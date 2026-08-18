@@ -2,12 +2,14 @@ package com.foamplayer.app.ui.screens.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,10 +29,13 @@ import com.foamplayer.app.ui.theme.FoamTheme
 @Composable
 fun TrackListItem(
     track: TrackEntity,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    showDragHandle: Boolean = false,
+    dragHandleModifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable { onClick() }
             .padding(vertical = 8.dp),
@@ -75,5 +80,25 @@ fun TrackListItem(
             )
         }
 
+        if (showDragHandle) {
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(
+                modifier = dragHandleModifier
+                    .padding(8.dp), // enlarges the touch target beyond the two visible lines
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                repeat(2) {
+                    Box(
+                        modifier = Modifier
+                            .width(16.dp)
+                            .height(2.dp)
+                            .clip(RoundedCornerShape(1.dp))
+                            .background(FoamTheme.colors.textSecondary)
+                    )
+                }
+            }
+        }
     }
 }

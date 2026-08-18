@@ -113,6 +113,33 @@ class AudioEngine @Inject constructor(
         _playbackState.value = _playbackState.value.copy(currentPositionMs = positionMs)
     }
 
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        val currentQueue = _playbackState.value.queue
+        if (fromIndex !in currentQueue.indices || toIndex !in currentQueue.indices || fromIndex == toIndex) return
+
+        // Reflect the move in the actual player so the currently loaded/playing item is untouched
+        player.moveMediaItem(fromIndex, toIndex)
+
+        val newQueue = currentQueue.toMutableList().apply {
+            add(toIndex, removeAt(fromIndex))
+        }
+
+        // Keep queueIndex pointing at whichever track was actually playing, even though its
+        // position in the list may have shifted as a side effect of the move.
+        val oldPlayingIndex = _playbackState.value.queueIndex
+        val newPlayingIndex = when {
+            oldPlayingIndex == fromIndex -> toIndex
+            fromIndex < oldPlayingIndex && toIndex >= oldPlayingIndex -> oldPlayingIndex - 1
+            fromIndex > oldPlayingIndex && toIndex <= oldPlayingIndex -> oldPlayingIndex + 1
+            else -> oldPlayingIndex
+        }
+
+        _playbackState.value = _playbackState.value.copy(
+            queue = newQueue,
+            queueIndex = newPlayingIndex
+        )
+    }
+
     fun toggleShuffle() {
         val newShuffle = !_playbackState.value.isShuffle
         player.shuffleModeEnabled = newShuffle

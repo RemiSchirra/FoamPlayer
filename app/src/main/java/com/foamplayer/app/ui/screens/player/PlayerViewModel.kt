@@ -24,6 +24,7 @@ class PlayerViewModel @Inject constructor(
     fun next() = audioEngine.next()
     fun previous() = audioEngine.previous()
     fun skipToIndex(index: Int) = audioEngine.skipToIndex(index)
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) = audioEngine.moveQueueItem(fromIndex, toIndex)
     fun seekTo(positionMs: Long) = audioEngine.seekTo(positionMs)
     fun toggleShuffle() = audioEngine.toggleShuffle()
     fun toggleRepeat() = audioEngine.toggleRepeat()
