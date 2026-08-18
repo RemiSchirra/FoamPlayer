@@ -20,7 +20,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -189,10 +190,17 @@ fun FoamNavigationBar(
                     .padding(8.dp),
                 contentAlignment = Alignment.Center
             ) {
-                BasicText(
-                    text = screen.title,
-                    style = if (selected) FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.primaryAccent)
-                    else FoamTheme.typography.body
+                Icon(
+                    imageVector = when(screen) {
+                        Screen.Library -> FoamTheme.icons.current.library
+                        Screen.Playlists -> FoamTheme.icons.current.playlists
+                        Screen.Search -> FoamTheme.icons.current.search
+                        Screen.Equalizer -> FoamTheme.icons.current.equalizer
+                        Screen.Settings -> FoamTheme.icons.current.settings
+                    },
+                    contentDescription = screen.title,
+                    modifier = Modifier.size(24.dp),
+                    tint = if (selected) FoamTheme.colors.primaryAccent else FoamTheme.colors.textSecondary
                 )
             }
         }
