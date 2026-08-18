@@ -60,7 +60,7 @@ class DragDropListState(
         private set
 
     /** Clamped visual Y offset (px) to apply to the dragged item via graphicsLayer. */
-    var draggedItemOffset by mutableStateOf(0f)
+    var draggingItemTop by mutableStateOf(0f)
         private set
 
     private var draggedDistance = 0f
@@ -76,7 +76,7 @@ class DragDropListState(
         val info = lazyListState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
         draggedIndex = index
         draggedDistance = 0f
-        draggedItemOffset = 0f
+        draggingItemTop = info.offset.toFloat()
         anchor = ItemSnapshot(info.index, info.offset, info.size)
     }
 
@@ -92,7 +92,7 @@ class DragDropListState(
     private fun reset() {
         stopAutoScroll()
         draggedIndex = null
-        draggedItemOffset = 0f
+        draggingItemTop = 0f
         draggedDistance = 0f
         anchor = null
     }
@@ -110,7 +110,7 @@ class DragDropListState(
         // Lock the dragged item's visible position within the list's own bounds,
         // not the raw finger position.
         val clampedTop = rawTop.coerceIn(viewportStart.toFloat(), maxTop)
-        draggedItemOffset = clampedTop - current.offset
+        draggingItemTop = clampedTop
 
         // Swap with whichever visible item the dragged item's center now overlaps.
         val draggedCenter = clampedTop + current.size / 2f

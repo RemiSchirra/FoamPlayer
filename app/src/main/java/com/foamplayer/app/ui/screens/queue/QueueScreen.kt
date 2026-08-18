@@ -90,7 +90,18 @@ fun QueueScreen(
                     modifier = Modifier
                         .zIndex(if (isDragging) 1f else 0f)
                         .graphicsLayer {
-                            translationY = if (isDragging) dragDropListState.draggedItemOffset else 0f
+                            translationY = if (isDragging) {
+                                // Fetch the actual physical position of the item for THIS exact frame
+                                val itemInfo = lazyListState.layoutInfo.visibleItemsInfo
+                                    .firstOrNull { it.index == index }
+
+                                if (itemInfo != null) {
+                                    // Absolute target top minus the current physical top
+                                    dragDropListState.draggingItemTop - itemInfo.offset
+                                } else 0f
+                            } else {
+                                0f
+                            }
                         },
                     showDragHandle = true,
                     dragHandleModifier = Modifier.pointerInput(track.id) {
