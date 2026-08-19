@@ -46,6 +46,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.Icon
@@ -62,13 +63,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.foamplayer.app.audio.engine.PlaybackState
@@ -134,6 +140,52 @@ fun FullPlayerScreen(
         orientation = Orientation.Vertical,
         onDragStopped = { velocity -> gestureController.onDragStopped(velocity) }
     )
+
+    // Intercept over-scrolls when lists (queue/lyrics) are at their top boundary.
+    val nestedScrollConnection = remember(gestureController) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source != NestedScrollSource.Drag && source.toString() != "UserInput") return Offset.Zero
+
+                val upState = gestureController.upTransitionState
+                val isMidDrag = upState.currentState != upState.targetState
+
+                // If the panel is partially dragged down, intercept all scroll to continue moving it
+                if (isMidDrag && available.y != 0f) {
+                    gestureController.onDrag(available.y)
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (source != NestedScrollSource.Drag && source.toString() != "UserInput") return Offset.Zero
+
+                // available.y > 0 means unconsumed downward scroll (list is at the top)
+                if (available.y > 0f) {
+                    gestureController.onDrag(available.y)
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                val upState = gestureController.upTransitionState
+                val isMidDrag = upState.currentState != upState.targetState
+
+                // Upon finger lift mid-drag, commit the fling velocity to the gesture controller
+                if (isMidDrag) {
+                    gestureController.onDragStopped(available.y)
+                    return Velocity(0f, available.y)
+                }
+                return Velocity.Zero
+            }
+        }
+    }
 
     // True while a shared-element hand-off is actively animating (open/close/drag), on
     // either the outer mini<->full transition or the inner up (header/subview) one.
@@ -216,7 +268,9 @@ fun FullPlayerScreen(
                                 slideInVertically(tween(TRANSITION_DURATION_MS)) { h -> h / 6 },
                         exit = fadeOut(tween(TRANSITION_DURATION_MS)) +
                                 slideOutVertically(tween(TRANSITION_DURATION_MS)) { h -> h / 6 },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .nestedScroll(nestedScrollConnection)
                     ) {
                         SubViewContent(
                             track = track,
@@ -718,13 +772,27 @@ private fun SharedTransitionScope.SubViewContent(
                 label = "SubViewContent"
             ) { mode ->
                 when (mode) {
-                    SubViewMode.LYRICS -> LyricsScreen(
-                        rawLyrics = state.currentLyrics,
-                        currentPositionMs = state.currentPositionMs,
-                        onSeek = { positionMs -> viewModel.seekTo(positionMs) },
-                        onClose = {},
-                        backgroundColor = Color.Transparent
-                    )
+                    SubViewMode.LYRICS -> {
+                        val isLyricsEmpty = state.currentLyrics.isNullOrBlank()
+                        Box(
+                            modifier = Modifier.fillMaxSize()
+                                .then(
+                                    if (isLyricsEmpty) {
+                                        Modifier.verticalScroll(rememberScrollState())
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        ) {
+                            LyricsScreen(
+                                rawLyrics = state.currentLyrics,
+                                currentPositionMs = state.currentPositionMs,
+                                onSeek = { positionMs -> viewModel.seekTo(positionMs) },
+                                onClose = {},
+                                backgroundColor = Color.Transparent
+                            )
+                        }
+                    }
                     SubViewMode.QUEUE -> QueueScreen(
                         viewModel = viewModel,
                         showTitle = false,
