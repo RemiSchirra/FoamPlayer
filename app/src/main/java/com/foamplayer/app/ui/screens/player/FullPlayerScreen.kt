@@ -86,7 +86,6 @@ enum class SubViewMode(val label: String) {
 private object PlayerDimens {
     val horizontalPagePadding = 24.dp
     val pageSpacing = 24.dp
-    val artCornerRadius = 24.dp
 }
 
 private const val TRANSITION_DURATION_MS = 400
@@ -410,7 +409,7 @@ private fun SharedTransitionScope.TrackHeroPager(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .clip(RoundedCornerShape(PlayerDimens.artCornerRadius))
+                        .clip(RoundedCornerShape(FoamTheme.shapes.fullPlayerRounding))
                         .background(placeholderColor)
                         .graphicsLayer { alpha = pageAlpha },
                     contentAlignment = Alignment.Center
@@ -466,7 +465,7 @@ private fun SharedTransitionScope.TrackHeroPager(
                             rememberSharedContentState(key = "album_art_header_${track.id}"),
                             animatedVisibilityScope = headerVisibilityScope
                         )
-                        .clip(RoundedCornerShape(PlayerDimens.artCornerRadius))
+                        .clip(RoundedCornerShape(FoamTheme.shapes.fullPlayerRounding))
                         .background(placeholderColor),
                     contentAlignment = Alignment.Center
                 ) {
@@ -622,7 +621,7 @@ private fun SubViewSelectorRow(
             } else {
                 FoamTheme.colors.textPrimary
             }
-            
+
             val icon = when(mode) {
                 SubViewMode.LYRICS -> FoamTheme.icons.current.lyrics
                 SubViewMode.QUEUE -> FoamTheme.icons.current.queue

@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Immutable
@@ -78,8 +80,20 @@ val DefaultFoamTypography = FoamTypography(
     )
 )
 
+@Immutable
+data class FoamShapes(
+    val miniPlayerRounding: Dp,
+    val fullPlayerRounding: Dp
+)
+
+val DefaultFoamShapes = FoamShapes(
+    miniPlayerRounding = 8.dp,
+    fullPlayerRounding = 24.dp
+)
+
 val LocalFoamColors = staticCompositionLocalOf { DarkFoamColors }
 val LocalFoamTypography = staticCompositionLocalOf { DefaultFoamTypography }
+val LocalFoamShapes = staticCompositionLocalOf { DefaultFoamShapes }
 
 object FoamTheme {
     val colors: FoamColors
@@ -90,20 +104,30 @@ object FoamTheme {
 
     val icons: FoamIcons
         @Composable get() = LocalFoamIcons.current
+
+    val shapes: FoamShapes
+        @Composable get() = LocalFoamShapes.current
 }
 
 @Composable
 fun FoamTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
+    miniPlayerRounding: Dp = 8.dp,
+    fullPlayerRounding: Dp = 24.dp,
     content: @Composable () -> Unit
 ) {
     val icons = DefaultFoamIcons.copy(currentStyle = iconStyle)
+    val shapes = FoamShapes(
+        miniPlayerRounding = miniPlayerRounding,
+        fullPlayerRounding = fullPlayerRounding
+    )
     
     CompositionLocalProvider(
         LocalFoamColors provides DarkFoamColors,
         LocalFoamTypography provides DefaultFoamTypography,
         LocalFoamIcons provides icons,
+        LocalFoamShapes provides shapes,
         content = content
     )
 }

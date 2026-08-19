@@ -61,7 +61,7 @@ fun MiniPlayer(
                                 rememberSharedContentState(key = "album_art_${track.id}"),
                                 animatedVisibilityScope = animatedVisibilityScope
                             )
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding))
                             .background(FoamTheme.colors.surface),
                         contentAlignment = Alignment.Center
                     ) {

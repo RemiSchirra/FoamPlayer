@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,6 +37,7 @@ import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.ui.theme.FoamIconStyle
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
@@ -42,6 +45,8 @@ fun SettingsScreen(
 ) {
     val isBitPerfectEnabled by viewModel.isBitPerfectEnabled.collectAsState()
     val iconStyle by viewModel.iconStyle.collectAsState()
+    val miniRounding by viewModel.miniPlayerRounding.collectAsState()
+    val fullRounding by viewModel.fullPlayerRounding.collectAsState()
     val selectedFolders by viewModel.selectedFolders.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
     val context = LocalContext.current
@@ -162,6 +167,49 @@ fun SettingsScreen(
                                 }
                             }
                         }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    BasicText(text = "Image Rounding", style = FoamTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Column {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            BasicText(text = "Mini Player", style = FoamTheme.typography.body)
+                            BasicText(text = "${miniRounding}dp", style = FoamTheme.typography.monospace)
+                        }
+                        Slider(
+                            value = miniRounding.toFloat(),
+                            onValueChange = { viewModel.setMiniPlayerRounding(it.roundToInt()) },
+                            valueRange = 0f..32f,
+                            steps = 7,
+                            colors = SliderDefaults.colors(
+                                thumbColor = FoamTheme.colors.primaryAccent,
+                                activeTrackColor = FoamTheme.colors.primaryAccent,
+                                inactiveTrackColor = FoamTheme.colors.surfaceVariant
+                            )
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Column {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            BasicText(text = "Full Player", style = FoamTheme.typography.body)
+                            BasicText(text = "${fullRounding}dp", style = FoamTheme.typography.monospace)
+                        }
+                        Slider(
+                            value = fullRounding.toFloat(),
+                            onValueChange = { viewModel.setFullPlayerRounding(it.roundToInt()) },
+                            valueRange = 0f..64f,
+                            steps = 7,
+                            colors = SliderDefaults.colors(
+                                thumbColor = FoamTheme.colors.primaryAccent,
+                                activeTrackColor = FoamTheme.colors.primaryAccent,
+                                inactiveTrackColor = FoamTheme.colors.surfaceVariant
+                            )
+                        )
                     }
                 }
             }

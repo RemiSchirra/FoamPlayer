@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.audio.service.PlaybackService
@@ -40,8 +41,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             val settingsViewModel: SettingsViewModel = hiltViewModel()
             val iconStyle by settingsViewModel.iconStyle.collectAsState(initial = FoamIconStyle.FLAT)
+            val miniRounding by settingsViewModel.miniPlayerRounding.collectAsState(initial = 8)
+            val fullRounding by settingsViewModel.fullPlayerRounding.collectAsState(initial = 24)
 
-            FoamTheme(iconStyle = iconStyle) {
+            FoamTheme(
+                iconStyle = iconStyle,
+                miniPlayerRounding = miniRounding.dp,
+                fullPlayerRounding = fullRounding.dp
+            ) {
                 FoamNavHost(modifier = Modifier.fillMaxSize())
             }
         }

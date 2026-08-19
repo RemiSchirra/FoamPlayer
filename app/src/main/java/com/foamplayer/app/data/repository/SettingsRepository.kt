@@ -3,6 +3,7 @@ package com.foamplayer.app.data.repository
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -21,6 +22,8 @@ class SettingsRepository @Inject constructor(
     private val PREF_BIT_PERFECT_ENABLED = booleanPreferencesKey("bit_perfect_enabled")
     private val PREF_SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
     private val PREF_ICON_STYLE = stringPreferencesKey("icon_style")
+    private val PREF_MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")
+    private val PREF_FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")
 
     val isBitPerfectEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[PREF_BIT_PERFECT_ENABLED] ?: true
@@ -39,6 +42,14 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    val miniPlayerRounding: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[PREF_MINI_PLAYER_ROUNDING] ?: 8
+    }
+
+    val fullPlayerRounding: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[PREF_FULL_PLAYER_ROUNDING] ?: 24
+    }
+
     suspend fun setBitPerfectEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[PREF_BIT_PERFECT_ENABLED] = enabled
@@ -48,6 +59,18 @@ class SettingsRepository @Inject constructor(
     suspend fun setIconStyle(style: FoamIconStyle) {
         context.dataStore.edit { prefs ->
             prefs[PREF_ICON_STYLE] = style.name
+        }
+    }
+
+    suspend fun setMiniPlayerRounding(rounding: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[PREF_MINI_PLAYER_ROUNDING] = rounding
+        }
+    }
+
+    suspend fun setFullPlayerRounding(rounding: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[PREF_FULL_PLAYER_ROUNDING] = rounding
         }
     }
 

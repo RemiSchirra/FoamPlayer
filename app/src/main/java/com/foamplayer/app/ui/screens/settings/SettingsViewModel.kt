@@ -31,6 +31,18 @@ class SettingsViewModel @Inject constructor(
         initialValue = FoamIconStyle.FLAT
     )
 
+    val miniPlayerRounding: StateFlow<Int> = settingsRepository.miniPlayerRounding.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 8
+    )
+
+    val fullPlayerRounding: StateFlow<Int> = settingsRepository.fullPlayerRounding.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 24
+    )
+
     val selectedFolders: StateFlow<Set<String>> = settingsRepository.selectedFolders.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -52,6 +64,18 @@ class SettingsViewModel @Inject constructor(
     fun setIconStyle(style: FoamIconStyle) {
         viewModelScope.launch {
             settingsRepository.setIconStyle(style)
+        }
+    }
+
+    fun setMiniPlayerRounding(rounding: Int) {
+        viewModelScope.launch {
+            settingsRepository.setMiniPlayerRounding(rounding)
+        }
+    }
+
+    fun setFullPlayerRounding(rounding: Int) {
+        viewModelScope.launch {
+            settingsRepository.setFullPlayerRounding(rounding)
         }
     }
 
