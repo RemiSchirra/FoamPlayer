@@ -6,8 +6,12 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.EaseIn
 import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
@@ -220,7 +224,7 @@ fun FullPlayerScreen(
                             subViewMode = subViewMode,
                             viewModel = viewModel,
                             headerVisibilityScope = this@AnimatedVisibility,
-                            dragModifier = dragModifier,
+                            modifier = dragModifier,
                             onCollapse = { gestureController.collapseToMainPlayer() }
                         )
                     }
@@ -392,6 +396,32 @@ private fun SharedTransitionScope.TrackHeroPager(
     val heroCoverage = (1f - abs(pagerOffsetFromAnchor)).coerceIn(0f, 1f)
     val heroTranslationPx = -pagerOffsetFromAnchor * (pageWidthPx + pageSpacingPx)
 
+    // Track the outer screen transition (MiniPlayer <-> FullPlayer)
+    val outerRadius by outerVisibilityScope.transition.animateDp(
+        transitionSpec = { tween(durationMillis = TRANSITION_DURATION_MS, easing = EaseInOut) },
+        label = "heroOuterRadius"
+    ) { enterExitState ->
+        if (enterExitState == EnterExitState.Visible) {
+            FoamTheme.shapes.fullPlayerRounding
+        } else {
+            FoamTheme.shapes.miniPlayerRounding
+        }
+    }
+
+    // Track the inner header transition (MiniPlayerHeader <-> FullPlayer)
+    val headerRadius by headerVisibilityScope.transition.animateDp(
+        transitionSpec = { tween(durationMillis = TRANSITION_DURATION_MS, easing = EaseInOut) },
+        label = "heroHeaderRadius"
+    ) { enterExitState ->
+        if (enterExitState == EnterExitState.Visible) {
+            FoamTheme.shapes.fullPlayerRounding
+        } else {
+            FoamTheme.shapes.miniPlayerRounding
+        }
+    }
+
+    val animatedCornerRadius = androidx.compose.ui.unit.min(outerRadius, headerRadius)
+
     Box(modifier = Modifier.fillMaxWidth()) {
         HorizontalPager(
             state = pagerState,
@@ -441,7 +471,7 @@ private fun SharedTransitionScope.TrackHeroPager(
             }
         }
 
-        // Hero overlay — the ONLY composable carrying the shared-element modifiers.
+        // Hero overlay
         if (heroCoverage > 0f) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -465,7 +495,7 @@ private fun SharedTransitionScope.TrackHeroPager(
                             rememberSharedContentState(key = "album_art_header_${track.id}"),
                             animatedVisibilityScope = headerVisibilityScope
                         )
-                        .clip(RoundedCornerShape(FoamTheme.shapes.fullPlayerRounding))
+                        .clip(RoundedCornerShape(animatedCornerRadius))
                         .background(placeholderColor),
                     contentAlignment = Alignment.Center
                 ) {
@@ -615,7 +645,7 @@ private fun SubViewSelectorRow(
     modifier: Modifier = Modifier
 ) {
     Row(modifier = modifier, horizontalArrangement = Arrangement.SpaceBetween) {
-        SubViewMode.values().forEach { mode ->
+        SubViewMode.entries.forEach { mode ->
             val color = if (selected != null) {
                 if (mode == selected) FoamTheme.colors.primaryAccent else FoamTheme.colors.textSecondary
             } else {
@@ -656,12 +686,12 @@ private fun SharedTransitionScope.SubViewContent(
     subViewMode: SubViewMode,
     viewModel: PlayerViewModel,
     headerVisibilityScope: AnimatedVisibilityScope,
-    dragModifier: Modifier,
+    modifier: Modifier,
     onCollapse: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 24.dp)) {
         // Draggable zone limited to the header to prevent scroll conflicts below.
-        Column(modifier = Modifier.fillMaxWidth().then(dragModifier)) {
+        Column(modifier = Modifier.fillMaxWidth().then(modifier)) {
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
@@ -713,6 +743,17 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     headerVisibilityScope: AnimatedVisibilityScope,
     onBack: () -> Unit
 ) {
+    val animatedCornerRadius by headerVisibilityScope.transition.animateDp(
+        transitionSpec = { tween(durationMillis = TRANSITION_DURATION_MS, easing = EaseInOut) },
+        label = "headerCornerRadius"
+    ) { enterExitState ->
+        if (enterExitState == EnterExitState.Visible) {
+            FoamTheme.shapes.miniPlayerRounding
+        } else {
+            FoamTheme.shapes.fullPlayerRounding
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -730,7 +771,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                     rememberSharedContentState(key = "album_art_header_${track.id}"),
                     animatedVisibilityScope = headerVisibilityScope
                 )
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(animatedCornerRadius))
                 .background(FoamTheme.colors.surfaceVariant)
         ) {
             if (track.albumArtPath != null) {

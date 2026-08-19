@@ -1,8 +1,10 @@
 package com.foamplayer.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.animateDp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -19,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +45,14 @@ fun MiniPlayer(
 ) {
     val track = playbackState.currentTrack ?: return
 
+    val animatedCornerRadius by animatedVisibilityScope.transition.animateDp(label = "miniCornerRadius") { enterExitState ->
+        if (enterExitState == EnterExitState.Visible) {
+            FoamTheme.shapes.miniPlayerRounding
+        } else {
+            FoamTheme.shapes.fullPlayerRounding
+        }
+    }
+
     with(sharedTransitionScope) {
         Box(
             modifier = modifier
@@ -61,7 +72,7 @@ fun MiniPlayer(
                                 rememberSharedContentState(key = "album_art_${track.id}"),
                                 animatedVisibilityScope = animatedVisibilityScope
                             )
-                            .clip(RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding))
+                            .clip(RoundedCornerShape(animatedCornerRadius))
                             .background(FoamTheme.colors.surface),
                         contentAlignment = Alignment.Center
                     ) {
