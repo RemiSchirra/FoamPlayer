@@ -202,7 +202,7 @@ class PlayerGestureController(
     fun expandToSubView() = runExclusive { upTransitionState.animateTo(true) }
 
     companion object {
-        private const val UP_SWIPE_SENSITIVITY = 1f
+        private const val UP_SWIPE_SENSITIVITY = 0.8f
         private const val UP_SWIPE_MIN_PROGRESS = 0.01f
         private const val UP_SWIPE_COMMIT_PROGRESS = 0.4f
         private const val UP_SWIPE_COMMIT_VELOCITY = -500f
