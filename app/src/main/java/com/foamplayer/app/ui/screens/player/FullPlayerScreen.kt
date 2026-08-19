@@ -57,6 +57,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -124,28 +125,34 @@ fun FullPlayerScreen(
     val scope = rememberCoroutineScope()
 
     val dragThresholdPx = screenHeightPx.coerceAtLeast(1f)
+    val currentOnDismiss = rememberUpdatedState(onDismiss)
     val gestureController = remember(playerTransitionState, dragThresholdPx) {
         PlayerGestureController(
             upTransitionState = upTransitionState,
             playerTransitionState = playerTransitionState,
             scope = scope,
             dragThresholdPx = dragThresholdPx,
-            onDismiss = onDismiss
+            onDismiss = { currentOnDismiss.value() }
         )
     }
 
     // Isolated draggable modifier to prevent interference with scrollable lists below it.
-    val dragModifier = Modifier.draggable(
+    val mainPlayerDrag = Modifier.draggable(
         state = rememberDraggableState { delta -> gestureController.onDrag(delta) },
         orientation = Orientation.Vertical,
-        onDragStopped = { velocity -> gestureController.onDragStopped(velocity) }
+        onDragStopped = { v -> gestureController.onDragStopped(v) }
+    )
+    val headerDrag = Modifier.draggable(
+        state = rememberDraggableState { delta -> gestureController.onDrag(delta) },
+        orientation = Orientation.Vertical,
+        onDragStopped = { v -> gestureController.onDragStopped(v) }
     )
 
     // Intercept over-scrolls when lists (queue/lyrics) are at their top boundary.
     val nestedScrollConnection = remember(gestureController) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (source != NestedScrollSource.Drag && source.toString() != "UserInput") return Offset.Zero
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
 
                 val upState = gestureController.upTransitionState
                 val isMidDrag = upState.currentState != upState.targetState
@@ -163,7 +170,7 @@ fun FullPlayerScreen(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
-                if (source != NestedScrollSource.Drag && source.toString() != "UserInput") return Offset.Zero
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
 
                 // available.y > 0 means unconsumed downward scroll (list is at the top)
                 if (available.y > 0f) {
@@ -245,7 +252,7 @@ fun FullPlayerScreen(
                                 slideInVertically(tween(TRANSITION_DURATION_MS)) { h -> -h / 6 },
                         exit = fadeOut(tween(TRANSITION_DURATION_MS)) +
                                 slideOutVertically(tween(TRANSITION_DURATION_MS)) { h -> -h / 6 },
-                        modifier = Modifier.fillMaxSize().then(dragModifier)
+                        modifier = Modifier.fillMaxSize().then(mainPlayerDrag)
                     ) {
                         MainPlayerContent(
                             track = track,
@@ -278,7 +285,7 @@ fun FullPlayerScreen(
                             subViewMode = subViewMode,
                             viewModel = viewModel,
                             headerVisibilityScope = this@AnimatedVisibility,
-                            modifier = dragModifier,
+                            modifier = headerDrag,
                             onCollapse = { gestureController.collapseToMainPlayer() }
                         )
                     }
