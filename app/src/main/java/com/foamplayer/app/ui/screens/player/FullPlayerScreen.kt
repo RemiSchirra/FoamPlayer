@@ -651,13 +651,7 @@ private fun PlaybackControls(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                BasicText(text = track.format, style = FoamTheme.typography.caption)
-                BasicText(text = "${track.bitrate} kbps", style = FoamTheme.typography.monospace)
-            }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
+        //Spacer(modifier = Modifier.height(16.dp))
 
         val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
         FoamSlider(value = progress, onValueChange = { new -> onSeek((new * durationMs).toLong()) })
