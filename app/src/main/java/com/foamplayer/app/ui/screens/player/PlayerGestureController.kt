@@ -126,32 +126,36 @@ class PlayerGestureController(
 
         when (direction) {
             GestureDirection.UP -> {
-                // This same drag zone is also attached to the subview header (see
-                // FullPlayerScreen's SubViewContent), so "UP" doesn't always mean opening.
-                // If we're already mid-seek, keep heading toward the existing targetState;
-                // if we're at rest, this gesture is moving AWAY from the resting state —
-                // main player -> subview (rest=false, target=true) on a drag up, or
-                // subview -> main player (rest=true, target=false) on a drag down on the
-                // header. Hardcoding targetState=true here would make the header's
-                // close-by-dragging gesture a no-op: seekTo() against an unchanged
-                // targetState never moves currentState, so the drag would show no visual
-                // feedback and always snap back open on release.
                 val upTarget = if (upTransitionState.currentState != upTransitionState.targetState) {
                     upTransitionState.targetState
                 } else {
                     !upTransitionState.currentState
                 }
                 val progressTowardUpTarget = if (upTarget) upProgress else 1f - upProgress
-                // Opening is driven by an upward (negative) delta; closing the header is
-                // driven by a downward (positive) delta — opposite signs, same math.
                 val signedDelta = if (upTarget) -delta else delta
-                val newProgress = (progressTowardUpTarget + signedDelta / (dragThresholdPx * UP_SWIPE_SENSITIVITY))
+
+                // Compensate the easing on reversing direction
+                val easingCompensation = if (signedDelta < 0) {
+                    1f + (progressTowardUpTarget * 2f)
+                } else {
+                    1f
+                }
+
+                val newProgress = (progressTowardUpTarget + (signedDelta * easingCompensation) / (dragThresholdPx * UP_SWIPE_SENSITIVITY))
                     .coerceIn(0f, 1f)
                 upTransitionState.seekTo(targetState = upTarget, fraction = newProgress)
             }
             GestureDirection.DOWN -> {
                 // Progressive swipe down: full player -> app mini player
-                val newProgress = (downProgress + delta / (dragThresholdPx * DOWN_SWIPE_SENSITIVITY)).coerceIn(0f, 1f)
+                // Compensate the easing on reversing direction
+                val easingCompensation = if (delta < 0) {
+                    1f + (downProgress * 2f)
+                } else {
+                    1f
+                }
+
+                val newProgress = (downProgress + (delta * easingCompensation) / (dragThresholdPx * DOWN_SWIPE_SENSITIVITY))
+                    .coerceIn(0f, 1f)
                 playerTransitionState.seekTo(targetState = false, fraction = newProgress)
             }
             null -> Unit
