@@ -1,11 +1,18 @@
 package com.foamplayer.app.ui.navigation
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.EaseIn
+import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.Transition
 import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -72,90 +79,126 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
 
     val playerTransitionState = remember { SeekableTransitionState(false) }
     val scope = rememberCoroutineScope()
+    val playerAnimationSpec = tween<Float>(durationMillis = 800, easing = EaseInOut)
 
     SharedTransitionLayout {
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")
 
-        Box(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Box(modifier = Modifier.weight(1f)) {
-                    NavHost(
-                        navController = navController,
-                        startDestination = Screen.Library.route
-                    ) {
-                        composable(Screen.Library.route) {
-                            LibraryScreen(
-                                viewModel = libraryViewModel,
-                                onTrackClick = { tracks, index ->
-                                    playerViewModel.playQueue(tracks, index)
+        Column(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
+            Box(modifier = Modifier.weight(1f)) {
+                // Content Area
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        NavHost(
+                            navController = navController,
+                            startDestination = Screen.Library.route,
+                            enterTransition = {
+                                if (playerTransitionState.currentState) {
+                                    EnterTransition.None
+                                } else {
+                                    fadeIn(animationSpec = tween(400))
                                 }
+                            },
+                            exitTransition = {
+                                if (playerTransitionState.currentState) {
+                                    ExitTransition.None
+                                } else {
+                                    fadeOut(animationSpec = tween(400))
+                                }
+                            },
+                            popEnterTransition = {
+                                if (playerTransitionState.currentState) {
+                                    EnterTransition.None
+                                } else {
+                                    fadeIn(animationSpec = tween(400))
+                                }
+                            },
+                            popExitTransition = {
+                                if (playerTransitionState.currentState) {
+                                    ExitTransition.None
+                                } else {
+                                    fadeOut(animationSpec = tween(400))
+                                }
+                            }
+                        ) {
+                            composable(Screen.Library.route) {
+                                LibraryScreen(
+                                    viewModel = libraryViewModel,
+                                    onTrackClick = { tracks, index ->
+                                        playerViewModel.playQueue(tracks, index)
+                                    }
+                                )
+                            }
+                            composable(Screen.Playlists.route) { PlaylistsScreen() }
+                            composable(Screen.Search.route) { SearchScreen() }
+                            composable(Screen.Equalizer.route) { EqualizerScreen() }
+                            composable(Screen.Settings.route) { SettingsScreen() }
+                        }
+                    }
+                    // Spacer for MiniPlayer
+                    Box(modifier = Modifier.fillMaxWidth().height(80.dp))
+                }
+
+                // MiniPlayer - Positioned at the bottom of the main content area, above the Nav Bar
+                Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                    transition.AnimatedVisibility(
+                        visible = { isFull -> !isFull },
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        if (playbackState.currentTrack != null) {
+                            MiniPlayer(
+                                playbackState = playbackState,
+                                onPlayPauseClick = {
+                                    if (playbackState.isPlaying) playerViewModel.pause() else playerViewModel.play()
+                                },
+                                onSeek = { progress ->
+                                    playerViewModel.seekTo((progress * playbackState.durationMs).toLong())
+                                },
+                                onClick = {
+                                    scope.launch { playerTransitionState.animateTo(true, playerAnimationSpec) }
+                                },
+                                sharedTransitionScope = this@SharedTransitionLayout,
+                                animatedVisibilityScope = this@AnimatedVisibility
                             )
                         }
-                        composable(Screen.Playlists.route) { PlaylistsScreen() }
-                        composable(Screen.Search.route) { SearchScreen() }
-                        composable(Screen.Equalizer.route) { EqualizerScreen() }
-                        composable(Screen.Settings.route) { SettingsScreen() }
                     }
                 }
 
-                Box(modifier = Modifier.fillMaxWidth().height(80.dp))
-
-                FoamNavigationBar(
-                    currentRoute = currentRoute,
-                    onNavigate = { route ->
-                        navController.navigate(route) {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 64.dp)
-            ) {
+                // FullPlayerScreen - Slides up over the content but stays above the Navigation Bar
                 transition.AnimatedVisibility(
-                    visible = { isFull -> !isFull },
+                    visible = { isFull -> isFull },
                     enter = fadeIn(),
                     exit = fadeOut()
                 ) {
-                    if (playbackState.currentTrack != null) {
-                        MiniPlayer(
-                            playbackState = playbackState,
-                            onPlayPauseClick = {
-                                if (playbackState.isPlaying) playerViewModel.pause() else playerViewModel.play()
-                            },
-                            onSeek = { progress ->
-                                playerViewModel.seekTo((progress * playbackState.durationMs).toLong())
-                            },
-                            onClick = {
-                                scope.launch { playerTransitionState.animateTo(true) }
-                            },
-                            sharedTransitionScope = this@SharedTransitionLayout,
-                            animatedVisibilityScope = this@AnimatedVisibility
-                        )
-                    }
+                    FullPlayerScreen(
+                        viewModel = playerViewModel,
+                        onDismiss = {
+                            scope.launch { playerTransitionState.animateTo(false, playerAnimationSpec) }
+                        },
+                        sharedTransitionScope = this@SharedTransitionLayout,
+                        animatedVisibilityScope = this@AnimatedVisibility,
+                        playerTransitionState = playerTransitionState
+                    )
                 }
             }
 
-            transition.AnimatedVisibility(
-                visible = { isFull -> isFull },
-                enter = slideInVertically(initialOffsetY = { it }),
-                exit = slideOutVertically(targetOffsetY = { it })
-            ) {
-                FullPlayerScreen(
-                    viewModel = playerViewModel,
-                    onDismiss = {
-                        scope.launch { playerTransitionState.animateTo(false) }
-                    },
-                    sharedTransitionScope = this@SharedTransitionLayout,
-                    animatedVisibilityScope = this@AnimatedVisibility,
-                    playerTransitionState = playerTransitionState
-                )
-            }
+            // Navigation Bar - Always Visible
+            FoamNavigationBar(
+                currentRoute = currentRoute,
+                onNavigate = { route ->
+                    scope.launch {
+                        if (playerTransitionState.currentState || playerTransitionState.targetState) {
+                            playerTransitionState.animateTo(false, playerAnimationSpec)
+                        }
+                    }
+                    navController.navigate(route) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
         }
     }
 }
