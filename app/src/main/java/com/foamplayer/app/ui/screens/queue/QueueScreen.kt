@@ -17,6 +17,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -83,20 +84,19 @@ fun QueueScreen(
                 key = { _, track -> track.id }
             ) { index, track ->
                 val isDragging = dragDropListState.isItemDragging(index)
+                val currentIndex = rememberUpdatedState(index)
 
                 TrackListItem(
                     track = track,
                     onClick = { viewModel.playQueue(displayedQueue, index) },
                     modifier = Modifier
+                        .let { if (isDragging) it else it.animateItem() }
                         .zIndex(if (isDragging) 1f else 0f)
                         .graphicsLayer {
                             translationY = if (isDragging) {
-                                // Fetch the actual physical position of the item for THIS exact frame
                                 val itemInfo = lazyListState.layoutInfo.visibleItemsInfo
                                     .firstOrNull { it.index == index }
-
                                 if (itemInfo != null) {
-                                    // Absolute target top minus the current physical top
                                     dragDropListState.draggingItemTop - itemInfo.offset
                                 } else 0f
                             } else {
@@ -107,8 +107,8 @@ fun QueueScreen(
                     dragHandleModifier = Modifier.pointerInput(track.id) {
                         detectDragGestures(
                             onDragStart = {
-                                dragOriginIndex = index
-                                dragDropListState.onDragStart(index)
+                                dragOriginIndex = currentIndex.value
+                                dragDropListState.onDragStart(currentIndex.value)
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
@@ -126,7 +126,7 @@ fun QueueScreen(
                             onDragCancel = {
                                 dragDropListState.onDragCancel()
                                 dragOriginIndex = null
-                                displayedQueue = state.queue // revert optimistic reorder
+                                displayedQueue = state.queue
                             }
                         )
                     }
