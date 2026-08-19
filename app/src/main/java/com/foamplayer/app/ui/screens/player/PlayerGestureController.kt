@@ -151,7 +151,7 @@ class PlayerGestureController(
             }
             GestureDirection.DOWN -> {
                 // Progressive swipe down: full player -> app mini player
-                val newProgress = (downProgress + delta / dragThresholdPx).coerceIn(0f, 1f)
+                val newProgress = (downProgress + delta / (dragThresholdPx * DOWN_SWIPE_SENSITIVITY)).coerceIn(0f, 1f)
                 playerTransitionState.seekTo(targetState = false, fraction = newProgress)
             }
             null -> Unit
@@ -198,10 +198,11 @@ class PlayerGestureController(
     fun expandToSubView() = runExclusive { upTransitionState.animateTo(true) }
 
     companion object {
-        private const val UP_SWIPE_SENSITIVITY = 0.55f
+        private const val UP_SWIPE_SENSITIVITY = 1f
         private const val UP_SWIPE_MIN_PROGRESS = 0.01f
         private const val UP_SWIPE_COMMIT_PROGRESS = 0.4f
         private const val UP_SWIPE_COMMIT_VELOCITY = -500f
+        private const val DOWN_SWIPE_SENSITIVITY = 1f
         private const val DOWN_SWIPE_COMMIT_PROGRESS = 0.15f
         private const val DOWN_SWIPE_COMMIT_VELOCITY = 800f
         private const val SETTLE_DURATION_MS = 250
