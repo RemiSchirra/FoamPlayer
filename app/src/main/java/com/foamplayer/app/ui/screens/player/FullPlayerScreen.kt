@@ -403,6 +403,7 @@ private fun SharedTransitionScope.MainPlayerContent(
             isPlaying = state.isPlaying,
             positionMs = state.currentPositionMs,
             durationMs = state.durationMs,
+            outerVisibilityScope = outerVisibilityScope,
             onSeek = { positionMs -> viewModel.seekTo(positionMs) },
             onPrevious = { viewModel.previous() },
             onPlayPause = { if (state.isPlaying) viewModel.pause() else viewModel.play() },
@@ -610,12 +611,14 @@ private fun SharedTransitionScope.TrackHeroPager(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun PlaybackControls(
+private fun SharedTransitionScope.PlaybackControls(
     track: TrackEntity,
     isPlaying: Boolean,
     positionMs: Long,
     durationMs: Long,
+    outerVisibilityScope: AnimatedVisibilityScope,
     onSeek: (Long) -> Unit,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
@@ -645,6 +648,10 @@ private fun PlaybackControls(
             Box(
                 modifier = Modifier
                     .size(64.dp)
+                    .sharedBounds(
+                        rememberSharedContentState(key = "play_button_${track.id}"),
+                        animatedVisibilityScope = outerVisibilityScope
+                    )
                     .clip(CircleShape)
                     .background(FoamTheme.colors.primaryAccent)
                     .clickable(onClick = onPlayPause),

@@ -119,6 +119,10 @@ fun MiniPlayer(
                     Box(
                         modifier = Modifier
                             .size(36.dp)
+                            .sharedBounds(
+                                rememberSharedContentState(key = "play_button_${track.id}"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
                             .clip(RoundedCornerShape(18.dp))
                             .background(FoamTheme.colors.primaryAccent)
                             .clickable { onPlayPauseClick() },
