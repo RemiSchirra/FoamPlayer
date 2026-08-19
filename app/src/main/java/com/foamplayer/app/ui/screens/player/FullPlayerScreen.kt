@@ -85,6 +85,7 @@ import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.utils.pingPongMarquee
 import kotlin.math.abs
 import kotlinx.coroutines.delay
 
@@ -607,33 +608,6 @@ private fun SharedTransitionScope.TrackHeroPager(
             }
         }
     }
-}
-
-fun Modifier.pingPongMarquee(
-    speedPxPerSecond: Float = 75f,
-    pauseDuration: Long = 1500L
-): Modifier = composed {
-    val scrollState = rememberScrollState()
-
-    LaunchedEffect(scrollState.maxValue) {
-        if (scrollState.maxValue > 0) {
-            val scrollDurationMillis = ((scrollState.maxValue / speedPxPerSecond) * 1000).toInt()
-            delay(pauseDuration)
-            while (true) {
-                scrollState.animateScrollTo(
-                    value = scrollState.maxValue,
-                    animationSpec = tween(durationMillis = scrollDurationMillis, easing = EaseInOut)
-                )
-                delay(pauseDuration)
-                scrollState.animateScrollTo(
-                    value = 0,
-                    animationSpec = tween(durationMillis = scrollDurationMillis, easing = EaseInOut)
-                )
-                delay(pauseDuration)
-            }
-        }
-    }
-    this.horizontalScroll(scrollState, enabled = false)
 }
 
 @Composable
