@@ -90,15 +90,6 @@ class PlayerGestureController(
                 seekTo(targetState = restingTarget, fraction = startFraction * (1f - FastOutSlowInEasing.transform(t)))
             } while (t < 1f)
         } finally {
-            // MUST run even if this job is cancelled partway through the loop above.
-            // runExclusive cancels this job the instant a *new* gesture starts — and if
-            // that new gesture locks to the *other* direction, it never touches this
-            // SeekableTransitionState again. Without a guaranteed snapTo here, a settle
-            // interrupted mid-flight leaves targetState pointing at restingTarget forever
-            // while currentState sits at restState: exactly the currentState != targetState
-            // condition described above that keeps both AnimatedVisibility branches
-            // composed, surfacing as a stale duplicate album art image next time *this*
-            // transition runs. NonCancellable lets snapTo still execute during unwind.
             withContext(NonCancellable) { snapTo(restState) }
         }
     }

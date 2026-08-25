@@ -79,7 +79,23 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
 
     val playerTransitionState = remember { SeekableTransitionState(false) }
     val scope = rememberCoroutineScope()
-    val playerAnimationSpec = tween<Float>(durationMillis = 800, easing = EaseInOut)
+    val getPlayerAnimationSpec: (Boolean) -> androidx.compose.animation.core.TweenSpec<Float> = { targetIsFull ->
+        val isOpenProgress = if (playerTransitionState.currentState == playerTransitionState.targetState) {
+            if (playerTransitionState.currentState) 1f else 0f
+        } else {
+            if (playerTransitionState.targetState) {
+                playerTransitionState.fraction
+            } else {
+                1f - playerTransitionState.fraction
+            }
+        }
+
+        val remainingFraction = (if (targetIsFull) 1f - isOpenProgress else isOpenProgress).coerceIn(0f, 1f)
+
+        val dynamicDuration = (800 * remainingFraction).toInt().coerceAtLeast(1)
+
+        tween(durationMillis = dynamicDuration, easing = EaseOut)
+    }
 
     SharedTransitionLayout {
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")
@@ -156,7 +172,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     playerViewModel.seekTo((progress * playbackState.durationMs).toLong())
                                 },
                                 onClick = {
-                                    scope.launch { playerTransitionState.animateTo(true, playerAnimationSpec) }
+                                    scope.launch { playerTransitionState.animateTo(true, getPlayerAnimationSpec(true)) }
                                 },
                                 sharedTransitionScope = this@SharedTransitionLayout,
                                 animatedVisibilityScope = this@AnimatedVisibility
@@ -174,7 +190,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                     FullPlayerScreen(
                         viewModel = playerViewModel,
                         onDismiss = {
-                            scope.launch { playerTransitionState.animateTo(false, playerAnimationSpec) }
+                            scope.launch { playerTransitionState.animateTo(false, getPlayerAnimationSpec(false)) }
                         },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = this@AnimatedVisibility,
@@ -189,7 +205,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                 onNavigate = { route ->
                     scope.launch {
                         if (playerTransitionState.currentState || playerTransitionState.targetState) {
-                            playerTransitionState.animateTo(false, playerAnimationSpec)
+                            playerTransitionState.animateTo(false, getPlayerAnimationSpec(false))
                         }
                     }
                     navController.navigate(route) {
