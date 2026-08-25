@@ -158,21 +158,18 @@ class PlayerGestureController(
 
         val upMidSeek = upTransitionState.currentState != upTransitionState.targetState
         if (upMidSeek) {
-            // Resolve against whichever target the drag was actually heading toward —
-            // true (opening the subview) or false (closing it back to the header drag) —
-            // not always "true". See onDrag for why that distinction matters.
             val upTarget = upTransitionState.targetState
             val progressTowardUpTarget = if (upTarget) upTransitionState.progress() else 1f - upTransitionState.progress()
             if (progressTowardUpTarget > UP_SWIPE_MIN_PROGRESS) {
-                // A fast flick continuing in the same direction as upTarget commits;
-                // velocity's sign convention flips depending on which way we're headed.
                 val signedVelocity = if (upTarget) velocity else -velocity
-                val commit = progressTowardUpTarget > UP_SWIPE_COMMIT_PROGRESS || signedVelocity < UP_SWIPE_COMMIT_VELOCITY
+
+                // Prevent committing if you actively flick your finger back in the opposite direction
+                val isReverseFlick = signedVelocity > 500f
+
+                val commit = !isReverseFlick && (progressTowardUpTarget > UP_SWIPE_COMMIT_PROGRESS || signedVelocity < UP_SWIPE_COMMIT_VELOCITY)
                 if (commit) {
-                    // Continuing toward the same targetState we've been seekTo-ing during the drag.
                     upTransitionState.animateTo(upTarget)
                 } else {
-                    // Reversing direction — settle the seek back to rest instead of animateTo(!upTarget).
                     upTransitionState.settleBackToRest()
                 }
             } else {
@@ -180,7 +177,11 @@ class PlayerGestureController(
             }
         } else {
             val downProgress = 1f - playerTransitionState.progress()
-            val commitToDismiss = downProgress > DOWN_SWIPE_COMMIT_PROGRESS || velocity > DOWN_SWIPE_COMMIT_VELOCITY
+
+            // Prevent dismissing if you actively flick the player back up to cancel
+            val isReverseFlick = velocity < -500f
+
+            val commitToDismiss = !isReverseFlick && (downProgress > DOWN_SWIPE_COMMIT_PROGRESS || velocity > DOWN_SWIPE_COMMIT_VELOCITY)
             when {
                 commitToDismiss -> onDismiss()
                 else -> playerTransitionState.settleBackToRest()
@@ -195,7 +196,7 @@ class PlayerGestureController(
     companion object {
         private const val UP_SWIPE_SENSITIVITY = 0.8f
         private const val UP_SWIPE_MIN_PROGRESS = 0.01f
-        private const val UP_SWIPE_COMMIT_PROGRESS = 0.4f
+        private const val UP_SWIPE_COMMIT_PROGRESS = 0.25f
         private const val UP_SWIPE_COMMIT_VELOCITY = -500f
         private const val DOWN_SWIPE_SENSITIVITY = 1.2f
         private const val DOWN_SWIPE_COMMIT_PROGRESS = 0.15f
