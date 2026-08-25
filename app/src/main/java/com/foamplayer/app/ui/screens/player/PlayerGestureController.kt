@@ -206,7 +206,7 @@ class PlayerGestureController(
         private const val UP_SWIPE_MIN_PROGRESS = 0.01f
         private const val UP_SWIPE_COMMIT_PROGRESS = 0.4f
         private const val UP_SWIPE_COMMIT_VELOCITY = -500f
-        private const val DOWN_SWIPE_SENSITIVITY = 1f
+        private const val DOWN_SWIPE_SENSITIVITY = 1.2f
         private const val DOWN_SWIPE_COMMIT_PROGRESS = 0.15f
         private const val DOWN_SWIPE_COMMIT_VELOCITY = 800f
         private const val SETTLE_DURATION_MS = 250
