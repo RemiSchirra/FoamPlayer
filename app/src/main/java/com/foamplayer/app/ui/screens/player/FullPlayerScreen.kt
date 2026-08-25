@@ -6,10 +6,8 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.EaseIn
 import androidx.compose.animation.core.EaseInOut
-import androidx.compose.animation.core.EaseOut
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
@@ -25,7 +23,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,7 +58,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -80,14 +76,12 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
-import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.pingPongMarquee
 import kotlin.math.abs
-import kotlinx.coroutines.delay
 
 enum class SubViewMode(val label: String) {
     LYRICS("Lyrics"),
@@ -222,7 +216,10 @@ fun FullPlayerScreen(
         }
     }
 
-    val uiAlpha by animatedVisibilityScope.transition.animateFloat(label = "uiAlpha") { enterExitState ->
+    val uiAlpha by animatedVisibilityScope.transition.animateFloat(
+        transitionSpec = { tween(durationMillis = 500, easing = EaseOutCubic) },
+        label = "uiAlpha"
+    ) { enterExitState ->
         if (enterExitState == EnterExitState.Visible) 1f else 0f
     }
 
