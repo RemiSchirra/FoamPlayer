@@ -70,13 +70,6 @@ fun TrackListScreen(
                     .clickable { onBack() }
                     .padding(4.dp)
             )
-            Spacer(modifier = Modifier.width(16.dp))
-            BasicText(
-                text = title,
-                style = FoamTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
 
         LazyColumn(
@@ -148,6 +141,13 @@ private fun HeaderSection(
         Spacer(modifier = Modifier.width(20.dp))
 
         Column(modifier = Modifier.weight(1f)) {
+            BasicText(
+                text = title,
+                style = FoamTheme.typography.titleLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+
             if (subtitle != null) {
                 BasicText(
                     text = subtitle,
