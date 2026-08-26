@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
@@ -50,7 +51,10 @@ import com.foamplayer.app.ui.screens.player.FullPlayerScreen
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.playlists.PlaylistsScreen
 import com.foamplayer.app.ui.screens.search.SearchScreen
+import com.foamplayer.app.ui.screens.settings.AudioSettingsScreen
+import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.SettingsScreen
+import com.foamplayer.app.ui.screens.settings.UISettingsScreen
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
 
@@ -64,6 +68,9 @@ sealed class Screen(val route: String, val title: String) {
     object Search : Screen("search", "Search")
     object Equalizer : Screen("equalizer", "Equalizer")
     object Settings : Screen("settings", "Settings")
+    object SettingsAudio : Screen("settings/audio", "Audio Settings")
+    object SettingsUI : Screen("settings/ui", "UI Settings")
+    object SettingsLibrary : Screen("settings/library", "Library Settings")
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -148,7 +155,22 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                             composable(Screen.Playlists.route) { PlaylistsScreen() }
                             composable(Screen.Search.route) { SearchScreen() }
                             composable(Screen.Equalizer.route) { EqualizerScreen() }
-                            composable(Screen.Settings.route) { SettingsScreen() }
+                            composable(Screen.Settings.route) {
+                                SettingsScreen(
+                                    onNavigateToAudio = { navController.navigate(Screen.SettingsAudio.route) },
+                                    onNavigateToUI = { navController.navigate(Screen.SettingsUI.route) },
+                                    onNavigateToLibrary = { navController.navigate(Screen.SettingsLibrary.route) }
+                                )
+                            }
+                            composable(Screen.SettingsAudio.route) {
+                                AudioSettingsScreen(onBack = { navController.popBackStack() })
+                            }
+                            composable(Screen.SettingsUI.route) {
+                                UISettingsScreen(onBack = { navController.popBackStack() })
+                            }
+                            composable(Screen.SettingsLibrary.route) {
+                                LibrarySettingsScreen(onBack = { navController.popBackStack() })
+                            }
                         }
                     }
                     // Spacer for MiniPlayer
@@ -242,7 +264,7 @@ fun FoamNavigationBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         items.forEach { screen ->
-            val selected = currentRoute == screen.route
+            val selected = currentRoute == screen.route || (screen == Screen.Settings && currentRoute?.startsWith("settings/") == true)
             Box(
                 modifier = Modifier
                     .clickable { onNavigate(screen.route) }
@@ -256,7 +278,8 @@ fun FoamNavigationBar(
                         Screen.Search -> FoamTheme.icons.current.search
                         Screen.Equalizer -> FoamTheme.icons.current.equalizer
                         Screen.Settings -> FoamTheme.icons.current.settings
-                    },
+                        else -> FoamTheme.icons.current.settings // Fallback
+                    } as ImageVector,
                     contentDescription = screen.title,
                     modifier = Modifier.size(24.dp),
                     tint = if (selected) FoamTheme.colors.primaryAccent else FoamTheme.colors.textSecondary
