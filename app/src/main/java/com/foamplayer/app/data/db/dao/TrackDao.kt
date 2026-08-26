@@ -33,6 +33,20 @@ interface TrackDao {
     """)
     fun searchAlbums(query: String): Flow<List<AlbumSearchResult>>
 
+    @Query("SELECT * FROM tracks WHERE album = :album ORDER BY trackNumber ASC, title ASC")
+    fun getTracksByAlbum(album: String): Flow<List<TrackEntity>>
+
+    @Query("""
+        SELECT album, 
+               GROUP_CONCAT(DISTINCT COALESCE(albumArtist, artist)) as artist, 
+               MAX(albumArtPath) as albumArtPath 
+        FROM tracks 
+        WHERE artist = :artist OR albumArtist = :artist
+        GROUP BY album
+        ORDER BY album ASC
+    """)
+    fun getAlbumsByArtist(artist: String): Flow<List<AlbumSearchResult>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTracks(tracks: List<TrackEntity>)
 

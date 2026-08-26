@@ -36,6 +36,10 @@ class TrackRepository @Inject constructor(
 
     fun searchAlbums(query: String): Flow<List<AlbumSearchResult>> = trackDao.searchAlbums(query)
 
+    fun getTracksByAlbum(album: String): Flow<List<TrackEntity>> = trackDao.getTracksByAlbum(album)
+
+    fun getAlbumsByArtist(artist: String): Flow<List<AlbumSearchResult>> = trackDao.getAlbumsByArtist(artist)
+
     suspend fun rescanLibrary() {
         val folders = settingsRepository.selectedFolders.first()
         startScan(folders)
