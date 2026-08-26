@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.screens.playlists
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -8,6 +9,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.TrackListScreen
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PlaylistDetailScreen(
     playlistId: Long,

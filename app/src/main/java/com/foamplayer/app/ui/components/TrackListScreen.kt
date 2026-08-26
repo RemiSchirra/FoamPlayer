@@ -1,5 +1,8 @@
 package com.foamplayer.app.ui.components
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -35,6 +38,7 @@ import com.foamplayer.app.ui.screens.library.TrackListItem
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun TrackListScreen(
     title: String,
@@ -44,7 +48,10 @@ fun TrackListScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     imageUrl: String? = null,
-    artistName: String? = null
+    artistName: String? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    sharedElementKey: String? = null
 ) {
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
@@ -82,7 +89,10 @@ fun TrackListScreen(
                     trackCount = tracks.size,
                     durationText = durationText,
                     imageUrl = imageUrl,
-                    onPlayAllClick = onPlayAllClick
+                    onPlayAllClick = onPlayAllClick,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    sharedElementKey = sharedElementKey
                 )
             }
 
@@ -100,6 +110,7 @@ fun TrackListScreen(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun HeaderSection(
     title: String,
@@ -107,8 +118,26 @@ private fun HeaderSection(
     trackCount: Int,
     durationText: String,
     imageUrl: String?,
-    onPlayAllClick: () -> Unit
+    onPlayAllClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope?,
+    sharedElementKey: String?
 ) {
+    // Helper: only wraps with a shared bounds modifier when a shared-element
+    // context was actually provided (e.g. when navigating in from Search/Artist).
+    @Composable
+    fun Modifier.sharedIfAvailable(key: String): Modifier {
+        if (sharedTransitionScope == null || animatedVisibilityScope == null || sharedElementKey == null) {
+            return this
+        }
+        return with(sharedTransitionScope) {
+            this@sharedIfAvailable.sharedBounds(
+                rememberSharedContentState(key = key),
+                animatedVisibilityScope = animatedVisibilityScope
+            )
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -120,6 +149,7 @@ private fun HeaderSection(
             modifier = Modifier
                 .size(120.dp)
                 .clip(RoundedCornerShape(12.dp))
+                .sharedIfAvailable("album-art-$sharedElementKey")
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
@@ -145,7 +175,8 @@ private fun HeaderSection(
                 text = title,
                 style = FoamTheme.typography.titleLarge,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.sharedIfAvailable("album-title-$sharedElementKey")
             )
 
             if (subtitle != null) {
@@ -153,7 +184,8 @@ private fun HeaderSection(
                     text = subtitle,
                     style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.primaryAccent),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.sharedIfAvailable("album-artist-$sharedElementKey")
                 )
             }
             BasicText(

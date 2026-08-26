@@ -1,5 +1,8 @@
 package com.foamplayer.app.ui.screens.search
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -38,10 +41,13 @@ import com.foamplayer.app.ui.screens.library.TrackListItem
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SearchScreen(
     onArtistClick: (String) -> Unit,
     onAlbumClick: (AlbumSearchResult) -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     searchViewModel: SearchViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel()
 ) {
@@ -108,7 +114,12 @@ fun SearchScreen(
                     SectionHeader("Albums")
                 }
                 items(uiState.albums) { album ->
-                    AlbumSearchResultItem(album = album, onClick = { onAlbumClick(album) })
+                    AlbumSearchResultItem(
+                        album = album,
+                        onClick = { onAlbumClick(album) },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
                 }
             }
 
@@ -124,7 +135,7 @@ fun SearchScreen(
                     )
                 }
             }
-            
+
             item { Spacer(modifier = Modifier.height(80.dp)) }
         }
     }
@@ -170,8 +181,14 @@ fun ArtistSearchResultItem(artist: String, onClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun AlbumSearchResultItem(album: AlbumSearchResult, onClick: () -> Unit) {
+fun AlbumSearchResultItem(
+    album: AlbumSearchResult,
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -182,6 +199,17 @@ fun AlbumSearchResultItem(album: AlbumSearchResult, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(48.dp)
+                .let { base ->
+                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        with(sharedTransitionScope) {
+                            base.sharedBounds(
+                                rememberSharedContentState(key = "album-art-${album.album}"),
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(8.dp))
+                            )
+                        }
+                    } else base
+                }
                 .clip(RoundedCornerShape(8.dp))
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
@@ -206,13 +234,33 @@ fun AlbumSearchResultItem(album: AlbumSearchResult, onClick: () -> Unit) {
                 text = album.album,
                 style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.let { base ->
+                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        with(sharedTransitionScope) {
+                            base.sharedBounds(
+                                rememberSharedContentState(key = "album-title-${album.album}"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        }
+                    } else base
+                }
             )
             BasicText(
                 text = album.artist,
                 style = FoamTheme.typography.caption,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.let { base ->
+                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        with(sharedTransitionScope) {
+                            base.sharedBounds(
+                                rememberSharedContentState(key = "album-artist-${album.album}"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        }
+                    } else base
+                }
             )
         }
     }

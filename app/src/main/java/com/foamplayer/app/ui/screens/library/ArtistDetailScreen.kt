@@ -1,5 +1,8 @@
 package com.foamplayer.app.ui.screens.library
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -32,11 +35,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.ui.screens.search.AlbumSearchResultItem
 import com.foamplayer.app.ui.theme.FoamTheme
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistDetailScreen(
     artistName: String,
     onAlbumClick: (String) -> Unit,
     onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: ArtistDetailViewModel = hiltViewModel()
 ) {
     val albums by viewModel.albums.collectAsState()
@@ -91,7 +97,9 @@ fun ArtistDetailScreen(
             items(albums) { album ->
                 AlbumSearchResultItem(
                     album = album,
-                    onClick = { onAlbumClick(album.album) }
+                    onClick = { onAlbumClick(album.album) },
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
 

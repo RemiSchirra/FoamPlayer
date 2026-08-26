@@ -175,7 +175,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     },
                                     onAlbumClick = { albumResult ->
                                         navController.navigate(Screen.AlbumDetail.createRoute(albumResult.album))
-                                    }
+                                    },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = this
                                 )
                             }
                             composable(Screen.Equalizer.route) { EqualizerScreen() }
@@ -205,7 +207,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     onAlbumClick = { album ->
                                         navController.navigate(Screen.AlbumDetail.createRoute(album))
                                     },
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = this
                                 )
                             }
                             composable(
@@ -218,7 +222,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     onTrackClick = { tracks, index ->
                                         playerViewModel.playQueue(tracks, index)
                                     },
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = this
                                 )
                             }
                             composable(
