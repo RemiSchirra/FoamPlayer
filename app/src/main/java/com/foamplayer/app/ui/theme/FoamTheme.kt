@@ -133,7 +133,7 @@ fun FoamTheme(
         animationSpec = tween(durationMillis = 500),
         label = "AccentColorFade"
     )
-    
+
     val colors = DarkFoamColors.copy(primaryAccent = animatedAccentColor)
     
     CompositionLocalProvider(
