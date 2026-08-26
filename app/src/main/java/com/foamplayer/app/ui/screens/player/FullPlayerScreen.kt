@@ -6,7 +6,13 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.EaseIn
 import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.EaseInOutCirc
+import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.EaseInOutQuint
+import androidx.compose.animation.core.EaseInOutSine
+import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.animateDp
@@ -73,6 +79,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.unit.min
 import coil.compose.AsyncImage
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -93,6 +101,16 @@ private object PlayerDimens {
     val horizontalPagePadding = 24.dp
     val pageSpacing = 24.dp
 }
+
+/**
+ * Calculates absolute completion (0 = closed/false, 1 = open/true)
+ */
+private fun SeekableTransitionState<Boolean>.progress(): Float =
+    if (currentState == targetState) {
+        if (currentState) 1f else 0f
+    } else {
+        if (targetState) fraction else 1f - fraction
+    }
 
 private const val TRANSITION_DURATION_MS = 400
 
@@ -262,7 +280,9 @@ fun FullPlayerScreen(
                             outerVisibilityScope = animatedVisibilityScope,
                             headerVisibilityScope = this@AnimatedVisibility,
                             viewModel = viewModel,
-                            onDismiss = onDismiss
+                            onDismiss = onDismiss,
+                            playerTransitionState = playerTransitionState,
+                            upTransitionState = upTransitionState
                         )
                     }
 
@@ -284,7 +304,8 @@ fun FullPlayerScreen(
                             viewModel = viewModel,
                             headerVisibilityScope = this@AnimatedVisibility,
                             modifier = headerDrag,
-                            onCollapse = { gestureController.collapseToMainPlayer() }
+                            onCollapse = { gestureController.collapseToMainPlayer() },
+                            upTransitionState = upTransitionState
                         )
                     }
                 }
@@ -358,7 +379,9 @@ private fun SharedTransitionScope.MainPlayerContent(
     outerVisibilityScope: AnimatedVisibilityScope,
     headerVisibilityScope: AnimatedVisibilityScope,
     viewModel: PlayerViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    playerTransitionState: SeekableTransitionState<Boolean>,
+    upTransitionState: SeekableTransitionState<Boolean>
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(top = 24.dp),
@@ -390,7 +413,9 @@ private fun SharedTransitionScope.MainPlayerContent(
             configuration = configuration,
             placeholderColor = placeholderColor,
             outerVisibilityScope = outerVisibilityScope,
-            headerVisibilityScope = headerVisibilityScope
+            headerVisibilityScope = headerVisibilityScope,
+            playerTransitionState = playerTransitionState,
+            upTransitionState = upTransitionState
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -446,7 +471,9 @@ private fun SharedTransitionScope.TrackHeroPager(
     configuration: android.content.res.Configuration,
     placeholderColor: Color,
     outerVisibilityScope: AnimatedVisibilityScope,
-    headerVisibilityScope: AnimatedVisibilityScope
+    headerVisibilityScope: AnimatedVisibilityScope,
+    playerTransitionState: SeekableTransitionState<Boolean>,
+    upTransitionState: SeekableTransitionState<Boolean>
 ) {
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val pageWidthPx = screenWidthPx - with(density) { (PlayerDimens.horizontalPagePadding * 2).toPx() }
@@ -457,30 +484,19 @@ private fun SharedTransitionScope.TrackHeroPager(
     val heroTranslationPx = -pagerOffsetFromAnchor * (pageWidthPx + pageSpacingPx)
 
     // Track the outer screen transition (MiniPlayer <-> FullPlayer)
-    val outerRadius by outerVisibilityScope.transition.animateDp(
-        transitionSpec = { tween(durationMillis = TRANSITION_DURATION_MS, easing = EaseInOut) },
-        label = "heroOuterRadius"
-    ) { enterExitState ->
-        if (enterExitState == EnterExitState.Visible) {
-            FoamTheme.shapes.fullPlayerRounding
-        } else {
-            FoamTheme.shapes.miniPlayerRounding
-        }
-    }
+    val outerRadius = lerp(
+        start = FoamTheme.shapes.miniPlayerRounding,
+        stop = FoamTheme.shapes.fullPlayerRounding,
+        fraction = playerTransitionState.progress()
+    )
 
-    // Track the inner header transition (MiniPlayerHeader <-> FullPlayer)
-    val headerRadius by headerVisibilityScope.transition.animateDp(
-        transitionSpec = { tween(durationMillis = TRANSITION_DURATION_MS, easing = EaseInOut) },
-        label = "heroHeaderRadius"
-    ) { enterExitState ->
-        if (enterExitState == EnterExitState.Visible) {
-            FoamTheme.shapes.fullPlayerRounding
-        } else {
-            FoamTheme.shapes.miniPlayerRounding
-        }
-    }
+    val headerRadius = lerp(
+        start = FoamTheme.shapes.fullPlayerRounding,
+        stop = FoamTheme.shapes.miniPlayerRounding,
+        fraction = upTransitionState.progress()
+    )
 
-    val animatedCornerRadius = androidx.compose.ui.unit.min(outerRadius, headerRadius)
+    val animatedCornerRadius = min(outerRadius, headerRadius)
 
     Box(modifier = Modifier.fillMaxWidth()) {
         HorizontalPager(
@@ -720,7 +736,8 @@ private fun SharedTransitionScope.SubViewContent(
     viewModel: PlayerViewModel,
     headerVisibilityScope: AnimatedVisibilityScope,
     modifier: Modifier,
-    onCollapse: () -> Unit
+    onCollapse: () -> Unit,
+    upTransitionState: SeekableTransitionState<Boolean>
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 24.dp)) {
         // Draggable zone limited to the header to prevent scroll conflicts below.
@@ -738,7 +755,8 @@ private fun SharedTransitionScope.SubViewContent(
             MiniPlayerHeader(
                 track = track,
                 headerVisibilityScope = headerVisibilityScope,
-                onBack = onCollapse
+                onBack = onCollapse,
+                upTransitionState = upTransitionState
             )
         }
 
@@ -788,18 +806,14 @@ private fun SharedTransitionScope.SubViewContent(
 private fun SharedTransitionScope.MiniPlayerHeader(
     track: TrackEntity,
     headerVisibilityScope: AnimatedVisibilityScope,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    upTransitionState: SeekableTransitionState<Boolean>
 ) {
-    val animatedCornerRadius by headerVisibilityScope.transition.animateDp(
-        transitionSpec = { tween(durationMillis = TRANSITION_DURATION_MS, easing = EaseInOut) },
-        label = "headerCornerRadius"
-    ) { enterExitState ->
-        if (enterExitState == EnterExitState.Visible) {
-            FoamTheme.shapes.miniPlayerRounding
-        } else {
-            FoamTheme.shapes.fullPlayerRounding
-        }
-    }
+    val animatedCornerRadius = lerp(
+        start = FoamTheme.shapes.fullPlayerRounding,
+        stop = FoamTheme.shapes.miniPlayerRounding,
+        fraction = EaseOutCubic.transform(upTransitionState.progress())
+    )
 
     Row(
         modifier = Modifier
