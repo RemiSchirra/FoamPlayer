@@ -5,18 +5,13 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.core.EaseIn
-import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.Transition
 import androidx.compose.animation.core.rememberTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,16 +34,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.foamplayer.app.ui.components.MiniPlayer
 import com.foamplayer.app.ui.screens.equalizer.EqualizerScreen
+import com.foamplayer.app.ui.screens.library.AlbumDetailScreen
+import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
 import com.foamplayer.app.ui.screens.library.LibraryScreen
 import com.foamplayer.app.ui.screens.library.LibraryViewModel
 import com.foamplayer.app.ui.screens.player.FullPlayerScreen
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
+import com.foamplayer.app.ui.screens.playlists.PlaylistDetailScreen
 import com.foamplayer.app.ui.screens.playlists.PlaylistsScreen
 import com.foamplayer.app.ui.screens.search.SearchScreen
 import com.foamplayer.app.ui.screens.settings.AudioSettingsScreen
@@ -57,11 +57,10 @@ import com.foamplayer.app.ui.screens.settings.SettingsScreen
 import com.foamplayer.app.ui.screens.settings.UISettingsScreen
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
+import java.net.URLDecoder
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
-// Note: there is no top-level "Queue" destination. The queue is presented
-// inline inside FullPlayerScreen (see SubViewMode.QUEUE there) rather than
-// as a separate NavHost route, so it stays in sync with the player's shared
-// element transitions instead of triggering a full screen navigation.
 sealed class Screen(val route: String, val title: String) {
     object Library : Screen("library", "Library")
     object Playlists : Screen("playlists", "Playlists")
@@ -71,6 +70,16 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsAudio : Screen("settings/audio", "Audio Settings")
     object SettingsUI : Screen("settings/ui", "UI Settings")
     object SettingsLibrary : Screen("settings/library", "Library Settings")
+
+    object ArtistDetail : Screen("artist/{artistName}", "Artist") {
+        fun createRoute(artistName: String) = "artist/${URLEncoder.encode(artistName, StandardCharsets.UTF_8.toString())}"
+    }
+    object AlbumDetail : Screen("album/{albumName}", "Album") {
+        fun createRoute(albumName: String) = "album/${URLEncoder.encode(albumName, StandardCharsets.UTF_8.toString())}"
+    }
+    object PlaylistDetail : Screen("playlist/{playlistId}", "Playlist") {
+        fun createRoute(playlistId: Long) = "playlist/$playlistId"
+    }
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -152,8 +161,23 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     }
                                 )
                             }
-                            composable(Screen.Playlists.route) { PlaylistsScreen() }
-                            composable(Screen.Search.route) { SearchScreen() }
+                            composable(Screen.Playlists.route) {
+                                PlaylistsScreen(
+                                    onPlaylistClick = { playlist ->
+                                        navController.navigate(Screen.PlaylistDetail.createRoute(playlist.playlistId))
+                                    }
+                                )
+                            }
+                            composable(Screen.Search.route) {
+                                SearchScreen(
+                                    onArtistClick = { artist ->
+                                        navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                                    },
+                                    onAlbumClick = { albumResult ->
+                                        navController.navigate(Screen.AlbumDetail.createRoute(albumResult.album))
+                                    }
+                                )
+                            }
                             composable(Screen.Equalizer.route) { EqualizerScreen() }
                             composable(Screen.Settings.route) {
                                 SettingsScreen(
@@ -170,6 +194,45 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                             }
                             composable(Screen.SettingsLibrary.route) {
                                 LibrarySettingsScreen(onBack = { navController.popBackStack() })
+                            }
+                            composable(
+                                Screen.ArtistDetail.route,
+                                arguments = listOf(navArgument("artistName") { type = NavType.StringType })
+                            ) { backStackEntry ->
+                                val artistName = URLDecoder.decode(backStackEntry.arguments?.getString("artistName") ?: "", StandardCharsets.UTF_8.toString())
+                                ArtistDetailScreen(
+                                    artistName = artistName,
+                                    onAlbumClick = { album ->
+                                        navController.navigate(Screen.AlbumDetail.createRoute(album))
+                                    },
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable(
+                                Screen.AlbumDetail.route,
+                                arguments = listOf(navArgument("albumName") { type = NavType.StringType })
+                            ) { backStackEntry ->
+                                val albumName = URLDecoder.decode(backStackEntry.arguments?.getString("albumName") ?: "", StandardCharsets.UTF_8.toString())
+                                AlbumDetailScreen(
+                                    albumName = albumName,
+                                    onTrackClick = { tracks, index ->
+                                        playerViewModel.playQueue(tracks, index)
+                                    },
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable(
+                                Screen.PlaylistDetail.route,
+                                arguments = listOf(navArgument("playlistId") { type = NavType.LongType })
+                            ) { backStackEntry ->
+                                val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: -1L
+                                PlaylistDetailScreen(
+                                    playlistId = playlistId,
+                                    onTrackClick = { tracks, index ->
+                                        playerViewModel.playQueue(tracks, index)
+                                    },
+                                    onBack = { navController.popBackStack() }
+                                )
                             }
                         }
                     }

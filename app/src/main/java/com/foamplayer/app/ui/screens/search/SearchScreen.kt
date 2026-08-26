@@ -40,6 +40,8 @@ import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
 fun SearchScreen(
+    onArtistClick: (String) -> Unit,
+    onAlbumClick: (AlbumSearchResult) -> Unit,
     searchViewModel: SearchViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel()
 ) {
@@ -96,7 +98,7 @@ fun SearchScreen(
                     SectionHeader("Artists")
                 }
                 items(uiState.artists) { artist ->
-                    ArtistSearchResultItem(artist = artist, onClick = { /* TODO: Navigate to artist */ })
+                    ArtistSearchResultItem(artist = artist, onClick = { onArtistClick(artist) })
                 }
             }
 
@@ -106,7 +108,7 @@ fun SearchScreen(
                     SectionHeader("Albums")
                 }
                 items(uiState.albums) { album ->
-                    AlbumSearchResultItem(album = album, onClick = { /* TODO: Navigate to album */ })
+                    AlbumSearchResultItem(album = album, onClick = { onAlbumClick(album) })
                 }
             }
 

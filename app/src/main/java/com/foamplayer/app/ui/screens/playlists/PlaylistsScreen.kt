@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +28,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
 fun PlaylistsScreen(
+    onPlaylistClick: (PlaylistEntity) -> Unit,
     viewModel: PlaylistsViewModel = hiltViewModel()
 ) {
     val playlists by viewModel.playlists.collectAsState()
@@ -76,7 +78,10 @@ fun PlaylistsScreen(
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(playlists) { playlist ->
-                    PlaylistItemRow(playlist = playlist)
+                    PlaylistItemRow(
+                        playlist = playlist,
+                        onClick = { onPlaylistClick(playlist) }
+                    )
                 }
             }
         }
@@ -84,10 +89,11 @@ fun PlaylistsScreen(
 }
 
 @Composable
-fun PlaylistItemRow(playlist: PlaylistEntity) {
+fun PlaylistItemRow(playlist: PlaylistEntity, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { onClick() }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -103,12 +109,11 @@ fun PlaylistItemRow(playlist: PlaylistEntity) {
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         BasicText(
             text = playlist.name,
-            style = FoamTheme.typography.titleMedium,
-            modifier = Modifier.padding(start = 12.dp)
+            style = FoamTheme.typography.titleMedium
         )
     }
 }
