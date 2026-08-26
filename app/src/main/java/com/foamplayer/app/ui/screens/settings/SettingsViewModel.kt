@@ -49,6 +49,18 @@ class SettingsViewModel @Inject constructor(
         initialValue = emptySet()
     )
 
+    val artistSeparators: StateFlow<Set<String>> = settingsRepository.artistSeparators.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = setOf(";", ",")
+    )
+
+    val genreSeparators: StateFlow<Set<String>> = settingsRepository.genreSeparators.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = setOf(";", ",")
+    )
+
     val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -88,6 +100,18 @@ class SettingsViewModel @Inject constructor(
     fun removeFolder(path: String) {
         viewModelScope.launch {
             settingsRepository.removeFolder(path)
+        }
+    }
+
+    fun setArtistSeparators(separators: Set<String>) {
+        viewModelScope.launch {
+            settingsRepository.setArtistSeparators(separators)
+        }
+    }
+
+    fun setGenreSeparators(separators: Set<String>) {
+        viewModelScope.launch {
+            settingsRepository.setGenreSeparators(separators)
         }
     }
 

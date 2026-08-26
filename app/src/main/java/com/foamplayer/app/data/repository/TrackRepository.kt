@@ -1,5 +1,6 @@
 package com.foamplayer.app.data.repository
 
+import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.dao.TrackDao
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.scanner.LocalAudioScanner
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,6 +27,15 @@ class TrackRepository @Inject constructor(
 
     fun searchTracks(query: String): Flow<List<TrackEntity>> = trackDao.searchTracks(query)
 
+    fun searchArtists(query: String): Flow<List<String>> = trackDao.searchArtists(query).map { rawArtists ->
+        rawArtists.flatMap { it.split("; ") }
+            .filter { it.contains(query, ignoreCase = true) }
+            .distinct()
+            .sorted()
+    }
+
+    fun searchAlbums(query: String): Flow<List<AlbumSearchResult>> = trackDao.searchAlbums(query)
+
     suspend fun rescanLibrary() {
         val folders = settingsRepository.selectedFolders.first()
         startScan(folders)
@@ -36,8 +47,11 @@ class TrackRepository @Inject constructor(
             return
         }
 
+        val artistSeps = settingsRepository.artistSeparators.first()
+        val genreSeps = settingsRepository.genreSeparators.first()
+
         _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
-        val scannedTracks = scanner.scanFoldersSync(folders) { progress, currentFile ->
+        val scannedTracks = scanner.scanFoldersSync(folders, artistSeps, genreSeps) { progress, currentFile ->
             _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
         }
         

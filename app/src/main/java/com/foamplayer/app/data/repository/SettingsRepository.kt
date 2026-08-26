@@ -24,6 +24,8 @@ class SettingsRepository @Inject constructor(
     private val PREF_ICON_STYLE = stringPreferencesKey("icon_style")
     private val PREF_MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")
     private val PREF_FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")
+    private val PREF_ARTIST_SEPARATORS = stringSetPreferencesKey("artist_separators")
+    private val PREF_GENRE_SEPARATORS = stringSetPreferencesKey("genre_separators")
 
     val isBitPerfectEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[PREF_BIT_PERFECT_ENABLED] ?: true
@@ -48,6 +50,14 @@ class SettingsRepository @Inject constructor(
 
     val fullPlayerRounding: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[PREF_FULL_PLAYER_ROUNDING] ?: 24
+    }
+
+    val artistSeparators: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[PREF_ARTIST_SEPARATORS] ?: setOf(";", ",")
+    }
+
+    val genreSeparators: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[PREF_GENRE_SEPARATORS] ?: setOf(";", ",")
     }
 
     suspend fun setBitPerfectEnabled(enabled: Boolean) {
@@ -85,6 +95,18 @@ class SettingsRepository @Inject constructor(
         context.dataStore.edit { prefs ->
             val current = prefs[PREF_SELECTED_FOLDERS] ?: emptySet()
             prefs[PREF_SELECTED_FOLDERS] = current - path
+        }
+    }
+
+    suspend fun setArtistSeparators(separators: Set<String>) {
+        context.dataStore.edit { prefs ->
+            prefs[PREF_ARTIST_SEPARATORS] = separators
+        }
+    }
+
+    suspend fun setGenreSeparators(separators: Set<String>) {
+        context.dataStore.edit { prefs ->
+            prefs[PREF_GENRE_SEPARATORS] = separators
         }
     }
 }

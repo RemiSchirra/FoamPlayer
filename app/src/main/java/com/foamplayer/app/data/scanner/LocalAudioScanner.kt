@@ -25,7 +25,12 @@ class LocalAudioScanner @Inject constructor(
 ) {
     private val extensions = listOf("mp3", "flac", "wav", "m4a", "ogg", "aac", "m4b", "opus")
 
-    suspend fun scanFoldersSync(folderPaths: Set<String>, onProgress: (Float, String) -> Unit): List<TrackEntity> = withContext(Dispatchers.IO) {
+    suspend fun scanFoldersSync(
+        folderPaths: Set<String>,
+        artistSeparators: Set<String>,
+        genreSeparators: Set<String>,
+        onProgress: (Float, String) -> Unit
+    ): List<TrackEntity> = withContext(Dispatchers.IO) {
         val allTracks = mutableListOf<TrackEntity>()
         val foundFiles = mutableListOf<Pair<Uri, String>>()
 
@@ -33,11 +38,9 @@ class LocalAudioScanner @Inject constructor(
             try {
                 val rootUri = Uri.parse(pathString)
                 if (rootUri.scheme == "content") {
-                    // Optimized SAF scanning using DocumentsContract
                     val treeId = DocumentsContract.getTreeDocumentId(rootUri)
                     collectUrisRecursive(rootUri, treeId, foundFiles, onProgress)
                 } else {
-                    // Legacy File API scanning
                     val rootFile = if (rootUri.scheme == "file") File(rootUri.path ?: "") else File(pathString)
                     if (rootFile.exists() && rootFile.isDirectory) {
                         collectLegacyFiles(rootFile, foundFiles)
@@ -54,13 +57,12 @@ class LocalAudioScanner @Inject constructor(
         val retriever = MediaMetadataRetriever()
 
         foundFiles.forEachIndexed { index, (uri, fileName) ->
-            // Update progress every 5 files to reduce UI thread load
             if (index % 5 == 0 || index == total - 1) {
                 onProgress(index.toFloat() / total, fileName)
             }
 
             try {
-                val track = extractMetadataFromUri(uri, fileName, retriever)
+                val track = extractMetadataFromUri(uri, fileName, retriever, artistSeparators, genreSeparators)
                 if (track != null) {
                     allTracks.add(track)
                 }
@@ -120,10 +122,17 @@ class LocalAudioScanner @Inject constructor(
         return extensions.any { lower.endsWith(".$it") }
     }
 
-    private fun extractMetadataFromUri(uri: Uri, fileName: String, retriever: MediaMetadataRetriever): TrackEntity? {
+    private fun extractMetadataFromUri(
+        uri: Uri,
+        fileName: String,
+        retriever: MediaMetadataRetriever,
+        artistSeparators: Set<String>,
+        genreSeparators: Set<String>
+    ): TrackEntity? {
         var title = fileName.substringBeforeLast('.')
-        var artist = "<Unknown Artist>"
+        var rawArtist = "<Unknown Artist>"
         var album = "<Unknown Album>"
+        var rawAlbumArtist: String? = null
         var duration = 0L
         var bitrate = 0
         var sampleRate = 44100
@@ -140,8 +149,9 @@ class LocalAudioScanner @Inject constructor(
         try {
             retriever.setDataSource(context, uri)
             title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: title
-            artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: artist
+            rawArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: rawArtist
             album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: album
+            rawAlbumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
             duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
 
             retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toIntOrNull()?.let {
@@ -163,12 +173,17 @@ class LocalAudioScanner @Inject constructor(
             return createFallbackTrack(uri, fileName, size)
         }
 
+        val processedArtist = splitAndJoin(rawArtist, artistSeparators)
+        val processedAlbumArtist = if (rawAlbumArtist != null) splitAndJoin(rawAlbumArtist, artistSeparators) else processedArtist
+        val rawGenre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
+        val processedGenre = rawGenre?.let { splitAndJoin(it, genreSeparators) }
+
         return TrackEntity(
             title = title,
-            artist = artist,
+            artist = processedArtist,
             album = album,
-            albumArtist = artist,
-            genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE),
+            albumArtist = processedAlbumArtist,
+            genre = processedGenre,
             year = null,
             trackNumber = null,
             discNumber = null,
@@ -183,6 +198,15 @@ class LocalAudioScanner @Inject constructor(
             albumArtPath = albumArtPath,
             lyrics = readLyricsSafely(uri, fileName)
         )
+    }
+
+    private fun splitAndJoin(value: String, separators: Set<String>): String {
+        if (separators.isEmpty()) return value
+        var result = listOf(value)
+        separators.forEach { sep ->
+            result = result.flatMap { it.split(sep) }
+        }
+        return result.map { it.trim() }.filter { it.isNotEmpty() }.joinToString("; ")
     }
 
     private fun saveAlbumArt(uri: Uri, artBytes: ByteArray): String? {
@@ -230,21 +254,6 @@ class LocalAudioScanner @Inject constructor(
 
     suspend fun scanDeviceAudioFiles(): List<TrackEntity> = emptyList()
 
-    // ---------------------------------------------------------------------
-    // Embedded lyrics extraction
-    //
-    // MediaMetadataRetriever has no public API for embedded lyrics, so we
-    // read the lyrics tag directly from the container/tag format:
-    //   - MP3 / AAC : ID3v2 "USLT" frame
-    //   - FLAC      : Vorbis comment "LYRICS" / "UNSYNCEDLYRICS" field
-    //   - OGG/Opus  : Vorbis comment / OpusTags "LYRICS" field
-    //   - M4A / M4B : MP4 "©lyr" atom under moov/udta/meta/ilst
-    // WAV is not covered (lyrics are rarely embedded there in a
-    // consistent/discoverable way) and simply returns null.
-    // All parsing streams forward through the file and bails out safely
-    // (returning null) on any malformed or unsupported data.
-    // ---------------------------------------------------------------------
-
     private fun readLyricsSafely(uri: Uri, fileName: String): String? {
         return try {
             readEmbeddedLyrics(uri, fileName)
@@ -269,8 +278,6 @@ class LocalAudioScanner @Inject constructor(
         return null
     }
 
-    // --- ID3v2 (USLT frame) -------------------------------------------------
-
     private fun parseId3Lyrics(input: InputStream): String? {
         val header = input.readNBytesCompat(10)
         if (header.size < 10) return null
@@ -281,7 +288,6 @@ class LocalAudioScanner @Inject constructor(
         val flags = header[5].toInt() and 0xFF
         var remaining = syncSafeInt(header, 6).toLong()
 
-        // Extended header (rare) - skip it if present.
         if (flags and 0x40 != 0) {
             val extHeader = input.readNBytesCompat(4)
             if (extHeader.size < 4) return null
@@ -294,7 +300,7 @@ class LocalAudioScanner @Inject constructor(
         while (remaining > 10) {
             val frameHeader = input.readNBytesCompat(10)
             if (frameHeader.size < 10) return null
-            if (frameHeader[0] == 0.toByte()) return null // padding reached
+            if (frameHeader[0] == 0.toByte()) return null
 
             val frameId = String(frameHeader, 0, 4, Charsets.US_ASCII)
             val frameSize = if (majorVersion >= 4) syncSafeInt(frameHeader, 4) else beInt(frameHeader, 4)
@@ -314,7 +320,7 @@ class LocalAudioScanner @Inject constructor(
     private fun parseUsltFrame(body: ByteArray): String? {
         if (body.size < 5) return null
         val encoding = body[0].toInt() and 0xFF
-        val offset = 4 // 1 byte encoding + 3 byte language
+        val offset = 4
         if (offset >= body.size) return null
 
         val (charset, terminatorLen) = when (encoding) {
@@ -343,8 +349,6 @@ class LocalAudioScanner @Inject constructor(
         return text.ifBlank { null }
     }
 
-    // --- FLAC (Vorbis comment block) ----------------------------------------
-
     private fun parseFlacLyrics(input: InputStream): String? {
         val magic = input.readNBytesCompat(4)
         if (magic.size < 4 || String(magic, Charsets.US_ASCII) != "fLaC") return null
@@ -358,7 +362,7 @@ class LocalAudioScanner @Inject constructor(
                     ((blockHeader[2].toInt() and 0xFF) shl 8) or
                     (blockHeader[3].toInt() and 0xFF)
 
-            if (blockType == 4) { // VORBIS_COMMENT
+            if (blockType == 4) {
                 val block = input.readNBytesCompat(blockSize)
                 return extractLyricsFromVorbisComment(block)
             } else {
@@ -368,20 +372,18 @@ class LocalAudioScanner @Inject constructor(
         }
     }
 
-    // --- OGG / Opus (Vorbis comment / OpusTags header) -----------------------
-
     private fun parseOggLyrics(input: InputStream): String? {
         var pagesRead = 0
         while (pagesRead < 10) {
             val capture = input.readNBytesCompat(4)
             if (capture.size < 4 || String(capture, Charsets.US_ASCII) != "OggS") return null
 
-            input.skipFully(1) // version
-            input.skipFully(1) // header type flag
-            input.skipFully(8) // granule position
-            input.skipFully(4) // serial number
-            input.skipFully(4) // page sequence number
-            input.skipFully(4) // checksum
+            input.skipFully(1)
+            input.skipFully(1)
+            input.skipFully(8)
+            input.skipFully(4)
+            input.skipFully(4)
+            input.skipFully(4)
 
             val segCountByte = input.readNBytesCompat(1)
             if (segCountByte.isEmpty()) return null
@@ -421,10 +423,10 @@ class LocalAudioScanner @Inject constructor(
         if (vendorLen < 0 || pos + vendorLen > bytes.size) return null
         pos += vendorLen
 
-        val commentCount = readLEInt() ?: return null
-        if (commentCount < 0) return null
+        val ownerCount = readLEInt() ?: return null
+        if (ownerCount < 0) return null
 
-        repeat(commentCount) {
+        repeat(ownerCount) {
             val len = readLEInt() ?: return null
             if (len < 0 || pos + len > bytes.size) return null
             val comment = String(bytes, pos, len, Charsets.UTF_8)
@@ -441,8 +443,6 @@ class LocalAudioScanner @Inject constructor(
         }
         return null
     }
-
-    // --- MP4 / M4A / M4B ("©lyr" atom) ----------------------------------------
 
     private fun parseMp4Lyrics(input: InputStream): String? {
         return findMp4LyricsAtom(input, Long.MAX_VALUE)
@@ -466,7 +466,7 @@ class LocalAudioScanner @Inject constructor(
                 size = beLong(ext)
                 headerLen = 16L
             }
-            if (size <= 0) return null // 0/negative means "rest of file" or corrupt data; bail out
+            if (size <= 0) return null
 
             val bodySize = size - headerLen
             if (bodySize < 0) return null
@@ -477,7 +477,6 @@ class LocalAudioScanner @Inject constructor(
                     if (result != null) return result
                 }
                 "meta" -> {
-                    // "meta" has a 4-byte version/flags field before its children
                     input.skipFully(4)
                     val result = findMp4LyricsAtom(input, bodySize - 4)
                     if (result != null) return result
@@ -503,7 +502,6 @@ class LocalAudioScanner @Inject constructor(
             if (size <= 0 || pos + size > body.size) break
 
             if (type == "data" && size > 16) {
-                // "data" atom layout: size(4) type(4) version+flags(4) reserved(4) payload...
                 val textBytes = body.copyOfRange(pos + 16, pos + size)
                 val text = String(textBytes, Charsets.UTF_8).trim { it.isISOControl() }
                 if (text.isNotBlank()) return text
@@ -512,8 +510,6 @@ class LocalAudioScanner @Inject constructor(
         }
         return null
     }
-
-    // --- Shared byte-level helpers --------------------------------------------
 
     private fun syncSafeInt(bytes: ByteArray, offset: Int): Int {
         return ((bytes[offset].toInt() and 0x7F) shl 21) or
@@ -569,8 +565,6 @@ class LocalAudioScanner @Inject constructor(
         while (remaining > 0) {
             val skipped = skip(remaining)
             if (skipped <= 0) {
-                // Some streams (e.g. content provider pipes) don't support skip() fully;
-                // fall back to reading and discarding in chunks.
                 val toRead = minOf(remaining, 8192L).toInt()
                 val discarded = readNBytesCompat(toRead)
                 if (discarded.isEmpty()) break

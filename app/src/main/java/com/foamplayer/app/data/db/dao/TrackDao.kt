@@ -18,9 +18,30 @@ interface TrackDao {
     @Query("SELECT * FROM tracks WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' OR album LIKE '%' || :query || '%'")
     fun searchTracks(query: String): Flow<List<TrackEntity>>
 
+    @Query("SELECT DISTINCT artist FROM tracks WHERE artist LIKE '%' || :query || '%'")
+    fun searchArtists(query: String): Flow<List<String>>
+
+    @Query("""
+        SELECT album, 
+               GROUP_CONCAT(DISTINCT COALESCE(albumArtist, artist)) as artist, 
+               MAX(albumArtPath) as albumArtPath 
+        FROM tracks 
+        WHERE album LIKE '%' || :query || '%' 
+           OR artist LIKE '%' || :query || '%' 
+           OR albumArtist LIKE '%' || :query || '%'
+        GROUP BY album
+    """)
+    fun searchAlbums(query: String): Flow<List<AlbumSearchResult>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTracks(tracks: List<TrackEntity>)
 
     @Query("DELETE FROM tracks WHERE path NOT IN (:existingPaths)")
     suspend fun deleteOrphanedTracks(existingPaths: List<String>)
 }
+
+data class AlbumSearchResult(
+    val album: String,
+    val artist: String,
+    val albumArtPath: String?
+)
