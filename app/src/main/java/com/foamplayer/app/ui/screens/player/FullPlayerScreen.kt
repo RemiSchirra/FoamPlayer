@@ -1,21 +1,14 @@
 package com.foamplayer.app.ui.screens.player
 
+import android.graphics.drawable.BitmapDrawable
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.EaseIn
-import androidx.compose.animation.core.EaseInOut
-import androidx.compose.animation.core.EaseInOutCirc
-import androidx.compose.animation.core.EaseInOutCubic
-import androidx.compose.animation.core.EaseInOutQuint
-import androidx.compose.animation.core.EaseInOutSine
-import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
-import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
@@ -54,14 +47,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -69,11 +65,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -81,14 +79,23 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
+import androidx.core.graphics.ColorUtils
+import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.utils.extractPaletteColor
 import com.foamplayer.app.ui.utils.pingPongMarquee
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 enum class SubViewMode(val label: String) {
@@ -222,15 +229,79 @@ fun FullPlayerScreen(
         pageCount = { state.queue.size }
     )
 
-    LaunchedEffect(state.queueIndex) {
-        if (state.queueIndex >= 0 && state.queueIndex < state.queue.size && state.queueIndex != pagerState.currentPage) {
-            pagerState.animateScrollToPage(state.queueIndex)
+    val currentQueueIndex by rememberUpdatedState(state.queueIndex)
+    val currentQueueSize by rememberUpdatedState(state.queue.size)
+
+    val context = LocalContext.current
+    val colorCache = remember { mutableStateMapOf<String, Color>() }
+
+    LaunchedEffect(pagerState.currentPage, state.queue) {
+        val indices = listOf(
+            pagerState.currentPage - 1,
+            pagerState.currentPage,
+            pagerState.currentPage + 1
+        )
+
+        val pathsToKeep = indices.mapNotNull { i ->
+            state.queue.getOrNull(i)?.albumArtPath
+        }.toSet()
+
+        // Purge scrolled-past tracks from memory
+        colorCache.keys.retainAll(pathsToKeep)
+
+        // Fetch newly visible paths
+        pathsToKeep.forEach { path ->
+            if (!colorCache.containsKey(path)) {
+                launch {
+                    val color = extractPaletteColor(context, path)
+                    if (color != null) {
+                        colorCache[path] = color
+                    }
+                }
+            }
         }
     }
 
-    LaunchedEffect(pagerState.settledPage) {
-        if (pagerState.settledPage != state.queueIndex && pagerState.settledPage >= 0 && pagerState.settledPage < state.queue.size) {
-            viewModel.skipToIndex(pagerState.settledPage)
+    LaunchedEffect(pagerState, state.queue, colorCache) {
+        snapshotFlow {
+            val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
+            val indexA = absoluteOffset.toInt().coerceIn(0, (state.queue.size - 1).coerceAtLeast(0))
+            val indexB = (indexA + 1).coerceAtMost((state.queue.size - 1).coerceAtLeast(0))
+            val fraction = (absoluteOffset - indexA).coerceIn(0f, 1f)
+
+            val pathA = state.queue.getOrNull(indexA)?.albumArtPath
+            val pathB = state.queue.getOrNull(indexB)?.albumArtPath
+
+            val cA = colorCache[pathA]
+            val cB = colorCache[pathB]
+
+            if (cA != null) {
+                lerp(cA, cB ?: cA, fraction)
+            } else null
+        }.collect { interpolatedColor ->
+            viewModel.setDynamicAccentColor(interpolatedColor)
+        }
+    }
+
+    // 3. Clean up and hand rendering authority back to MainActivity when collapsed
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.setDynamicAccentColor(null)
+        }
+    }
+
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }
+            .collect { settledPage ->
+                if (settledPage in 0 until currentQueueSize && settledPage != currentQueueIndex) {
+                    viewModel.skipToIndex(settledPage)
+                }
+            }
+    }
+
+    LaunchedEffect(currentQueueIndex) {
+        if (currentQueueIndex in 0 until currentQueueSize && pagerState.currentPage != currentQueueIndex) {
+            pagerState.animateScrollToPage(currentQueueIndex)
         }
     }
 

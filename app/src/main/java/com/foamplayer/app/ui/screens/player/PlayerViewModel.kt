@@ -1,11 +1,14 @@
 package com.foamplayer.app.ui.screens.player
 
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 
 @HiltViewModel
@@ -14,6 +17,13 @@ class PlayerViewModel @Inject constructor(
 ) : ViewModel() {
 
     val playbackState: StateFlow<PlaybackState> = audioEngine.playbackState
+
+    private val _dynamicAccentColor = MutableStateFlow<Color?>(null)
+    val dynamicAccentColor: StateFlow<Color?> = _dynamicAccentColor.asStateFlow()
+
+    fun setDynamicAccentColor(color: Color?) {
+        _dynamicAccentColor.value = color
+    }
 
     fun playQueue(tracks: List<TrackEntity>, startIndex: Int) {
         audioEngine.setQueue(tracks, startIndex)

@@ -126,16 +126,10 @@ fun FoamTheme(
         miniPlayerRounding = miniPlayerRounding,
         fullPlayerRounding = fullPlayerRounding
     )
-    
-    val targetAccentColor = accentColor ?: DarkFoamColors.primaryAccent
-    val animatedAccentColor by animateColorAsState(
-        targetValue = targetAccentColor,
-        animationSpec = tween(durationMillis = 500),
-        label = "AccentColorFade"
-    )
 
-    val colors = DarkFoamColors.copy(primaryAccent = animatedAccentColor)
-    
+    val targetAccentColor = accentColor ?: DarkFoamColors.primaryAccent
+    val colors = DarkFoamColors.copy(primaryAccent = targetAccentColor)
+
     CompositionLocalProvider(
         LocalFoamColors provides colors,
         LocalFoamTypography provides DefaultFoamTypography,
