@@ -26,6 +26,8 @@ class SettingsRepository @Inject constructor(
     private val PREF_FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")
     private val PREF_ARTIST_SEPARATORS = stringSetPreferencesKey("artist_separators")
     private val PREF_GENRE_SEPARATORS = stringSetPreferencesKey("genre_separators")
+    private val PREF_AUTOMATIC_COLOR = booleanPreferencesKey("automatic_color")
+    private val PREF_ACCENT_COLOR = intPreferencesKey("accent_color")
 
     val isBitPerfectEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[PREF_BIT_PERFECT_ENABLED] ?: true
@@ -58,6 +60,14 @@ class SettingsRepository @Inject constructor(
 
     val genreSeparators: Flow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[PREF_GENRE_SEPARATORS] ?: setOf(";", ",")
+    }
+
+    val isAutomaticColorEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[PREF_AUTOMATIC_COLOR] ?: true
+    }
+
+    val accentColor: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[PREF_ACCENT_COLOR] ?: 0xFFFF5252.toInt()
     }
 
     suspend fun setBitPerfectEnabled(enabled: Boolean) {
@@ -107,6 +117,18 @@ class SettingsRepository @Inject constructor(
     suspend fun setGenreSeparators(separators: Set<String>) {
         context.dataStore.edit { prefs ->
             prefs[PREF_GENRE_SEPARATORS] = separators
+        }
+    }
+
+    suspend fun setAutomaticColorEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[PREF_AUTOMATIC_COLOR] = enabled
+        }
+    }
+
+    suspend fun setAccentColor(color: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[PREF_ACCENT_COLOR] = color
         }
     }
 }

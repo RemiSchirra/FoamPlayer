@@ -1,9 +1,12 @@
 package com.foamplayer.app.ui.theme
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -115,6 +118,7 @@ fun FoamTheme(
     iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
     miniPlayerRounding: Dp = 8.dp,
     fullPlayerRounding: Dp = 24.dp,
+    accentColor: Color? = null,
     content: @Composable () -> Unit
 ) {
     val icons = DefaultFoamIcons.copy(currentStyle = iconStyle)
@@ -123,8 +127,17 @@ fun FoamTheme(
         fullPlayerRounding = fullPlayerRounding
     )
     
+    val targetAccentColor = accentColor ?: DarkFoamColors.primaryAccent
+    val animatedAccentColor by animateColorAsState(
+        targetValue = targetAccentColor,
+        animationSpec = tween(durationMillis = 500),
+        label = "AccentColorFade"
+    )
+    
+    val colors = DarkFoamColors.copy(primaryAccent = animatedAccentColor)
+    
     CompositionLocalProvider(
-        LocalFoamColors provides DarkFoamColors,
+        LocalFoamColors provides colors,
         LocalFoamTypography provides DefaultFoamTypography,
         LocalFoamIcons provides icons,
         LocalFoamShapes provides shapes,

@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -35,6 +37,7 @@ import kotlin.math.roundToInt
 @Composable
 fun UISettingsScreen(
     onBack: () -> Unit,
+    onNavigateToColors: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val iconStyle by viewModel.iconStyle.collectAsState()
@@ -50,6 +53,33 @@ fun UISettingsScreen(
         item {
             SettingsHeader(title = "User Interface", onBack = onBack)
             Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        item {
+            BasicText(text = "Colors", style = FoamTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(12.dp))
+            FoamGlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToColors() }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BasicText(text = "Accent Colors & Themes", style = FoamTheme.typography.body)
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = FoamTheme.colors.textSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
         item {

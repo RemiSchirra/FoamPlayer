@@ -52,6 +52,7 @@ import com.foamplayer.app.ui.screens.playlists.PlaylistDetailScreen
 import com.foamplayer.app.ui.screens.playlists.PlaylistsScreen
 import com.foamplayer.app.ui.screens.search.SearchScreen
 import com.foamplayer.app.ui.screens.settings.AudioSettingsScreen
+import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.SettingsScreen
 import com.foamplayer.app.ui.screens.settings.UISettingsScreen
@@ -69,6 +70,7 @@ sealed class Screen(val route: String, val title: String) {
     object Settings : Screen("settings", "Settings")
     object SettingsAudio : Screen("settings/audio", "Audio Settings")
     object SettingsUI : Screen("settings/ui", "UI Settings")
+    object SettingsColors : Screen("settings/ui/colors", "Color Settings")
     object SettingsLibrary : Screen("settings/library", "Library Settings")
 
     object ArtistDetail : Screen("artist/{artistName}", "Artist") {
@@ -192,7 +194,13 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                 AudioSettingsScreen(onBack = { navController.popBackStack() })
                             }
                             composable(Screen.SettingsUI.route) {
-                                UISettingsScreen(onBack = { navController.popBackStack() })
+                                UISettingsScreen(
+                                    onBack = { navController.popBackStack() },
+                                    onNavigateToColors = { navController.navigate(Screen.SettingsColors.route) }
+                                )
+                            }
+                            composable(Screen.SettingsColors.route) {
+                                ColorsSettingsScreen(onBack = { navController.popBackStack() })
                             }
                             composable(Screen.SettingsLibrary.route) {
                                 LibrarySettingsScreen(onBack = { navController.popBackStack() })

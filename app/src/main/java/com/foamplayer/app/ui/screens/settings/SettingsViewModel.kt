@@ -61,6 +61,18 @@ class SettingsViewModel @Inject constructor(
         initialValue = setOf(";", ",")
     )
 
+    val isAutomaticColorEnabled: StateFlow<Boolean> = settingsRepository.isAutomaticColorEnabled.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    val accentColor: StateFlow<Int> = settingsRepository.accentColor.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0xFF6200EE.toInt()
+    )
+
     val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -112,6 +124,18 @@ class SettingsViewModel @Inject constructor(
     fun setGenreSeparators(separators: Set<String>) {
         viewModelScope.launch {
             settingsRepository.setGenreSeparators(separators)
+        }
+    }
+
+    fun setAutomaticColorEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAutomaticColorEnabled(enabled)
+        }
+    }
+
+    fun setAccentColor(color: Int) {
+        viewModelScope.launch {
+            settingsRepository.setAccentColor(color)
         }
     }
 
