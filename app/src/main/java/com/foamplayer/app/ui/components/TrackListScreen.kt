@@ -1,8 +1,10 @@
 package com.foamplayer.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -33,10 +35,37 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.size.Size
+import androidx.compose.ui.platform.LocalContext
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.ui.navigation.SharedElementEasing
+import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.screens.library.TrackListItem
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
+
+// Used by both this header and the search/artist list rows for the shared-element
+// transition. Keeping it a single shared shape means the artwork never has to snap
+// between two different corner radii mid-animation.
+private val AlbumArtShape = RoundedCornerShape(12.dp)
+
+// Fixed decode size (px) for album art shared between this header and the search/artist
+// list rows. Coil's memory-cache key includes the requested size, so using the same
+// value on both ends means switching from the small list image to this big header image
+// is an instant cache hit instead of a fresh decode (which otherwise shows briefly as a
+// blank/transparent frame mid-transition).
+val AlbumArtRequestSize = Size(480, 480)
+
+// Drives the size/position animation for every shared element in this transition (both
+// this file's and SearchScreen.kt's). Uses the SAME duration/easing as the NavHost's
+// screen-level fade (SharedElementTransitionDurationMs/SharedElementEasing) so the
+// background fading in and the artwork moving/resizing finish on the same frame instead
+// of one lagging or overshooting the other, which is what read as a flicker.
+@OptIn(ExperimentalSharedTransitionApi::class)
+val AlbumArtBoundsTransform = BoundsTransform { _, _ ->
+    tween(durationMillis = SharedElementTransitionDurationMs, easing = SharedElementEasing)
+}
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -125,15 +154,38 @@ private fun HeaderSection(
 ) {
     // Helper: only wraps with a shared bounds modifier when a shared-element
     // context was actually provided (e.g. when navigating in from Search/Artist).
+    // For the title/artist TEXT: content genuinely differs between screens (different
+    // font sizes), so sharedBounds' cross-fade between the two is the right behavior.
     @Composable
-    fun Modifier.sharedIfAvailable(key: String): Modifier {
+    fun Modifier.sharedBoundsIfAvailable(key: String): Modifier {
         if (sharedTransitionScope == null || animatedVisibilityScope == null || sharedElementKey == null) {
             return this
         }
         return with(sharedTransitionScope) {
-            this@sharedIfAvailable.sharedBounds(
+            this@sharedBoundsIfAvailable.sharedBounds(
                 rememberSharedContentState(key = key),
-                animatedVisibilityScope = animatedVisibilityScope
+                animatedVisibilityScope = animatedVisibilityScope,
+                boundsTransform = AlbumArtBoundsTransform
+            )
+        }
+    }
+
+    // For the ARTWORK: it's the same image on both screens, just a different size and
+    // corner radius. sharedElement animates the bounds of a single element instead of
+    // cross-fading two overlapping copies, which is what was causing the "two images
+    // clipping together" / transparency glitch. clipInOverlayDuringTransition keeps the
+    // rounded corners applied for every frame of the animation, not just the resting state.
+    @Composable
+    fun Modifier.sharedArtworkIfAvailable(key: String): Modifier {
+        if (sharedTransitionScope == null || animatedVisibilityScope == null || sharedElementKey == null) {
+            return this
+        }
+        return with(sharedTransitionScope) {
+            this@sharedArtworkIfAvailable.sharedElement(
+                rememberSharedContentState(key = key),
+                animatedVisibilityScope = animatedVisibilityScope,
+                clipInOverlayDuringTransition = OverlayClip(AlbumArtShape),
+                boundsTransform = AlbumArtBoundsTransform
             )
         }
     }
@@ -148,14 +200,21 @@ private fun HeaderSection(
         Box(
             modifier = Modifier
                 .size(120.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .sharedIfAvailable("album-art-$sharedElementKey")
+                .sharedArtworkIfAvailable("album-art-$sharedElementKey")
+                .clip(AlbumArtShape)
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             if (imageUrl != null) {
                 AsyncImage(
-                    model = imageUrl,
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(imageUrl)
+                        // Must match the size used for this same URL in the search/artist
+                        // list rows (see AlbumArtRequestSize in SearchScreen.kt) so both
+                        // requests hit the same memory-cache entry during the transition.
+                        .size(AlbumArtRequestSize)
+                        .crossfade(false)
+                        .build(),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -176,7 +235,7 @@ private fun HeaderSection(
                 style = FoamTheme.typography.titleLarge,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.sharedIfAvailable("album-title-$sharedElementKey")
+                modifier = Modifier.sharedBoundsIfAvailable("album-title-$sharedElementKey")
             )
 
             if (subtitle != null) {
@@ -185,7 +244,7 @@ private fun HeaderSection(
                     style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.primaryAccent),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.sharedIfAvailable("album-artist-$sharedElementKey")
+                    modifier = Modifier.sharedBoundsIfAvailable("album-artist-$sharedElementKey")
                 )
             }
             BasicText(

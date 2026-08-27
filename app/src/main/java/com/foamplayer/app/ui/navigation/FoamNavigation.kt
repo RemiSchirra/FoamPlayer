@@ -5,7 +5,9 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.Transition
 import androidx.compose.animation.core.rememberTransition
@@ -76,12 +78,33 @@ sealed class Screen(val route: String, val title: String) {
     object ArtistDetail : Screen("artist/{artistName}", "Artist") {
         fun createRoute(artistName: String) = "artist/${URLEncoder.encode(artistName, StandardCharsets.UTF_8.toString())}"
     }
-    object AlbumDetail : Screen("album/{albumName}", "Album") {
-        fun createRoute(albumName: String) = "album/${URLEncoder.encode(albumName, StandardCharsets.UTF_8.toString())}"
+    object AlbumDetail : Screen("album/{albumName}?artUrl={artUrl}&artist={artist}", "Album") {
+        fun createRoute(albumName: String, artUrl: String? = null, artist: String? = null): String {
+            val encodedName = URLEncoder.encode(albumName, StandardCharsets.UTF_8.toString())
+            val encodedArt = URLEncoder.encode(artUrl.orEmpty(), StandardCharsets.UTF_8.toString())
+            val encodedArtist = URLEncoder.encode(artist.orEmpty(), StandardCharsets.UTF_8.toString())
+            return "album/$encodedName?artUrl=$encodedArt&artist=$encodedArtist"
+        }
     }
     object PlaylistDetail : Screen("playlist/{playlistId}", "Playlist") {
         fun createRoute(playlistId: Long) = "playlist/$playlistId"
     }
+}
+
+// Search <-> ArtistDetail <-> AlbumDetail all hand off shared elements (album art,
+// title, artist) between each other. The non-shared parts of the screen (background,
+// buttons, list rows) still need their own fade-in/out so the transition doesn't feel
+// abrupt — but that fade must run on the exact same duration/easing as the shared
+// element's bounds animation (see AlbumArtBoundsTransform in TrackListScreen.kt), or the
+// two race each other at different speeds and the mismatch reads as a flicker.
+const val SharedElementTransitionDurationMs = 350
+val SharedElementEasing = FastOutSlowInEasing
+
+private fun isSharedElementRoute(route: String?): Boolean {
+    if (route == null) return false
+    return route == Screen.Search.route ||
+            route.startsWith("artist/") ||
+            route.startsWith("album/")
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -127,33 +150,42 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                             navController = navController,
                             startDestination = Screen.Library.route,
                             enterTransition = {
-                                if (playerTransitionState.currentState) {
-                                    EnterTransition.None
-                                } else {
-                                    fadeIn(animationSpec = tween(400))
+                                when {
+                                    playerTransitionState.currentState -> EnterTransition.None
+                                    isSharedElementRoute(initialState.destination.route) ||
+                                            isSharedElementRoute(targetState.destination.route) ->
+                                        fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
+                                    else -> fadeIn(animationSpec = tween(400))
                                 }
                             },
                             exitTransition = {
-                                if (playerTransitionState.currentState) {
-                                    ExitTransition.None
-                                } else {
-                                    fadeOut(animationSpec = tween(400))
+                                when {
+                                    playerTransitionState.currentState -> ExitTransition.None
+                                    isSharedElementRoute(initialState.destination.route) ||
+                                            isSharedElementRoute(targetState.destination.route) ->
+                                        fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
+                                    else -> fadeOut(animationSpec = tween(400))
                                 }
                             },
                             popEnterTransition = {
-                                if (playerTransitionState.currentState) {
-                                    EnterTransition.None
-                                } else {
-                                    fadeIn(animationSpec = tween(400))
+                                when {
+                                    playerTransitionState.currentState -> EnterTransition.None
+                                    isSharedElementRoute(initialState.destination.route) ||
+                                            isSharedElementRoute(targetState.destination.route) ->
+                                        fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
+                                    else -> fadeIn(animationSpec = tween(400))
                                 }
                             },
                             popExitTransition = {
-                                if (playerTransitionState.currentState) {
-                                    ExitTransition.None
-                                } else {
-                                    fadeOut(animationSpec = tween(400))
+                                when {
+                                    playerTransitionState.currentState -> ExitTransition.None
+                                    isSharedElementRoute(initialState.destination.route) ||
+                                            isSharedElementRoute(targetState.destination.route) ->
+                                        fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
+                                    else -> fadeOut(animationSpec = tween(400))
                                 }
-                            }
+                            },
+                            sizeTransform = { SizeTransform(clip = false) }
                         ) {
                             composable(Screen.Library.route) {
                                 LibraryScreen(
@@ -176,7 +208,13 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                         navController.navigate(Screen.ArtistDetail.createRoute(artist))
                                     },
                                     onAlbumClick = { albumResult ->
-                                        navController.navigate(Screen.AlbumDetail.createRoute(albumResult.album))
+                                        navController.navigate(
+                                            Screen.AlbumDetail.createRoute(
+                                                albumResult.album,
+                                                albumResult.albumArtPath,
+                                                albumResult.artist
+                                            )
+                                        )
                                     },
                                     sharedTransitionScope = this@SharedTransitionLayout,
                                     animatedVisibilityScope = this
@@ -213,7 +251,13 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                 ArtistDetailScreen(
                                     artistName = artistName,
                                     onAlbumClick = { album ->
-                                        navController.navigate(Screen.AlbumDetail.createRoute(album))
+                                        navController.navigate(
+                                            Screen.AlbumDetail.createRoute(
+                                                album.album,
+                                                album.albumArtPath,
+                                                album.artist
+                                            )
+                                        )
                                     },
                                     onBack = { navController.popBackStack() },
                                     sharedTransitionScope = this@SharedTransitionLayout,
@@ -222,11 +266,19 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                             }
                             composable(
                                 Screen.AlbumDetail.route,
-                                arguments = listOf(navArgument("albumName") { type = NavType.StringType })
+                                arguments = listOf(
+                                    navArgument("albumName") { type = NavType.StringType },
+                                    navArgument("artUrl") { type = NavType.StringType; defaultValue = "" },
+                                    navArgument("artist") { type = NavType.StringType; defaultValue = "" }
+                                )
                             ) { backStackEntry ->
                                 val albumName = URLDecoder.decode(backStackEntry.arguments?.getString("albumName") ?: "", StandardCharsets.UTF_8.toString())
+                                val artUrl = URLDecoder.decode(backStackEntry.arguments?.getString("artUrl") ?: "", StandardCharsets.UTF_8.toString()).ifEmpty { null }
+                                val artist = URLDecoder.decode(backStackEntry.arguments?.getString("artist") ?: "", StandardCharsets.UTF_8.toString()).ifEmpty { null }
                                 AlbumDetailScreen(
                                     albumName = albumName,
+                                    initialImageUrl = artUrl,
+                                    initialArtistName = artist,
                                     onTrackClick = { tracks, index ->
                                         playerViewModel.playQueue(tracks, index)
                                     },

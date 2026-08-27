@@ -19,6 +19,8 @@ fun AlbumDetailScreen(
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
+    initialImageUrl: String? = null,
+    initialArtistName: String? = null,
     viewModel: AlbumDetailViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.tracks.collectAsState()
@@ -28,7 +30,11 @@ fun AlbumDetailScreen(
     }
 
     val firstTrack = tracks.firstOrNull()
-    val artistName = firstTrack?.albumArtist ?: firstTrack?.artist
+    // Fall back to the values passed in via navigation (known at click-time) until the
+    // DB query resolves, so the shared-element target never renders without art on
+    // its first frame. Once tracks load these agree anyway, so there's no visible swap.
+    val imageUrl = firstTrack?.albumArtPath ?: initialImageUrl
+    val artistName = firstTrack?.albumArtist ?: firstTrack?.artist ?: initialArtistName
 
     TrackListScreen(
         title = albumName,
@@ -40,7 +46,7 @@ fun AlbumDetailScreen(
             }
         },
         onBack = onBack,
-        imageUrl = firstTrack?.albumArtPath,
+        imageUrl = imageUrl,
         artistName = artistName,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,

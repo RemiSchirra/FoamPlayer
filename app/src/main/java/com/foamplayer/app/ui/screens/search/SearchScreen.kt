@@ -34,12 +34,20 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
+import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
+import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.screens.library.TrackListItem
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
+
+// Must match TrackListScreen's AlbumArtShape — using the same shape on both ends of the
+// shared-element transition means the corners never have to jump between two radii.
+private val AlbumArtShape = RoundedCornerShape(12.dp)
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -202,28 +210,33 @@ fun AlbumSearchResultItem(
                 .let { base ->
                     if (sharedTransitionScope != null && animatedVisibilityScope != null) {
                         with(sharedTransitionScope) {
-                            base.sharedBounds(
+                            base.sharedElement(
                                 rememberSharedContentState(key = "album-art-${album.album}"),
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(8.dp))
+                                clipInOverlayDuringTransition = OverlayClip(AlbumArtShape),
+                                boundsTransform = AlbumArtBoundsTransform
                             )
                         }
                     } else base
                 }
-                .clip(RoundedCornerShape(8.dp))
+                .clip(AlbumArtShape)
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             if (album.albumArtPath != null) {
                 AsyncImage(
-                    model = album.albumArtPath,
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(album.albumArtPath)
+                        .size(AlbumArtRequestSize)
+                        .crossfade(false)
+                        .build(),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 BasicText(
-                    text = "A",
+                    text = album.album.take(1).uppercase(),
                     style = FoamTheme.typography.caption
                 )
             }
@@ -240,7 +253,8 @@ fun AlbumSearchResultItem(
                         with(sharedTransitionScope) {
                             base.sharedBounds(
                                 rememberSharedContentState(key = "album-title-${album.album}"),
-                                animatedVisibilityScope = animatedVisibilityScope
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                boundsTransform = AlbumArtBoundsTransform
                             )
                         }
                     } else base
@@ -256,7 +270,8 @@ fun AlbumSearchResultItem(
                         with(sharedTransitionScope) {
                             base.sharedBounds(
                                 rememberSharedContentState(key = "album-artist-${album.album}"),
-                                animatedVisibilityScope = animatedVisibilityScope
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                boundsTransform = AlbumArtBoundsTransform
                             )
                         }
                     } else base

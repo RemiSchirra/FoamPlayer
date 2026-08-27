@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.ui.screens.search.AlbumSearchResultItem
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -39,7 +40,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 @Composable
 fun ArtistDetailScreen(
     artistName: String,
-    onAlbumClick: (String) -> Unit,
+    onAlbumClick: (AlbumSearchResult) -> Unit,
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -97,7 +98,7 @@ fun ArtistDetailScreen(
             items(albums) { album ->
                 AlbumSearchResultItem(
                     album = album,
-                    onClick = { onAlbumClick(album.album) },
+                    onClick = { onAlbumClick(album) },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
                 )
