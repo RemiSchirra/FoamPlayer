@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -338,6 +339,11 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                     enter = fadeIn(),
                     exit = fadeOut()
                 ) {
+                    BackHandler {
+                        scope.launch {
+                            playerTransitionState.animateTo(false, getPlayerAnimationSpec(false))
+                        }
+                    }
                     FullPlayerScreen(
                         viewModel = playerViewModel,
                         onDismiss = {

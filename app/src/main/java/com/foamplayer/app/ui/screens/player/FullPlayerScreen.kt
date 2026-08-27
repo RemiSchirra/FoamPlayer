@@ -1,6 +1,7 @@
 package com.foamplayer.app.ui.screens.player
 
 import android.graphics.drawable.BitmapDrawable
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -154,6 +155,10 @@ fun FullPlayerScreen(
             dragThresholdPx = dragThresholdPx,
             onDismiss = { currentOnDismiss.value() }
         )
+    }
+
+    BackHandler(enabled = upTransitionState.currentState || upTransitionState.targetState) {
+        gestureController.collapseToMainPlayer()
     }
 
     // Isolated draggable modifier to prevent interference with scrollable lists below it.
