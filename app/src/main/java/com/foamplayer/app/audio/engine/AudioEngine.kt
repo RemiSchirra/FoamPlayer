@@ -58,6 +58,7 @@ class AudioEngine @Inject constructor(
                         currentTrack = track,
                         queueIndex = index,
                         durationMs = track.duration,
+                        currentPositionMs = 0L,
                         audioOutputInfo = outputInfo,
                         currentLyrics = track.lyrics
                     )
