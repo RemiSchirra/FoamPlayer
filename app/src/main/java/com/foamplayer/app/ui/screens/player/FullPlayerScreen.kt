@@ -431,7 +431,7 @@ private fun SharedTransitionScope.MainPlayerContent(
         modifier = Modifier.fillMaxSize().padding(top = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        /*Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 modifier = Modifier
                     .width(40.dp)
@@ -444,7 +444,7 @@ private fun SharedTransitionScope.MainPlayerContent(
             state.audioOutputInfo?.let { info ->
                 AudioFormatBadge(isBitPerfect = info.isBitPerfectMode)
             }
-        }
+        }*/
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -562,11 +562,11 @@ private fun SharedTransitionScope.TrackHeroPager(
                 if (immersive) {
                     // Reserve the classic artwork footprint so the title and
                     // controls do not move, but do not compose another art/card.
-                    Spacer(modifier = Modifier.fillMaxWidth(0.85f).aspectRatio(1f))
+                    Spacer(modifier = Modifier.fillMaxWidth().aspectRatio(1f))
                 } else {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(0.85f)
+                            .fillMaxWidth()
                             .aspectRatio(1f)
                             .clip(RoundedCornerShape(FoamTheme.shapes.fullPlayerRounding))
                             .background(placeholderColor)
