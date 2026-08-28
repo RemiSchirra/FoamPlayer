@@ -9,7 +9,9 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -471,6 +473,8 @@ private fun SharedTransitionScope.MainPlayerContent(
             positionMs = state.currentPositionMs,
             durationMs = state.durationMs,
             outerVisibilityScope = outerVisibilityScope,
+            pagerState = pagerState,
+            currentIndex = state.queueIndex,
             onSeek = { positionMs -> viewModel.seekTo(positionMs) },
             onPrevious = { viewModel.previous() },
             onPlayPause = { if (state.isPlaying) viewModel.pause() else viewModel.play() },
@@ -717,6 +721,8 @@ private fun SharedTransitionScope.PlaybackControls(
     positionMs: Long,
     durationMs: Long,
     outerVisibilityScope: AnimatedVisibilityScope,
+    pagerState: PagerState,
+    currentIndex: Int,
     onSeek: (Long) -> Unit,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
@@ -729,7 +735,19 @@ private fun SharedTransitionScope.PlaybackControls(
         //Spacer(modifier = Modifier.height(16.dp))
 
         val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
-        FoamSlider(value = progress, onValueChange = { new -> onSeek((new * durationMs).toLong()) })
+        
+        val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
+        val distanceFromCurrent = abs(scrollPosition - currentIndex.coerceAtLeast(0))
+        val activeFraction = (1f - distanceFromCurrent).coerceIn(0f, 1f)
+        val visualProgress = progress * activeFraction
+
+        val animatedProgress by animateFloatAsState(
+            targetValue = visualProgress,
+            animationSpec = if (visualProgress == 0f && !pagerState.isScrollInProgress) tween(450) else snap(),
+            label = "SliderProgress"
+        )
+        
+        FoamSlider(value = animatedProgress, onValueChange = { new -> onSeek((new * durationMs).toLong()) })
         Spacer(modifier = Modifier.height(16.dp))
 
         Row(
@@ -771,4 +789,3 @@ private fun SharedTransitionScope.PlaybackControls(
         }
     }
 }
-

@@ -5,6 +5,9 @@ import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -43,6 +46,7 @@ import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.extractPaletteColor
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -262,8 +266,19 @@ fun MiniPlayer(
                     playbackState.currentPositionMs.toFloat() / playbackState.durationMs
                 } else 0f
 
+                val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                val distanceFromCurrent = abs(scrollPosition - currentIndex.coerceAtLeast(0))
+                val activeFraction = (1f - distanceFromCurrent).coerceIn(0f, 1f)
+                val visualProgress = progress * activeFraction
+
+                val animatedProgress by animateFloatAsState(
+                    targetValue = visualProgress,
+                    animationSpec = if (visualProgress == 0f && !pagerState.isScrollInProgress) tween(450) else snap(),
+                    label = "SliderProgress"
+                )
+
                 FoamSlider(
-                    value = progress,
+                    value = animatedProgress,
                     onValueChange = onSeek,
                     trackHeight = 2.dp,
                     activeColor = if (playbackState.audioOutputInfo?.isBitPerfectMode == true)
