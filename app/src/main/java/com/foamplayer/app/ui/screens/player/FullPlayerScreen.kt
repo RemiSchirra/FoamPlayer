@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.screens.player
 
+import android.annotation.SuppressLint
 import android.graphics.drawable.BitmapDrawable
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -25,6 +26,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -63,8 +65,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -122,6 +128,7 @@ private fun SeekableTransitionState<Boolean>.progress(): Float =
 
 private const val TRANSITION_DURATION_MS = 400
 
+private const val immersive = true
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -139,6 +146,15 @@ fun FullPlayerScreen(
 
     val upTransitionState = remember { SeekableTransitionState(false) }
     val upTransition = rememberTransition(upTransitionState, label = "UpTransition")
+    // This is seekable, so it follows the finger while the user drags into/out of
+    // Lyrics or Queue. Blur quickly on the way up; use a curve on the way back so
+    // the sharp hero returns early instead of waiting for the final part of a drag.
+    val rawSubViewProgress = upTransitionState.progress()
+    val subViewBlurProgress = if (upTransitionState.targetState) {
+        (rawSubViewProgress * 2.5f).coerceIn(0f, 1f)
+    } else {
+        rawSubViewProgress * rawSubViewProgress
+    }
 
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
@@ -332,7 +348,18 @@ fun FullPlayerScreen(
                 frontArtPath = state.queue.getOrNull(indexA)?.albumArtPath,
                 backArtPath = state.queue.getOrNull(indexB)?.albumArtPath,
                 crossfadeFraction = crossfadeFraction,
+                immersive = immersive,
+                subViewProgress = subViewBlurProgress,
                 modifier = Modifier.graphicsLayer { alpha = uiAlpha }
+            )
+
+            // This sits above either artwork backdrop but below all player UI,
+            // giving Lyrics and Queue a calmer, higher-contrast reading surface.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    // 20% dark
+                    .background(Color.Black.copy(alpha = 0.2f * subViewBlurProgress))
             )
 
             Column(modifier = Modifier.fillMaxSize()) {
@@ -353,6 +380,7 @@ fun FullPlayerScreen(
                             density = density,
                             configuration = configuration,
                             placeholderColor = placeholderColor,
+                            immersive = immersive,
                             outerVisibilityScope = animatedVisibilityScope,
                             headerVisibilityScope = this@AnimatedVisibility,
                             viewModel = viewModel,
@@ -410,17 +438,30 @@ fun FullPlayerScreen(
     }
 }
 
-/** Background layer: crossfading, heavily blurred album art behind a dark scrim. */
+/** Background layer for the classic blurred treatment and the immersive art hero. */
 @Composable
 private fun AlbumArtBackdrop(
     frontArtPath: String?,
     backArtPath: String?,
     crossfadeFraction: Float,
+    immersive: Boolean,
+    subViewProgress: Float,
     modifier: Modifier = Modifier
 ) {
+    if (immersive) {
+        ImmersiveAlbumArtBackdrop(
+            frontArtPath = frontArtPath,
+            backArtPath = backArtPath,
+            crossfadeFraction = crossfadeFraction,
+            subViewProgress = subViewProgress,
+            modifier = modifier
+        )
+        return
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
-        Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.8f }) {
+        Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f }) {
             if (frontArtPath != null) {
                 AsyncImage(
                     model = frontArtPath,
@@ -438,7 +479,122 @@ private fun AlbumArtBackdrop(
                 )
             }
         }
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)))
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        0.54f to Color.Transparent,
+                        0.72f to Color.Black.copy(alpha = 0.30f),
+                        1f to Color.Black.copy(alpha = 1f)
+                    )
+                )
+        )
+    }
+}
+
+/**
+ * Edge-to-edge art treatment. The sharp image occupies the top of the player and
+ * dissolves into the blurred background just below the halfway point, so it reads
+ * as one continuous background rather than as an oversized artwork card.
+ */
+@SuppressLint("UnusedBoxWithConstraintsScope")
+@Composable
+private fun ImmersiveAlbumArtBackdrop(
+    frontArtPath: String?,
+    backArtPath: String?,
+    crossfadeFraction: Float,
+    subViewProgress: Float,
+    modifier: Modifier = Modifier
+) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        // The sharp layer extends past the start of the transition so it can fade
+        // out over the blur instead of ending at a visible horizontal edge.
+        val sharpArtHeight = maxHeight * 0.74f
+
+        Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
+
+        // The blurred art continues beneath the complete player, preserving contrast
+        // for text and controls after the sharp hero has faded out.
+        AlbumArtImagePair(
+            frontArtPath = frontArtPath,
+            backArtPath = backArtPath,
+            crossfadeFraction = crossfadeFraction,
+            modifier = Modifier.fillMaxSize().blur(30.dp)
+        )
+
+        Box(modifier = Modifier.fillMaxWidth().height(sharpArtHeight)) {
+            AlbumArtImagePair(
+                frontArtPath = frontArtPath,
+                backArtPath = backArtPath,
+                crossfadeFraction = crossfadeFraction,
+                modifier = Modifier
+                    .fillMaxSize()
+                    // The subview has no large artwork card, so fade the sharp
+                    // hero completely into the existing blurred background.
+                    .graphicsLayer { alpha = 1f - subViewProgress }
+                    .fadeIntoBlur()
+            )
+        }
+
+        // Start replacing the crisp art with its blur at ~60% of the screen. The
+        // gradient deliberately extends below the hero so there is no hard seam.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        0.54f to Color.Transparent,
+                        0.72f to Color.Black.copy(alpha = 0.30f),
+                        1f to Color.Black.copy(alpha = 1f)
+                    )
+                )
+        )
+    }
+}
+
+/** Fades the sharp top art from 60% to 74% of the screen into the blur below it. */
+private fun Modifier.fadeIntoBlur(): Modifier =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithCache {
+            val alphaMask = Brush.verticalGradient(
+                0f to Color.White,
+                0.78f to Color.White,
+                1f to Color.Transparent
+            )
+            onDrawWithContent {
+                drawContent()
+                drawRect(alphaMask, blendMode = BlendMode.DstIn)
+            }
+        }
+
+@Composable
+private fun AlbumArtImagePair(
+    frontArtPath: String?,
+    backArtPath: String?,
+    crossfadeFraction: Float,
+    modifier: Modifier
+) {
+    Box(modifier = modifier) {
+        if (frontArtPath != null) {
+            AsyncImage(
+                model = frontArtPath,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+        if (backArtPath != null && backArtPath != frontArtPath) {
+            AsyncImage(
+                model = backArtPath,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = crossfadeFraction },
+                contentScale = ContentScale.Crop
+            )
+        }
     }
 }
 
@@ -452,6 +608,7 @@ private fun SharedTransitionScope.MainPlayerContent(
     density: Density,
     configuration: android.content.res.Configuration,
     placeholderColor: Color,
+    immersive: Boolean,
     outerVisibilityScope: AnimatedVisibilityScope,
     headerVisibilityScope: AnimatedVisibilityScope,
     viewModel: PlayerViewModel,
@@ -488,6 +645,7 @@ private fun SharedTransitionScope.MainPlayerContent(
             density = density,
             configuration = configuration,
             placeholderColor = placeholderColor,
+            immersive = immersive,
             outerVisibilityScope = outerVisibilityScope,
             headerVisibilityScope = headerVisibilityScope,
             playerTransitionState = playerTransitionState,
@@ -546,6 +704,7 @@ private fun SharedTransitionScope.TrackHeroPager(
     density: Density,
     configuration: android.content.res.Configuration,
     placeholderColor: Color,
+    immersive: Boolean,
     outerVisibilityScope: AnimatedVisibilityScope,
     headerVisibilityScope: AnimatedVisibilityScope,
     playerTransitionState: SeekableTransitionState<Boolean>,
@@ -584,25 +743,33 @@ private fun SharedTransitionScope.TrackHeroPager(
         ) { page ->
             val pageTrack = queue.getOrNull(page) ?: return@HorizontalPager
             val isAnchorPage = page == anchorPage
-            val pageAlpha = if (isAnchorPage) 1f - heroCoverage else 1f
+            // Classic mode hands the current title to the hero overlay. Immersive
+            // mode has no foreground hero card, so the pager owns the title too.
+            val pageAlpha = if (immersive) 1f else if (isAnchorPage) 1f - heroCoverage else 1f
 
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(FoamTheme.shapes.fullPlayerRounding))
-                        .background(placeholderColor)
-                        .graphicsLayer { alpha = pageAlpha },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (pageTrack.albumArtPath != null) {
-                        AsyncImage(
-                            model = pageTrack.albumArtPath,
-                            contentDescription = "Album Art",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
+                if (immersive) {
+                    // Reserve the classic artwork footprint so the title and
+                    // controls do not move, but do not compose another art/card.
+                    Spacer(modifier = Modifier.fillMaxWidth().aspectRatio(1f))
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(FoamTheme.shapes.fullPlayerRounding))
+                            .background(placeholderColor)
+                            .graphicsLayer { alpha = pageAlpha },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (pageTrack.albumArtPath != null) {
+                            AsyncImage(
+                                model = pageTrack.albumArtPath,
+                                contentDescription = "Album Art",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
@@ -611,20 +778,50 @@ private fun SharedTransitionScope.TrackHeroPager(
                         text = pageTrack.title,
                         style = FoamTheme.typography.titleLarge,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = if (immersive && pageTrack.id == track.id) {
+                            Modifier
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "track_title_${track.id}"),
+                                    animatedVisibilityScope = outerVisibilityScope
+                                )
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "track_title_header_${track.id}"),
+                                    animatedVisibilityScope = headerVisibilityScope
+                                )
+                                .pingPongMarquee()
+                        } else {
+                            Modifier
+                        }
                     )
                     BasicText(
                         text = "${pageTrack.artist} — ${pageTrack.album}",
                         style = FoamTheme.typography.body,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = if (immersive && pageTrack.id == track.id) {
+                            Modifier
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "track_artist_${track.id}"),
+                                    animatedVisibilityScope = outerVisibilityScope
+                                )
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "track_artist_header_${track.id}"),
+                                    animatedVisibilityScope = headerVisibilityScope
+                                )
+                                .pingPongMarquee()
+                        } else {
+                            Modifier
+                        }
                     )
                 }
             }
         }
 
         // Hero overlay
-        if (heroCoverage > 0f) {
+        // In immersive mode the artwork is rendered by AlbumArtBackdrop; rendering
+        // this card as well creates a duplicate (and can show as a black image).
+        if (heroCoverage > 0f && !immersive) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
@@ -648,7 +845,8 @@ private fun SharedTransitionScope.TrackHeroPager(
                             animatedVisibilityScope = headerVisibilityScope
                         )
                         .clip(RoundedCornerShape(animatedCornerRadius))
-                        .background(placeholderColor),
+                        .background(placeholderColor)
+                        .graphicsLayer { alpha = 1f },
                     contentAlignment = Alignment.Center
                 ) {
                     if (track.albumArtPath != null) {
