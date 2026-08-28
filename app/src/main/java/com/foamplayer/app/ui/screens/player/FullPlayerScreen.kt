@@ -734,19 +734,26 @@ private fun SharedTransitionScope.PlaybackControls(
     ) {
         //Spacer(modifier = Modifier.height(16.dp))
 
+        // Animate the seek bar
         val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
-        
+
         val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
         val distanceFromCurrent = abs(scrollPosition - currentIndex.coerceAtLeast(0))
         val activeFraction = (1f - distanceFromCurrent).coerceIn(0f, 1f)
         val visualProgress = progress * activeFraction
 
+        val dynamicDuration = if (activeFraction == 0f || progress == 0f) {
+            300
+        } else {
+            (300 * activeFraction).toInt().coerceAtLeast(1)
+        }
+
         val animatedProgress by animateFloatAsState(
             targetValue = visualProgress,
-            animationSpec = if (visualProgress == 0f && !pagerState.isScrollInProgress) tween(450) else snap(),
+            animationSpec = if (visualProgress == 0f) tween(dynamicDuration) else snap(),
             label = "SliderProgress"
         )
-        
+
         FoamSlider(value = animatedProgress, onValueChange = { new -> onSeek((new * durationMs).toLong()) })
         Spacer(modifier = Modifier.height(16.dp))
 

@@ -59,6 +59,7 @@ fun MiniPlayer(
     onClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
+    isAnimateSeekBarEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val track = playbackState.currentTrack ?: return
@@ -262,6 +263,8 @@ fun MiniPlayer(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
+
+                // Animate the seek bar
                 val progress = if (playbackState.durationMs > 0) {
                     playbackState.currentPositionMs.toFloat() / playbackState.durationMs
                 } else 0f
@@ -271,9 +274,15 @@ fun MiniPlayer(
                 val activeFraction = (1f - distanceFromCurrent).coerceIn(0f, 1f)
                 val visualProgress = progress * activeFraction
 
+                val dynamicDuration = if (activeFraction == 0f || progress == 0f) {
+                    300
+                } else {
+                    (300 * activeFraction).toInt().coerceAtLeast(1)
+                }
+
                 val animatedProgress by animateFloatAsState(
                     targetValue = visualProgress,
-                    animationSpec = if (visualProgress == 0f && !pagerState.isScrollInProgress) tween(450) else snap(),
+                    animationSpec = if (visualProgress == 0f) tween(dynamicDuration) else snap(),
                     label = "SliderProgress"
                 )
 
