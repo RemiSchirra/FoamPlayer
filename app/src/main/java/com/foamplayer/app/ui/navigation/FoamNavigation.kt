@@ -323,6 +323,12 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                 onSeek = { progress ->
                                     playerViewModel.seekTo((progress * playbackState.durationMs).toLong())
                                 },
+                                onSkipToTrack = { index ->
+                                    playerViewModel.skipToIndex(index)
+                                },
+                                onColorChange = { color ->
+                                    playerViewModel.setDynamicAccentColor(color)
+                                },
                                 onClick = {
                                     scope.launch { playerTransitionState.animateTo(true, getPlayerAnimationSpec(true)) }
                                 },
@@ -333,7 +339,6 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                     }
                 }
 
-                // FullPlayerScreen - Slides up over the content but stays above the Navigation Bar
                 transition.AnimatedVisibility(
                     visible = { isFull -> isFull },
                     enter = fadeIn(),
@@ -413,8 +418,8 @@ fun FoamNavigationBar(
                         Screen.Search -> FoamTheme.icons.current.search
                         Screen.Equalizer -> FoamTheme.icons.current.equalizer
                         Screen.Settings -> FoamTheme.icons.current.settings
-                        else -> FoamTheme.icons.current.settings // Fallback
-                    } as ImageVector,
+                        else -> FoamTheme.icons.current.settings
+                    },
                     contentDescription = screen.title,
                     modifier = Modifier.size(24.dp),
                     tint = if (selected) FoamTheme.colors.primaryAccent else FoamTheme.colors.textSecondary
