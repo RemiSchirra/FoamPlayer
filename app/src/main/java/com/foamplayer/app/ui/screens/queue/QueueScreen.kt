@@ -129,7 +129,8 @@ fun QueueScreen(
                                 displayedQueue = state.queue
                             }
                         )
-                    }
+                    },
+                    onRemove = { viewModel.removeQueueItem(currentIndex.value) }
                 )
             }
         }

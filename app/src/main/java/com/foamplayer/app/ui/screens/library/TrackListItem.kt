@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -32,7 +33,8 @@ fun TrackListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     showDragHandle: Boolean = false,
-    dragHandleModifier: Modifier = Modifier
+    dragHandleModifier: Modifier = Modifier,
+    onRemove: (() -> Unit)? = null
 ) {
     Row(
         modifier = modifier
@@ -80,8 +82,34 @@ fun TrackListItem(
             )
         }
 
+        if (onRemove != null) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clickable { onRemove() },
+                contentAlignment = Alignment.Center
+            ) {
+                val thickness = 3.dp
+                val length = 16.dp
+                Box(
+                    modifier = Modifier
+                        .width(length)
+                        .height(thickness)
+                        .graphicsLayer(rotationZ = 45f)
+                        .background(FoamTheme.colors.textSecondary, RoundedCornerShape(thickness / 2))
+                )
+                Box(
+                    modifier = Modifier
+                        .width(length)
+                        .height(thickness)
+                        .graphicsLayer(rotationZ = -45f)
+                        .background(FoamTheme.colors.textSecondary, RoundedCornerShape(thickness / 2))
+                )
+            }
+        }
+
         if (showDragHandle) {
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(if (onRemove != null) 20.dp else 12.dp))
 
             Column(
                 modifier = dragHandleModifier

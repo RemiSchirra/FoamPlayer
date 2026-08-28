@@ -140,6 +140,30 @@ class AudioEngine @Inject constructor(
         )
     }
 
+    fun removeQueueItem(index: Int) {
+        val currentQueue = _playbackState.value.queue
+        if (index !in currentQueue.indices) return
+
+        player.removeMediaItem(index)
+
+        val newQueue = currentQueue.toMutableList().apply {
+            removeAt(index)
+        }
+
+        val oldPlayingIndex = _playbackState.value.queueIndex
+        val newPlayingIndex = when {
+            index < oldPlayingIndex -> oldPlayingIndex - 1
+            index == oldPlayingIndex -> if (newQueue.isEmpty()) -1 else index.coerceAtMost(newQueue.size - 1)
+            else -> oldPlayingIndex
+        }
+
+        _playbackState.value = _playbackState.value.copy(
+            queue = newQueue,
+            queueIndex = newPlayingIndex,
+            currentTrack = if (newPlayingIndex != -1) newQueue.getOrNull(newPlayingIndex) else null
+        )
+    }
+
     fun toggleShuffle() {
         val newShuffle = !_playbackState.value.isShuffle
         player.shuffleModeEnabled = newShuffle
