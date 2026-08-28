@@ -1,9 +1,6 @@
 package com.foamplayer.app.ui.screens.player
 
-import android.annotation.SuppressLint
-import android.graphics.drawable.BitmapDrawable
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
@@ -18,7 +15,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -26,7 +22,6 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -41,13 +36,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -63,14 +54,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -86,29 +72,15 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
-import androidx.core.graphics.ColorUtils
-import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
-import coil.imageLoader
-import coil.request.ImageRequest
-import coil.request.SuccessResult
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.FoamSlider
-import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
-import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.extractPaletteColor
 import com.foamplayer.app.ui.utils.pingPongMarquee
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.math.abs
-
-enum class SubViewMode(val label: String) {
-    LYRICS("Lyrics"),
-    QUEUE("Queue")
-}
 
 /** Shared layout constants so the header, pager and hero overlay always agree on geometry. */
 private object PlayerDimens {
@@ -119,16 +91,16 @@ private object PlayerDimens {
 /**
  * Calculates absolute completion (0 = closed/false, 1 = open/true)
  */
-private fun SeekableTransitionState<Boolean>.progress(): Float =
+internal fun SeekableTransitionState<Boolean>.progress(): Float =
     if (currentState == targetState) {
         if (currentState) 1f else 0f
     } else {
         if (targetState) fraction else 1f - fraction
     }
 
-private const val TRANSITION_DURATION_MS = 400
+internal const val TRANSITION_DURATION_MS = 400
 
-private const val immersive = true
+private const val immersive = false
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -437,167 +409,6 @@ fun FullPlayerScreen(
         }
     }
 }
-
-/** Background layer for the classic blurred treatment and the immersive art hero. */
-@Composable
-private fun AlbumArtBackdrop(
-    frontArtPath: String?,
-    backArtPath: String?,
-    crossfadeFraction: Float,
-    immersive: Boolean,
-    subViewProgress: Float,
-    modifier: Modifier = Modifier
-) {
-    if (immersive) {
-        ImmersiveAlbumArtBackdrop(
-            frontArtPath = frontArtPath,
-            backArtPath = backArtPath,
-            crossfadeFraction = crossfadeFraction,
-            subViewProgress = subViewProgress,
-            modifier = modifier
-        )
-        return
-    }
-
-    Box(modifier = modifier.fillMaxSize()) {
-        Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
-        Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f }) {
-            if (frontArtPath != null) {
-                AsyncImage(
-                    model = frontArtPath,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().blur(20.dp),
-                    contentScale = ContentScale.Crop
-                )
-            }
-            if (backArtPath != null && backArtPath != frontArtPath) {
-                AsyncImage(
-                    model = backArtPath,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().blur(20.dp).graphicsLayer { alpha = crossfadeFraction },
-                    contentScale = ContentScale.Crop
-                )
-            }
-        }
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)))
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.54f to Color.Transparent,
-                        0.72f to Color.Black.copy(alpha = 0.30f),
-                        1f to Color.Black.copy(alpha = 1f)
-                    )
-                )
-        )
-    }
-}
-
-/**
- * Edge-to-edge art treatment. The sharp image occupies the top of the player and
- * dissolves into the blurred background just below the halfway point, so it reads
- * as one continuous background rather than as an oversized artwork card.
- */
-@SuppressLint("UnusedBoxWithConstraintsScope")
-@Composable
-private fun ImmersiveAlbumArtBackdrop(
-    frontArtPath: String?,
-    backArtPath: String?,
-    crossfadeFraction: Float,
-    subViewProgress: Float,
-    modifier: Modifier = Modifier
-) {
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        // The sharp layer extends past the start of the transition so it can fade
-        // out over the blur instead of ending at a visible horizontal edge.
-        val sharpArtHeight = maxHeight * 0.74f
-
-        Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
-
-        // The blurred art continues beneath the complete player, preserving contrast
-        // for text and controls after the sharp hero has faded out.
-        AlbumArtImagePair(
-            frontArtPath = frontArtPath,
-            backArtPath = backArtPath,
-            crossfadeFraction = crossfadeFraction,
-            modifier = Modifier.fillMaxSize().blur(30.dp)
-        )
-
-        Box(modifier = Modifier.fillMaxWidth().height(sharpArtHeight)) {
-            AlbumArtImagePair(
-                frontArtPath = frontArtPath,
-                backArtPath = backArtPath,
-                crossfadeFraction = crossfadeFraction,
-                modifier = Modifier
-                    .fillMaxSize()
-                    // The subview has no large artwork card, so fade the sharp
-                    // hero completely into the existing blurred background.
-                    .graphicsLayer { alpha = 1f - subViewProgress }
-                    .fadeIntoBlur()
-            )
-        }
-
-        // Start replacing the crisp art with its blur at ~60% of the screen. The
-        // gradient deliberately extends below the hero so there is no hard seam.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.54f to Color.Transparent,
-                        0.72f to Color.Black.copy(alpha = 0.30f),
-                        1f to Color.Black.copy(alpha = 1f)
-                    )
-                )
-        )
-    }
-}
-
-/** Fades the sharp top art from 60% to 74% of the screen into the blur below it. */
-private fun Modifier.fadeIntoBlur(): Modifier =
-    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithCache {
-            val alphaMask = Brush.verticalGradient(
-                0f to Color.White,
-                0.78f to Color.White,
-                1f to Color.Transparent
-            )
-            onDrawWithContent {
-                drawContent()
-                drawRect(alphaMask, blendMode = BlendMode.DstIn)
-            }
-        }
-
-@Composable
-private fun AlbumArtImagePair(
-    frontArtPath: String?,
-    backArtPath: String?,
-    crossfadeFraction: Float,
-    modifier: Modifier
-) {
-    Box(modifier = modifier) {
-        if (frontArtPath != null) {
-            AsyncImage(
-                model = frontArtPath,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        }
-        if (backArtPath != null && backArtPath != frontArtPath) {
-            AsyncImage(
-                model = backArtPath,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = crossfadeFraction },
-                contentScale = ContentScale.Crop
-            )
-        }
-    }
-}
-
 /** Layer 1 content: handle, hi-res badge, the track hero pager, playback controls, subview shortcuts. */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -961,194 +772,3 @@ private fun SharedTransitionScope.PlaybackControls(
     }
 }
 
-@Composable
-private fun SubViewSelectorRow(
-    selected: SubViewMode?,
-    onSelect: (SubViewMode) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.SpaceBetween) {
-        SubViewMode.entries.forEach { mode ->
-            val color = if (selected != null) {
-                if (mode == selected) FoamTheme.colors.primaryAccent else FoamTheme.colors.textSecondary
-            } else {
-                FoamTheme.colors.textPrimary
-            }
-
-            val icon = when(mode) {
-                SubViewMode.LYRICS -> FoamTheme.icons.current.lyrics
-                SubViewMode.QUEUE -> FoamTheme.icons.current.queue
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.clickable { onSelect(mode) }.padding(8.dp)
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = mode.label,
-                    tint = color,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                BasicText(
-                    text = mode.label,
-                    style = FoamTheme.typography.body.copy(color = color)
-                )
-            }
-        }
-    }
-}
-
-/** Layer 2 content: mini header (draggable handle) plus the lyrics/queue subview. */
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-private fun SharedTransitionScope.SubViewContent(
-    track: TrackEntity,
-    state: PlaybackState,
-    subViewMode: SubViewMode,
-    viewModel: PlayerViewModel,
-    headerVisibilityScope: AnimatedVisibilityScope,
-    modifier: Modifier,
-    onCollapse: () -> Unit,
-    upTransitionState: SeekableTransitionState<Boolean>
-) {
-    Column(modifier = Modifier.fillMaxSize().padding(top = 24.dp)) {
-        // Draggable zone limited to the header to prevent scroll conflicts below.
-        Column(modifier = Modifier.fillMaxWidth().then(modifier)) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .width(40.dp)
-                    .height(4.dp)
-                    .clip(CircleShape)
-                    .background(FoamTheme.colors.borderOverlay)
-                    .clickable { onCollapse() }
-            )
-
-            MiniPlayerHeader(
-                track = track,
-                headerVisibilityScope = headerVisibilityScope,
-                onBack = onCollapse,
-                upTransitionState = upTransitionState
-            )
-        }
-
-        Box(modifier = Modifier.weight(1f)) {
-            AnimatedContent(
-                targetState = subViewMode,
-                transitionSpec = {
-                    fadeIn(tween(TRANSITION_DURATION_MS)) togetherWith fadeOut(tween(TRANSITION_DURATION_MS))
-                },
-                label = "SubViewContent"
-            ) { mode ->
-                when (mode) {
-                    SubViewMode.LYRICS -> {
-                        val isLyricsEmpty = state.currentLyrics.isNullOrBlank()
-                        Box(
-                            modifier = Modifier.fillMaxSize()
-                                .then(
-                                    if (isLyricsEmpty) {
-                                        Modifier.verticalScroll(rememberScrollState())
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                        ) {
-                            LyricsScreen(
-                                rawLyrics = state.currentLyrics,
-                                currentPositionMs = state.currentPositionMs,
-                                onSeek = { positionMs -> viewModel.seekTo(positionMs) },
-                                onClose = {},
-                                backgroundColor = Color.Transparent
-                            )
-                        }
-                    }
-                    SubViewMode.QUEUE -> QueueScreen(
-                        viewModel = viewModel,
-                        showTitle = false,
-                        backgroundColor = Color.Transparent
-                    )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-private fun SharedTransitionScope.MiniPlayerHeader(
-    track: TrackEntity,
-    headerVisibilityScope: AnimatedVisibilityScope,
-    onBack: () -> Unit,
-    upTransitionState: SeekableTransitionState<Boolean>
-) {
-    val animatedCornerRadius = lerp(
-        start = FoamTheme.shapes.fullPlayerRounding,
-        stop = FoamTheme.shapes.miniPlayerRounding,
-        fraction = EaseOutCubic.transform(upTransitionState.progress())
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 12.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.Black.copy(alpha = 0.2f))
-            .clickable { onBack() }
-            .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .sharedElement(
-                    rememberSharedContentState(key = "album_art_header_${track.id}"),
-                    animatedVisibilityScope = headerVisibilityScope
-                )
-                .clip(RoundedCornerShape(animatedCornerRadius))
-                .background(FoamTheme.colors.surfaceVariant)
-        ) {
-            if (track.albumArtPath != null) {
-                AsyncImage(
-                    model = track.albumArtPath,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.width(16.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            BasicText(
-                text = track.title,
-                style = FoamTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.sharedBounds(
-                    rememberSharedContentState(key = "track_title_header_${track.id}"),
-                    animatedVisibilityScope = headerVisibilityScope
-                )
-            )
-            BasicText(
-                text = track.artist,
-                style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.sharedBounds(
-                    rememberSharedContentState(key = "track_artist_header_${track.id}"),
-                    animatedVisibilityScope = headerVisibilityScope
-                )
-            )
-        }
-
-        Icon(
-            imageVector = Icons.Rounded.KeyboardArrowDown,
-            contentDescription = "Collapse",
-            tint = FoamTheme.colors.primaryAccent,
-            modifier = Modifier.size(28.dp)
-        )
-    }
-}
