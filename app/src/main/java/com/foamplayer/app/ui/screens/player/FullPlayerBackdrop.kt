@@ -77,14 +77,14 @@ private fun ImmersiveAlbumArtBackdrop(
     modifier: Modifier = Modifier
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val sharpArtHeight = maxHeight * 0.74f
+        val sharpArtHeight = maxHeight * 0.65f
 
         Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
         AlbumArtImagePair(
             frontArtPath = frontArtPath,
             backArtPath = backArtPath,
             crossfadeFraction = crossfadeFraction,
-            modifier = Modifier.fillMaxSize().blur(30.dp)
+            modifier = Modifier.fillMaxSize().blur(35.dp)
         )
         Box(modifier = Modifier.fillMaxWidth().height(sharpArtHeight)) {
             AlbumArtImagePair(
@@ -109,8 +109,8 @@ private fun BackdropGradient() {
             .background(
                 Brush.verticalGradient(
                     0f to Color.Transparent,
-                    0.54f to Color.Transparent,
-                    0.72f to Color.Black.copy(alpha = 0.30f),
+                    0.5f to Color.Transparent,
+                    0.75f to Color.Black.copy(alpha = 0.5f),
                     1f to Color.Black.copy(alpha = 1f)
                 )
             )
@@ -123,7 +123,7 @@ private fun Modifier.fadeIntoBlur(): Modifier =
         .drawWithCache {
             val alphaMask = Brush.verticalGradient(
                 0f to Color.White,
-                0.78f to Color.White,
+                0.7f to Color.White,
                 1f to Color.Transparent
             )
             onDrawWithContent {

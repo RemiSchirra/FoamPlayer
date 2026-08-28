@@ -100,7 +100,7 @@ internal fun SeekableTransitionState<Boolean>.progress(): Float =
 
 internal const val TRANSITION_DURATION_MS = 400
 
-private const val immersive = false
+private const val immersive = true
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -463,7 +463,7 @@ private fun SharedTransitionScope.MainPlayerContent(
             upTransitionState = upTransitionState
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.weight(1f))
 
         PlaybackControls(
             track = track,
@@ -477,7 +477,7 @@ private fun SharedTransitionScope.MainPlayerContent(
             onNext = { viewModel.next() }
         )
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(48.dp))
     }
 }
 
@@ -562,11 +562,11 @@ private fun SharedTransitionScope.TrackHeroPager(
                 if (immersive) {
                     // Reserve the classic artwork footprint so the title and
                     // controls do not move, but do not compose another art/card.
-                    Spacer(modifier = Modifier.fillMaxWidth().aspectRatio(1f))
+                    Spacer(modifier = Modifier.fillMaxWidth(0.85f).aspectRatio(1f))
                 } else {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .fillMaxWidth(0.85f)
                             .aspectRatio(1f)
                             .clip(RoundedCornerShape(FoamTheme.shapes.fullPlayerRounding))
                             .background(placeholderColor)
