@@ -15,6 +15,8 @@ import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -110,6 +112,10 @@ private fun isSharedElementRoute(route: String?): Boolean {
             route.startsWith("album/")
 }
 
+private fun isSettingsRoute(route: String?): Boolean {
+    return route != null && (route == Screen.Settings.route || route.startsWith("settings/"))
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun FoamNavHost(modifier: Modifier = Modifier) {
@@ -155,6 +161,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                             enterTransition = {
                                 when {
                                     playerTransitionState.currentState -> EnterTransition.None
+                                    isSettingsRoute(initialState.destination.route) &&
+                                            isSettingsRoute(targetState.destination.route) ->
+                                        slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(400)) + fadeIn(animationSpec = tween(400))
                                     isSharedElementRoute(initialState.destination.route) ||
                                             isSharedElementRoute(targetState.destination.route) ->
                                         fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
@@ -164,6 +173,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                             exitTransition = {
                                 when {
                                     playerTransitionState.currentState -> ExitTransition.None
+                                    isSettingsRoute(initialState.destination.route) &&
+                                            isSettingsRoute(targetState.destination.route) ->
+                                        slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = tween(400)) + fadeOut(animationSpec = tween(400))
                                     isSharedElementRoute(initialState.destination.route) ||
                                             isSharedElementRoute(targetState.destination.route) ->
                                         fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
@@ -173,6 +185,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                             popEnterTransition = {
                                 when {
                                     playerTransitionState.currentState -> EnterTransition.None
+                                    isSettingsRoute(initialState.destination.route) &&
+                                            isSettingsRoute(targetState.destination.route) ->
+                                        slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = tween(400)) + fadeIn(animationSpec = tween(400))
                                     isSharedElementRoute(initialState.destination.route) ||
                                             isSharedElementRoute(targetState.destination.route) ->
                                         fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
@@ -182,6 +197,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                             popExitTransition = {
                                 when {
                                     playerTransitionState.currentState -> ExitTransition.None
+                                    isSettingsRoute(initialState.destination.route) &&
+                                            isSettingsRoute(targetState.destination.route) ->
+                                        slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(400)) + fadeOut(animationSpec = tween(400))
                                     isSharedElementRoute(initialState.destination.route) ||
                                             isSharedElementRoute(targetState.destination.route) ->
                                         fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
