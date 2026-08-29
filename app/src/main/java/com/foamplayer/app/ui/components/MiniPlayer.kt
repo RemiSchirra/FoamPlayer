@@ -31,7 +31,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,17 +78,26 @@ fun MiniPlayer(
         pageCount = { queue.size }
     )
 
-    // Prefetch colors for nearby tracks to enable smooth interpolation
-    LaunchedEffect(pagerState.currentPage, queue) {
+    // Represents a distant jump in progress. While the pager slides one page,
+    // from its current position to `viaPage`, we render the *target* track's
+    // content on `viaPage` instead of whatever track actually lives there.
+    // That turns any distant jump into a single, real one-page pager slide
+    // that lands exactly on the right track -- after which we silently remap
+    // the pager onto the real index (content is identical, so nothing pops).
+    data class PendingJump(val viaPage: Int, val targetIndex: Int)
+    var pendingJump by remember { mutableStateOf<PendingJump?>(null) }
+
+    // Prefetch colors for nearby tracks (and any in-flight jump target) to enable smooth interpolation
+    LaunchedEffect(pagerState.currentPage, queue, pendingJump) {
         val indices = listOf(
             pagerState.currentPage - 1,
             pagerState.currentPage,
             pagerState.currentPage + 1
         )
 
-        val pathsToKeep = indices.mapNotNull { i ->
+        val pathsToKeep = (indices.mapNotNull { i ->
             queue.getOrNull(i)?.albumArtPath
-        }.toSet()
+        } + listOfNotNull(pendingJump?.let { queue.getOrNull(it.targetIndex)?.albumArtPath })).toSet()
 
         colorCache.keys.retainAll(pathsToKeep)
 
@@ -103,15 +114,22 @@ fun MiniPlayer(
     }
 
     // Intercept pager progress to drive the dynamic accent color transition
-    LaunchedEffect(pagerState, queue, colorCache) {
+    LaunchedEffect(pagerState, queue, colorCache, pendingJump) {
         snapshotFlow {
             val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
             val indexA = absoluteOffset.toInt().coerceIn(0, (queue.size - 1).coerceAtLeast(0))
             val indexB = (indexA + 1).coerceAtMost((queue.size - 1).coerceAtLeast(0))
             val fraction = (absoluteOffset - indexA).coerceIn(0f, 1f)
 
-            val pathA = queue.getOrNull(indexA)?.albumArtPath
-            val pathB = queue.getOrNull(indexB)?.albumArtPath
+            val jump = pendingJump
+            fun resolvedPath(page: Int) = if (jump != null && page == jump.viaPage) {
+                queue.getOrNull(jump.targetIndex)?.albumArtPath
+            } else {
+                queue.getOrNull(page)?.albumArtPath
+            }
+
+            val pathA = resolvedPath(indexA)
+            val pathB = resolvedPath(indexB)
 
             val cA = colorCache[pathA]
             val cB = colorCache[pathB]
@@ -131,10 +149,36 @@ fun MiniPlayer(
         }
     }
 
-    // Sync pager when track changes elsewhere
+    // Sync pager when track changes elsewhere (e.g. tapped from a full queue list).
     LaunchedEffect(currentIndex) {
+        // Clear any override left behind by a jump that got interrupted by
+        // this new one -- otherwise a stale viaPage/targetIndex pair can
+        // linger and desync the text/art from the real current track.
+        pendingJump = null
+
         if (currentIndex in queue.indices && pagerState.currentPage != currentIndex) {
-            pagerState.animateScrollToPage(currentIndex)
+            val distance = currentIndex - pagerState.currentPage
+            if (abs(distance) <= 1) {
+                // Already adjacent: the pager's normal slide is exactly right.
+                pagerState.animateScrollToPage(currentIndex)
+            } else {
+                // Distant jump: slide exactly one page -- rendering the real
+                // target track on that page the whole way -- so it plays as
+                // a single continuous slide straight to the new song. Once
+                // landed, silently remap the pager onto the real index; the
+                // content shown doesn't change, so nothing visibly pops.
+                val direction = if (distance > 0) 1 else -1
+                val viaPage = (pagerState.currentPage + direction).coerceIn(0, queue.size - 1)
+                try {
+                    pendingJump = PendingJump(viaPage, currentIndex)
+                    pagerState.animateScrollToPage(viaPage)
+                    pagerState.scrollToPage(currentIndex)
+                } finally {
+                    // Runs even if a newer tap cancels us mid-flight, so we
+                    // never hand off a stale override to the next jump.
+                    pendingJump = null
+                }
+            }
         }
     }
 
@@ -150,9 +194,13 @@ fun MiniPlayer(
         }
     }
 
-    // Trigger track change in engine when a swipe settles
+    // Trigger track change in engine when a swipe settles (ignore settles
+    // caused by our own programmatic jump above)
     LaunchedEffect(pagerState.settledPage) {
-        if (pagerState.settledPage != currentIndex && pagerState.settledPage in queue.indices) {
+        if (pendingJump == null &&
+            pagerState.settledPage != currentIndex &&
+            pagerState.settledPage in queue.indices
+        ) {
             onSkipToTrack(pagerState.settledPage)
         }
     }
@@ -182,8 +230,28 @@ fun MiniPlayer(
                         beyondViewportPageCount = 1,
                         key = { index -> queue.getOrNull(index)?.id ?: index }
                     ) { page ->
-                        val pageTrack = queue.getOrNull(page) ?: return@HorizontalPager
-                        
+                        val jump = pendingJump
+                        val pageTrack = (
+                                if (jump != null && page == jump.viaPage) {
+                                    queue.getOrNull(jump.targetIndex)
+                                } else {
+                                    queue.getOrNull(page)
+                                }
+                                ) ?: return@HorizontalPager
+
+                        // Only the page that's genuinely settled as the current
+                        // track may carry the shared-element continuity into the
+                        // full player. While a jump override is active, `track`
+                        // (updated instantly) can transiently match either the
+                        // page we're still visually on, or the override page
+                        // that hasn't landed yet -- neither is a safe attach
+                        // point, since the shared-element overlay renders at
+                        // wherever that page actually lays out, which may be
+                        // outside the mini player's clipped bounds. Skipping
+                        // the tag entirely during a jump avoids that; it
+                        // reattaches cleanly on the next frame after landing.
+                        val isSettledCurrentTrackPage = jump == null && pageTrack.id == track.id
+
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -194,7 +262,7 @@ fun MiniPlayer(
                                 modifier = Modifier
                                     .size(44.dp)
                                     .then(
-                                        if (pageTrack.id == track.id) {
+                                        if (isSettledCurrentTrackPage) {
                                             Modifier.sharedElement(
                                                 rememberSharedContentState(key = "album_art_${track.id}"),
                                                 animatedVisibilityScope = animatedVisibilityScope
@@ -228,7 +296,7 @@ fun MiniPlayer(
                                     style = FoamTheme.typography.titleMedium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = if (pageTrack.id == track.id) {
+                                    modifier = if (isSettledCurrentTrackPage) {
                                         Modifier.sharedBounds(
                                             rememberSharedContentState(key = "track_title_${track.id}"),
                                             animatedVisibilityScope = animatedVisibilityScope
@@ -240,7 +308,7 @@ fun MiniPlayer(
                                     style = FoamTheme.typography.caption,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = if (pageTrack.id == track.id) {
+                                    modifier = if (isSettledCurrentTrackPage) {
                                         Modifier.sharedBounds(
                                             rememberSharedContentState(key = "track_artist_${track.id}"),
                                             animatedVisibilityScope = animatedVisibilityScope
