@@ -48,7 +48,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -80,9 +79,8 @@ import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.utils.extractPaletteColor
+import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.pingPongMarquee
-import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 /** Shared layout constants so the header, pager and hero overlay always agree on geometry. */
@@ -228,8 +226,11 @@ fun FullPlayerScreen(
     val currentQueueSize by rememberUpdatedState(state.queue.size)
 
     val context = LocalContext.current
-    val colorCache = remember { mutableStateMapOf<String, Color>() }
 
+    // Ensure colors for nearby tracks are available for smooth interpolation.
+    // This asks the shared cache to fetch anything missing; it doesn't decode
+    // on its own, so it never duplicates work the mini player's own pager
+    // (which tracks the same queueIndex) already kicked off for the same art.
     LaunchedEffect(pagerState.currentPage, state.queue) {
         val indices = listOf(
             pagerState.currentPage - 1,
@@ -241,23 +242,12 @@ fun FullPlayerScreen(
             state.queue.getOrNull(i)?.albumArtPath
         }.toSet()
 
-        // Purge scrolled-past tracks from memory
-        colorCache.keys.retainAll(pathsToKeep)
-
-        // Fetch newly visible paths
         pathsToKeep.forEach { path ->
-            if (!colorCache.containsKey(path)) {
-                launch {
-                    val color = extractPaletteColor(context, path)
-                    if (color != null) {
-                        colorCache[path] = color
-                    }
-                }
-            }
+            AlbumArtPaletteCache.ensure(scope = this, context = context, path = path)
         }
     }
 
-    LaunchedEffect(pagerState, state.queue, colorCache) {
+    LaunchedEffect(pagerState, state.queue) {
         snapshotFlow {
             val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
             val indexA = absoluteOffset.toInt().coerceIn(0, (state.queue.size - 1).coerceAtLeast(0))
@@ -267,8 +257,8 @@ fun FullPlayerScreen(
             val pathA = state.queue.getOrNull(indexA)?.albumArtPath
             val pathB = state.queue.getOrNull(indexB)?.albumArtPath
 
-            val cA = colorCache[pathA]
-            val cB = colorCache[pathB]
+            val cA = pathA?.let { AlbumArtPaletteCache.colors[it] }
+            val cB = pathB?.let { AlbumArtPaletteCache.colors[it] }
 
             if (cA != null) {
                 lerp(cA, cB ?: cA, fraction)

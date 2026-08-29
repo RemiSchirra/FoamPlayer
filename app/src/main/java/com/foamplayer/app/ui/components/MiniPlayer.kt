@@ -30,9 +30,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -47,8 +47,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.utils.extractPaletteColor
-import kotlinx.coroutines.launch
+import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import kotlin.math.abs
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -70,7 +69,7 @@ fun MiniPlayer(
     val currentIndex = playbackState.queueIndex
 
     val context = LocalContext.current
-    val colorCache = remember { mutableStateMapOf<String, Color>() }
+    val scope = rememberCoroutineScope()
 
     // Pager state to handle the progressive swipe animation
     val pagerState = rememberPagerState(
@@ -87,7 +86,10 @@ fun MiniPlayer(
     data class PendingJump(val viaPage: Int, val targetIndex: Int)
     var pendingJump by remember { mutableStateOf<PendingJump?>(null) }
 
-    // Prefetch colors for nearby tracks (and any in-flight jump target) to enable smooth interpolation
+    // Ensure colors for nearby tracks (and any in-flight jump target) are available
+    // for smooth interpolation. This only asks the shared cache to fetch anything
+    // missing -- it never decodes on its own, so it doesn't duplicate work the
+    // full player (or a previous pass here) already kicked off for the same paths.
     LaunchedEffect(pagerState.currentPage, queue, pendingJump) {
         val indices = listOf(
             pagerState.currentPage - 1,
@@ -99,22 +101,13 @@ fun MiniPlayer(
             queue.getOrNull(i)?.albumArtPath
         } + listOfNotNull(pendingJump?.let { queue.getOrNull(it.targetIndex)?.albumArtPath })).toSet()
 
-        colorCache.keys.retainAll(pathsToKeep)
-
         pathsToKeep.forEach { path ->
-            if (!colorCache.containsKey(path)) {
-                launch {
-                    val color = extractPaletteColor(context, path)
-                    if (color != null) {
-                        colorCache[path] = color
-                    }
-                }
-            }
+            AlbumArtPaletteCache.ensure(scope = this, context = context, path = path)
         }
     }
 
     // Intercept pager progress to drive the dynamic accent color transition
-    LaunchedEffect(pagerState, queue, colorCache, pendingJump) {
+    LaunchedEffect(pagerState, queue, pendingJump) {
         snapshotFlow {
             val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
             val indexA = absoluteOffset.toInt().coerceIn(0, (queue.size - 1).coerceAtLeast(0))
@@ -131,8 +124,8 @@ fun MiniPlayer(
             val pathA = resolvedPath(indexA)
             val pathB = resolvedPath(indexB)
 
-            val cA = colorCache[pathA]
-            val cB = colorCache[pathB]
+            val cA = pathA?.let { AlbumArtPaletteCache.colors[it] }
+            val cB = pathB?.let { AlbumArtPaletteCache.colors[it] }
 
             if (cA != null) {
                 lerp(cA, cB ?: cA, fraction)
