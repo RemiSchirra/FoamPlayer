@@ -756,9 +756,9 @@ private fun SharedTransitionScope.PlaybackControls(
         val visualProgress = progress * activeFraction
 
         val dynamicDuration = if (activeFraction == 0f || progress == 0f) {
-            300
+            150
         } else {
-            (300 * activeFraction).toInt().coerceAtLeast(1)
+            (150 * activeFraction).toInt().coerceAtLeast(1)
         }
 
         val animatedProgress by animateFloatAsState(
