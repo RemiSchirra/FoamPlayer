@@ -25,7 +25,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 internal fun AlbumArtBackdrop(
     frontArtPath: String?,
     backArtPath: String?,
-    crossfadeFraction: Float,
+    crossfadeFraction: () -> Float,
     immersive: Boolean,
     subViewProgress: Float,
     modifier: Modifier = Modifier
@@ -56,7 +56,7 @@ internal fun AlbumArtBackdrop(
                 AsyncImage(
                     model = backArtPath,
                     contentDescription = null,
-                    modifier = Modifier.fillMaxSize().blur(20.dp).graphicsLayer { alpha = crossfadeFraction },
+                    modifier = Modifier.fillMaxSize().blur(20.dp).graphicsLayer { alpha = crossfadeFraction() },
                     contentScale = ContentScale.Crop
                 )
             }
@@ -72,7 +72,7 @@ internal fun AlbumArtBackdrop(
 private fun ImmersiveAlbumArtBackdrop(
     frontArtPath: String?,
     backArtPath: String?,
-    crossfadeFraction: Float,
+    crossfadeFraction: () -> Float,
     subViewProgress: Float,
     modifier: Modifier = Modifier
 ) {
@@ -136,7 +136,7 @@ private fun Modifier.fadeIntoBlur(): Modifier =
 private fun AlbumArtImagePair(
     frontArtPath: String?,
     backArtPath: String?,
-    crossfadeFraction: Float,
+    crossfadeFraction: () -> Float,
     modifier: Modifier
 ) {
     Box(modifier = modifier) {
@@ -152,7 +152,7 @@ private fun AlbumArtImagePair(
             AsyncImage(
                 model = backArtPath,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = crossfadeFraction },
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = crossfadeFraction() },
                 contentScale = ContentScale.Crop
             )
         }

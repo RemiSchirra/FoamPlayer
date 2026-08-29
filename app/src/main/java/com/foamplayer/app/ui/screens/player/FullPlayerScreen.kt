@@ -305,15 +305,27 @@ fun FullPlayerScreen(
                 .fillMaxSize()
                 .background(FoamTheme.colors.background.copy(alpha = uiAlpha))
         ) {
-            val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-            val indexA = absoluteOffset.toInt().coerceIn(0, (state.queue.size - 1).coerceAtLeast(0))
-            val indexB = (indexA + 1).coerceAtMost((state.queue.size - 1).coerceAtLeast(0))
-            val crossfadeFraction = (absoluteOffset - indexA).coerceIn(0f, 1f)
+            val indexA by remember(pagerState, state.queue.size) {
+                derivedStateOf {
+                    val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                    absoluteOffset.toInt().coerceIn(0, (state.queue.size - 1).coerceAtLeast(0))
+                }
+            }
+
+            val indexB by remember(pagerState, state.queue.size) {
+                derivedStateOf {
+                    val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                    (absoluteOffset.toInt() + 1).coerceAtMost((state.queue.size - 1).coerceAtLeast(0))
+                }
+            }
 
             AlbumArtBackdrop(
                 frontArtPath = state.queue.getOrNull(indexA)?.albumArtPath,
                 backArtPath = state.queue.getOrNull(indexB)?.albumArtPath,
-                crossfadeFraction = crossfadeFraction,
+                crossfadeFraction = {
+                    val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                    (absoluteOffset - absoluteOffset.toInt()).coerceIn(0f, 1f)
+                },
                 immersive = isImmersiveEnabled,
                 subViewProgress = subViewBlurProgress,
                 modifier = Modifier.graphicsLayer { alpha = uiAlpha }
