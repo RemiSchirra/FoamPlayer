@@ -22,6 +22,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -282,6 +283,18 @@ fun FullPlayerScreen(
     DisposableEffect(Unit) {
         onDispose {
             viewModel.setDynamicAccentColor(null)
+        }
+    }
+
+    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
+
+    // Trigger track change exactly when the user releases their finger
+    LaunchedEffect(isDragged) {
+        if (!isDragged) {
+            val targetPage = pagerState.targetPage
+            if (targetPage in 0 until currentQueueSize && targetPage != currentQueueIndex) {
+                viewModel.skipToIndex(targetPage)
+            }
         }
     }
 

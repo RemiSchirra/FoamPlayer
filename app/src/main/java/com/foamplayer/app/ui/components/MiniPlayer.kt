@@ -10,6 +10,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -134,6 +135,18 @@ fun MiniPlayer(
     LaunchedEffect(currentIndex) {
         if (currentIndex in queue.indices && pagerState.currentPage != currentIndex) {
             pagerState.animateScrollToPage(currentIndex)
+        }
+    }
+
+    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
+
+    // Trigger track change exactly when the user releases their finger
+    LaunchedEffect(isDragged) {
+        if (!isDragged) {
+            val target = pagerState.targetPage
+            if (target != currentIndex && target in queue.indices) {
+                onSkipToTrack(target)
+            }
         }
     }
 
