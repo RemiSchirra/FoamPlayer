@@ -13,9 +13,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -30,6 +33,7 @@ fun PlayerSettingsScreen(
 ) {
     val miniRounding by viewModel.miniPlayerRounding.collectAsState()
     val fullRounding by viewModel.fullPlayerRounding.collectAsState()
+    val isImmersiveEnabled by viewModel.isImmersiveModeEnabled.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -40,6 +44,39 @@ fun PlayerSettingsScreen(
         item {
             SettingsHeader(title = "Player Settings", onBack = onBack)
             Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        item {
+            BasicText(text = "Visuals", style = FoamTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        BasicText(text = "Immersive Mode", style = FoamTheme.typography.body)
+                        BasicText(
+                            text = "Expand album art backdrop to fill the screen",
+                            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
+                        )
+                    }
+                    Switch(
+                        checked = isImmersiveEnabled,
+                        onCheckedChange = { viewModel.setImmersiveModeEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = FoamTheme.colors.primaryAccent,
+                            checkedTrackColor = FoamTheme.colors.primaryAccent.copy(alpha = 0.5f),
+                            uncheckedThumbColor = FoamTheme.colors.textSecondary,
+                            uncheckedTrackColor = FoamTheme.colors.surfaceVariant
+                        )
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
         item {

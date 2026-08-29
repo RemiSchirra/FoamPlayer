@@ -103,8 +103,6 @@ internal fun SeekableTransitionState<Boolean>.progress(): Float =
 
 internal const val TRANSITION_DURATION_MS = 400
 
-private const val immersive = true
-
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun FullPlayerScreen(
@@ -115,6 +113,7 @@ fun FullPlayerScreen(
     playerTransitionState: SeekableTransitionState<Boolean>
 ) {
     val state by viewModel.playbackState.collectAsState()
+    val isImmersiveEnabled by viewModel.isImmersiveModeEnabled.collectAsState()
     val track = state.currentTrack ?: return
 
     var subViewMode by remember { mutableStateOf(SubViewMode.LYRICS) }
@@ -335,7 +334,7 @@ fun FullPlayerScreen(
                 frontArtPath = state.queue.getOrNull(indexA)?.albumArtPath,
                 backArtPath = state.queue.getOrNull(indexB)?.albumArtPath,
                 crossfadeFraction = crossfadeFraction,
-                immersive = immersive,
+                immersive = isImmersiveEnabled,
                 subViewProgress = subViewBlurProgress,
                 modifier = Modifier.graphicsLayer { alpha = uiAlpha }
             )
@@ -367,7 +366,7 @@ fun FullPlayerScreen(
                             density = density,
                             configuration = configuration,
                             placeholderColor = placeholderColor,
-                            immersive = immersive,
+                            immersive = isImmersiveEnabled,
                             outerVisibilityScope = animatedVisibilityScope,
                             headerVisibilityScope = this@AnimatedVisibility,
                             viewModel = viewModel,

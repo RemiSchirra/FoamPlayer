@@ -28,6 +28,7 @@ class SettingsRepository @Inject constructor(
     private val PREF_GENRE_SEPARATORS = stringSetPreferencesKey("genre_separators")
     private val PREF_AUTOMATIC_COLOR = booleanPreferencesKey("automatic_color")
     private val PREF_ACCENT_COLOR = intPreferencesKey("accent_color")
+    private val PREF_IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
 
     val isBitPerfectEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[PREF_BIT_PERFECT_ENABLED] ?: true
@@ -68,6 +69,10 @@ class SettingsRepository @Inject constructor(
 
     val accentColor: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[PREF_ACCENT_COLOR] ?: 0xFFFF5252.toInt()
+    }
+
+    val isImmersiveModeEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[PREF_IMMERSIVE_MODE] ?: true
     }
 
     suspend fun setBitPerfectEnabled(enabled: Boolean) {
@@ -129,6 +134,12 @@ class SettingsRepository @Inject constructor(
     suspend fun setAccentColor(color: Int) {
         context.dataStore.edit { prefs ->
             prefs[PREF_ACCENT_COLOR] = color
+        }
+    }
+
+    suspend fun setImmersiveModeEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[PREF_IMMERSIVE_MODE] = enabled
         }
     }
 }

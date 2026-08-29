@@ -73,6 +73,12 @@ class SettingsViewModel @Inject constructor(
         initialValue = 0xFF6200EE.toInt()
     )
 
+    val isImmersiveModeEnabled: StateFlow<Boolean> = settingsRepository.isImmersiveModeEnabled.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
     val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -136,6 +142,12 @@ class SettingsViewModel @Inject constructor(
     fun setAccentColor(color: Int) {
         viewModelScope.launch {
             settingsRepository.setAccentColor(color)
+        }
+    }
+
+    fun setImmersiveModeEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setImmersiveModeEnabled(enabled)
         }
     }
 
