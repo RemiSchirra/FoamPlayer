@@ -5,12 +5,8 @@ import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateDp
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -175,20 +172,6 @@ fun MiniPlayer(
         }
     }
 
-    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
-
-    // Trigger track change exactly when the user releases their finger
-    LaunchedEffect(isDragged) {
-        if (!isDragged) {
-            val target = pagerState.targetPage
-            if (target != currentIndex && target in queue.indices) {
-                onSkipToTrack(target)
-            }
-        }
-    }
-
-    // Trigger track change in engine when a swipe settles (ignore settles
-    // caused by our own programmatic jump above)
     LaunchedEffect(pagerState.settledPage) {
         if (pendingJump == null &&
             pagerState.settledPage != currentIndex &&
@@ -337,31 +320,24 @@ fun MiniPlayer(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-
-                // Animate the seek bar
-                val progress = if (playbackState.durationMs > 0) {
-                    playbackState.currentPositionMs.toFloat() / playbackState.durationMs
-                } else 0f
-
-                val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                val distanceFromCurrent = abs(scrollPosition - currentIndex.coerceAtLeast(0))
-                val activeFraction = (1f - distanceFromCurrent).coerceIn(0f, 1f)
-                val visualProgress = progress * activeFraction
-
-                val dynamicDuration = if (activeFraction == 0f || progress == 0f) {
-                    150
-                } else {
-                    (150 * activeFraction).toInt().coerceAtLeast(1)
+                val visualProgress by remember(
+                    playbackState.currentPositionMs,
+                    playbackState.durationMs,
+                    currentIndex
+                ) {
+                    derivedStateOf {
+                        val progress = if (playbackState.durationMs > 0) {
+                            playbackState.currentPositionMs.toFloat() / playbackState.durationMs
+                        } else 0f
+                        val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                        val distanceFromCurrent = abs(scrollPosition - currentIndex.coerceAtLeast(0))
+                        val activeFraction = (1f - distanceFromCurrent).coerceIn(0f, 1f)
+                        progress * activeFraction
+                    }
                 }
 
-                val animatedProgress by animateFloatAsState(
-                    targetValue = visualProgress,
-                    animationSpec = if (visualProgress == 0f) tween(dynamicDuration) else snap(),
-                    label = "SliderProgress"
-                )
-
                 FoamSlider(
-                    value = animatedProgress,
+                    value = visualProgress,
                     onValueChange = onSeek,
                     trackHeight = 2.dp,
                     activeColor = if (playbackState.audioOutputInfo?.isBitPerfectMode == true)

@@ -47,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -275,18 +276,7 @@ fun FullPlayerScreen(
         }
     }
 
-    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
-
-    // Trigger track change exactly when the user releases their finger
-    LaunchedEffect(isDragged) {
-        if (!isDragged) {
-            val targetPage = pagerState.targetPage
-            if (targetPage in 0 until currentQueueSize && targetPage != currentQueueIndex) {
-                viewModel.skipToIndex(targetPage)
-            }
-        }
-    }
-
+    // Single source of truth for track changing upon scroll completion
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
@@ -329,18 +319,14 @@ fun FullPlayerScreen(
                 modifier = Modifier.graphicsLayer { alpha = uiAlpha }
             )
 
-            // This sits above either artwork backdrop but below all player UI,
-            // giving Lyrics and Queue a calmer, higher-contrast reading surface.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    // 20% dark
                     .background(Color.Black.copy(alpha = 0.2f * subViewBlurProgress))
             )
 
             Column(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.weight(1f)) {
-                    // --- Layer 1: main player (art pager + controls) ---
                     upTransition.AnimatedVisibility(
                         visible = { !it },
                         enter = fadeIn(tween(TRANSITION_DURATION_MS)) +
@@ -366,7 +352,6 @@ fun FullPlayerScreen(
                         )
                     }
 
-                    // --- Layer 2: mini header + subview (lyrics/queue) ---
                     upTransition.AnimatedVisibility(
                         visible = { it },
                         enter = fadeIn(tween(TRANSITION_DURATION_MS)) +
@@ -527,13 +512,38 @@ private fun SharedTransitionScope.TrackHeroPager(
     playerTransitionState: SeekableTransitionState<Boolean>,
     upTransitionState: SeekableTransitionState<Boolean>
 ) {
-    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
-    val pageWidthPx = screenWidthPx - with(density) { (PlayerDimens.horizontalPagePadding * 2).toPx() }
-    val pageSpacingPx = with(density) { PlayerDimens.pageSpacing.toPx() }
     val anchorPage = queueIndex.coerceAtLeast(0)
-    val pagerOffsetFromAnchor = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
-    val heroCoverage = (1f - abs(pagerOffsetFromAnchor)).coerceIn(0f, 1f)
-    val heroTranslationPx = -pagerOffsetFromAnchor * (pageWidthPx + pageSpacingPx)
+
+    // Read the pager's *actual* measured page width/spacing instead of
+    // recomputing them from LocalConfiguration + a hardcoded padding constant.
+    // That manual calculation can drift from what the pager really laid out
+    // (insets, edge-to-edge display, dp->px rounding, multi-window), so the
+    // hero overlay below -- a duplicate of the anchor page's art, translated
+    // to sit visually on top of it -- would end up a few pixels off from the
+    // real page underneath. That drift is invisible near the center of a
+    // swipe but grows with distance, which is why it only showed up
+    // "sometimes": far enough into a swipe, the hero's copy of the old
+    // track's art visibly separates from the incoming page's real image.
+    val pageWidthPx = pagerState.layoutInfo.pageSize.toFloat()
+    val pageSpacingPx = pagerState.layoutInfo.pageSpacing.toFloat()
+
+    // Whether the hero overlay needs to be composed at all. This is read
+    // directly (not deferred) because it's a real composition decision --
+    // but wrapped in derivedStateOf so it only triggers recomposition when
+    // the hero crosses fully-covered <-> partially-visible, not on every
+    // fractional pixel of the drag. The continuous alpha/position values
+    // themselves are read inside graphicsLayer blocks below, which redraw
+    // on the layout/draw phase without recomposing this function.
+    val showHero by remember(anchorPage, immersive) {
+        derivedStateOf {
+            if (immersive) {
+                false
+            } else {
+                val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
+                abs(offset) < 1f
+            }
+        }
+    }
 
     // Track the outer screen transition (MiniPlayer <-> FullPlayer)
     val outerRadius = lerp(
@@ -556,13 +566,22 @@ private fun SharedTransitionScope.TrackHeroPager(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = PlayerDimens.horizontalPagePadding),
             pageSpacing = PlayerDimens.pageSpacing,
-            beyondViewportPageCount = 1
+            beyondViewportPageCount = 1,
+            key = { page -> queue.getOrNull(page)?.id ?: page }
         ) { page ->
             val pageTrack = queue.getOrNull(page) ?: return@HorizontalPager
             val isAnchorPage = page == anchorPage
             // Classic mode hands the current title to the hero overlay. Immersive
             // mode has no foreground hero card, so the pager owns the title too.
-            val pageAlpha = if (immersive) 1f else if (isAnchorPage) 1f - heroCoverage else 1f
+            // Read inside graphicsLayer (deferred) rather than as a captured
+            // Float, so redraws don't force this Column to recompose every frame.
+            fun anchorPageAlpha(): Float =
+                if (immersive || !isAnchorPage) {
+                    1f
+                } else {
+                    val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
+                    abs(offset).coerceIn(0f, 1f)
+                }
 
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 if (immersive) {
@@ -576,7 +595,7 @@ private fun SharedTransitionScope.TrackHeroPager(
                             .aspectRatio(1f)
                             .clip(RoundedCornerShape(FoamTheme.shapes.fullPlayerRounding))
                             .background(placeholderColor)
-                            .graphicsLayer { alpha = pageAlpha },
+                            .graphicsLayer { alpha = anchorPageAlpha() },
                         contentAlignment = Alignment.Center
                     ) {
                         if (pageTrack.albumArtPath != null) {
@@ -590,7 +609,7 @@ private fun SharedTransitionScope.TrackHeroPager(
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
-                Column(modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = pageAlpha }) {
+                Column(modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = anchorPageAlpha() }) {
                     BasicText(
                         text = pageTrack.title,
                         style = FoamTheme.typography.titleLarge,
@@ -638,15 +657,19 @@ private fun SharedTransitionScope.TrackHeroPager(
         // Hero overlay
         // In immersive mode the artwork is rendered by AlbumArtBackdrop; rendering
         // this card as well creates a duplicate (and can show as a black image).
-        if (heroCoverage > 0f && !immersive) {
+        if (showHero) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = PlayerDimens.horizontalPagePadding)
                     .graphicsLayer {
-                        translationX = heroTranslationPx
-                        alpha = heroCoverage
+                        // Deferred reads: this layer redraws every frame of the
+                        // drag without recomposing the Column (and its marquee
+                        // text / sharedElement registrations) around it.
+                        val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
+                        translationX = -offset * (pageWidthPx + pageSpacingPx)
+                        //alpha = (1f - abs(offset)).coerceIn(0f, 1f)
                     }
             ) {
                 Box(
@@ -734,29 +757,18 @@ private fun SharedTransitionScope.PlaybackControls(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        //Spacer(modifier = Modifier.height(16.dp))
-
-        // Animate the seek bar
-        val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
-
-        val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
-        val distanceFromCurrent = abs(scrollPosition - currentIndex.coerceAtLeast(0))
-        val activeFraction = (1f - distanceFromCurrent).coerceIn(0f, 1f)
-        val visualProgress = progress * activeFraction
-
-        val dynamicDuration = if (activeFraction == 0f || progress == 0f) {
-            150
-        } else {
-            (150 * activeFraction).toInt().coerceAtLeast(1)
+        // Isolate drag calculation in derived state to avoid recomposing buttons on every drag pixel
+        val visualProgress by remember(positionMs, durationMs, currentIndex) {
+            derivedStateOf {
+                val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
+                val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                val distanceFromCurrent = abs(scrollPosition - currentIndex.coerceAtLeast(0))
+                val activeFraction = (1f - distanceFromCurrent).coerceIn(0f, 1f)
+                progress * activeFraction
+            }
         }
 
-        val animatedProgress by animateFloatAsState(
-            targetValue = visualProgress,
-            animationSpec = if (visualProgress == 0f) tween(dynamicDuration) else snap(),
-            label = "SliderProgress"
-        )
-
-        FoamSlider(value = animatedProgress, onValueChange = { new -> onSeek((new * durationMs).toLong()) })
+        FoamSlider(value = visualProgress, onValueChange = { new -> onSeek((new * durationMs).toLong()) })
         Spacer(modifier = Modifier.height(16.dp))
 
         Row(
