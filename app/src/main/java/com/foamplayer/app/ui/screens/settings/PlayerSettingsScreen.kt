@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.ui.components.FoamGlassCard
+import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.roundToInt
 
@@ -49,33 +50,12 @@ fun PlayerSettingsScreen(
         item {
             BasicText(text = "Visuals", style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-            FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        BasicText(text = "Immersive Mode", style = FoamTheme.typography.body)
-                        BasicText(
-                            text = "Expand album art backdrop to fill the screen",
-                            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
-                        )
-                    }
-                    Switch(
-                        checked = isImmersiveEnabled,
-                        onCheckedChange = { viewModel.setImmersiveModeEnabled(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = FoamTheme.colors.primaryAccent,
-                            checkedTrackColor = FoamTheme.colors.primaryAccent.copy(alpha = 0.5f),
-                            uncheckedThumbColor = FoamTheme.colors.textSecondary,
-                            uncheckedTrackColor = FoamTheme.colors.surfaceVariant
-                        )
-                    )
-                }
-            }
+            FoamSwitchItem(
+                title = "Immersive Mode",
+                description = "Expand album art backdrop to fill the screen",
+                checked = isImmersiveEnabled,
+                onCheckedChange = { viewModel.setImmersiveModeEnabled(it) })
+            
             Spacer(modifier = Modifier.height(24.dp))
         }
 

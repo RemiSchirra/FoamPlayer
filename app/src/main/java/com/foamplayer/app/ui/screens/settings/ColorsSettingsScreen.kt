@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.ui.components.FoamGlassCard
+import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -76,42 +77,11 @@ fun ColorsSettingsScreen(
         item {
             BasicText(text = "System Colors", style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-            FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        BasicText(
-                            text = "Automatic Color",
-                            style = FoamTheme.typography.titleMedium
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        BasicText(
-                            text = "Extract accent color from album art or system theme.",
-                            style = FoamTheme.typography.body
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (isAutomaticColorEnabled) FoamTheme.colors.primaryAccent
-                                else FoamTheme.colors.surfaceVariant
-                            )
-                            .clickable { viewModel.setAutomaticColorEnabled(!isAutomaticColorEnabled) }
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
-                    ) {
-                        BasicText(
-                            text = if (isAutomaticColorEnabled) "ON" else "OFF",
-                            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.background)
-                        )
-                    }
-                }
-            }
+            FoamSwitchItem(
+                title = "Automatic color",
+                description = "Extract accent color from album art.",
+                checked = isAutomaticColorEnabled,
+                onCheckedChange = { viewModel.setAutomaticColorEnabled(!isAutomaticColorEnabled) })
             Spacer(modifier = Modifier.height(24.dp))
         }
 
