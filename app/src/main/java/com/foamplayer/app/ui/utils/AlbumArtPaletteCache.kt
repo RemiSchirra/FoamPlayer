@@ -26,13 +26,43 @@ import kotlinx.coroutines.withContext
  *
  * Routing both screens through this single cache means the color for a
  * given path is decoded at most once, no matter how many pagers ask for it.
+ *
+ * The cache is bounded by an LRU cap so a long session across a large library
+ * doesn't grow the map without limit. Entries are touched by [ensure] each
+ * time a screen asks for them, so the tracks actually on screen stay hot
+ * while distant ones fall out. ([interpolatedColor] deliberately does not
+ * touch: it runs inside a `snapshotFlow` read, where mutating the recency
+ * map would write snapshot state mid-read and churn on every frame.)
  */
 object AlbumArtPaletteCache {
+    /** Maximum number of cached colors before the least-recently-read entry is evicted. */
+    private const val MAX_ENTRIES = 64
+
     /** Read this directly from composition; it's a snapshot-backed map. */
     val colors = mutableStateMapOf<String, Color>()
 
     private val inFlight = mutableSetOf<String>()
     private val inFlightLock = Mutex()
+
+    // Access-ordered record of what's been read recently, driving eviction. Only the
+    // paths matter; the value is a placeholder. Backed by a plain LinkedHashMap with
+    // accessOrder=true so `touch` moves an entry to the end (most recently used).
+    private val recency = object : LinkedHashMap<String, Unit>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Unit>?): Boolean {
+            return if (size > MAX_ENTRIES) {
+                eldest?.let { colors.remove(it.key) }
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    /** Marks [path] as recently used, bumping it toward the front of the eviction order. */
+    private fun touch(path: String) {
+        recency.remove(path)
+        recency[path] = Unit
+    }
 
     /**
      * Ensures [path]'s color is present in [colors], kicking off extraction
@@ -40,7 +70,11 @@ object AlbumArtPaletteCache {
      * screens.
      */
     fun ensure(scope: CoroutineScope, context: Context, path: String?) {
-        if (path == null || colors.containsKey(path)) return
+        if (path == null) return
+        if (colors.containsKey(path)) {
+            touch(path)
+            return
+        }
         scope.launch {
             val shouldFetch = inFlightLock.withLock {
                 if (path in inFlight) {
@@ -55,6 +89,7 @@ object AlbumArtPaletteCache {
                 val color = extractPaletteColor(context, path)
                 if (color != null) {
                     colors[path] = color
+                    touch(path)
                 }
             } finally {
                 // The launching scope (a LaunchedEffect) is cancelled the moment its

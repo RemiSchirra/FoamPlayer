@@ -14,9 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -29,7 +26,7 @@ import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
 import com.foamplayer.app.ui.theme.FoamIconStyle
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.utils.extractPaletteColor
+import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -64,15 +61,18 @@ class MainActivity : ComponentActivity() {
             val dynamicAccentColor by playerViewModel.dynamicAccentColor.collectAsState()
 
             val context = LocalContext.current
-            var extractedColor by remember { mutableStateOf<Color?>(null) }
+            val currentArtPath = if (isAutomaticColor) currentTrack?.albumArtPath else null
 
-            LaunchedEffect(currentTrack?.albumArtPath, isAutomaticColor) {
-                extractedColor = if (isAutomaticColor && currentTrack?.albumArtPath != null) {
-                    extractPaletteColor(context, currentTrack.albumArtPath)
-                } else {
-                    null
+            // Reuse the shared process-wide palette cache instead of decoding the
+            // current track's art a second time here. `ensure` kicks off the fetch
+            // (deduplicated against MiniPlayer/FullPlayerScreen's own requests) and
+            // `colors[path]` reads the result reactively once it lands.
+            LaunchedEffect(currentArtPath) {
+                if (currentArtPath != null) {
+                    AlbumArtPaletteCache.ensure(scope = this, context = context, path = currentArtPath)
                 }
             }
+            val extractedColor = currentArtPath?.let { AlbumArtPaletteCache.colors[it] }
 
             val animatedManualColor by animateColorAsState(
                 targetValue = Color(manualAccentColor),
