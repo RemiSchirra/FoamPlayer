@@ -54,7 +54,7 @@ fun TestSettingsScreen(
         item {
             BasicText(text = "Sliders", style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             FoamSliderItem(
                 title = "Continuous Slider",
                 description = "Standard smooth slider component.",
@@ -70,7 +70,7 @@ fun TestSettingsScreen(
                 description = "Slider with snapping enabled.",
                 value = snappedSliderValue,
                 onValueChange = { snappedSliderValue = it },
-                steps = 5,
+                steps = 4, // Changed from 5 to 4
                 valueDisplay = "Step ${(snappedSliderValue * 5).toInt()}",
                 minMaxDisplay = "0" to "5"
             )
