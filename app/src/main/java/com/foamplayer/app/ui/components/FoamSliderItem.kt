@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.Slider
+import androidx.compose.material.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,11 +57,16 @@ fun FoamSliderItem(
         
         Spacer(modifier = Modifier.height(12.dp))
         
-        FoamSlider(
+        Slider(
             value = value,
             onValueChange = onValueChange,
-            steps = steps,
-            modifier = Modifier.fillMaxWidth()
+            steps = steps ?: 0,
+            modifier = Modifier.fillMaxWidth(),
+            colors = SliderDefaults.colors(
+                thumbColor = FoamTheme.colors.primaryAccent,
+                activeTrackColor = FoamTheme.colors.primaryAccent,
+                inactiveTrackColor = FoamTheme.colors.surfaceVariant
+            )
         )
         
         minMaxDisplay?.let { (min, max) ->
