@@ -1,0 +1,76 @@
+package com.foamplayer.app.ui.components
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.foamplayer.app.ui.theme.FoamTheme
+
+@Composable
+fun FoamSliderItem(
+    title: String,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueDisplay: String,
+    modifier: Modifier = Modifier,
+    steps: Int? = null,
+    description: String? = null,
+    minMaxDisplay: Pair<String, String>? = null
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp, horizontal = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                BasicText(
+                    text = title,
+                    style = FoamTheme.typography.titleMedium
+                )
+                description?.let {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    BasicText(
+                        text = it,
+                        style = FoamTheme.typography.body
+                    )
+                }
+            }
+            BasicText(
+                text = valueDisplay,
+                style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.primaryAccent)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        FoamSlider(
+            value = value,
+            onValueChange = onValueChange,
+            steps = steps,
+            modifier = Modifier.fillMaxWidth()
+        )
+        
+        minMaxDisplay?.let { (min, max) ->
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                BasicText(text = min, style = FoamTheme.typography.caption)
+                BasicText(text = max, style = FoamTheme.typography.caption)
+            }
+        }
+    }
+}
