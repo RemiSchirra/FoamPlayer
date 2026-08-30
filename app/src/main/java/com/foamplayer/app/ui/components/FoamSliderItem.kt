@@ -1,6 +1,7 @@
 package com.foamplayer.app.ui.components
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +19,8 @@ import androidx.compose.material.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -61,15 +64,13 @@ fun FoamSliderItem(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Wrap the Slider in a BoxWithConstraints to calculate absolute dimensions
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val density = LocalDensity.current
-            // Material sliders have a hardcoded 16.dp horizontal padding for the thumb center
-            val paddingPx = with(density) { 16.dp.toPx() }
+            // Change 16.dp to 10.dp to match the Material 2 Slider's internal thumb radius / track inset
+            val paddingPx = with(density) { 10.dp.toPx() }
             val widthPx = constraints.maxWidth.toFloat()
             val trackWidthPx = widthPx - (2 * paddingPx)
 
-            // Calculate the absolute value based on screen coordinates
             fun updateValueFromTouch(touchX: Float) {
                 if (trackWidthPx <= 0) return
 
@@ -86,23 +87,46 @@ fun FoamSliderItem(
                 onValueChange(finalValue)
             }
 
-            // The original Slider now acts purely as a visual renderer
             Slider(
                 value = value,
-                onValueChange = { /* Handled by our interceptor Box */ },
+                onValueChange = {},
                 steps = steps ?: 0,
                 valueRange = valueRange,
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(
                     thumbColor = FoamTheme.colors.primaryAccent,
                     activeTrackColor = FoamTheme.colors.primaryAccent,
-                    inactiveTrackColor = FoamTheme.colors.surfaceVariant,
-                    activeTickColor = FoamTheme.colors.surfaceVariant.copy(alpha = 0.4f),
-                    inactiveTickColor = FoamTheme.colors.primaryAccent.copy(alpha = 0.4f)
+                    inactiveTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f),
+                    activeTickColor = Color.Transparent,
+                    inactiveTickColor = Color.Transparent
                 )
             )
 
-            // Transparent touch interceptor overlay
+            if (steps != null && steps > 0) {
+                val activeDotColor = FoamTheme.colors.primaryAccent.copy(alpha = 0.7f)
+                val inactiveDotColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)
+                val currentFraction = (value - valueRange.start) / (valueRange.endInclusive - valueRange.start)
+
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val intervals = steps + 1
+                    val dotRadius = 3.dp.toPx()
+
+                    for (i in 0..steps+1) {
+                        val fraction = i.toFloat() / intervals.toFloat()
+                        val x = paddingPx + fraction * trackWidthPx
+                        val y = size.height / 2f
+
+                        val color = if (fraction <= currentFraction) activeDotColor else inactiveDotColor
+
+                        drawCircle(
+                            color = color,
+                            radius = dotRadius,
+                            center = Offset(x, y)
+                        )
+                    }
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .matchParentSize()
