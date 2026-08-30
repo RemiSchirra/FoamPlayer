@@ -14,14 +14,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -29,7 +30,8 @@ import com.foamplayer.app.ui.theme.FoamTheme
 fun SettingsScreen(
     onNavigateToAudio: () -> Unit,
     onNavigateToUI: () -> Unit,
-    onNavigateToLibrary: () -> Unit
+    onNavigateToLibrary: () -> Unit,
+    onNavigateToTest: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -50,7 +52,7 @@ fun SettingsScreen(
             SettingsCategoryItem(
                 title = "Audio",
                 subtitle = "Bit-perfect, engine options",
-                icon = FoamTheme.icons.current.equalizer, // Using equalizer icon for audio settings
+                icon = FoamTheme.icons.current.equalizer,
                 onClick = onNavigateToAudio
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -72,6 +74,16 @@ fun SettingsScreen(
                 subtitle = "Manage folders, scan media",
                 icon = FoamTheme.icons.current.library,
                 onClick = onNavigateToLibrary
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        item {
+            SettingsCategoryItem(
+                title = "Components Test",
+                subtitle = "Test UI components (Slider, Switch)",
+                icon = Icons.Default.BugReport,
+                onClick = onNavigateToTest
             )
             Spacer(modifier = Modifier.height(12.dp))
         }
@@ -111,7 +123,6 @@ fun SettingsCategoryItem(
     }
 }
 
-// Helper for sub-screens top bar
 @Composable
 fun SettingsHeader(
     title: String,
@@ -130,7 +141,7 @@ fun SettingsHeader(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = androidx.compose.material.icons.Icons.Default.ArrowBack,
+                imageVector = Icons.Default.ArrowBack,
                 contentDescription = "Back",
                 tint = FoamTheme.colors.textPrimary
             )

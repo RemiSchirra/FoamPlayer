@@ -21,6 +21,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlin.math.round
 
 @Composable
 fun FoamGlassCard(
@@ -43,28 +44,34 @@ fun FoamSlider(
     value: Float,
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    steps: Int? = null,
     trackHeight: Dp = 4.dp,
     activeColor: Color = FoamTheme.colors.primaryAccent,
     inactiveColor: Color = FoamTheme.colors.surfaceVariant
 ) {
     val currentOnValueChange by rememberUpdatedState(onValueChange)
 
+    fun snap(v: Float): Float {
+        if (steps == null || steps <= 0) return v.coerceIn(0f, 1f)
+        return (round(v * steps) / steps).coerceIn(0f, 1f)
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(32.dp)
-            .pointerInput(Unit) {
+            .pointerInput(steps) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val width = size.width
                     if (width > 0) {
-                        currentOnValueChange((down.position.x / width).coerceIn(0f, 1f))
+                        currentOnValueChange(snap(down.position.x / width))
                     }
                     down.consume()
                     
                     drag(down.id) { change ->
                         if (width > 0) {
-                            currentOnValueChange((change.position.x / width).coerceIn(0f, 1f))
+                            currentOnValueChange(snap(change.position.x / width))
                         }
                         if (change.pressed) change.consume()
                     }
