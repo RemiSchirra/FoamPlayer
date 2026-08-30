@@ -165,7 +165,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     playerTransitionState.currentState -> EnterTransition.None
                                     isSettingsRoute(initialState.destination.route) &&
                                             isSettingsRoute(targetState.destination.route) ->
-                                        slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(400)) + fadeIn(animationSpec = tween(400))
+                                        slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) + fadeIn(animationSpec = tween(400))
                                     isSharedElementRoute(initialState.destination.route) ||
                                             isSharedElementRoute(targetState.destination.route) ->
                                         fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
@@ -177,7 +177,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     playerTransitionState.currentState -> ExitTransition.None
                                     isSettingsRoute(initialState.destination.route) &&
                                             isSettingsRoute(targetState.destination.route) ->
-                                        slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = tween(400)) + fadeOut(animationSpec = tween(400))
+                                        slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = tween()) + fadeOut(animationSpec = tween(400))
                                     isSharedElementRoute(initialState.destination.route) ||
                                             isSharedElementRoute(targetState.destination.route) ->
                                         fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
@@ -189,7 +189,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     playerTransitionState.currentState -> EnterTransition.None
                                     isSettingsRoute(initialState.destination.route) &&
                                             isSettingsRoute(targetState.destination.route) ->
-                                        slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = tween(400)) + fadeIn(animationSpec = tween(400))
+                                        slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = tween()) + fadeIn(animationSpec = tween(400))
                                     isSharedElementRoute(initialState.destination.route) ||
                                             isSharedElementRoute(targetState.destination.route) ->
                                         fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
@@ -201,7 +201,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     playerTransitionState.currentState -> ExitTransition.None
                                     isSettingsRoute(initialState.destination.route) &&
                                             isSettingsRoute(targetState.destination.route) ->
-                                        slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(400)) + fadeOut(animationSpec = tween(400))
+                                        slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) + fadeOut(animationSpec = tween(400))
                                     isSharedElementRoute(initialState.destination.route) ||
                                             isSharedElementRoute(targetState.destination.route) ->
                                         fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
