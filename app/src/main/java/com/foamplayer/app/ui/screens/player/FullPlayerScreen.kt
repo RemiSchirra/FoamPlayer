@@ -728,18 +728,20 @@ private fun SharedTransitionScope.PlaybackControls(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Isolate drag calculation in derived state to avoid recomposing buttons on every drag pixel
-        val visualProgress by remember(positionMs, durationMs, currentIndex) {
-            derivedStateOf {
-                val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
-                val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                val distanceFromCurrent = abs(scrollPosition - currentIndex.coerceAtLeast(0))
-                val activeFraction = (1f - distanceFromCurrent).coerceIn(0f, 1f)
-                progress * activeFraction
-            }
-        }
-
-        FoamSlider(value = visualProgress, onValueChange = { new -> onSeek((new * durationMs).toLong()) })
+        // The value below tracks pagerState.currentPageOffsetFraction, which changes on
+        // essentially every frame of a horizontal swipe. derivedStateOf only skips
+        // recomposition when its *output* is unchanged -- it does nothing to contain
+        // *where* that output is read. Reading it here, in PlaybackControls' own body,
+        // used to force this whole composable (including the Prev/Play/Next Row and its
+        // shared-element bounds) to recompose on every drag pixel. Reading it inside a
+        // dedicated leaf composable instead confines that recomposition to just the slider.
+        PlaybackProgressSlider(
+            positionMs = positionMs,
+            durationMs = durationMs,
+            currentIndex = currentIndex,
+            pagerState = pagerState,
+            onSeek = onSeek
+        )
         Spacer(modifier = Modifier.height(16.dp))
 
         Row(
@@ -780,4 +782,32 @@ private fun SharedTransitionScope.PlaybackControls(
             )
         }
     }
+}
+
+/**
+ * Isolated on purpose: this is the one piece of PlaybackControls that legitimately needs
+ * to update every frame of a horizontal swipe (fading the slider's progress out as its
+ * page scrolls away from center). Keeping it in its own composable means that per-frame
+ * recomposition stops here instead of propagating up into PlaybackControls' Row of
+ * buttons/shared-element bounds.
+ */
+@Composable
+private fun PlaybackProgressSlider(
+    positionMs: Long,
+    durationMs: Long,
+    currentIndex: Int,
+    pagerState: PagerState,
+    onSeek: (Long) -> Unit
+) {
+    val visualProgress by remember(positionMs, durationMs, currentIndex) {
+        derivedStateOf {
+            val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
+            val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
+            val distanceFromCurrent = abs(scrollPosition - currentIndex.coerceAtLeast(0))
+            val activeFraction = (1f - distanceFromCurrent).coerceIn(0f, 1f)
+            progress * activeFraction
+        }
+    }
+
+    FoamSlider(value = visualProgress, onValueChange = { new -> onSeek((new * durationMs).toLong()) })
 }

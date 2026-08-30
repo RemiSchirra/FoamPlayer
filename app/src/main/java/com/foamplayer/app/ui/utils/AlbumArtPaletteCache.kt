@@ -3,6 +3,7 @@ package com.foamplayer.app.ui.utils
 import android.content.Context
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import kotlinx.coroutines.CoroutineScope
@@ -137,9 +138,14 @@ object AlbumArtPaletteCache {
         val indexB = (indexA + 1).coerceAtMost(pageCount - 1)
         val fraction = (absoluteOffset - indexA).coerceIn(0f, 1f)
 
-        val colorA = pathForPage(indexA)?.let { colors[it] } ?: return null
-        val colorB = pathForPage(indexB)?.let { colors[it] }
+        var colorA: Color? = null
+        var colorB: Color? = null
+        Snapshot.withoutReadObservation {
+            colorA = pathForPage(indexA)?.let { colors[it] }
+            colorB = pathForPage(indexB)?.let { colors[it] }
+        }
 
-        return lerp(colorA, colorB ?: colorA, fraction)
+        val resolvedA = colorA ?: return null
+        return lerp(resolvedA, colorB ?: resolvedA, fraction)
     }
 }
