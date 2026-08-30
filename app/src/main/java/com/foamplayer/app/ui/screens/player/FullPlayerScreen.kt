@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -61,7 +60,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -151,12 +149,10 @@ fun FullPlayerScreen(
     }
 
     // Isolated draggable modifier to prevent interference with scrollable lists below it.
-    val mainPlayerDrag = Modifier.draggable(
-        state = rememberDraggableState { delta -> gestureController.onDrag(delta) },
-        orientation = Orientation.Vertical,
-        onDragStopped = { v -> gestureController.onDragStopped(v) }
-    )
-    val headerDrag = Modifier.draggable(
+    // Main content and the subview are mutually exclusive (AnimatedVisibility toggles
+    // between them), so both call sites below share this one Modifier/DraggableState
+    // instead of each allocating an identical copy.
+    val playerDrag = Modifier.draggable(
         state = rememberDraggableState { delta -> gestureController.onDrag(delta) },
         orientation = Orientation.Vertical,
         onDragStopped = { v -> gestureController.onDragStopped(v) }
@@ -248,22 +244,17 @@ fun FullPlayerScreen(
         }
     }
 
+    // Fires every frame the pager is mid-drag, by design -- the accent color should
+    // track the swipe continuously, not jump at settle. See
+    // AlbumArtPaletteCache.interpolatedColor for the shared calculation (this used to
+    // be a local copy of the same index/lerp math that also lived in MiniPlayer).
     LaunchedEffect(pagerState, state.queue) {
         snapshotFlow {
-            val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-            val indexA = absoluteOffset.toInt().coerceIn(0, (state.queue.size - 1).coerceAtLeast(0))
-            val indexB = (indexA + 1).coerceAtMost((state.queue.size - 1).coerceAtLeast(0))
-            val fraction = (absoluteOffset - indexA).coerceIn(0f, 1f)
-
-            val pathA = state.queue.getOrNull(indexA)?.albumArtPath
-            val pathB = state.queue.getOrNull(indexB)?.albumArtPath
-
-            val cA = pathA?.let { AlbumArtPaletteCache.colors[it] }
-            val cB = pathB?.let { AlbumArtPaletteCache.colors[it] }
-
-            if (cA != null) {
-                lerp(cA, cB ?: cA, fraction)
-            } else null
+            AlbumArtPaletteCache.interpolatedColor(
+                currentPage = pagerState.currentPage,
+                currentPageOffsetFraction = pagerState.currentPageOffsetFraction,
+                pageCount = state.queue.size
+            ) { page -> state.queue.getOrNull(page)?.albumArtPath }
         }.collect { interpolatedColor ->
             viewModel.setDynamicAccentColor(interpolatedColor)
         }
@@ -345,7 +336,7 @@ fun FullPlayerScreen(
                                 slideInVertically(tween(TRANSITION_DURATION_MS)) { h -> -h / 6 },
                         exit = fadeOut(tween(TRANSITION_DURATION_MS)) +
                                 slideOutVertically(tween(TRANSITION_DURATION_MS)) { h -> -h / 6 },
-                        modifier = Modifier.fillMaxSize().then(mainPlayerDrag)
+                        modifier = Modifier.fillMaxSize().then(playerDrag)
                     ) {
                         MainPlayerContent(
                             track = track,
@@ -358,7 +349,6 @@ fun FullPlayerScreen(
                             outerVisibilityScope = animatedVisibilityScope,
                             headerVisibilityScope = this@AnimatedVisibility,
                             viewModel = viewModel,
-                            onDismiss = onDismiss,
                             playerTransitionState = playerTransitionState,
                             upTransitionState = upTransitionState
                         )
@@ -380,7 +370,7 @@ fun FullPlayerScreen(
                             subViewMode = subViewMode,
                             viewModel = viewModel,
                             headerVisibilityScope = this@AnimatedVisibility,
-                            modifier = headerDrag,
+                            modifier = playerDrag,
                             onCollapse = { gestureController.collapseToMainPlayer() },
                             upTransitionState = upTransitionState
                         )
@@ -424,7 +414,6 @@ private fun SharedTransitionScope.MainPlayerContent(
     outerVisibilityScope: AnimatedVisibilityScope,
     headerVisibilityScope: AnimatedVisibilityScope,
     viewModel: PlayerViewModel,
-    onDismiss: () -> Unit,
     playerTransitionState: SeekableTransitionState<Boolean>,
     upTransitionState: SeekableTransitionState<Boolean>
 ) {
@@ -432,21 +421,6 @@ private fun SharedTransitionScope.MainPlayerContent(
         modifier = Modifier.fillMaxSize().padding(top = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        /*Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier
-                    .width(40.dp)
-                    .height(4.dp)
-                    .clip(CircleShape)
-                    .background(FoamTheme.colors.borderOverlay)
-                    .clickable { onDismiss() }
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-            state.audioOutputInfo?.let { info ->
-                AudioFormatBadge(isBitPerfect = info.isBitPerfectMode)
-            }
-        }*/
-
         Spacer(modifier = Modifier.height(24.dp))
 
         TrackHeroPager(
@@ -481,26 +455,6 @@ private fun SharedTransitionScope.MainPlayerContent(
         )
 
         Spacer(modifier = Modifier.height(48.dp))
-    }
-}
-
-@Composable
-private fun AudioFormatBadge(isBitPerfect: Boolean) {
-    val tint = if (isBitPerfect) FoamTheme.colors.bitPerfectActive else FoamTheme.colors.bitPerfectInactive
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .padding(horizontal = 24.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(tint.copy(alpha = 0.15f))
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-    ) {
-        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(tint))
-        Spacer(modifier = Modifier.width(6.dp))
-        BasicText(
-            text = if (isBitPerfect) "BIT-PERFECT" else "HI-RES AUDIO",
-            style = FoamTheme.typography.monospace.copy(color = tint)
-        )
     }
 }
 
@@ -681,7 +635,6 @@ private fun SharedTransitionScope.TrackHeroPager(
                         // text / sharedElement registrations) around it.
                         val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
                         translationX = -offset * (pageWidthPx + pageSpacingPx)
-                        //alpha = (1f - abs(offset)).coerceIn(0f, 1f)
                     }
             ) {
                 Box(

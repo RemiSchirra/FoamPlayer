@@ -1,8 +1,10 @@
 package com.foamplayer.app.ui.utils
 
 import android.content.Context
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -56,5 +58,43 @@ object AlbumArtPaletteCache {
                 inFlightLock.withLock { inFlight -= path }
             }
         }
+    }
+
+    /**
+     * Interpolated accent color for a pager sitting between two pages, meant to be
+     * called from inside a `snapshotFlow { ... }` so it re-evaluates every frame a
+     * pager is mid-drag -- MiniPlayer and FullPlayerScreen both want that continuous
+     * per-frame update while swiping, not a throttled/settled version.
+     *
+     * This used to be two copies of the same index/lerp math, one per screen, each
+     * reading its own [PagerState] directly. Centralizing it here doesn't change how
+     * often it fires (each caller still drives it from its own pager, every frame,
+     * exactly as before) -- it just means there's one implementation to keep correct
+     * instead of two that can quietly drift apart.
+     *
+     * @param currentPage the pager's [PagerState.currentPage]
+     * @param currentPageOffsetFraction the pager's [PagerState.currentPageOffsetFraction]
+     * @param pageCount number of pages/tracks the pager can be on
+     * @param pathForPage resolves a page index to its album-art path; callers that
+     *   need to remap a page mid-transition (e.g. MiniPlayer's distant-jump override)
+     *   can do so here instead of this function needing to know about that concept
+     */
+    fun interpolatedColor(
+        currentPage: Int,
+        currentPageOffsetFraction: Float,
+        pageCount: Int,
+        pathForPage: (Int) -> String?
+    ): Color? {
+        if (pageCount <= 0) return null
+
+        val absoluteOffset = currentPage + currentPageOffsetFraction
+        val indexA = absoluteOffset.toInt().coerceIn(0, pageCount - 1)
+        val indexB = (indexA + 1).coerceAtMost(pageCount - 1)
+        val fraction = (absoluteOffset - indexA).coerceIn(0f, 1f)
+
+        val colorA = pathForPage(indexA)?.let { colors[it] } ?: return null
+        val colorB = pathForPage(indexB)?.let { colors[it] }
+
+        return lerp(colorA, colorB ?: colorA, fraction)
     }
 }

@@ -36,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +45,16 @@ import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import kotlin.math.abs
+
+/**
+ * Represents a distant jump in progress. While the pager slides one page, from its
+ * current position to [viaPage], [MiniPlayer] renders the *target* track's content on
+ * [viaPage] instead of whatever track actually lives there. That turns any distant
+ * jump into a single, real one-page pager slide that lands exactly on the right track
+ * -- after which the pager is silently remapped onto the real index (content is
+ * identical, so nothing pops).
+ */
+private data class PendingJump(val viaPage: Int, val targetIndex: Int)
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -74,13 +83,6 @@ fun MiniPlayer(
         pageCount = { queue.size }
     )
 
-    // Represents a distant jump in progress. While the pager slides one page,
-    // from its current position to `viaPage`, we render the *target* track's
-    // content on `viaPage` instead of whatever track actually lives there.
-    // That turns any distant jump into a single, real one-page pager slide
-    // that lands exactly on the right track -- after which we silently remap
-    // the pager onto the real index (content is identical, so nothing pops).
-    data class PendingJump(val viaPage: Int, val targetIndex: Int)
     var pendingJump by remember { mutableStateOf<PendingJump?>(null) }
 
     // Ensure colors for nearby tracks (and any in-flight jump target) are available
@@ -103,30 +105,24 @@ fun MiniPlayer(
         }
     }
 
-    // Intercept pager progress to drive the dynamic accent color transition
+    // Intercept pager progress to drive the dynamic accent color transition. Fires
+    // every frame the pager is mid-drag, by design. See
+    // AlbumArtPaletteCache.interpolatedColor for the shared calculation (this used to
+    // be a local copy of the same index/lerp math that also lived in FullPlayerScreen).
     LaunchedEffect(pagerState, queue, pendingJump) {
         snapshotFlow {
-            val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-            val indexA = absoluteOffset.toInt().coerceIn(0, (queue.size - 1).coerceAtLeast(0))
-            val indexB = (indexA + 1).coerceAtMost((queue.size - 1).coerceAtLeast(0))
-            val fraction = (absoluteOffset - indexA).coerceIn(0f, 1f)
-
             val jump = pendingJump
-            fun resolvedPath(page: Int) = if (jump != null && page == jump.viaPage) {
-                queue.getOrNull(jump.targetIndex)?.albumArtPath
-            } else {
-                queue.getOrNull(page)?.albumArtPath
+            AlbumArtPaletteCache.interpolatedColor(
+                currentPage = pagerState.currentPage,
+                currentPageOffsetFraction = pagerState.currentPageOffsetFraction,
+                pageCount = queue.size
+            ) { page ->
+                if (jump != null && page == jump.viaPage) {
+                    queue.getOrNull(jump.targetIndex)?.albumArtPath
+                } else {
+                    queue.getOrNull(page)?.albumArtPath
+                }
             }
-
-            val pathA = resolvedPath(indexA)
-            val pathB = resolvedPath(indexB)
-
-            val cA = pathA?.let { AlbumArtPaletteCache.colors[it] }
-            val cB = pathB?.let { AlbumArtPaletteCache.colors[it] }
-
-            if (cA != null) {
-                lerp(cA, cB ?: cA, fraction)
-            } else null
         }.collect { interpolatedColor ->
             onColorChange(interpolatedColor)
         }
