@@ -32,7 +32,6 @@ fun TestSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FoamTheme.colors.background)
-            .padding(horizontal = 16.dp)
     ) {
         item {
             SettingsHeader(title = "Component Test", onBack = onBack)
