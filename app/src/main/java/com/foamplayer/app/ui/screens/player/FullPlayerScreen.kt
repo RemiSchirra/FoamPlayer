@@ -249,12 +249,18 @@ fun FullPlayerScreen(
     // AlbumArtPaletteCache.interpolatedColor for the shared calculation (this used to
     // be a local copy of the same index/lerp math that also lived in MiniPlayer).
     LaunchedEffect(pagerState, state.queue) {
+        // Capture the queue locally so the snapshotFlow below only observes the
+        // pager's page/offset and the palette cache. Reading `state.queue` directly
+        // would pull the whole PlaybackState (a new object every 200ms position
+        // tick) into the observed set, re-running this effect on every tick while
+        // idle even though the queue itself is unchanged.
+        val queue = state.queue
         snapshotFlow {
             AlbumArtPaletteCache.interpolatedColor(
                 currentPage = pagerState.currentPage,
                 currentPageOffsetFraction = pagerState.currentPageOffsetFraction,
-                pageCount = state.queue.size
-            ) { page -> state.queue.getOrNull(page)?.albumArtPath }
+                pageCount = queue.size
+            ) { page -> queue.getOrNull(page)?.albumArtPath }
         }.collect { interpolatedColor ->
             viewModel.setDynamicAccentColor(interpolatedColor)
         }

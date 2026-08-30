@@ -6,9 +6,11 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Process-wide cache of album-art accent colors, keyed by art path.
@@ -55,7 +57,15 @@ object AlbumArtPaletteCache {
                     colors[path] = color
                 }
             } finally {
-                inFlightLock.withLock { inFlight -= path }
+                // The launching scope (a LaunchedEffect) is cancelled the moment its
+                // screen/page is swapped or left. `withLock` is cancellable, so on a
+                // cancelled scope it would throw before running `inFlight -= path`,
+                // permanently leaking `path` in `inFlight` and blocking every future
+                // fetch of that path's color. NonCancellable guarantees the marker is
+                // always cleared.
+                withContext(NonCancellable) {
+                    inFlightLock.withLock { inFlight -= path }
+                }
             }
         }
     }

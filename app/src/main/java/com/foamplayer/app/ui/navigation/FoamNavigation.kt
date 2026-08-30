@@ -61,6 +61,7 @@ import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.PlayerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.SettingsScreen
+import com.foamplayer.app.ui.screens.settings.TestSettingsScreen
 import com.foamplayer.app.ui.screens.settings.UISettingsScreen
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
@@ -79,6 +80,7 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsColors : Screen("settings/ui/colors", "Color Settings")
     object SettingsPlayer : Screen("settings/ui/player", "Player Settings")
     object SettingsLibrary : Screen("settings/library", "Library Settings")
+    object SettingsTest : Screen("settings/test", "Component Test")
 
     object ArtistDetail : Screen("artist/{artistName}", "Artist") {
         fun createRoute(artistName: String) = "artist/${URLEncoder.encode(artistName, StandardCharsets.UTF_8.toString())}"
@@ -246,7 +248,8 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                 SettingsScreen(
                                     onNavigateToAudio = { navController.navigate(Screen.SettingsAudio.route) },
                                     onNavigateToUI = { navController.navigate(Screen.SettingsUI.route) },
-                                    onNavigateToLibrary = { navController.navigate(Screen.SettingsLibrary.route) }
+                                    onNavigateToLibrary = { navController.navigate(Screen.SettingsLibrary.route) },
+                                    onNavigateToTest = { navController.navigate(Screen.SettingsTest.route) }
                                 )
                             }
                             composable(Screen.SettingsAudio.route) {
@@ -267,6 +270,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                             }
                             composable(Screen.SettingsLibrary.route) {
                                 LibrarySettingsScreen(onBack = { navController.popBackStack() })
+                            }
+                            composable(Screen.SettingsTest.route) {
+                                TestSettingsScreen(onBack = { navController.popBackStack() })
                             }
                             composable(
                                 Screen.ArtistDetail.route,
