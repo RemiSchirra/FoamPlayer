@@ -18,11 +18,15 @@ import androidx.compose.material.SwitchDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.ui.components.FoamGlassCard
+import com.foamplayer.app.ui.components.FoamSliderItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.roundToInt
@@ -34,6 +38,8 @@ fun PlayerSettingsScreen(
 ) {
     val miniRounding by viewModel.miniPlayerRounding.collectAsState()
     val fullRounding by viewModel.fullPlayerRounding.collectAsState()
+    var localMiniRounding by remember { mutableFloatStateOf(miniRounding.toFloat()) }
+    var localFullRounding by remember { mutableFloatStateOf(fullRounding.toFloat()) }
     val isImmersiveEnabled by viewModel.isImmersiveModeEnabled.collectAsState()
     val isAnimateSeekBarEnabled by viewModel.isAnimateSeekBarEnabled.collectAsState()
 
@@ -71,47 +77,33 @@ fun PlayerSettingsScreen(
         item {
             BasicText(text = "Image Rounding", style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-            FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Column {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            BasicText(text = "Mini Player", style = FoamTheme.typography.body)
-                            BasicText(text = "${miniRounding}dp", style = FoamTheme.typography.monospace)
-                        }
-                        Slider(
-                            value = miniRounding.toFloat(),
-                            onValueChange = { viewModel.setMiniPlayerRounding(it.roundToInt()) },
-                            valueRange = 0f..32f,
-                            steps = 7,
-                            colors = SliderDefaults.colors(
-                                thumbColor = FoamTheme.colors.primaryAccent,
-                                activeTrackColor = FoamTheme.colors.primaryAccent,
-                                inactiveTrackColor = FoamTheme.colors.surfaceVariant
-                            )
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Column {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            BasicText(text = "Full Player", style = FoamTheme.typography.body)
-                            BasicText(text = "${fullRounding}dp", style = FoamTheme.typography.monospace)
-                        }
-                        Slider(
-                            value = fullRounding.toFloat(),
-                            onValueChange = { viewModel.setFullPlayerRounding(it.roundToInt()) },
-                            valueRange = 0f..64f,
-                            steps = 7,
-                            colors = SliderDefaults.colors(
-                                thumbColor = FoamTheme.colors.primaryAccent,
-                                activeTrackColor = FoamTheme.colors.primaryAccent,
-                                inactiveTrackColor = FoamTheme.colors.surfaceVariant
-                            )
-                        )
-                    }
-                }
-            }
+            FoamSliderItem(
+                title = "Mini player",
+                description = "Slider with snapping enabled.",
+                value = localMiniRounding,
+                onValueChange = {
+                    localMiniRounding = it
+                    viewModel.setMiniPlayerRounding(it.roundToInt())
+                },
+                steps = 7,
+                valueRange = 0f..32f,
+                valueDisplay = "$miniRounding",
+                minMaxDisplay = "0" to "32"
+            )
+            FoamSliderItem(
+                title = "Full player",
+                description = "Slider with snapping enabled.",
+                value = localFullRounding,
+                onValueChange = {
+                    localFullRounding = it
+                    viewModel.setFullPlayerRounding(it.roundToInt())
+                },
+                steps = 7,
+                valueRange = 0f..64f,
+                valueDisplay = "$fullRounding",
+                minMaxDisplay = "0" to "64"
+            )
+
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
