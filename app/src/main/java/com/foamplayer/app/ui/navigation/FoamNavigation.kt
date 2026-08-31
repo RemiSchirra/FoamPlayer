@@ -128,6 +128,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
     val playerViewModel: PlayerViewModel = hiltViewModel()
     val libraryViewModel: LibraryViewModel = hiltViewModel()
     val playbackState by playerViewModel.playbackState.collectAsState()
+    val isAnimateSeekBarEnabled by playerViewModel.isAnimateSeekBarEnabled.collectAsState()
 
     val playerTransitionState = remember { SeekableTransitionState(false) }
     val scope = rememberCoroutineScope()
@@ -363,7 +364,8 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     scope.launch { playerTransitionState.animateTo(true, getPlayerAnimationSpec(true)) }
                                 },
                                 sharedTransitionScope = this@SharedTransitionLayout,
-                                animatedVisibilityScope = this@AnimatedVisibility
+                                animatedVisibilityScope = this@AnimatedVisibility,
+                                isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
                             )
                         }
                     }
@@ -386,7 +388,8 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                         },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = this@AnimatedVisibility,
-                        playerTransitionState = playerTransitionState
+                        playerTransitionState = playerTransitionState,
+                        isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
                     )
                 }
             }

@@ -29,6 +29,12 @@ class PlayerViewModel @Inject constructor(
         initialValue = true
     )
 
+    val isAnimateSeekBarEnabled: StateFlow<Boolean> = settingsRepository.isAnimateSeekBarEnabled.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
     private val _dynamicAccentColor = MutableStateFlow<Color?>(null)
     val dynamicAccentColor: StateFlow<Color?> = _dynamicAccentColor.asStateFlow()
 

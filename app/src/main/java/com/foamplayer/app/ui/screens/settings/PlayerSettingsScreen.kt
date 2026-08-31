@@ -35,6 +35,7 @@ fun PlayerSettingsScreen(
     val miniRounding by viewModel.miniPlayerRounding.collectAsState()
     val fullRounding by viewModel.fullPlayerRounding.collectAsState()
     val isImmersiveEnabled by viewModel.isImmersiveModeEnabled.collectAsState()
+    val isAnimateSeekBarEnabled by viewModel.isAnimateSeekBarEnabled.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -55,6 +56,14 @@ fun PlayerSettingsScreen(
                 description = "Expand album art backdrop to fill the screen",
                 checked = isImmersiveEnabled,
                 onCheckedChange = { viewModel.setImmersiveModeEnabled(it) })
+            
+            Spacer(modifier = Modifier.height(8.dp))
+
+            FoamSwitchItem(
+                title = "Animate Seek Bar",
+                description = "Enable smooth animations for the seek bar progress",
+                checked = isAnimateSeekBarEnabled,
+                onCheckedChange = { viewModel.setAnimateSeekBarEnabled(it) })
             
             Spacer(modifier = Modifier.height(24.dp))
         }

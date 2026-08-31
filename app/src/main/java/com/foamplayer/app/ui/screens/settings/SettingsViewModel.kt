@@ -79,6 +79,12 @@ class SettingsViewModel @Inject constructor(
         initialValue = true
     )
 
+    val isAnimateSeekBarEnabled: StateFlow<Boolean> = settingsRepository.isAnimateSeekBarEnabled.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
     val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -148,6 +154,12 @@ class SettingsViewModel @Inject constructor(
     fun setImmersiveModeEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setImmersiveModeEnabled(enabled)
+        }
+    }
+
+    fun setAnimateSeekBarEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAnimateSeekBarEnabled(enabled)
         }
     }
 
