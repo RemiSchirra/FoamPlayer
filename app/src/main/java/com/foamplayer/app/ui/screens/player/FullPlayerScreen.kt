@@ -384,14 +384,6 @@ fun FullPlayerScreen(
                 immersive = isImmersiveEnabled,
                 subViewProgress = subViewBlurProgress,
                 modifier = Modifier.graphicsLayer { alpha = uiAlpha },
-                foregroundModifier = if (isImmersiveEnabled) {
-                    Modifier.sharedElement(
-                        rememberSharedContentState(key = "album_art_${track.id}"),
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
-                } else {
-                    Modifier
-                }
             )
 
             Box(
