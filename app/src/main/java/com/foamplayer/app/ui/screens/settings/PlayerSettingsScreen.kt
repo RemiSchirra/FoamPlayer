@@ -42,6 +42,7 @@ fun PlayerSettingsScreen(
     var localFullRounding by remember { mutableFloatStateOf(fullRounding.toFloat()) }
     val isImmersiveEnabled by viewModel.isImmersiveModeEnabled.collectAsState()
     val isAnimateSeekBarEnabled by viewModel.isAnimateSeekBarEnabled.collectAsState()
+    val isAutoOpenPlayerEnabled by viewModel.isAutoOpenPlayerEnabled.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -52,6 +53,18 @@ fun PlayerSettingsScreen(
         item {
             SettingsHeader(title = "Player Settings", onBack = onBack)
             Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        item {
+            BasicText(text = "Behaviour", style = FoamTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            FoamSwitchItem(
+                title = "Auto open",
+                description = "Auto open the player screen when clicking on a song",
+                checked = isAutoOpenPlayerEnabled,
+                onCheckedChange = { viewModel.setAutoOpenPlayerEnabled(it) })
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
         item {

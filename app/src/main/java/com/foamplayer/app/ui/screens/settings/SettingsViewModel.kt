@@ -91,6 +91,12 @@ class SettingsViewModel @Inject constructor(
         initialValue = ScanStatus.Idle
     )
 
+    val isAutoOpenPlayerEnabled: StateFlow<Boolean> = settingsRepository.isAutoOpenPlayerEnabled.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
     fun setBitPerfectEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setBitPerfectEnabled(enabled)
@@ -160,6 +166,12 @@ class SettingsViewModel @Inject constructor(
     fun setAnimateSeekBarEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setAnimateSeekBarEnabled(enabled)
+        }
+    }
+
+    fun setAutoOpenPlayerEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAutoOpenPlayerEnabled(enabled)
         }
     }
 

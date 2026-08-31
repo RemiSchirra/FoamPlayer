@@ -30,6 +30,7 @@ class SettingsRepository @Inject constructor(
     private val PREF_ACCENT_COLOR = intPreferencesKey("accent_color")
     private val PREF_IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
     private val PREF_ANIMATE_SEEK_BAR = booleanPreferencesKey("animate_seek_bar")
+    private val PREF_AUTO_OPEN_PLAYER = booleanPreferencesKey("auto_open_player")
 
     val isBitPerfectEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[PREF_BIT_PERFECT_ENABLED] ?: true
@@ -78,6 +79,10 @@ class SettingsRepository @Inject constructor(
 
     val isAnimateSeekBarEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[PREF_ANIMATE_SEEK_BAR] ?: false
+    }
+
+    val isAutoOpenPlayerEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[PREF_AUTO_OPEN_PLAYER] ?: false
     }
 
     suspend fun setBitPerfectEnabled(enabled: Boolean) {
@@ -151,6 +156,12 @@ class SettingsRepository @Inject constructor(
     suspend fun setAnimateSeekBarEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[PREF_ANIMATE_SEEK_BAR] = enabled
+        }
+    }
+
+    suspend fun setAutoOpenPlayerEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[PREF_AUTO_OPEN_PLAYER] = enabled
         }
     }
 }
