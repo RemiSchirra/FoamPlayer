@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -70,6 +71,7 @@ fun MiniPlayer(
     onClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
+    useSharedElements: Boolean = true,
     isAnimateSeekBarEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -294,7 +296,7 @@ fun MiniPlayer(
                                 modifier = Modifier
                                     .size(44.dp)
                                     .then(
-                                        if (isSettledCurrentTrackPage) {
+                                        if (useSharedElements && isSettledCurrentTrackPage) {
                                             Modifier.sharedElement(
                                                 rememberSharedContentState(key = "album_art_${track.id}"),
                                                 animatedVisibilityScope = animatedVisibilityScope
@@ -307,7 +309,11 @@ fun MiniPlayer(
                             ) {
                                 if (pageTrack.albumArtPath != null) {
                                     AsyncImage(
-                                        model = pageTrack.albumArtPath,
+                                        model = ImageRequest.Builder(context)
+                                            .data(pageTrack.albumArtPath)
+                                            .size(AlbumArtRequestSize)
+                                            .crossfade(false)
+                                            .build(),
                                         contentDescription = "Album Art",
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
@@ -328,7 +334,7 @@ fun MiniPlayer(
                                     style = FoamTheme.typography.titleMedium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = if (isSettledCurrentTrackPage) {
+                                    modifier = if (useSharedElements && isSettledCurrentTrackPage) {
                                         Modifier.sharedBounds(
                                             rememberSharedContentState(key = "track_title_${track.id}"),
                                             animatedVisibilityScope = animatedVisibilityScope
@@ -340,7 +346,7 @@ fun MiniPlayer(
                                     style = FoamTheme.typography.caption,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = if (isSettledCurrentTrackPage) {
+                                    modifier = if (useSharedElements && isSettledCurrentTrackPage) {
                                         Modifier.sharedBounds(
                                             rememberSharedContentState(key = "track_artist_${track.id}"),
                                             animatedVisibilityScope = animatedVisibilityScope

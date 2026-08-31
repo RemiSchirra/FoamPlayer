@@ -32,8 +32,11 @@ import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -129,9 +132,11 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
     val libraryViewModel: LibraryViewModel = hiltViewModel()
     val playbackState by playerViewModel.playbackState.collectAsState()
     val isAnimateSeekBarEnabled by playerViewModel.isAnimateSeekBarEnabled.collectAsState()
+    val isAutoOpenPlayerEnabled by playerViewModel.isAutoOpenPlayerEnabled.collectAsState()
 
     val playerTransitionState = remember { SeekableTransitionState(false) }
     val scope = rememberCoroutineScope()
+    var trackListTransitionTrackId by remember { mutableStateOf<Long?>(null) }
     val getPlayerAnimationSpec: (Boolean) -> androidx.compose.animation.core.TweenSpec<Float> = { targetIsFull ->
         val isOpenProgress = if (playerTransitionState.currentState == playerTransitionState.targetState) {
             if (playerTransitionState.currentState) 1f else 0f
@@ -154,7 +159,34 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")
 
         Column(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
+            fun playTrackFromList(tracks: List<com.foamplayer.app.data.db.entities.TrackEntity>, index: Int) {
+                playerViewModel.playQueue(tracks, index)
+                if (isAutoOpenPlayerEnabled) {
+                    trackListTransitionTrackId = tracks.getOrNull(index)?.id
+                    scope.launch {
+                        try {
+                            // Let the selected row and the new full-player content enter
+                            // composition before starting their shared-element handoff.
+                            withFrameNanos { }
+                            playerTransitionState.animateTo(true, getPlayerAnimationSpec(true))
+                        } finally {
+                            // An interrupted animation must not make a later mini-player
+                            // tap reuse this row as its shared-element source.
+                            trackListTransitionTrackId = null
+                        }
+                    }
+                }
+            }
+
             Box(modifier = Modifier.weight(1f)) {
+            transition.AnimatedVisibility(
+                visible = { isFull -> !isFull },
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                val playerTransitionVisibilityScope = this
+                Box(modifier = Modifier.fillMaxSize()) {
                 // Content Area
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.weight(1f)) {
@@ -215,8 +247,11 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                 LibraryScreen(
                                     viewModel = libraryViewModel,
                                     onTrackClick = { tracks, index ->
-                                        playerViewModel.playQueue(tracks, index)
-                                    }
+                                        playTrackFromList(tracks, index)
+                                    },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = playerTransitionVisibilityScope,
+                                    sharedTrackId = trackListTransitionTrackId
                                 )
                             }
                             composable(Screen.Playlists.route) {
@@ -241,7 +276,10 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                         )
                                     },
                                     sharedTransitionScope = this@SharedTransitionLayout,
-                                    animatedVisibilityScope = this
+                                    animatedVisibilityScope = this,
+                                    playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                    sharedTrackId = trackListTransitionTrackId,
+                                    onTrackClick = { track -> playTrackFromList(listOf(track), 0) }
                                 )
                             }
                             composable(Screen.Equalizer.route) { EqualizerScreen() }
@@ -312,11 +350,13 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     initialImageUrl = artUrl,
                                     initialArtistName = artist,
                                     onTrackClick = { tracks, index ->
-                                        playerViewModel.playQueue(tracks, index)
+                                        playTrackFromList(tracks, index)
                                     },
                                     onBack = { navController.popBackStack() },
                                     sharedTransitionScope = this@SharedTransitionLayout,
-                                    animatedVisibilityScope = this
+                                    animatedVisibilityScope = this,
+                                    playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                    sharedTrackId = trackListTransitionTrackId
                                 )
                             }
                             composable(
@@ -327,9 +367,13 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                 PlaylistDetailScreen(
                                     playlistId = playlistId,
                                     onTrackClick = { tracks, index ->
-                                        playerViewModel.playQueue(tracks, index)
+                                        playTrackFromList(tracks, index)
                                     },
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = this,
+                                    playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                    sharedTrackId = trackListTransitionTrackId
                                 )
                             }
                         }
@@ -345,6 +389,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                         enter = fadeIn(),
                         exit = fadeOut()
                     ) {
+                        val miniPlayerVisibilityScope = this
                         if (playbackState.currentTrack != null) {
                             MiniPlayer(
                                 playbackState = playbackState,
@@ -361,17 +406,26 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     playerViewModel.setDynamicAccentColor(color)
                                 },
                                 onClick = {
-                                    scope.launch { playerTransitionState.animateTo(true, getPlayerAnimationSpec(true)) }
+                                    // A manual mini-player open always starts from the mini
+                                    // player, even if a prior list-origin animation was cancelled.
+                                    trackListTransitionTrackId = null
+                                    scope.launch {
+                                        withFrameNanos { }
+                                        playerTransitionState.animateTo(true, getPlayerAnimationSpec(true))
+                                    }
                                 },
                                 sharedTransitionScope = this@SharedTransitionLayout,
-                                animatedVisibilityScope = this@AnimatedVisibility,
+                                animatedVisibilityScope = miniPlayerVisibilityScope,
+                                useSharedElements = trackListTransitionTrackId == null,
                                 isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
                             )
                         }
                     }
                 }
+                }
+            }
 
-                transition.AnimatedVisibility(
+            transition.AnimatedVisibility(
                     visible = { isFull -> isFull },
                     enter = fadeIn(),
                     exit = fadeOut()
@@ -392,6 +446,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                         isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
                     )
                 }
+
             }
 
             // Navigation Bar - Always Visible

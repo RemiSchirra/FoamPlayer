@@ -16,8 +16,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /** Background layer for the classic blurred treatment and the immersive art hero. */
@@ -28,7 +31,8 @@ internal fun AlbumArtBackdrop(
     crossfadeFraction: () -> Float,
     immersive: Boolean,
     subViewProgress: Float,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    foregroundModifier: Modifier = Modifier
 ) {
     if (immersive) {
         ImmersiveAlbumArtBackdrop(
@@ -36,7 +40,8 @@ internal fun AlbumArtBackdrop(
             backArtPath = backArtPath,
             crossfadeFraction = crossfadeFraction,
             subViewProgress = subViewProgress,
-            modifier = modifier
+            modifier = modifier,
+            foregroundModifier = foregroundModifier
         )
         return
     }
@@ -74,7 +79,8 @@ private fun ImmersiveAlbumArtBackdrop(
     backArtPath: String?,
     crossfadeFraction: () -> Float,
     subViewProgress: Float,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    foregroundModifier: Modifier = Modifier
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val sharpArtHeight = maxHeight * 0.65f
@@ -86,7 +92,12 @@ private fun ImmersiveAlbumArtBackdrop(
             crossfadeFraction = crossfadeFraction,
             modifier = Modifier.fillMaxSize().blur(35.dp)
         )
-        Box(modifier = Modifier.fillMaxWidth().height(sharpArtHeight)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(sharpArtHeight)
+                .then(foregroundModifier)
+        ) {
             AlbumArtImagePair(
                 frontArtPath = frontArtPath,
                 backArtPath = backArtPath,
@@ -102,9 +113,9 @@ private fun ImmersiveAlbumArtBackdrop(
 }
 
 @androidx.compose.runtime.Composable
-private fun BackdropGradient() {
+private fun BackdropGradient(modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
@@ -139,10 +150,17 @@ private fun AlbumArtImagePair(
     crossfadeFraction: () -> Float,
     modifier: Modifier
 ) {
+    val context = LocalContext.current
+    fun request(path: String) = ImageRequest.Builder(context)
+        .data(path)
+        .size(AlbumArtRequestSize)
+        .crossfade(false)
+        .build()
+
     Box(modifier = modifier) {
         if (frontArtPath != null) {
             AsyncImage(
-                model = frontArtPath,
+                model = request(frontArtPath),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
@@ -150,7 +168,7 @@ private fun AlbumArtImagePair(
         }
         if (backArtPath != null && backArtPath != frontArtPath) {
             AsyncImage(
-                model = backArtPath,
+                model = request(backArtPath),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize().graphicsLayer { alpha = crossfadeFraction() },
                 contentScale = ContentScale.Crop

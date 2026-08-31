@@ -39,10 +39,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
+import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.screens.library.TrackListItem
-import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
 
 // Must match TrackListScreen's AlbumArtShape — using the same shape on both ends of the
@@ -56,8 +56,10 @@ fun SearchScreen(
     onAlbumClick: (AlbumSearchResult) -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
-    searchViewModel: SearchViewModel = hiltViewModel(),
-    playerViewModel: PlayerViewModel = hiltViewModel()
+    playerTransitionVisibilityScope: AnimatedVisibilityScope,
+    sharedTrackId: Long?,
+    onTrackClick: (TrackEntity) -> Unit,
+    searchViewModel: SearchViewModel = hiltViewModel()
 ) {
     var query by remember { mutableStateOf("") }
     val uiState by searchViewModel.uiState.collectAsState()
@@ -139,7 +141,10 @@ fun SearchScreen(
                 items(uiState.tracks) { track ->
                     TrackListItem(
                         track = track,
-                        onClick = { playerViewModel.playQueue(listOf(track), 0) }
+                        onClick = { onTrackClick(track) },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = playerTransitionVisibilityScope,
+                        isSharedTransitionSource = track.id == sharedTrackId
                     )
                 }
             }

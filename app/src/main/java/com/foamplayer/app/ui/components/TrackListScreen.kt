@@ -80,7 +80,9 @@ fun TrackListScreen(
     artistName: String? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
-    sharedElementKey: String? = null
+    sharedElementKey: String? = null,
+    sharedTrackId: Long? = null,
+    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
@@ -129,7 +131,10 @@ fun TrackListScreen(
                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                     TrackListItem(
                         track = track,
-                        onClick = { onTrackClick(tracks, index) }
+                        onClick = { onTrackClick(tracks, index) },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
+                        isSharedTransitionSource = track.id == sharedTrackId
                     )
                 }
             }

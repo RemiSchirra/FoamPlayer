@@ -19,6 +19,8 @@ fun AlbumDetailScreen(
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
+    playerTransitionVisibilityScope: AnimatedVisibilityScope,
+    sharedTrackId: Long?,
     initialImageUrl: String? = null,
     initialArtistName: String? = null,
     viewModel: AlbumDetailViewModel = hiltViewModel()
@@ -50,6 +52,8 @@ fun AlbumDetailScreen(
         artistName = artistName,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
-        sharedElementKey = albumName
+        sharedElementKey = albumName,
+        sharedTrackId = sharedTrackId,
+        playerTransitionVisibilityScope = playerTransitionVisibilityScope
     )
 }

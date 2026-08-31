@@ -35,6 +35,12 @@ class PlayerViewModel @Inject constructor(
         initialValue = false
     )
 
+    val isAutoOpenPlayerEnabled: StateFlow<Boolean> = settingsRepository.isAutoOpenPlayerEnabled.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
     private val _dynamicAccentColor = MutableStateFlow<Color?>(null)
     val dynamicAccentColor: StateFlow<Color?> = _dynamicAccentColor.asStateFlow()
 

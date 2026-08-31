@@ -1,5 +1,8 @@
 package com.foamplayer.app.ui.screens.library
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,12 +24,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.theme.FoamTheme
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun TrackListItem(
     track: TrackEntity,
@@ -34,8 +41,31 @@ fun TrackListItem(
     modifier: Modifier = Modifier,
     showDragHandle: Boolean = false,
     dragHandleModifier: Modifier = Modifier,
-    onRemove: (() -> Unit)? = null
+    onRemove: (() -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    isSharedTransitionSource: Boolean = false
 ) {
+    @Composable
+    fun Modifier.sharedArtwork(): Modifier =
+        if (!isSharedTransitionSource || sharedTransitionScope == null || animatedVisibilityScope == null) this
+        else with(sharedTransitionScope) {
+            this@sharedArtwork.sharedElement(
+                rememberSharedContentState(key = "album_art_${track.id}"),
+                animatedVisibilityScope = animatedVisibilityScope
+            )
+        }
+
+    @Composable
+    fun Modifier.sharedText(key: String): Modifier =
+        if (!isSharedTransitionSource || sharedTransitionScope == null || animatedVisibilityScope == null) this
+        else with(sharedTransitionScope) {
+            this@sharedText.sharedBounds(
+                rememberSharedContentState(key = key),
+                animatedVisibilityScope = animatedVisibilityScope
+            )
+        }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -46,13 +76,18 @@ fun TrackListItem(
         Box(
             modifier = Modifier
                 .size(48.dp)
+                .sharedArtwork()
                 .clip(RoundedCornerShape(8.dp))
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             if (track.albumArtPath != null) {
                 AsyncImage(
-                    model = track.albumArtPath,
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(track.albumArtPath)
+                        .size(AlbumArtRequestSize)
+                        .crossfade(false)
+                        .build(),
                     contentDescription = "Album Art",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -72,13 +107,15 @@ fun TrackListItem(
                 text = track.title,
                 style = FoamTheme.typography.titleMedium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.sharedText("track_title_${track.id}")
             )
             BasicText(
                 text = "${track.artist} • ${track.album}",
                 style = FoamTheme.typography.body,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.sharedText("track_artist_${track.id}")
             )
         }
 

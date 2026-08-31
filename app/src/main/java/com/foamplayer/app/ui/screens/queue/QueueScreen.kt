@@ -1,6 +1,7 @@
 package com.foamplayer.app.ui.screens.queue
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +31,7 @@ import com.foamplayer.app.ui.screens.library.TrackListItem
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun QueueScreen(
     modifier: Modifier = Modifier,

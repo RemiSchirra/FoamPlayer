@@ -1,5 +1,8 @@
 package com.foamplayer.app.ui.screens.library
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -29,10 +32,14 @@ import coil.compose.AsyncImage
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.theme.FoamTheme
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel,
-    onTrackClick: (List<TrackEntity>, Int) -> Unit
+    onTrackClick: (List<TrackEntity>, Int) -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    sharedTrackId: Long?
 ) {
     val tracks by viewModel.tracks.collectAsState()
 
@@ -72,7 +79,10 @@ fun LibraryScreen(
                 itemsIndexed(tracks) { index, track ->
                     TrackListItem(
                         track = track,
-                        onClick = { onTrackClick(tracks, index) }
+                        onClick = { onTrackClick(tracks, index) },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        isSharedTransitionSource = track.id == sharedTrackId
                     )
                 }
             }

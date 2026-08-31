@@ -74,9 +74,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.FoamSlider
+import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.onSeekBarReleased
@@ -381,7 +383,15 @@ fun FullPlayerScreen(
                 },
                 immersive = isImmersiveEnabled,
                 subViewProgress = subViewBlurProgress,
-                modifier = Modifier.graphicsLayer { alpha = uiAlpha }
+                modifier = Modifier.graphicsLayer { alpha = uiAlpha },
+                foregroundModifier = if (isImmersiveEnabled) {
+                    Modifier.sharedElement(
+                        rememberSharedContentState(key = "album_art_${track.id}"),
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
+                } else {
+                    Modifier
+                }
             )
 
             Box(
@@ -644,7 +654,11 @@ private fun SharedTransitionScope.TrackHeroPager(
                     ) {
                         if (pageTrack.albumArtPath != null) {
                             AsyncImage(
-                                model = pageTrack.albumArtPath,
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(pageTrack.albumArtPath)
+                                    .size(AlbumArtRequestSize)
+                                    .crossfade(false)
+                                    .build(),
                                 contentDescription = "Album Art",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
@@ -734,7 +748,11 @@ private fun SharedTransitionScope.TrackHeroPager(
                 ) {
                     if (track.albumArtPath != null) {
                         AsyncImage(
-                            model = track.albumArtPath,
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(track.albumArtPath)
+                                .size(AlbumArtRequestSize)
+                                .crossfade(false)
+                                .build(),
                             contentDescription = "Album Art",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop

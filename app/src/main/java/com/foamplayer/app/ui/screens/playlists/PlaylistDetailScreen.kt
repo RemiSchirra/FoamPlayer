@@ -1,6 +1,8 @@
 package com.foamplayer.app.ui.screens.playlists
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -15,6 +17,10 @@ fun PlaylistDetailScreen(
     playlistId: Long,
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
     onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    playerTransitionVisibilityScope: AnimatedVisibilityScope,
+    sharedTrackId: Long?,
     viewModel: PlaylistDetailViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.tracks.collectAsState()
@@ -34,6 +40,10 @@ fun PlaylistDetailScreen(
             }
         },
         onBack = onBack,
-        imageUrl = tracks.firstOrNull { it.albumArtPath != null }?.albumArtPath
+        imageUrl = tracks.firstOrNull { it.albumArtPath != null }?.albumArtPath,
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope,
+        sharedTrackId = sharedTrackId,
+        playerTransitionVisibilityScope = playerTransitionVisibilityScope
     )
 }
