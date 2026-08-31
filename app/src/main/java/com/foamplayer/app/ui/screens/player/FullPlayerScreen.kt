@@ -77,6 +77,10 @@ import coil.compose.AsyncImage
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.FoamSlider
+import com.foamplayer.app.ui.components.PreviousAction
+import com.foamplayer.app.ui.components.SeekBarProgressState
+import com.foamplayer.app.ui.components.onSeekBarReleased
+import com.foamplayer.app.ui.components.rememberSeekBarProgressState
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.pingPongMarquee
@@ -107,7 +111,8 @@ fun FullPlayerScreen(
     onDismiss: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
-    playerTransitionState: SeekableTransitionState<Boolean>
+    playerTransitionState: SeekableTransitionState<Boolean>,
+    isAnimateSeekBarEnabled: Boolean = false
 ) {
     val state by viewModel.playbackState.collectAsState()
     val isImmersiveEnabled by viewModel.isImmersiveModeEnabled.collectAsState()
@@ -219,6 +224,26 @@ fun FullPlayerScreen(
         pageCount = { state.queue.size }
     )
 
+    // Shared with PlaybackProgressSlider (renders it) and the Previous/Next handlers
+    // (which trigger its settle animation). liveProgress is the same
+    // position/duration * pager-active-fraction computation this screen already had;
+    // it's read lazily every time `.progress` is accessed, not just once here.
+    val seekBarProgress = rememberSeekBarProgressState(
+        liveProgress = {
+            val progress = if (state.durationMs > 0) state.currentPositionMs.toFloat() / state.durationMs else 0f
+
+            val activeFraction = if (isAnimateSeekBarEnabled) {
+                val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                val distanceFromCurrent = abs(scrollPosition - state.queueIndex.coerceAtLeast(0))
+                (1f - distanceFromCurrent).coerceIn(0f, 1f)
+            } else {
+                1f
+            }
+
+            progress * activeFraction
+        }
+    )
+
     val currentQueueIndex by rememberUpdatedState(state.queueIndex)
     val currentQueueSize by rememberUpdatedState(state.queue.size)
 
@@ -273,11 +298,42 @@ fun FullPlayerScreen(
         }
     }
 
+    // Lock the bar to 0 only once the finger actually releases -- tweened in animated
+    // mode, snapped instantly otherwise -- well before the pager's own fling-to-settle
+    // animation visually finishes. Does nothing if the swipe springs back to the same
+    // track (targetPage == currentQueueIndex).
+    //
+    // Gating on `isDragged` going from true to false (rather than on `targetPage`
+    // directly) matters: PagerState.targetPage already reflects its predicted
+    // destination page *while the finger is still down* -- Compose updates it live
+    // from drag distance/velocity, well before release -- so collecting it directly
+    // fired the settle tween/snap mid-drag instead of on release.
+    //
+    // Watching the pair, not just `isDragged` alone, matters too: `isDragged` and
+    // `targetPage` are separate snapshot values that don't necessarily update in the
+    // same frame. On a fast swipe that's already almost all the way to the next
+    // track, release can flip `isDragged` to false a frame before `targetPage`
+    // catches up to the new page -- a plain `snapshotFlow { isDragged }` reads
+    // `targetPage` at that exact (stale) instant and misses the commit entirely,
+    // since it only re-fires on the next `isDragged` *change*, not on `targetPage`
+    // catching up moments later. Keying the flow on both means a late `targetPage`
+    // update still produces a fresh emission to react to.
+    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(pagerState) {
+        snapshotFlow { isDragged to pagerState.targetPage }
+            .collect { (dragging, targetPage) ->
+                if (!dragging && targetPage in 0 until currentQueueSize && targetPage != currentQueueIndex) {
+                    seekBarProgress.onTrackChangeCommitted(animated = isAnimateSeekBarEnabled)
+                }
+            }
+    }
+
     // Single source of truth for track changing upon scroll completion
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
                 if (settledPage in 0 until currentQueueSize && settledPage != currentQueueIndex) {
+                    seekBarProgress.onTrackChangeApplied()
                     viewModel.skipToIndex(settledPage)
                 }
             }
@@ -356,7 +412,9 @@ fun FullPlayerScreen(
                             headerVisibilityScope = this@AnimatedVisibility,
                             viewModel = viewModel,
                             playerTransitionState = playerTransitionState,
-                            upTransitionState = upTransitionState
+                            upTransitionState = upTransitionState,
+                            seekBarProgress = seekBarProgress,
+                            isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
                         )
                     }
 
@@ -421,7 +479,9 @@ private fun SharedTransitionScope.MainPlayerContent(
     headerVisibilityScope: AnimatedVisibilityScope,
     viewModel: PlayerViewModel,
     playerTransitionState: SeekableTransitionState<Boolean>,
-    upTransitionState: SeekableTransitionState<Boolean>
+    upTransitionState: SeekableTransitionState<Boolean>,
+    seekBarProgress: SeekBarProgressState,
+    isAnimateSeekBarEnabled: Boolean
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(top = 24.dp),
@@ -449,15 +509,27 @@ private fun SharedTransitionScope.MainPlayerContent(
         PlaybackControls(
             track = track,
             isPlaying = state.isPlaying,
-            positionMs = state.currentPositionMs,
             durationMs = state.durationMs,
             outerVisibilityScope = outerVisibilityScope,
-            pagerState = pagerState,
-            currentIndex = state.queueIndex,
+            seekBarProgress = seekBarProgress,
+            isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
             onSeek = { positionMs -> viewModel.seekTo(positionMs) },
-            onPrevious = { viewModel.previous() },
+            onPrevious = {
+                when (
+                    seekBarProgress.onPreviousPressed(
+                        animated = isAnimateSeekBarEnabled,
+                        positionMs = state.currentPositionMs
+                    )
+                ) {
+                    PreviousAction.RESTART_CURRENT -> viewModel.seekTo(0L)
+                    PreviousAction.SKIP_TO_PREVIOUS -> viewModel.previous()
+                }
+            },
             onPlayPause = { if (state.isPlaying) viewModel.pause() else viewModel.play() },
-            onNext = { viewModel.next() }
+            onNext = {
+                seekBarProgress.onNextPressed(animated = isAnimateSeekBarEnabled)
+                viewModel.next()
+            }
         )
 
         Spacer(modifier = Modifier.height(48.dp))
@@ -714,11 +786,10 @@ private fun SharedTransitionScope.TrackHeroPager(
 private fun SharedTransitionScope.PlaybackControls(
     track: TrackEntity,
     isPlaying: Boolean,
-    positionMs: Long,
     durationMs: Long,
     outerVisibilityScope: AnimatedVisibilityScope,
-    pagerState: PagerState,
-    currentIndex: Int,
+    seekBarProgress: SeekBarProgressState,
+    isAnimateSeekBarEnabled: Boolean,
     onSeek: (Long) -> Unit,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
@@ -728,18 +799,16 @@ private fun SharedTransitionScope.PlaybackControls(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // The value below tracks pagerState.currentPageOffsetFraction, which changes on
-        // essentially every frame of a horizontal swipe. derivedStateOf only skips
-        // recomposition when its *output* is unchanged -- it does nothing to contain
-        // *where* that output is read. Reading it here, in PlaybackControls' own body,
-        // used to force this whole composable (including the Prev/Play/Next Row and its
-        // shared-element bounds) to recompose on every drag pixel. Reading it inside a
-        // dedicated leaf composable instead confines that recomposition to just the slider.
+        // seekBarProgress.progress tracks pagerState.currentPageOffsetFraction under
+        // the hood, which changes on essentially every frame of a horizontal swipe.
+        // Reading it here, in PlaybackControls' own body, would force this whole
+        // composable (including the Prev/Play/Next Row and its shared-element bounds)
+        // to recompose on every drag pixel. Reading it inside a dedicated leaf
+        // composable instead confines that recomposition to just the slider.
         PlaybackProgressSlider(
-            positionMs = positionMs,
             durationMs = durationMs,
-            currentIndex = currentIndex,
-            pagerState = pagerState,
+            seekBarProgress = seekBarProgress,
+            isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
             onSeek = onSeek
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -793,21 +862,23 @@ private fun SharedTransitionScope.PlaybackControls(
  */
 @Composable
 private fun PlaybackProgressSlider(
-    positionMs: Long,
     durationMs: Long,
-    currentIndex: Int,
-    pagerState: PagerState,
+    seekBarProgress: SeekBarProgressState,
+    isAnimateSeekBarEnabled: Boolean,
     onSeek: (Long) -> Unit
 ) {
-    val visualProgress by remember(positionMs, durationMs, currentIndex) {
-        derivedStateOf {
-            val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
-            val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
-            val distanceFromCurrent = abs(scrollPosition - currentIndex.coerceAtLeast(0))
-            val activeFraction = (1f - distanceFromCurrent).coerceIn(0f, 1f)
-            progress * activeFraction
+    FoamSlider(
+        value = seekBarProgress.progress,
+        onValueChange = { new ->
+            // A fresh manual drag always wins over any settle tween in flight.
+            seekBarProgress.onDragging()
+            onSeek((new * durationMs).toLong())
+        },
+        modifier = Modifier.onSeekBarReleased {
+            seekBarProgress.onSeekDragFinished(
+                animated = isAnimateSeekBarEnabled,
+                releasedAt = seekBarProgress.progress
+            )
         }
-    }
-
-    FoamSlider(value = visualProgress, onValueChange = { new -> onSeek((new * durationMs).toLong()) })
+    )
 }
