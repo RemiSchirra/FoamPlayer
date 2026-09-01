@@ -358,7 +358,8 @@ fun FullPlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(FoamTheme.colors.background.copy(alpha = uiAlpha))
+                .graphicsLayer { alpha = uiAlpha }
+                .background(FoamTheme.colors.background)
         ) {
             val indexA by remember(pagerState, state.queue.size) {
                 derivedStateOf {
@@ -376,20 +377,35 @@ fun FullPlayerScreen(
 
             AlbumArtBackdrop(
                 frontArtPath = state.queue.getOrNull(indexA)?.albumArtPath,
-                backArtPath = state.queue.getOrNull(indexB)?.albumArtPath,
+                // The back-art layer gets its own full-screen 20dp blur, purely so it
+                // can crossfade in once the user actually starts swiping the pager --
+                // it's invisible (alpha 0 via crossfadeFraction) until then. Skipping
+                // it while the outer mini<->full hand-off is still animating avoids
+                // decoding + blurring a second full-screen image at the exact moment
+                // the shared-element animation needs the frame budget; it's cheap to
+                // pick back up once the screen has settled and swiping becomes possible.
+                backArtPath = if (playerTransitionState.currentState != playerTransitionState.targetState) {
+                    null
+                } else {
+                    state.queue.getOrNull(indexB)?.albumArtPath
+                },
                 crossfadeFraction = {
                     val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
                     (absoluteOffset - absoluteOffset.toInt()).coerceIn(0f, 1f)
                 },
                 immersive = isImmersiveEnabled,
-                subViewProgress = subViewBlurProgress,
-                modifier = Modifier.graphicsLayer { alpha = uiAlpha },
+                subViewProgress = subViewBlurProgress
+                // No alpha modifier here: the enclosing Box above already applies
+                // `.graphicsLayer { alpha = uiAlpha }` to this whole subtree -- adding
+                // it again here was multiplying uiAlpha by itself, fading the backdrop
+                // out non-linearly relative to the rest of the screen.
             )
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.2f * subViewBlurProgress))
+                    .graphicsLayer { alpha = 0.2f * subViewBlurProgress }
+                    .background(Color.Black)
             )
 
             Column(modifier = Modifier.fillMaxSize()) {
@@ -612,7 +628,7 @@ private fun SharedTransitionScope.TrackHeroPager(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = PlayerDimens.horizontalPagePadding),
             pageSpacing = PlayerDimens.pageSpacing,
-            beyondViewportPageCount = 1,
+            beyondViewportPageCount = 0,
             key = { page -> queue.getOrNull(page)?.id ?: page }
         ) { page ->
             val pageTrack = queue.getOrNull(page) ?: return@HorizontalPager
