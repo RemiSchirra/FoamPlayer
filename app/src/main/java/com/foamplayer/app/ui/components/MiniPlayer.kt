@@ -252,7 +252,7 @@ fun MiniPlayer(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 6.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding))
                 .background(FoamTheme.colors.surfaceVariant)
                 .padding(8.dp)
         ) {

@@ -77,7 +77,7 @@ fun TrackListItem(
             modifier = Modifier
                 .size(48.dp)
                 .sharedArtwork()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding))
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {

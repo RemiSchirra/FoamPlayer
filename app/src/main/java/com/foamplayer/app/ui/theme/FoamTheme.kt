@@ -90,7 +90,7 @@ data class FoamShapes(
 )
 
 val DefaultFoamShapes = FoamShapes(
-    miniPlayerRounding = 8.dp,
+    miniPlayerRounding = 14.dp,
     fullPlayerRounding = 24.dp
 )
 
@@ -116,7 +116,7 @@ object FoamTheme {
 fun FoamTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
-    miniPlayerRounding: Dp = 8.dp,
+    miniPlayerRounding: Dp = 14.dp,
     fullPlayerRounding: Dp = 24.dp,
     accentColor: Color? = null,
     content: @Composable () -> Unit
