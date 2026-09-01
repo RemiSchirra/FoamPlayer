@@ -151,9 +151,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
 
         val remainingFraction = (if (targetIsFull) 1f - isOpenProgress else isOpenProgress).coerceIn(0f, 1f)
 
-        val dynamicDuration = (800 * remainingFraction).toInt().coerceAtLeast(1)
+        val dynamicDuration = (500 * remainingFraction).toInt().coerceAtLeast(1)
 
-        tween(durationMillis = dynamicDuration, easing = EaseOut)
+        tween(durationMillis = dynamicDuration, easing = EaseInOut)
     }
 
     SharedTransitionLayout {
