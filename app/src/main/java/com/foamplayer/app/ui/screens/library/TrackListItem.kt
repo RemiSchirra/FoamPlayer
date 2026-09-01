@@ -3,6 +3,12 @@ package com.foamplayer.app.ui.screens.library
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.EaseIn
+import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,9 +25,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -67,14 +75,24 @@ fun TrackListItem(
             )
         }
 
+    val targetBackgroundColor = if (active) {
+        FoamTheme.colors.primaryAccent.copy(alpha = 0.4f)
+    } else {
+        Color.Transparent
+    }
+
+    // Animate the color change
+    val animatedBackgroundColor by animateColorAsState(
+        targetValue = targetBackgroundColor,
+        animationSpec = tween(durationMillis = 200, easing = EaseOut),
+        label = "activeBackgroundFade"
+    )
+
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding + 4.dp))
-            .background(
-                if (active) FoamTheme.colors.primaryAccent.copy(alpha = 0.4f)
-                else androidx.compose.ui.graphics.Color.Transparent
-            )
+            .background(animatedBackgroundColor) // Use the animated color here
             .clickable { onClick() }
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -156,7 +174,7 @@ fun TrackListItem(
 
             Column(
                 modifier = dragHandleModifier
-                    .padding(8.dp), // enlarges the touch target beyond the two visible lines
+                    .padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
