@@ -73,6 +73,7 @@ fun MiniPlayer(
     animatedVisibilityScope: AnimatedVisibilityScope,
     useSharedElements: Boolean = true,
     isAnimateSeekBarEnabled: Boolean = false,
+    skipTrackChangeAnimation: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val track = playbackState.currentTrack ?: return
@@ -99,6 +100,7 @@ fun MiniPlayer(
     // gives us that same "always current" proxy here.
     val latestPlaybackState by rememberUpdatedState(playbackState)
     val latestCurrentIndex by rememberUpdatedState(currentIndex)
+    val latestSkipTrackChangeAnimation by rememberUpdatedState(skipTrackChangeAnimation)
 
     // Same live computation the FoamSlider below already had -- read lazily every
     // time `.progress` is accessed, so it stays live while dragging/swiping and is
@@ -178,7 +180,11 @@ fun MiniPlayer(
         // linger and desync the text/art from the real current track.
         pendingJump = null
 
-        if (currentIndex in queue.indices && pagerState.currentPage != currentIndex) {
+        // Doesn't animate is the full player is auto opening
+        if (currentIndex in queue.indices &&
+            pagerState.currentPage != currentIndex &&
+            !latestSkipTrackChangeAnimation
+        ) {
             val distance = currentIndex - pagerState.currentPage
             if (abs(distance) <= 1) {
                 // Already adjacent: the pager's normal slide is exactly right.

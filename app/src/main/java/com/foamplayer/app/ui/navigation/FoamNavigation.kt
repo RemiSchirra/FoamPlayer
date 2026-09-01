@@ -138,6 +138,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
     val playerTransitionState = remember { SeekableTransitionState(false) }
     val scope = rememberCoroutineScope()
     var trackListTransitionTrackId by remember { mutableStateOf<Long?>(null) }
+    var skipMiniPlayerTrackAnimation by remember { mutableStateOf(false) }
     val getPlayerAnimationSpec: (Boolean) -> androidx.compose.animation.core.TweenSpec<Float> = { targetIsFull ->
         val isOpenProgress = if (playerTransitionState.currentState == playerTransitionState.targetState) {
             if (playerTransitionState.currentState) 1f else 0f
@@ -161,6 +162,11 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
 
         Column(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
             fun playTrackFromList(tracks: List<com.foamplayer.app.data.db.entities.TrackEntity>, index: Int) {
+                // Must be set before playQueue() so it's already true by the time the
+                // mini player recomposes with the new currentIndex.
+                if (isAutoOpenPlayerEnabled) {
+                    skipMiniPlayerTrackAnimation = true
+                }
                 playerViewModel.playQueue(tracks, index)
                 if (isAutoOpenPlayerEnabled) {
                     trackListTransitionTrackId = tracks.getOrNull(index)?.id
@@ -175,6 +181,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                             // An interrupted animation must not make a later mini-player
                             // tap reuse this row as its shared-element source.
                             trackListTransitionTrackId = null
+                            skipMiniPlayerTrackAnimation = false
                         }
                     }
                 }
@@ -422,7 +429,8 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                         sharedTransitionScope = this@SharedTransitionLayout,
                                         animatedVisibilityScope = miniPlayerVisibilityScope,
                                         useSharedElements = trackListTransitionTrackId == null,
-                                        isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
+                                        isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                                        skipTrackChangeAnimation = skipMiniPlayerTrackAnimation
                                     )
                                 }
                             }
