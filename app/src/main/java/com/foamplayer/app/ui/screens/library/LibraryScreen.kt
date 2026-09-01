@@ -76,7 +76,7 @@ fun LibraryScreen(
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                itemsIndexed(tracks) { index, track ->
+                itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
                     TrackListItem(
                         track = track,
                         onClick = { onTrackClick(tracks, index) },
