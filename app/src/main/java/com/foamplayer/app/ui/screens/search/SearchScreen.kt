@@ -58,6 +58,7 @@ fun SearchScreen(
     animatedVisibilityScope: AnimatedVisibilityScope,
     playerTransitionVisibilityScope: AnimatedVisibilityScope,
     sharedTrackId: Long?,
+    activeTrackId: Long?,
     onTrackClick: (TrackEntity) -> Unit,
     searchViewModel: SearchViewModel = hiltViewModel()
 ) {
@@ -142,6 +143,7 @@ fun SearchScreen(
                     TrackListItem(
                         track = track,
                         onClick = { onTrackClick(track) },
+                        active = track.id == activeTrackId,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = playerTransitionVisibilityScope,
                         isSharedTransitionSource = track.id == sharedTrackId

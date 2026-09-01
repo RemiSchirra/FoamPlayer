@@ -260,7 +260,8 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                             },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = playerTransitionVisibilityScope,
-                                            sharedTrackId = trackListTransitionTrackId
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            activeTrackId = playbackState.currentTrack?.id
                                         )
                                     }
                                     composable(Screen.Playlists.route) {
@@ -288,6 +289,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                             animatedVisibilityScope = this,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
+                                            activeTrackId = playbackState.currentTrack?.id,
                                             onTrackClick = { track -> playTrackFromList(listOf(track), 0) }
                                         )
                                     }
@@ -365,7 +367,8 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-                                            sharedTrackId = trackListTransitionTrackId
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            activeTrackId = playbackState.currentTrack?.id
                                         )
                                     }
                                     composable(
@@ -382,7 +385,8 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-                                            sharedTrackId = trackListTransitionTrackId
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            activeTrackId = playbackState.currentTrack?.id
                                         )
                                     }
                                 }

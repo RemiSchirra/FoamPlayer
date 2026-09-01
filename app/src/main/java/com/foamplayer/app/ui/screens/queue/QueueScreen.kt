@@ -91,6 +91,7 @@ fun QueueScreen(
                 TrackListItem(
                     track = track,
                     onClick = { viewModel.playQueue(displayedQueue, index) },
+                    active = track.id == state.currentTrack?.id,
                     modifier = Modifier
                         .let { if (isDragging) it else it.animateItem() }
                         .zIndex(if (isDragging) 1f else 0f)

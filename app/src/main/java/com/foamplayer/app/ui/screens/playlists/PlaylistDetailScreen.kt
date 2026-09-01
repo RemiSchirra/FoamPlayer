@@ -21,6 +21,7 @@ fun PlaylistDetailScreen(
     animatedVisibilityScope: AnimatedVisibilityScope,
     playerTransitionVisibilityScope: AnimatedVisibilityScope,
     sharedTrackId: Long?,
+    activeTrackId: Long?,
     viewModel: PlaylistDetailViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.tracks.collectAsState()
@@ -44,6 +45,7 @@ fun PlaylistDetailScreen(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         sharedTrackId = sharedTrackId,
+        activeTrackId = activeTrackId,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope
     )
 }

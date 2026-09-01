@@ -39,6 +39,7 @@ fun TrackListItem(
     track: TrackEntity,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    active: Boolean = false,
     showDragHandle: Boolean = false,
     dragHandleModifier: Modifier = Modifier,
     onRemove: (() -> Unit)? = null,
@@ -69,8 +70,13 @@ fun TrackListItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding + 4.dp))
+            .background(
+                if (active) FoamTheme.colors.primaryAccent.copy(alpha = 0.4f)
+                else androidx.compose.ui.graphics.Color.Transparent
+            )
             .clickable { onClick() }
-            .padding(vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(

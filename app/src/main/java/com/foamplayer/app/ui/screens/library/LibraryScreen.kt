@@ -39,7 +39,8 @@ fun LibraryScreen(
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
-    sharedTrackId: Long?
+    sharedTrackId: Long?,
+    activeTrackId: Long?
 ) {
     val tracks by viewModel.tracks.collectAsState()
 
@@ -80,6 +81,7 @@ fun LibraryScreen(
                     TrackListItem(
                         track = track,
                         onClick = { onTrackClick(tracks, index) },
+                        active = track.id == activeTrackId,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
                         isSharedTransitionSource = track.id == sharedTrackId
