@@ -9,6 +9,52 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+internal const val SETTLE_DURATION_MS = 250
+
+/**
+ * Cancels an in-flight seek without ever calling animateTo() on the opposite state. Keeps
+ * the current targetState fixed and eases [SeekableTransitionState.fraction] from wherever
+ * it is back down to 0, so currentState is never touched and there's nothing for
+ * SeekableTransitionState to "resolve" before animating -- see [PlayerGestureController]'s
+ * class doc for the underlying glitch this avoids.
+ *
+ * Shared (rather than private to one controller) because both halves of the mini <-> full
+ * player swipe -- [PlayerGestureController]'s swipe-down-to-dismiss and
+ * [MiniPlayerSwipeController]'s swipe-up-to-open -- spring back the same way when a drag
+ * doesn't cross its commit threshold.
+ *
+ * Easing fraction to 0 alone isn't enough to fully settle things: targetState is left
+ * pointing at restingTarget even though fraction says we're visually back at currentState.
+ * Transition treats currentState != targetState as "still transitioning" regardless of
+ * fraction, so it keeps *both* AnimatedVisibility branches composed -- the extra, stale
+ * branch is what shows up as a duplicate album art image on the next real transition. The
+ * closing snapTo(restState) collapses targetState back onto currentState (a visual no-op,
+ * since fraction is already 0) so the Transition actually settles.
+ */
+internal suspend fun SeekableTransitionState<Boolean>.settleBackToRest(
+    durationMillis: Int = SETTLE_DURATION_MS
+) {
+    val restingTarget = targetState
+    val restState = currentState
+    val startFraction = fraction
+    if (startFraction <= 0f) {
+        if (targetState != restState) snapTo(restState)
+        return
+    }
+
+    try {
+        val startFrameNanos = withFrameNanos { it }
+        var t: Float
+        do {
+            val elapsedMs = (withFrameNanos { it } - startFrameNanos) / 1_000_000f
+            t = (elapsedMs / durationMillis).coerceIn(0f, 1f)
+            seekTo(targetState = restingTarget, fraction = startFraction * (1f - FastOutSlowInEasing.transform(t)))
+        } while (t < 1f)
+    } finally {
+        withContext(NonCancellable) { snapTo(restState) }
+    }
+}
+
 /**
  * Drives the two nested seekable transitions used by the full player:
  *  - [playerTransitionState]: mini player <-> full player, owned by the caller/nav graph.
@@ -54,44 +100,6 @@ class PlayerGestureController(
     private fun runExclusive(block: suspend () -> Unit) {
         activeGestureJob?.cancel()
         activeGestureJob = scope.launch { block() }
-    }
-
-    /**
-     * Cancels an in-flight seek without ever calling animateTo() on the opposite state.
-     * Keeps the current targetState fixed and eases [SeekableTransitionState.fraction] from
-     * wherever it is back down to 0, so currentState is never touched and there's nothing for
-     * SeekableTransitionState to "resolve" before animating — see class doc.
-     *
-     * Easing fraction to 0 alone isn't enough to fully settle things: targetState is left
-     * pointing at restingTarget even though fraction says we're visually back at currentState.
-     * Transition treats currentState != targetState as "still transitioning" regardless of
-     * fraction, so it keeps *both* AnimatedVisibility branches composed — the extra, stale
-     * branch is what shows up as a duplicate album art image on the next real transition. The
-     * closing snapTo(restState) collapses targetState back onto currentState (a visual no-op,
-     * since fraction is already 0) so the Transition actually settles.
-     */
-    private suspend fun SeekableTransitionState<Boolean>.settleBackToRest(
-        durationMillis: Int = SETTLE_DURATION_MS
-    ) {
-        val restingTarget = targetState
-        val restState = currentState
-        val startFraction = fraction
-        if (startFraction <= 0f) {
-            if (targetState != restState) snapTo(restState)
-            return
-        }
-
-        try {
-            val startFrameNanos = withFrameNanos { it }
-            var t: Float
-            do {
-                val elapsedMs = (withFrameNanos { it } - startFrameNanos) / 1_000_000f
-                t = (elapsedMs / durationMillis).coerceIn(0f, 1f)
-                seekTo(targetState = restingTarget, fraction = startFraction * (1f - FastOutSlowInEasing.transform(t)))
-            } while (t < 1f)
-        } finally {
-            withContext(NonCancellable) { snapTo(restState) }
-        }
     }
 
     /**
@@ -201,6 +209,81 @@ class PlayerGestureController(
         private const val DOWN_SWIPE_SENSITIVITY = 1.2f
         private const val DOWN_SWIPE_COMMIT_PROGRESS = 0.15f
         private const val DOWN_SWIPE_COMMIT_VELOCITY = 800f
-        private const val SETTLE_DURATION_MS = 250
+    }
+}
+
+/**
+ * Drives [playerTransitionState] for the mini player's swipe-up-to-open gesture -- the
+ * mirror image of the swipe-down-to-dismiss [PlayerGestureController] handles once the full
+ * player is on screen.
+ *
+ * This has to be a separate controller rather than another branch on
+ * [PlayerGestureController]: that controller is only constructed inside [FullPlayerScreen],
+ * which itself only enters composition once [playerTransitionState] starts moving toward
+ * open. A swipe-up needs to react to the very first pixel of the drag, while the mini player
+ * is still the only thing on screen, so it needs its own gesture handling that lives
+ * alongside the mini player instead.
+ *
+ * Reuses [settleBackToRest] for the same "released before threshold" glitch described on
+ * [PlayerGestureController], and the same [runExclusive]-per-job pattern for the same
+ * "release lands after the animation already started" glitch.
+ */
+class MiniPlayerSwipeController(
+    private val playerTransitionState: SeekableTransitionState<Boolean>,
+    private val scope: CoroutineScope,
+    private val dragThresholdPx: Float,
+    private val onOpen: () -> Unit
+) {
+    private var activeGestureJob: Job? = null
+
+    private fun runExclusive(block: suspend () -> Unit) {
+        activeGestureJob?.cancel()
+        activeGestureJob = scope.launch { block() }
+    }
+
+    fun onDrag(delta: Float) = runExclusive {
+        val openProgress = playerTransitionState.progress()
+
+        // Already fully open/opening (e.g. a tap-triggered animateTo is running) -- once the
+        // full player itself is composed it takes over via PlayerGestureController, so there's
+        // nothing left for this drag to do.
+        if (playerTransitionState.currentState) return@runExclusive
+
+        // At rest and swiping further down: nothing to open, ignore.
+        if (openProgress == 0f && delta >= 0f) return@runExclusive
+
+        val signedDelta = -delta // up = negative delta = increasing open progress
+
+        // Compensate the easing on reversing direction
+        val easingCompensation = if (signedDelta < 0) {
+            1f + (openProgress * 2f)
+        } else {
+            1f
+        }
+
+        val newProgress = (openProgress + (signedDelta * easingCompensation) / (dragThresholdPx * OPEN_SWIPE_SENSITIVITY))
+            .coerceIn(0f, 1f)
+        playerTransitionState.seekTo(targetState = true, fraction = newProgress)
+    }
+
+    fun onDragStopped(velocity: Float) = runExclusive {
+        val openProgress = playerTransitionState.progress()
+        if (openProgress <= 0f || playerTransitionState.currentState) return@runExclusive
+
+        // Prevent opening if you actively flick your finger back down to cancel
+        val isReverseFlick = velocity > 500f
+
+        val commit = !isReverseFlick && (openProgress > OPEN_SWIPE_COMMIT_PROGRESS || velocity < OPEN_SWIPE_COMMIT_VELOCITY)
+        if (commit) {
+            onOpen()
+        } else {
+            playerTransitionState.settleBackToRest()
+        }
+    }
+
+    companion object {
+        private const val OPEN_SWIPE_SENSITIVITY = 1.2f
+        private const val OPEN_SWIPE_COMMIT_PROGRESS = 0.15f
+        private const val OPEN_SWIPE_COMMIT_VELOCITY = -800f
     }
 }

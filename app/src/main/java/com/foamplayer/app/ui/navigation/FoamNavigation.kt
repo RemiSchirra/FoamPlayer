@@ -20,6 +20,9 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +44,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
@@ -56,6 +61,7 @@ import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
 import com.foamplayer.app.ui.screens.library.LibraryScreen
 import com.foamplayer.app.ui.screens.library.LibraryViewModel
 import com.foamplayer.app.ui.screens.player.FullPlayerScreen
+import com.foamplayer.app.ui.screens.player.MiniPlayerSwipeController
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.playlists.PlaylistDetailScreen
 import com.foamplayer.app.ui.screens.playlists.PlaylistsScreen
@@ -137,6 +143,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
 
     val playerTransitionState = remember { SeekableTransitionState(false) }
     val scope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     var trackListTransitionTrackId by remember { mutableStateOf<Long?>(null) }
     var skipMiniPlayerTrackAnimation by remember { mutableStateOf(false) }
     val getPlayerAnimationSpec: (Boolean) -> androidx.compose.animation.core.TweenSpec<Float> = { targetIsFull ->
@@ -155,6 +164,22 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
         val dynamicDuration = (500 * remainingFraction).toInt().coerceAtLeast(1)
 
         tween(durationMillis = dynamicDuration, easing = EaseInOut)
+    }
+
+    // Mirrors PlayerGestureController's swipe-down-to-dismiss, but for progressively
+    // swiping the mini player up into the full player. Kept separate from that controller
+    // since it needs to be live before FullPlayerScreen (and the controller living inside
+    // it) has even entered composition -- see MiniPlayerSwipeController's doc.
+    val miniPlayerSwipeController = remember(playerTransitionState, screenHeightPx) {
+        MiniPlayerSwipeController(
+            playerTransitionState = playerTransitionState,
+            scope = scope,
+            dragThresholdPx = screenHeightPx.coerceAtLeast(1f),
+            onOpen = {
+                trackListTransitionTrackId = null
+                scope.launch { playerTransitionState.animateTo(true, getPlayerAnimationSpec(true)) }
+            }
+        )
     }
 
     SharedTransitionLayout {
@@ -434,7 +459,12 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                         animatedVisibilityScope = miniPlayerVisibilityScope,
                                         useSharedElements = trackListTransitionTrackId == null,
                                         isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
-                                        skipTrackChangeAnimation = skipMiniPlayerTrackAnimation
+                                        skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,
+                                        modifier = Modifier.draggable(
+                                            state = rememberDraggableState { delta -> miniPlayerSwipeController.onDrag(delta) },
+                                            orientation = Orientation.Vertical,
+                                            onDragStopped = { velocity -> miniPlayerSwipeController.onDragStopped(velocity) }
+                                        )
                                     )
                                 }
                             }
