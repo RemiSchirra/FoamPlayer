@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,8 +36,7 @@ class MainActivity : ComponentActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val granted = permissions.values.all { it }
-        if (granted) {
+        if (permissions.values.all { it }) {
             startPlaybackService()
         }
     }
@@ -46,89 +46,106 @@ class MainActivity : ComponentActivity() {
         checkAndRequestPermissions()
 
         setContent {
-            val settingsViewModel: SettingsViewModel = hiltViewModel()
-            val playerViewModel: PlayerViewModel = hiltViewModel()
-
-            val iconStyle by settingsViewModel.iconStyle.collectAsState(initial = FoamIconStyle.FLAT)
-            val miniRounding by settingsViewModel.miniPlayerRounding.collectAsState(initial = 8)
-            val fullRounding by settingsViewModel.fullPlayerRounding.collectAsState(initial = 24)
-            val isAutomaticColor by settingsViewModel.isAutomaticColorEnabled.collectAsState(initial = true)
-            val manualAccentColor by settingsViewModel.accentColor.collectAsState(initial = 0xFFFF5252.toInt())
-
-            val playbackState by playerViewModel.playbackState.collectAsState()
-            val currentTrack = playbackState.currentTrack
-
-            val dynamicAccentColor by playerViewModel.dynamicAccentColor.collectAsState()
-
-            val context = LocalContext.current
-            val currentArtPath = if (isAutomaticColor) currentTrack?.albumArtPath else null
-
-            // Reuse the shared process-wide palette cache instead of decoding the
-            // current track's art a second time here. `ensure` kicks off the fetch
-            // (deduplicated against MiniPlayer/FullPlayerScreen's own requests) and
-            // `colors[path]` reads the result reactively once it lands.
-            LaunchedEffect(currentArtPath) {
-                if (currentArtPath != null) {
-                    AlbumArtPaletteCache.ensure(scope = this, context = context, path = currentArtPath)
-                }
-            }
-            val extractedColor = currentArtPath?.let { AlbumArtPaletteCache.colors[it] }
-
-            val animatedManualColor by animateColorAsState(
-                targetValue = Color(manualAccentColor),
-                animationSpec = tween(durationMillis = 500),
-                label = "ManualColorFade"
-            )
-
-            val baseTargetColor = extractedColor ?: Color(manualAccentColor)
-            val animatedBaseColor by animateColorAsState(
-                targetValue = baseTargetColor,
-                animationSpec = tween(durationMillis = 500),
-                label = "BaseColorFade"
-            )
-
-            val themeAccentColor = if (isAutomaticColor) {
-                dynamicAccentColor ?: animatedBaseColor
-            } else {
-                animatedManualColor
-            }
-
-            FoamTheme(
-                iconStyle = iconStyle,
-                miniPlayerRounding = miniRounding.dp,
-                fullPlayerRounding = fullRounding.dp,
-                accentColor = themeAccentColor
-            ) {
-                FoamNavHost(modifier = Modifier.fillMaxSize())
-            }
+            FoamApp()
         }
     }
 
     private fun checkAndRequestPermissions() {
-        val permissionsToRequest = mutableListOf<String>()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
-            }
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        } else {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-            }
+        val missingPermissions = requiredPermissions().filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
 
-        if (permissionsToRequest.isNotEmpty()) {
-            permissionLauncher.launch(permissionsToRequest.toTypedArray())
-        } else {
+        if (missingPermissions.isEmpty()) {
             startPlaybackService()
+        } else {
+            permissionLauncher.launch(missingPermissions.toTypedArray())
         }
+    }
+
+    // Pure decision, no side effects — easy to reason about (and test)
+    // independently of whether permissions actually get requested.
+    private fun requiredPermissions(): List<String> = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> listOf(
+            Manifest.permission.READ_MEDIA_AUDIO,
+            Manifest.permission.POST_NOTIFICATIONS
+        )
+        else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
 
     private fun startPlaybackService() {
-        val intent = Intent(this, PlaybackService::class.java)
-        startService(intent)
+        startService(Intent(this, PlaybackService::class.java))
     }
+}
+
+/**
+ * Root composable: reads settings + playback state, resolves the current
+ * theme accent color, and hosts navigation. Kept out of the Activity so it
+ * can be previewed/reasoned about as plain Compose UI.
+ */
+@Composable
+private fun FoamApp(
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
+    playerViewModel: PlayerViewModel = hiltViewModel()
+) {
+    val iconStyle by settingsViewModel.iconStyle.collectAsState(initial = FoamIconStyle.FLAT)
+    val miniRounding by settingsViewModel.miniPlayerRounding.collectAsState(initial = 8)
+    val fullRounding by settingsViewModel.fullPlayerRounding.collectAsState(initial = 24)
+    val isAutomaticColor by settingsViewModel.isAutomaticColorEnabled.collectAsState(initial = true)
+    val manualAccentColor by settingsViewModel.accentColor.collectAsState(initial = 0xFFFF5252.toInt())
+
+    val playbackState by playerViewModel.playbackState.collectAsState()
+    val dynamicAccentColor by playerViewModel.dynamicAccentColor.collectAsState()
+
+    val accentColor = rememberAccentColor(
+        isAutomaticColor = isAutomaticColor,
+        manualAccentColor = manualAccentColor,
+        dynamicAccentColor = dynamicAccentColor,
+        albumArtPath = playbackState.currentTrack?.albumArtPath
+    )
+
+    FoamTheme(
+        iconStyle = iconStyle,
+        miniPlayerRounding = miniRounding.dp,
+        fullPlayerRounding = fullRounding.dp,
+        accentColor = accentColor
+    ) {
+        FoamNavHost(modifier = Modifier.fillMaxSize())
+    }
+}
+
+/**
+ * Resolves and animates the theme's accent color from whichever source is
+ * active: the player's live dynamic color, an album-art palette extraction,
+ * or the user's manually chosen color. A single animateColorAsState means
+ * switching between automatic and manual mode fades instead of snapping.
+ */
+@Composable
+private fun rememberAccentColor(
+    isAutomaticColor: Boolean,
+    manualAccentColor: Int,
+    dynamicAccentColor: Color?,
+    albumArtPath: String?
+): Color {
+    val context = LocalContext.current
+    val effectiveArtPath = if (isAutomaticColor) albumArtPath else null
+
+    LaunchedEffect(effectiveArtPath) {
+        if (effectiveArtPath != null) {
+            AlbumArtPaletteCache.ensure(scope = this, context = context, path = effectiveArtPath)
+        }
+    }
+    val extractedColor = effectiveArtPath?.let { AlbumArtPaletteCache.colors[it] }
+
+    val targetColor = when {
+        !isAutomaticColor -> Color(manualAccentColor)
+        dynamicAccentColor != null -> dynamicAccentColor
+        else -> extractedColor ?: Color(manualAccentColor)
+    }
+
+    val animatedColor by animateColorAsState(
+        targetValue = targetColor,
+        animationSpec = tween(durationMillis = 500),
+        label = "AccentColorFade"
+    )
+    return animatedColor
 }
