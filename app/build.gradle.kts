@@ -106,4 +106,8 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.mockito:mockito-core:5.14.2")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+
+    implementation(project(":lyrics:kugou"))
+    implementation(project(":lyrics:lrclib"))
+    implementation(project(":lyrics:betterlyrics"))
 }
