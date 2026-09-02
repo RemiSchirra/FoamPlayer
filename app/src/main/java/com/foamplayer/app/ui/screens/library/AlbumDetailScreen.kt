@@ -33,10 +33,7 @@ fun AlbumDetailScreen(
     }
 
     val firstTrack = tracks.firstOrNull()
-    // Fall back to the values passed in via navigation (known at click-time) until the
-    // DB query resolves, so the shared-element target never renders without art on
-    // its first frame. Once tracks load these agree anyway, so there's no visible swap.
-    val imageUrl = firstTrack?.albumArtPath ?: initialImageUrl
+    val imageUrl = initialImageUrl ?: firstTrack?.albumArtPath
     val artistName = firstTrack?.albumArtist ?: firstTrack?.artist ?: initialArtistName
 
     TrackListScreen(

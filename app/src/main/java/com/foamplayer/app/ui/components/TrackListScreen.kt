@@ -45,6 +45,8 @@ import coil.request.ImageRequest
 import coil.size.Size
 import androidx.compose.ui.platform.LocalContext
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import androidx.core.net.toUri
 import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.screens.library.TrackListItem
@@ -240,15 +242,15 @@ private fun HeaderSection(
             contentAlignment = Alignment.Center
         ) {
             if (imageUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(imageUrl)
-                        // Must match the size used for this same URL in the search/artist
-                        // list rows (see AlbumArtRequestSize in SearchScreen.kt) so both
-                        // requests hit the same memory-cache entry during the transition.
+                val albumArtRequest = remember(imageUrl) {
+                    ImageRequest.Builder(context)
+                        .data(EmbeddedAlbumArt(imageUrl.toUri()))
                         .size(AlbumArtRequestSize)
                         .crossfade(false)
-                        .build(),
+                        .build()
+                }
+                AsyncImage(
+                    model = albumArtRequest,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

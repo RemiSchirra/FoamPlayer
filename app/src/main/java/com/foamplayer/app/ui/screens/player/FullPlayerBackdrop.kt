@@ -18,8 +18,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -51,7 +53,7 @@ internal fun AlbumArtBackdrop(
         Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f }) {
             if (frontArtPath != null) {
                 AsyncImage(
-                    model = frontArtPath,
+                    model = EmbeddedAlbumArt(frontArtPath.toUri()),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize().blur(20.dp),
                     contentScale = ContentScale.Crop
@@ -59,7 +61,7 @@ internal fun AlbumArtBackdrop(
             }
             if (backArtPath != null && backArtPath != frontArtPath) {
                 AsyncImage(
-                    model = backArtPath,
+                    model = EmbeddedAlbumArt(backArtPath.toUri()),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize().blur(20.dp).graphicsLayer { alpha = crossfadeFraction() },
                     contentScale = ContentScale.Crop
@@ -152,7 +154,7 @@ private fun AlbumArtImagePair(
 ) {
     val context = LocalContext.current
     fun request(path: String) = ImageRequest.Builder(context)
-        .data(path)
+        .data(EmbeddedAlbumArt(path.toUri()))
         .size(AlbumArtRequestSize)
         .crossfade(false)
         .build()

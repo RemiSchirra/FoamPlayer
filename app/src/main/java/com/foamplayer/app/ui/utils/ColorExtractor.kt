@@ -7,13 +7,15 @@ import androidx.palette.graphics.Palette
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.core.net.toUri
 
 suspend fun extractPaletteColor(context: android.content.Context, path: String): Color? {
     return withContext(Dispatchers.IO) {
         val request = ImageRequest.Builder(context)
-            .data(path)
+            .data(EmbeddedAlbumArt(path.toUri()))
             .allowHardware(false)
             .build()
 

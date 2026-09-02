@@ -40,10 +40,12 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.screens.library.TrackListItem
 import com.foamplayer.app.ui.theme.FoamTheme
+import androidx.core.net.toUri
 
 // Must match TrackListScreen's AlbumArtShape — using the same shape on both ends of the
 // shared-element transition means the corners never have to jump between two radii.
@@ -231,12 +233,15 @@ fun AlbumSearchResultItem(
             contentAlignment = Alignment.Center
         ) {
             if (album.albumArtPath != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(album.albumArtPath)
+                val context = LocalContext.current
+                val albumArtRequest = remember(album.albumArtPath) {
+                    ImageRequest.Builder(context)
+                        .data(EmbeddedAlbumArt(album.albumArtPath.toUri()))
                         .size(AlbumArtRequestSize)
-                        .crossfade(false)
-                        .build(),
+                        .build()
+                }
+                AsyncImage(
+                    model = albumArtRequest,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

@@ -8,7 +8,6 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
 import java.io.InputStream
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -165,9 +164,14 @@ class LocalAudioScanner @Inject constructor(
                 bitDepth = 24
             }
 
-            val artBytes = retriever.embeddedPicture
-            if (artBytes != null) {
-                albumArtPath = saveAlbumArt(uri, artBytes)
+            // Don't decode/copy the artwork here — just note that this file
+            // *has* embedded art, using the track's own URI. The bytes are
+            // read straight from the audio file, on demand, only when
+            // something actually needs to display them (see
+            // EmbeddedAlbumArtFetcher). Nothing gets written to disk during
+            // scanning anymore.
+            if (retriever.embeddedPicture != null) {
+                albumArtPath = uri.toString()
             }
         } catch (e: Exception) {
             return createFallbackTrack(uri, fileName, size)
@@ -207,25 +211,6 @@ class LocalAudioScanner @Inject constructor(
             result = result.flatMap { it.split(sep) }
         }
         return result.map { it.trim() }.filter { it.isNotEmpty() }.joinToString("; ")
-    }
-
-    private fun saveAlbumArt(uri: Uri, artBytes: ByteArray): String? {
-        return try {
-            val folder = File(context.cacheDir, "album_art")
-            if (!folder.exists()) folder.mkdirs()
-
-            val fileName = "art_${uri.toString().hashCode()}.jpg"
-            val file = File(folder, fileName)
-            if (!file.exists()) {
-                FileOutputStream(file).use { fos ->
-                    fos.write(artBytes)
-                }
-            }
-            file.absolutePath
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
     }
 
     private fun createFallbackTrack(uri: Uri, fileName: String, size: Long = 0): TrackEntity {

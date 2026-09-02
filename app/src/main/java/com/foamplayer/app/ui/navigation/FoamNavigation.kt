@@ -75,9 +75,7 @@ import com.foamplayer.app.ui.screens.settings.TestSettingsScreen
 import com.foamplayer.app.ui.screens.settings.UISettingsScreen
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
-import java.net.URLDecoder
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
+import android.net.Uri
 
 sealed class Screen(val route: String, val title: String) {
     object Library : Screen("library", "Library")
@@ -93,13 +91,13 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsTest : Screen("settings/test", "Component Test")
 
     object ArtistDetail : Screen("artist/{artistName}", "Artist") {
-        fun createRoute(artistName: String) = "artist/${URLEncoder.encode(artistName, StandardCharsets.UTF_8.toString())}"
+        fun createRoute(artistName: String) = "artist/${Uri.encode(artistName)}"
     }
     object AlbumDetail : Screen("album/{albumName}?artUrl={artUrl}&artist={artist}", "Album") {
         fun createRoute(albumName: String, artUrl: String? = null, artist: String? = null): String {
-            val encodedName = URLEncoder.encode(albumName, StandardCharsets.UTF_8.toString())
-            val encodedArt = URLEncoder.encode(artUrl.orEmpty(), StandardCharsets.UTF_8.toString())
-            val encodedArtist = URLEncoder.encode(artist.orEmpty(), StandardCharsets.UTF_8.toString())
+            val encodedName = Uri.encode(albumName)
+            val encodedArt = Uri.encode(artUrl.orEmpty())
+            val encodedArtist = Uri.encode(artist.orEmpty())
             return "album/$encodedName?artUrl=$encodedArt&artist=$encodedArtist"
         }
     }
@@ -353,7 +351,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                         Screen.ArtistDetail.route,
                                         arguments = listOf(navArgument("artistName") { type = NavType.StringType })
                                     ) { backStackEntry ->
-                                        val artistName = URLDecoder.decode(backStackEntry.arguments?.getString("artistName") ?: "", StandardCharsets.UTF_8.toString())
+                                        val artistName = backStackEntry.arguments?.getString("artistName") ?: ""
                                         ArtistDetailScreen(
                                             artistName = artistName,
                                             onAlbumClick = { album ->
@@ -378,9 +376,12 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                             navArgument("artist") { type = NavType.StringType; defaultValue = "" }
                                         )
                                     ) { backStackEntry ->
-                                        val albumName = URLDecoder.decode(backStackEntry.arguments?.getString("albumName") ?: "", StandardCharsets.UTF_8.toString())
-                                        val artUrl = URLDecoder.decode(backStackEntry.arguments?.getString("artUrl") ?: "", StandardCharsets.UTF_8.toString()).ifEmpty { null }
-                                        val artist = URLDecoder.decode(backStackEntry.arguments?.getString("artist") ?: "", StandardCharsets.UTF_8.toString()).ifEmpty { null }
+                                        // Same as ArtistDetail above: these arrive already decoded by
+                                        // Navigation's own matcher, so decoding again here would corrupt
+                                        // any %-encoded segments already present in a real content:// URI.
+                                        val albumName = backStackEntry.arguments?.getString("albumName") ?: ""
+                                        val artUrl = (backStackEntry.arguments?.getString("artUrl") ?: "").ifEmpty { null }
+                                        val artist = (backStackEntry.arguments?.getString("artist") ?: "").ifEmpty { null }
                                         AlbumDetailScreen(
                                             albumName = albumName,
                                             initialImageUrl = artUrl,

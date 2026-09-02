@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.components
 
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -44,9 +45,12 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.audio.engine.PlaybackState
+import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import kotlin.math.abs
+import androidx.core.net.toUri
+
 // SeekBarProgressState / rememberSeekBarProgressState (SeekBarProgressState.kt) live
 // in this same package, so no import is needed for them here.
 
@@ -314,12 +318,14 @@ fun MiniPlayer(
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (pageTrack.albumArtPath != null) {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data(pageTrack.albumArtPath)
+                                    val albumArtRequest = remember(pageTrack.albumArtPath) {
+                                        ImageRequest.Builder(context)
+                                            .data(EmbeddedAlbumArt(pageTrack.albumArtPath.toUri()))
                                             .size(AlbumArtRequestSize)
-                                            .crossfade(false)
-                                            .build(),
+                                            .build()
+                                    }
+                                    AsyncImage(
+                                        model = albumArtRequest,
                                         contentDescription = "Album Art",
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop

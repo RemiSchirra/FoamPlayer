@@ -4,10 +4,7 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.EaseIn
-import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.EaseOut
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -41,8 +38,10 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.theme.FoamTheme
+import androidx.core.net.toUri
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -114,12 +113,15 @@ fun TrackListItem(
             contentAlignment = Alignment.Center
         ) {
             if (track.albumArtPath != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(track.albumArtPath)
+                val context = LocalContext.current
+                val albumArtRequest = remember(track.albumArtPath) {
+                    ImageRequest.Builder(context)
+                        .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
                         .size(AlbumArtRequestSize)
-                        .crossfade(false)
-                        .build(),
+                        .build()
+                }
+                AsyncImage(
+                    model = albumArtRequest,
                     contentDescription = "Album Art",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

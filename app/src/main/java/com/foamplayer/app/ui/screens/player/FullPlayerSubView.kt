@@ -38,9 +38,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -177,7 +179,8 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                 .background(FoamTheme.colors.surfaceVariant)
         ) {
             track.albumArtPath?.let { path ->
-                AsyncImage(model = path, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                AsyncImage(model = EmbeddedAlbumArt(path.toUri()),
+                    contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             }
         }
         Spacer(modifier = Modifier.width(16.dp))

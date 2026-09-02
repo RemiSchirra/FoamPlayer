@@ -77,6 +77,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.PreviousAction
@@ -87,6 +88,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.pingPongMarquee
 import kotlin.math.abs
+import androidx.core.net.toUri
 
 /** Shared layout constants so the header, pager and hero overlay always agree on geometry. */
 private object PlayerDimens {
@@ -755,12 +757,15 @@ private fun SharedTransitionScope.TrackHeroPager(
                     contentAlignment = Alignment.Center
                 ) {
                     if (track.albumArtPath != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(track.albumArtPath)
+                        val context = LocalContext.current
+                        val albumArtRequest = remember(track.albumArtPath) {
+                            ImageRequest.Builder(context)
+                                .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
                                 .size(AlbumArtRequestSize)
-                                .crossfade(false)
-                                .build(),
+                                .build()
+                        }
+                        AsyncImage(
+                            model = albumArtRequest,
                             contentDescription = "Album Art",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
