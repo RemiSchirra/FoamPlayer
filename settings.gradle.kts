@@ -24,3 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "FoamPlayer"
 include(":app")
+
+// This includes the lyrics folder as a separate project
+includeBuild("lyrics")
