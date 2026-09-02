@@ -1,6 +1,7 @@
 package com.foamplayer.app.data.repository
 
 import android.content.Context
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -19,149 +20,83 @@ private val Context.dataStore by preferencesDataStore(name = "foam_settings")
 class SettingsRepository @Inject constructor(
     private val context: Context
 ) {
-    private val PREF_BIT_PERFECT_ENABLED = booleanPreferencesKey("bit_perfect_enabled")
-    private val PREF_SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
-    private val PREF_ICON_STYLE = stringPreferencesKey("icon_style")
-    private val PREF_MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")
-    private val PREF_FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")
-    private val PREF_ARTIST_SEPARATORS = stringSetPreferencesKey("artist_separators")
-    private val PREF_GENRE_SEPARATORS = stringSetPreferencesKey("genre_separators")
-    private val PREF_AUTOMATIC_COLOR = booleanPreferencesKey("automatic_color")
-    private val PREF_ACCENT_COLOR = intPreferencesKey("accent_color")
-    private val PREF_IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
-    private val PREF_ANIMATE_SEEK_BAR = booleanPreferencesKey("animate_seek_bar")
-    private val PREF_AUTO_OPEN_PLAYER = booleanPreferencesKey("auto_open_player")
-
-    val isBitPerfectEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[PREF_BIT_PERFECT_ENABLED] ?: true
+    // Keys
+    private object Keys {
+        val BIT_PERFECT_ENABLED = booleanPreferencesKey("bit_perfect_enabled")
+        val SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
+        val ICON_STYLE = stringPreferencesKey("icon_style")
+        val MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")
+        val FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")
+        val ARTIST_SEPARATORS = stringSetPreferencesKey("artist_separators")
+        val GENRE_SEPARATORS = stringSetPreferencesKey("genre_separators")
+        val AUTOMATIC_COLOR = booleanPreferencesKey("automatic_color")
+        val ACCENT_COLOR = intPreferencesKey("accent_color")
+        val IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
+        val ANIMATE_SEEK_BAR = booleanPreferencesKey("animate_seek_bar")
+        val AUTO_OPEN_PLAYER = booleanPreferencesKey("auto_open_player")
     }
 
-    val selectedFolders: Flow<Set<String>> = context.dataStore.data.map { prefs ->
-        prefs[PREF_SELECTED_FOLDERS] ?: emptySet()
+    // Getter & setter
+    private fun <T> preference(key: Preferences.Key<T>, default: T): Flow<T> =
+        context.dataStore.data.map { prefs -> prefs[key] ?: default }
+
+    private suspend fun <T> setPreference(key: Preferences.Key<T>, value: T) {
+        context.dataStore.edit { prefs -> prefs[key] = value }
     }
 
+    // Preferences relative to their current state
+    private suspend fun <T> updatePreference(key: Preferences.Key<T>, default: T, transform: (T) -> T) {
+        context.dataStore.edit { prefs ->
+            prefs[key] = transform(prefs[key] ?: default)
+        }
+    }
+
+    // ---- Simple settings --------------------------------------------------
+    val isBitPerfectEnabled: Flow<Boolean> = preference(Keys.BIT_PERFECT_ENABLED, true)
+    suspend fun setBitPerfectEnabled(enabled: Boolean) = setPreference(Keys.BIT_PERFECT_ENABLED, enabled)
+
+    val miniPlayerRounding: Flow<Int> = preference(Keys.MINI_PLAYER_ROUNDING, 8)
+    suspend fun setMiniPlayerRounding(rounding: Int) = setPreference(Keys.MINI_PLAYER_ROUNDING, rounding)
+
+    val fullPlayerRounding: Flow<Int> = preference(Keys.FULL_PLAYER_ROUNDING, 24)
+    suspend fun setFullPlayerRounding(rounding: Int) = setPreference(Keys.FULL_PLAYER_ROUNDING, rounding)
+
+    val isAutomaticColorEnabled: Flow<Boolean> = preference(Keys.AUTOMATIC_COLOR, true)
+    suspend fun setAutomaticColorEnabled(enabled: Boolean) = setPreference(Keys.AUTOMATIC_COLOR, enabled)
+
+    val accentColor: Flow<Int> = preference(Keys.ACCENT_COLOR, 0xFFFF5252.toInt())
+    suspend fun setAccentColor(color: Int) = setPreference(Keys.ACCENT_COLOR, color)
+
+    val isImmersiveModeEnabled: Flow<Boolean> = preference(Keys.IMMERSIVE_MODE, true)
+    suspend fun setImmersiveModeEnabled(enabled: Boolean) = setPreference(Keys.IMMERSIVE_MODE, enabled)
+
+    val isAnimateSeekBarEnabled: Flow<Boolean> = preference(Keys.ANIMATE_SEEK_BAR, false)
+    suspend fun setAnimateSeekBarEnabled(enabled: Boolean) = setPreference(Keys.ANIMATE_SEEK_BAR, enabled)
+
+    val isAutoOpenPlayerEnabled: Flow<Boolean> = preference(Keys.AUTO_OPEN_PLAYER, false)
+    suspend fun setAutoOpenPlayerEnabled(enabled: Boolean) = setPreference(Keys.AUTO_OPEN_PLAYER, enabled)
+
+    val artistSeparators: Flow<Set<String>> = preference(Keys.ARTIST_SEPARATORS, setOf(";", ","))
+    suspend fun setArtistSeparators(separators: Set<String>) = setPreference(Keys.ARTIST_SEPARATORS, separators)
+
+    val genreSeparators: Flow<Set<String>> = preference(Keys.GENRE_SEPARATORS, setOf(";", ","))
+    suspend fun setGenreSeparators(separators: Set<String>) = setPreference(Keys.GENRE_SEPARATORS, separators)
+
+    // Enum: stored as its name, parsed back with a safe fallback.
     val iconStyle: Flow<FoamIconStyle> = context.dataStore.data.map { prefs ->
-        val styleName = prefs[PREF_ICON_STYLE] ?: FoamIconStyle.FLAT.name
-        try {
-            FoamIconStyle.valueOf(styleName)
-        } catch (e: Exception) {
-            FoamIconStyle.FLAT
-        }
+        prefs[Keys.ICON_STYLE]?.let { name ->
+            runCatching { FoamIconStyle.valueOf(name) }.getOrNull()
+        } ?: FoamIconStyle.FLAT
     }
 
-    val miniPlayerRounding: Flow<Int> = context.dataStore.data.map { prefs ->
-        prefs[PREF_MINI_PLAYER_ROUNDING] ?: 8
-    }
+    suspend fun setIconStyle(style: FoamIconStyle) = setPreference(Keys.ICON_STYLE, style.name)
 
-    val fullPlayerRounding: Flow<Int> = context.dataStore.data.map { prefs ->
-        prefs[PREF_FULL_PLAYER_ROUNDING] ?: 24
-    }
+    // Folder set: mutated relative to its current value rather than replaced.
+    val selectedFolders: Flow<Set<String>> = preference(Keys.SELECTED_FOLDERS, emptySet())
 
-    val artistSeparators: Flow<Set<String>> = context.dataStore.data.map { prefs ->
-        prefs[PREF_ARTIST_SEPARATORS] ?: setOf(";", ",")
-    }
+    suspend fun addFolder(path: String) =
+        updatePreference(Keys.SELECTED_FOLDERS, emptySet()) { it + path }
 
-    val genreSeparators: Flow<Set<String>> = context.dataStore.data.map { prefs ->
-        prefs[PREF_GENRE_SEPARATORS] ?: setOf(";", ",")
-    }
-
-    val isAutomaticColorEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[PREF_AUTOMATIC_COLOR] ?: true
-    }
-
-    val accentColor: Flow<Int> = context.dataStore.data.map { prefs ->
-        prefs[PREF_ACCENT_COLOR] ?: 0xFFFF5252.toInt()
-    }
-
-    val isImmersiveModeEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[PREF_IMMERSIVE_MODE] ?: true
-    }
-
-    val isAnimateSeekBarEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[PREF_ANIMATE_SEEK_BAR] ?: false
-    }
-
-    val isAutoOpenPlayerEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[PREF_AUTO_OPEN_PLAYER] ?: false
-    }
-
-    suspend fun setBitPerfectEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[PREF_BIT_PERFECT_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setIconStyle(style: FoamIconStyle) {
-        context.dataStore.edit { prefs ->
-            prefs[PREF_ICON_STYLE] = style.name
-        }
-    }
-
-    suspend fun setMiniPlayerRounding(rounding: Int) {
-        context.dataStore.edit { prefs ->
-            prefs[PREF_MINI_PLAYER_ROUNDING] = rounding
-        }
-    }
-
-    suspend fun setFullPlayerRounding(rounding: Int) {
-        context.dataStore.edit { prefs ->
-            prefs[PREF_FULL_PLAYER_ROUNDING] = rounding
-        }
-    }
-
-    suspend fun addFolder(path: String) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[PREF_SELECTED_FOLDERS] ?: emptySet()
-            prefs[PREF_SELECTED_FOLDERS] = current + path
-        }
-    }
-
-    suspend fun removeFolder(path: String) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[PREF_SELECTED_FOLDERS] ?: emptySet()
-            prefs[PREF_SELECTED_FOLDERS] = current - path
-        }
-    }
-
-    suspend fun setArtistSeparators(separators: Set<String>) {
-        context.dataStore.edit { prefs ->
-            prefs[PREF_ARTIST_SEPARATORS] = separators
-        }
-    }
-
-    suspend fun setGenreSeparators(separators: Set<String>) {
-        context.dataStore.edit { prefs ->
-            prefs[PREF_GENRE_SEPARATORS] = separators
-        }
-    }
-
-    suspend fun setAutomaticColorEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[PREF_AUTOMATIC_COLOR] = enabled
-        }
-    }
-
-    suspend fun setAccentColor(color: Int) {
-        context.dataStore.edit { prefs ->
-            prefs[PREF_ACCENT_COLOR] = color
-        }
-    }
-
-    suspend fun setImmersiveModeEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[PREF_IMMERSIVE_MODE] = enabled
-        }
-    }
-
-    suspend fun setAnimateSeekBarEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[PREF_ANIMATE_SEEK_BAR] = enabled
-        }
-    }
-
-    suspend fun setAutoOpenPlayerEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[PREF_AUTO_OPEN_PLAYER] = enabled
-        }
-    }
+    suspend fun removeFolder(path: String) =
+        updatePreference(Keys.SELECTED_FOLDERS, emptySet()) { it - path }
 }

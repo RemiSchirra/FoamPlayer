@@ -7,6 +7,7 @@ import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.theme.FoamIconStyle
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -19,165 +20,68 @@ class SettingsViewModel @Inject constructor(
     private val trackRepository: TrackRepository
 ) : ViewModel() {
 
-    val isBitPerfectEnabled: StateFlow<Boolean> = settingsRepository.isBitPerfectEnabled.stateIn(
+    private fun <T> Flow<T>.asState(initial: T): StateFlow<T> = stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
+        initialValue = initial
     )
 
-    val iconStyle: StateFlow<FoamIconStyle> = settingsRepository.iconStyle.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = FoamIconStyle.FLAT
-    )
+    val isBitPerfectEnabled: StateFlow<Boolean> =
+        settingsRepository.isBitPerfectEnabled.asState(true)
 
-    val miniPlayerRounding: StateFlow<Int> = settingsRepository.miniPlayerRounding.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = 8
-    )
+    val iconStyle: StateFlow<FoamIconStyle> =
+        settingsRepository.iconStyle.asState(FoamIconStyle.FLAT)
 
-    val fullPlayerRounding: StateFlow<Int> = settingsRepository.fullPlayerRounding.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = 24
-    )
+    val miniPlayerRounding: StateFlow<Int> =
+        settingsRepository.miniPlayerRounding.asState(8)
 
-    val selectedFolders: StateFlow<Set<String>> = settingsRepository.selectedFolders.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptySet()
-    )
+    val fullPlayerRounding: StateFlow<Int> =
+        settingsRepository.fullPlayerRounding.asState(24)
 
-    val artistSeparators: StateFlow<Set<String>> = settingsRepository.artistSeparators.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = setOf(";", ",")
-    )
+    val selectedFolders: StateFlow<Set<String>> =
+        settingsRepository.selectedFolders.asState(emptySet())
 
-    val genreSeparators: StateFlow<Set<String>> = settingsRepository.genreSeparators.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = setOf(";", ",")
-    )
+    val artistSeparators: StateFlow<Set<String>> =
+        settingsRepository.artistSeparators.asState(setOf(";", ","))
 
-    val isAutomaticColorEnabled: StateFlow<Boolean> = settingsRepository.isAutomaticColorEnabled.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
-    )
+    val genreSeparators: StateFlow<Set<String>> =
+        settingsRepository.genreSeparators.asState(setOf(";", ","))
 
-    val accentColor: StateFlow<Int> = settingsRepository.accentColor.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = 0xFF6200EE.toInt()
-    )
+    val isAutomaticColorEnabled: StateFlow<Boolean> =
+        settingsRepository.isAutomaticColorEnabled.asState(true)
 
-    val isImmersiveModeEnabled: StateFlow<Boolean> = settingsRepository.isImmersiveModeEnabled.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
-    )
+    val accentColor: StateFlow<Int> =
+        settingsRepository.accentColor.asState(0xFF6200EE.toInt())
 
-    val isAnimateSeekBarEnabled: StateFlow<Boolean> = settingsRepository.isAnimateSeekBarEnabled.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
-    )
+    val isImmersiveModeEnabled: StateFlow<Boolean> =
+        settingsRepository.isImmersiveModeEnabled.asState(true)
 
-    val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = ScanStatus.Idle
-    )
+    val isAnimateSeekBarEnabled: StateFlow<Boolean> =
+        settingsRepository.isAnimateSeekBarEnabled.asState(false)
 
-    val isAutoOpenPlayerEnabled: StateFlow<Boolean> = settingsRepository.isAutoOpenPlayerEnabled.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
-    )
+    val isAutoOpenPlayerEnabled: StateFlow<Boolean> =
+        settingsRepository.isAutoOpenPlayerEnabled.asState(false)
 
-    fun setBitPerfectEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setBitPerfectEnabled(enabled)
-        }
-    }
+    val scanStatus: StateFlow<ScanStatus> =
+        trackRepository.scanStatus.asState(ScanStatus.Idle)
 
-    fun setIconStyle(style: FoamIconStyle) {
-        viewModelScope.launch {
-            settingsRepository.setIconStyle(style)
-        }
-    }
+    fun setBitPerfectEnabled(enabled: Boolean) = launch { settingsRepository.setBitPerfectEnabled(enabled) }
+    fun setIconStyle(style: FoamIconStyle) = launch { settingsRepository.setIconStyle(style) }
+    fun setMiniPlayerRounding(rounding: Int) = launch { settingsRepository.setMiniPlayerRounding(rounding) }
+    fun setFullPlayerRounding(rounding: Int) = launch { settingsRepository.setFullPlayerRounding(rounding) }
+    fun addFolder(path: String) = launch { settingsRepository.addFolder(path) }
+    fun removeFolder(path: String) = launch { settingsRepository.removeFolder(path) }
+    fun setArtistSeparators(separators: Set<String>) = launch { settingsRepository.setArtistSeparators(separators) }
+    fun setGenreSeparators(separators: Set<String>) = launch { settingsRepository.setGenreSeparators(separators) }
+    fun setAutomaticColorEnabled(enabled: Boolean) = launch { settingsRepository.setAutomaticColorEnabled(enabled) }
+    fun setAccentColor(color: Int) = launch { settingsRepository.setAccentColor(color) }
+    fun setImmersiveModeEnabled(enabled: Boolean) = launch { settingsRepository.setImmersiveModeEnabled(enabled) }
+    fun setAnimateSeekBarEnabled(enabled: Boolean) = launch { settingsRepository.setAnimateSeekBarEnabled(enabled) }
+    fun setAutoOpenPlayerEnabled(enabled: Boolean) = launch { settingsRepository.setAutoOpenPlayerEnabled(enabled) }
 
-    fun setMiniPlayerRounding(rounding: Int) {
-        viewModelScope.launch {
-            settingsRepository.setMiniPlayerRounding(rounding)
-        }
-    }
+    fun startScan() = launch { trackRepository.rescanLibrary() }
 
-    fun setFullPlayerRounding(rounding: Int) {
-        viewModelScope.launch {
-            settingsRepository.setFullPlayerRounding(rounding)
-        }
-    }
-
-    fun addFolder(path: String) {
-        viewModelScope.launch {
-            settingsRepository.addFolder(path)
-        }
-    }
-
-    fun removeFolder(path: String) {
-        viewModelScope.launch {
-            settingsRepository.removeFolder(path)
-        }
-    }
-
-    fun setArtistSeparators(separators: Set<String>) {
-        viewModelScope.launch {
-            settingsRepository.setArtistSeparators(separators)
-        }
-    }
-
-    fun setGenreSeparators(separators: Set<String>) {
-        viewModelScope.launch {
-            settingsRepository.setGenreSeparators(separators)
-        }
-    }
-
-    fun setAutomaticColorEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAutomaticColorEnabled(enabled)
-        }
-    }
-
-    fun setAccentColor(color: Int) {
-        viewModelScope.launch {
-            settingsRepository.setAccentColor(color)
-        }
-    }
-
-    fun setImmersiveModeEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setImmersiveModeEnabled(enabled)
-        }
-    }
-
-    fun setAnimateSeekBarEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAnimateSeekBarEnabled(enabled)
-        }
-    }
-
-    fun setAutoOpenPlayerEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAutoOpenPlayerEnabled(enabled)
-        }
-    }
-
-    fun startScan() {
-        viewModelScope.launch {
-            trackRepository.rescanLibrary()
-        }
+    private fun launch(block: suspend () -> Unit) {
+        viewModelScope.launch { block() }
     }
 }
