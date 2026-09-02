@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,10 +27,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,6 +50,7 @@ import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.screens.library.TrackListItem
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
+import com.foamplayer.app.ui.utils.extractPaletteColor
 
 // Used by both this header and the search/artist list rows for the shared-element
 // transition. Keeping it a single shared shape means the artwork never has to snap
@@ -159,6 +166,26 @@ private fun HeaderSection(
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?
 ) {
+    val context = LocalContext.current
+    val defaultAccentColor = FoamTheme.colors.primaryAccent
+
+    var paletteColor by remember(imageUrl) { mutableStateOf<Color?>(null) }
+
+    LaunchedEffect(imageUrl) {
+        paletteColor = if (imageUrl != null) {
+            extractPaletteColor(context, imageUrl)
+        } else {
+            null
+        }
+    }
+
+    // Fades to the extracted color once it's ready, rather than snapping to it.
+    val accentColor by animateColorAsState(
+        targetValue = paletteColor ?: defaultAccentColor,
+        animationSpec = tween(durationMillis = 300),
+        label = "trackListAccentColor"
+    )
+
     // Helper: only wraps with a shared bounds modifier when a shared-element
     // context was actually provided (e.g. when navigating in from Search/Artist).
     // For the title/artist TEXT: content genuinely differs between screens (different
@@ -248,7 +275,7 @@ private fun HeaderSection(
             if (subtitle != null) {
                 BasicText(
                     text = subtitle,
-                    style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.primaryAccent),
+                    style = FoamTheme.typography.titleMedium.copy(color = accentColor),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.sharedBoundsIfAvailable("album-artist-$sharedElementKey")
@@ -266,7 +293,7 @@ private fun HeaderSection(
             Box(
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(FoamTheme.colors.primaryAccent)
+                    .background(accentColor)
                     .clickable { onPlayAllClick() }
                     .padding(horizontal = 24.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
