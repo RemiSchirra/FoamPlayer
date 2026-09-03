@@ -237,210 +237,209 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                 ) {
                     val playerTransitionVisibilityScope = this
                     Box(modifier = Modifier.fillMaxSize()) {
-                        // Content Area
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                NavHost(
-                                    navController = navController,
-                                    startDestination = Screen.Library.route,
-                                    enterTransition = {
-                                        when {
-                                            playerTransitionState.currentState -> EnterTransition.None
-                                            isSettingsRoute(initialState.destination.route) &&
-                                                    isSettingsRoute(targetState.destination.route) ->
-                                                slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) + fadeIn(animationSpec = tween(400))
-                                            isSharedElementRoute(initialState.destination.route) ||
-                                                    isSharedElementRoute(targetState.destination.route) ->
-                                                fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
-                                            else -> fadeIn(animationSpec = tween(400))
-                                        }
-                                    },
-                                    exitTransition = {
-                                        when {
-                                            playerTransitionState.currentState -> ExitTransition.None
-                                            isSettingsRoute(initialState.destination.route) &&
-                                                    isSettingsRoute(targetState.destination.route) ->
-                                                slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = tween()) + fadeOut(animationSpec = tween(400))
-                                            isSharedElementRoute(initialState.destination.route) ||
-                                                    isSharedElementRoute(targetState.destination.route) ->
-                                                fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
-                                            else -> fadeOut(animationSpec = tween(400))
-                                        }
-                                    },
-                                    popEnterTransition = {
-                                        when {
-                                            playerTransitionState.currentState -> EnterTransition.None
-                                            isSettingsRoute(initialState.destination.route) &&
-                                                    isSettingsRoute(targetState.destination.route) ->
-                                                slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = tween()) + fadeIn(animationSpec = tween(400))
-                                            isSharedElementRoute(initialState.destination.route) ||
-                                                    isSharedElementRoute(targetState.destination.route) ->
-                                                fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
-                                            else -> fadeIn(animationSpec = tween(400))
-                                        }
-                                    },
-                                    popExitTransition = {
-                                        when {
-                                            playerTransitionState.currentState -> ExitTransition.None
-                                            isSettingsRoute(initialState.destination.route) &&
-                                                    isSettingsRoute(targetState.destination.route) ->
-                                                slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) + fadeOut(animationSpec = tween(400))
-                                            isSharedElementRoute(initialState.destination.route) ||
-                                                    isSharedElementRoute(targetState.destination.route) ->
-                                                fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
-                                            else -> fadeOut(animationSpec = tween(400))
-                                        }
-                                    },
-                                    sizeTransform = { SizeTransform(clip = false) }
-                                ) {
-                                    composable(Screen.Library.route) {
-                                        LibraryScreen(
-                                            viewModel = libraryViewModel,
-                                            onTrackClick = { tracks, index ->
-                                                playTrackFromList(tracks, index)
-                                            },
-                                            sharedTransitionScope = this@SharedTransitionLayout,
-                                            animatedVisibilityScope = playerTransitionVisibilityScope,
-                                            sharedTrackId = trackListTransitionTrackId,
-                                            activeTrackId = playbackState.currentTrack?.id
-                                        )
-                                    }
-                                    composable(Screen.Playlists.route) {
-                                        PlaylistsScreen(
-                                            onPlaylistClick = { playlist ->
-                                                navController.navigate(Screen.PlaylistDetail.createRoute(playlist.playlistId))
-                                            }
-                                        )
-                                    }
-                                    composable(Screen.Search.route) {
-                                        SearchScreen(
-                                            onArtistClick = { artist ->
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artist))
-                                            },
-                                            onAlbumClick = { albumResult ->
-                                                navController.navigate(
-                                                    Screen.AlbumDetail.createRoute(
-                                                        albumResult.album,
-                                                        albumResult.albumArtPath,
-                                                        albumResult.artist
-                                                    )
-                                                )
-                                            },
-                                            sharedTransitionScope = this@SharedTransitionLayout,
-                                            animatedVisibilityScope = this,
-                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-                                            sharedTrackId = trackListTransitionTrackId,
-                                            activeTrackId = playbackState.currentTrack?.id,
-                                            onTrackClick = { track -> playTrackFromList(listOf(track), 0) }
-                                        )
-                                    }
-                                    composable(Screen.Equalizer.route) { EqualizerScreen() }
-                                    composable(Screen.Settings.route) {
-                                        SettingsScreen(
-                                            onNavigateToAudio = { navController.navigate(Screen.SettingsAudio.route) },
-                                            onNavigateToUI = { navController.navigate(Screen.SettingsUI.route) },
-                                            onNavigateToLibrary = { navController.navigate(Screen.SettingsLibrary.route) },
-                                            onNavigateToTest = { navController.navigate(Screen.SettingsTest.route) }
-                                        )
-                                    }
-                                    composable(Screen.SettingsAudio.route) {
-                                        AudioSettingsScreen(onBack = { navController.popBackStack() })
-                                    }
-                                    composable(Screen.SettingsUI.route) {
-                                        UISettingsScreen(
-                                            onBack = { navController.popBackStack() },
-                                            onNavigateToColors = { navController.navigate(Screen.SettingsColors.route) },
-                                            onNavigateToPlayer = { navController.navigate(Screen.SettingsPlayer.route) },
-                                            onNavigateToBackground = { navController.navigate(Screen.SettingsBackground.route) },
-                                        )
-                                    }
-                                    composable(Screen.SettingsColors.route) {
-                                        ColorsSettingsScreen(onBack = { navController.popBackStack() })
-                                    }
-                                    composable(Screen.SettingsPlayer.route) {
-                                        PlayerSettingsScreen(onBack = { navController.popBackStack() })
-                                    }
-                                    composable(Screen.SettingsBackground.route) {
-                                        BackgroundSettingsScreen(onBack = { navController.popBackStack() })
-                                    }
-                                    composable(Screen.SettingsLibrary.route) {
-                                        LibrarySettingsScreen(onBack = { navController.popBackStack() })
-                                    }
-                                    composable(Screen.SettingsTest.route) {
-                                        TestSettingsScreen(onBack = { navController.popBackStack() })
-                                    }
-                                    composable(
-                                        Screen.ArtistDetail.route,
-                                        arguments = listOf(navArgument("artistName") { type = NavType.StringType })
-                                    ) { backStackEntry ->
-                                        val artistName = backStackEntry.arguments?.getString("artistName") ?: ""
-                                        ArtistDetailScreen(
-                                            artistName = artistName,
-                                            onAlbumClick = { album ->
-                                                navController.navigate(
-                                                    Screen.AlbumDetail.createRoute(
-                                                        album.album,
-                                                        album.albumArtPath,
-                                                        album.artist
-                                                    )
-                                                )
-                                            },
-                                            onBack = { navController.popBackStack() },
-                                            sharedTransitionScope = this@SharedTransitionLayout,
-                                            animatedVisibilityScope = this
-                                        )
-                                    }
-                                    composable(
-                                        Screen.AlbumDetail.route,
-                                        arguments = listOf(
-                                            navArgument("albumName") { type = NavType.StringType },
-                                            navArgument("artUrl") { type = NavType.StringType; defaultValue = "" },
-                                            navArgument("artist") { type = NavType.StringType; defaultValue = "" }
-                                        )
-                                    ) { backStackEntry ->
-                                        // Same as ArtistDetail above: these arrive already decoded by
-                                        // Navigation's own matcher, so decoding again here would corrupt
-                                        // any %-encoded segments already present in a real content:// URI.
-                                        val albumName = backStackEntry.arguments?.getString("albumName") ?: ""
-                                        val artUrl = (backStackEntry.arguments?.getString("artUrl") ?: "").ifEmpty { null }
-                                        val artist = (backStackEntry.arguments?.getString("artist") ?: "").ifEmpty { null }
-                                        AlbumDetailScreen(
-                                            albumName = albumName,
-                                            initialImageUrl = artUrl,
-                                            initialArtistName = artist,
-                                            onTrackClick = { tracks, index ->
-                                                playTrackFromList(tracks, index)
-                                            },
-                                            onBack = { navController.popBackStack() },
-                                            sharedTransitionScope = this@SharedTransitionLayout,
-                                            animatedVisibilityScope = this,
-                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-                                            sharedTrackId = trackListTransitionTrackId,
-                                            activeTrackId = playbackState.currentTrack?.id
-                                        )
-                                    }
-                                    composable(
-                                        Screen.PlaylistDetail.route,
-                                        arguments = listOf(navArgument("playlistId") { type = NavType.LongType })
-                                    ) { backStackEntry ->
-                                        val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: -1L
-                                        PlaylistDetailScreen(
-                                            playlistId = playlistId,
-                                            onTrackClick = { tracks, index ->
-                                                playTrackFromList(tracks, index)
-                                            },
-                                            onBack = { navController.popBackStack() },
-                                            sharedTransitionScope = this@SharedTransitionLayout,
-                                            animatedVisibilityScope = this,
-                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-                                            sharedTrackId = trackListTransitionTrackId,
-                                            activeTrackId = playbackState.currentTrack?.id
-                                        )
-                                    }
+                        // Content Area - fills the whole area so screens (e.g. TrackListScreen)
+                        // can paint a full-bleed background that extends behind the mini player,
+                        // instead of being squeezed to stop above it. Screens whose content
+                        // scrolls reserve their own bottom inset (see TrackListScreen's trailing
+                        // Spacer) so list items aren't hidden under the mini player.
+                        NavHost(
+                            modifier = Modifier.fillMaxSize(),
+                            navController = navController,
+                            startDestination = Screen.Library.route,
+                            enterTransition = {
+                                when {
+                                    playerTransitionState.currentState -> EnterTransition.None
+                                    isSettingsRoute(initialState.destination.route) &&
+                                            isSettingsRoute(targetState.destination.route) ->
+                                        slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) + fadeIn(animationSpec = tween(400))
+                                    isSharedElementRoute(initialState.destination.route) ||
+                                            isSharedElementRoute(targetState.destination.route) ->
+                                        fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
+                                    else -> fadeIn(animationSpec = tween(400))
                                 }
+                            },
+                            exitTransition = {
+                                when {
+                                    playerTransitionState.currentState -> ExitTransition.None
+                                    isSettingsRoute(initialState.destination.route) &&
+                                            isSettingsRoute(targetState.destination.route) ->
+                                        slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = tween()) + fadeOut(animationSpec = tween(400))
+                                    isSharedElementRoute(initialState.destination.route) ||
+                                            isSharedElementRoute(targetState.destination.route) ->
+                                        fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
+                                    else -> fadeOut(animationSpec = tween(400))
+                                }
+                            },
+                            popEnterTransition = {
+                                when {
+                                    playerTransitionState.currentState -> EnterTransition.None
+                                    isSettingsRoute(initialState.destination.route) &&
+                                            isSettingsRoute(targetState.destination.route) ->
+                                        slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = tween()) + fadeIn(animationSpec = tween(400))
+                                    isSharedElementRoute(initialState.destination.route) ||
+                                            isSharedElementRoute(targetState.destination.route) ->
+                                        fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
+                                    else -> fadeIn(animationSpec = tween(400))
+                                }
+                            },
+                            popExitTransition = {
+                                when {
+                                    playerTransitionState.currentState -> ExitTransition.None
+                                    isSettingsRoute(initialState.destination.route) &&
+                                            isSettingsRoute(targetState.destination.route) ->
+                                        slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) + fadeOut(animationSpec = tween(400))
+                                    isSharedElementRoute(initialState.destination.route) ||
+                                            isSharedElementRoute(targetState.destination.route) ->
+                                        fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
+                                    else -> fadeOut(animationSpec = tween(400))
+                                }
+                            },
+                            sizeTransform = { SizeTransform(clip = false) }
+                        ) {
+                            composable(Screen.Library.route) {
+                                LibraryScreen(
+                                    viewModel = libraryViewModel,
+                                    onTrackClick = { tracks, index ->
+                                        playTrackFromList(tracks, index)
+                                    },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = playerTransitionVisibilityScope,
+                                    sharedTrackId = trackListTransitionTrackId,
+                                    activeTrackId = playbackState.currentTrack?.id
+                                )
                             }
-                            // Spacer for MiniPlayer
-                            Box(modifier = Modifier.fillMaxWidth().height(80.dp))
+                            composable(Screen.Playlists.route) {
+                                PlaylistsScreen(
+                                    onPlaylistClick = { playlist ->
+                                        navController.navigate(Screen.PlaylistDetail.createRoute(playlist.playlistId))
+                                    }
+                                )
+                            }
+                            composable(Screen.Search.route) {
+                                SearchScreen(
+                                    onArtistClick = { artist ->
+                                        navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                                    },
+                                    onAlbumClick = { albumResult ->
+                                        navController.navigate(
+                                            Screen.AlbumDetail.createRoute(
+                                                albumResult.album,
+                                                albumResult.albumArtPath,
+                                                albumResult.artist
+                                            )
+                                        )
+                                    },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = this,
+                                    playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                    sharedTrackId = trackListTransitionTrackId,
+                                    activeTrackId = playbackState.currentTrack?.id,
+                                    onTrackClick = { track -> playTrackFromList(listOf(track), 0) }
+                                )
+                            }
+                            composable(Screen.Equalizer.route) { EqualizerScreen() }
+                            composable(Screen.Settings.route) {
+                                SettingsScreen(
+                                    onNavigateToAudio = { navController.navigate(Screen.SettingsAudio.route) },
+                                    onNavigateToUI = { navController.navigate(Screen.SettingsUI.route) },
+                                    onNavigateToLibrary = { navController.navigate(Screen.SettingsLibrary.route) },
+                                    onNavigateToTest = { navController.navigate(Screen.SettingsTest.route) }
+                                )
+                            }
+                            composable(Screen.SettingsAudio.route) {
+                                AudioSettingsScreen(onBack = { navController.popBackStack() })
+                            }
+                            composable(Screen.SettingsUI.route) {
+                                UISettingsScreen(
+                                    onBack = { navController.popBackStack() },
+                                    onNavigateToColors = { navController.navigate(Screen.SettingsColors.route) },
+                                    onNavigateToPlayer = { navController.navigate(Screen.SettingsPlayer.route) },
+                                    onNavigateToBackground = { navController.navigate(Screen.SettingsBackground.route) },
+                                )
+                            }
+                            composable(Screen.SettingsColors.route) {
+                                ColorsSettingsScreen(onBack = { navController.popBackStack() })
+                            }
+                            composable(Screen.SettingsPlayer.route) {
+                                PlayerSettingsScreen(onBack = { navController.popBackStack() })
+                            }
+                            composable(Screen.SettingsBackground.route) {
+                                BackgroundSettingsScreen(onBack = { navController.popBackStack() })
+                            }
+                            composable(Screen.SettingsLibrary.route) {
+                                LibrarySettingsScreen(onBack = { navController.popBackStack() })
+                            }
+                            composable(Screen.SettingsTest.route) {
+                                TestSettingsScreen(onBack = { navController.popBackStack() })
+                            }
+                            composable(
+                                Screen.ArtistDetail.route,
+                                arguments = listOf(navArgument("artistName") { type = NavType.StringType })
+                            ) { backStackEntry ->
+                                val artistName = backStackEntry.arguments?.getString("artistName") ?: ""
+                                ArtistDetailScreen(
+                                    artistName = artistName,
+                                    onAlbumClick = { album ->
+                                        navController.navigate(
+                                            Screen.AlbumDetail.createRoute(
+                                                album.album,
+                                                album.albumArtPath,
+                                                album.artist
+                                            )
+                                        )
+                                    },
+                                    onBack = { navController.popBackStack() },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = this
+                                )
+                            }
+                            composable(
+                                Screen.AlbumDetail.route,
+                                arguments = listOf(
+                                    navArgument("albumName") { type = NavType.StringType },
+                                    navArgument("artUrl") { type = NavType.StringType; defaultValue = "" },
+                                    navArgument("artist") { type = NavType.StringType; defaultValue = "" }
+                                )
+                            ) { backStackEntry ->
+                                // Same as ArtistDetail above: these arrive already decoded by
+                                // Navigation's own matcher, so decoding again here would corrupt
+                                // any %-encoded segments already present in a real content:// URI.
+                                val albumName = backStackEntry.arguments?.getString("albumName") ?: ""
+                                val artUrl = (backStackEntry.arguments?.getString("artUrl") ?: "").ifEmpty { null }
+                                val artist = (backStackEntry.arguments?.getString("artist") ?: "").ifEmpty { null }
+                                AlbumDetailScreen(
+                                    albumName = albumName,
+                                    initialImageUrl = artUrl,
+                                    initialArtistName = artist,
+                                    onTrackClick = { tracks, index ->
+                                        playTrackFromList(tracks, index)
+                                    },
+                                    onBack = { navController.popBackStack() },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = this,
+                                    playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                    sharedTrackId = trackListTransitionTrackId,
+                                    activeTrackId = playbackState.currentTrack?.id
+                                )
+                            }
+                            composable(
+                                Screen.PlaylistDetail.route,
+                                arguments = listOf(navArgument("playlistId") { type = NavType.LongType })
+                            ) { backStackEntry ->
+                                val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: -1L
+                                PlaylistDetailScreen(
+                                    playlistId = playlistId,
+                                    onTrackClick = { tracks, index ->
+                                        playTrackFromList(tracks, index)
+                                    },
+                                    onBack = { navController.popBackStack() },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = this,
+                                    playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                    sharedTrackId = trackListTransitionTrackId,
+                                    activeTrackId = playbackState.currentTrack?.id
+                                )
+                            }
                         }
 
                         // MiniPlayer - Positioned at the bottom of the main content area, above the Nav Bar
