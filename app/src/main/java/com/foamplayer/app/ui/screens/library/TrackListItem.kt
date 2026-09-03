@@ -33,7 +33,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -42,7 +45,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -51,7 +53,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.theme.FoamTheme
 import androidx.core.net.toUri
-import kotlin.math.roundToInt
+import kotlin.math.max
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -105,43 +107,54 @@ fun TrackListItem(
     val density = LocalDensity.current
     val verticalPaddingPx = with(density) { 8.dp.toPx() }
 
-    // Tracks the art box's real, rendered height and top position (in px, relative
-    // to the outer container below) each layout pass. While the shared-element
-    // transition to/from the full player is running, this box's size *and* position
-    // are being driven by the shared transition itself, so reading both every frame
-    // lets the highlight follow the artwork exactly instead of being pinned to the
-    // Row's own (static) bounds. Defaults match the resting state — art box top
-    // equal to the row's vertical padding — so nothing jumps before the first
-    // layout pass reports real values.
-    var artBoxHeightPx by remember { mutableFloatStateOf(with(density) { 48.dp.toPx() }) }
+    val restingArtHeightPx = with(density) { 48.dp.toPx() }
+    var artBoxHeightPx by remember { mutableFloatStateOf(restingArtHeightPx) }
     var artBoxTopPx by remember { mutableFloatStateOf(verticalPaddingPx) }
+    var artistTextBottomPx by remember {
+        mutableFloatStateOf(verticalPaddingPx + restingArtHeightPx)
+    }
     var containerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-
-    val highlightHeight = with(density) { (artBoxHeightPx + verticalPaddingPx * 2f).toDp() }
+    val highlightShape = RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding + 4.dp)
+    val highlightCornerRadiusPx = with(density) {
+        (FoamTheme.shapes.miniPlayerRounding + 4.dp).toPx()
+    }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .onGloballyPositioned { containerCoordinates = it }
+            .then(
+                if (active) {
+                    Modifier.onGloballyPositioned { containerCoordinates = it }
+                } else {
+                    Modifier
+                }
+            )
     ) {
-        // Drawn behind the row content. Both its height and its vertical offset are
-        // sourced from the art box's live measurements (rather than the Row's own,
-        // static height), so as the artwork grows/shrinks and moves during the
-        // shared-element animation, this rectangle grows and repositions right along
-        // with it instead of staying pinned to the row's own bounds.
+        // Active rectangle indicator
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(highlightHeight)
-                .offset { IntOffset(x = 0, y = (artBoxTopPx - verticalPaddingPx).roundToInt()) }
-                .clip(RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding + 4.dp))
-                .background(animatedBackgroundColor) // Uses the animated color
+                .height(64.dp)
+                .drawBehind {
+                    val contentBottomPx = max(
+                        artBoxTopPx + artBoxHeightPx,
+                        artistTextBottomPx
+                    )
+                    val targetHeightPx = (contentBottomPx - artBoxTopPx) + verticalPaddingPx * 2f
+                    val topPx = artBoxTopPx - verticalPaddingPx
+                    drawRoundRect(
+                        color = animatedBackgroundColor,
+                        topLeft = Offset(0f, topPx),
+                        size = Size(size.width, targetHeightPx),
+                        cornerRadius = CornerRadius(highlightCornerRadiusPx, highlightCornerRadiusPx)
+                    )
+                }
         )
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding + 4.dp))
+                .clip(highlightShape)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = ripple(color = FoamTheme.colors.textPrimary)
@@ -153,12 +166,18 @@ fun TrackListItem(
                 modifier = Modifier
                     .size(48.dp)
                     .sharedArtwork()
-                    .onGloballyPositioned { coords ->
-                        artBoxHeightPx = coords.size.height.toFloat()
-                        containerCoordinates?.let { container ->
-                            artBoxTopPx = container.localPositionOf(coords, Offset.Zero).y
+                    .then(
+                        if (active) {
+                            Modifier.onGloballyPositioned { coords ->
+                                artBoxHeightPx = coords.size.height.toFloat()
+                                containerCoordinates?.let { container ->
+                                    artBoxTopPx = container.localPositionOf(coords, Offset.Zero).y
+                                }
+                            }
+                        } else {
+                            Modifier
                         }
-                    }
+                    )
                     .clip(RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding))
                     .background(FoamTheme.colors.surfaceVariant),
                 contentAlignment = Alignment.Center
@@ -200,7 +219,22 @@ fun TrackListItem(
                     style = FoamTheme.typography.body,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.sharedText("track_artist_${track.id}")
+                    modifier = Modifier
+                        .sharedText("track_artist_${track.id}")
+                        .then(
+                            if (active) {
+                                Modifier.onGloballyPositioned { coords ->
+                                    containerCoordinates?.let { container ->
+                                        artistTextBottomPx = container.localPositionOf(
+                                            coords,
+                                            Offset(0f, coords.size.height.toFloat())
+                                        ).y
+                                    }
+                                }
+                            } else {
+                                Modifier
+                            }
+                        )
                 )
             }
 
