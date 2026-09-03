@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithCache
@@ -17,6 +19,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
@@ -26,27 +29,43 @@ import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /** A blurred, crossfading artwork layer for non-settings areas of the app. */
-@androidx.compose.runtime.Composable
+@Composable
 internal fun DynamicAlbumArtBackground(
     frontArtPath: String?,
     backArtPath: String?,
     crossfadeFraction: Float,
-    blur: androidx.compose.ui.unit.Dp,
+    blur: Dp,
     intensity: Float,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+
     Box(modifier = modifier) {
         frontArtPath?.let { path ->
+            val request = remember(path) {
+                ImageRequest.Builder(context)
+                    .data(EmbeddedAlbumArt(path.toUri()))
+                    .size(AlbumArtRequestSize)
+                    .crossfade(300)
+                    .build()
+            }
             AsyncImage(
-                model = EmbeddedAlbumArt(path.toUri()),
+                model = request,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize().blur(blur),
                 contentScale = ContentScale.Crop,
             )
         }
         if (backArtPath != null && backArtPath != frontArtPath) {
+            val backRequest = remember(backArtPath) {
+                ImageRequest.Builder(context)
+                    .data(EmbeddedAlbumArt(backArtPath.toUri()))
+                    .size(AlbumArtRequestSize)
+                    .crossfade(300)
+                    .build()
+            }
             AsyncImage(
-                model = EmbeddedAlbumArt(backArtPath.toUri()),
+                model = backRequest,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
