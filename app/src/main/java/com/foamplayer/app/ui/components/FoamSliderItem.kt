@@ -22,6 +22,7 @@ fun FoamSliderItem(
     title: String,
     value: Float,
     onValueChange: (Float) -> Unit,
+    onValueChangeFinished: (() -> Unit)? = null,
     valueDisplay: String,
     modifier: Modifier = Modifier,
     steps: Int? = null,
@@ -57,6 +58,7 @@ fun FoamSliderItem(
         Slider(
             value = value,
             onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished,
             steps = steps ?: 0,
             valueRange = valueRange,
             modifier = Modifier.fillMaxWidth(),

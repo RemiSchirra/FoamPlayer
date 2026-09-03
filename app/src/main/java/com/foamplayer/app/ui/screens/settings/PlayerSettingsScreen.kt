@@ -16,6 +16,7 @@ import androidx.compose.material.SliderDefaults
 import androidx.compose.material.Switch
 import androidx.compose.material.SwitchDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -36,13 +37,19 @@ fun PlayerSettingsScreen(
     onBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val miniRounding by viewModel.miniPlayerRounding.collectAsState()
-    val fullRounding by viewModel.fullPlayerRounding.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+    val miniRounding = settings.miniPlayerRounding
+    val fullRounding = settings.fullPlayerRounding
     var localMiniRounding by remember { mutableFloatStateOf(miniRounding.toFloat()) }
     var localFullRounding by remember { mutableFloatStateOf(fullRounding.toFloat()) }
-    val isImmersiveEnabled by viewModel.isImmersiveModeEnabled.collectAsState()
-    val isAnimateSeekBarEnabled by viewModel.isAnimateSeekBarEnabled.collectAsState()
-    val isAutoOpenPlayerEnabled by viewModel.isAutoOpenPlayerEnabled.collectAsState()
+    val isImmersiveEnabled = settings.immersiveModeEnabled
+    val isAnimateSeekBarEnabled = settings.animateSeekBarEnabled
+    val isAutoOpenPlayerEnabled = settings.autoOpenPlayerEnabled
+
+    // Persist only after a drag ends. Writing DataStore for every pointer update
+    // caused the slider to repeatedly reconcile with stale persisted values.
+    LaunchedEffect(miniRounding) { localMiniRounding = miniRounding.toFloat() }
+    LaunchedEffect(fullRounding) { localFullRounding = fullRounding.toFloat() }
 
     LazyColumn(
         modifier = Modifier
@@ -94,26 +101,26 @@ fun PlayerSettingsScreen(
                 title = "Mini player",
                 description = "Slider with snapping enabled.",
                 value = localMiniRounding,
-                onValueChange = {
-                    localMiniRounding = it
-                    viewModel.setMiniPlayerRounding(it.roundToInt())
+                onValueChange = { localMiniRounding = it },
+                onValueChangeFinished = {
+                    viewModel.setMiniPlayerRounding(localMiniRounding.roundToInt())
                 },
                 steps = 7,
                 valueRange = 0f..32f,
-                valueDisplay = "$miniRounding",
+                valueDisplay = localMiniRounding.roundToInt().toString(),
                 minMaxDisplay = "0" to "32"
             )
             FoamSliderItem(
                 title = "Full player",
                 description = "Slider with snapping enabled.",
                 value = localFullRounding,
-                onValueChange = {
-                    localFullRounding = it
-                    viewModel.setFullPlayerRounding(it.roundToInt())
+                onValueChange = { localFullRounding = it },
+                onValueChangeFinished = {
+                    viewModel.setFullPlayerRounding(localFullRounding.roundToInt())
                 },
                 steps = 7,
                 valueRange = 0f..64f,
-                valueDisplay = "$fullRounding",
+                valueDisplay = localFullRounding.roundToInt().toString(),
                 minMaxDisplay = "0" to "64"
             )
 

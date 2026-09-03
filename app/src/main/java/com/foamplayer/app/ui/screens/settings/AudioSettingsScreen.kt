@@ -29,7 +29,8 @@ fun AudioSettingsScreen(
     onBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val isBitPerfectEnabled by viewModel.isBitPerfectEnabled.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+    val isBitPerfectEnabled = settings.bitPerfectEnabled
 
     LazyColumn(
         modifier = Modifier

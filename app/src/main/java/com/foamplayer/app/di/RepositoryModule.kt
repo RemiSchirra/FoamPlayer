@@ -1,6 +1,9 @@
 package com.foamplayer.app.di
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
 import com.foamplayer.app.data.db.dao.PlaylistDao
 import com.foamplayer.app.data.db.dao.TrackDao
 import com.foamplayer.app.data.repository.PlaylistRepository
@@ -13,6 +16,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+
+private val Context.settingsDataStore by preferencesDataStore(name = "foam_settings")
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -42,7 +47,6 @@ object RepositoryModule {
 
     @Provides
     @Singleton
-    fun provideSettingsRepository(@ApplicationContext context: Context): SettingsRepository {
-        return SettingsRepository(context)
-    }
+    fun provideSettingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        context.settingsDataStore
 }

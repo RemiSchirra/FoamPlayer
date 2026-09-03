@@ -48,10 +48,11 @@ fun LibrarySettingsScreen(
     onBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val selectedFolders by viewModel.selectedFolders.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+    val selectedFolders = settings.libraryFolders
     val scanStatus by viewModel.scanStatus.collectAsState()
-    val artistSeparators by viewModel.artistSeparators.collectAsState()
-    val genreSeparators by viewModel.genreSeparators.collectAsState()
+    val artistSeparators = settings.artistSeparators
+    val genreSeparators = settings.genreSeparators
     val context = LocalContext.current
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
@@ -103,7 +104,7 @@ fun LibrarySettingsScreen(
                 }
             }
         } else {
-            items(selectedFolders.toList()) { folder ->
+            items(selectedFolders.sorted()) { folder ->
                 FoamGlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     Row(
                         Modifier.fillMaxWidth().padding(12.dp),
@@ -228,7 +229,7 @@ fun SeparatorSettingsCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                separators.forEach { sep ->
+                separators.sorted().forEach { sep ->
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))

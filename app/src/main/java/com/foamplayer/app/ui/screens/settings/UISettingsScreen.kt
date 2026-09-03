@@ -28,7 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.ui.components.FoamGlassCard
-import com.foamplayer.app.ui.theme.FoamIconStyle
+import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -38,7 +38,8 @@ fun UISettingsScreen(
     onNavigateToPlayer: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val iconStyle by viewModel.iconStyle.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+    val iconStyle = settings.iconStyle
 
     LazyColumn(
         modifier = Modifier

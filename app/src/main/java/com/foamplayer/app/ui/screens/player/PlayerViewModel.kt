@@ -7,6 +7,7 @@ import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.SettingsRepository
+import com.foamplayer.app.data.settings.AppSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,22 +24,10 @@ class PlayerViewModel @Inject constructor(
 
     val playbackState: StateFlow<PlaybackState> = audioEngine.playbackState
 
-    val isImmersiveModeEnabled: StateFlow<Boolean> = settingsRepository.isImmersiveModeEnabled.stateIn(
+    val settings: StateFlow<AppSettings> = settingsRepository.settings.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
-    )
-
-    val isAnimateSeekBarEnabled: StateFlow<Boolean> = settingsRepository.isAnimateSeekBarEnabled.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
-    )
-
-    val isAutoOpenPlayerEnabled: StateFlow<Boolean> = settingsRepository.isAutoOpenPlayerEnabled.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
+        initialValue = AppSettings()
     )
 
     private val _dynamicAccentColor = MutableStateFlow<Color?>(null)

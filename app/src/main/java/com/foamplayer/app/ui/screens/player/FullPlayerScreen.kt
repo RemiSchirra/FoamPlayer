@@ -119,7 +119,8 @@ fun FullPlayerScreen(
     isAnimateSeekBarEnabled: Boolean = false
 ) {
     val state by viewModel.playbackState.collectAsState()
-    val isImmersiveEnabled by viewModel.isImmersiveModeEnabled.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+    val isImmersiveEnabled = settings.immersiveModeEnabled
     val track = state.currentTrack ?: return
 
     var subViewMode by remember { mutableStateOf(SubViewMode.LYRICS) }

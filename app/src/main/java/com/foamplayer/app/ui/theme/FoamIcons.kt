@@ -13,12 +13,7 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.vector.ImageVector
-
-enum class FoamIconStyle(val label: String) {
-    SOLID("Solid"),
-    OUTLINE("Outline"),
-    FLAT("Flat")
-}
+import com.foamplayer.app.data.settings.FoamIconStyle
 
 @Immutable
 data class FoamIconSet(

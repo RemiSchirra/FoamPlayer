@@ -41,7 +41,7 @@ class TrackRepository @Inject constructor(
     fun getAlbumsByArtist(artist: String): Flow<List<AlbumSearchResult>> = trackDao.getAlbumsByArtist(artist)
 
     suspend fun rescanLibrary() {
-        val folders = settingsRepository.selectedFolders.first()
+        val folders = settingsRepository.settings.first().libraryFolders
         startScan(folders)
     }
 
@@ -51,8 +51,9 @@ class TrackRepository @Inject constructor(
             return
         }
 
-        val artistSeps = settingsRepository.artistSeparators.first()
-        val genreSeps = settingsRepository.genreSeparators.first()
+        val settings = settingsRepository.settings.first()
+        val artistSeps = settings.artistSeparators
+        val genreSeps = settings.genreSeparators
 
         _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
         val scannedTracks = scanner.scanFoldersSync(folders, artistSeps, genreSeps) { progress, currentFile ->

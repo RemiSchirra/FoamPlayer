@@ -40,8 +40,9 @@ fun ColorsSettingsScreen(
     onBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val isAutomaticColorEnabled by viewModel.isAutomaticColorEnabled.collectAsState()
-    val accentColorInt by viewModel.accentColor.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+    val isAutomaticColorEnabled = settings.automaticColorEnabled
+    val accentColorInt = settings.accentColor
     val accentColor = Color(accentColorInt)
 
     val palette = listOf(
@@ -81,7 +82,8 @@ fun ColorsSettingsScreen(
                 title = "Automatic color",
                 description = "Extract accent color from album art.",
                 checked = isAutomaticColorEnabled,
-                onCheckedChange = { viewModel.setAutomaticColorEnabled(!isAutomaticColorEnabled) })
+                onCheckedChange = viewModel::setAutomaticColorEnabled
+            )
             Spacer(modifier = Modifier.height(24.dp))
         }
 

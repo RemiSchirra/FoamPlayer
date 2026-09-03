@@ -136,8 +136,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
     val playerViewModel: PlayerViewModel = hiltViewModel()
     val libraryViewModel: LibraryViewModel = hiltViewModel()
     val playbackState by playerViewModel.playbackState.collectAsState()
-    val isAnimateSeekBarEnabled by playerViewModel.isAnimateSeekBarEnabled.collectAsState()
-    val isAutoOpenPlayerEnabled by playerViewModel.isAutoOpenPlayerEnabled.collectAsState()
+    val playerSettings by playerViewModel.settings.collectAsState()
+    val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
+    val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
 
     val playerTransitionState = remember { SeekableTransitionState(false) }
     val scope = rememberCoroutineScope()

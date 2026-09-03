@@ -25,7 +25,6 @@ import com.foamplayer.app.audio.service.PlaybackService
 import com.foamplayer.app.ui.navigation.FoamNavHost
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
-import com.foamplayer.app.ui.theme.FoamIconStyle
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import dagger.hilt.android.AndroidEntryPoint
@@ -87,26 +86,22 @@ private fun FoamApp(
     settingsViewModel: SettingsViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel()
 ) {
-    val iconStyle by settingsViewModel.iconStyle.collectAsState(initial = FoamIconStyle.FLAT)
-    val miniRounding by settingsViewModel.miniPlayerRounding.collectAsState(initial = 8)
-    val fullRounding by settingsViewModel.fullPlayerRounding.collectAsState(initial = 24)
-    val isAutomaticColor by settingsViewModel.isAutomaticColorEnabled.collectAsState(initial = true)
-    val manualAccentColor by settingsViewModel.accentColor.collectAsState(initial = 0xFFFF5252.toInt())
+    val settings by settingsViewModel.settings.collectAsState()
 
     val playbackState by playerViewModel.playbackState.collectAsState()
     val dynamicAccentColor by playerViewModel.dynamicAccentColor.collectAsState()
 
     val accentColor = rememberAccentColor(
-        isAutomaticColor = isAutomaticColor,
-        manualAccentColor = manualAccentColor,
+        isAutomaticColor = settings.automaticColorEnabled,
+        manualAccentColor = settings.accentColor,
         dynamicAccentColor = dynamicAccentColor,
         albumArtPath = playbackState.currentTrack?.albumArtPath
     )
 
     FoamTheme(
-        iconStyle = iconStyle,
-        miniPlayerRounding = miniRounding.dp,
-        fullPlayerRounding = fullRounding.dp,
+        iconStyle = settings.iconStyle,
+        miniPlayerRounding = settings.miniPlayerRounding.dp,
+        fullPlayerRounding = settings.fullPlayerRounding.dp,
         accentColor = accentColor
     ) {
         FoamNavHost(modifier = Modifier.fillMaxSize())
