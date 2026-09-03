@@ -43,6 +43,8 @@ class SettingsRepository @Inject constructor(
     suspend fun setImmersiveModeEnabled(enabled: Boolean) = update { it.copy(immersiveModeEnabled = enabled) }
     suspend fun setAnimateSeekBarEnabled(enabled: Boolean) = update { it.copy(animateSeekBarEnabled = enabled) }
     suspend fun setAutoOpenPlayerEnabled(enabled: Boolean) = update { it.copy(autoOpenPlayerEnabled = enabled) }
+    suspend fun setDynamicBackgroundEnabled(enabled: Boolean) = update { it.copy(dynamicBackgroundEnabled = enabled) }
+    suspend fun setBackgroundBlur(blur: Int) = update { it.copy(backgroundBlur = blur) }
     suspend fun addFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders + path) }
     suspend fun removeFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders - path) }
     suspend fun setArtistSeparators(separators: Set<String>) = update { it.copy(artistSeparators = separators) }
@@ -62,7 +64,9 @@ class SettingsRepository @Inject constructor(
         accentColor = this[Keys.ACCENT_COLOR] ?: AppSettings.DEFAULT_ACCENT_COLOR,
         immersiveModeEnabled = this[Keys.IMMERSIVE_MODE] ?: AppSettings().immersiveModeEnabled,
         animateSeekBarEnabled = this[Keys.ANIMATE_SEEK_BAR] ?: AppSettings().animateSeekBarEnabled,
-        autoOpenPlayerEnabled = this[Keys.AUTO_OPEN_PLAYER] ?: AppSettings().autoOpenPlayerEnabled
+        autoOpenPlayerEnabled = this[Keys.AUTO_OPEN_PLAYER] ?: AppSettings().autoOpenPlayerEnabled,
+        dynamicBackgroundEnabled = this[Keys.DYNAMIC_BACKGROUND] ?: AppSettings().dynamicBackgroundEnabled,
+        backgroundBlur = this[Keys.BACKGROUND_BLUR] ?: AppSettings().backgroundBlur
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -78,6 +82,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.IMMERSIVE_MODE] = settings.immersiveModeEnabled
         this[Keys.ANIMATE_SEEK_BAR] = settings.animateSeekBarEnabled
         this[Keys.AUTO_OPEN_PLAYER] = settings.autoOpenPlayerEnabled
+        this[Keys.DYNAMIC_BACKGROUND] = settings.dynamicBackgroundEnabled
+        this[Keys.BACKGROUND_BLUR] = settings.backgroundBlur
     }
 
     private object Keys {
@@ -93,5 +99,7 @@ class SettingsRepository @Inject constructor(
         val IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
         val ANIMATE_SEEK_BAR = booleanPreferencesKey("animate_seek_bar")
         val AUTO_OPEN_PLAYER = booleanPreferencesKey("auto_open_player")
+        val DYNAMIC_BACKGROUND = booleanPreferencesKey("dynamic_background")
+        val BACKGROUND_BLUR = intPreferencesKey("background_blur")
     }
 }

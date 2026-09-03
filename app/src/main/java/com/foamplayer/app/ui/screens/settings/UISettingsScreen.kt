@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -27,8 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.data.settings.FoamIconStyle
+import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -36,6 +34,7 @@ fun UISettingsScreen(
     onBack: () -> Unit,
     onNavigateToColors: () -> Unit,
     onNavigateToPlayer: () -> Unit,
+    onNavigateToBackground: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
@@ -45,107 +44,83 @@ fun UISettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FoamTheme.colors.background)
-            .padding(horizontal = 16.dp)
     ) {
         item {
-            SettingsHeader(title = "User Interface", onBack = onBack)
+            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                SettingsHeader(title = "User Interface", onBack = onBack)
+            }
             Spacer(modifier = Modifier.height(8.dp))
         }
 
         item {
-            BasicText(text = "Colors", style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(12.dp))
-            FoamGlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToColors() }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    BasicText(text = "Accent Colors & Themes", style = FoamTheme.typography.body)
-                    Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = null,
-                        tint = FoamTheme.colors.textSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
+            FoamNavigationButton(
+                title = "Colors",
+                description = "Accent color",
+                onClick = onNavigateToColors,
+            )
             Spacer(modifier = Modifier.height(24.dp))
         }
 
         item {
-            BasicText(text = "Player", style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(12.dp))
-            FoamGlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToPlayer() }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    BasicText(text = "Rounding, Layout, & Visuals", style = FoamTheme.typography.body)
-                    Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = null,
-                        tint = FoamTheme.colors.textSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
+            FoamNavigationButton(
+                title = "Player",
+                description = "Behaviour, layout and visuals",
+                onClick = onNavigateToPlayer,
+            )
             Spacer(modifier = Modifier.height(24.dp))
         }
 
         item {
-            BasicText(text = "Icon Style", style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FoamIconStyle.entries.forEach { style ->
-                    val isSelected = style == iconStyle
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (isSelected) FoamTheme.colors.primaryAccent
-                                else FoamTheme.colors.surfaceVariant
-                            )
-                            .clickable { viewModel.setIconStyle(style) }
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            val iconSet = when (style) {
-                                FoamIconStyle.SOLID -> FoamTheme.icons.solid
-                                FoamIconStyle.OUTLINE -> FoamTheme.icons.outline
-                                FoamIconStyle.FLAT -> FoamTheme.icons.flat
-                            }
-                            Icon(
-                                imageVector = iconSet.play,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            BasicText(
-                                text = style.label,
-                                style = FoamTheme.typography.body.copy(
-                                    color = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
+            FoamNavigationButton(
+                title = "Background",
+                description = "Dynamic background effects",
+                onClick = onNavigateToBackground,
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        item {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                BasicText(text = "Icon Style", style = FoamTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FoamIconStyle.entries.forEach { style ->
+                        val isSelected = style == iconStyle
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (isSelected) FoamTheme.colors.primaryAccent
+                                    else FoamTheme.colors.surfaceVariant
                                 )
-                            )
+                                .clickable { viewModel.setIconStyle(style) }
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val iconSet = when (style) {
+                                    FoamIconStyle.SOLID -> FoamTheme.icons.solid
+                                    FoamIconStyle.OUTLINE -> FoamTheme.icons.outline
+                                    FoamIconStyle.FLAT -> FoamTheme.icons.flat
+                                }
+                                Icon(
+                                    imageVector = iconSet.play,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                BasicText(
+                                    text = style.label,
+                                    style = FoamTheme.typography.body.copy(
+                                        color = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
+                                    )
+                                )
+                            }
                         }
                     }
                 }

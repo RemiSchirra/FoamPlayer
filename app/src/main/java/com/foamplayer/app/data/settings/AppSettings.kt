@@ -19,12 +19,15 @@ data class AppSettings(
     val accentColor: Int = DEFAULT_ACCENT_COLOR,
     val immersiveModeEnabled: Boolean = true,
     val animateSeekBarEnabled: Boolean = false,
-    val autoOpenPlayerEnabled: Boolean = false
+    val autoOpenPlayerEnabled: Boolean = false,
+    val dynamicBackgroundEnabled: Boolean = false,
+    val backgroundBlur: Int = DEFAULT_BACKGROUND_BLUR
 ) {
     fun sanitized(): AppSettings = copy(
         libraryFolders = libraryFolders.map(String::trim).filter(String::isNotEmpty).toSet(),
         miniPlayerRounding = miniPlayerRounding.coerceIn(MIN_MINI_PLAYER_ROUNDING, MAX_MINI_PLAYER_ROUNDING),
         fullPlayerRounding = fullPlayerRounding.coerceIn(MIN_FULL_PLAYER_ROUNDING, MAX_FULL_PLAYER_ROUNDING),
+        backgroundBlur = backgroundBlur.coerceIn(MIN_BACKGROUND_BLUR, MAX_BACKGROUND_BLUR),
         artistSeparators = artistSeparators.normalizedSeparators(),
         genreSeparators = genreSeparators.normalizedSeparators()
     )
@@ -36,6 +39,9 @@ data class AppSettings(
         const val MAX_MINI_PLAYER_ROUNDING = 32
         const val MIN_FULL_PLAYER_ROUNDING = 0
         const val MAX_FULL_PLAYER_ROUNDING = 64
+        const val MIN_BACKGROUND_BLUR = 0
+        const val MAX_BACKGROUND_BLUR = 100
+        const val DEFAULT_BACKGROUND_BLUR = 20
         val DEFAULT_SEPARATORS = setOf(";", ",")
     }
 }

@@ -67,6 +67,7 @@ import com.foamplayer.app.ui.screens.playlists.PlaylistDetailScreen
 import com.foamplayer.app.ui.screens.playlists.PlaylistsScreen
 import com.foamplayer.app.ui.screens.search.SearchScreen
 import com.foamplayer.app.ui.screens.settings.AudioSettingsScreen
+import com.foamplayer.app.ui.screens.settings.BackgroundSettingsScreen
 import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.PlayerSettingsScreen
@@ -87,6 +88,7 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsUI : Screen("settings/ui", "UI Settings")
     object SettingsColors : Screen("settings/ui/colors", "Color Settings")
     object SettingsPlayer : Screen("settings/ui/player", "Player Settings")
+    object SettingsBackground : Screen("settings/ui/background", "Background Settings")
     object SettingsLibrary : Screen("settings/library", "Library Settings")
     object SettingsTest : Screen("settings/test", "Component Test")
 
@@ -333,7 +335,8 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                         UISettingsScreen(
                                             onBack = { navController.popBackStack() },
                                             onNavigateToColors = { navController.navigate(Screen.SettingsColors.route) },
-                                            onNavigateToPlayer = { navController.navigate(Screen.SettingsPlayer.route) }
+                                            onNavigateToPlayer = { navController.navigate(Screen.SettingsPlayer.route) },
+                                            onNavigateToBackground = { navController.navigate(Screen.SettingsBackground.route) },
                                         )
                                     }
                                     composable(Screen.SettingsColors.route) {
@@ -341,6 +344,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     }
                                     composable(Screen.SettingsPlayer.route) {
                                         PlayerSettingsScreen(onBack = { navController.popBackStack() })
+                                    }
+                                    composable(Screen.SettingsBackground.route) {
+                                        BackgroundSettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     composable(Screen.SettingsLibrary.route) {
                                         LibrarySettingsScreen(onBack = { navController.popBackStack() })
