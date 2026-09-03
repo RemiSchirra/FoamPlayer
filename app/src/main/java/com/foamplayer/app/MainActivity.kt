@@ -131,16 +131,16 @@ private fun rememberAccentColor(
     }
     val extractedColor = effectiveArtPath?.let { AlbumArtPaletteCache.colors[it] }
 
-    val targetColor = when {
-        !isAutomaticColor -> Color(manualAccentColor)
-        dynamicAccentColor != null -> dynamicAccentColor
-        else -> extractedColor ?: Color(manualAccentColor)
+    when {
+        !isAutomaticColor -> return Color(manualAccentColor)
+        dynamicAccentColor != null -> return dynamicAccentColor
+        else -> {
+            val animatedColor by animateColorAsState(
+                targetValue = extractedColor ?: Color(manualAccentColor),
+                animationSpec = tween(durationMillis = 500),
+                label = "AccentColorFade"
+            )
+            return animatedColor
+        }
     }
-
-    val animatedColor by animateColorAsState(
-        targetValue = targetColor,
-        animationSpec = tween(durationMillis = 500),
-        label = "AccentColorFade"
-    )
-    return animatedColor
 }
