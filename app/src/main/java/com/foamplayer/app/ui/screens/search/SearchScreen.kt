@@ -70,7 +70,7 @@ fun SearchScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 8.dp)
     ) {
         Spacer(modifier = Modifier.height(16.dp))
         BasicText(
