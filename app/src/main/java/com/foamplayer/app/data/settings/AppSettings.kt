@@ -21,13 +21,18 @@ data class AppSettings(
     val animateSeekBarEnabled: Boolean = false,
     val autoOpenPlayerEnabled: Boolean = false,
     val dynamicBackgroundEnabled: Boolean = false,
-    val backgroundBlur: Int = DEFAULT_BACKGROUND_BLUR
+    val backgroundBlur: Int = DEFAULT_BACKGROUND_BLUR,
+    val dynamicBackgroundIntensity: Int = DEFAULT_DYNAMIC_BACKGROUND_INTENSITY
 ) {
     fun sanitized(): AppSettings = copy(
         libraryFolders = libraryFolders.map(String::trim).filter(String::isNotEmpty).toSet(),
         miniPlayerRounding = miniPlayerRounding.coerceIn(MIN_MINI_PLAYER_ROUNDING, MAX_MINI_PLAYER_ROUNDING),
         fullPlayerRounding = fullPlayerRounding.coerceIn(MIN_FULL_PLAYER_ROUNDING, MAX_FULL_PLAYER_ROUNDING),
         backgroundBlur = backgroundBlur.coerceIn(MIN_BACKGROUND_BLUR, MAX_BACKGROUND_BLUR),
+        dynamicBackgroundIntensity = dynamicBackgroundIntensity.coerceIn(
+            MIN_DYNAMIC_BACKGROUND_INTENSITY,
+            MAX_DYNAMIC_BACKGROUND_INTENSITY
+        ),
         artistSeparators = artistSeparators.normalizedSeparators(),
         genreSeparators = genreSeparators.normalizedSeparators()
     )
@@ -42,6 +47,9 @@ data class AppSettings(
         const val MIN_BACKGROUND_BLUR = 0
         const val MAX_BACKGROUND_BLUR = 100
         const val DEFAULT_BACKGROUND_BLUR = 20
+        const val MIN_DYNAMIC_BACKGROUND_INTENSITY = 0
+        const val MAX_DYNAMIC_BACKGROUND_INTENSITY = 100
+        const val DEFAULT_DYNAMIC_BACKGROUND_INTENSITY = 50
         val DEFAULT_SEPARATORS = setOf(";", ",")
     }
 }

@@ -44,6 +44,9 @@ class SettingsViewModel @Inject constructor(
     fun setAutoOpenPlayerEnabled(enabled: Boolean) = launch { settingsRepository.setAutoOpenPlayerEnabled(enabled) }
     fun setDynamicBackgroundEnabled(enabled: Boolean) = launch { settingsRepository.setDynamicBackgroundEnabled(enabled) }
     fun setBackgroundBlur(blur: Int) = launch { settingsRepository.setBackgroundBlur(blur) }
+    fun setDynamicBackgroundIntensity(intensity: Int) = launch {
+        settingsRepository.setDynamicBackgroundIntensity(intensity)
+    }
     fun startScan() = launch { trackRepository.rescanLibrary() }
 
     private fun launch(block: suspend () -> Unit) {

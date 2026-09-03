@@ -45,6 +45,9 @@ class SettingsRepository @Inject constructor(
     suspend fun setAutoOpenPlayerEnabled(enabled: Boolean) = update { it.copy(autoOpenPlayerEnabled = enabled) }
     suspend fun setDynamicBackgroundEnabled(enabled: Boolean) = update { it.copy(dynamicBackgroundEnabled = enabled) }
     suspend fun setBackgroundBlur(blur: Int) = update { it.copy(backgroundBlur = blur) }
+    suspend fun setDynamicBackgroundIntensity(intensity: Int) = update {
+        it.copy(dynamicBackgroundIntensity = intensity)
+    }
     suspend fun addFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders + path) }
     suspend fun removeFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders - path) }
     suspend fun setArtistSeparators(separators: Set<String>) = update { it.copy(artistSeparators = separators) }
@@ -66,7 +69,9 @@ class SettingsRepository @Inject constructor(
         animateSeekBarEnabled = this[Keys.ANIMATE_SEEK_BAR] ?: AppSettings().animateSeekBarEnabled,
         autoOpenPlayerEnabled = this[Keys.AUTO_OPEN_PLAYER] ?: AppSettings().autoOpenPlayerEnabled,
         dynamicBackgroundEnabled = this[Keys.DYNAMIC_BACKGROUND] ?: AppSettings().dynamicBackgroundEnabled,
-        backgroundBlur = this[Keys.BACKGROUND_BLUR] ?: AppSettings().backgroundBlur
+        backgroundBlur = this[Keys.BACKGROUND_BLUR] ?: AppSettings().backgroundBlur,
+        dynamicBackgroundIntensity = this[Keys.DYNAMIC_BACKGROUND_INTENSITY]
+            ?: AppSettings().dynamicBackgroundIntensity
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -84,6 +89,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.AUTO_OPEN_PLAYER] = settings.autoOpenPlayerEnabled
         this[Keys.DYNAMIC_BACKGROUND] = settings.dynamicBackgroundEnabled
         this[Keys.BACKGROUND_BLUR] = settings.backgroundBlur
+        this[Keys.DYNAMIC_BACKGROUND_INTENSITY] = settings.dynamicBackgroundIntensity
     }
 
     private object Keys {
@@ -101,5 +107,6 @@ class SettingsRepository @Inject constructor(
         val AUTO_OPEN_PLAYER = booleanPreferencesKey("auto_open_player")
         val DYNAMIC_BACKGROUND = booleanPreferencesKey("dynamic_background")
         val BACKGROUND_BLUR = intPreferencesKey("background_blur")
+        val DYNAMIC_BACKGROUND_INTENSITY = intPreferencesKey("dynamic_background_intensity")
     }
 }

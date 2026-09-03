@@ -37,7 +37,6 @@ fun EqualizerScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
             .verticalScroll(scrollState)
             .padding(16.dp)
     ) {

@@ -36,7 +36,6 @@ fun PlaylistsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
             .padding(16.dp)
     ) {
         Row(

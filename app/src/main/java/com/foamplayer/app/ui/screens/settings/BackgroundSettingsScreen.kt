@@ -29,9 +29,15 @@ fun BackgroundSettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsState()
     var localBackgroundBlur by remember { mutableFloatStateOf(settings.backgroundBlur.toFloat()) }
+    var localBackgroundIntensity by remember {
+        mutableFloatStateOf(settings.dynamicBackgroundIntensity.toFloat())
+    }
 
     LaunchedEffect(settings.backgroundBlur) {
         localBackgroundBlur = settings.backgroundBlur.toFloat()
+    }
+    LaunchedEffect(settings.dynamicBackgroundIntensity) {
+        localBackgroundIntensity = settings.dynamicBackgroundIntensity.toFloat()
     }
 
     Column(
@@ -63,6 +69,21 @@ fun BackgroundSettingsScreen(
             valueRange = 0f..100f,
             valueDisplay = localBackgroundBlur.roundToInt().toString(),
             minMaxDisplay = "None" to "Max",
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        FoamSliderItem(
+            title = "Dynamic background intensity",
+            value = localBackgroundIntensity,
+            onValueChange = { localBackgroundIntensity = it },
+            onValueChangeFinished = {
+                viewModel.setDynamicBackgroundIntensity(localBackgroundIntensity.roundToInt())
+            },
+            // Nine internal ticks create ten 0–100 intervals.
+            steps = 9,
+            valueRange = 0f..100f,
+            valueDisplay = localBackgroundIntensity.roundToInt().toString(),
+            minMaxDisplay = "Black" to "Image",
         )
     }
 }

@@ -72,6 +72,7 @@ fun MiniPlayer(
     onSeek: (Float) -> Unit,
     onSkipToTrack: (Int) -> Unit,
     onColorChange: (Color?) -> Unit,
+    onBackgroundTransition: (frontArtPath: String?, backArtPath: String?, fraction: Float) -> Unit,
     onClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -105,6 +106,7 @@ fun MiniPlayer(
     val latestPlaybackState by rememberUpdatedState(playbackState)
     val latestCurrentIndex by rememberUpdatedState(currentIndex)
     val latestSkipTrackChangeAnimation by rememberUpdatedState(skipTrackChangeAnimation)
+    val latestBackgroundTransition by rememberUpdatedState(onBackgroundTransition)
 
     // Same live computation the FoamSlider below already had -- read lazily every
     // time `.progress` is accessed, so it stays live while dragging/swiping and is
@@ -167,6 +169,28 @@ fun MiniPlayer(
             }
         }.collect { interpolatedColor ->
             onColorChange(interpolatedColor)
+        }
+    }
+
+    // Keep the app-wide backdrop in lockstep with the mini-player pager, including
+    // while the user's finger is still dragging between two tracks.
+    LaunchedEffect(pagerState, queue, pendingJump) {
+        snapshotFlow {
+            val jump = pendingJump
+            val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
+            val frontIndex = absoluteOffset.toInt().coerceIn(0, (queue.size - 1).coerceAtLeast(0))
+            val backIndex = (frontIndex + 1).coerceAtMost((queue.size - 1).coerceAtLeast(0))
+            val fraction = (absoluteOffset - frontIndex).coerceIn(0f, 1f)
+            val pathForPage: (Int) -> String? = { page ->
+                if (jump != null && page == jump.viaPage) {
+                    queue.getOrNull(jump.targetIndex)?.albumArtPath
+                } else {
+                    queue.getOrNull(page)?.albumArtPath
+                }
+            }
+            Triple(pathForPage(frontIndex), pathForPage(backIndex), fraction)
+        }.collect { (frontArtPath, backArtPath, fraction) ->
+            latestBackgroundTransition(frontArtPath, backArtPath, fraction)
         }
     }
 

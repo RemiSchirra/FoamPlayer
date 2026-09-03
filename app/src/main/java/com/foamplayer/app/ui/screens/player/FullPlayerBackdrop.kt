@@ -25,6 +25,44 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.theme.FoamTheme
 
+/** A blurred, crossfading artwork layer for non-settings areas of the app. */
+@androidx.compose.runtime.Composable
+internal fun DynamicAlbumArtBackground(
+    frontArtPath: String?,
+    backArtPath: String?,
+    crossfadeFraction: Float,
+    blur: androidx.compose.ui.unit.Dp,
+    intensity: Float,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        frontArtPath?.let { path ->
+            AsyncImage(
+                model = EmbeddedAlbumArt(path.toUri()),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().blur(blur),
+                contentScale = ContentScale.Crop,
+            )
+        }
+        if (backArtPath != null && backArtPath != frontArtPath) {
+            AsyncImage(
+                model = EmbeddedAlbumArt(backArtPath.toUri()),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(blur)
+                    .graphicsLayer { alpha = crossfadeFraction },
+                contentScale = ContentScale.Crop,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 1f - intensity.coerceIn(0f, 1f)))
+        )
+    }
+}
+
 /** Background layer for the classic blurred treatment and the immersive art hero. */
 @androidx.compose.runtime.Composable
 internal fun AlbumArtBackdrop(
@@ -33,6 +71,8 @@ internal fun AlbumArtBackdrop(
     crossfadeFraction: () -> Float,
     immersive: Boolean,
     subViewProgress: Float,
+    dynamicBackgroundEnabled: Boolean,
+    backgroundBlur: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
     foregroundModifier: Modifier = Modifier
 ) {
@@ -50,22 +90,26 @@ internal fun AlbumArtBackdrop(
 
     Box(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
-        Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f }) {
-            if (frontArtPath != null) {
-                AsyncImage(
-                    model = EmbeddedAlbumArt(frontArtPath.toUri()),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().blur(20.dp),
-                    contentScale = ContentScale.Crop
-                )
-            }
-            if (backArtPath != null && backArtPath != frontArtPath) {
-                AsyncImage(
-                    model = EmbeddedAlbumArt(backArtPath.toUri()),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().blur(20.dp).graphicsLayer { alpha = crossfadeFraction() },
-                    contentScale = ContentScale.Crop
-                )
+        if (dynamicBackgroundEnabled) {
+            // The two art layers remain composed throughout a pager transition so the
+            // currently playing track can dissolve into the next track's background.
+            Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f }) {
+                if (frontArtPath != null) {
+                    AsyncImage(
+                        model = EmbeddedAlbumArt(frontArtPath.toUri()),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().blur(backgroundBlur),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                if (backArtPath != null && backArtPath != frontArtPath) {
+                    AsyncImage(
+                        model = EmbeddedAlbumArt(backArtPath.toUri()),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().blur(backgroundBlur).graphicsLayer { alpha = crossfadeFraction() },
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
         }
         Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)))

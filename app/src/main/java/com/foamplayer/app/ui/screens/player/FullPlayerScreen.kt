@@ -6,8 +6,8 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberTransition
@@ -397,7 +397,9 @@ fun FullPlayerScreen(
                     (absoluteOffset - absoluteOffset.toInt()).coerceIn(0f, 1f)
                 },
                 immersive = isImmersiveEnabled,
-                subViewProgress = subViewBlurProgress
+                subViewProgress = subViewBlurProgress,
+                dynamicBackgroundEnabled = settings.dynamicBackgroundEnabled,
+                backgroundBlur = settings.backgroundBlur.dp,
                 // No alpha modifier here: the enclosing Box above already applies
                 // `.graphicsLayer { alpha = uiAlpha }` to this whole subtree -- adding
                 // it again here was multiplying uiAlpha by itself, fading the backdrop

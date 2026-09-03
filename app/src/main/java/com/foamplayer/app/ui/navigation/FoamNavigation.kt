@@ -61,6 +61,7 @@ import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
 import com.foamplayer.app.ui.screens.library.LibraryScreen
 import com.foamplayer.app.ui.screens.library.LibraryViewModel
 import com.foamplayer.app.ui.screens.player.FullPlayerScreen
+import com.foamplayer.app.ui.screens.player.DynamicAlbumArtBackground
 import com.foamplayer.app.ui.screens.player.MiniPlayerSwipeController
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.playlists.PlaylistDetailScreen
@@ -141,6 +142,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
     val playerSettings by playerViewModel.settings.collectAsState()
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
     val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
+    val isDynamicBackgroundEnabled = playerSettings.dynamicBackgroundEnabled
 
     val playerTransitionState = remember { SeekableTransitionState(false) }
     val scope = rememberCoroutineScope()
@@ -166,6 +168,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
 
         tween(durationMillis = dynamicDuration, easing = EaseInOut)
     }
+    var backgroundFrontArtPath by remember { mutableStateOf(playbackState.currentTrack?.albumArtPath) }
+    var backgroundBackArtPath by remember { mutableStateOf<String?>(null) }
+    var backgroundCrossfadeFraction by remember { mutableStateOf(0f) }
 
     // Mirrors PlayerGestureController's swipe-down-to-dismiss, but for progressively
     // swiping the mini player up into the full player. Kept separate from that controller
@@ -214,6 +219,16 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
             }
 
             Box(modifier = Modifier.weight(1f)) {
+                if (isDynamicBackgroundEnabled && !isSettingsRoute(currentRoute)) {
+                    DynamicAlbumArtBackground(
+                        frontArtPath = backgroundFrontArtPath,
+                        backArtPath = backgroundBackArtPath,
+                        crossfadeFraction = backgroundCrossfadeFraction,
+                        blur = playerSettings.backgroundBlur.dp,
+                        intensity = playerSettings.dynamicBackgroundIntensity / 100f,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
                 transition.AnimatedVisibility(
                     visible = { isFull -> !isFull },
                     enter = fadeIn(),
@@ -450,6 +465,11 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                         },
                                         onColorChange = { color ->
                                             playerViewModel.setDynamicAccentColor(color)
+                                        },
+                                        onBackgroundTransition = { frontArtPath, backArtPath, fraction ->
+                                            backgroundFrontArtPath = frontArtPath
+                                            backgroundBackArtPath = backArtPath
+                                            backgroundCrossfadeFraction = fraction
                                         },
                                         onClick = {
                                             // A manual mini-player open always starts from the mini

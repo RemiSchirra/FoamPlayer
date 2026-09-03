@@ -55,7 +55,6 @@ fun ArtistDetailScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
     ) {
         // Top Bar
         Row(
