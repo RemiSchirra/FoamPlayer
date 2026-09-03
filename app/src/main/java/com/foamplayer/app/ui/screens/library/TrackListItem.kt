@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.times
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -54,6 +55,15 @@ import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.theme.FoamTheme
 import androidx.core.net.toUri
 import kotlin.math.max
+
+/** Size of the album art thumbnail at rest (not actively playing). */
+private val AlbumArtSize = 48.dp
+
+/**
+ * Padding added around the row content, and the amount by which the
+ * active-track selection rectangle is inset/expanded beyond that content.
+ */
+private val HighlightPadding = 6.dp
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -105,18 +115,18 @@ fun TrackListItem(
     val interactionSource = remember { MutableInteractionSource() }
 
     val density = LocalDensity.current
-    val verticalPaddingPx = with(density) { 8.dp.toPx() }
+    val selectionHighlightPaddingPx = with(density) { HighlightPadding.toPx() }
 
-    val restingArtHeightPx = with(density) { 48.dp.toPx() }
+    val restingArtHeightPx = with(density) { AlbumArtSize.toPx() }
     var artBoxHeightPx by remember { mutableFloatStateOf(restingArtHeightPx) }
-    var artBoxTopPx by remember { mutableFloatStateOf(verticalPaddingPx) }
+    var artBoxTopPx by remember { mutableFloatStateOf(selectionHighlightPaddingPx) }
     var artistTextBottomPx by remember {
-        mutableFloatStateOf(verticalPaddingPx + restingArtHeightPx)
+        mutableFloatStateOf(selectionHighlightPaddingPx + restingArtHeightPx)
     }
     var containerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    val highlightShape = RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding + 4.dp)
+    val highlightShape = RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding + HighlightPadding)
     val highlightCornerRadiusPx = with(density) {
-        (FoamTheme.shapes.miniPlayerRounding + 4.dp).toPx()
+        (FoamTheme.shapes.miniPlayerRounding + HighlightPadding).toPx()
     }
 
     Box(
@@ -134,14 +144,14 @@ fun TrackListItem(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
+                .height(AlbumArtSize + 2 * HighlightPadding)
                 .drawBehind {
                     val contentBottomPx = max(
                         artBoxTopPx + artBoxHeightPx,
                         artistTextBottomPx
                     )
-                    val targetHeightPx = (contentBottomPx - artBoxTopPx) + verticalPaddingPx * 2f
-                    val topPx = artBoxTopPx - verticalPaddingPx
+                    val targetHeightPx = (contentBottomPx - artBoxTopPx) + selectionHighlightPaddingPx * 2f
+                    val topPx = artBoxTopPx - selectionHighlightPaddingPx
                     drawRoundRect(
                         color = animatedBackgroundColor,
                         topLeft = Offset(0f, topPx),
@@ -159,12 +169,12 @@ fun TrackListItem(
                     interactionSource = interactionSource,
                     indication = ripple(color = FoamTheme.colors.textPrimary)
                 ) { onClick() }
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .padding(horizontal = HighlightPadding, vertical = HighlightPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(AlbumArtSize)
                     .sharedArtwork()
                     .then(
                         if (active) {
