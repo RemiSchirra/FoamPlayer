@@ -153,7 +153,7 @@ fun TrackListScreen(
                     )
                 }
 
-                itemsIndexed(tracks) { index, track ->
+                itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
                     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                         TrackListItem(
                             track = track,
