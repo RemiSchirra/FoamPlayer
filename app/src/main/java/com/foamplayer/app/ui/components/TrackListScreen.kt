@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -50,6 +51,7 @@ import androidx.core.net.toUri
 import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.screens.library.TrackListItem
+import com.foamplayer.app.ui.screens.player.DynamicAlbumArtBackground
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 import com.foamplayer.app.ui.utils.extractPaletteColor
@@ -76,6 +78,10 @@ val AlbumArtBoundsTransform = BoundsTransform { _, _ ->
     tween(durationMillis = SharedElementTransitionDurationMs, easing = SharedElementEasing)
 }
 
+// Uses the list image cover if true
+// TODO: hardcoded for now
+private const val SHOW_CUSTOM_BACKGROUND = true
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun TrackListScreen(
@@ -92,65 +98,76 @@ fun TrackListScreen(
     sharedElementKey: String? = null,
     sharedTrackId: Long? = null,
     activeTrackId: Long? = null,
-    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null
+    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
+    // TODO : use the background blur app settings
+    backgroundBlur: Dp = 30.dp,
+    backgroundIntensity: Float = 0.5f
 ) {
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(FoamTheme.colors.background)
-    ) {
-        // Top Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "Back",
-                tint = FoamTheme.colors.textPrimary,
-                modifier = Modifier
-                    .size(32.dp)
-                    .clickable { onBack() }
-                    .padding(4.dp)
+    Box(modifier = modifier.fillMaxSize()) {
+        if (SHOW_CUSTOM_BACKGROUND) {
+            DynamicAlbumArtBackground(
+                frontArtPath = imageUrl,
+                backArtPath = null,
+                crossfadeFraction = 0f,
+                blur = backgroundBlur,
+                intensity = backgroundIntensity,
+                modifier = Modifier.fillMaxSize()
             )
         }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            item {
-                HeaderSection(
-                    title = title,
-                    subtitle = artistName,
-                    trackCount = tracks.size,
-                    durationText = durationText,
-                    imageUrl = imageUrl,
-                    onPlayAllClick = onPlayAllClick,
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    sharedElementKey = sharedElementKey
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Top Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    tint = FoamTheme.colors.textPrimary,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clickable { onBack() }
+                        .padding(4.dp)
                 )
             }
 
-            itemsIndexed(tracks) { index, track ->
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    TrackListItem(
-                        track = track,
-                        onClick = { onTrackClick(tracks, index) },
-                        active = track.id == activeTrackId,
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                item {
+                    HeaderSection(
+                        title = title,
+                        subtitle = artistName,
+                        trackCount = tracks.size,
+                        durationText = durationText,
+                        imageUrl = imageUrl,
+                        onPlayAllClick = onPlayAllClick,
                         sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
-                        isSharedTransitionSource = track.id == sharedTrackId
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        sharedElementKey = sharedElementKey
                     )
                 }
-            }
 
-            item { Spacer(modifier = Modifier.height(80.dp)) }
+                itemsIndexed(tracks) { index, track ->
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        TrackListItem(
+                            track = track,
+                            onClick = { onTrackClick(tracks, index) },
+                            active = track.id == activeTrackId,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
+                            isSharedTransitionSource = track.id == sharedTrackId
+                        )
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(80.dp)) }
+            }
         }
     }
 }
