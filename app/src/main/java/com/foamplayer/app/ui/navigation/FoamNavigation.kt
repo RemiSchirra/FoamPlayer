@@ -76,6 +76,7 @@ import com.foamplayer.app.ui.screens.settings.SettingsScreen
 import com.foamplayer.app.ui.screens.settings.TestSettingsScreen
 import com.foamplayer.app.ui.screens.settings.UISettingsScreen
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import android.net.Uri
 
@@ -172,6 +173,57 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
     var backgroundBackArtPath by remember { mutableStateOf<String?>(null) }
     var backgroundCrossfadeFraction by remember { mutableStateOf(0f) }
 
+    // Every animateTo() call against playerTransitionState (open, close, from a track tap,
+    // from the mini player, from a swipe, from the nav bar, ...) now goes through
+    // animatePlayerTransition below instead of firing its own independent scope.launch.
+    // Rapid taps (e.g. two different tracks in quick succession) used to launch multiple
+    // concurrent coroutines animating the *same* SeekableTransitionState; the first one's
+    // `finally` cleanup could run after the second one had already started and stomp on
+    // its trackListTransitionTrackId/skipMiniPlayerTrackAnimation state, leaving the shared
+    // element animation visually stuck partway through. Centralizing this: (1) explicitly
+    // cancels any in-flight transition job before starting a new one, so only one animation
+    // ever drives playerTransitionState at a time, and (2) tags each job with a generation
+    // number so a cancelled job's cleanup can never clobber a newer job's state.
+    //
+    // The job/generation bookkeeping MUST survive recomposition — FoamNavHost recomposes
+    // on every playbackState emission, including the ~200ms position ticks — so it's kept
+    // in a remembered holder rather than a plain var. A plain var here would get silently
+    // reset to null/0 on the next tick, turning `playerTransitionJob?.cancel()` into a
+    // no-op and letting two animations run concurrently again (the flip-flopping and the
+    // extra frame-callback churn both trace back to that).
+    class TransitionJobHolder {
+        var job: Job? = null
+        var generation: Int = 0
+    }
+    val transitionJobHolder = remember { TransitionJobHolder() }
+
+    fun animatePlayerTransition(open: Boolean, sourceTrackId: Long? = null, precompose: Boolean = false) {
+        transitionJobHolder.job?.cancel()
+        if (open) {
+            trackListTransitionTrackId = sourceTrackId
+        }
+        val myGeneration = ++transitionJobHolder.generation
+        transitionJobHolder.job = scope.launch {
+            try {
+                if (precompose) {
+                    withFrameNanos { }
+                    // Precompose the full player
+                    playerTransitionState.seekTo(fraction = 0f, targetState = open)
+                    withFrameNanos { }
+                }
+                playerTransitionState.animateTo(open, getPlayerAnimationSpec(open))
+            } finally {
+                // Only the most recent transition is allowed to reset this shared state —
+                // an older, cancelled job finishing its cleanup late must not wipe out
+                // whatever the newer (still-running or already-completed) job set.
+                if (open && transitionJobHolder.generation == myGeneration) {
+                    trackListTransitionTrackId = null
+                    skipMiniPlayerTrackAnimation = false
+                }
+            }
+        }
+    }
+
     // Mirrors PlayerGestureController's swipe-down-to-dismiss, but for progressively
     // swiping the mini player up into the full player. Kept separate from that controller
     // since it needs to be live before FullPlayerScreen (and the controller living inside
@@ -182,8 +234,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
             scope = scope,
             dragThresholdPx = screenHeightPx.coerceAtLeast(1f),
             onOpen = {
-                trackListTransitionTrackId = null
-                scope.launch { playerTransitionState.animateTo(true, getPlayerAnimationSpec(true)) }
+                animatePlayerTransition(open = true)
             }
         )
     }
@@ -200,21 +251,11 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                 }
                 playerViewModel.playQueue(tracks, index)
                 if (isAutoOpenPlayerEnabled) {
-                    trackListTransitionTrackId = tracks.getOrNull(index)?.id
-                    scope.launch {
-                        try {
-                            withFrameNanos { }
-                            // Precompose the full player
-                            playerTransitionState.seekTo(fraction = 0f, targetState = true)
-                            withFrameNanos { }
-                            playerTransitionState.animateTo(true, getPlayerAnimationSpec(true))
-                        } finally {
-                            // An interrupted animation must not make a later mini-player
-                            // tap reuse this row as its shared-element source.
-                            trackListTransitionTrackId = null
-                            skipMiniPlayerTrackAnimation = false
-                        }
-                    }
+                    animatePlayerTransition(
+                        open = true,
+                        sourceTrackId = tracks.getOrNull(index)?.id,
+                        precompose = true
+                    )
                 }
             }
 
@@ -473,14 +514,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                         onClick = {
                                             // A manual mini-player open always starts from the mini
                                             // player, even if a prior list-origin animation was cancelled.
-                                            trackListTransitionTrackId = null
-                                            scope.launch {
-                                                withFrameNanos { }
-                                                // Precompose the full player
-                                                playerTransitionState.seekTo(fraction = 0f, targetState = true)
-                                                withFrameNanos { }
-                                                playerTransitionState.animateTo(true, getPlayerAnimationSpec(true))
-                                            }
+                                            animatePlayerTransition(open = true, precompose = true)
                                         },
                                         sharedTransitionScope = this@SharedTransitionLayout,
                                         animatedVisibilityScope = miniPlayerVisibilityScope,
@@ -505,14 +539,12 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                     exit = fadeOut()
                 ) {
                     BackHandler {
-                        scope.launch {
-                            playerTransitionState.animateTo(false, getPlayerAnimationSpec(false))
-                        }
+                        animatePlayerTransition(open = false)
                     }
                     FullPlayerScreen(
                         viewModel = playerViewModel,
                         onDismiss = {
-                            scope.launch { playerTransitionState.animateTo(false, getPlayerAnimationSpec(false)) }
+                            animatePlayerTransition(open = false)
                         },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = this@AnimatedVisibility,
@@ -527,10 +559,8 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
             FoamNavigationBar(
                 currentRoute = currentRoute,
                 onNavigate = { route ->
-                    scope.launch {
-                        if (playerTransitionState.currentState || playerTransitionState.targetState) {
-                            playerTransitionState.animateTo(false, getPlayerAnimationSpec(false))
-                        }
+                    if (playerTransitionState.currentState || playerTransitionState.targetState) {
+                        animatePlayerTransition(open = false)
                     }
                     navController.navigate(route) {
                         popUpTo(navController.graph.startDestinationId) { saveState = true }

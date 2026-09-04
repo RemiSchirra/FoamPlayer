@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
+import androidx.core.net.toUri
 
 @Singleton
 class AudioEngine @Inject constructor(
@@ -33,10 +34,32 @@ class AudioEngine @Inject constructor(
 
     private var progressJob: Job? = null
 
+    // Window index range
+    private var loadedRange: IntRange = IntRange.EMPTY
+    private var lazyLoadJob: Job? = null
+
+    // Mirrors _playbackState.value.queue: maps track id -> its index in that queue
+    private var trackIndexById: Map<Long, Int> = emptyMap()
+
+    companion object {
+        // Number of tracks loaded around the current track
+        private const val INITIAL_WINDOW_RADIUS = 15
+        // Number of tracks get added per chunk
+        private const val LAZY_CHUNK_SIZE = 25
+        // Delay between chunk loads
+        private const val LAZY_CHUNK_DELAY_MS = 40L
+    }
+
     init {
         setupPlayerListeners()
         startProgressTracker()
     }
+
+    private fun TrackEntity.toMediaItem(): MediaItem =
+        MediaItem.Builder()
+            .setUri(path.toUri())
+            .setMediaId(id.toString())
+            .build()
 
     private fun setupPlayerListeners() {
         player.addListener(object : Player.Listener {
@@ -45,9 +68,10 @@ class AudioEngine @Inject constructor(
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                val index = player.currentMediaItemIndex
+                val trackId = mediaItem?.mediaId?.toLongOrNull() ?: return
                 val currentQueue = _playbackState.value.queue
-                if (index in currentQueue.indices) {
+                val index = trackIndexById[trackId]
+                if (index != null) {
                     val track = currentQueue[index]
                     val outputInfo = bitPerfectDetector.evaluateOutput(
                         sourceSampleRate = track.sampleRate,
@@ -72,14 +96,73 @@ class AudioEngine @Inject constructor(
     }
 
     fun setQueue(tracks: List<TrackEntity>, startIndex: Int = 0) {
+        lazyLoadJob?.cancel()
+
+        if (tracks.isEmpty()) {
+            loadedRange = IntRange.EMPTY
+            trackIndexById = emptyMap()
+            player.clearMediaItems()
+            _playbackState.value = _playbackState.value.copy(queue = emptyList(), queueIndex = -1)
+            return
+        }
+
+        val clampedStart = startIndex.coerceIn(0, tracks.lastIndex)
+
+        trackIndexById = tracks.withIndex().associate { (i, t) -> t.id to i }
         _playbackState.value = _playbackState.value.copy(
             queue = tracks,
-            queueIndex = startIndex
+            queueIndex = clampedStart
         )
-        val mediaItems = tracks.map { MediaItem.fromUri(Uri.parse(it.path)) }
-        player.setMediaItems(mediaItems, startIndex, 0L)
+
+        loadWindowAndPlay(tracks, clampedStart)
+    }
+
+    /**
+     * Loads a window of tracks around [centerIndex] into the player, starts playback,
+     * then starts lazy loading of everything else.
+     */
+    private fun loadWindowAndPlay(tracks: List<TrackEntity>, centerIndex: Int) {
+        lazyLoadJob?.cancel()
+
+        val windowStart = (centerIndex - INITIAL_WINDOW_RADIUS).coerceAtLeast(0)
+        val windowEnd = (centerIndex + INITIAL_WINDOW_RADIUS).coerceAtMost(tracks.lastIndex)
+        loadedRange = windowStart..windowEnd
+
+        val windowItems = tracks.subList(windowStart, windowEnd + 1).map { it.toMediaItem() }
+        player.setMediaItems(windowItems, centerIndex - windowStart, 0L)
         player.prepare()
         player.play()
+
+        lazyLoadRemaining()
+    }
+
+    /**
+     * Loads the rest of the queue.
+     */
+    private fun lazyLoadRemaining() {
+        lazyLoadJob = scope.launch {
+            while (true) {
+                val tracks = _playbackState.value.queue
+                if (tracks.isEmpty() || loadedRange == IntRange.EMPTY) break
+                if (loadedRange.first <= 0 && loadedRange.last >= tracks.lastIndex) break
+
+                if (loadedRange.first > 0) {
+                    val newStart = (loadedRange.first - LAZY_CHUNK_SIZE).coerceAtLeast(0)
+                    val chunk = tracks.subList(newStart, loadedRange.first).map { it.toMediaItem() }
+                    player.addMediaItems(0, chunk)
+                    loadedRange = newStart..loadedRange.last
+                    delay(LAZY_CHUNK_DELAY_MS)
+                }
+
+                if (loadedRange.last < tracks.lastIndex) {
+                    val newEnd = (loadedRange.last + LAZY_CHUNK_SIZE).coerceAtMost(tracks.lastIndex)
+                    val chunk = tracks.subList(loadedRange.last + 1, newEnd + 1).map { it.toMediaItem() }
+                    player.addMediaItems(chunk)
+                    loadedRange = loadedRange.first..newEnd
+                    delay(LAZY_CHUNK_DELAY_MS)
+                }
+            }
+        }
     }
 
     fun play() = player.play()
@@ -89,6 +172,14 @@ class AudioEngine @Inject constructor(
         if (player.hasNextMediaItem()) {
             seekTo(0)
             player.seekToNextMediaItem()
+        } else {
+            // The next track exists in the full queue but hasn't been lazily loaded yet
+            // (e.g. rapid skipping outran the background loader) — jump a fresh window there.
+            val queue = _playbackState.value.queue
+            val nextIndex = _playbackState.value.queueIndex + 1
+            if (nextIndex in queue.indices) {
+                loadWindowAndPlay(queue, nextIndex)
+            }
         }
     }
 
@@ -100,12 +191,25 @@ class AudioEngine @Inject constructor(
                 player.seekToPreviousMediaItem()
             }
             seekTo(0)
+        } else if (loadedRange.first > 0) {
+            val queue = _playbackState.value.queue
+            val previousIndex = loadedRange.first - 1
+            if (previousIndex in queue.indices) {
+                loadWindowAndPlay(queue, previousIndex)
+            }
         }
     }
 
     fun skipToIndex(index: Int) {
-        if (index in 0 until player.mediaItemCount) {
-            player.seekTo(index, 0L)
+        val queue = _playbackState.value.queue
+        if (index !in queue.indices) return
+
+        if (index in loadedRange) {
+            player.seekTo(index - loadedRange.first, 0L)
+        } else {
+            // Tapped a track outside the currently loaded window — load a fresh window
+            // around it instead of paying to insert everything in between.
+            loadWindowAndPlay(queue, index)
         }
     }
 
@@ -118,34 +222,56 @@ class AudioEngine @Inject constructor(
         val currentQueue = _playbackState.value.queue
         if (fromIndex !in currentQueue.indices || toIndex !in currentQueue.indices || fromIndex == toIndex) return
 
-        // Reflect the move in the actual player so the currently loaded/playing item is untouched
-        player.moveMediaItem(fromIndex, toIndex)
+        val fromLoaded = fromIndex in loadedRange
+        val toLoaded = toIndex in loadedRange
+
+        if (fromLoaded && toLoaded) {
+            // Both endpoints are in the loaded window — reflect the move directly in the player.
+            player.moveMediaItem(fromIndex - loadedRange.first, toIndex - loadedRange.first)
+        }
+        // If only one endpoint is loaded, the move crosses the loaded/unloaded boundary; we
+        // resync the window below (after the queue list itself is updated) rather than trying
+        // to patch a partially-loaded player timeline in place.
+        val needsWindowResync = fromLoaded != toLoaded
 
         val newQueue = currentQueue.toMutableList().apply {
             add(toIndex, removeAt(fromIndex))
         }
 
-        // Keep queueIndex pointing at whichever track was actually playing, even though its
-        // position in the list may have shifted as a side effect of the move.
         val oldPlayingIndex = _playbackState.value.queueIndex
         val newPlayingIndex = when {
             oldPlayingIndex == fromIndex -> toIndex
-            fromIndex < oldPlayingIndex && toIndex >= oldPlayingIndex -> oldPlayingIndex - 1
-            fromIndex > oldPlayingIndex && toIndex <= oldPlayingIndex -> oldPlayingIndex + 1
+            oldPlayingIndex in (fromIndex + 1)..toIndex -> oldPlayingIndex - 1
+            oldPlayingIndex in toIndex..<fromIndex -> oldPlayingIndex + 1
             else -> oldPlayingIndex
         }
 
+        trackIndexById = newQueue.withIndex().associate { (i, t) -> t.id to i }
         _playbackState.value = _playbackState.value.copy(
             queue = newQueue,
             queueIndex = newPlayingIndex
         )
+
+        if (needsWindowResync) {
+            lazyLoadJob?.cancel()
+            loadWindowAndPlay(newQueue, newPlayingIndex)
+        }
     }
 
     fun removeQueueItem(index: Int) {
         val currentQueue = _playbackState.value.queue
         if (index !in currentQueue.indices) return
 
-        player.removeMediaItem(index)
+        when {
+            index in loadedRange -> {
+                player.removeMediaItem(index - loadedRange.first)
+                loadedRange = loadedRange.first..<loadedRange.last
+            }
+            index < loadedRange.first -> {
+                loadedRange = (loadedRange.first - 1)..<loadedRange.last
+            }
+            // index > loadedRange.last: nothing loaded needs to shift.
+        }
 
         val newQueue = currentQueue.toMutableList().apply {
             removeAt(index)
@@ -158,6 +284,7 @@ class AudioEngine @Inject constructor(
             else -> oldPlayingIndex
         }
 
+        trackIndexById = newQueue.withIndex().associate { (i, t) -> t.id to i }
         _playbackState.value = _playbackState.value.copy(
             queue = newQueue,
             queueIndex = newPlayingIndex,

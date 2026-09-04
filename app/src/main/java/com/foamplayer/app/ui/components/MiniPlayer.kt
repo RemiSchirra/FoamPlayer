@@ -96,6 +96,14 @@ fun MiniPlayer(
 
     var pendingJump by remember { mutableStateOf<PendingJump?>(null) }
 
+    // See the LaunchedEffect(currentIndex) doc below for why this needs to be a
+    // token-guarded holder rather than a plain boolean.
+    class PagerSyncState {
+        var isSyncing = false
+        var activeToken = 0
+    }
+    val pagerSyncState = remember { PagerSyncState() }
+
     // rememberSeekBarProgressState only captures `liveProgress` once (remember has no
     // keys), so this lambda must not close over `playbackState`/`currentIndex`
     // directly -- those are plain parameters, and a direct capture would freeze on
@@ -201,11 +209,8 @@ fun MiniPlayer(
         }
     }
 
-    // Sync pager when track changes elsewhere (e.g. tapped from a full queue list).
+    // Sync pager when track changes
     LaunchedEffect(currentIndex) {
-        // Clear any override left behind by a jump that got interrupted by
-        // this new one -- otherwise a stale viaPage/targetIndex pair can
-        // linger and desync the text/art from the real current track.
         pendingJump = null
 
         // Doesn't animate is the full player is auto opening
@@ -213,26 +218,33 @@ fun MiniPlayer(
             pagerState.currentPage != currentIndex &&
             !latestSkipTrackChangeAnimation
         ) {
-            val distance = currentIndex - pagerState.currentPage
-            if (abs(distance) <= 1) {
-                // Already adjacent: the pager's normal slide is exactly right.
-                pagerState.animateScrollToPage(currentIndex)
-            } else {
-                // Distant jump: slide exactly one page -- rendering the real
-                // target track on that page the whole way -- so it plays as
-                // a single continuous slide straight to the new song. Once
-                // landed, silently remap the pager onto the real index; the
-                // content shown doesn't change, so nothing visibly pops.
-                val direction = if (distance > 0) 1 else -1
-                val viaPage = (pagerState.currentPage + direction).coerceIn(0, queue.size - 1)
-                try {
-                    pendingJump = PendingJump(viaPage, currentIndex)
-                    pagerState.animateScrollToPage(viaPage)
-                    pagerState.scrollToPage(currentIndex)
-                } finally {
-                    // Runs even if a newer tap cancels us mid-flight, so we
-                    // never hand off a stale override to the next jump.
-                    pendingJump = null
+            val myToken = ++pagerSyncState.activeToken
+            pagerSyncState.isSyncing = true
+            try {
+                val distance = currentIndex - pagerState.currentPage
+                if (abs(distance) <= 1) {
+                    // Slide 1 item
+                    pagerState.animateScrollToPage(currentIndex)
+                } else {
+                    // Distant slide : slide 1 item but renders the via as the target track
+                    val direction = if (distance > 0) 1 else -1
+                    val viaPage = (pagerState.currentPage + direction).coerceIn(0, queue.size - 1)
+                    try {
+                        pendingJump = PendingJump(viaPage, currentIndex)
+                        pagerState.animateScrollToPage(viaPage)
+                        pagerState.scrollToPage(currentIndex)
+                    } finally {
+                        // Runs even if a newer tap cancels us mid-flight, so we
+                        // never hand off a stale override to the next jump --
+                        // unless a newer run already took over (see token doc above).
+                        if (pagerSyncState.activeToken == myToken) {
+                            pendingJump = null
+                        }
+                    }
+                }
+            } finally {
+                if (pagerSyncState.activeToken == myToken) {
+                    pagerSyncState.isSyncing = false
                 }
             }
         }
@@ -264,7 +276,8 @@ fun MiniPlayer(
     }
 
     LaunchedEffect(pagerState.settledPage) {
-        if (pendingJump == null &&
+        if (!pagerSyncState.isSyncing &&
+            pendingJump == null &&
             pagerState.settledPage != currentIndex &&
             pagerState.settledPage in queue.indices
         ) {
