@@ -494,6 +494,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                 if (playbackState.currentTrack != null) {
                                     MiniPlayer(
                                         playbackState = playbackState,
+                                        positionMsFlow = playerViewModel.positionMs,
                                         onPlayPauseClick = {
                                             if (playbackState.isPlaying) playerViewModel.pause() else playerViewModel.play()
                                         },

@@ -50,6 +50,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import kotlin.math.abs
 import androidx.core.net.toUri
+import kotlinx.coroutines.flow.StateFlow
 
 // SeekBarProgressState / rememberSeekBarProgressState (SeekBarProgressState.kt) live
 // in this same package, so no import is needed for them here.
@@ -68,6 +69,7 @@ private data class PendingJump(val viaPage: Int, val targetIndex: Int)
 @Composable
 fun MiniPlayer(
     playbackState: PlaybackState,
+    positionMsFlow: StateFlow<Long>,
     onPlayPauseClick: () -> Unit,
     onSeek: (Float) -> Unit,
     onSkipToTrack: (Int) -> Unit,
@@ -120,9 +122,10 @@ fun MiniPlayer(
     // time `.progress` is accessed, so it stays live while dragging/swiping and is
     // only overridden by a settle tween after a release/track change.
     val seekBarProgress = rememberSeekBarProgressState(
-        liveProgress = {
+        positionMsFlow = positionMsFlow,
+        liveProgress = { livePositionMs ->
             val progress = if (latestPlaybackState.durationMs > 0) {
-                latestPlaybackState.currentPositionMs.toFloat() / latestPlaybackState.durationMs
+                livePositionMs.toFloat() / latestPlaybackState.durationMs
             } else 0f
 
             val activeFraction = if (isAnimateSeekBarEnabled) {

@@ -234,8 +234,8 @@ fun FullPlayerScreen(
     // position/duration * pager-active-fraction computation this screen already had;
     // it's read lazily every time `.progress` is accessed, not just once here.
     val seekBarProgress = rememberSeekBarProgressState(
-        liveProgress = {
-            val livePositionMs = viewModel.positionMs.value
+        positionMsFlow = viewModel.positionMs,
+        liveProgress = { livePositionMs ->
             val progress = if (state.durationMs > 0) livePositionMs.toFloat() / state.durationMs else 0f
 
             val activeFraction = if (isAnimateSeekBarEnabled) {

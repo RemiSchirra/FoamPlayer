@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -17,6 +18,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /** Duration of the seek bar's "settle" tween (drag release, track change, restart). */
@@ -66,9 +68,9 @@ enum class PreviousAction {
  * actually landed and the real track change has taken effect to release that hold.
  * Without the hold, if the pager's own settle animation is still running once our
  * tween/snap finishes, control would hand back to `liveProgress` while it's still
- * mid-flight (still influenced by the in-progress pager offset, or in non-animated
- * mode still reporting the old track's stale position), and the bar would visibly
- * jump away from 0 before settling back down again.
+ * mid-flight (still pager-offset-scaled, or in non-animated mode still reporting the
+ * old track's stale position), and the bar would visibly jump away from 0 before
+ * settling back down again.
  *
  * Usage:
  *  - Pass `liveProgress` in [rememberSeekBarProgressState]: the same 0f..1f
@@ -85,15 +87,28 @@ enum class PreviousAction {
 @Stable
 class SeekBarProgressState internal constructor(
     private val scope: CoroutineScope,
-    private val liveProgress: () -> Float
+    private val positionMsFlow: StateFlow<Long>,
+    private val liveProgressState: State<(Long) -> Float>
 ) {
     private val overrideAnimatable = Animatable(0f)
     private var overrideJob: Job? = null
     private var overrideActive by mutableStateOf(false)
 
+    private val currentPositionState = mutableStateOf(positionMsFlow.value)
+
+    init {
+        scope.launch {
+            positionMsFlow.collect {
+                currentPositionState.value = it
+            }
+        }
+    }
+
+    private fun getLiveProgress(): Float = liveProgressState.value(currentPositionState.value)
+
     /** What the slider should actually render this frame. */
     val progress: Float
-        get() = if (overrideActive) overrideAnimatable.value else liveProgress()
+        get() = if (overrideActive) overrideAnimatable.value else getLiveProgress()
 
     /**
      * Call this at the top of the slider's onValueChange, before forwarding the new
@@ -198,7 +213,7 @@ class SeekBarProgressState internal constructor(
         overrideJob = scope.launch {
             overrideAnimatable.snapTo(from ?: progress)
             overrideActive = true
-            val destination = target ?: liveProgress()
+            val destination = target ?: getLiveProgress()
             // Animatable.value is itself snapshot-state-backed, so every frame this
             // advances, readers of `progress` (via overrideAnimatable.value above)
             // recompose on their own -- no per-frame callback needed here.
@@ -215,9 +230,13 @@ class SeekBarProgressState internal constructor(
  * be `remember`-stable itself.
  */
 @Composable
-fun rememberSeekBarProgressState(liveProgress: () -> Float): SeekBarProgressState {
+fun rememberSeekBarProgressState(
+    positionMsFlow: StateFlow<Long>,
+    liveProgress: (Long) -> Float
+): SeekBarProgressState {
     val scope = rememberCoroutineScope()
-    return remember { SeekBarProgressState(scope, liveProgress) }
+    val latestLiveProgress = rememberUpdatedState(liveProgress)
+    return remember(positionMsFlow) { SeekBarProgressState(scope, positionMsFlow, latestLiveProgress) }
 }
 
 /**
