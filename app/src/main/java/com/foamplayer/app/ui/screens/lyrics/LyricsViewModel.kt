@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.data.repository.LyricsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -29,9 +31,12 @@ class LyricsViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    val currentPositionMs: StateFlow<Long> = audioEngine.playbackState
-        .map { it.currentPositionMs }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+    // NOT sourced from playbackState — that field only updates on track transitions and
+    // manual seeks now (see AudioEngine.positionMs), so mapping it here would freeze the
+    // karaoke sync loop in LyricsEnhanced almost immediately (it drifts, gets clamped,
+    // and keeps snapping back to a stale value instead of advancing). audioEngine.positionMs
+    // is the fast, always-ticking flow; forward it directly.
+    val currentPositionMs: StateFlow<Long> = audioEngine.positionMs
 
     val durationMs: StateFlow<Long> = audioEngine.playbackState
         .map { it.durationMs }
@@ -60,7 +65,7 @@ class LyricsViewModel @Inject constructor(
                     _isLoading.value = true
                     _lyrics.value = null
 
-                    val result = lyricsRepository.getLyrics(track)
+                    val result = withContext(Dispatchers.IO) { lyricsRepository.getLyrics(track) }
                     _lyrics.value = result
                     _isLoading.value = false
                 }

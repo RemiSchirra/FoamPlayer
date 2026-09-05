@@ -24,6 +24,14 @@ class PlayerViewModel @Inject constructor(
 
     val playbackState: StateFlow<PlaybackState> = audioEngine.playbackState
 
+    // Live position, updated 5x/sec while playing. Deliberately kept separate from
+    // playbackState — see the comment on AudioEngine.positionMs. Read this via
+    // `.value` from a leaf composable/provider lambda (as FullPlayerScreen's
+    // seekBarProgress and LyricsScreen's currentPositionMsProvider already do),
+    // not via collectAsState() at a screen's top level, or you'll reintroduce the
+    // same tick-rate recomposition this was added to avoid.
+    val positionMs: StateFlow<Long> = audioEngine.positionMs
+
     val settings: StateFlow<AppSettings> = settingsRepository.settings.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),

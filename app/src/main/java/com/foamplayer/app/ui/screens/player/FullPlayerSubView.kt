@@ -85,7 +85,6 @@ internal fun SubViewSelectorRow(
 @Composable
 internal fun SharedTransitionScope.SubViewContent(
     track: TrackEntity,
-    state: PlaybackState,
     subViewMode: SubViewMode,
     viewModel: PlayerViewModel,
     headerVisibilityScope: AnimatedVisibilityScope,
@@ -115,9 +114,9 @@ internal fun SharedTransitionScope.SubViewContent(
         Box(modifier = Modifier.weight(1f)) {
             AnimatedContent(
                 targetState = subViewMode,
-                transitionSpec = { 
-                    fadeIn(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) togetherWith 
-                    fadeOut(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) 
+                transitionSpec = {
+                    fadeIn(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) togetherWith
+                            fadeOut(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS))
                 },
                 label = "SubViewContent"
             ) { mode ->

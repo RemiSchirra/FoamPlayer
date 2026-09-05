@@ -235,7 +235,8 @@ fun FullPlayerScreen(
     // it's read lazily every time `.progress` is accessed, not just once here.
     val seekBarProgress = rememberSeekBarProgressState(
         liveProgress = {
-            val progress = if (state.durationMs > 0) state.currentPositionMs.toFloat() / state.durationMs else 0f
+            val livePositionMs = viewModel.positionMs.value
+            val progress = if (state.durationMs > 0) livePositionMs.toFloat() / state.durationMs else 0f
 
             val activeFraction = if (isAnimateSeekBarEnabled) {
                 val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
@@ -453,7 +454,6 @@ fun FullPlayerScreen(
                     ) {
                         SubViewContent(
                             track = track,
-                            state = state,
                             subViewMode = subViewMode,
                             viewModel = viewModel,
                             headerVisibilityScope = this@AnimatedVisibility,
@@ -541,7 +541,10 @@ private fun SharedTransitionScope.MainPlayerContent(
                 when (
                     seekBarProgress.onPreviousPressed(
                         animated = isAnimateSeekBarEnabled,
-                        positionMs = state.currentPositionMs
+                        // Same reasoning as liveProgress above: state.currentPositionMs
+                        // is now a coarse snapshot, not a live value. This needs the
+                        // actual current position to decide restart-vs-skip correctly.
+                        positionMs = viewModel.positionMs.value
                     )
                 ) {
                     PreviousAction.RESTART_CURRENT -> viewModel.seekTo(0L)

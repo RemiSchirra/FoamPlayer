@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Button
 import androidx.compose.material.ButtonDefaults
 import androidx.compose.material.Card
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
@@ -40,6 +41,7 @@ import androidx.compose.material.TextButton
 import androidx.compose.material.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -113,6 +115,7 @@ import com.foamplayer.app.lyrics.LyricsUtils.romanizeLyricsWordWithLineContext
 import com.foamplayer.app.lyrics.LyricsUtils.shouldRomanizeLyricsLine
 import com.foamplayer.app.lyrics.WordTimestamp
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlinx.coroutines.withContext
 import java.text.BreakIterator
 import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
@@ -132,7 +135,13 @@ private const val LYRIC_FOCUS_BOTTOM_GUARD_RATIO = 0.24f
 private const val LYRIC_FOCUS_MIN_SCROLL_PX = 6
 private const val LYRIC_FOCUS_ANIMATED_DISTANCE = 12
 private const val SMOOTH_PLAYBACK_MAX_FORWARD_DRIFT_MS = 80L
-private const val SMOOTH_PLAYBACK_MAX_BACKWARD_DRIFT_MS = 180L
+// AudioEngine.positionMs now ticks every rendered frame while playing (see
+// startProgressTracker), so under normal playback `rawPosition` should already sit
+// within a frame or two of the interpolated `projectedPosition` below -- there's no
+// longer a ~200ms staircase to tolerate. This just needs enough headroom to absorb
+// ordinary frame jitter (a dropped frame, a GC pause) without treating it as a real
+// desync, while still reacting quickly to genuine ones (track transitions, stalls).
+private const val SMOOTH_PLAYBACK_MAX_BACKWARD_DRIFT_MS = 150L
 private const val SMOOTH_PLAYBACK_DRIFT_CORRECTION = 0.55f
 private const val LYRIC_FOCUS_SCROLL_DURATION_MS = 520
 private const val LYRIC_FOCUS_POLL_INTERVAL_MS = 120L
@@ -202,36 +211,32 @@ fun LyricsEnhanced(
     val isSynced = remember(lyrics) { lyrics != null && (isLineSyncedLrc(lyrics!!) || isTtml(lyrics!!)) }
     val isTtmlFormat = remember(lyrics) { lyrics != null && isTtml(lyrics!!) }
 
-    val lyricsEntries: List<LyricsEntry> =
-        remember(lyrics) {
-            if (lyrics == null || lyrics == LYRICS_NOT_FOUND) return@remember emptyList()
-            when {
-                isTtml(lyrics!!) -> {
-                    parseTtml(lyrics!!)
-                }
+    var lyricsEntries by remember(lyrics) { mutableStateOf<List<LyricsEntry>>(emptyList()) }
+    var syncedLyrics by remember(lyrics) { mutableStateOf(SyncedLyrics(emptyList())) }
+    var isPreparingLyrics by remember(lyrics) { mutableStateOf(lyrics != null && lyrics != LYRICS_NOT_FOUND) }
 
-                isLineSyncedLrc(lyrics!!) -> {
-                    parseLyrics(lyrics!!)
-                }
-
-                else -> {
-                    lyrics!!
-                        .lines()
-                        .filter { it.isNotBlank() }
-                        .map { line -> LyricsEntry(time = -1L, text = line.trim()) }
-                }
-            }
+    LaunchedEffect(lyrics) {
+        if (lyrics == null || lyrics == LYRICS_NOT_FOUND) {
+            lyricsEntries = emptyList()
+            syncedLyrics = SyncedLyrics(emptyList())
+            isPreparingLyrics = false
+            return@LaunchedEffect
         }
-
-    // buildSyncedLyrics is computed synchronously here (not in a LaunchedEffect) so the
-    // first frame already has correct data. Re-running it again in a LaunchedEffect right
-    // after would be a redundant duplicate computation, and forcing a full remount of
-    // KaraokeLyricsView via key() for it was causing a visible flash: the view would be
-    // torn down and rebuilt from scratch a moment after first showing up, and again once
-    // romanization finished. Updating the `syncedLyrics` state below is enough for
-    // KaraokeLyricsView to recompose in place with the new data.
-    var syncedLyrics by remember(lyricsEntries, isTtmlFormat) {
-        mutableStateOf(buildSyncedLyrics(lyricsEntries, isTtmlFormat, emptyMap()))
+        val (entries, synced) = withContext(Dispatchers.Default) {
+            val builtEntries = when {
+                isTtml(lyrics) -> parseTtml(lyrics)
+                isLineSyncedLrc(lyrics) -> parseLyrics(lyrics)
+                else -> lyrics
+                    .lines()
+                    .filter { it.isNotBlank() }
+                    .map { line -> LyricsEntry(time = -1L, text = line.trim()) }
+            }
+            val builtSynced = buildSyncedLyrics(builtEntries, isTtml(lyrics), emptyMap())
+            builtEntries to builtSynced
+        }
+        lyricsEntries = entries
+        syncedLyrics = synced
+        isPreparingLyrics = false
     }
 
     LaunchedEffect(lyricsEntries, romanizationPreferences, isReadyToParse) {
@@ -559,8 +564,14 @@ fun LyricsEnhanced(
                     },
             )
         }
-    val selectedLineKeySnapshot = selectedLineKeys.toList()
-    val selectedLineKeySet = remember(selectedLineKeySnapshot) { selectedLineKeySnapshot.toSet() }
+    // selectedLineKeys is already a SnapshotStateList, so reads of it are tracked and
+    // recomposition happens exactly when its contents change. Wrapping it in
+    // `.toList()` first creates a new list identity on every recomposition, which
+    // defeated the `remember(selectedLineKeySnapshot)` below (its key never compared
+    // equal to itself), so the `.toSet()` conversion ran unmemoized every time. A plain
+    // derivedStateOf recomputes only when the underlying list's structural content
+    // actually changes.
+    val selectedLineKeySet by remember { derivedStateOf { selectedLineKeys.toSet() } }
     val dismissSelection = {
         isSelectionModeActive = false
         selectedLineKeys.clear()
@@ -584,6 +595,12 @@ fun LyricsEnhanced(
                 .padding(bottom = 12.dp),
     ) {
         when {
+            isPreparingLyrics -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = FoamTheme.colors.primaryAccent)
+                }
+            }
+
             lyrics == LYRICS_NOT_FOUND -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(

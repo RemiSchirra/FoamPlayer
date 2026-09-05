@@ -1,6 +1,7 @@
 package com.foamplayer.app.audio.engine
 
 import android.content.Context
+import android.view.Choreographer
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -16,6 +17,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,6 +34,18 @@ class AudioEngine @Inject constructor(
     private val _playbackState = MutableStateFlow(PlaybackState())
     val playbackState: StateFlow<PlaybackState> = _playbackState
 
+    // Deliberately separate from _playbackState. Position ticks every rendered frame
+    // while playing; if it lived on the same object as queue/currentTrack/etc, every tick
+    // would emit a
+    // brand-new PlaybackState and force recomposition of every composable that reads
+    // ANY field off `state` (not just position) — including screens far from anything
+    // that actually needs live position, like the lyrics/queue subviews. Consumers that
+    // need a live, per-frame position (seek bar, karaoke lyrics sync) should read
+    // `positionMs.value` directly inside a leaf composable/provider lambda, the same way
+    // LyricsScreen already does — not via collectAsState() at a screen's top level.
+    private val _positionMs = MutableStateFlow(0L)
+    val positionMs: StateFlow<Long> = _positionMs
+
     private var progressJob: Job? = null
 
     // Window index range
@@ -45,13 +60,25 @@ class AudioEngine @Inject constructor(
         private const val INITIAL_WINDOW_RADIUS = 15
         // Number of tracks get added per chunk
         private const val LAZY_CHUNK_SIZE = 25
-        // Delay between chunk loads
-        private const val LAZY_CHUNK_DELAY_MS = 40L
     }
 
     init {
         setupPlayerListeners()
         startProgressTracker()
+    }
+
+    /**
+     * Suspends until just after the next display frame is rendered. Used to pace
+     * Main-thread player mutations during lazy queue loading so they land right after
+     * a frame commits instead of on an arbitrary wall-clock timer that can fire mid-frame.
+     * AudioEngine's own `scope` isn't running under a composition, so it has no
+     * MonotonicFrameClock available and can't use Compose's `withFrameNanos` directly —
+     * this goes straight to the platform Choreographer instead.
+     */
+    private suspend fun awaitFrame() = suspendCancellableCoroutine<Unit> { cont ->
+        val callback = Choreographer.FrameCallback { cont.resumeWith(Result.success(Unit)) }
+        Choreographer.getInstance().postFrameCallback(callback)
+        cont.invokeOnCancellation { Choreographer.getInstance().removeFrameCallback(callback) }
     }
 
     private fun TrackEntity.toMediaItem(): MediaItem =
@@ -84,6 +111,7 @@ class AudioEngine @Inject constructor(
                         currentPositionMs = 0L,
                         audioOutputInfo = outputInfo
                     )
+                    _positionMs.value = 0L
                 }
             }
 
@@ -146,18 +174,35 @@ class AudioEngine @Inject constructor(
 
                 if (loadedRange.first > 0) {
                     val newStart = (loadedRange.first - LAZY_CHUNK_SIZE).coerceAtLeast(0)
-                    val chunk = tracks.subList(newStart, loadedRange.first).map { it.toMediaItem() }
+                    // Building MediaItems is pure CPU work with no player interaction, so it
+                    // doesn't need to run on Main. Only the actual player mutation below needs
+                    // to be on Main.
+                    val chunk = withContext(Dispatchers.Default) {
+                        tracks.subList(newStart, loadedRange.first).map { it.toMediaItem() }
+                    }
+                    // A fixed wall-clock delay() here fires on its own timer, independent of
+                    // Compose's frame clock, so it can land mid-frame -- right when the karaoke
+                    // lyrics screen (the heaviest UI in the app, needing a full 16ms/frame) is
+                    // in the middle of drawing. addMediaItems() below is real ExoPlayer work
+                    // (rebuilding the internal timeline, notifying listeners) that has to run
+                    // on Main, so instead of an arbitrary timer we wait for the next frame
+                    // callback: that guarantees this mutation only ever runs right after a
+                    // frame has committed, never stealing time out of one in progress, and it
+                    // naturally paces itself to the display's actual refresh rate instead of
+                    // hammering Main every 40ms for as long as it takes to load a big queue.
+                    awaitFrame()
                     player.addMediaItems(0, chunk)
                     loadedRange = newStart..loadedRange.last
-                    delay(LAZY_CHUNK_DELAY_MS)
                 }
 
                 if (loadedRange.last < tracks.lastIndex) {
                     val newEnd = (loadedRange.last + LAZY_CHUNK_SIZE).coerceAtMost(tracks.lastIndex)
-                    val chunk = tracks.subList(loadedRange.last + 1, newEnd + 1).map { it.toMediaItem() }
+                    val chunk = withContext(Dispatchers.Default) {
+                        tracks.subList(loadedRange.last + 1, newEnd + 1).map { it.toMediaItem() }
+                    }
+                    awaitFrame()
                     player.addMediaItems(chunk)
                     loadedRange = loadedRange.first..newEnd
-                    delay(LAZY_CHUNK_DELAY_MS)
                 }
             }
         }
@@ -214,6 +259,7 @@ class AudioEngine @Inject constructor(
     fun seekTo(positionMs: Long) {
         player.seekTo(positionMs)
         _playbackState.value = _playbackState.value.copy(currentPositionMs = positionMs)
+        _positionMs.value = positionMs
     }
 
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
@@ -315,11 +361,13 @@ class AudioEngine @Inject constructor(
         progressJob = scope.launch {
             while (true) {
                 if (player.isPlaying) {
-                    _playbackState.value = _playbackState.value.copy(
-                        currentPositionMs = player.currentPosition
-                    )
+                    // Updates the position flow every frame
+                    _positionMs.value = player.currentPosition
+                    awaitFrame()
+                } else {
+                    // Loops every 200ms
+                    delay(200)
                 }
-                delay(200)
             }
         }
     }
