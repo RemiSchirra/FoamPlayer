@@ -14,6 +14,7 @@ appcompat = "1.7.0"
 material = "1.12.0"
 room = "2.8.4"
 palette = "1.0.0"
+kuromoji = "0.9.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -39,6 +40,9 @@ ktor-client-encoding = { group = "io.ktor", name = "ktor-client-encoding", versi
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
 kotlin-metadata-jvm = { group = "org.jetbrains.kotlin", name = "kotlin-metadata-jvm", version.ref = "kotlin" }
+
+# Kuromoji
+kuromoji-ipadic = { group = "com.atilika.kuromoji", name = "kuromoji-ipadic", version.ref = "kuromoji" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
