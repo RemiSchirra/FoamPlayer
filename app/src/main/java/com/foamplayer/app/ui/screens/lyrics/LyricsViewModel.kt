@@ -33,6 +33,14 @@ class LyricsViewModel @Inject constructor(
         .map { it.currentPositionMs }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
+    val durationMs: StateFlow<Long> = audioEngine.playbackState
+        .map { it.durationMs }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+
+    val isPlaying: StateFlow<Boolean> = audioEngine.playbackState
+        .map { it.isPlaying }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     init {
         observeCurrentTrack()
     }
@@ -48,10 +56,10 @@ class LyricsViewModel @Inject constructor(
                         _lyrics.value = null
                         return@collectLatest
                     }
-                    
+
                     _isLoading.value = true
                     _lyrics.value = null
-                    
+
                     val result = lyricsRepository.getLyrics(track)
                     _lyrics.value = result
                     _isLoading.value = false
