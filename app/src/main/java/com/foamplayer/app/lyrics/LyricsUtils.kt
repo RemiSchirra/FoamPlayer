@@ -20,7 +20,7 @@ data class LyricsRomanizationPreferences(
         get() = romanizeJapanese || romanizeKorean || romanizeChinese || romanizeHindi || romanizeOther
 }
 
-private val LYRICS_NOT_FOUND = "LYRICS_NOT_FOUND"
+const val LYRICS_NOT_FOUND = "LYRICS_NOT_FOUND"
 
 @Suppress("RegExpRedundantEscape")
 object LyricsUtils {
