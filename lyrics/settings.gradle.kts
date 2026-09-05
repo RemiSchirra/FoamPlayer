@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 include(":betterlyrics")
 include(":lrclib")
 include(":kugou")
+include(":youlyplus")
