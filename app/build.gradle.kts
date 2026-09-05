@@ -65,14 +65,13 @@ kotlin {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    // Rétrogradé pour API 36
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
+    implementation("androidx.activity:activity-compose:1.13.0")
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
 
-    // Rétrogradé pour API 36
-    implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    // Compose BOM 2026.08.00+ (Compose 1.12.0) requires compileSdk 37 / AGP 9.1.0 — staying on 2026.06.00 (Compose 1.11.x) to match compileSdk 36 / AGP 9.0.1
+    implementation(platform("androidx.compose:compose-bom:2026.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -80,16 +79,15 @@ dependencies {
     implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.runtime:runtime-livedata")
     implementation("androidx.compose.material:material")
-    implementation("androidx.navigation:navigation-compose:2.8.5")
+    implementation("androidx.navigation:navigation-compose:2.9.8")
 
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Rétrogradé pour API 36
-    implementation("androidx.media3:media3-exoplayer:1.5.1")
-    implementation("androidx.media3:media3-session:1.5.1")
-    implementation("androidx.media3:media3-common:1.5.1")
-    implementation("androidx.media3:media3-extractor:1.5.1")
+    implementation("androidx.media3:media3-exoplayer:1.9.0")
+    implementation("androidx.media3:media3-session:1.9.0")
+    implementation("androidx.media3:media3-common:1.9.0")
+    implementation("androidx.media3:media3-extractor:1.9.0")
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
@@ -99,8 +97,8 @@ dependencies {
     ksp(libs.hilt.compiler)
     ksp(libs.kotlin.metadata.jvm) // Correctif Hilt
 
-    // Rétrogradé pour API 36
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    // hilt-navigation-compose 1.4.0 requires compileSdk 37 / AGP 9.1.0 — staying on 1.3.0
+    implementation("androidx.hilt:hilt-navigation-compose:1.3.0")
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
