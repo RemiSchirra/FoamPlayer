@@ -1,7 +1,7 @@
 package com.foamplayer.app.audio.engine
 
 import android.content.Context
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
-import androidx.core.net.toUri
 
 @Singleton
 class AudioEngine @Inject constructor(
@@ -83,8 +82,7 @@ class AudioEngine @Inject constructor(
                         queueIndex = index,
                         durationMs = track.duration,
                         currentPositionMs = 0L,
-                        audioOutputInfo = outputInfo,
-                        currentLyrics = track.lyrics
+                        audioOutputInfo = outputInfo
                     )
                 }
             }

@@ -31,6 +31,5 @@ data class TrackEntity(
     val format: String,
     val path: String,
     val size: Long,
-    val albumArtPath: String?,
-    val lyrics: String?
+    val albumArtPath: String?
 )

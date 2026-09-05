@@ -14,8 +14,7 @@ data class PlaybackState(
     val queueIndex: Int = -1,
     val isShuffle: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.NONE,
-    val audioOutputInfo: AudioOutputInfo? = null,
-    val currentLyrics: String? = null
+    val audioOutputInfo: AudioOutputInfo? = null
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -28,8 +27,7 @@ data class PlaybackState(
                 queueIndex == other.queueIndex &&
                 isShuffle == other.isShuffle &&
                 repeatMode == other.repeatMode &&
-                audioOutputInfo == other.audioOutputInfo &&
-                currentLyrics == other.currentLyrics
+                audioOutputInfo == other.audioOutputInfo
     }
 
     override fun hashCode(): Int {
@@ -42,7 +40,6 @@ data class PlaybackState(
         result = 31 * result + isShuffle.hashCode()
         result = 31 * result + repeatMode.hashCode()
         result = 31 * result + (audioOutputInfo?.hashCode() ?: 0)
-        result = 31 * result + (currentLyrics?.hashCode() ?: 0)
         return result
     }
 }

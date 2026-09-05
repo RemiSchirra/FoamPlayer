@@ -21,14 +21,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -117,33 +115,18 @@ internal fun SharedTransitionScope.SubViewContent(
         Box(modifier = Modifier.weight(1f)) {
             AnimatedContent(
                 targetState = subViewMode,
-                transitionSpec = { fadeIn(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) togetherWith fadeOut(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) },
+                transitionSpec = { 
+                    fadeIn(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) togetherWith 
+                    fadeOut(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) 
+                },
                 label = "SubViewContent"
             ) { mode ->
                 when (mode) {
-                    SubViewMode.LYRICS -> LyricsContent(state = state, viewModel = viewModel)
+                    SubViewMode.LYRICS -> LyricsScreen(backgroundColor = Color.Transparent)
                     SubViewMode.QUEUE -> QueueScreen(viewModel = viewModel, showTitle = false, backgroundColor = Color.Transparent)
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun LyricsContent(state: PlaybackState, viewModel: PlayerViewModel) {
-    val isLyricsEmpty = state.currentLyrics.isNullOrBlank()
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(if (isLyricsEmpty) Modifier.verticalScroll(rememberScrollState()) else Modifier)
-    ) {
-        LyricsScreen(
-            rawLyrics = state.currentLyrics,
-            currentPositionMs = state.currentPositionMs,
-            onSeek = viewModel::seekTo,
-            onClose = {},
-            backgroundColor = Color.Transparent
-        )
     }
 }
 
