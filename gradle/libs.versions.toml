@@ -11,6 +11,8 @@ junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
 appcompat = "1.7.0"
+lyricsCore = "0.4.7"
+lyricsUi = "1.0.19"
 material = "1.12.0"
 room = "2.8.4"
 palette = "1.0.0"
@@ -22,6 +24,8 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+lyrics-core = { module = "com.mocharealm.accompanist:lyrics-core", version.ref = "lyricsCore" }
+lyrics-ui = { module = "com.mocharealm.accompanist:lyrics-ui", version.ref = "lyricsUi" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }

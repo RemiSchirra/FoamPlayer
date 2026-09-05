@@ -108,6 +108,10 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation(libs.androidx.palette)
 
+    // Karaoke lyrics
+    implementation(libs.lyrics.core)
+    implementation(libs.lyrics.ui)
+
     // Kuromoji
     implementation(libs.kuromoji.ipadic)
 
