@@ -16,19 +16,89 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutModifier
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import kotlin.math.roundToInt
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.theme.FoamTheme
 
-/** A blurred, crossfading artwork layer for non-settings areas of the app. */
+/**
+ * Calculate a factor for a requested [blur] radius.
+ * @return an interpolated value between 0.2 (full downscale) and 1 (no downscale)
+ */
+private fun blurDownscaleFactor(blur: Dp): Float {
+    val radiusDp = blur.value
+    return when {
+        radiusDp <= 8f -> 1f
+        radiusDp >= 80f -> 0.2f
+        else -> {
+            val t = (radiusDp - 8f) / (80f - 8f)
+            1f - t * 0.8f
+        }
+    }
+}
+
+/**
+ * Renders an image at scale [factor].
+ */
+private fun Modifier.renderAtScale(factor: Float): Modifier {
+    if (factor >= 0.999f) return this
+    return this.then(
+        object : LayoutModifier {
+            override fun MeasureScope.measure(
+                measurable: Measurable,
+                constraints: Constraints
+            ): MeasureResult {
+                val scaledConstraints = Constraints(
+                    minWidth = (constraints.minWidth * factor).roundToInt(),
+                    maxWidth = if (constraints.hasBoundedWidth)
+                        (constraints.maxWidth * factor).roundToInt() else constraints.maxWidth,
+                    minHeight = (constraints.minHeight * factor).roundToInt(),
+                    maxHeight = if (constraints.hasBoundedHeight)
+                        (constraints.maxHeight * factor).roundToInt() else constraints.maxHeight,
+                )
+                val placeable = measurable.measure(scaledConstraints)
+                val fullWidth = (placeable.width / factor).roundToInt()
+                val fullHeight = (placeable.height / factor).roundToInt()
+                return layout(fullWidth, fullHeight) {
+                    placeable.placeWithLayer(0, 0) {
+                        scaleX = 1f / factor
+                        scaleY = 1f / factor
+                        transformOrigin = TransformOrigin(0f, 0f)
+                    }
+                }
+            }
+        }
+    )
+}
+
+/**
+ * Performant blur modifier, downscale the image first, then apply blur.
+ */
+private fun Modifier.performantBlur(radius: Dp): Modifier {
+    if (radius <= 0.dp) return this
+    val factor = blurDownscaleFactor(radius)
+    return this
+        .renderAtScale(factor)
+        .blur(radius * factor)
+}
+
+/**
+ * A blurred, crossfading artwork layer for non-settings areas of the app.
+ */
 @Composable
 internal fun DynamicAlbumArtBackground(
     frontArtPath: String?,
@@ -52,7 +122,7 @@ internal fun DynamicAlbumArtBackground(
             AsyncImage(
                 model = request,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize().blur(blur),
+                modifier = Modifier.fillMaxSize().performantBlur(blur),
                 contentScale = ContentScale.Crop,
             )
         }
@@ -69,7 +139,7 @@ internal fun DynamicAlbumArtBackground(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .blur(blur)
+                    .performantBlur(blur)
                     .graphicsLayer { alpha = crossfadeFraction },
                 contentScale = ContentScale.Crop,
             )
@@ -83,7 +153,7 @@ internal fun DynamicAlbumArtBackground(
 }
 
 /** Background layer for the classic blurred treatment and the immersive art hero. */
-@androidx.compose.runtime.Composable
+@Composable
 internal fun AlbumArtBackdrop(
     frontArtPath: String?,
     backArtPath: String?,
@@ -91,7 +161,7 @@ internal fun AlbumArtBackdrop(
     immersive: Boolean,
     subViewProgress: Float,
     dynamicBackgroundEnabled: Boolean,
-    backgroundBlur: androidx.compose.ui.unit.Dp,
+    backgroundBlur: Dp,
     modifier: Modifier = Modifier,
     foregroundModifier: Modifier = Modifier
 ) {
@@ -117,7 +187,7 @@ internal fun AlbumArtBackdrop(
                     AsyncImage(
                         model = EmbeddedAlbumArt(frontArtPath.toUri()),
                         contentDescription = null,
-                        modifier = Modifier.fillMaxSize().blur(backgroundBlur),
+                        modifier = Modifier.fillMaxSize().performantBlur(backgroundBlur),
                         contentScale = ContentScale.Crop
                     )
                 }
@@ -125,7 +195,7 @@ internal fun AlbumArtBackdrop(
                     AsyncImage(
                         model = EmbeddedAlbumArt(backArtPath.toUri()),
                         contentDescription = null,
-                        modifier = Modifier.fillMaxSize().blur(backgroundBlur).graphicsLayer { alpha = crossfadeFraction() },
+                        modifier = Modifier.fillMaxSize().performantBlur(backgroundBlur).graphicsLayer { alpha = crossfadeFraction() },
                         contentScale = ContentScale.Crop
                     )
                 }
@@ -136,9 +206,11 @@ internal fun AlbumArtBackdrop(
     }
 }
 
-/** Edge-to-edge art treatment that dissolves into the blurred background. */
+/**
+ * Edge-to-edge art treatment that dissolves into the blurred background.
+ */
 @SuppressLint("UnusedBoxWithConstraintsScope")
-@androidx.compose.runtime.Composable
+@Composable
 private fun ImmersiveAlbumArtBackdrop(
     frontArtPath: String?,
     backArtPath: String?,
@@ -155,7 +227,7 @@ private fun ImmersiveAlbumArtBackdrop(
             frontArtPath = frontArtPath,
             backArtPath = backArtPath,
             crossfadeFraction = crossfadeFraction,
-            modifier = Modifier.fillMaxSize().blur(35.dp)
+            modifier = Modifier.fillMaxSize().performantBlur(35.dp)
         )
         Box(
             modifier = Modifier
@@ -177,7 +249,7 @@ private fun ImmersiveAlbumArtBackdrop(
     }
 }
 
-@androidx.compose.runtime.Composable
+@Composable
 private fun BackdropGradient(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
@@ -193,7 +265,9 @@ private fun BackdropGradient(modifier: Modifier = Modifier) {
     )
 }
 
-/** Fades the sharp top art into the blur below it. */
+/**
+ * Fades the sharp top art into the blur below it.
+ */
 private fun Modifier.fadeIntoBlur(): Modifier =
     graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
         .drawWithCache {
@@ -208,7 +282,7 @@ private fun Modifier.fadeIntoBlur(): Modifier =
             }
         }
 
-@androidx.compose.runtime.Composable
+@Composable
 private fun AlbumArtImagePair(
     frontArtPath: String?,
     backArtPath: String?,
