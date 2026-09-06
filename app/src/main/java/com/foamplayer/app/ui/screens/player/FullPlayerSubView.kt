@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,17 +53,15 @@ internal enum class SubViewMode(val label: String) {
 
 @Composable
 internal fun SubViewSelectorRow(
-    selected: SubViewMode?,
+    subViewMode: SubViewMode,
+    progress: () -> Float,
     onSelect: (SubViewMode) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(modifier = modifier, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
         SubViewMode.entries.forEach { mode ->
-            val color = when {
-                selected == null -> FoamTheme.colors.textPrimary
-                mode == selected -> FoamTheme.colors.primaryAccent
-                else -> FoamTheme.colors.textSecondary
-            }
+            val targetColor = if (mode == subViewMode) FoamTheme.colors.primaryAccent else FoamTheme.colors.textSecondary
+            val color = lerp(FoamTheme.colors.textPrimary, targetColor, progress().coerceIn(0f, 1f))
             val icon = when (mode) {
                 SubViewMode.LYRICS -> FoamTheme.icons.current.lyrics
                 SubViewMode.QUEUE -> FoamTheme.icons.current.queue
