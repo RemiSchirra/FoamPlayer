@@ -373,7 +373,7 @@ fun MiniPlayer(
                                 } else {
                                     BasicText(
                                         text = pageTrack.format.take(3),
-                                        style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.primaryAccent)
+                                        style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor)
                                     )
                                 }
                             }
@@ -419,7 +419,7 @@ fun MiniPlayer(
                                 animatedVisibilityScope = animatedVisibilityScope
                             )
                             .clip(RoundedCornerShape(18.dp))
-                            .background(FoamTheme.colors.primaryAccent)
+                            .background(FoamTheme.accentColor)
                             .clickable { onPlayPauseClick() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -444,7 +444,7 @@ fun MiniPlayer(
                     trackHeight = 2.dp,
                     activeColor = if (playbackState.audioOutputInfo?.isBitPerfectMode == true)
                         FoamTheme.colors.bitPerfectActive
-                    else FoamTheme.colors.primaryAccent,
+                    else FoamTheme.accentColor,
                     modifier = Modifier
                         .height(12.dp)
                         .onSeekBarReleased {

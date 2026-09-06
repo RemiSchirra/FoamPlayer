@@ -615,7 +615,7 @@ fun FoamNavigationBar(
                     },
                     contentDescription = screen.title,
                     modifier = Modifier.size(24.dp),
-                    tint = if (selected) FoamTheme.colors.primaryAccent else FoamTheme.colors.textSecondary
+                    tint = if (selected) FoamTheme.accentColor else FoamTheme.colors.textSecondary
                 )
             }
         }

@@ -54,7 +54,7 @@ fun EqualizerScreen(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
                     .background(
-                        if (state.enabled) FoamTheme.colors.primaryAccent
+                        if (state.enabled) FoamTheme.accentColor
                         else FoamTheme.colors.surfaceVariant
                     )
                     .clickable { viewModel.toggleEqualizer(!state.enabled) }
@@ -90,7 +90,7 @@ fun EqualizerScreen(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(
-                            if (selected) FoamTheme.colors.primaryAccent
+                            if (selected) FoamTheme.accentColor
                             else FoamTheme.colors.surfaceVariant
                         )
                         .clickable { viewModel.selectPreset(preset) }

@@ -85,7 +85,7 @@ fun LibrarySettingsScreen(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(FoamTheme.colors.primaryAccent)
+                        .background(FoamTheme.accentColor)
                         .clickable { folderPickerLauncher.launch(null) }
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
@@ -113,7 +113,7 @@ fun LibrarySettingsScreen(
                         BasicText(text = folder, style = FoamTheme.typography.caption, modifier = Modifier.weight(1f))
                         BasicText(
                             text = "Remove",
-                            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.primaryAccent),
+                            style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor),
                             modifier = Modifier.clickable { viewModel.removeFolder(folder) }
                         )
                     }
@@ -176,7 +176,7 @@ fun LibrarySettingsScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (scanStatus is ScanStatus.Scanning) FoamTheme.colors.surfaceVariant else FoamTheme.colors.primaryAccent)
+                                .background(if (scanStatus is ScanStatus.Scanning) FoamTheme.colors.surfaceVariant else FoamTheme.accentColor)
                                 .clickable(enabled = scanStatus !is ScanStatus.Scanning) { viewModel.startScan() }
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
@@ -199,7 +199,7 @@ fun LibrarySettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth((scanStatus as ScanStatus.Scanning).progress)
                                     .height(4.dp)
-                                    .background(FoamTheme.colors.primaryAccent)
+                                    .background(FoamTheme.accentColor)
                             )
                         }
                     }
@@ -242,7 +242,7 @@ fun SeparatorSettingsCard(
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Remove",
-                                tint = FoamTheme.colors.primaryAccent,
+                                tint = FoamTheme.accentColor,
                                 modifier = Modifier
                                     .size(12.dp)
                                     .clickable { onRemove(sep) }
@@ -275,7 +275,7 @@ fun SeparatorSettingsCard(
                         value = newSeparator,
                         onValueChange = { newSeparator = it },
                         textStyle = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textPrimary),
-                        cursorBrush = SolidColor(FoamTheme.colors.primaryAccent),
+                        cursorBrush = SolidColor(FoamTheme.accentColor),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -287,7 +287,7 @@ fun SeparatorSettingsCard(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (newSeparator.isBlank()) FoamTheme.colors.surfaceVariant else FoamTheme.colors.primaryAccent)
+                        .background(if (newSeparator.isBlank()) FoamTheme.colors.surfaceVariant else FoamTheme.accentColor)
                         .clickable(enabled = newSeparator.isNotBlank()) {
                             onAdd(newSeparator)
                             newSeparator = ""

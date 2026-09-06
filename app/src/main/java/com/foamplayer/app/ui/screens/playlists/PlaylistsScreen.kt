@@ -51,7 +51,7 @@ fun PlaylistsScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .background(FoamTheme.colors.primaryAccent)
+                    .background(FoamTheme.accentColor)
                     .clickable { viewModel.createPlaylist("New Playlist") }
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {

@@ -30,7 +30,7 @@ fun LyricsScreen(
         if (isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.align(Alignment.Center),
-                color = FoamTheme.colors.primaryAccent
+                color = FoamTheme.accentColor
             )
         } else {
             LyricsEnhanced(

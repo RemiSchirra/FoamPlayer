@@ -89,7 +89,7 @@ fun ArtistDetailScreen(
             item {
                 BasicText(
                     text = "Albums",
-                    style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.primaryAccent),
+                    style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.accentColor),
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
             }

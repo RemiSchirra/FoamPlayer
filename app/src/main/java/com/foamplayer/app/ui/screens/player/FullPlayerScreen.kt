@@ -933,7 +933,7 @@ private fun SharedTransitionScope.PlaybackControls(
                         animatedVisibilityScope = outerVisibilityScope
                     )
                     .clip(CircleShape)
-                    .background(FoamTheme.colors.primaryAccent)
+                    .background(FoamTheme.accentColor)
                     .clickable(onClick = onPlayPause),
                 contentAlignment = Alignment.Center
             ) {
@@ -997,7 +997,7 @@ private fun MiniPlayPauseButton(
             .size(50.dp)
             .graphicsLayer { alpha = progress }
             .clip(CircleShape)
-            .background(FoamTheme.colors.primaryAccent)
+            .background(FoamTheme.accentColor)
             .clickable(enabled = progress > 0.01f, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {

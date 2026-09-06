@@ -49,7 +49,7 @@ fun FoamSliderItem(
             }
             BasicText(
                 text = valueDisplay,
-                style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.primaryAccent)
+                style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.accentColor)
             )
         }
 
@@ -63,8 +63,8 @@ fun FoamSliderItem(
             valueRange = valueRange,
             modifier = Modifier.fillMaxWidth(),
             colors = SliderDefaults.colors(
-                thumbColor = FoamTheme.colors.primaryAccent,
-                activeTrackColor = FoamTheme.colors.primaryAccent,
+                thumbColor = FoamTheme.accentColor,
+                activeTrackColor = FoamTheme.accentColor,
                 inactiveTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f),
                 activeTickColor = Color.White.copy(alpha = 0.5f),
                 inactiveTickColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)

@@ -60,7 +60,7 @@ internal fun SubViewSelectorRow(
 ) {
     Row(modifier = modifier, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
         SubViewMode.entries.forEach { mode ->
-            val targetColor = if (mode == subViewMode) FoamTheme.colors.primaryAccent else FoamTheme.colors.textSecondary
+            val targetColor = if (mode == subViewMode) FoamTheme.accentColor else FoamTheme.colors.textSecondary
             val color = lerp(FoamTheme.colors.textPrimary, targetColor, progress().coerceIn(0f, 1f))
             val icon = when (mode) {
                 SubViewMode.LYRICS -> FoamTheme.icons.current.lyrics
@@ -181,6 +181,6 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                 modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_artist_header_${track.id}"), animatedVisibilityScope = headerVisibilityScope)
             )
         }
-        Icon(imageVector = Icons.Rounded.KeyboardArrowDown, contentDescription = "Collapse", tint = FoamTheme.colors.primaryAccent, modifier = Modifier.size(28.dp))
+        Icon(imageVector = Icons.Rounded.KeyboardArrowDown, contentDescription = "Collapse", tint = FoamTheme.accentColor, modifier = Modifier.size(28.dp))
     }
 }

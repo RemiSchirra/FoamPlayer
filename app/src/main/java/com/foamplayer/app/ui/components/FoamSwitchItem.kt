@@ -63,8 +63,8 @@ fun FoamSwitchItem(
             onCheckedChange = onCheckedChange,
             modifier = Modifier.clearAndSetSemantics {},
             colors = SwitchDefaults.colors(
-                checkedThumbColor = FoamTheme.colors.primaryAccent,
-                checkedTrackColor = FoamTheme.colors.primaryAccent.copy(alpha = 0.5f),
+                checkedThumbColor = FoamTheme.accentColor,
+                checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
                 uncheckedThumbColor = FoamTheme.colors.textSecondary.copy(alpha = 1f),
                 uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)
             )

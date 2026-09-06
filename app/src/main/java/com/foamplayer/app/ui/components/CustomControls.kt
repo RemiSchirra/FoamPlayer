@@ -46,7 +46,7 @@ fun FoamSlider(
     modifier: Modifier = Modifier,
     steps: Int? = null,
     trackHeight: Dp = 4.dp,
-    activeColor: Color = FoamTheme.colors.primaryAccent,
+    activeColor: Color = FoamTheme.accentColor,
     inactiveColor: Color = FoamTheme.colors.surfaceVariant
 ) {
     val currentOnValueChange by rememberUpdatedState(onValueChange)

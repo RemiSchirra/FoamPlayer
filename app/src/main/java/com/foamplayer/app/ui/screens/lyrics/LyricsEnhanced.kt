@@ -597,7 +597,7 @@ fun LyricsEnhanced(
         when {
             isPreparingLyrics -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FoamTheme.colors.primaryAccent)
+                    CircularProgressIndicator(color = FoamTheme.accentColor)
                 }
             }
 

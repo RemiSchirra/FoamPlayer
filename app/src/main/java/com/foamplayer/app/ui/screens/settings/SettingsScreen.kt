@@ -112,7 +112,7 @@ fun SettingsCategoryItem(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(24.dp),
-                tint = FoamTheme.colors.primaryAccent
+                tint = FoamTheme.accentColor
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column {

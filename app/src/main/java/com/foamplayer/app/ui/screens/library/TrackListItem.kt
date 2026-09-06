@@ -100,7 +100,7 @@ fun TrackListItem(
         }
 
     val targetBackgroundColor = if (active) {
-        FoamTheme.colors.primaryAccent.copy(alpha = 0.4f)
+        FoamTheme.accentColor.copy(alpha = 0.4f)
     } else {
         Color.Transparent
     }
@@ -209,7 +209,7 @@ fun TrackListItem(
                 } else {
                     BasicText(
                         text = track.format,
-                        style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.primaryAccent)
+                        style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor)
                     )
                 }
             }

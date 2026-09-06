@@ -186,7 +186,7 @@ private fun HeaderSection(
     sharedElementKey: String?
 ) {
     val context = LocalContext.current
-    val defaultAccentColor = FoamTheme.colors.primaryAccent
+    val defaultAccentColor = FoamTheme.accentColor
 
     var paletteColor by remember(imageUrl) { mutableStateOf<Color?>(null) }
 

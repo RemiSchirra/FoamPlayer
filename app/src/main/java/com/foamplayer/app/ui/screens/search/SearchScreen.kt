@@ -101,7 +101,7 @@ fun SearchScreen(
                     searchViewModel.search(it)
                 },
                 textStyle = FoamTheme.typography.titleMedium,
-                cursorBrush = SolidColor(FoamTheme.colors.primaryAccent),
+                cursorBrush = SolidColor(FoamTheme.accentColor),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -161,7 +161,7 @@ fun SearchScreen(
 fun SectionHeader(title: String) {
     BasicText(
         text = title,
-        style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.primaryAccent),
+        style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.accentColor),
         modifier = Modifier.padding(vertical = 8.dp)
     )
 }

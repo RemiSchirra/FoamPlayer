@@ -94,7 +94,7 @@ fun UISettingsScreen(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(
-                                    if (isSelected) FoamTheme.colors.primaryAccent
+                                    if (isSelected) FoamTheme.accentColor
                                     else FoamTheme.colors.surfaceVariant
                                 )
                                 .clickable { viewModel.setIconStyle(style) }
