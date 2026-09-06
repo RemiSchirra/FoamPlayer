@@ -31,6 +31,7 @@ fun SettingsScreen(
     onNavigateToAudio: () -> Unit,
     onNavigateToUI: () -> Unit,
     onNavigateToLibrary: () -> Unit,
+    onNavigateToLyrics: () -> Unit,
     onNavigateToTest: () -> Unit
 ) {
     LazyColumn(
@@ -74,6 +75,16 @@ fun SettingsScreen(
                 subtitle = "Manage folders, scan media",
                 icon = FoamTheme.icons.current.library,
                 onClick = onNavigateToLibrary
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        item {
+            SettingsCategoryItem(
+                title = "Lyrics",
+                subtitle = "Providers, order, appearance",
+                icon = FoamTheme.icons.current.lyrics,
+                onClick = onNavigateToLyrics
             )
             Spacer(modifier = Modifier.height(12.dp))
         }

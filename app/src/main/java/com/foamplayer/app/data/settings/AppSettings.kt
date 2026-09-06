@@ -1,5 +1,8 @@
 package com.foamplayer.app.data.settings
 
+import com.foamplayer.app.constants.DefaultLyricsProviderOrder
+import com.foamplayer.app.constants.PreferredLyricsProvider
+
 /** The complete, validated set of user-configurable application preferences. */
 enum class FoamIconStyle(val label: String) {
     SOLID("Solid"),
@@ -22,7 +25,9 @@ data class AppSettings(
     val autoOpenPlayerEnabled: Boolean = false,
     val dynamicBackgroundEnabled: Boolean = false,
     val backgroundBlur: Int = DEFAULT_BACKGROUND_BLUR,
-    val dynamicBackgroundIntensity: Int = DEFAULT_DYNAMIC_BACKGROUND_INTENSITY
+    val dynamicBackgroundIntensity: Int = DEFAULT_DYNAMIC_BACKGROUND_INTENSITY,
+    val lyricsProviderOrder: List<PreferredLyricsProvider> = DefaultLyricsProviderOrder,
+    val enabledLyricsProviders: Set<PreferredLyricsProvider> = PreferredLyricsProvider.entries.toSet()
 ) {
     fun sanitized(): AppSettings = copy(
         libraryFolders = libraryFolders.map(String::trim).filter(String::isNotEmpty).toSet(),

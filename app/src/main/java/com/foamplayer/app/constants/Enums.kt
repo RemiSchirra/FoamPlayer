@@ -128,25 +128,11 @@ fun deserializeLyricsProviderOrder(orderStr: String?): List<PreferredLyricsProvi
     val parsed =
         orderStr
             .split(",")
-            .mapNotNull { name ->
-                PreferredLyricsProvider.entries.find { it.name == name.trim() }
-            }.distinct()
+            .mapNotNull { name -> PreferredLyricsProvider.entries.find { it.name == name.trim() } }
+            .distinct()
 
-    val normalized =
-        when {
-            parsed.take(3) ==
-                    listOf(
-                        PreferredLyricsProvider.LRCLIB,
-                        PreferredLyricsProvider.KUGOU,
-                        PreferredLyricsProvider.BETTER_LYRICS,
-                    )
-                -> listOf(PreferredLyricsProvider.BETTER_LYRICS) + parsed.filterNot { it == PreferredLyricsProvider.BETTER_LYRICS }
-
-            else -> parsed
-        }
-
-    val missing = DefaultLyricsProviderOrder.filterNot { it in normalized }
-    return normalized + missing
+    val missing = DefaultLyricsProviderOrder.filterNot { it in parsed }
+    return parsed + missing
 }
 
 enum class LyricsAnimationStyle {

@@ -8,6 +8,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.foamplayer.app.constants.DefaultLyricsProviderOrder
+import com.foamplayer.app.constants.PreferredLyricsProvider
+import com.foamplayer.app.constants.deserializeLyricsProviderOrder
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.FoamIconStyle
 import java.io.IOException
@@ -53,6 +56,14 @@ class SettingsRepository @Inject constructor(
     suspend fun setArtistSeparators(separators: Set<String>) = update { it.copy(artistSeparators = separators) }
     suspend fun setGenreSeparators(separators: Set<String>) = update { it.copy(genreSeparators = separators) }
 
+    suspend fun setLyricsProviderOrder(order: List<PreferredLyricsProvider>) = update {
+        it.copy(lyricsProviderOrder = order)
+    }
+
+    suspend fun setEnabledLyricsProviders(enabled: Set<PreferredLyricsProvider>) = update {
+        it.copy(enabledLyricsProviders = enabled)
+    }
+
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
@@ -71,7 +82,11 @@ class SettingsRepository @Inject constructor(
         dynamicBackgroundEnabled = this[Keys.DYNAMIC_BACKGROUND] ?: AppSettings().dynamicBackgroundEnabled,
         backgroundBlur = this[Keys.BACKGROUND_BLUR] ?: AppSettings().backgroundBlur,
         dynamicBackgroundIntensity = this[Keys.DYNAMIC_BACKGROUND_INTENSITY]
-            ?: AppSettings().dynamicBackgroundIntensity
+            ?: AppSettings().dynamicBackgroundIntensity,
+        lyricsProviderOrder = deserializeLyricsProviderOrder(this[Keys.LYRICS_PROVIDER_ORDER]),
+        enabledLyricsProviders = this[Keys.ENABLED_LYRICS_PROVIDERS]
+            ?.mapNotNull { name -> PreferredLyricsProvider.entries.find { it.name == name } }
+            ?.toSet() ?: PreferredLyricsProvider.entries.toSet()
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -90,6 +105,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.DYNAMIC_BACKGROUND] = settings.dynamicBackgroundEnabled
         this[Keys.BACKGROUND_BLUR] = settings.backgroundBlur
         this[Keys.DYNAMIC_BACKGROUND_INTENSITY] = settings.dynamicBackgroundIntensity
+        this[Keys.LYRICS_PROVIDER_ORDER] = settings.lyricsProviderOrder.joinToString(",") { it.name }
+        this[Keys.ENABLED_LYRICS_PROVIDERS] = settings.enabledLyricsProviders.map { it.name }.toSet()
     }
 
     private object Keys {
@@ -108,5 +125,7 @@ class SettingsRepository @Inject constructor(
         val DYNAMIC_BACKGROUND = booleanPreferencesKey("dynamic_background")
         val BACKGROUND_BLUR = intPreferencesKey("background_blur")
         val DYNAMIC_BACKGROUND_INTENSITY = intPreferencesKey("dynamic_background_intensity")
+        val LYRICS_PROVIDER_ORDER = stringPreferencesKey("lyrics_provider_order")
+        val ENABLED_LYRICS_PROVIDERS = stringSetPreferencesKey("enabled_lyrics_providers")
     }
 }

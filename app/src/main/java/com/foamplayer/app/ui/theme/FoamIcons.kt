@@ -27,7 +27,8 @@ data class FoamIconSet(
     val playlists: ImageVector,
     val search: ImageVector,
     val equalizer: ImageVector,
-    val settings: ImageVector
+    val settings: ImageVector,
+    val dragHandle: ImageVector
 )
 
 @Immutable
@@ -57,7 +58,8 @@ val DefaultFoamIcons = FoamIcons(
         playlists = Icons.AutoMirrored.Filled.QueueMusic,
         search = Icons.Filled.Search,
         equalizer = Icons.Filled.GraphicEq,
-        settings = Icons.Filled.Settings
+        settings = Icons.Filled.Settings,
+        dragHandle = Icons.Filled.DragHandle
     ),
     outline = FoamIconSet(
         play = Icons.Outlined.PlayArrow,
@@ -70,7 +72,8 @@ val DefaultFoamIcons = FoamIcons(
         playlists = Icons.AutoMirrored.Outlined.QueueMusic,
         search = Icons.Outlined.Search,
         equalizer = Icons.Outlined.GraphicEq,
-        settings = Icons.Outlined.Settings
+        settings = Icons.Outlined.Settings,
+        dragHandle = Icons.Outlined.DragHandle
     ),
     flat = FoamIconSet(
         play = Icons.Rounded.PlayArrow,
@@ -83,7 +86,8 @@ val DefaultFoamIcons = FoamIcons(
         playlists = Icons.AutoMirrored.Rounded.QueueMusic,
         search = Icons.Rounded.Search,
         equalizer = Icons.Rounded.GraphicEq,
-        settings = Icons.Rounded.Settings
+        settings = Icons.Rounded.Settings,
+        dragHandle = Icons.Rounded.DragHandle
     ),
     currentStyle = FoamIconStyle.FLAT
 )

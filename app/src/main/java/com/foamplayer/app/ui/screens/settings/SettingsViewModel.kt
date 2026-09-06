@@ -2,6 +2,7 @@ package com.foamplayer.app.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ScanStatus
@@ -48,6 +49,16 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setDynamicBackgroundIntensity(intensity)
     }
     fun startScan() = launch { trackRepository.rescanLibrary() }
+
+    fun setLyricsProviderOrder(order: List<PreferredLyricsProvider>) = launch {
+        settingsRepository.setLyricsProviderOrder(order)
+    }
+
+    fun setLyricsProviderEnabled(provider: PreferredLyricsProvider, enabled: Boolean) = launch {
+        val currentEnabled = settings.value.enabledLyricsProviders
+        val newEnabled = if (enabled) currentEnabled + provider else currentEnabled - provider
+        settingsRepository.setEnabledLyricsProviders(newEnabled)
+    }
 
     private fun launch(block: suspend () -> Unit) {
         viewModelScope.launch { block() }
