@@ -733,12 +733,16 @@ private fun SharedTransitionScope.TrackHeroPager(
                         contentAlignment = Alignment.Center
                     ) {
                         if (pageTrack.albumArtPath != null) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(pageTrack.albumArtPath)
+                            val context = LocalContext.current
+                            val pageArtRequest = remember(pageTrack.albumArtPath) {
+                                ImageRequest.Builder(context)
+                                    .data(EmbeddedAlbumArt(pageTrack.albumArtPath.toUri()))
                                     .size(AlbumArtRequestSize)
                                     .crossfade(false)
-                                    .build(),
+                                    .build()
+                            }
+                            AsyncImage(
+                                model = pageArtRequest,
                                 contentDescription = "Album Art",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
