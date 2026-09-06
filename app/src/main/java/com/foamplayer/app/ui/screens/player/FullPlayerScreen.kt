@@ -8,6 +8,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberTransition
@@ -94,6 +95,13 @@ import androidx.core.net.toUri
 private object PlayerDimens {
     val horizontalPagePadding = 24.dp
     val pageSpacing = 24.dp
+
+    // Bottom control cluster in the subview (selector row + mini play button + seek bar).
+    // The rise distances are purely cosmetic transforms (see subControlsProgress usage
+    // below) -- they never change layout size, only where things are drawn.
+    val selectorRowRise = 20.dp
+    val playButtonRise = 28.dp
+    val seekBarRise = 12.dp
 }
 
 /**
@@ -358,6 +366,12 @@ fun FullPlayerScreen(
         if (enterExitState == EnterExitState.Visible) 1f else 0f
     }
 
+    val subControlsProgress = if (upTransitionState.targetState) {
+        EaseOutCubic.transform(rawSubViewProgress.coerceIn(0f, 1f))
+    } else {
+        EaseInCubic.transform(rawSubViewProgress.coerceIn(0f, 1f))
+    }
+
     with(sharedTransitionScope) {
         Box(
             modifier = Modifier
@@ -464,26 +478,66 @@ fun FullPlayerScreen(
                     }
                 }
 
-                SubViewSelectorRow(
-                    selected = if (upTransitionState.targetState) subViewMode else null,
-                    onSelect = { mode ->
-                        if (upTransitionState.targetState) {
-                            if (subViewMode == mode) {
-                                gestureController.collapseToMainPlayer()
+                // Controls for the subview
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    SubViewSelectorRow(
+                        selected = if (upTransitionState.targetState) subViewMode else null,
+                        onSelect = { mode ->
+                            if (upTransitionState.targetState) {
+                                if (subViewMode == mode) {
+                                    gestureController.collapseToMainPlayer()
+                                } else {
+                                    subViewMode = mode
+                                }
                             } else {
                                 subViewMode = mode
+                                gestureController.expandToSubView()
                             }
-                        } else {
-                            subViewMode = mode
-                            gestureController.expandToSubView()
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 24.dp)
-                        .graphicsLayer { alpha = uiAlpha }
-                )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 24.dp)
+                            .graphicsLayer {
+                                alpha = uiAlpha
+                                translationY = -PlayerDimens.selectorRowRise.toPx() * subControlsProgress
+                            }
+                    )
+
+                    MiniPlayPauseButton(
+                        isPlaying = state.isPlaying,
+                        progress = subControlsProgress,
+                        onClick = { if (state.isPlaying) viewModel.pause() else viewModel.play() },
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .graphicsLayer {
+                                translationY = -PlayerDimens.playButtonRise.toPx() * subControlsProgress
+                            }
+                    )
+                }
             }
+
+            // Mini seek bar, drawn as a true overlay on the outer screen Box (a sibling of
+            // the Column above, not a child of it) so it never takes up Column layout space.
+            // Previously this lived in a reserved-height Box at the bottom of the Column,
+            // which permanently shrank the weighted content area above by that height --
+            // shifting the selector row's resting position up even at rawSubViewProgress
+            // == 0. Overlaying it here instead means the Column's layout, and therefore the
+            // selector row's default position, is completely unaffected; only this slider's
+            // own alpha/translationY move it in and out at the very bottom of the screen.
+            PlaybackProgressSlider(
+                durationMs = state.durationMs,
+                seekBarProgress = seekBarProgress,
+                isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                onSeek = { positionMs -> viewModel.seekTo(positionMs) },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 12.dp)
+                    .graphicsLayer {
+                        alpha = subControlsProgress
+                        translationY = PlayerDimens.seekBarRise.toPx() * (1f - subControlsProgress)
+                    }
+            )
         }
     }
 }
@@ -902,7 +956,8 @@ private fun PlaybackProgressSlider(
     durationMs: Long,
     seekBarProgress: SeekBarProgressState,
     isAnimateSeekBarEnabled: Boolean,
-    onSeek: (Long) -> Unit
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     FoamSlider(
         value = seekBarProgress.progress,
@@ -911,11 +966,36 @@ private fun PlaybackProgressSlider(
             seekBarProgress.onDragging()
             onSeek((new * durationMs).toLong())
         },
-        modifier = Modifier.onSeekBarReleased {
+        modifier = modifier.onSeekBarReleased {
             seekBarProgress.onSeekDragFinished(
                 animated = isAnimateSeekBarEnabled,
                 releasedAt = seekBarProgress.progress
             )
         }
     )
+}
+
+@Composable
+private fun MiniPlayPauseButton(
+    isPlaying: Boolean,
+    progress: Float,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(50.dp)
+            .graphicsLayer { alpha = progress }
+            .clip(CircleShape)
+            .background(FoamTheme.colors.primaryAccent)
+            .clickable(enabled = progress > 0.01f, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
+            contentDescription = if (isPlaying) "Pause" else "Play",
+            tint = FoamTheme.colors.background,
+            modifier = Modifier.size(28.dp)
+        )
+    }
 }
