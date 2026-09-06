@@ -8,7 +8,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.EaseInOut
-import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.Transition
@@ -43,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -71,6 +69,7 @@ import com.foamplayer.app.ui.screens.settings.AudioSettingsScreen
 import com.foamplayer.app.ui.screens.settings.BackgroundSettingsScreen
 import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
+import com.foamplayer.app.ui.screens.settings.LyricsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.PlayerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.SettingsScreen
 import com.foamplayer.app.ui.screens.settings.TestSettingsScreen
@@ -78,37 +77,6 @@ import com.foamplayer.app.ui.screens.settings.UISettingsScreen
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import android.net.Uri
-
-sealed class Screen(val route: String, val title: String) {
-    object Library : Screen("library", "Library")
-    object Playlists : Screen("playlists", "Playlists")
-    object Search : Screen("search", "Search")
-    object Equalizer : Screen("equalizer", "Equalizer")
-    object Settings : Screen("settings", "Settings")
-    object SettingsAudio : Screen("settings/audio", "Audio Settings")
-    object SettingsUI : Screen("settings/ui", "UI Settings")
-    object SettingsColors : Screen("settings/ui/colors", "Color Settings")
-    object SettingsPlayer : Screen("settings/ui/player", "Player Settings")
-    object SettingsBackground : Screen("settings/ui/background", "Background Settings")
-    object SettingsLibrary : Screen("settings/library", "Library Settings")
-    object SettingsTest : Screen("settings/test", "Component Test")
-
-    object ArtistDetail : Screen("artist/{artistName}", "Artist") {
-        fun createRoute(artistName: String) = "artist/${Uri.encode(artistName)}"
-    }
-    object AlbumDetail : Screen("album/{albumName}?artUrl={artUrl}&artist={artist}", "Album") {
-        fun createRoute(albumName: String, artUrl: String? = null, artist: String? = null): String {
-            val encodedName = Uri.encode(albumName)
-            val encodedArt = Uri.encode(artUrl.orEmpty())
-            val encodedArtist = Uri.encode(artist.orEmpty())
-            return "album/$encodedName?artUrl=$encodedArt&artist=$encodedArtist"
-        }
-    }
-    object PlaylistDetail : Screen("playlist/{playlistId}", "Playlist") {
-        fun createRoute(playlistId: Long) = "playlist/$playlistId"
-    }
-}
 
 // Search <-> ArtistDetail <-> AlbumDetail all hand off shared elements (album art,
 // title, artist) between each other. The non-shared parts of the screen (background,
@@ -121,7 +89,8 @@ val SharedElementEasing = FastOutSlowInEasing
 
 private fun isSharedElementRoute(route: String?): Boolean {
     if (route == null) return false
-    return route == Screen.Search.route ||
+    return route == Screen.Library.route ||
+            route == Screen.Search.route ||
             route.startsWith("artist/") ||
             route.startsWith("album/")
 }
@@ -173,24 +142,6 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
     var backgroundBackArtPath by remember { mutableStateOf<String?>(null) }
     var backgroundCrossfadeFraction by remember { mutableStateOf(0f) }
 
-    // Every animateTo() call against playerTransitionState (open, close, from a track tap,
-    // from the mini player, from a swipe, from the nav bar, ...) now goes through
-    // animatePlayerTransition below instead of firing its own independent scope.launch.
-    // Rapid taps (e.g. two different tracks in quick succession) used to launch multiple
-    // concurrent coroutines animating the *same* SeekableTransitionState; the first one's
-    // `finally` cleanup could run after the second one had already started and stomp on
-    // its trackListTransitionTrackId/skipMiniPlayerTrackAnimation state, leaving the shared
-    // element animation visually stuck partway through. Centralizing this: (1) explicitly
-    // cancels any in-flight transition job before starting a new one, so only one animation
-    // ever drives playerTransitionState at a time, and (2) tags each job with a generation
-    // number so a cancelled job's cleanup can never clobber a newer job's state.
-    //
-    // The job/generation bookkeeping MUST survive recomposition — FoamNavHost recomposes
-    // on every playbackState emission, including the ~200ms position ticks — so it's kept
-    // in a remembered holder rather than a plain var. A plain var here would get silently
-    // reset to null/0 on the next tick, turning `playerTransitionJob?.cancel()` into a
-    // no-op and letting two animations run concurrently again (the flip-flopping and the
-    // extra frame-callback churn both trace back to that).
     class TransitionJobHolder {
         var job: Job? = null
         var generation: Int = 0
@@ -207,15 +158,11 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
             try {
                 if (precompose) {
                     withFrameNanos { }
-                    // Precompose the full player
                     playerTransitionState.seekTo(fraction = 0f, targetState = open)
                     withFrameNanos { }
                 }
                 playerTransitionState.animateTo(open, getPlayerAnimationSpec(open))
             } finally {
-                // Only the most recent transition is allowed to reset this shared state —
-                // an older, cancelled job finishing its cleanup late must not wipe out
-                // whatever the newer (still-running or already-completed) job set.
                 if (open && transitionJobHolder.generation == myGeneration) {
                     trackListTransitionTrackId = null
                     skipMiniPlayerTrackAnimation = false
@@ -224,10 +171,6 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
         }
     }
 
-    // Mirrors PlayerGestureController's swipe-down-to-dismiss, but for progressively
-    // swiping the mini player up into the full player. Kept separate from that controller
-    // since it needs to be live before FullPlayerScreen (and the controller living inside
-    // it) has even entered composition -- see MiniPlayerSwipeController's doc.
     val miniPlayerSwipeController = remember(playerTransitionState, screenHeightPx) {
         MiniPlayerSwipeController(
             playerTransitionState = playerTransitionState,
@@ -244,8 +187,6 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
 
         Column(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
             fun playTrackFromList(tracks: List<com.foamplayer.app.data.db.entities.TrackEntity>, index: Int) {
-                // Must be set before playQueue() so it's already true by the time the
-                // mini player recomposes with the new currentIndex.
                 if (isAutoOpenPlayerEnabled) {
                     skipMiniPlayerTrackAnimation = true
                 }
@@ -278,11 +219,6 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                 ) {
                     val playerTransitionVisibilityScope = this
                     Box(modifier = Modifier.fillMaxSize()) {
-                        // Content Area - fills the whole area so screens (e.g. TrackListScreen)
-                        // can paint a full-bleed background that extends behind the mini player,
-                        // instead of being squeezed to stop above it. Screens whose content
-                        // scrolls reserve their own bottom inset (see TrackListScreen's trailing
-                        // Spacer) so list items aren't hidden under the mini player.
                         NavHost(
                             modifier = Modifier.fillMaxSize(),
                             navController = navController,
@@ -384,6 +320,7 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     onNavigateToAudio = { navController.navigate(Screen.SettingsAudio.route) },
                                     onNavigateToUI = { navController.navigate(Screen.SettingsUI.route) },
                                     onNavigateToLibrary = { navController.navigate(Screen.SettingsLibrary.route) },
+                                    onNavigateToLyrics = { navController.navigate(Screen.SettingsLyrics.route) },
                                     onNavigateToTest = { navController.navigate(Screen.SettingsTest.route) }
                                 )
                             }
@@ -409,6 +346,9 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                             }
                             composable(Screen.SettingsLibrary.route) {
                                 LibrarySettingsScreen(onBack = { navController.popBackStack() })
+                            }
+                            composable(Screen.SettingsLyrics.route) {
+                                LyricsSettingsScreen(onBack = { navController.popBackStack() })
                             }
                             composable(Screen.SettingsTest.route) {
                                 TestSettingsScreen(onBack = { navController.popBackStack() })
@@ -442,9 +382,6 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                     navArgument("artist") { type = NavType.StringType; defaultValue = "" }
                                 )
                             ) { backStackEntry ->
-                                // Same as ArtistDetail above: these arrive already decoded by
-                                // Navigation's own matcher, so decoding again here would corrupt
-                                // any %-encoded segments already present in a real content:// URI.
                                 val albumName = backStackEntry.arguments?.getString("albumName") ?: ""
                                 val artUrl = (backStackEntry.arguments?.getString("artUrl") ?: "").ifEmpty { null }
                                 val artist = (backStackEntry.arguments?.getString("artist") ?: "").ifEmpty { null }
@@ -483,7 +420,6 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                             }
                         }
 
-                        // MiniPlayer - Positioned at the bottom of the main content area, above the Nav Bar
                         Box(modifier = Modifier.align(Alignment.BottomCenter)) {
                             transition.AnimatedVisibility(
                                 visible = { isFull -> !isFull },
@@ -513,8 +449,6 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                                             backgroundCrossfadeFraction = fraction
                                         },
                                         onClick = {
-                                            // A manual mini-player open always starts from the mini
-                                            // player, even if a prior list-origin animation was cancelled.
                                             animatePlayerTransition(open = true, precompose = true)
                                         },
                                         sharedTransitionScope = this@SharedTransitionLayout,
@@ -556,7 +490,6 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
 
             }
 
-            // Navigation Bar - Always Visible
             FoamNavigationBar(
                 currentRoute = currentRoute,
                 onNavigate = { route ->
