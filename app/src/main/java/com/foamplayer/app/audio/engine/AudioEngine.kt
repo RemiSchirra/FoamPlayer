@@ -377,6 +377,8 @@ class AudioEngine @Inject constructor(
                     _positionMs.value = player.currentPosition
                     awaitFrame()
                 } else {
+                    // Even when paused, keep position in sync to catch seeks from notification/external
+                    _positionMs.value = player.currentPosition
                     // Loops every 200ms
                     delay(200)
                 }
