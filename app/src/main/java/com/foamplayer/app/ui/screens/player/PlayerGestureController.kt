@@ -82,7 +82,15 @@ class PlayerGestureController(
     val upTransitionState: SeekableTransitionState<Boolean>,
     private val playerTransitionState: SeekableTransitionState<Boolean>,
     private val scope: CoroutineScope,
+    // Full mini<->full player dismiss swipe: travels the whole screen, so this is
+    // sized to screenHeightPx by the caller.
     private val dragThresholdPx: Float,
+    // Subview (header <-> Lyrics/Queue) open/close swipe. This only ever needs to
+    // travel a small fraction of the screen -- reusing dragThresholdPx here made a
+    // small, natural upward flick barely register any progress, since the drag would
+    // need to cover most of the screen height before crossing the commit threshold.
+    // Sized independently by the caller to a fixed, device-agnostic distance instead.
+    private val upDragThresholdPx: Float,
     private val onDismiss: () -> Unit
 ) {
     private var activeGestureJob: Job? = null
@@ -140,7 +148,7 @@ class PlayerGestureController(
                     1f
                 }
 
-                val newProgress = (progressTowardUpTarget + (signedDelta * easingCompensation) / (dragThresholdPx * UP_SWIPE_SENSITIVITY))
+                val newProgress = (progressTowardUpTarget + (signedDelta * easingCompensation) / (upDragThresholdPx * UP_SWIPE_SENSITIVITY))
                     .coerceIn(0f, 1f)
                 upTransitionState.seekTo(targetState = upTarget, fraction = newProgress)
             }

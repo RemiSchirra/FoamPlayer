@@ -27,9 +27,25 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.screens.library.TrackListItem
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
+
+/**
+ * A track paired with its absolute position in the *real* underlying queue
+ * (state.queue), captured at the same time as the rest of the displayed list.
+ *
+ * We deliberately never recompute this index later from a separately-read
+ * offset (e.g. `index + state.queueIndex + 1` at click time) -- that combines
+ * a position from one snapshot of the list with an offset from a possibly
+ * newer snapshot (displayedQueue can lag state by a frame via the
+ * LaunchedEffect below, or during a drag). Bundling the absolute index with
+ * the track up front means every consumer (click, remove, reorder) always
+ * uses an index that came from the exact same snapshot as what's on screen,
+ * so it can never drift out of sync and resolve to the wrong track.
+ */
+private data class QueueItem(val absoluteIndex: Int, val track: TrackEntity)
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -42,26 +58,28 @@ fun QueueScreen(
     val state by viewModel.playbackState.collectAsState()
     val lazyListState = rememberLazyListState()
 
-    val currentOffset = state.queueIndex + 1
-    val upcomingTracks = remember(state.queue, currentOffset) {
-        state.queue.drop(currentOffset.coerceAtLeast(0))
+    // Display the queue starting at the next track, and hide previous songs.
+    // Each item carries its real absolute index in state.queue, computed once
+    // here alongside the slice itself.
+    val upcomingItems = remember(state.queue, state.queueIndex) {
+        val offset = (state.queueIndex + 1).coerceAtLeast(0)
+        state.queue.drop(offset).mapIndexed { i, track -> QueueItem(offset + i, track) }
     }
 
-    // Display the queue starting at the next track, and hide previous songs
-    var displayedQueue by remember { mutableStateOf(upcomingTracks) }
+    var displayedItems by remember { mutableStateOf(upcomingItems) }
     var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
-    var dragOffset by remember { mutableStateOf(0) }
+    var dragOriginAbsoluteIndex by remember { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(upcomingTracks) {
+    LaunchedEffect(upcomingItems) {
         if (dragOriginIndex == null) {
-            displayedQueue = upcomingTracks
+            displayedItems = upcomingItems
         }
     }
 
     val dragDropListState = rememberDragDropListState(
         lazyListState = lazyListState,
         onMove = { from, to ->
-            displayedQueue = displayedQueue.toMutableList().apply {
+            displayedItems = displayedItems.toMutableList().apply {
                 add(to, removeAt(from))
             }
         }
@@ -75,7 +93,7 @@ fun QueueScreen(
     ) {
         if (showTitle) {
             BasicText(
-                text = "Up Next (${displayedQueue.size} tracks)",
+                text = "Up Next (${displayedItems.size} tracks)",
                 style = FoamTheme.typography.titleLarge
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -86,15 +104,29 @@ fun QueueScreen(
             modifier = Modifier.fillMaxSize()
         ) {
             itemsIndexed(
-                items = displayedQueue,
-                key = { _, track -> track.id }
-            ) { index, track ->
+                items = displayedItems,
+                key = { _, item -> item.track.id }
+            ) { index, item ->
                 val isDragging = dragDropListState.isItemDragging(index)
                 val currentIndex = rememberUpdatedState(index)
 
                 TrackListItem(
-                    track = track,
-                    onClick = { viewModel.skipToIndex(index + currentOffset) },
+                    track = item.track,
+                    onClick = {
+                        // Move the clicked track to be immediately next, then take a
+                        // single +1 step to it, rather than skipping straight to its
+                        // (possibly distant) absolute index. A big jump forward drags
+                        // the main player's pager across every page in between via its
+                        // own sync effect, which can race with this and resolve to the
+                        // wrong settled page. Moving-then-skipping-by-one sidesteps that
+                        // entirely and matches what tapping a queued track should do:
+                        // play it next, immediately.
+                        val nextIndex = state.queueIndex + 1
+                        if (item.absoluteIndex != nextIndex) {
+                            viewModel.moveQueueItem(item.absoluteIndex, nextIndex)
+                        }
+                        viewModel.skipToIndex(nextIndex)
+                    },
                     active = false, // Current track is not in this list
                     modifier = Modifier
                         .let { if (isDragging) it else it.animateItem() }
@@ -111,11 +143,11 @@ fun QueueScreen(
                             }
                         },
                     showDragHandle = true,
-                    dragHandleModifier = Modifier.pointerInput(track.id) {
+                    dragHandleModifier = Modifier.pointerInput(item.track.id) {
                         detectDragGestures(
                             onDragStart = {
                                 dragOriginIndex = currentIndex.value
-                                dragOffset = currentOffset
+                                dragOriginAbsoluteIndex = displayedItems.getOrNull(currentIndex.value)?.absoluteIndex
                                 dragDropListState.onDragStart(currentIndex.value)
                             },
                             onDrag = { change, dragAmount ->
@@ -125,20 +157,23 @@ fun QueueScreen(
                             onDragEnd = {
                                 val from = dragOriginIndex
                                 val to = dragDropListState.draggedIndex
+                                val originAbsoluteIndex = dragOriginAbsoluteIndex
                                 dragDropListState.onDragEnd()
                                 dragOriginIndex = null
-                                if (from != null && to != null && from != to) {
-                                    viewModel.moveQueueItem(from + dragOffset, to + dragOffset)
+                                dragOriginAbsoluteIndex = null
+                                if (from != null && to != null && from != to && originAbsoluteIndex != null) {
+                                    viewModel.moveQueueItem(originAbsoluteIndex, originAbsoluteIndex + (to - from))
                                 }
                             },
                             onDragCancel = {
                                 dragDropListState.onDragCancel()
                                 dragOriginIndex = null
-                                displayedQueue = upcomingTracks
+                                dragOriginAbsoluteIndex = null
+                                displayedItems = upcomingItems
                             }
                         )
                     },
-                    onRemove = { viewModel.removeQueueItem(currentIndex.value + currentOffset) }
+                    onRemove = { viewModel.removeQueueItem(item.absoluteIndex) }
                 )
             }
         }

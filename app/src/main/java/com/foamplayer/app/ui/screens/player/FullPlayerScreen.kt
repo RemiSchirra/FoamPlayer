@@ -102,6 +102,13 @@ private object PlayerDimens {
     val selectorRowRise = 20.dp
     val playButtonRise = 28.dp
     val seekBarRise = 12.dp
+
+    // How far a swipe needs to travel to fully open/close the Lyrics/Queue subview.
+    // Kept as a fixed distance (not a fraction of screen height) so it stays a quick,
+    // tactile flick on every device instead of scaling up on taller screens. 260dp
+    // completed too fast (felt twitchy); 420dp gives the finger more room to travel
+    // while still being far short of a full-screen swipe.
+    val subViewSwipeThreshold = 420.dp
 }
 
 /**
@@ -151,13 +158,15 @@ fun FullPlayerScreen(
     val scope = rememberCoroutineScope()
 
     val dragThresholdPx = screenHeightPx.coerceAtLeast(1f)
+    val upDragThresholdPx = with(density) { PlayerDimens.subViewSwipeThreshold.toPx() }.coerceAtLeast(1f)
     val currentOnDismiss = rememberUpdatedState(onDismiss)
-    val gestureController = remember(playerTransitionState, dragThresholdPx) {
+    val gestureController = remember(playerTransitionState, dragThresholdPx, upDragThresholdPx) {
         PlayerGestureController(
             upTransitionState = upTransitionState,
             playerTransitionState = playerTransitionState,
             scope = scope,
             dragThresholdPx = dragThresholdPx,
+            upDragThresholdPx = upDragThresholdPx,
             onDismiss = { currentOnDismiss.value() }
         )
     }
@@ -261,6 +270,16 @@ fun FullPlayerScreen(
     val currentQueueIndex by rememberUpdatedState(state.queueIndex)
     val currentQueueSize by rememberUpdatedState(state.queue.size)
 
+    // Whether MainPlayerContent (and therefore this pager) is actually laid out right
+    // now. Mirrors the `upTransition.AnimatedVisibility(visible = { !it })` condition
+    // below that composes it: both branches stay composed during a drag/transition
+    // (see PlayerGestureController's class doc), so the pager is trustworthy any time
+    // we haven't fully settled into the open subview. Read as a function (not a
+    // `val`/derivedStateOf) since it's only ever consulted inside the LaunchedEffects
+    // above at the moment of each emission, not something this composable needs to
+    // recompose on itself.
+    fun isMainPagerVisible() = !upTransitionState.currentState
+
     val context = LocalContext.current
 
     // Ensure colors for nearby tracks are available for smooth interpolation.
@@ -342,11 +361,22 @@ fun FullPlayerScreen(
             }
     }
 
-    // Single source of truth for track changing upon scroll completion
+    // Single source of truth for track changing upon scroll completion.
+    //
+    // Guarded on isMainPagerVisible: this pager (and these effects) keep running even
+    // while the Lyrics/Queue subview fully covers it and it isn't laid out. An
+    // animateScrollToPage issued while hidden can resolve to an unexpected page once
+    // the pager is measured again, and without this guard that stray settle would
+    // land here and silently skip playback to the wrong track sometime after the
+    // subview reopens the main content -- exactly the flakiness of "sometimes it
+    // plays the tapped track, sometimes it switches to another one" a moment later.
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
-                if (settledPage in 0 until currentQueueSize && settledPage != currentQueueIndex) {
+                if (isMainPagerVisible() &&
+                    settledPage in 0 until currentQueueSize &&
+                    settledPage != currentQueueIndex
+                ) {
                     seekBarProgress.onTrackChangeApplied()
                     viewModel.skipToIndex(settledPage)
                 }
@@ -355,7 +385,15 @@ fun FullPlayerScreen(
 
     LaunchedEffect(currentQueueIndex) {
         if (currentQueueIndex in 0 until currentQueueSize && pagerState.currentPage != currentQueueIndex) {
-            pagerState.animateScrollToPage(currentQueueIndex)
+            if (isMainPagerVisible()) {
+                pagerState.animateScrollToPage(currentQueueIndex)
+            } else {
+                // Hidden behind the subview and not laid out -- animating here is
+                // exactly the unreliable case above. Snap straight to the right page
+                // instead; the jump is invisible since the pager isn't on screen, and
+                // it's already correct once the subview closes and reveals it.
+                pagerState.scrollToPage(currentQueueIndex)
+            }
         }
     }
 
