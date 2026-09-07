@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import androidx.core.graphics.scale
 import androidx.media3.common.util.BitmapLoader
 import androidx.media3.common.util.UnstableApi
 import com.google.common.util.concurrent.Futures
@@ -24,6 +25,8 @@ import java.util.concurrent.ConcurrentHashMap
  * being read, the last successfully displayed bitmap is returned immediately so a notification
  * update never briefly falls back to an empty large icon. A missing embedded picture is cached as
  * a confirmed miss and is the only case that returns null.
+ *
+ * Bitmaps are resized to a fixed small size to avoid performance lag in the notification system.
  */
 @UnstableApi
 class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
@@ -41,7 +44,7 @@ class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
 
     override fun decodeBitmap(data: ByteArray): ListenableFuture<Bitmap> =
         loadAsync(key = "bytes:${data.contentHashCode()}") {
-            BitmapFactory.decodeByteArray(data, 0, data.size)
+            decodeAndResize(data)
         }
 
     override fun loadBitmap(uri: Uri): ListenableFuture<Bitmap> {
@@ -89,7 +92,7 @@ class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
         return try {
             retriever.setDataSource(appContext, uri)
             retriever.embeddedPicture?.let { bytes ->
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                decodeAndResize(bytes)
             }
         } catch (_: Exception) {
             null
@@ -98,7 +101,46 @@ class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
         }
     }
 
+    private fun decodeAndResize(data: ByteArray): Bitmap? {
+        // First decode with inJustDecodeBounds=true to check dimensions
+        val options = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        BitmapFactory.decodeByteArray(data, 0, data.size, options)
+
+        // Calculate inSampleSize to downsample the image during decode to save memory
+        options.inSampleSize = calculateInSampleSize(options, MAX_ARTWORK_SIZE, MAX_ARTWORK_SIZE)
+        options.inJustDecodeBounds = false
+
+        val decoded = BitmapFactory.decodeByteArray(data, 0, data.size, options) ?: return null
+
+        // Ensure the final bitmap is exactly within our target size for consistency
+        return if (decoded.width > MAX_ARTWORK_SIZE || decoded.height > MAX_ARTWORK_SIZE) {
+            decoded.scale(MAX_ARTWORK_SIZE, MAX_ARTWORK_SIZE, true)
+        } else {
+            decoded
+        }
+    }
+
+    private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
+        val (height: Int, width: Int) = options.outHeight to options.outWidth
+        var inSampleSize = 1
+
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight: Int = height / 2
+            val halfWidth: Int = width / 2
+            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun immediateNullBitmap(): ListenableFuture<Bitmap> =
         Futures.immediateFuture<Bitmap?>(null) as ListenableFuture<Bitmap>
+
+    private companion object {
+        private const val MAX_ARTWORK_SIZE = 512
+    }
 }
