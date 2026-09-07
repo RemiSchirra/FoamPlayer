@@ -15,6 +15,7 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsBackground : Screen("settings/ui/background", "Background Settings")
     object SettingsLibrary : Screen("settings/library", "Library Settings")
     object SettingsLyrics : Screen("settings/lyrics", "Lyrics Settings")
+    object SettingsLyricsProvider : Screen("settings/lyrics/provider", "Lyrics Providers")
     object SettingsTest : Screen("settings/test", "Component Test")
 
     object ArtistDetail : Screen("artist/{artistName}", "Artist") {
