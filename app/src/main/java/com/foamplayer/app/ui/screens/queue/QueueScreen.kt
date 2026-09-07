@@ -42,15 +42,19 @@ fun QueueScreen(
     val state by viewModel.playbackState.collectAsState()
     val lazyListState = rememberLazyListState()
 
-    // Locally-reordered view of the queue. While a drag is in progress this is the
-    // source of truth for the list (so items swap immediately as you drag), and it
-    // resyncs from the ViewModel whenever nothing is being dragged.
-    var displayedQueue by remember { mutableStateOf(state.queue) }
-    var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
+    val currentOffset = state.queueIndex + 1
+    val upcomingTracks = remember(state.queue, currentOffset) {
+        state.queue.drop(currentOffset.coerceAtLeast(0))
+    }
 
-    LaunchedEffect(state.queue) {
+    // Display the queue starting at the next track, and hide previous songs
+    var displayedQueue by remember { mutableStateOf(upcomingTracks) }
+    var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableStateOf(0) }
+
+    LaunchedEffect(upcomingTracks) {
         if (dragOriginIndex == null) {
-            displayedQueue = state.queue
+            displayedQueue = upcomingTracks
         }
     }
 
@@ -71,7 +75,7 @@ fun QueueScreen(
     ) {
         if (showTitle) {
             BasicText(
-                text = "Playback Queue (${displayedQueue.size} tracks)",
+                text = "Up Next (${displayedQueue.size} tracks)",
                 style = FoamTheme.typography.titleLarge
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -90,8 +94,8 @@ fun QueueScreen(
 
                 TrackListItem(
                     track = track,
-                    onClick = { viewModel.playQueue(displayedQueue, index) },
-                    active = track.id == state.currentTrack?.id,
+                    onClick = { viewModel.skipToIndex(index + currentOffset) },
+                    active = false, // Current track is not in this list
                     modifier = Modifier
                         .let { if (isDragging) it else it.animateItem() }
                         .zIndex(if (isDragging) 1f else 0f)
@@ -111,6 +115,7 @@ fun QueueScreen(
                         detectDragGestures(
                             onDragStart = {
                                 dragOriginIndex = currentIndex.value
+                                dragOffset = currentOffset
                                 dragDropListState.onDragStart(currentIndex.value)
                             },
                             onDrag = { change, dragAmount ->
@@ -123,17 +128,17 @@ fun QueueScreen(
                                 dragDropListState.onDragEnd()
                                 dragOriginIndex = null
                                 if (from != null && to != null && from != to) {
-                                    viewModel.moveQueueItem(from, to)
+                                    viewModel.moveQueueItem(from + dragOffset, to + dragOffset)
                                 }
                             },
                             onDragCancel = {
                                 dragDropListState.onDragCancel()
                                 dragOriginIndex = null
-                                displayedQueue = state.queue
+                                displayedQueue = upcomingTracks
                             }
                         )
                     },
-                    onRemove = { viewModel.removeQueueItem(currentIndex.value) }
+                    onRemove = { viewModel.removeQueueItem(currentIndex.value + currentOffset) }
                 )
             }
         }
