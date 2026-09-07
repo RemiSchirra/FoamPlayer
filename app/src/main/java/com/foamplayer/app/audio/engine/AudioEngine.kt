@@ -2,9 +2,12 @@ package com.foamplayer.app.audio.engine
 
 import android.content.Context
 import android.view.Choreographer
+import androidx.annotation.OptIn
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.foamplayer.app.audio.bitperfect.BitPerfectDetector
 import com.foamplayer.app.audio.equalizer.EqualizerManager
@@ -75,7 +78,7 @@ class AudioEngine @Inject constructor(
      * MonotonicFrameClock available and can't use Compose's `withFrameNanos` directly —
      * this goes straight to the platform Choreographer instead.
      */
-    private suspend fun awaitFrame() = suspendCancellableCoroutine<Unit> { cont ->
+    private suspend fun awaitFrame() = suspendCancellableCoroutine { cont ->
         val callback = Choreographer.FrameCallback { cont.resumeWith(Result.success(Unit)) }
         Choreographer.getInstance().postFrameCallback(callback)
         cont.invokeOnCancellation { Choreographer.getInstance().removeFrameCallback(callback) }
@@ -85,8 +88,17 @@ class AudioEngine @Inject constructor(
         MediaItem.Builder()
             .setUri(path.toUri())
             .setMediaId(id.toString())
+            // Media data used by the notification
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setArtist(artist)
+                    .setArtworkUri(path.toUri())
+                    .build()
+            )
             .build()
 
+    @OptIn(UnstableApi::class)
     private fun setupPlayerListeners() {
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
