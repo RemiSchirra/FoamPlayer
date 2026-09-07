@@ -8,6 +8,7 @@ import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -152,34 +153,49 @@ private fun SharedTransitionScope.MiniPlayerHeader(
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .sharedElement(rememberSharedContentState(key = "album_art_header_${track.id}"), animatedVisibilityScope = headerVisibilityScope)
-                .clip(RoundedCornerShape(cornerRadius))
-                .background(FoamTheme.colors.surfaceVariant)
-        ) {
-            track.albumArtPath?.let { path ->
-                AsyncImage(model = EmbeddedAlbumArt(path.toUri()),
-                    contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        // Animate the song coming in
+        AnimatedContent(
+            targetState = track,
+            transitionSpec = {
+                (fadeIn(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) +
+                        slideInVertically(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) { height -> height / 3 }) togetherWith
+                        fadeOut(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS))
+            },
+            contentKey = { it.id },
+            modifier = Modifier.weight(1f),
+            label = "MiniPlayerHeaderTrackInfo"
+        ) { headerTrack ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .sharedElement(rememberSharedContentState(key = "album_art_header_${headerTrack.id}"), animatedVisibilityScope = headerVisibilityScope)
+                        .clip(RoundedCornerShape(cornerRadius))
+                        .background(FoamTheme.colors.surfaceVariant)
+                ) {
+                    headerTrack.albumArtPath?.let { path ->
+                        AsyncImage(model = EmbeddedAlbumArt(path.toUri()),
+                            contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    }
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    BasicText(
+                        text = headerTrack.title,
+                        style = FoamTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_title_header_${headerTrack.id}"), animatedVisibilityScope = headerVisibilityScope)
+                    )
+                    BasicText(
+                        text = headerTrack.artist,
+                        style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_artist_header_${headerTrack.id}"), animatedVisibilityScope = headerVisibilityScope)
+                    )
+                }
             }
-        }
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            BasicText(
-                text = track.title,
-                style = FoamTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_title_header_${track.id}"), animatedVisibilityScope = headerVisibilityScope)
-            )
-            BasicText(
-                text = track.artist,
-                style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_artist_header_${track.id}"), animatedVisibilityScope = headerVisibilityScope)
-            )
         }
         Icon(imageVector = Icons.Rounded.KeyboardArrowDown, contentDescription = "Collapse", tint = FoamTheme.accentColor, modifier = Modifier.size(28.dp))
     }
