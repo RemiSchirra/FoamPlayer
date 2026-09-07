@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.EaseInCubic
@@ -383,6 +384,34 @@ fun FullPlayerScreen(
             }
     }
 
+    // Backs up the backdrop's crossfade when the queue index changes without a live pager
+    // drag driving it -- e.g. tapping a track in the Queue subview, which snaps the hidden
+    // pager straight to the new page below instead of animating it. Declared, and therefore
+    // launched, before that snap so it reads pagerState.currentPage synchronously while it
+    // still holds the *outgoing* track's page, before the sibling effect below moves it.
+    // While active this takes over AlbumArtBackdrop's frontArtPath/backArtPath/
+    // crossfadeFraction in place of the raw pager-derived values a few lines down, which
+    // would otherwise jump to the new art in the same single frame the pager snaps.
+    val programmaticBackdropCrossfade = remember { Animatable(1f) }
+    var programmaticBackdropFromPath by remember { mutableStateOf<String?>(null) }
+    var programmaticBackdropToPath by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(currentQueueIndex) {
+        if (!isMainPagerVisible() &&
+            currentQueueIndex in 0 until currentQueueSize &&
+            pagerState.currentPage != currentQueueIndex
+        ) {
+            val fromPath = state.queue.getOrNull(pagerState.currentPage)?.albumArtPath
+            val toPath = state.queue.getOrNull(currentQueueIndex)?.albumArtPath
+            if (fromPath != toPath) {
+                programmaticBackdropFromPath = fromPath
+                programmaticBackdropToPath = toPath
+                programmaticBackdropCrossfade.snapTo(0f)
+                programmaticBackdropCrossfade.animateTo(1f, tween(TRANSITION_DURATION_MS))
+            }
+        }
+    }
+
     LaunchedEffect(currentQueueIndex) {
         if (currentQueueIndex in 0 until currentQueueSize && pagerState.currentPage != currentQueueIndex) {
             if (isMainPagerVisible()) {
@@ -436,8 +465,19 @@ fun FullPlayerScreen(
                 }
             }
 
+            // True for the duration of the tween kicked off above. While active, it fully
+            // owns the backdrop's crossfade inputs below instead of the raw pager-derived
+            // ones, since the pager itself has already snapped straight to its destination
+            // page by this point and no longer has a useful in-between state to read.
+            val isProgrammaticCrossfadeActive = programmaticBackdropToPath != null &&
+                    programmaticBackdropCrossfade.value < 1f
+
             AlbumArtBackdrop(
-                frontArtPath = state.queue.getOrNull(indexA)?.albumArtPath,
+                frontArtPath = if (isProgrammaticCrossfadeActive) {
+                    programmaticBackdropFromPath
+                } else {
+                    state.queue.getOrNull(indexA)?.albumArtPath
+                },
                 // The back-art layer gets its own full-screen 20dp blur, purely so it
                 // can crossfade in once the user actually starts swiping the pager --
                 // it's invisible (alpha 0 via crossfadeFraction) until then. Skipping
@@ -445,14 +485,20 @@ fun FullPlayerScreen(
                 // decoding + blurring a second full-screen image at the exact moment
                 // the shared-element animation needs the frame budget; it's cheap to
                 // pick back up once the screen has settled and swiping becomes possible.
-                backArtPath = if (playerTransitionState.currentState != playerTransitionState.targetState) {
+                backArtPath = if (isProgrammaticCrossfadeActive) {
+                    programmaticBackdropToPath
+                } else if (playerTransitionState.currentState != playerTransitionState.targetState) {
                     null
                 } else {
                     state.queue.getOrNull(indexB)?.albumArtPath
                 },
                 crossfadeFraction = {
-                    val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    (absoluteOffset - absoluteOffset.toInt()).coerceIn(0f, 1f)
+                    if (isProgrammaticCrossfadeActive) {
+                        programmaticBackdropCrossfade.value
+                    } else {
+                        val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                        (absoluteOffset - absoluteOffset.toInt()).coerceIn(0f, 1f)
+                    }
                 },
                 immersive = isImmersiveEnabled,
                 subViewProgress = subViewBlurProgress,

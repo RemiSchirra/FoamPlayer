@@ -152,7 +152,26 @@ internal fun DynamicAlbumArtBackground(
     }
 }
 
-/** Background layer for the classic blurred treatment and the immersive art hero. */
+/**
+ * Background layer for the classic blurred treatment and the immersive art hero.
+ *
+ * The two-layer front/back + [crossfadeFraction] scheme below is a manual crossfade, not
+ * Coil's built-in one -- deliberately. Coil's AsyncImage skips its own crossfade transition
+ * whenever the image resolves from its in-memory cache, which is exactly what happens here:
+ * the caller prefetches the art for tracks around the current queue position into that same
+ * cache (see AlbumArtPaletteCache.ensure), so jumping onto one of them is a cache hit for a
+ * genuinely different image and would silently pop instead of fade. Forcing Coil to skip its
+ * cache read (CachePolicy.WRITE_ONLY) avoids the pop but introduces a worse one: the request
+ * now has to go through a Loading state first, and AsyncImage clears to nothing for that gap,
+ * flashing through to the background color underneath before the new image fades in.
+ *
+ * Driving frontArtPath/backArtPath/crossfadeFraction ourselves sidesteps Coil's transition
+ * logic (and its cache quirks) entirely -- both images can load straight from cache (fast,
+ * synchronous, no Loading gap) and the fade is just our own alpha animation on top. See
+ * FullPlayerScreen's `programmaticBackdropCrossfade` for the piece that feeds this a smooth
+ * fraction even when the queue index changes without a live pager drag behind it (e.g.
+ * tapping a track in the Queue subview).
+ */
 @Composable
 internal fun AlbumArtBackdrop(
     frontArtPath: String?,
