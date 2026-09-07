@@ -110,45 +110,89 @@ fun SearchScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            // Artists Section
-            if (uiState.artists.isNotEmpty()) {
-                item {
-                    SectionHeader("Artists")
+            if (query.isEmpty()) {
+                if (uiState.history.isNotEmpty()) {
+                    item(key = "history_header") {
+                        SectionHeader(
+                            title = "Recent Searches",
+                            modifier = Modifier.animateItem()
+                        )
+                    }
+                    items(uiState.history, key = { "history_${it.path}" }) { track ->
+                        TrackListItem(
+                            track = track,
+                            onClick = {
+                                searchViewModel.addToHistory(track)
+                                onTrackClick(track)
+                            },
+                            onRemove = { searchViewModel.removeFromHistory(track) },
+                            active = track.id == activeTrackId,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = playerTransitionVisibilityScope,
+                            isSharedTransitionSource = track.id == sharedTrackId,
+                            modifier = Modifier.animateItem()
+                        )
+                    }
+                    item(key = "history_clear") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateItem()
+                                .clickable { searchViewModel.clearHistory() }
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            BasicText(
+                                text = "Clear search history",
+                                style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor)
+                            )
+                        }
+                    }
                 }
-                items(uiState.artists) { artist ->
-                    ArtistSearchResultItem(artist = artist, onClick = { onArtistClick(artist) })
+            } else {
+                // Artists Section
+                if (uiState.artists.isNotEmpty()) {
+                    item {
+                        SectionHeader("Artists")
+                    }
+                    items(uiState.artists) { artist ->
+                        ArtistSearchResultItem(artist = artist, onClick = { onArtistClick(artist) })
+                    }
                 }
-            }
 
-            // Albums Section
-            if (uiState.albums.isNotEmpty()) {
-                item {
-                    SectionHeader("Albums")
+                // Albums Section
+                if (uiState.albums.isNotEmpty()) {
+                    item {
+                        SectionHeader("Albums")
+                    }
+                    items(uiState.albums) { album ->
+                        AlbumSearchResultItem(
+                            album = album,
+                            onClick = { onAlbumClick(album) },
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                    }
                 }
-                items(uiState.albums) { album ->
-                    AlbumSearchResultItem(
-                        album = album,
-                        onClick = { onAlbumClick(album) },
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
-                }
-            }
 
-            // Tracks Section
-            if (uiState.tracks.isNotEmpty()) {
-                item {
-                    SectionHeader("Tracks")
-                }
-                items(uiState.tracks) { track ->
-                    TrackListItem(
-                        track = track,
-                        onClick = { onTrackClick(track) },
-                        active = track.id == activeTrackId,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = playerTransitionVisibilityScope,
-                        isSharedTransitionSource = track.id == sharedTrackId
-                    )
+                // Tracks Section
+                if (uiState.tracks.isNotEmpty()) {
+                    item {
+                        SectionHeader("Tracks")
+                    }
+                    items(uiState.tracks) { track ->
+                        TrackListItem(
+                            track = track,
+                            onClick = {
+                                searchViewModel.addToHistory(track)
+                                onTrackClick(track)
+                            },
+                            active = track.id == activeTrackId,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = playerTransitionVisibilityScope,
+                            isSharedTransitionSource = track.id == sharedTrackId
+                        )
+                    }
                 }
             }
 
@@ -158,11 +202,11 @@ fun SearchScreen(
 }
 
 @Composable
-fun SectionHeader(title: String) {
+fun SectionHeader(title: String, modifier: Modifier = Modifier) {
     BasicText(
         text = title,
         style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.accentColor),
-        modifier = Modifier.padding(vertical = 8.dp)
+        modifier = modifier.padding(vertical = 8.dp)
     )
 }
 

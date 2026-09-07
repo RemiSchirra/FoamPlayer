@@ -64,6 +64,8 @@ class SettingsRepository @Inject constructor(
         it.copy(enabledLyricsProviders = enabled)
     }
 
+    suspend fun setSearchHistory(history: List<String>) = update { it.copy(searchHistory = history) }
+
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
@@ -86,7 +88,8 @@ class SettingsRepository @Inject constructor(
         lyricsProviderOrder = deserializeLyricsProviderOrder(this[Keys.LYRICS_PROVIDER_ORDER]),
         enabledLyricsProviders = this[Keys.ENABLED_LYRICS_PROVIDERS]
             ?.mapNotNull { name -> PreferredLyricsProvider.entries.find { it.name == name } }
-            ?.toSet() ?: PreferredLyricsProvider.entries.toSet()
+            ?.toSet() ?: PreferredLyricsProvider.entries.toSet(),
+        searchHistory = this[Keys.SEARCH_HISTORY]?.split("|")?.filter { it.isNotEmpty() } ?: emptyList()
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -107,6 +110,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.DYNAMIC_BACKGROUND_INTENSITY] = settings.dynamicBackgroundIntensity
         this[Keys.LYRICS_PROVIDER_ORDER] = settings.lyricsProviderOrder.joinToString(",") { it.name }
         this[Keys.ENABLED_LYRICS_PROVIDERS] = settings.enabledLyricsProviders.map { it.name }.toSet()
+        this[Keys.SEARCH_HISTORY] = settings.searchHistory.joinToString("|")
     }
 
     private object Keys {
@@ -127,5 +131,6 @@ class SettingsRepository @Inject constructor(
         val DYNAMIC_BACKGROUND_INTENSITY = intPreferencesKey("dynamic_background_intensity")
         val LYRICS_PROVIDER_ORDER = stringPreferencesKey("lyrics_provider_order")
         val ENABLED_LYRICS_PROVIDERS = stringSetPreferencesKey("enabled_lyrics_providers")
+        val SEARCH_HISTORY = stringPreferencesKey("search_history")
     }
 }
