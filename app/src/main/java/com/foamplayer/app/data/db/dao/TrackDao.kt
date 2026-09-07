@@ -15,7 +15,7 @@ interface TrackDao {
     @Query("SELECT * FROM tracks WHERE path = :path LIMIT 1")
     suspend fun getTrackByPath(path: String): TrackEntity?
 
-    @Query("SELECT * FROM tracks WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' OR album LIKE '%' || :query || '%'")
+    @Query("SELECT * FROM tracks WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' OR album LIKE '%' || :query || '%' ORDER BY title ASC")
     fun searchTracks(query: String): Flow<List<TrackEntity>>
 
     @Query("SELECT DISTINCT artist FROM tracks WHERE artist LIKE '%' || :query || '%'")
