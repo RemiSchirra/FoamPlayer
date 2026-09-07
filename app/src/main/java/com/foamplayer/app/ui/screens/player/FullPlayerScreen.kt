@@ -122,7 +122,7 @@ internal fun SeekableTransitionState<Boolean>.progress(): Float =
         if (targetState) fraction else 1f - fraction
     }
 
-internal const val TRANSITION_DURATION_MS = 400
+internal const val TRANSITION_DURATION_MS = 300
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -414,13 +414,13 @@ fun FullPlayerScreen(
 
     LaunchedEffect(currentQueueIndex) {
         if (currentQueueIndex in 0 until currentQueueSize && pagerState.currentPage != currentQueueIndex) {
+            // Only play the animation if we're not in the subview
             if (isMainPagerVisible()) {
-                pagerState.animateScrollToPage(currentQueueIndex)
+                pagerState.animateScrollToPage(
+                    page = currentQueueIndex,
+                    animationSpec = tween(TRANSITION_DURATION_MS)
+                )
             } else {
-                // Hidden behind the subview and not laid out -- animating here is
-                // exactly the unreliable case above. Snap straight to the right page
-                // instead; the jump is invisible since the pager isn't on screen, and
-                // it's already correct once the subview closes and reveals it.
                 pagerState.scrollToPage(currentQueueIndex)
             }
         }
