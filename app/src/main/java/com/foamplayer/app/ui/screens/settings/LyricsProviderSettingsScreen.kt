@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.screens.settings
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -173,11 +174,16 @@ private fun LyricsProviderItem(
     modifier: Modifier = Modifier,
     dragHandleModifier: Modifier = Modifier
 ) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isDragging) FoamTheme.colors.surfaceVariant else FoamTheme.colors.surface,
+        label = "dragBackgroundColor"
+    )
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(if (isDragging) FoamTheme.colors.surfaceVariant else FoamTheme.colors.surface)
+            .background(backgroundColor)
     ) {
         Row(
             modifier = Modifier
