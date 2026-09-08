@@ -24,9 +24,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,7 +62,7 @@ fun SearchScreen(
     onTrackClick: (TrackEntity) -> Unit,
     searchViewModel: SearchViewModel = hiltViewModel()
 ) {
-    var query by remember { mutableStateOf("") }
+    val query by searchViewModel.query.collectAsState()
     val uiState by searchViewModel.uiState.collectAsState()
 
     Column(
@@ -97,7 +95,6 @@ fun SearchScreen(
             BasicTextField(
                 value = query,
                 onValueChange = {
-                    query = it
                     searchViewModel.search(it)
                 },
                 textStyle = FoamTheme.typography.titleMedium,
