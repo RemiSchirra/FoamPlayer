@@ -7,6 +7,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
@@ -527,6 +528,7 @@ fun FoamNavHost(
 
             FoamNavigationBar(
                 currentRoute = currentRoute,
+                isPlayerOpen = playerTransitionState.targetState, // Added this line
                 onNavigate = { route ->
                     if (playerTransitionState.currentState || playerTransitionState.targetState) {
                         animatePlayerTransition(open = false)
@@ -545,6 +547,7 @@ fun FoamNavHost(
 @Composable
 fun FoamNavigationBar(
     currentRoute: String?,
+    isPlayerOpen: Boolean,
     onNavigate: (String) -> Unit
 ) {
     val items = listOf(
@@ -565,7 +568,17 @@ fun FoamNavigationBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         items.forEach { screen ->
-            val selected = currentRoute == screen.route || (screen == Screen.Settings && currentRoute?.startsWith("settings/") == true)
+            val selected = !isPlayerOpen && (
+                    currentRoute == screen.route ||
+                            (screen == Screen.Settings && currentRoute?.startsWith("settings/") == true)
+                    )
+
+            val animatedTint by animateColorAsState(
+                targetValue = if (selected) FoamTheme.accentColor else FoamTheme.colors.textSecondary,
+                animationSpec = tween(durationMillis = 300),
+                label = "NavIconTint"
+            )
+
             Box(
                 modifier = Modifier
                     .clickable { onNavigate(screen.route) }
@@ -583,7 +596,7 @@ fun FoamNavigationBar(
                     },
                     contentDescription = screen.title,
                     modifier = Modifier.size(24.dp),
-                    tint = if (selected) FoamTheme.accentColor else FoamTheme.colors.textSecondary
+                    tint = animatedTint
                 )
             }
         }
