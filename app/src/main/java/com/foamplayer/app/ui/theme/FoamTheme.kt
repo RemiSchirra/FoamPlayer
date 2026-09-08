@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -107,7 +108,7 @@ val LocalFoamShapes = staticCompositionLocalOf { DefaultFoamShapes }
 // continuously while swiping between tracks in the full player. It deliberately gets
 // its own *non*-static CompositionLocal so that only components reading 'accentColor'
 // (and not everything else using FoamTheme) are invalidated on each frame.
-val LocalPrimaryAccentColor = staticCompositionLocalOf { DefaultPrimaryAccent }
+val LocalPrimaryAccentColor = compositionLocalOf { DefaultPrimaryAccent }
 
 object FoamTheme {
     val colors: FoamColors
