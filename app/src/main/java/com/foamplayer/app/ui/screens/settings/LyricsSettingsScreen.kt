@@ -28,28 +28,36 @@ fun LyricsSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FoamTheme.colors.background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = FoamDimens.paddingMedium)
     ) {
-        SettingsHeader(title = "Lyrics", onBack = onBack)
-        Spacer(modifier = Modifier.height(FoamDimens.spacingStandard))
-
-        BasicText(text = "Providers", style = FoamTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                .background(FoamTheme.colors.surface)
-        ) {
-            FoamNavigationButton(
-                title = "Lyrics Providers",
-                description = "Enable and reorder providers",
-                onClick = onNavigateToProviders
-            )
-        }
+        SettingsHeader(
+            title = "Lyrics",
+            onBack = onBack,
+            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
+        )
         
-        Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = FoamDimens.paddingMedium)
+        ) {
+            BasicText(text = "Providers", style = FoamTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .background(FoamTheme.colors.surface)
+            ) {
+                FoamNavigationButton(
+                    title = "Lyrics Providers",
+                    description = "Enable and reorder providers",
+                    onClick = onNavigateToProviders
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+        }
     }
 }

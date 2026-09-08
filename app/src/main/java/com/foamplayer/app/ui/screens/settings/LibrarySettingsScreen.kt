@@ -68,179 +68,185 @@ fun LibrarySettingsScreen(
         }
     }
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(FoamTheme.colors.background)
-            .padding(horizontal = FoamDimens.paddingMedium)
     ) {
-        item {
-            SettingsHeader(title = "Library", onBack = onBack)
-            Spacer(modifier = Modifier.height(FoamDimens.spacingStandard))
-        }
+        SettingsHeader(
+            title = "Library",
+            onBack = onBack,
+            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
+        )
 
-        // --- Library Folders ---
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BasicText(text = "Library Folders", style = FoamTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                        .background(FoamTheme.accentColor)
-                        .clickable { folderPickerLauncher.launch(null) }
-                        .padding(horizontal = FoamDimens.spacingMedium, vertical = FoamDimens.spacingSmall)
-                ) {
-                    BasicText(
-                        text = "Add Folder", 
-                        style = FoamTheme.typography.caption.copy(
-                            color = FoamTheme.colors.background,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-        }
-
-        if (selectedFolders.isEmpty()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = FoamDimens.paddingMedium)
+        ) {
+            // --- Library Folders ---
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
-                        .padding(vertical = FoamDimens.paddingLarge),
-                    contentAlignment = Alignment.Center
-                ) {
-                    BasicText(text = "No folders selected", style = FoamTheme.typography.body)
-                }
-            }
-        } else {
-            items(selectedFolders.sorted()) { folder ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = FoamDimens.spacingTiny)
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(FoamDimens.spacingMedium),
-                        verticalAlignment = Alignment.CenterVertically
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BasicText(text = "Library Folders", style = FoamTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                            .background(FoamTheme.accentColor)
+                            .clickable { folderPickerLauncher.launch(null) }
+                            .padding(horizontal = FoamDimens.spacingMedium, vertical = FoamDimens.spacingSmall)
                     ) {
                         BasicText(
-                            text = folder, 
-                            style = FoamTheme.typography.caption, 
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1
-                        )
-                        Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
-                        BasicText(
-                            text = "Remove",
-                            style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor, fontWeight = FontWeight.Bold),
-                            modifier = Modifier.clickable { viewModel.removeFolder(folder) }
+                            text = "Add Folder", 
+                            style = FoamTheme.typography.caption.copy(
+                                color = FoamTheme.colors.background,
+                                fontWeight = FontWeight.Bold
+                            )
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
             }
-        }
 
-        item { Spacer(modifier = Modifier.height(FoamDimens.spacingLarge)) }
+            if (selectedFolders.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                            .background(FoamTheme.colors.surface)
+                            .padding(vertical = FoamDimens.paddingLarge),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        BasicText(text = "No folders selected", style = FoamTheme.typography.body)
+                    }
+                }
+            } else {
+                items(selectedFolders.sorted()) { folder ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = FoamDimens.spacingTiny)
+                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                            .background(FoamTheme.colors.surface)
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(FoamDimens.spacingMedium),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            BasicText(
+                                text = folder, 
+                                style = FoamTheme.typography.caption, 
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1
+                            )
+                            Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
+                            BasicText(
+                                text = "Remove",
+                                style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor, fontWeight = FontWeight.Bold),
+                                modifier = Modifier.clickable { viewModel.removeFolder(folder) }
+                            )
+                        }
+                    }
+                }
+            }
 
-        // --- Metadata Separators ---
-        item {
-            BasicText(text = "Metadata Separators", style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-            
-            SeparatorSettingsCard(
-                title = "Artist Separators",
-                separators = artistSeparators,
-                onAdd = { viewModel.setArtistSeparators(artistSeparators + it) },
-                onRemove = { viewModel.setArtistSeparators(artistSeparators - it) }
-            )
-            
-            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-            
-            SeparatorSettingsCard(
-                title = "Genre Separators",
-                separators = genreSeparators,
-                onAdd = { viewModel.setGenreSeparators(genreSeparators + it) },
-                onRemove = { viewModel.setGenreSeparators(genreSeparators - it) }
-            )
-            
-            Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
-        }
+            item { Spacer(modifier = Modifier.height(FoamDimens.spacingLarge)) }
 
-        // --- Library Scan ---
-        item {
-            BasicText(text = "Library Scan", style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .background(FoamTheme.colors.surface)
-            ) {
-                Column(Modifier.fillMaxWidth().padding(FoamDimens.paddingMedium)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            BasicText(text = "Scan Media", style = FoamTheme.typography.titleMedium)
-                            when (val status = scanStatus) {
-                                is ScanStatus.Scanning -> {
-                                    BasicText(
-                                        text = "Scanning: ${status.currentFile} (${(status.progress * 100).toInt()}%)",
-                                        style = FoamTheme.typography.caption
+            // --- Metadata Separators ---
+            item {
+                BasicText(text = "Metadata Separators", style = FoamTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                
+                SeparatorSettingsCard(
+                    title = "Artist Separators",
+                    separators = artistSeparators,
+                    onAdd = { viewModel.setArtistSeparators(artistSeparators + it) },
+                    onRemove = { viewModel.setArtistSeparators(artistSeparators - it) }
+                )
+                
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                
+                SeparatorSettingsCard(
+                    title = "Genre Separators",
+                    separators = genreSeparators,
+                    onAdd = { viewModel.setGenreSeparators(genreSeparators + it) },
+                    onRemove = { viewModel.setGenreSeparators(genreSeparators - it) }
+                )
+                
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+
+            // --- Library Scan ---
+            item {
+                BasicText(text = "Library Scan", style = FoamTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(FoamDimens.paddingMedium)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                BasicText(text = "Scan Media", style = FoamTheme.typography.titleMedium)
+                                when (val status = scanStatus) {
+                                    is ScanStatus.Scanning -> {
+                                        BasicText(
+                                            text = "Scanning: ${status.currentFile} (${(status.progress * 100).toInt()}%)",
+                                            style = FoamTheme.typography.caption
+                                        )
+                                    }
+                                    is ScanStatus.Finished -> {
+                                        BasicText(
+                                            text = "Scan finished: ${status.count} tracks found",
+                                            style = FoamTheme.typography.caption
+                                        )
+                                    }
+                                    else -> {
+                                        BasicText(text = "Sync your music library", style = FoamTheme.typography.body)
+                                    }
+                                }
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                                    .background(if (scanStatus is ScanStatus.Scanning) FoamTheme.colors.surfaceVariant else FoamTheme.accentColor)
+                                    .clickable(enabled = scanStatus !is ScanStatus.Scanning) { viewModel.startScan() }
+                                    .padding(horizontal = FoamDimens.spacingStandard, vertical = FoamDimens.spacingSmall)
+                            ) {
+                                BasicText(
+                                    text = if (scanStatus is ScanStatus.Scanning) "SCANNING" else "START SCAN",
+                                    style = FoamTheme.typography.caption.copy(
+                                        color = if (scanStatus is ScanStatus.Scanning) FoamTheme.colors.textSecondary else FoamTheme.colors.background,
+                                        fontWeight = FontWeight.Bold
                                     )
-                                }
-                                is ScanStatus.Finished -> {
-                                    BasicText(
-                                        text = "Scan finished: ${status.count} tracks found",
-                                        style = FoamTheme.typography.caption
-                                    )
-                                }
-                                else -> {
-                                    BasicText(text = "Sync your music library", style = FoamTheme.typography.body)
-                                }
+                                )
                             }
                         }
                         
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                .background(if (scanStatus is ScanStatus.Scanning) FoamTheme.colors.surfaceVariant else FoamTheme.accentColor)
-                                .clickable(enabled = scanStatus !is ScanStatus.Scanning) { viewModel.startScan() }
-                                .padding(horizontal = FoamDimens.spacingStandard, vertical = FoamDimens.spacingSmall)
-                        ) {
-                            BasicText(
-                                text = if (scanStatus is ScanStatus.Scanning) "SCANNING" else "START SCAN",
-                                style = FoamTheme.typography.caption.copy(
-                                    color = if (scanStatus is ScanStatus.Scanning) FoamTheme.colors.textSecondary else FoamTheme.colors.background,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
-                    }
-                    
-                    if (scanStatus is ScanStatus.Scanning) {
-                        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(FoamDimens.spacingTiny)
-                                .clip(RoundedCornerShape(FoamDimens.spacingTiny / 2))
-                                .background(FoamTheme.colors.surfaceVariant)
-                        ) {
+                        if (scanStatus is ScanStatus.Scanning) {
+                            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth((scanStatus as ScanStatus.Scanning).progress)
+                                    .fillMaxWidth()
                                     .height(FoamDimens.spacingTiny)
-                                    .background(FoamTheme.accentColor)
-                            )
+                                    .clip(RoundedCornerShape(FoamDimens.spacingTiny / 2))
+                                    .background(FoamTheme.colors.surfaceVariant)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth((scanStatus as ScanStatus.Scanning).progress)
+                                        .height(FoamDimens.spacingTiny)
+                                        .background(FoamTheme.accentColor)
+                                )
+                            }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
             }
-            Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
         }
     }
 }

@@ -32,66 +32,72 @@ fun AudioSettingsScreen(
     val settings by viewModel.settings.collectAsState()
     val isBitPerfectEnabled = settings.bitPerfectEnabled
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(FoamTheme.colors.background)
-            .padding(horizontal = FoamDimens.paddingMedium)
     ) {
-        item {
-            SettingsHeader(title = "Audio", onBack = onBack)
-            Spacer(modifier = Modifier.height(FoamDimens.spacingStandard))
-        }
-
-        item {
-            BasicText(text = "Engine Settings", style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-            
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .background(FoamTheme.colors.surface)
-            ) {
-                Row(
+        SettingsHeader(
+            title = "Audio",
+            onBack = onBack,
+            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
+        )
+        
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = FoamDimens.paddingMedium)
+        ) {
+            item {
+                BasicText(text = "Engine Settings", style = FoamTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(FoamDimens.paddingMedium),
-                    verticalAlignment = Alignment.CenterVertically
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        BasicText(
-                            text = "Bit-Perfect Output",
-                            style = FoamTheme.typography.titleMedium
-                        )
-                        Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
-                        BasicText(
-                            text = "Bypass system resampler for high-res audio on compatible USB DACs.",
-                            style = FoamTheme.typography.body
-                        )
-                    }
-
-                    Box(
+                    Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall / 2))
-                            .background(
-                                if (isBitPerfectEnabled) FoamTheme.accentColor
-                                else FoamTheme.colors.surfaceVariant
-                            )
-                            .clickable { viewModel.setBitPerfectEnabled(!isBitPerfectEnabled) }
-                            .padding(horizontal = FoamDimens.spacingMedium, vertical = FoamDimens.spacingSmall)
+                            .fillMaxWidth()
+                            .padding(FoamDimens.paddingMedium),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        BasicText(
-                            text = if (isBitPerfectEnabled) "ON" else "OFF",
-                            style = FoamTheme.typography.caption.copy(
-                                color = if (isBitPerfectEnabled) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
-                                fontWeight = FontWeight.Bold
+                        Column(modifier = Modifier.weight(1f)) {
+                            BasicText(
+                                text = "Bit-Perfect Output",
+                                style = FoamTheme.typography.titleMedium
                             )
-                        )
+                            Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
+                            BasicText(
+                                text = "Bypass system resampler for high-res audio on compatible USB DACs.",
+                                style = FoamTheme.typography.body
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall / 2))
+                                .background(
+                                    if (isBitPerfectEnabled) FoamTheme.accentColor
+                                    else FoamTheme.colors.surfaceVariant
+                                )
+                                .clickable { viewModel.setBitPerfectEnabled(!isBitPerfectEnabled) }
+                                .padding(horizontal = FoamDimens.spacingMedium, vertical = FoamDimens.spacingSmall)
+                        ) {
+                            BasicText(
+                                text = if (isBitPerfectEnabled) "ON" else "OFF",
+                                style = FoamTheme.typography.caption.copy(
+                                    color = if (isBitPerfectEnabled) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
                     }
                 }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
-            Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
         }
     }
 }

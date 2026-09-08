@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,73 +50,82 @@ fun BackgroundSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FoamTheme.colors.background)
-            .padding(horizontal = FoamDimens.paddingMedium),
     ) {
-        SettingsHeader(title = "Background", onBack = onBack)
-        Spacer(modifier = Modifier.height(FoamDimens.spacingStandard))
-
-        BasicText(text = "Dynamic Effects", style = FoamTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+        SettingsHeader(
+            title = "Background",
+            onBack = onBack,
+            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
+        )
         
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                .background(FoamTheme.colors.surface)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = FoamDimens.paddingMedium),
         ) {
-            FoamSwitchItem(
-                title = "Dynamic Background",
-                description = "Extract colors from track art for background",
-                checked = settings.dynamicBackgroundEnabled,
-                onCheckedChange = viewModel::setDynamicBackgroundEnabled,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
-        
-        BasicText(text = "Appearance", style = FoamTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-        
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                .background(FoamTheme.colors.surface)
-        ) {
-            Column {
-                FoamSliderItem(
-                    title = "Background Blur",
-                    value = localBackgroundBlur,
-                    onValueChange = { localBackgroundBlur = it },
-                    onValueChangeFinished = {
-                        viewModel.setBackgroundBlur(localBackgroundBlur.roundToInt())
-                    },
-                    steps = 9,
-                    valueRange = 0f..100f,
-                    valueDisplay = "${localBackgroundBlur.roundToInt()}%",
-                    minMaxDisplay = "None" to "Max",
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(FoamDimens.separatorHeight)
-                        .background(FoamTheme.colors.borderOverlay)
-                )
-                FoamSliderItem(
-                    title = "Color Intensity",
-                    value = localBackgroundIntensity,
-                    onValueChange = { localBackgroundIntensity = it },
-                    onValueChangeFinished = {
-                        viewModel.setDynamicBackgroundIntensity(localBackgroundIntensity.roundToInt())
-                    },
-                    steps = 9,
-                    valueRange = 0f..100f,
-                    valueDisplay = "${localBackgroundIntensity.roundToInt()}%",
-                    minMaxDisplay = "Dim" to "Vivid",
+            BasicText(text = "Dynamic Effects", style = FoamTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .background(FoamTheme.colors.surface)
+            ) {
+                FoamSwitchItem(
+                    title = "Dynamic Background",
+                    description = "Extract colors from track art for background",
+                    checked = settings.dynamicBackgroundEnabled,
+                    onCheckedChange = viewModel::setDynamicBackgroundEnabled,
                 )
             }
+
+            Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            
+            BasicText(text = "Appearance", style = FoamTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .background(FoamTheme.colors.surface)
+            ) {
+                Column {
+                    FoamSliderItem(
+                        title = "Background Blur",
+                        value = localBackgroundBlur,
+                        onValueChange = { localBackgroundBlur = it },
+                        onValueChangeFinished = {
+                            viewModel.setBackgroundBlur(localBackgroundBlur.roundToInt())
+                        },
+                        steps = 9,
+                        valueRange = 0f..100f,
+                        valueDisplay = "${localBackgroundBlur.roundToInt()}%",
+                        minMaxDisplay = "None" to "Max",
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(FoamDimens.separatorHeight)
+                            .background(FoamTheme.colors.borderOverlay)
+                    )
+                    FoamSliderItem(
+                        title = "Color Intensity",
+                        value = localBackgroundIntensity,
+                        onValueChange = { localBackgroundIntensity = it },
+                        onValueChangeFinished = {
+                            viewModel.setDynamicBackgroundIntensity(localBackgroundIntensity.roundToInt())
+                        },
+                        steps = 9,
+                        valueRange = 0f..100f,
+                        valueDisplay = "${localBackgroundIntensity.roundToInt()}%",
+                        minMaxDisplay = "Dim" to "Vivid",
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
         }
-        
-        Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
     }
 }

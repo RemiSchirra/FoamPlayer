@@ -41,6 +41,7 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -63,9 +64,9 @@ fun LyricsProviderSettingsScreen(
     val dragDropListState = rememberDragDropListState(
         lazyListState = lazyListState,
         onMove = { from, to ->
-            // Adjusted for the 2 header items
-            val fromIdx = from - 2
-            val toIdx = to - 2
+            // Adjusted for the header item (Search Priority)
+            val fromIdx = from - 1
+            val toIdx = to - 1
             if (fromIdx in displayedOrder.indices && toIdx in displayedOrder.indices) {
                 displayedOrder = displayedOrder.toMutableList().apply {
                     add(toIdx, removeAt(fromIdx))
@@ -74,93 +75,99 @@ fun LyricsProviderSettingsScreen(
         }
     )
 
-    LazyColumn(
-        state = lazyListState,
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(FoamTheme.colors.background)
-            .padding(horizontal = 16.dp)
     ) {
-        item {
-            SettingsHeader(title = "Lyrics Providers", onBack = onBack)
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+        SettingsHeader(
+            title = "Lyrics Providers",
+            onBack = onBack,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
 
-        item {
-            BasicText(
-                text = "Search Priority",
-                style = FoamTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            BasicText(
-                text = "Drag handles to reorder. Enabled providers are searched in order.",
-                style = FoamTheme.typography.body
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        itemsIndexed(
-            items = displayedOrder,
-            key = { _, provider -> provider.name }
-        ) { index, provider ->
-            val lazyColumnIndex = index + 2
-            val isDragging = dragDropListState.isItemDragging(lazyColumnIndex)
-            val currentIndex = rememberUpdatedState(lazyColumnIndex)
-            val isEnabled = settings.enabledLyricsProviders.contains(provider)
-
-            val elevation by animateDpAsState(if (isDragging) 8.dp else 0.dp, label = "elevation")
-
-            Column(
-                modifier = Modifier
-                    .let { if (isDragging) it else it.animateItem() }
-                    .zIndex(if (isDragging) 1f else 0f)
-                    .graphicsLayer {
-                        translationY = if (isDragging) {
-                            val itemInfo = lazyListState.layoutInfo.visibleItemsInfo
-                                .firstOrNull { it.index == lazyColumnIndex }
-                            if (itemInfo != null) {
-                                dragDropListState.draggingItemTop - itemInfo.offset
-                            } else 0f
-                        } else {
-                            0f
-                        }
-                        shadowElevation = elevation.toPx()
-                    }
-            ) {
-                LyricsProviderItem(
-                    provider = provider,
-                    isEnabled = isEnabled,
-                    onEnabledChange = { viewModel.setLyricsProviderEnabled(provider, it) },
-                    isDragging = isDragging,
-                    dragHandleModifier = Modifier.pointerInput(provider.name) {
-                        detectDragGestures(
-                            onDragStart = {
-                                dragOriginIndex = currentIndex.value
-                                dragDropListState.onDragStart(currentIndex.value)
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                dragDropListState.onDrag(dragAmount)
-                            },
-                            onDragEnd = {
-                                dragDropListState.onDragEnd()
-                                dragOriginIndex = null
-                                viewModel.setLyricsProviderOrder(displayedOrder)
-                            },
-                            onDragCancel = {
-                                dragDropListState.onDragCancel()
-                                dragOriginIndex = null
-                                displayedOrder = settings.lyricsProviderOrder
-                            }
-                        )
-                    }
+        LazyColumn(
+            state = lazyListState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+        ) {
+            item {
+                BasicText(
+                    text = "Search Priority",
+                    style = FoamTheme.typography.titleMedium
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+                BasicText(
+                    text = "Drag handles to reorder. Enabled providers are searched in order.",
+                    style = FoamTheme.typography.body
+                )
+                Spacer(modifier = Modifier.height(16.dp))
             }
-        }
 
-        item {
-            Spacer(modifier = Modifier.height(32.dp))
+            itemsIndexed(
+                items = displayedOrder,
+                key = { _, provider -> provider.name }
+            ) { index, provider ->
+                val lazyColumnIndex = index + 1
+                val isDragging = dragDropListState.isItemDragging(lazyColumnIndex)
+                val currentIndex = rememberUpdatedState(lazyColumnIndex)
+                val isEnabled = settings.enabledLyricsProviders.contains(provider)
+
+                val elevation by animateDpAsState(if (isDragging) 8.dp else 0.dp, label = "elevation")
+
+                Column(
+                    modifier = Modifier
+                        .let { if (isDragging) it else it.animateItem() }
+                        .zIndex(if (isDragging) 1f else 0f)
+                        .graphicsLayer {
+                            translationY = if (isDragging) {
+                                val itemInfo = lazyListState.layoutInfo.visibleItemsInfo
+                                    .firstOrNull { it.index == lazyColumnIndex }
+                                if (itemInfo != null) {
+                                    dragDropListState.draggingItemTop - itemInfo.offset
+                                } else 0f
+                            } else {
+                                0f
+                            }
+                            shadowElevation = elevation.toPx()
+                        }
+                ) {
+                    LyricsProviderItem(
+                        provider = provider,
+                        isEnabled = isEnabled,
+                        onEnabledChange = { viewModel.setLyricsProviderEnabled(provider, it) },
+                        isDragging = isDragging,
+                        dragHandleModifier = Modifier.pointerInput(provider.name) {
+                            detectDragGestures(
+                                onDragStart = {
+                                    dragOriginIndex = currentIndex.value
+                                    dragDropListState.onDragStart(currentIndex.value)
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    dragDropListState.onDrag(dragAmount)
+                                },
+                                onDragEnd = {
+                                    dragDropListState.onDragEnd()
+                                    dragOriginIndex = null
+                                    viewModel.setLyricsProviderOrder(displayedOrder)
+                                },
+                                onDragCancel = {
+                                    dragDropListState.onDragCancel()
+                                    dragOriginIndex = null
+                                    displayedOrder = settings.lyricsProviderOrder
+                                }
+                            )
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
+            }
         }
     }
 }

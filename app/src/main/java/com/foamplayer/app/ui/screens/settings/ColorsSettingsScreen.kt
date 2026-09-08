@@ -60,91 +60,97 @@ fun ColorsSettingsScreen(
         Color(0xFFFF6E40)  // Deep Orange
     )
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(FoamTheme.colors.background)
-            .padding(horizontal = FoamDimens.paddingMedium)
     ) {
-        item {
-            SettingsHeader(title = "Colors", onBack = onBack)
-            Spacer(modifier = Modifier.height(FoamDimens.spacingStandard))
-        }
+        SettingsHeader(
+            title = "Colors",
+            onBack = onBack,
+            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
+        )
 
-        item {
-            BasicText(text = "System Colors", style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .background(FoamTheme.colors.surface)
-            ) {
-                FoamSwitchItem(
-                    title = "Automatic Color",
-                    description = "Extract accent color from album art",
-                    checked = isAutomaticColorEnabled,
-                    onCheckedChange = viewModel::setAutomaticColorEnabled
-                )
-            }
-            Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
-        }
-
-        if (!isAutomaticColorEnabled) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = FoamDimens.paddingMedium)
+        ) {
             item {
-                BasicText(text = "Accent Palette", style = FoamTheme.typography.titleMedium)
+                BasicText(text = "System Colors", style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
                         .background(FoamTheme.colors.surface)
-                        .padding(FoamDimens.paddingMedium)
                 ) {
-                    val chunks = palette.chunked(4)
-                    Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingStandard)) {
-                        chunks.forEach { rowColors ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                rowColors.forEach { color ->
-                                    val isSelected = color.toArgb() == accentColorInt
-                                    Box(
-                                        modifier = Modifier
-                                            .size(64.dp)
-                                            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                            .background(color)
-                                            .border(
-                                                width = if (isSelected) 3.dp else 0.dp,
-                                                color = if (isSelected) Color.White else Color.Transparent,
-                                                shape = RoundedCornerShape(FoamDimens.buttonRounding)
-                                            )
-                                            .clickable { viewModel.setAccentColor(color.toArgb()) },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (isSelected) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(FoamDimens.paddingSmall)
-                                                    .clip(CircleShape)
-                                                    .background(Color.White)
-                                            )
+                    FoamSwitchItem(
+                        title = "Automatic Color",
+                        description = "Extract accent color from album art",
+                        checked = isAutomaticColorEnabled,
+                        onCheckedChange = viewModel::setAutomaticColorEnabled
+                    )
+                }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+
+            if (!isAutomaticColorEnabled) {
+                item {
+                    BasicText(text = "Accent Palette", style = FoamTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                    
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                            .background(FoamTheme.colors.surface)
+                            .padding(FoamDimens.paddingMedium)
+                    ) {
+                        val chunks = palette.chunked(4)
+                        Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingStandard)) {
+                            chunks.forEach { rowColors ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    rowColors.forEach { color ->
+                                        val isSelected = color.toArgb() == accentColorInt
+                                        Box(
+                                            modifier = Modifier
+                                                .size(64.dp)
+                                                .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                                                .background(color)
+                                                .border(
+                                                    width = if (isSelected) 3.dp else 0.dp,
+                                                    color = if (isSelected) Color.White else Color.Transparent,
+                                                    shape = RoundedCornerShape(FoamDimens.buttonRounding)
+                                                )
+                                                .clickable { viewModel.setAccentColor(color.toArgb()) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (isSelected) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(FoamDimens.paddingSmall)
+                                                        .clip(CircleShape)
+                                                        .background(Color.White)
+                                                )
+                                            }
                                         }
                                     }
-                                }
-                                // Fill empty slots if row is not full
-                                if (rowColors.size < 4) {
-                                    repeat(4 - rowColors.size) {
-                                        Spacer(modifier = Modifier.size(64.dp))
+                                    // Fill empty slots if row is not full
+                                    if (rowColors.size < 4) {
+                                        repeat(4 - rowColors.size) {
+                                            Spacer(modifier = Modifier.size(64.dp))
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
                 }
-                Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
             }
         }
     }

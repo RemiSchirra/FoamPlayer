@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.components.FoamSliderItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.FoamDimens
 
 @Composable
 fun TestSettingsScreen(
@@ -32,65 +33,71 @@ fun TestSettingsScreen(
     var sliderValue by remember { mutableFloatStateOf(0.5f) }
     var snappedSliderValue by remember { mutableFloatStateOf(0.5f) }
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(FoamTheme.colors.background)
-            .padding(horizontal = 16.dp)
     ) {
-        item {
-            SettingsHeader(title = "Component Test", onBack = onBack)
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+        SettingsHeader(
+            title = "Component Test",
+            onBack = onBack,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
 
-        item {
-            BasicText(text = "Switches", style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(12.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(FoamTheme.colors.surface)
-            ) {
-                FoamSwitchItem(
-                    title = "Test Switch",
-                    description = "Demonstration of the flat switch component",
-                    checked = switchState,
-                    onCheckedChange = { switchState = it }
-                )
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        item {
-            BasicText(text = "Sliders", style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(FoamTheme.colors.surface)
-            ) {
-                Column {
-                    FoamSliderItem(
-                        title = "Continuous Slider",
-                        value = sliderValue,
-                        onValueChange = { sliderValue = it },
-                        valueDisplay = "${(sliderValue * 100).toInt()}%"
-                    )
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(FoamTheme.colors.borderOverlay).padding(horizontal = 16.dp))
-                    FoamSliderItem(
-                        title = "Snapped Slider",
-                        value = snappedSliderValue,
-                        onValueChange = { snappedSliderValue = it },
-                        steps = 4,
-                        valueDisplay = "Step ${(snappedSliderValue * 5).toInt()}",
-                        minMaxDisplay = "0" to "5"
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+        ) {
+            item {
+                BasicText(text = "Switches", style = FoamTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(12.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    FoamSwitchItem(
+                        title = "Test Switch",
+                        description = "Demonstration of the flat switch component",
+                        checked = switchState,
+                        onCheckedChange = { switchState = it }
                     )
                 }
+                Spacer(modifier = Modifier.height(24.dp))
             }
-            Spacer(modifier = Modifier.height(32.dp))
+
+            item {
+                BasicText(text = "Sliders", style = FoamTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    Column {
+                        FoamSliderItem(
+                            title = "Continuous Slider",
+                            value = sliderValue,
+                            onValueChange = { sliderValue = it },
+                            valueDisplay = "${(sliderValue * 100).toInt()}%"
+                        )
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(FoamTheme.colors.borderOverlay).padding(horizontal = 16.dp))
+                        FoamSliderItem(
+                            title = "Snapped Slider",
+                            value = snappedSliderValue,
+                            onValueChange = { snappedSliderValue = it },
+                            steps = 4,
+                            valueDisplay = "Step ${(snappedSliderValue * 5).toInt()}",
+                            minMaxDisplay = "0" to "5"
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+            }
         }
     }
 }
