@@ -30,7 +30,7 @@ data class FoamColors(
 
 val DarkFoamColors = FoamColors(
     background = Color(0xFF121212), // Dark Grey Background
-    surface = Color(0xFF1E1E1E),    // Flat Surface
+    surface = Color(0xFF212121),
     surfaceVariant = Color(0xFF2A2A2A),
     bitPerfectActive = Color(0xFF00E676),
     bitPerfectInactive = Color(0xFFFFB300),
