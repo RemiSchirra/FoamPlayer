@@ -69,6 +69,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Velocity
@@ -78,6 +79,7 @@ import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.times
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.foamplayer.app.R
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
@@ -834,7 +836,7 @@ private fun SharedTransitionScope.TrackHeroPager(
                             }
                             AsyncImage(
                                 model = pageArtRequest,
-                                contentDescription = "Album Art",
+                                contentDescription = stringResource(R.string.album_art),
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
@@ -864,7 +866,7 @@ private fun SharedTransitionScope.TrackHeroPager(
                         }
                     )
                     BasicText(
-                        text = "${pageTrack.artist} — ${pageTrack.album}",
+                        text = stringResource(R.string.artist_album_separator, pageTrack.artist, pageTrack.album),
                         style = FoamTheme.typography.body,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -931,7 +933,7 @@ private fun SharedTransitionScope.TrackHeroPager(
                         }
                         AsyncImage(
                             model = albumArtRequest,
-                            contentDescription = "Album Art",
+                            contentDescription = stringResource(R.string.album_art),
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
@@ -956,7 +958,7 @@ private fun SharedTransitionScope.TrackHeroPager(
                             .pingPongMarquee()
                     )
                     BasicText(
-                        text = "${track.artist} — ${track.album}",
+                        text = stringResource(R.string.artist_album_separator, track.artist, track.album),
                         style = FoamTheme.typography.body,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -1016,7 +1018,7 @@ private fun SharedTransitionScope.PlaybackControls(
         ) {
             Icon(
                 imageVector = FoamTheme.icons.current.previous,
-                contentDescription = "Previous",
+                contentDescription = stringResource(R.string.previous),
                 tint = FoamTheme.colors.textPrimary,
                 modifier = Modifier.size(32.dp).clickable(onClick = onPrevious)
             )
@@ -1034,14 +1036,14 @@ private fun SharedTransitionScope.PlaybackControls(
             ) {
                 Icon(
                     imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
                     tint = FoamTheme.colors.background,
                     modifier = Modifier.size(32.dp)
                 )
             }
             Icon(
                 imageVector = FoamTheme.icons.current.next,
-                contentDescription = "Next",
+                contentDescription = stringResource(R.string.next),
                 tint = FoamTheme.colors.textPrimary,
                 modifier = Modifier.size(32.dp).clickable(onClick = onNext)
             )
@@ -1098,7 +1100,7 @@ private fun MiniPlayPauseButton(
     ) {
         Icon(
             imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
-            contentDescription = if (isPlaying) "Pause" else "Play",
+            contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
             tint = FoamTheme.colors.background,
             modifier = Modifier.size(28.dp)
         )

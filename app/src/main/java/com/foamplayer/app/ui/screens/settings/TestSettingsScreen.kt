@@ -19,7 +19,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.FoamSliderItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -39,7 +41,7 @@ fun TestSettingsScreen(
             .background(FoamTheme.colors.background)
     ) {
         SettingsHeader(
-            title = "Component Test",
+            title = stringResource(R.string.test_components),
             onBack = onBack,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
@@ -50,7 +52,7 @@ fun TestSettingsScreen(
                 .padding(horizontal = 16.dp)
         ) {
             item {
-                BasicText(text = "Switches", style = FoamTheme.typography.titleMedium)
+                BasicText(text = stringResource(R.string.switches), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(12.dp))
                 Box(
                     modifier = Modifier
@@ -69,7 +71,7 @@ fun TestSettingsScreen(
             }
 
             item {
-                BasicText(text = "Sliders", style = FoamTheme.typography.titleMedium)
+                BasicText(text = stringResource(R.string.sliders), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Box(

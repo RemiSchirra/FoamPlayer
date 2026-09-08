@@ -37,9 +37,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -74,7 +76,7 @@ fun LibrarySettingsScreen(
             .background(FoamTheme.colors.background)
     ) {
         SettingsHeader(
-            title = "Library",
+            title = stringResource(R.string.library),
             onBack = onBack,
             modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
         )
@@ -87,7 +89,7 @@ fun LibrarySettingsScreen(
             // --- Library Folders ---
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    BasicText(text = "Library Folders", style = FoamTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    BasicText(text = stringResource(R.string.library_folders), style = FoamTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
@@ -96,7 +98,7 @@ fun LibrarySettingsScreen(
                             .padding(horizontal = FoamDimens.spacingMedium, vertical = FoamDimens.spacingSmall)
                     ) {
                         BasicText(
-                            text = "Add Folder", 
+                            text = stringResource(R.string.add_folder), 
                             style = FoamTheme.typography.caption.copy(
                                 color = FoamTheme.colors.background,
                                 fontWeight = FontWeight.Bold
@@ -117,7 +119,7 @@ fun LibrarySettingsScreen(
                             .padding(vertical = FoamDimens.paddingLarge),
                         contentAlignment = Alignment.Center
                     ) {
-                        BasicText(text = "No folders selected", style = FoamTheme.typography.body)
+                        BasicText(text = stringResource(R.string.no_folders_selected), style = FoamTheme.typography.body)
                     }
                 }
             } else {
@@ -141,7 +143,7 @@ fun LibrarySettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
                             BasicText(
-                                text = "Remove",
+                                text = stringResource(R.string.remove),
                                 style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor, fontWeight = FontWeight.Bold),
                                 modifier = Modifier.clickable { viewModel.removeFolder(folder) }
                             )
@@ -154,11 +156,11 @@ fun LibrarySettingsScreen(
 
             // --- Metadata Separators ---
             item {
-                BasicText(text = "Metadata Separators", style = FoamTheme.typography.titleMedium)
+                BasicText(text = stringResource(R.string.metadata_separators), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                 
                 SeparatorSettingsCard(
-                    title = "Artist Separators",
+                    title = stringResource(R.string.artist_separators),
                     separators = artistSeparators,
                     onAdd = { viewModel.setArtistSeparators(artistSeparators + it) },
                     onRemove = { viewModel.setArtistSeparators(artistSeparators - it) }
@@ -167,7 +169,7 @@ fun LibrarySettingsScreen(
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                 
                 SeparatorSettingsCard(
-                    title = "Genre Separators",
+                    title = stringResource(R.string.genre_separators),
                     separators = genreSeparators,
                     onAdd = { viewModel.setGenreSeparators(genreSeparators + it) },
                     onRemove = { viewModel.setGenreSeparators(genreSeparators - it) }
@@ -178,7 +180,7 @@ fun LibrarySettingsScreen(
 
             // --- Library Scan ---
             item {
-                BasicText(text = "Library Scan", style = FoamTheme.typography.titleMedium)
+                BasicText(text = stringResource(R.string.library_scan), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                 Box(
                     modifier = Modifier
@@ -189,22 +191,22 @@ fun LibrarySettingsScreen(
                     Column(Modifier.fillMaxWidth().padding(FoamDimens.paddingMedium)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                BasicText(text = "Scan Media", style = FoamTheme.typography.titleMedium)
+                                BasicText(text = stringResource(R.string.scan_media), style = FoamTheme.typography.titleMedium)
                                 when (val status = scanStatus) {
                                     is ScanStatus.Scanning -> {
                                         BasicText(
-                                            text = "Scanning: ${status.currentFile} (${(status.progress * 100).toInt()}%)",
+                                            text = stringResource(R.string.scanning_status, status.currentFile, (status.progress * 100).toInt()),
                                             style = FoamTheme.typography.caption
                                         )
                                     }
                                     is ScanStatus.Finished -> {
                                         BasicText(
-                                            text = "Scan finished: ${status.count} tracks found",
+                                            text = stringResource(R.string.scan_finished, status.count),
                                             style = FoamTheme.typography.caption
                                         )
                                     }
                                     else -> {
-                                        BasicText(text = "Sync your music library", style = FoamTheme.typography.body)
+                                        BasicText(text = stringResource(R.string.sync_library), style = FoamTheme.typography.body)
                                     }
                                 }
                             }
@@ -217,7 +219,7 @@ fun LibrarySettingsScreen(
                                     .padding(horizontal = FoamDimens.spacingStandard, vertical = FoamDimens.spacingSmall)
                             ) {
                                 BasicText(
-                                    text = if (scanStatus is ScanStatus.Scanning) "SCANNING" else "START SCAN",
+                                    text = if (scanStatus is ScanStatus.Scanning) stringResource(R.string.scanning_caps) else stringResource(R.string.start_scan),
                                     style = FoamTheme.typography.caption.copy(
                                         color = if (scanStatus is ScanStatus.Scanning) FoamTheme.colors.textSecondary else FoamTheme.colors.background,
                                         fontWeight = FontWeight.Bold
@@ -288,7 +290,7 @@ fun SeparatorSettingsCard(
                             Spacer(modifier = Modifier.width(FoamDimens.spacingTiny))
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Remove",
+                                contentDescription = stringResource(R.string.remove),
                                 tint = FoamTheme.accentColor,
                                 modifier = Modifier
                                     .size(FoamDimens.iconTiny)
@@ -314,7 +316,7 @@ fun SeparatorSettingsCard(
                 ) {
                     if (newSeparator.isEmpty()) {
                         BasicText(
-                            text = "Add separator...",
+                            text = stringResource(R.string.add_separator),
                             style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
                         )
                     }
@@ -343,7 +345,7 @@ fun SeparatorSettingsCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "Add",
+                        contentDescription = stringResource(R.string.add),
                         tint = if (newSeparator.isBlank()) FoamTheme.colors.textSecondary else FoamTheme.colors.background,
                         modifier = Modifier.size(FoamDimens.spacingLarge - FoamDimens.spacingSmall)
                     )

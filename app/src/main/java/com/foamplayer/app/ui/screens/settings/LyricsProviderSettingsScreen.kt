@@ -35,10 +35,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -81,7 +83,7 @@ fun LyricsProviderSettingsScreen(
             .background(FoamTheme.colors.background)
     ) {
         SettingsHeader(
-            title = "Lyrics Providers",
+            title = stringResource(R.string.lyrics_providers),
             onBack = onBack,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
@@ -94,12 +96,12 @@ fun LyricsProviderSettingsScreen(
         ) {
             item {
                 BasicText(
-                    text = "Search Priority",
+                    text = stringResource(R.string.search_priority),
                     style = FoamTheme.typography.titleMedium
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 BasicText(
-                    text = "Drag handles to reorder. Enabled providers are searched in order.",
+                    text = stringResource(R.string.drag_to_reorder_desc),
                     style = FoamTheme.typography.body
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -200,7 +202,7 @@ private fun LyricsProviderItem(
         ) {
             Icon(
                 imageVector = FoamTheme.icons.current.dragHandle,
-                contentDescription = "Reorder",
+                contentDescription = stringResource(R.string.reorder),
                 modifier = dragHandleModifier.size(20.dp),
                 tint = if (isEnabled) FoamTheme.colors.textSecondary else FoamTheme.colors.textSecondary.copy(alpha = 0.6f)
             )

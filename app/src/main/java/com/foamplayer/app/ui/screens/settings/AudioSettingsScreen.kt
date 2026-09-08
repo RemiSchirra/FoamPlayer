@@ -19,8 +19,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -38,7 +40,7 @@ fun AudioSettingsScreen(
             .background(FoamTheme.colors.background)
     ) {
         SettingsHeader(
-            title = "Audio",
+            title = stringResource(R.string.audio),
             onBack = onBack,
             modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
         )
@@ -49,7 +51,7 @@ fun AudioSettingsScreen(
                 .padding(horizontal = FoamDimens.paddingMedium)
         ) {
             item {
-                BasicText(text = "Engine Settings", style = FoamTheme.typography.titleMedium)
+                BasicText(text = stringResource(R.string.engine_settings), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                 
                 Box(
@@ -66,12 +68,12 @@ fun AudioSettingsScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             BasicText(
-                                text = "Bit-Perfect Output",
+                                text = stringResource(R.string.bit_perfect_output),
                                 style = FoamTheme.typography.titleMedium
                             )
                             Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
                             BasicText(
-                                text = "Bypass system resampler for high-res audio on compatible USB DACs.",
+                                text = stringResource(R.string.bit_perfect_desc),
                                 style = FoamTheme.typography.body
                             )
                         }

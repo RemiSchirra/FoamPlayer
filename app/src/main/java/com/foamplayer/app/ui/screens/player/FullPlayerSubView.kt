@@ -36,21 +36,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.times
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
+import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamTheme
 
-internal enum class SubViewMode(val label: String) {
-    LYRICS("Lyrics"),
-    QUEUE("Queue")
+internal enum class SubViewMode(val labelRes: Int) {
+    LYRICS(R.string.lyrics),
+    QUEUE(R.string.queue)
 }
 
 @Composable
@@ -69,13 +71,14 @@ internal fun SubViewSelectorRow(
                 SubViewMode.QUEUE -> FoamTheme.icons.current.queue
             }
 
+            val label = stringResource(mode.labelRes)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.clickable { onSelect(mode) }.padding(8.dp)
             ) {
-                Icon(imageVector = icon, contentDescription = mode.label, tint = color, modifier = Modifier.size(20.dp))
+                Icon(imageVector = icon, contentDescription = label, tint = color, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                BasicText(text = mode.label, style = FoamTheme.typography.body.copy(color = color))
+                BasicText(text = label, style = FoamTheme.typography.body.copy(color = color))
             }
         }
     }
@@ -208,6 +211,6 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                 }
             }
         }
-        Icon(imageVector = Icons.Rounded.KeyboardArrowDown, contentDescription = "Collapse", tint = FoamTheme.accentColor, modifier = Modifier.size(28.dp))
+        Icon(imageVector = Icons.Rounded.KeyboardArrowDown, contentDescription = stringResource(R.string.collapse), tint = FoamTheme.accentColor, modifier = Modifier.size(28.dp))
     }
 }

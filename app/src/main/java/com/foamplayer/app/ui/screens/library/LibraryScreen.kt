@@ -23,12 +23,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -54,7 +55,7 @@ fun LibraryScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             BasicText(
-                text = "Audio Library",
+                text = stringResource(R.string.audio_library),
                 style = FoamTheme.typography.titleLarge,
                 modifier = Modifier.weight(1f)
             )
@@ -68,10 +69,9 @@ fun LibraryScreen(
                 contentAlignment = Alignment.Center
             ) {
                 BasicText(
-                    text = "No audio files detected.\nGo to Settings to add folders and scan your library.",
+                    text = stringResource(R.string.no_audio_detected),
                     style = FoamTheme.typography.body,
                     modifier = Modifier.fillMaxWidth(),
-                    onTextLayout = {},
                 )
             }
         } else {

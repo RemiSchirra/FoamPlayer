@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import com.foamplayer.app.R
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -41,7 +43,7 @@ fun SettingsScreen(
             .background(FoamTheme.colors.background)
     ) {
         SettingsHeader(
-            title = "Settings",
+            title = stringResource(R.string.settings),
             modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
         )
 
@@ -52,8 +54,8 @@ fun SettingsScreen(
         ) {
             item {
                 SettingsCategoryItem(
-                    title = "Audio",
-                    subtitle = "Bit-perfect engine and output options",
+                    title = stringResource(R.string.audio),
+                    subtitle = stringResource(R.string.audio_settings_subtitle),
                     icon = FoamTheme.icons.current.equalizer,
                     onClick = onNavigateToAudio
                 )
@@ -62,8 +64,8 @@ fun SettingsScreen(
 
             item {
                 SettingsCategoryItem(
-                    title = "User Interface",
-                    subtitle = "Appearance, icon styles and rounding",
+                    title = stringResource(R.string.user_interface),
+                    subtitle = stringResource(R.string.ui_settings_subtitle),
                     icon = FoamTheme.icons.current.settings,
                     onClick = onNavigateToUI
                 )
@@ -72,8 +74,8 @@ fun SettingsScreen(
 
             item {
                 SettingsCategoryItem(
-                    title = "Library",
-                    subtitle = "Manage music folders and metadata",
+                    title = stringResource(R.string.library),
+                    subtitle = stringResource(R.string.library_settings_subtitle),
                     icon = FoamTheme.icons.current.library,
                     onClick = onNavigateToLibrary
                 )
@@ -82,8 +84,8 @@ fun SettingsScreen(
 
             item {
                 SettingsCategoryItem(
-                    title = "Lyrics",
-                    subtitle = "Lyrics providers and display settings",
+                    title = stringResource(R.string.lyrics),
+                    subtitle = stringResource(R.string.lyrics_settings_subtitle),
                     icon = FoamTheme.icons.current.lyrics,
                     onClick = onNavigateToLyrics
                 )
@@ -92,8 +94,8 @@ fun SettingsScreen(
 
             item {
                 SettingsCategoryItem(
-                    title = "Components Test",
-                    subtitle = "Internal UI testing utilities",
+                    title = stringResource(R.string.test_components),
+                    subtitle = stringResource(R.string.test_components_subtitle),
                     icon = Icons.Default.BugReport,
                     onClick = onNavigateToTest
                 )
@@ -161,7 +163,7 @@ fun SettingsHeader(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.back),
                     tint = FoamTheme.colors.textPrimary
                 )
             }

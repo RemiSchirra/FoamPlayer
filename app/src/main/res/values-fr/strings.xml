@@ -1,0 +1,118 @@
+<resources>
+    <string name="app_name">FoamPlayer</string>
+    <string name="action_shuffle">Aléatoire</string>
+    <string name="action_repeat">Répéter</string>
+    <string name="play">Lecture</string>
+    <string name="pause">Pause</string>
+    <string name="previous">Précédent</string>
+    <string name="next">Suivant</string>
+    <string name="back">Retour</string>
+    <string name="collapse">Réduire</string>
+    <string name="add">Ajouter</string>
+    <string name="remove">Supprimer</string>
+    <string name="reorder">Réordonner</string>
+    <string name="album_art">Pochette d\'album</string>
+    <string name="settings">Paramètres</string>
+    <string name="audio">Audio</string>
+    <string name="user_interface">Interface utilisateur</string>
+    <string name="library">Bibliothèque</string>
+    <string name="lyrics">Paroles</string>
+    <string name="queue">File d\'attente</string>
+    <string name="search">Rechercher</string>
+    <string name="playlists">Playlists</string>
+    <string name="equalizer_dsp">Égaliseur &amp; DSP</string>
+
+    <string name="library_folders">Dossiers de la bibliothèque</string>
+    <string name="add_folder">Ajouter un dossier</string>
+    <string name="no_folders_selected">Aucun dossier sélectionné</string>
+    <string name="metadata_separators">Séparateurs de métadonnées</string>
+    <string name="artist_separators">Séparateurs d\'artistes</string>
+    <string name="genre_separators">Séparateurs de genres</string>
+    <string name="library_scan">Analyse de la bibliothèque</string>
+    <string name="scan_media">Analyser les médias</string>
+    <string name="sync_library">Synchronisez votre bibliothèque musicale</string>
+    <string name="start_scan">LANCER L\'ANALYSE</string>
+    <string name="scanning_caps">ANALYSE...</string>
+    <string name="scanning_status">Analyse en cours : %1$s (%2$d%%)</string>
+    <string name="scan_finished">Analyse terminée : %1$d pistes trouvées</string>
+
+    <string name="no_audio_detected">Aucun fichier audio détecté.\nAllez dans les Paramètres pour ajouter des dossiers et analyser votre bibliothèque.</string>
+    <string name="search_library">Rechercher dans la bibliothèque</string>
+    <string name="search_hint">Rechercher des pistes, artistes, albums...</string>
+    <string name="clear_search_history">Effacer l\'historique de recherche</string>
+
+    <string name="appearance">Apparence</string>
+    <string name="dynamic_effects">Effets dynamiques</string>
+    <string name="icon_style">Style d\'icône</string>
+    <string name="visuals">Visuels</string>
+    <string name="behaviour">Comportement</string>
+    <string name="interface_rounding">Arrondi de l\'interface</string>
+    <string name="accent_palette">Palette d\'accentuation</string>
+    <string name="system_colors">Couleurs système</string>
+
+    <string name="colors">Couleurs</string>
+    <string name="colors_desc">Couleur d\'accentuation et palette</string>
+    <string name="player">Lecteur</string>
+    <string name="player_desc">Mise en page et visuels</string>
+    <string name="background">Arrière-plan</string>
+    <string name="background_desc">Effets d\'arrière-plan dynamiques</string>
+
+    <string name="engine_settings">Paramètres du moteur</string>
+    <string name="bit_perfect_output">Sortie Bit-Perfect</string>
+    <string name="bit_perfect_desc">Contourner le rééchantillonneur système pour l\'audio haute résolution sur les DAC USB compatibles</string>
+
+    <string name="lyrics_providers">Fournisseurs</string>
+    <string name="lyrics_not_found">Paroles non trouvées</string>
+    <string name="resume_auto_scroll">Reprendre le défilement auto</string>
+    <string name="search_priority">Priorité de recherche</string>
+    <string name="drag_to_reorder_desc">Faites glisser les poignées pour réordonner. Les fournisseurs activés sont parcourus dans l\'ordre.</string>
+
+    <string name="equalizer_notice">⚠️ Note : Égaliseur actif. Le chemin audio fonctionne en mode haute précision.</string>
+
+    <string name="audio_library">Bibliothèque audio</string>
+    <string name="albums">Albums</string>
+    <string name="play_all">Tout lire</string>
+    <string name="create_playlist">+ Créer</string>
+    <string name="no_playlists_yet">Aucune playlist créée pour le moment.</string>
+
+    <string name="up_next">À suivre (%1$d pistes)</string>
+    <string name="track_count_duration">%1$d Pistes • %2$s</string>
+    <string name="add_separator">Ajouter un séparateur...</string>
+
+    <string name="audio_settings_subtitle">Moteur bit-perfect et options de sortie</string>
+    <string name="ui_settings_subtitle">Apparence, styles d\'icônes et arrondi</string>
+    <string name="library_settings_subtitle">Gérer les dossiers de musique et les métadonnées</string>
+    <string name="lyrics_settings_subtitle">Fournisseurs de paroles et paramètres d\'affichage</string>
+    <string name="test_components">Test de composants</string>
+    <string name="test_components_subtitle">Utilitaires de test d\'interface internes</string>
+    <string name="switches">Interrupteurs</string>
+    <string name="sliders">Curseurs</string>
+
+    <string name="artist_album_separator">%1$s — %2$s</string>
+    <string name="artist_format_separator">%1$s • %2$s</string>
+
+    <string name="dynamic_background">Arrière-plan dynamique</string>
+    <string name="dynamic_background_desc">Extraire les couleurs de la pochette pour l\'arrière-plan</string>
+    <string name="background_blur">Flou d\'arrière-plan</string>
+    <string name="color_intensity">Intensité des couleurs</string>
+    <string name="none">Aucun</string>
+    <string name="max">Max</string>
+    <string name="dim">Sombre</string>
+    <string name="vivid">Vif</string>
+
+    <string name="auto_open_player">Ouvrir auto. le lecteur</string>
+    <string name="auto_open_player_desc">Ouvrir le lecteur au lancement d\'une piste</string>
+    <string name="immersive_mode">Mode immersif</string>
+    <string name="immersive_mode_desc">La pochette d\'album remplit tout l\'écran</string>
+    <string name="animate_seek_bar">Animer la barre de recherche</string>
+    <string name="animate_seek_bar_desc">Mouvement fluide de la barre de progression</string>
+    <string name="mini_player">Mini lecteur</string>
+    <string name="full_player">Lecteur complet</string>
+    <string name="square">Carré</string>
+    <string name="circle">Cercle</string>
+
+    <string name="automatic_color">Couleur automatique</string>
+    <string name="automatic_color_desc">Extraire la couleur d\'accentuation de la pochette</string>
+    <string name="on">ON</string>
+    <string name="off">OFF</string>
+</resources>

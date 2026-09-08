@@ -6,4 +6,113 @@
     <string name="pause">Pause</string>
     <string name="previous">Previous</string>
     <string name="next">Next</string>
+    <string name="back">Back</string>
+    <string name="collapse">Collapse</string>
+    <string name="add">Add</string>
+    <string name="remove">Remove</string>
+    <string name="reorder">Reorder</string>
+    <string name="album_art">Album Art</string>
+    <string name="settings">Settings</string>
+    <string name="audio">Audio</string>
+    <string name="user_interface">User Interface</string>
+    <string name="library">Library</string>
+    <string name="lyrics">Lyrics</string>
+    <string name="queue">Queue</string>
+    <string name="search">Search</string>
+    <string name="playlists">Playlists</string>
+    <string name="equalizer_dsp">Equalizer &amp; DSP</string>
+
+    <string name="library_folders">Library Folders</string>
+    <string name="add_folder">Add Folder</string>
+    <string name="no_folders_selected">No folders selected</string>
+    <string name="metadata_separators">Metadata Separators</string>
+    <string name="artist_separators">Artist Separators</string>
+    <string name="genre_separators">Genre Separators</string>
+    <string name="library_scan">Library Scan</string>
+    <string name="scan_media">Scan Media</string>
+    <string name="sync_library">Sync your music library</string>
+    <string name="start_scan">START SCAN</string>
+    <string name="scanning_caps">SCANNING</string>
+    <string name="scanning_status">Scanning: %1$s (%2$d%%)</string>
+    <string name="scan_finished">Scan finished: %1$d tracks found</string>
+
+    <string name="no_audio_detected">No audio files detected.\nGo to Settings to add folders and scan your library.</string>
+    <string name="search_library">Search Library</string>
+    <string name="search_hint">Search tracks, artists, albums...</string>
+    <string name="clear_search_history">Clear search history</string>
+
+    <string name="appearance">Appearance</string>
+    <string name="dynamic_effects">Dynamic Effects</string>
+    <string name="icon_style">Icon Style</string>
+    <string name="visuals">Visuals</string>
+    <string name="behaviour">Behaviour</string>
+    <string name="interface_rounding">Interface Rounding</string>
+    <string name="accent_palette">Accent Palette</string>
+    <string name="system_colors">System Colors</string>
+
+    <string name="colors">Colors</string>
+    <string name="colors_desc">Accent color and palette</string>
+    <string name="player">Player</string>
+    <string name="player_desc">Layout and visuals</string>
+    <string name="background">Background</string>
+    <string name="background_desc">Dynamic background effects</string>
+
+    <string name="engine_settings">Engine Settings</string>
+    <string name="bit_perfect_output">Bit-Perfect Output</string>
+    <string name="bit_perfect_desc">Bypass system resampler for high-res audio on compatible USB DACs</string>
+
+    <string name="lyrics_providers">Providers</string>
+    <string name="lyrics_not_found">Lyrics not found</string>
+    <string name="resume_auto_scroll">Resume auto-scroll</string>
+    <string name="search_priority">Search Priority</string>
+    <string name="drag_to_reorder_desc">Drag handles to reorder. Enabled providers are searched in order.</string>
+
+    <string name="equalizer_notice">⚠️ Notice: Equalizer active. Audio path is operating in high-precision mode.</string>
+
+    <string name="audio_library">Audio Library</string>
+    <string name="albums">Albums</string>
+    <string name="play_all">Play All</string>
+    <string name="create_playlist">+ Create</string>
+    <string name="no_playlists_yet">No playlists created yet.</string>
+
+    <string name="up_next">Up Next (%1$d tracks)</string>
+    <string name="track_count_duration">%1$d Tracks • %2$s</string>
+    <string name="add_separator">Add separator...</string>
+
+    <string name="audio_settings_subtitle">Bit-perfect engine and output options</string>
+    <string name="ui_settings_subtitle">Appearance, icon styles and rounding</string>
+    <string name="library_settings_subtitle">Manage music folders and metadata</string>
+    <string name="lyrics_settings_subtitle">Lyrics providers and display settings</string>
+    <string name="test_components">Components Test</string>
+    <string name="test_components_subtitle">Internal UI testing utilities</string>
+    <string name="switches">Switches</string>
+    <string name="sliders">Sliders</string>
+
+    <string name="artist_album_separator">%1$s — %2$s</string>
+    <string name="artist_format_separator">%1$s • %2$s</string>
+
+    <string name="dynamic_background">Dynamic Background</string>
+    <string name="dynamic_background_desc">Extract colors from track art for background</string>
+    <string name="background_blur">Background Blur</string>
+    <string name="color_intensity">Color Intensity</string>
+    <string name="none">None</string>
+    <string name="max">Max</string>
+    <string name="dim">Dim</string>
+    <string name="vivid">Vivid</string>
+
+    <string name="auto_open_player">Auto Open Player</string>
+    <string name="auto_open_player_desc">Open player screen when a track starts</string>
+    <string name="immersive_mode">Immersive Mode</string>
+    <string name="immersive_mode_desc">Album art fills the entire screen</string>
+    <string name="animate_seek_bar">Animate Seek Bar</string>
+    <string name="animate_seek_bar_desc">Smooth progress bar movement</string>
+    <string name="mini_player">Mini Player</string>
+    <string name="full_player">Full Player</string>
+    <string name="square">Square</string>
+    <string name="circle">Circle</string>
+
+    <string name="automatic_color">Automatic Color</string>
+    <string name="automatic_color_desc">Extract accent color from album art</string>
+    <string name="on">ON</string>
+    <string name="off">OFF</string>
 </resources>

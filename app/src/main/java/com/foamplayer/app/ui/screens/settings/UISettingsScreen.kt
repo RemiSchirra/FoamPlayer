@@ -23,8 +23,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -47,7 +49,7 @@ fun UISettingsScreen(
             .background(FoamTheme.colors.background)
     ) {
         SettingsHeader(
-            title = "User Interface",
+            title = stringResource(R.string.user_interface),
             onBack = onBack,
             modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
         )
@@ -58,7 +60,7 @@ fun UISettingsScreen(
         ) {
             item {
                 Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
-                    BasicText(text = "Appearance", style = FoamTheme.typography.titleMedium)
+                    BasicText(text = stringResource(R.string.appearance), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                     
                     Box(
@@ -69,8 +71,8 @@ fun UISettingsScreen(
                     ) {
                         Column {
                             FoamNavigationButton(
-                                title = "Colors",
-                                description = "Accent color and palette",
+                                title = stringResource(R.string.colors),
+                                description = stringResource(R.string.colors_desc),
                                 onClick = onNavigateToColors,
                             )
                             Box(
@@ -80,8 +82,8 @@ fun UISettingsScreen(
                                     .background(FoamTheme.colors.borderOverlay)
                             )
                             FoamNavigationButton(
-                                title = "Player",
-                                description = "Layout and visuals",
+                                title = stringResource(R.string.player),
+                                description = stringResource(R.string.player_desc),
                                 onClick = onNavigateToPlayer,
                             )
                             Box(
@@ -91,8 +93,8 @@ fun UISettingsScreen(
                                     .background(FoamTheme.colors.borderOverlay)
                             )
                             FoamNavigationButton(
-                                title = "Background",
-                                description = "Dynamic background effects",
+                                title = stringResource(R.string.background),
+                                description = stringResource(R.string.background_desc),
                                 onClick = onNavigateToBackground,
                             )
                         }
@@ -103,7 +105,7 @@ fun UISettingsScreen(
 
             item {
                 Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
-                    BasicText(text = "Icon Style", style = FoamTheme.typography.titleMedium)
+                    BasicText(text = stringResource(R.string.icon_style), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
