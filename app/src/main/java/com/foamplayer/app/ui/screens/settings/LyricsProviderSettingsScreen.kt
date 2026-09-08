@@ -182,21 +182,22 @@ private fun LyricsProviderItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = FoamTheme.icons.current.dragHandle,
                 contentDescription = "Reorder",
-                modifier = dragHandleModifier.size(24.dp),
-                tint = FoamTheme.colors.textSecondary
+                modifier = dragHandleModifier.size(20.dp),
+                tint = if (isEnabled) FoamTheme.colors.textSecondary else FoamTheme.colors.textSecondary.copy(alpha = 0.6f)
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 BasicText(
                     text = provider.name.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() },
-                    style = FoamTheme.typography.titleMedium.copy(
-                        color = if (isEnabled) FoamTheme.colors.textPrimary else FoamTheme.colors.textSecondary
+                    style = FoamTheme.typography.body.copy(
+                        fontWeight = FontWeight.Medium,
+                        color = if (isEnabled) FoamTheme.colors.textPrimary else FoamTheme.colors.textSecondary.copy(alpha = 0.6f)
                     )
                 )
             }
