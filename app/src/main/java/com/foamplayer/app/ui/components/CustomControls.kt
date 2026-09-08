@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.components
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -12,7 +13,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,9 +51,19 @@ fun FoamSlider(
     steps: Int? = null,
     trackHeight: Dp = 4.dp,
     activeColor: Color = FoamTheme.accentColor,
-    inactiveColor: Color = FoamTheme.colors.surfaceVariant
+    inactiveColor: Color = FoamTheme.colors.surfaceVariant,
+    growFactor: Float = 1.8f
 ) {
     val currentOnValueChange by rememberUpdatedState(onValueChange)
+
+    // 1. Track whether the user is currently touching/dragging the slider
+    var isDragging by remember { mutableStateOf(false) }
+
+    // 2. Smoothly animate the height based on the dragging state
+    val animatedTrackHeight by animateDpAsState(
+        targetValue = if (isDragging) trackHeight * growFactor else trackHeight,
+        label = "trackHeightAnimation"
+    )
 
     fun snap(v: Float): Float {
         if (steps == null || steps <= 0) return v.coerceIn(0f, 1f)
@@ -63,17 +77,24 @@ fun FoamSlider(
             .pointerInput(steps) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+
+                    isDragging = true
+
                     val width = size.width
                     if (width > 0) {
                         currentOnValueChange(snap(down.position.x / width))
                     }
                     down.consume()
-                    
-                    drag(down.id) { change ->
-                        if (width > 0) {
-                            currentOnValueChange(snap(change.position.x / width))
+
+                    try {
+                        drag(down.id) { change ->
+                            if (width > 0) {
+                                currentOnValueChange(snap(change.position.x / width))
+                            }
+                            if (change.pressed) change.consume()
                         }
-                        if (change.pressed) change.consume()
+                    } finally {
+                        isDragging = false
                     }
                 }
             },
@@ -83,7 +104,7 @@ fun FoamSlider(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(trackHeight)
+                .height(animatedTrackHeight)
                 .clip(CircleShape)
                 .background(inactiveColor)
         )
@@ -92,7 +113,7 @@ fun FoamSlider(
         Box(
             modifier = Modifier
                 .fillMaxWidth(value.coerceIn(0f, 1f))
-                .height(trackHeight)
+                .height(animatedTrackHeight)
                 .clip(CircleShape)
                 .background(activeColor)
         )
