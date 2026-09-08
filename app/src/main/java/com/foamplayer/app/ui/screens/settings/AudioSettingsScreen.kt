@@ -19,9 +19,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.foamplayer.app.ui.components.FoamGlassCard
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -36,50 +36,62 @@ fun AudioSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FoamTheme.colors.background)
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = FoamDimens.paddingMedium)
     ) {
         item {
             SettingsHeader(title = "Audio", onBack = onBack)
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingStandard))
         }
 
         item {
-            BasicText(text = "Audio Engine", style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
+            BasicText(text = "Engine Settings", style = FoamTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .background(FoamTheme.colors.surface)
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(FoamDimens.paddingMedium),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         BasicText(
-                            text = "Prefer Bit-Perfect Output",
+                            text = "Bit-Perfect Output",
                             style = FoamTheme.typography.titleMedium
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
                         BasicText(
-                            text = "Bypass AudioFlinger hardware resampler on compatible USB DACs.",
+                            text = "Bypass system resampler for high-res audio on compatible USB DACs.",
                             style = FoamTheme.typography.body
                         )
                     }
 
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall / 2))
                             .background(
-                                if (isBitPerfectEnabled) FoamTheme.colors.bitPerfectActive
+                                if (isBitPerfectEnabled) FoamTheme.accentColor
                                 else FoamTheme.colors.surfaceVariant
                             )
                             .clickable { viewModel.setBitPerfectEnabled(!isBitPerfectEnabled) }
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                            .padding(horizontal = FoamDimens.spacingMedium, vertical = FoamDimens.spacingSmall)
                     ) {
                         BasicText(
-                            text = if (isBitPerfectEnabled) "ENABLED" else "DISABLED",
-                            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.background)
+                            text = if (isBitPerfectEnabled) "ON" else "OFF",
+                            style = FoamTheme.typography.caption.copy(
+                                color = if (isBitPerfectEnabled) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
                         )
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
         }
     }
 }

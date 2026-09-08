@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -81,16 +82,17 @@ fun LyricsProviderSettingsScreen(
     ) {
         item {
             SettingsHeader(title = "Lyrics Providers", onBack = onBack)
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
         item {
             BasicText(
-                text = "Search priority",
+                text = "Search Priority",
                 style = FoamTheme.typography.titleMedium
             )
+            Spacer(modifier = Modifier.height(4.dp))
             BasicText(
-                text = "Enable and reorder providers to set search priority.",
+                text = "Drag handles to reorder. Enabled providers are searched in order.",
                 style = FoamTheme.typography.body
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -123,12 +125,12 @@ fun LyricsProviderSettingsScreen(
                         }
                         shadowElevation = elevation.toPx()
                     }
-                    .background(if (isDragging) FoamTheme.colors.surfaceVariant else FoamTheme.colors.background)
             ) {
                 LyricsProviderItem(
                     provider = provider,
                     isEnabled = isEnabled,
                     onEnabledChange = { viewModel.setLyricsProviderEnabled(provider, it) },
+                    isDragging = isDragging,
                     dragHandleModifier = Modifier.pointerInput(provider.name) {
                         detectDragGestures(
                             onDragStart = {
@@ -152,7 +154,7 @@ fun LyricsProviderSettingsScreen(
                         )
                     }
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
 
@@ -167,6 +169,7 @@ private fun LyricsProviderItem(
     provider: PreferredLyricsProvider,
     isEnabled: Boolean,
     onEnabledChange: (Boolean) -> Unit,
+    isDragging: Boolean,
     modifier: Modifier = Modifier,
     dragHandleModifier: Modifier = Modifier
 ) {
@@ -174,12 +177,12 @@ private fun LyricsProviderItem(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(FoamTheme.colors.surface)
+            .background(if (isDragging) FoamTheme.colors.surfaceVariant else FoamTheme.colors.surface)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -192,7 +195,9 @@ private fun LyricsProviderItem(
             Column(modifier = Modifier.weight(1f)) {
                 BasicText(
                     text = provider.name.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() },
-                    style = FoamTheme.typography.titleMedium
+                    style = FoamTheme.typography.titleMedium.copy(
+                        color = if (isEnabled) FoamTheme.colors.textPrimary else FoamTheme.colors.textSecondary
+                    )
                 )
             }
             Switch(

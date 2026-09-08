@@ -13,17 +13,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
-import com.foamplayer.app.ui.components.FoamGlassCard
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -38,65 +39,65 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FoamTheme.colors.background)
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = FoamDimens.paddingMedium)
     ) {
         item {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
             BasicText(
                 text = "Settings",
                 style = FoamTheme.typography.titleLarge
             )
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
         }
 
         item {
             SettingsCategoryItem(
                 title = "Audio",
-                subtitle = "Bit-perfect, engine options",
+                subtitle = "Bit-perfect engine and output options",
                 icon = FoamTheme.icons.current.equalizer,
                 onClick = onNavigateToAudio
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
         }
 
         item {
             SettingsCategoryItem(
                 title = "User Interface",
-                subtitle = "Icon styles, rounding, themes",
+                subtitle = "Appearance, icon styles and rounding",
                 icon = FoamTheme.icons.current.settings,
                 onClick = onNavigateToUI
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
         }
 
         item {
             SettingsCategoryItem(
                 title = "Library",
-                subtitle = "Manage folders, scan media",
+                subtitle = "Manage music folders and metadata",
                 icon = FoamTheme.icons.current.library,
                 onClick = onNavigateToLibrary
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
         }
 
         item {
             SettingsCategoryItem(
                 title = "Lyrics",
-                subtitle = "Providers, order, appearance",
+                subtitle = "Lyrics providers and display settings",
                 icon = FoamTheme.icons.current.lyrics,
                 onClick = onNavigateToLyrics
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
         }
 
         item {
             SettingsCategoryItem(
                 title = "Components Test",
-                subtitle = "Test UI components (Slider, Switch)",
+                subtitle = "Internal UI testing utilities",
                 icon = Icons.Default.BugReport,
                 onClick = onNavigateToTest
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
         }
     }
 }
@@ -108,24 +109,26 @@ fun SettingsCategoryItem(
     icon: ImageVector,
     onClick: () -> Unit
 ) {
-    FoamGlassCard(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
+            .background(FoamTheme.colors.surface)
             .clickable { onClick() }
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(FoamDimens.paddingMedium),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(FoamDimens.iconMedium),
                 tint = FoamTheme.accentColor
             )
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(FoamDimens.spacingStandard))
             Column {
                 BasicText(text = title, style = FoamTheme.typography.titleMedium)
                 BasicText(text = subtitle, style = FoamTheme.typography.body)
@@ -142,22 +145,23 @@ fun SettingsHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 16.dp),
+            .padding(vertical = FoamDimens.paddingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(FoamDimens.headerIconSize)
+                .clip(RoundedCornerShape(FoamDimens.headerIconRounding))
                 .clickable { onBack() },
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = FoamTheme.colors.textPrimary
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
         BasicText(text = title, style = FoamTheme.typography.titleLarge)
     }
 }

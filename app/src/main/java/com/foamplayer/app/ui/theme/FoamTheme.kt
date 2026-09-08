@@ -1,13 +1,10 @@
 package com.foamplayer.app.ui.theme
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -32,14 +29,14 @@ data class FoamColors(
 )
 
 val DarkFoamColors = FoamColors(
-    background = Color(0xFF0A0B0E),
-    surface = Color(0xFF12141B),
-    surfaceVariant = Color(0xFF1A1D27),
+    background = Color(0xFF121212), // Dark Grey Background
+    surface = Color(0xFF1E1E1E),    // Flat Surface
+    surfaceVariant = Color(0xFF2A2A2A),
     bitPerfectActive = Color(0xFF00E676),
     bitPerfectInactive = Color(0xFFFFB300),
-    textPrimary = Color(0xFFF0F2F5),
-    textSecondary = Color(0xFF8C93A8),
-    borderOverlay = Color(0xFF252A37)
+    textPrimary = Color(0xFFE0E0E0),
+    textSecondary = Color(0xFF9E9E9E),
+    borderOverlay = Color(0xFF333333)
 )
 
 /** Default accent color, used until [FoamTheme] provides a live one (e.g. in previews). */
@@ -58,31 +55,31 @@ val DefaultFoamTypography = FoamTypography(
     titleLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
-        fontSize = 22.sp,
-        color = Color(0xFFF0F2F5)
+        fontSize = 24.sp, // Slightly larger for a professional flat look
+        color = Color(0xFFE0E0E0)
     ),
     titleMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 16.sp,
-        color = Color(0xFFF0F2F5)
+        fontSize = 18.sp, // Refined title size
+        color = Color(0xFFE0E0E0)
     ),
     body = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        color = Color(0xFF8C93A8)
+        fontSize = 15.sp, // Standard flat body size
+        color = Color(0xFF9E9E9E)
     ),
     caption = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Light,
-        fontSize = 11.sp,
-        color = Color(0xFF8C93A8)
+        fontWeight = FontWeight.Normal,
+        fontSize = 12.sp,
+        color = Color(0xFF9E9E9E)
     ),
     monospace = TextStyle(
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
+        fontSize = 13.sp,
         color = Color(0xFF00E676)
     )
 )
@@ -90,7 +87,8 @@ val DefaultFoamTypography = FoamTypography(
 @Immutable
 data class FoamShapes(
     val miniPlayerRounding: Dp,
-    val fullPlayerRounding: Dp
+    val fullPlayerRounding: Dp,
+    val cardRounding: Dp = 8.dp // Flatter corners for professional look
 )
 
 val DefaultFoamShapes = FoamShapes(
@@ -107,20 +105,16 @@ val LocalFoamShapes = staticCompositionLocalOf { DefaultFoamShapes }
 
 // The accent color is the one theme value that changes at animation frequency --
 // continuously while swiping between tracks in the full player. It deliberately gets
-// its own *non*-static local: compositionLocalOf keeps per-reader subscriptions, so a
-// new value here only recomposes the handful of composables that actually read
-// FoamTheme.accentColor, instead of forcing every consumer of the (otherwise static)
-// FoamColors struct to recompose on every drag frame. Keeping it out of FoamColors
-// entirely is what makes that isolation possible -- folding it back into that struct
-// would put every other field's readers back in the blast radius.
-val LocalPrimaryAccentColor = compositionLocalOf { DefaultPrimaryAccent }
+// its own *non*-static CompositionLocal so that only components reading 'accentColor'
+// (and not everything else using FoamTheme) are invalidated on each frame.
+val LocalPrimaryAccentColor = staticCompositionLocalOf { DefaultPrimaryAccent }
 
 object FoamTheme {
     val colors: FoamColors
-        @Composable get() = LocalFoamColors.current
+        @Composable @ReadOnlyComposable get() = LocalFoamColors.current
 
     val typography: FoamTypography
-        @Composable get() = LocalFoamTypography.current
+        @Composable @ReadOnlyComposable get() = LocalFoamTypography.current
 
     val icons: FoamIcons
         @Composable get() = LocalFoamIcons.current

@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,9 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -31,8 +27,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.ui.components.FoamSwitchItem
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -68,74 +64,87 @@ fun ColorsSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FoamTheme.colors.background)
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = FoamDimens.paddingMedium)
     ) {
         item {
             SettingsHeader(title = "Colors", onBack = onBack)
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingStandard))
         }
 
         item {
             BasicText(text = "System Colors", style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            FoamSwitchItem(
-                title = "Automatic color",
-                description = "Extract accent color from album art.",
-                checked = isAutomaticColorEnabled,
-                onCheckedChange = viewModel::setAutomaticColorEnabled
-            )
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .background(FoamTheme.colors.surface)
+            ) {
+                FoamSwitchItem(
+                    title = "Automatic Color",
+                    description = "Extract accent color from album art",
+                    checked = isAutomaticColorEnabled,
+                    onCheckedChange = viewModel::setAutomaticColorEnabled
+                )
+            }
+            Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
         }
 
         if (!isAutomaticColorEnabled) {
             item {
-                BasicText(text = "Accent Color Palette", style = FoamTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(12.dp))
+                BasicText(text = "Accent Palette", style = FoamTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                 
-                // Using a Column with Rows since LazyVerticalGrid inside LazyColumn is problematic 
-                // without fixed height, and we want it to scroll with the list.
-                val chunks = palette.chunked(4)
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    chunks.forEach { rowColors ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            rowColors.forEach { color ->
-                                val isSelected = color.toArgb() == accentColorInt
-                                Box(
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(color)
-                                        .border(
-                                            width = if (isSelected) 3.dp else 0.dp,
-                                            color = if (isSelected) Color.White else Color.Transparent,
-                                            shape = RoundedCornerShape(16.dp)
-                                        )
-                                        .clickable { viewModel.setAccentColor(color.toArgb()) },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (isSelected) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(8.dp)
-                                                .clip(CircleShape)
-                                                .background(Color.White)
-                                        )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                        .padding(FoamDimens.paddingMedium)
+                ) {
+                    val chunks = palette.chunked(4)
+                    Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingStandard)) {
+                        chunks.forEach { rowColors ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                rowColors.forEach { color ->
+                                    val isSelected = color.toArgb() == accentColorInt
+                                    Box(
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                                            .background(color)
+                                            .border(
+                                                width = if (isSelected) 3.dp else 0.dp,
+                                                color = if (isSelected) Color.White else Color.Transparent,
+                                                shape = RoundedCornerShape(FoamDimens.buttonRounding)
+                                            )
+                                            .clickable { viewModel.setAccentColor(color.toArgb()) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isSelected) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(FoamDimens.paddingSmall)
+                                                    .clip(CircleShape)
+                                                    .background(Color.White)
+                                            )
+                                        }
                                     }
                                 }
-                            }
-                            // Fill empty slots if row is not full
-                            if (rowColors.size < 4) {
-                                repeat(4 - rowColors.size) {
-                                    Spacer(modifier = Modifier.size(64.dp))
+                                // Fill empty slots if row is not full
+                                if (rowColors.size < 4) {
+                                    repeat(4 - rowColors.size) {
+                                        Spacer(modifier = Modifier.size(64.dp))
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
             }
         }
     }

@@ -23,10 +23,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.ui.components.FoamNavigationButton
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -46,59 +47,77 @@ fun UISettingsScreen(
             .background(FoamTheme.colors.background)
     ) {
         item {
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Box(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
                 SettingsHeader(title = "User Interface", onBack = onBack)
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingStandard))
         }
 
         item {
-            FoamNavigationButton(
-                title = "Colors",
-                description = "Accent color",
-                onClick = onNavigateToColors,
-            )
-            Spacer(modifier = Modifier.height(24.dp))
+            Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
+                BasicText(text = "Appearance", style = FoamTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    Column {
+                        FoamNavigationButton(
+                            title = "Colors",
+                            description = "Accent color and palette",
+                            onClick = onNavigateToColors,
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(FoamDimens.separatorHeight)
+                                .background(FoamTheme.colors.borderOverlay)
+                        )
+                        FoamNavigationButton(
+                            title = "Player",
+                            description = "Layout and visuals",
+                            onClick = onNavigateToPlayer,
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(FoamDimens.separatorHeight)
+                                .background(FoamTheme.colors.borderOverlay)
+                        )
+                        FoamNavigationButton(
+                            title = "Background",
+                            description = "Dynamic background effects",
+                            onClick = onNavigateToBackground,
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
         }
 
         item {
-            FoamNavigationButton(
-                title = "Player",
-                description = "Behaviour, layout and visuals",
-                onClick = onNavigateToPlayer,
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        item {
-            FoamNavigationButton(
-                title = "Background",
-                description = "Dynamic background effects",
-                onClick = onNavigateToBackground,
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        item {
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
                 BasicText(text = "Icon Style", style = FoamTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
                 ) {
                     FoamIconStyle.entries.forEach { style ->
                         val isSelected = style == iconStyle
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
                                 .background(
                                     if (isSelected) FoamTheme.accentColor
-                                    else FoamTheme.colors.surfaceVariant
+                                    else FoamTheme.colors.surface
                                 )
                                 .clickable { viewModel.setIconStyle(style) }
-                                .padding(vertical = 12.dp),
+                                .padding(vertical = FoamDimens.paddingMedium),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -110,14 +129,15 @@ fun UISettingsScreen(
                                 Icon(
                                     imageVector = iconSet.play,
                                     contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
+                                    modifier = Modifier.size(FoamDimens.iconSmall),
                                     tint = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
                                 BasicText(
                                     text = style.label,
                                     style = FoamTheme.typography.body.copy(
-                                        color = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
+                                        color = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                     )
                                 )
                             }
@@ -125,7 +145,7 @@ fun UISettingsScreen(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
         }
     }
 }
