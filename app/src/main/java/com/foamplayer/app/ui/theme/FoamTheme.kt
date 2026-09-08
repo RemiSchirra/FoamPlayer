@@ -86,14 +86,14 @@ val DefaultFoamTypography = FoamTypography(
 
 @Immutable
 data class FoamShapes(
-    val miniPlayerRounding: Dp,
-    val fullPlayerRounding: Dp,
+    val miniPlayerRounding: Float, // Percentage 0f..1f
+    val fullPlayerRounding: Float, // Percentage 0f..1f
     val cardRounding: Dp = 8.dp // Flatter corners for professional look
 )
 
 val DefaultFoamShapes = FoamShapes(
-    miniPlayerRounding = 14.dp,
-    fullPlayerRounding = 24.dp
+    miniPlayerRounding = 0.25f,
+    fullPlayerRounding = 0.15f
 )
 
 // These three rarely (if ever) change after launch, so a staticCompositionLocalOf is
@@ -131,8 +131,8 @@ object FoamTheme {
 fun FoamTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
-    miniPlayerRounding: Dp = 14.dp,
-    fullPlayerRounding: Dp = 24.dp,
+    miniPlayerRounding: Float = 0.4f,
+    fullPlayerRounding: Float = 0.4f,
     accentColor: Color? = null,
     content: @Composable () -> Unit
 ) {

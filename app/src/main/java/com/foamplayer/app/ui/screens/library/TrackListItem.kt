@@ -124,10 +124,11 @@ fun TrackListItem(
         mutableFloatStateOf(selectionHighlightPaddingPx + restingArtHeightPx)
     }
     var containerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    val highlightShape = RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding + HighlightPadding)
-    val highlightCornerRadiusPx = with(density) {
-        (FoamTheme.shapes.miniPlayerRounding + HighlightPadding).toPx()
-    }
+    
+    val imageRadius = (AlbumArtSize / 2) * FoamTheme.shapes.miniPlayerRounding
+    val highlightRadius = imageRadius + HighlightPadding
+    val highlightShape = RoundedCornerShape(highlightRadius)
+    val highlightCornerRadiusPx = with(density) { highlightRadius.toPx() }
 
     Box(
         modifier = modifier
@@ -188,7 +189,7 @@ fun TrackListItem(
                             Modifier
                         }
                     )
-                    .clip(RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding))
+                    .clip(RoundedCornerShape(imageRadius))
                     .background(FoamTheme.colors.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {

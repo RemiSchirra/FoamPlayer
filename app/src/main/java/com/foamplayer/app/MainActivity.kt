@@ -20,7 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.util.UnstableApi
@@ -112,8 +111,8 @@ private fun FoamApp(
 
     FoamTheme(
         iconStyle = settings.iconStyle,
-        miniPlayerRounding = settings.miniPlayerRounding.dp,
-        fullPlayerRounding = settings.fullPlayerRounding.dp,
+        miniPlayerRounding = settings.miniPlayerRounding / 100f,
+        fullPlayerRounding = settings.fullPlayerRounding / 100f,
         accentColor = accentColor
     ) {
         FoamNavHost(

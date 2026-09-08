@@ -20,7 +20,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.ui.components.FoamSliderItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
@@ -125,10 +124,10 @@ fun PlayerSettingsScreen(
                         onValueChangeFinished = {
                             viewModel.setMiniPlayerRounding(localMiniRounding.roundToInt())
                         },
-                        steps = 7,
-                        valueRange = 0f..32f,
-                        valueDisplay = "${localMiniRounding.roundToInt()}dp",
-                        minMaxDisplay = "0" to "32"
+                        steps = 9,
+                        valueRange = 0f..100f,
+                        valueDisplay = "${localMiniRounding.roundToInt()}%",
+                        minMaxDisplay = "Square" to "Circle"
                     )
                     Box(
                         modifier = Modifier
@@ -143,10 +142,10 @@ fun PlayerSettingsScreen(
                         onValueChangeFinished = {
                             viewModel.setFullPlayerRounding(localFullRounding.roundToInt())
                         },
-                        steps = 7,
-                        valueRange = 0f..64f,
-                        valueDisplay = "${localFullRounding.roundToInt()}dp",
-                        minMaxDisplay = "0" to "64"
+                        steps = 9,
+                        valueRange = 0f..100f,
+                        valueDisplay = "${localFullRounding.roundToInt()}%",
+                        minMaxDisplay = "Square" to "Circle"
                     )
                 }
             }

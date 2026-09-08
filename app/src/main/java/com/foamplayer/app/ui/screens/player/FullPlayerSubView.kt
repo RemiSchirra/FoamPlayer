@@ -35,12 +35,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.unit.times
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
-import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
@@ -137,17 +138,27 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     onBack: () -> Unit,
     upTransitionState: SeekableTransitionState<Boolean>
 ) {
+    val configuration = LocalConfiguration.current
+    val miniImageSize = 48.dp
+    val fullImageSize = configuration.screenWidthDp.dp - 48.dp
+    
+    val miniRadius = (miniImageSize / 2) * FoamTheme.shapes.miniPlayerRounding
+    val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
+
     val cornerRadius = lerp(
-        start = FoamTheme.shapes.fullPlayerRounding,
-        stop = FoamTheme.shapes.miniPlayerRounding,
+        start = fullRadius,
+        stop = miniRadius,
         fraction = EaseOutCubic.transform(upTransitionState.progress())
     )
+    
+    val containerPadding = 8.dp
+    val containerRadius = cornerRadius + containerPadding
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 12.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(containerRadius))
             .background(Color.Black.copy(alpha = 0.2f))
             .clickable(onClick = onBack)
             .padding(8.dp),

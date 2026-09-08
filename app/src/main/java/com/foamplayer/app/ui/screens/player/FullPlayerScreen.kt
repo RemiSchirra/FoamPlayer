@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
+import androidx.compose.ui.unit.times
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.audio.engine.PlaybackState
@@ -763,16 +764,22 @@ private fun SharedTransitionScope.TrackHeroPager(
         }
     }
 
+    val miniImageSize = 44.dp
+    val fullImageSize = configuration.screenWidthDp.dp - (PlayerDimens.horizontalPagePadding * 2)
+
+    val miniRadius = (miniImageSize / 2) * FoamTheme.shapes.miniPlayerRounding
+    val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
+
     // Track the outer screen transition (MiniPlayer <-> FullPlayer)
     val outerRadius = lerp(
-        start = FoamTheme.shapes.miniPlayerRounding,
-        stop = FoamTheme.shapes.fullPlayerRounding,
+        start = miniRadius,
+        stop = fullRadius,
         fraction = playerTransitionState.progress()
     )
 
     val headerRadius = lerp(
-        start = FoamTheme.shapes.fullPlayerRounding,
-        stop = FoamTheme.shapes.miniPlayerRounding,
+        start = fullRadius,
+        stop = miniRadius,
         fraction = upTransitionState.progress()
     )
 
@@ -811,7 +818,7 @@ private fun SharedTransitionScope.TrackHeroPager(
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(1f)
-                            .clip(RoundedCornerShape(FoamTheme.shapes.fullPlayerRounding))
+                            .clip(RoundedCornerShape(fullRadius))
                             .background(placeholderColor)
                             .graphicsLayer { alpha = anchorPageAlpha() },
                         contentAlignment = Alignment.Center

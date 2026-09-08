@@ -39,9 +39,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.unit.times
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.audio.engine.PlaybackState
@@ -289,22 +292,35 @@ fun MiniPlayer(
         }
     }
 
+    val configuration = LocalConfiguration.current
+    val miniImageSize = 44.dp
+    val fullImageSize = configuration.screenWidthDp.dp - 48.dp
+    
+    val miniRoundingPercent = FoamTheme.shapes.miniPlayerRounding
+    val fullRoundingPercent = FoamTheme.shapes.fullPlayerRounding
+
+    val miniImageRadius = (miniImageSize / 2) * miniRoundingPercent
+    val fullImageRadius = (fullImageSize / 2) * fullRoundingPercent
+
     val animatedCornerRadius by animatedVisibilityScope.transition.animateDp(label = "miniCornerRadius") { enterExitState ->
         if (enterExitState == EnterExitState.Visible) {
-            FoamTheme.shapes.miniPlayerRounding
+            miniImageRadius
         } else {
-            FoamTheme.shapes.fullPlayerRounding
+            fullImageRadius
         }
     }
+
+    val containerPadding = 8.dp
+    val containerRadius = miniImageRadius + containerPadding
 
     with(sharedTransitionScope) {
         Box(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 6.dp)
-                .clip(RoundedCornerShape(FoamTheme.shapes.miniPlayerRounding))
+                .clip(RoundedCornerShape(containerRadius))
                 .background(FoamTheme.colors.surfaceVariant)
-                .padding(8.dp)
+                .padding(containerPadding)
         ) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -344,7 +360,7 @@ fun MiniPlayer(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(44.dp)
+                                    .size(miniImageSize)
                                     .then(
                                         if (useSharedElements && isSettledCurrentTrackPage) {
                                             Modifier.sharedElement(

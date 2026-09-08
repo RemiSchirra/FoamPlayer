@@ -14,8 +14,8 @@ data class AppSettings(
     val bitPerfectEnabled: Boolean = true,
     val libraryFolders: Set<String> = emptySet(),
     val iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
-    val miniPlayerRounding: Int = 8,
-    val fullPlayerRounding: Int = 24,
+    val miniPlayerRounding: Int = 40,
+    val fullPlayerRounding: Int = 40,
     val artistSeparators: Set<String> = DEFAULT_SEPARATORS,
     val genreSeparators: Set<String> = DEFAULT_SEPARATORS,
     val automaticColorEnabled: Boolean = true,
@@ -32,8 +32,8 @@ data class AppSettings(
 ) {
     fun sanitized(): AppSettings = copy(
         libraryFolders = libraryFolders.map(String::trim).filter(String::isNotEmpty).toSet(),
-        miniPlayerRounding = miniPlayerRounding.coerceIn(MIN_MINI_PLAYER_ROUNDING, MAX_MINI_PLAYER_ROUNDING),
-        fullPlayerRounding = fullPlayerRounding.coerceIn(MIN_FULL_PLAYER_ROUNDING, MAX_FULL_PLAYER_ROUNDING),
+        miniPlayerRounding = miniPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
+        fullPlayerRounding = fullPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
         backgroundBlur = backgroundBlur.coerceIn(MIN_BACKGROUND_BLUR, MAX_BACKGROUND_BLUR),
         dynamicBackgroundIntensity = dynamicBackgroundIntensity.coerceIn(
             MIN_DYNAMIC_BACKGROUND_INTENSITY,
@@ -46,10 +46,8 @@ data class AppSettings(
     companion object {
         // 0xFFFF5252 (the app's existing default red) as a signed ARGB Int.
         const val DEFAULT_ACCENT_COLOR = -44_462
-        const val MIN_MINI_PLAYER_ROUNDING = 0
-        const val MAX_MINI_PLAYER_ROUNDING = 32
-        const val MIN_FULL_PLAYER_ROUNDING = 0
-        const val MAX_FULL_PLAYER_ROUNDING = 64
+        const val MIN_ROUNDING = 0
+        const val MAX_ROUNDING = 100
         const val MIN_BACKGROUND_BLUR = 0
         const val MAX_BACKGROUND_BLUR = 100
         const val DEFAULT_BACKGROUND_BLUR = 20
