@@ -8,6 +8,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.annotation.OptIn
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.media3.common.util.UnstableApi
 import com.foamplayer.app.audio.service.PlaybackService
 import com.foamplayer.app.ui.navigation.FoamNavHost
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
@@ -31,6 +34,8 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    private val playerViewModel: PlayerViewModel by viewModels()
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -43,9 +48,22 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         checkAndRequestPermissions()
+        handleIntent(intent)
 
         setContent {
-            FoamApp()
+            FoamApp(playerViewModel = playerViewModel)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(PlaybackService.EXTRA_OPEN_PLAYER, false) == true) {
+            playerViewModel.requestOpenPlayer()
         }
     }
 
@@ -61,8 +79,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Pure decision, no side effects — easy to reason about (and test)
-    // independently of whether permissions actually get requested.
     private fun requiredPermissions(): List<String> = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> listOf(
             Manifest.permission.READ_MEDIA_AUDIO,
@@ -71,20 +87,16 @@ class MainActivity : ComponentActivity() {
         else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
 
+    @OptIn(UnstableApi::class)
     private fun startPlaybackService() {
         startService(Intent(this, PlaybackService::class.java))
     }
 }
 
-/**
- * Root composable: reads settings + playback state, resolves the current
- * theme accent color, and hosts navigation. Kept out of the Activity so it
- * can be previewed/reasoned about as plain Compose UI.
- */
 @Composable
 private fun FoamApp(
     settingsViewModel: SettingsViewModel = hiltViewModel(),
-    playerViewModel: PlayerViewModel = hiltViewModel()
+    playerViewModel: PlayerViewModel
 ) {
     val settings by settingsViewModel.settings.collectAsState()
 
@@ -104,16 +116,13 @@ private fun FoamApp(
         fullPlayerRounding = settings.fullPlayerRounding.dp,
         accentColor = accentColor
     ) {
-        FoamNavHost(modifier = Modifier.fillMaxSize())
+        FoamNavHost(
+            modifier = Modifier.fillMaxSize(),
+            playerViewModel = playerViewModel
+        )
     }
 }
 
-/**
- * Resolves and animates the theme's accent color from whichever source is
- * active: the player's live dynamic color, an album-art palette extraction,
- * or the user's manually chosen color. A single animateColorAsState means
- * switching between automatic and manual mode fades instead of snapping.
- */
 @Composable
 private fun rememberAccentColor(
     isAutomaticColor: Boolean,

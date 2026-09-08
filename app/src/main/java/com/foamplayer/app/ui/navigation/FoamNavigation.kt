@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -79,12 +80,6 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-// Search <-> ArtistDetail <-> AlbumDetail all hand off shared elements (album art,
-// title, artist) between each other. The non-shared parts of the screen (background,
-// buttons, list rows) still need their own fade-in/out so the transition doesn't feel
-// abrupt — but that fade must run on the exact same duration/easing as the shared
-// element's bounds animation (see AlbumArtBoundsTransform in TrackListScreen.kt), or the
-// two race each other at different speeds and the mismatch reads as a flicker.
 const val SharedElementTransitionDurationMs = 350
 val SharedElementEasing = FastOutSlowInEasing
 
@@ -102,12 +97,14 @@ private fun isSettingsRoute(route: String?): Boolean {
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun FoamNavHost(modifier: Modifier = Modifier) {
+fun FoamNavHost(
+    modifier: Modifier = Modifier,
+    playerViewModel: PlayerViewModel = hiltViewModel()
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val playerViewModel: PlayerViewModel = hiltViewModel()
     val libraryViewModel: LibraryViewModel = hiltViewModel()
     val playbackState by playerViewModel.playbackState.collectAsState()
     val playerSettings by playerViewModel.settings.collectAsState()
@@ -115,13 +112,27 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
     val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
     val isDynamicBackgroundEnabled = playerSettings.dynamicBackgroundEnabled
 
-    val playerTransitionState = remember { SeekableTransitionState(false) }
+    // Initialize the transition state based on whether the player should be open immediately
+    val initialOpenRequested = remember { playerViewModel.openPlayerRequested.value }
+    val playerTransitionState = remember { SeekableTransitionState(initialOpenRequested) }
+    
+    LaunchedEffect(Unit) {
+        if (initialOpenRequested) {
+            playerViewModel.consumeOpenPlayerRequest()
+        }
+    }
+
     val scope = rememberCoroutineScope()
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     var trackListTransitionTrackId by remember { mutableStateOf<Long?>(null) }
     var skipMiniPlayerTrackAnimation by remember { mutableStateOf(false) }
+    
+    // Track whether the current or next transition should use animation.
+    // If we start opened, we disable animation for the initial frame.
+    var isTransitionAnimated by remember { mutableStateOf(!initialOpenRequested) }
+
     val getPlayerAnimationSpec: (Boolean) -> androidx.compose.animation.core.TweenSpec<Float> = { targetIsFull ->
         val isOpenProgress = if (playerTransitionState.currentState == playerTransitionState.targetState) {
             if (playerTransitionState.currentState) 1f else 0f
@@ -132,13 +143,11 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                 1f - playerTransitionState.fraction
             }
         }
-
         val remainingFraction = (if (targetIsFull) 1f - isOpenProgress else isOpenProgress).coerceIn(0f, 1f)
-
         val dynamicDuration = (500 * remainingFraction).toInt().coerceAtLeast(1)
-
         tween(durationMillis = dynamicDuration, easing = EaseInOut)
     }
+
     var backgroundFrontArtPath by remember { mutableStateOf(playbackState.currentTrack?.albumArtPath) }
     var backgroundBackArtPath by remember { mutableStateOf<String?>(null) }
     var backgroundCrossfadeFraction by remember { mutableStateOf(0f) }
@@ -149,26 +158,45 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
     }
     val transitionJobHolder = remember { TransitionJobHolder() }
 
-    fun animatePlayerTransition(open: Boolean, sourceTrackId: Long? = null, precompose: Boolean = false) {
+    fun animatePlayerTransition(
+        open: Boolean,
+        sourceTrackId: Long? = null,
+        precompose: Boolean = false,
+        animated: Boolean = true
+    ) {
         transitionJobHolder.job?.cancel()
+        isTransitionAnimated = animated
+        
         if (open) {
             trackListTransitionTrackId = sourceTrackId
         }
         val myGeneration = ++transitionJobHolder.generation
         transitionJobHolder.job = scope.launch {
             try {
-                if (precompose) {
-                    withFrameNanos { }
-                    playerTransitionState.seekTo(fraction = 0f, targetState = open)
-                    withFrameNanos { }
+                if (animated) {
+                    if (precompose) {
+                        withFrameNanos { }
+                        playerTransitionState.seekTo(fraction = 0f, targetState = open)
+                        withFrameNanos { }
+                    }
+                    playerTransitionState.animateTo(open, getPlayerAnimationSpec(open))
+                } else {
+                    playerTransitionState.seekTo(if (open) 1f else 0f, targetState = open)
                 }
-                playerTransitionState.animateTo(open, getPlayerAnimationSpec(open))
             } finally {
                 if (open && transitionJobHolder.generation == myGeneration) {
                     trackListTransitionTrackId = null
                     skipMiniPlayerTrackAnimation = false
                 }
             }
+        }
+    }
+
+    val openPlayerRequested by playerViewModel.openPlayerRequested.collectAsState()
+    LaunchedEffect(openPlayerRequested) {
+        if (openPlayerRequested) {
+            animatePlayerTransition(open = true, animated = false)
+            playerViewModel.consumeOpenPlayerRequest()
         }
     }
 
@@ -214,8 +242,8 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                 }
                 transition.AnimatedVisibility(
                     visible = { isFull -> !isFull },
-                    enter = fadeIn(),
-                    exit = fadeOut(),
+                    enter = if (isTransitionAnimated) fadeIn() else EnterTransition.None,
+                    exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None,
                     modifier = Modifier.fillMaxSize()
                 ) {
                     val playerTransitionVisibilityScope = this
@@ -430,8 +458,8 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
                         Box(modifier = Modifier.align(Alignment.BottomCenter)) {
                             transition.AnimatedVisibility(
                                 visible = { isFull -> !isFull },
-                                enter = fadeIn(),
-                                exit = fadeOut()
+                                enter = if (isTransitionAnimated) fadeIn() else EnterTransition.None,
+                                exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
                             ) {
                                 val miniPlayerVisibilityScope = this
                                 if (playbackState.currentTrack != null) {
@@ -477,8 +505,8 @@ fun FoamNavHost(modifier: Modifier = Modifier) {
 
                 transition.AnimatedVisibility(
                     visible = { isFull -> isFull },
-                    enter = fadeIn(),
-                    exit = fadeOut()
+                    enter = if (isTransitionAnimated) fadeIn() else EnterTransition.None,
+                    exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
                 ) {
                     BackHandler {
                         animatePlayerTransition(open = false)

@@ -24,12 +24,6 @@ class PlayerViewModel @Inject constructor(
 
     val playbackState: StateFlow<PlaybackState> = audioEngine.playbackState
 
-    // Live position, updated 5x/sec while playing. Deliberately kept separate from
-    // playbackState — see the comment on AudioEngine.positionMs. Read this via
-    // `.value` from a leaf composable/provider lambda (as FullPlayerScreen's
-    // seekBarProgress and LyricsScreen's currentPositionMsProvider already do),
-    // not via collectAsState() at a screen's top level, or you'll reintroduce the
-    // same tick-rate recomposition this was added to avoid.
     val positionMs: StateFlow<Long> = audioEngine.positionMs
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings.stateIn(
@@ -41,8 +35,19 @@ class PlayerViewModel @Inject constructor(
     private val _dynamicAccentColor = MutableStateFlow<Color?>(null)
     val dynamicAccentColor: StateFlow<Color?> = _dynamicAccentColor.asStateFlow()
 
+    private val _openPlayerRequested = MutableStateFlow(false)
+    val openPlayerRequested: StateFlow<Boolean> = _openPlayerRequested.asStateFlow()
+
     fun setDynamicAccentColor(color: Color?) {
         _dynamicAccentColor.value = color
+    }
+
+    fun requestOpenPlayer() {
+        _openPlayerRequested.value = true
+    }
+
+    fun consumeOpenPlayerRequest() {
+        _openPlayerRequested.value = false
     }
 
     fun playQueue(tracks: List<TrackEntity>, startIndex: Int) {

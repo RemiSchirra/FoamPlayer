@@ -1,5 +1,7 @@
 package com.foamplayer.app.audio.service
 
+import android.app.PendingIntent
+import android.content.Intent
 import android.os.Bundle
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
@@ -9,6 +11,7 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.foamplayer.app.FoamApplication
+import com.foamplayer.app.MainActivity
 import com.foamplayer.app.R
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.RepeatMode
@@ -64,9 +67,19 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(EXTRA_OPEN_PLAYER, true)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         val session = MediaSession.Builder(this, audioEngine.player)
             .setCallback(callback)
             .setBitmapLoader(EmbeddedAlbumArtBitmapLoader(this))
+            .setSessionActivity(pendingIntent)
             .build()
 
         // Set the notification provider
@@ -130,8 +143,9 @@ class PlaybackService : MediaSessionService() {
         )
     }
 
-    private companion object {
+    companion object {
         const val ACTION_TOGGLE_SHUFFLE = "com.foamplayer.app.action.TOGGLE_SHUFFLE"
         const val ACTION_TOGGLE_REPEAT = "com.foamplayer.app.action.TOGGLE_REPEAT"
+        const val EXTRA_OPEN_PLAYER = "com.foamplayer.app.extra.OPEN_PLAYER"
     }
 }
