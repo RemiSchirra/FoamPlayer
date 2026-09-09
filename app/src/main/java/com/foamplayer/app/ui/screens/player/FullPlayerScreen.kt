@@ -416,7 +416,10 @@ fun FullPlayerScreen(
     }
 
     LaunchedEffect(queueIndex) {
-        if (queueIndex in 0 until queueSize && pagerState.currentPage != queueIndex) {
+        if (queueIndex in 0 until queueSize &&
+            pagerState.currentPage != queueIndex &&
+            !pagerState.isScrollInProgress
+        ) {
             // Only play the animation if we're not in the subview
             if (isMainPagerVisible()) {
                 pagerState.animateScrollToPage(

@@ -2,6 +2,7 @@ package com.foamplayer.app.ui.screens.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,7 +20,9 @@ import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -117,7 +120,11 @@ fun SettingsCategoryItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
             .background(FoamTheme.colors.surface)
-            .clickable { onClick() }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onClick
+            )
     ) {
         Row(
             modifier = Modifier

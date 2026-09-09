@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -39,30 +41,49 @@ class AudioEngine @Inject constructor(
 
     // Deliberately separate from _playbackState. Position ticks every rendered frame
     // while playing; if it lived on the same object as queue/currentTrack/etc, every tick
-    // would emit a
-    // brand-new PlaybackState and force recomposition of every composable that reads
-    // ANY field off `state` (not just position) — including screens far from anything
-    // that actually needs live position, like the lyrics/queue subviews. Consumers that
-    // need a live, per-frame position (seek bar, karaoke lyrics sync) should read
-    // `positionMs.value` directly inside a leaf composable/provider lambda, the same way
-    // LyricsScreen already does — not via collectAsState() at a screen's top level.
+    // would emit a brand-new PlaybackState and force recomposition of every composable
+    // that reads ANY field off `state` (not just position) — including screens far from
+    // anything that actually needs live position, like the lyrics/queue subviews.
+    // Consumers that need a live, per-frame position (seek bar, karaoke lyrics sync)
+    // should read `positionMs.value` directly inside a leaf composable/provider lambda,
+    // the same way LyricsScreen already does — not via collectAsState() at a screen's
+    // top level.
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs
 
     private var progressJob: Job? = null
 
-    // Window index range
+    // The range of queue indices currently loaded into the player, as absolute indices
+    // into _playbackState.value.queue (player index 0 == queue index loadedRange.first).
+    // This is always kept to a small bounded window, never the whole queue — see
+    // adjustWindow() below, which is the thing that actually enforces that bound.
     private var loadedRange: IntRange = IntRange.EMPTY
-    private var lazyLoadJob: Job? = null
+
+    // Guards a full "jump to a fresh window" (setQueue / loadWindowAndPlay — used when
+    // starting a new queue or skipping somewhere outside the currently loaded window).
+    // Cancelling this is how a new jump discards an in-flight one.
+    private var windowJumpJob: Job? = null
+
+    // Serializes the small, reactive window-shift mutations triggered by
+    // onMediaItemTransition, so a burst of rapid skips can't run two adjustWindow()
+    // player mutations concurrently against each other.
+    private val windowAdjustMutex = Mutex()
 
     // Mirrors _playbackState.value.queue: maps track id -> its index in that queue
     private var trackIndexById: Map<Long, Int> = emptyMap()
 
     companion object {
-        // Number of tracks loaded around the current track
-        private const val INITIAL_WINDOW_RADIUS = 15
-        // Number of tracks get added per chunk
-        private const val LAZY_CHUNK_SIZE = 25
+        // Steady-state number of tracks kept loaded on each side of the current track.
+        // Combined with CHUNK_SIZE below, the player never holds more than roughly
+        // 2 * WINDOW_RADIUS + CHUNK_SIZE tracks at once, no matter how large the
+        // underlying queue is.
+        private const val WINDOW_RADIUS = 15
+        // Tracks fetched (or trimmed) per window shift.
+        private const val CHUNK_SIZE = 10
+        // Start extending the loaded window once the current track is this close to
+        // either edge of it, so the next chunk is already loaded before playback
+        // actually reaches that edge.
+        private const val EDGE_TRIGGER_MARGIN = 5
     }
 
     init {
@@ -72,7 +93,7 @@ class AudioEngine @Inject constructor(
 
     /**
      * Suspends until just after the next display frame is rendered. Used to pace
-     * Main-thread player mutations during lazy queue loading so they land right after
+     * Main-thread player mutations during window loading so they land right after
      * a frame commits instead of on an arbitrary wall-clock timer that can fire mid-frame.
      * AudioEngine's own `scope` isn't running under a composition, so it has no
      * MonotonicFrameClock available and can't use Compose's `withFrameNanos` directly —
@@ -111,19 +132,20 @@ class AudioEngine @Inject constructor(
                 val index = trackIndexById[trackId]
                 if (index != null) {
                     val track = currentQueue[index]
-                    val outputInfo = bitPerfectDetector.evaluateOutput(
-                        sourceSampleRate = track.sampleRate,
-                        sourceBitDepth = track.bitDepth,
-                        isEqualizerActive = equalizerManager.state.value.enabled
-                    )
+
                     _playbackState.value = _playbackState.value.copy(
                         currentTrack = track,
                         queueIndex = index,
                         durationMs = track.duration,
-                        currentPositionMs = 0L,
-                        audioOutputInfo = outputInfo
+                        currentPositionMs = 0L
                     )
                     _positionMs.value = 0L
+
+                    // Reactively keep the loaded window centered on the new current
+                    // track. This — not a background loop that loads the rest of the
+                    // queue — is what keeps the player's footprint small even when the
+                    // queue itself is huge.
+                    scope.launch { adjustWindow() }
                 }
             }
 
@@ -134,7 +156,7 @@ class AudioEngine @Inject constructor(
     }
 
     fun setQueue(tracks: List<TrackEntity>, startIndex: Int = 0) {
-        lazyLoadJob?.cancel()
+        windowJumpJob?.cancel()
 
         if (tracks.isEmpty()) {
             loadedRange = IntRange.EMPTY
@@ -156,67 +178,102 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Loads a window of tracks around [centerIndex] into the player, starts playback,
-     * then starts lazy loading of everything else.
+     * Loads *only* a window of up to 2*WINDOW_RADIUS+1 tracks around [centerIndex]
+     * into the player and starts playback. Nothing else in the queue is touched here:
+     * the rest is loaded lazily, on demand, by adjustWindow() as playback moves
+     * through it — so a 50,000-track queue costs exactly the same as a 50-track one.
      */
     private fun loadWindowAndPlay(tracks: List<TrackEntity>, centerIndex: Int) {
-        lazyLoadJob?.cancel()
+        windowJumpJob?.cancel()
 
-        val windowStart = (centerIndex - INITIAL_WINDOW_RADIUS).coerceAtLeast(0)
-        val windowEnd = (centerIndex + INITIAL_WINDOW_RADIUS).coerceAtMost(tracks.lastIndex)
-        loadedRange = windowStart..windowEnd
+        val windowStart = (centerIndex - WINDOW_RADIUS).coerceAtLeast(0)
+        val windowEnd = (centerIndex + WINDOW_RADIUS).coerceAtMost(tracks.lastIndex)
 
-        val windowItems = tracks.subList(windowStart, windowEnd + 1).map { it.toMediaItem() }
-        player.setMediaItems(windowItems, centerIndex - windowStart, 0L)
-        player.prepare()
-        player.play()
-
-        lazyLoadRemaining()
+        windowJumpJob = scope.launch {
+            // Building MediaItems is pure CPU work with no player interaction (title/
+            // artist metadata, artwork URI parsing), so it belongs on Default. This used
+            // to run synchronously on Main, which meant every song switch that needed a
+            // fresh window (starting a new queue, skipping past the loaded range, tapping
+            // a track in the Queue subview) blocked Main building up to 2*WINDOW_RADIUS+1
+            // MediaItems right on the thread Compose needs for that same switch's own
+            // animations.
+            val windowItems = withContext(Dispatchers.Default) {
+                tracks.subList(windowStart, windowEnd + 1).map { it.toMediaItem() }
+            }
+            player.setMediaItems(windowItems, centerIndex - windowStart, 0L)
+            player.prepare()
+            player.play()
+            loadedRange = windowStart..windowEnd
+        }
     }
 
     /**
-     * Loads the rest of the queue.
+     * Keeps the player's loaded window small and centered around the current track,
+     * regardless of how large the underlying queue is:
+     *  - extends the window by one chunk on whichever edge playback is approaching, so
+     *    that edge is loaded before playback actually reaches it, and
+     *  - trims tracks off the *opposite* edge once the window has grown well past the
+     *    target radius, so the player never accumulates the whole queue behind/ahead of
+     *    where playback actually is.
+     *
+     * A no-op while a fresh window jump (loadWindowAndPlay) is in flight — that jump
+     * establishes its own window when it completes, so adjusting the *old* window here
+     * would just be wasted, and potentially wrong, work.
      */
-    private fun lazyLoadRemaining() {
-        lazyLoadJob = scope.launch {
-            while (true) {
-                val tracks = _playbackState.value.queue
-                if (tracks.isEmpty() || loadedRange == IntRange.EMPTY) break
-                if (loadedRange.first <= 0 && loadedRange.last >= tracks.lastIndex) break
+    private suspend fun adjustWindow() {
+        if (windowJumpJob?.isActive == true) return
+        windowAdjustMutex.withLock {
+            val tracks = _playbackState.value.queue
+            val currentIndex = _playbackState.value.queueIndex
+            if (tracks.isEmpty() || loadedRange == IntRange.EMPTY) return@withLock
+            if (currentIndex !in loadedRange) return@withLock
 
-                if (loadedRange.first > 0) {
-                    val newStart = (loadedRange.first - LAZY_CHUNK_SIZE).coerceAtLeast(0)
-                    // Building MediaItems is pure CPU work with no player interaction, so it
-                    // doesn't need to run on Main. Only the actual player mutation below needs
-                    // to be on Main.
-                    val chunk = withContext(Dispatchers.Default) {
-                        tracks.subList(newStart, loadedRange.first).map { it.toMediaItem() }
-                    }
-                    // A fixed wall-clock delay() here fires on its own timer, independent of
-                    // Compose's frame clock, so it can land mid-frame -- right when the karaoke
-                    // lyrics screen (the heaviest UI in the app, needing a full 16ms/frame) is
-                    // in the middle of drawing. addMediaItems() below is real ExoPlayer work
-                    // (rebuilding the internal timeline, notifying listeners) that has to run
-                    // on Main, so instead of an arbitrary timer we wait for the next frame
-                    // callback: that guarantees this mutation only ever runs right after a
-                    // frame has committed, never stealing time out of one in progress, and it
-                    // naturally paces itself to the display's actual refresh rate instead of
-                    // hammering Main every 40ms for as long as it takes to load a big queue.
-                    awaitFrame()
-                    player.addMediaItems(0, chunk)
-                    loadedRange = newStart..loadedRange.last
-                }
+            var start = loadedRange.first
+            var end = loadedRange.last
 
-                if (loadedRange.last < tracks.lastIndex) {
-                    val newEnd = (loadedRange.last + LAZY_CHUNK_SIZE).coerceAtMost(tracks.lastIndex)
-                    val chunk = withContext(Dispatchers.Default) {
-                        tracks.subList(loadedRange.last + 1, newEnd + 1).map { it.toMediaItem() }
-                    }
-                    awaitFrame()
-                    player.addMediaItems(chunk)
-                    loadedRange = loadedRange.first..newEnd
+            // Extend ahead if we're approaching the trailing edge.
+            if (end < tracks.lastIndex && end - currentIndex < EDGE_TRIGGER_MARGIN) {
+                val newEnd = (end + CHUNK_SIZE).coerceAtMost(tracks.lastIndex)
+                val chunk = withContext(Dispatchers.Default) {
+                    tracks.subList(end + 1, newEnd + 1).map { it.toMediaItem() }
                 }
+                awaitFrame()
+                player.addMediaItems(chunk)
+                end = newEnd
             }
+
+            // Extend behind if we're approaching the leading edge.
+            if (start > 0 && currentIndex - start < EDGE_TRIGGER_MARGIN) {
+                val newStart = (start - CHUNK_SIZE).coerceAtLeast(0)
+                val chunk = withContext(Dispatchers.Default) {
+                    tracks.subList(newStart, start).map { it.toMediaItem() }
+                }
+                awaitFrame()
+                player.addMediaItems(0, chunk)
+                start = newStart
+            }
+
+            // Trim the far side once it's grown well past the target radius. This is
+            // the step that actually bounds memory/timeline size for a huge queue —
+            // without it, repeatedly extending ahead as playback advances would
+            // eventually load the entire queue into the player, one chunk at a time.
+            val overhang = WINDOW_RADIUS + CHUNK_SIZE
+            if (currentIndex - start > overhang) {
+                val newStart = currentIndex - WINDOW_RADIUS
+                val removeCount = newStart - start
+                awaitFrame()
+                player.removeMediaItems(0, removeCount)
+                start = newStart
+            }
+            if (end - currentIndex > overhang) {
+                val newEnd = currentIndex + WINDOW_RADIUS
+                val keepCount = newEnd - start + 1
+                awaitFrame()
+                player.removeMediaItems(keepCount, player.mediaItemCount)
+                end = newEnd
+            }
+
+            loadedRange = start..end
         }
     }
 
@@ -225,7 +282,12 @@ class AudioEngine @Inject constructor(
 
     fun next() {
         if (player.hasNextMediaItem()) {
-            seekTo(0)
+            // No seekTo(0) here: onMediaItemTransition already resets
+            // currentPositionMs/_positionMs to 0 for the new track. Calling seekTo(0)
+            // first would allocate and emit an extra PlaybackState (with the old
+            // track's metadata but a zeroed position) right before the transition's
+            // own PlaybackState emission overwrites it -- a wasted full-screen
+            // recomposition, and a one-frame position/track mismatch, on every skip.
             player.seekToNextMediaItem()
         } else {
             // The next track exists in the full queue but hasn't been lazily loaded yet
@@ -243,9 +305,15 @@ class AudioEngine @Inject constructor(
             // Skip to previous media only if the cursor is in the first 5 seconds of the track
             // TODO : This should be an app parameter
             if (player.contentPosition <= 5000L) {
+                // Actually changing tracks -- onMediaItemTransition will reset the
+                // position itself. Calling seekTo(0) here too would double-emit
+                // PlaybackState for the same reason described in next().
                 player.seekToPreviousMediaItem()
+            } else {
+                // Staying on the current track (just restarting it) -- this is the
+                // only case that needs an explicit reset, since no transition fires.
+                seekTo(0)
             }
-            seekTo(0)
         } else if (loadedRange.first > 0) {
             val queue = _playbackState.value.queue
             val previousIndex = loadedRange.first - 1
@@ -309,7 +377,7 @@ class AudioEngine @Inject constructor(
         )
 
         if (needsWindowResync) {
-            lazyLoadJob?.cancel()
+            windowJumpJob?.cancel()
             loadWindowAndPlay(newQueue, newPlayingIndex)
         }
     }
