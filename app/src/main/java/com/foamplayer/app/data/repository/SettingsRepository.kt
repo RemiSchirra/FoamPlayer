@@ -65,6 +65,8 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setSearchHistory(history: List<String>) = update { it.copy(searchHistory = history) }
+    
+    suspend fun setLanguage(language: String) = update { it.copy(language = language) }
 
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
@@ -89,7 +91,8 @@ class SettingsRepository @Inject constructor(
         enabledLyricsProviders = this[Keys.ENABLED_LYRICS_PROVIDERS]
             ?.mapNotNull { name -> PreferredLyricsProvider.entries.find { it.name == name } }
             ?.toSet() ?: PreferredLyricsProvider.entries.toSet(),
-        searchHistory = this[Keys.SEARCH_HISTORY]?.split("|")?.filter { it.isNotEmpty() } ?: emptyList()
+        searchHistory = this[Keys.SEARCH_HISTORY]?.split("|")?.filter { it.isNotEmpty() } ?: emptyList(),
+        language = this[Keys.LANGUAGE] ?: AppSettings().language
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -111,6 +114,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.LYRICS_PROVIDER_ORDER] = settings.lyricsProviderOrder.joinToString(",") { it.name }
         this[Keys.ENABLED_LYRICS_PROVIDERS] = settings.enabledLyricsProviders.map { it.name }.toSet()
         this[Keys.SEARCH_HISTORY] = settings.searchHistory.joinToString("|")
+        this[Keys.LANGUAGE] = settings.language
     }
 
     private object Keys {
@@ -132,5 +136,6 @@ class SettingsRepository @Inject constructor(
         val LYRICS_PROVIDER_ORDER = stringPreferencesKey("lyrics_provider_order")
         val ENABLED_LYRICS_PROVIDERS = stringSetPreferencesKey("enabled_lyrics_providers")
         val SEARCH_HISTORY = stringPreferencesKey("search_history")
+        val LANGUAGE = stringPreferencesKey("language")
     }
 }

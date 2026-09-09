@@ -28,7 +28,8 @@ data class AppSettings(
     val dynamicBackgroundIntensity: Int = DEFAULT_DYNAMIC_BACKGROUND_INTENSITY,
     val lyricsProviderOrder: List<PreferredLyricsProvider> = DefaultLyricsProviderOrder,
     val enabledLyricsProviders: Set<PreferredLyricsProvider> = PreferredLyricsProvider.entries.toSet(),
-    val searchHistory: List<String> = emptyList()
+    val searchHistory: List<String> = emptyList(),
+    val language: String = "auto"
 ) {
     fun sanitized(): AppSettings = copy(
         libraryFolders = libraryFolders.map(String::trim).filter(String::isNotEmpty).toSet(),

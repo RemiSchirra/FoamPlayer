@@ -62,6 +62,10 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setEnabledLyricsProviders(newEnabled)
     }
 
+    fun setLanguage(language: String) = launch {
+        settingsRepository.setLanguage(language)
+    }
+
     private fun launch(block: suspend () -> Unit) {
         viewModelScope.launch { block() }
     }

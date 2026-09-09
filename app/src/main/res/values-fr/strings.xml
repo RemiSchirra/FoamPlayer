@@ -115,4 +115,7 @@
     <string name="automatic_color_desc">Extraire la couleur d\'accentuation de la pochette</string>
     <string name="on">ON</string>
     <string name="off">OFF</string>
+
+    <string name="language">Langue</string>
+    <string name="language_automatic">Automatique</string>
 </resources>

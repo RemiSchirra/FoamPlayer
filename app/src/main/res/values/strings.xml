@@ -115,4 +115,7 @@
     <string name="automatic_color_desc">Extract accent color from album art</string>
     <string name="on">ON</string>
     <string name="off">OFF</string>
+
+    <string name="language">Language</string>
+    <string name="language_automatic">Automatic</string>
 </resources>

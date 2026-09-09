@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,10 +17,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -105,6 +113,18 @@ fun UISettingsScreen(
 
             item {
                 Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
+                    BasicText(text = stringResource(R.string.language), style = FoamTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                    LanguageSelector(
+                        currentLanguage = settings.language,
+                        onLanguageSelected = { viewModel.setLanguage(it) }
+                    )
+                }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+
+            item {
+                Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
                     BasicText(text = stringResource(R.string.icon_style), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                     Row(
@@ -151,6 +171,64 @@ fun UISettingsScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+        }
+    }
+}
+
+@Composable
+private fun LanguageSelector(
+    currentLanguage: String,
+    onLanguageSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val languages = listOf(
+        "auto" to stringResource(R.string.language_automatic),
+        "en" to "English",
+        "fr" to "Français"
+    )
+    val currentLabel = languages.find { it.first == currentLanguage }?.second ?: languages[0].second
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+            .background(FoamTheme.colors.surface)
+            .clickable { expanded = true }
+            .padding(FoamDimens.paddingMedium)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BasicText(text = currentLabel, style = FoamTheme.typography.body)
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = null,
+                tint = FoamTheme.colors.textSecondary
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .background(FoamTheme.colors.surface)
+                .width(IntrinsicSize.Max)
+        ) {
+            languages.forEach { (code, label) ->
+                DropdownMenuItem(onClick = {
+                    onLanguageSelected(code)
+                    expanded = false
+                }) {
+                    BasicText(
+                        text = label,
+                        style = FoamTheme.typography.body.copy(
+                            color = if (code == currentLanguage) FoamTheme.accentColor else FoamTheme.colors.textPrimary
+                        )
+                    )
+                }
             }
         }
     }
