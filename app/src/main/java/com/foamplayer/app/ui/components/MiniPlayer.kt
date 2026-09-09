@@ -68,6 +68,41 @@ import kotlinx.coroutines.flow.StateFlow
  */
 private data class PendingJump(val viaPage: Int, val targetIndex: Int)
 
+/**
+ * Isolated on purpose, mirroring PlaybackProgressSlider in FullPlayerScreen.kt:
+ * seekBarProgress.progress tracks pagerState.currentPageOffsetFraction under the
+ * hood, which changes on essentially every frame of a horizontal swipe. Reading it
+ * directly inside MiniPlayer's own body (as this used to do) forced the whole
+ * function -- album art, title/artist text, and the HorizontalPager itself -- to
+ * recompose on every drag pixel. Reading it here instead confines that
+ * recomposition to just the slider.
+ */
+@Composable
+private fun MiniPlayerProgressSlider(
+    seekBarProgress: SeekBarProgressState,
+    isAnimateSeekBarEnabled: Boolean,
+    activeColor: Color,
+    onSeek: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FoamSlider(
+        value = seekBarProgress.progress,
+        onValueChange = { new ->
+            // A fresh manual drag always wins over any settle tween in flight.
+            seekBarProgress.onDragging()
+            onSeek(new)
+        },
+        trackHeight = 2.dp,
+        activeColor = activeColor,
+        modifier = modifier.onSeekBarReleased {
+            seekBarProgress.onSeekDragFinished(
+                animated = isAnimateSeekBarEnabled,
+                releasedAt = seekBarProgress.progress
+            )
+        }
+    )
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun MiniPlayer(
@@ -295,7 +330,7 @@ fun MiniPlayer(
     val configuration = LocalConfiguration.current
     val miniImageSize = 44.dp
     val fullImageSize = configuration.screenWidthDp.dp - 48.dp
-    
+
     val miniRoundingPercent = FoamTheme.shapes.miniPlayerRounding
     val fullRoundingPercent = FoamTheme.shapes.fullPlayerRounding
 
@@ -450,25 +485,14 @@ fun MiniPlayer(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                FoamSlider(
-                    value = seekBarProgress.progress,
-                    onValueChange = { new ->
-                        // A fresh manual drag always wins over any settle tween in flight.
-                        seekBarProgress.onDragging()
-                        onSeek(new)
-                    },
-                    trackHeight = 2.dp,
+                MiniPlayerProgressSlider(
+                    seekBarProgress = seekBarProgress,
+                    isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                     activeColor = if (playbackState.audioOutputInfo?.isBitPerfectMode == true)
                         FoamTheme.colors.bitPerfectActive
                     else FoamTheme.accentColor,
-                    modifier = Modifier
-                        .height(12.dp)
-                        .onSeekBarReleased {
-                            seekBarProgress.onSeekDragFinished(
-                                animated = isAnimateSeekBarEnabled,
-                                releasedAt = seekBarProgress.progress
-                            )
-                        }
+                    onSeek = onSeek,
+                    modifier = Modifier.height(12.dp)
                 )
             }
         }

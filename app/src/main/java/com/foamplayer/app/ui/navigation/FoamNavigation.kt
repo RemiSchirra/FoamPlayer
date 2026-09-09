@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
@@ -96,6 +97,51 @@ private fun isSettingsRoute(route: String?): Boolean {
     return route != null && (route == Screen.Settings.route || route.startsWith("settings/"))
 }
 
+/**
+ * Owns the background-art crossfade state itself instead of hoisting it into
+ * FoamNavHost. onBackgroundTransition used to write into `mutableStateOf` vars
+ * declared (and read directly, undeferred) at the top of FoamNavHost -- since
+ * that read sat in the same scope as the MiniPlayer and FoamNavigationBar call
+ * sites, every frame of a mini-player drag (this fires every frame, by design)
+ * invalidated that whole Column, forcing FoamNavigationBar to recompose and
+ * MiniPlayer to fully re-run (dragging its HorizontalPager along with it).
+ * Keeping the state -- and the DynamicAlbumArtBackground read of it -- entirely
+ * inside this composable confines that per-frame churn to just this function.
+ * The returned callback is `remember`ed with no keys, so its identity never
+ * changes across recompositions and doesn't itself force callers to recompose.
+ */
+@Composable
+private fun rememberAnimatedBackground(
+    enabled: Boolean,
+    initialFrontArtPath: String?,
+    blur: Dp,
+    intensity: Float,
+    modifier: Modifier = Modifier
+): (frontArtPath: String?, backArtPath: String?, fraction: Float) -> Unit {
+    var frontArtPath by remember { mutableStateOf(initialFrontArtPath) }
+    var backArtPath by remember { mutableStateOf<String?>(null) }
+    var crossfadeFraction by remember { mutableStateOf(0f) }
+
+    if (enabled) {
+        DynamicAlbumArtBackground(
+            frontArtPath = frontArtPath,
+            backArtPath = backArtPath,
+            crossfadeFraction = crossfadeFraction,
+            blur = blur,
+            intensity = intensity,
+            modifier = modifier,
+        )
+    }
+
+    return remember {
+        { front, back, fraction ->
+            frontArtPath = front
+            backArtPath = back
+            crossfadeFraction = fraction
+        }
+    }
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun FoamNavHost(
@@ -116,7 +162,7 @@ fun FoamNavHost(
     // Initialize the transition state based on whether the player should be open immediately
     val initialOpenRequested = remember { playerViewModel.openPlayerRequested.value }
     val playerTransitionState = remember { SeekableTransitionState(initialOpenRequested) }
-    
+
     LaunchedEffect(Unit) {
         if (initialOpenRequested) {
             playerViewModel.consumeOpenPlayerRequest()
@@ -129,7 +175,7 @@ fun FoamNavHost(
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     var trackListTransitionTrackId by remember { mutableStateOf<Long?>(null) }
     var skipMiniPlayerTrackAnimation by remember { mutableStateOf(false) }
-    
+
     // Track whether the current or next transition should use animation.
     // If we start opened, we disable animation for the initial frame.
     var isTransitionAnimated by remember { mutableStateOf(!initialOpenRequested) }
@@ -149,10 +195,6 @@ fun FoamNavHost(
         tween(durationMillis = dynamicDuration, easing = EaseInOut)
     }
 
-    var backgroundFrontArtPath by remember { mutableStateOf(playbackState.currentTrack?.albumArtPath) }
-    var backgroundBackArtPath by remember { mutableStateOf<String?>(null) }
-    var backgroundCrossfadeFraction by remember { mutableStateOf(0f) }
-
     class TransitionJobHolder {
         var job: Job? = null
         var generation: Int = 0
@@ -167,7 +209,7 @@ fun FoamNavHost(
     ) {
         transitionJobHolder.job?.cancel()
         isTransitionAnimated = animated
-        
+
         if (open) {
             trackListTransitionTrackId = sourceTrackId
         }
@@ -231,15 +273,17 @@ fun FoamNavHost(
             }
 
             Box(modifier = Modifier.weight(1f)) {
-                if (isDynamicBackgroundEnabled && !isSettingsRoute(currentRoute)) {
-                    DynamicAlbumArtBackground(
-                        frontArtPath = backgroundFrontArtPath,
-                        backArtPath = backgroundBackArtPath,
-                        crossfadeFraction = backgroundCrossfadeFraction,
+                val backgroundEnabled = isDynamicBackgroundEnabled && !isSettingsRoute(currentRoute)
+                val onBackgroundTransition = if (backgroundEnabled) {
+                    rememberAnimatedBackground(
+                        enabled = true,
+                        initialFrontArtPath = playbackState.currentTrack?.albumArtPath,
                         blur = playerSettings.backgroundBlur.dp,
                         intensity = playerSettings.dynamicBackgroundIntensity / 100f,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize()
                     )
+                } else {
+                    remember { { _: String?, _: String?, _: Float -> } }
                 }
                 transition.AnimatedVisibility(
                     visible = { isFull -> !isFull },
@@ -479,11 +523,7 @@ fun FoamNavHost(
                                         onColorChange = { color ->
                                             playerViewModel.setDynamicAccentColor(color)
                                         },
-                                        onBackgroundTransition = { frontArtPath, backArtPath, fraction ->
-                                            backgroundFrontArtPath = frontArtPath
-                                            backgroundBackArtPath = backArtPath
-                                            backgroundCrossfadeFraction = fraction
-                                        },
+                                        onBackgroundTransition = onBackgroundTransition,
                                         onClick = {
                                             animatePlayerTransition(open = true, precompose = true)
                                         },

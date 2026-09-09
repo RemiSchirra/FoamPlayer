@@ -55,6 +55,38 @@ internal enum class SubViewMode(val labelRes: Int) {
     QUEUE(R.string.queue)
 }
 
+/**
+ * Isolated on purpose: FoamTheme.accentColor changes every frame of a horizontal
+ * swipe (it's driven by viewModel.setDynamicAccentColor, fired every drag frame).
+ * Reading it here -- one leaf per entry -- instead of inline in
+ * SubViewSelectorRow's own body confines that per-frame recomposition to just the
+ * selected item's icon/label, rather than the whole row (and the row's caller).
+ */
+@Composable
+private fun SubViewSelectorItem(
+    mode: SubViewMode,
+    isSelected: Boolean,
+    progress: () -> Float,
+    onSelect: (SubViewMode) -> Unit
+) {
+    val targetColor = if (isSelected) FoamTheme.accentColor else FoamTheme.colors.textSecondary
+    val color = lerp(FoamTheme.colors.textPrimary, targetColor, progress().coerceIn(0f, 1f))
+    val icon = when (mode) {
+        SubViewMode.LYRICS -> FoamTheme.icons.current.lyrics
+        SubViewMode.QUEUE -> FoamTheme.icons.current.queue
+    }
+
+    val label = stringResource(mode.labelRes)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.clickable { onSelect(mode) }.padding(8.dp)
+    ) {
+        Icon(imageVector = icon, contentDescription = label, tint = color, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        BasicText(text = label, style = FoamTheme.typography.body.copy(color = color))
+    }
+}
+
 @Composable
 internal fun SubViewSelectorRow(
     subViewMode: SubViewMode,
@@ -64,22 +96,12 @@ internal fun SubViewSelectorRow(
 ) {
     Row(modifier = modifier, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
         SubViewMode.entries.forEach { mode ->
-            val targetColor = if (mode == subViewMode) FoamTheme.accentColor else FoamTheme.colors.textSecondary
-            val color = lerp(FoamTheme.colors.textPrimary, targetColor, progress().coerceIn(0f, 1f))
-            val icon = when (mode) {
-                SubViewMode.LYRICS -> FoamTheme.icons.current.lyrics
-                SubViewMode.QUEUE -> FoamTheme.icons.current.queue
-            }
-
-            val label = stringResource(mode.labelRes)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.clickable { onSelect(mode) }.padding(8.dp)
-            ) {
-                Icon(imageVector = icon, contentDescription = label, tint = color, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                BasicText(text = label, style = FoamTheme.typography.body.copy(color = color))
-            }
+            SubViewSelectorItem(
+                mode = mode,
+                isSelected = mode == subViewMode,
+                progress = progress,
+                onSelect = onSelect
+            )
         }
     }
 }
@@ -144,7 +166,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     val configuration = LocalConfiguration.current
     val miniImageSize = 48.dp
     val fullImageSize = configuration.screenWidthDp.dp - 48.dp
-    
+
     val miniRadius = (miniImageSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
 
@@ -153,7 +175,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
         stop = miniRadius,
         fraction = EaseOutCubic.transform(upTransitionState.progress())
     )
-    
+
     val containerPadding = 8.dp
     val containerRadius = cornerRadius + containerPadding
 

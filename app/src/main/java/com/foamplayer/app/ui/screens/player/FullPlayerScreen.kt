@@ -72,6 +72,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
@@ -271,8 +272,22 @@ fun FullPlayerScreen(
         }
     )
 
-    val currentQueueIndex by rememberUpdatedState(state.queueIndex)
-    val currentQueueSize by rememberUpdatedState(state.queue.size)
+    // Plain vals, not rememberUpdatedState: FullPlayerScreen already recomposes whenever
+    // `state` changes (it's read at the top of this function), so these are always
+    // current for anything read directly in this body -- keys, child-composable params,
+    // inline checks. Wrapping them in rememberUpdatedState here (as this used to do) and
+    // reading that via `by` in the body actually made things worse: rememberUpdatedState
+    // only updates its backing state via a SideEffect that runs *after* composition, so
+    // on the pass where `state` first changes, the `by` read here still returned the
+    // *previous* queueIndex/size -- and then the SideEffect's post-composition write
+    // immediately invalidated this same top-level scope again to pick up the real value,
+    // turning one track-change into two full FullPlayerScreen recompositions instead of
+    // one. (rememberUpdatedState is still the right tool where a value only needs to be
+    // read *inside* a long-lived effect/callback without restarting it -- see the
+    // settledPage effect below, and TrackChangeCommitEffect -- just not read directly
+    // into this composable's own body.)
+    val queueIndex = state.queueIndex
+    val queueSize = state.queue.size
 
     // Whether MainPlayerContent (and therefore this pager) is actually laid out right
     // now. Mirrors the `upTransition.AnimatedVisibility(visible = { !it })` condition
@@ -290,20 +305,20 @@ fun FullPlayerScreen(
     // This asks the shared cache to fetch anything missing; it doesn't decode
     // on its own, so it never duplicates work the mini player's own pager
     // (which tracks the same queueIndex) already kicked off for the same art.
-    LaunchedEffect(pagerState.currentPage, state.queue) {
-        val indices = listOf(
-            pagerState.currentPage - 1,
-            pagerState.currentPage,
-            pagerState.currentPage + 1
-        )
+    LaunchedEffect(pagerState, state.queue) {
+        val queue = state.queue
+        snapshotFlow { pagerState.currentPage }
+            .collect { currentPage ->
+                val indices = listOf(currentPage - 1, currentPage, currentPage + 1)
 
-        val pathsToKeep = indices.mapNotNull { i ->
-            state.queue.getOrNull(i)?.albumArtPath
-        }.toSet()
+                val pathsToKeep = indices.mapNotNull { i ->
+                    queue.getOrNull(i)?.albumArtPath
+                }.toSet()
 
-        pathsToKeep.forEach { path ->
-            AlbumArtPaletteCache.ensure(scope = this, context = context, path = path)
-        }
+                pathsToKeep.forEach { path ->
+                    AlbumArtPaletteCache.ensure(scope = this, context = context, path = path)
+                }
+            }
     }
 
     // Fires every frame the pager is mid-drag, by design -- the accent color should
@@ -335,35 +350,18 @@ fun FullPlayerScreen(
         }
     }
 
-    // Lock the bar to 0 only once the finger actually releases -- tweened in animated
+    // Locks the bar to 0 only once the finger actually releases -- tweened in animated
     // mode, snapped instantly otherwise -- well before the pager's own fling-to-settle
     // animation visually finishes. Does nothing if the swipe springs back to the same
-    // track (targetPage == currentQueueIndex).
-    //
-    // Gating on `isDragged` going from true to false (rather than on `targetPage`
-    // directly) matters: PagerState.targetPage already reflects its predicted
-    // destination page *while the finger is still down* -- Compose updates it live
-    // from drag distance/velocity, well before release -- so collecting it directly
-    // fired the settle tween/snap mid-drag instead of on release.
-    //
-    // Watching the pair, not just `isDragged` alone, matters too: `isDragged` and
-    // `targetPage` are separate snapshot values that don't necessarily update in the
-    // same frame. On a fast swipe that's already almost all the way to the next
-    // track, release can flip `isDragged` to false a frame before `targetPage`
-    // catches up to the new page -- a plain `snapshotFlow { isDragged }` reads
-    // `targetPage` at that exact (stale) instant and misses the commit entirely,
-    // since it only re-fires on the next `isDragged` *change*, not on `targetPage`
-    // catching up moments later. Keying the flow on both means a late `targetPage`
-    // update still produces a fresh emission to react to.
-    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
-    LaunchedEffect(pagerState) {
-        snapshotFlow { isDragged to pagerState.targetPage }
-            .collect { (dragging, targetPage) ->
-                if (!dragging && targetPage in 0 until currentQueueSize && targetPage != currentQueueIndex) {
-                    seekBarProgress.onTrackChangeCommitted(animated = isAnimateSeekBarEnabled)
-                }
-            }
-    }
+    // track (targetPage == queueIndex). See TrackChangeCommitEffect's own doc
+    // comment for why this is a separate composable rather than an inline LaunchedEffect.
+    TrackChangeCommitEffect(
+        pagerState = pagerState,
+        currentQueueIndex = queueIndex,
+        currentQueueSize = queueSize,
+        isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+        seekBarProgress = seekBarProgress
+    )
 
     // Single source of truth for track changing upon scroll completion.
     //
@@ -374,12 +372,14 @@ fun FullPlayerScreen(
     // land here and silently skip playback to the wrong track sometime after the
     // subview reopens the main content -- exactly the flakiness of "sometimes it
     // plays the tapped track, sometimes it switches to another one" a moment later.
+    val latestQueueIndex = rememberUpdatedState(queueIndex)
+    val latestQueueSize = rememberUpdatedState(queueSize)
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
                 if (isMainPagerVisible() &&
-                    settledPage in 0 until currentQueueSize &&
-                    settledPage != currentQueueIndex
+                    settledPage in 0 until latestQueueSize.value &&
+                    settledPage != latestQueueIndex.value
                 ) {
                     seekBarProgress.onTrackChangeApplied()
                     viewModel.skipToIndex(settledPage)
@@ -399,13 +399,13 @@ fun FullPlayerScreen(
     var programmaticBackdropFromPath by remember { mutableStateOf<String?>(null) }
     var programmaticBackdropToPath by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(currentQueueIndex) {
+    LaunchedEffect(queueIndex) {
         if (!isMainPagerVisible() &&
-            currentQueueIndex in 0 until currentQueueSize &&
-            pagerState.currentPage != currentQueueIndex
+            queueIndex in 0 until queueSize &&
+            pagerState.currentPage != queueIndex
         ) {
             val fromPath = state.queue.getOrNull(pagerState.currentPage)?.albumArtPath
-            val toPath = state.queue.getOrNull(currentQueueIndex)?.albumArtPath
+            val toPath = state.queue.getOrNull(queueIndex)?.albumArtPath
             if (fromPath != toPath) {
                 programmaticBackdropFromPath = fromPath
                 programmaticBackdropToPath = toPath
@@ -415,16 +415,16 @@ fun FullPlayerScreen(
         }
     }
 
-    LaunchedEffect(currentQueueIndex) {
-        if (currentQueueIndex in 0 until currentQueueSize && pagerState.currentPage != currentQueueIndex) {
+    LaunchedEffect(queueIndex) {
+        if (queueIndex in 0 until queueSize && pagerState.currentPage != queueIndex) {
             // Only play the animation if we're not in the subview
             if (isMainPagerVisible()) {
                 pagerState.animateScrollToPage(
-                    page = currentQueueIndex,
+                    page = queueIndex,
                     animationSpec = tween(TRANSITION_DURATION_MS)
                 )
             } else {
-                pagerState.scrollToPage(currentQueueIndex)
+                pagerState.scrollToPage(queueIndex)
             }
         }
     }
@@ -441,10 +441,19 @@ fun FullPlayerScreen(
     // feels done well before the drag/settle (rawSubViewProgress) actually reaches 1,
     // while closing uses EaseInCubic instead of just running that same curve backwards --
     // it starts the hide slowly and picks up speed toward the end.
-    val subControlsProgress = if (upTransitionState.targetState) {
-        EaseOutCubic.transform(rawSubViewProgress.coerceIn(0f, 1f))
-    } else {
-        EaseInCubic.transform(rawSubViewProgress.coerceIn(0f, 1f))
+    // Memoized against upTransitionState, whose instance never changes across
+    // FullPlayerScreen's lifetime -- so this same () -> Float lambda is handed to
+    // SubViewSelectorRow and MiniPlayPauseButton on every recomposition instead of a
+    // freshly-allocated closure. That lets Compose skip those calls outright during a
+    // drag; only the graphicsLayer blocks that actually invoke the lambda redraw per
+    // frame. (Previously this was a plain Float val computed directly from
+    // upTransitionState.progress(), which forced a fresh closure -- and therefore a
+    // forced recompose -- on every one of those child composables every drag frame.)
+    val subControlsProgress = remember(upTransitionState) {
+        {
+            val raw = upTransitionState.progress().coerceIn(0f, 1f)
+            if (upTransitionState.targetState) EaseOutCubic.transform(raw) else EaseInCubic.transform(raw)
+        }
     }
 
     with(sharedTransitionScope) {
@@ -535,7 +544,7 @@ fun FullPlayerScreen(
                             state = state,
                             pagerState = pagerState,
                             density = density,
-                            configuration = configuration,
+                            screenWidthDp = configuration.screenWidthDp.dp,
                             placeholderColor = placeholderColor,
                             immersive = isImmersiveEnabled,
                             outerVisibilityScope = animatedVisibilityScope,
@@ -578,9 +587,33 @@ fun FullPlayerScreen(
                 // inside it), so its reveal never resizes anything: the row's rise is its
                 // own independent translationY, not a reaction to a new sibling.
                 Box(modifier = Modifier.fillMaxWidth()) {
+                    // uiAlpha itself is a `by` State read (only re-fires during the ~500ms
+                    // enter/exit fade, not per drag frame), but wrapping it in
+                    // rememberUpdatedState lets the graphicsLayer blocks below read its
+                    // latest value without the surrounding Modifier having to be rebuilt
+                    // -- which is what would otherwise force these modifiers (and the
+                    // remember calls below) to be reallocated on every recomposition.
+                    val currentUiAlpha = rememberUpdatedState(uiAlpha)
+
+                    // Built once (keyed only on stable instances) instead of inline in the
+                    // call below. An inline `Modifier....graphicsLayer { ... }` literal is
+                    // reallocated every recomposition regardless of whether its captures
+                    // changed, and a changed Modifier parameter is enough on its own to
+                    // stop SubViewSelectorRow from being skipped -- reintroducing the
+                    // every-frame recompose even after `progress` was made stable.
+                    val selectorRowModifier = remember(subControlsProgress, currentUiAlpha) {
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 24.dp)
+                            .graphicsLayer {
+                                alpha = currentUiAlpha.value
+                                translationY = -PlayerDimens.selectorRowRise.toPx() * subControlsProgress()
+                            }
+                    }
+
                     SubViewSelectorRow(
                         subViewMode = subViewMode,
-                        progress = { subControlsProgress },
+                        progress = subControlsProgress,
                         onSelect = { mode ->
                             if (upTransitionState.targetState) {
                                 if (subViewMode == mode) {
@@ -593,28 +626,26 @@ fun FullPlayerScreen(
                                 gestureController.expandToSubView()
                             }
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 24.dp)
-                            .graphicsLayer {
-                                alpha = uiAlpha
-                                translationY = -PlayerDimens.selectorRowRise.toPx() * subControlsProgress
-                            }
+                        modifier = selectorRowModifier
                     )
 
                     // Centered between the Lyrics and Queue labels. Sits in the same Box as
                     // the row above (not inside it), so appearing/disappearing can't push
                     // the row's layout -- only its own alpha/translationY follow
                     // subControlsProgress, on their own path (a bigger rise than the row).
+                    val miniPlayButtonModifier = remember(subControlsProgress) {
+                        Modifier
+                            .align(Alignment.Center)
+                            .graphicsLayer {
+                                translationY = -PlayerDimens.playButtonRise.toPx() * subControlsProgress()
+                            }
+                    }
+
                     MiniPlayPauseButton(
                         isPlaying = state.isPlaying,
                         progress = subControlsProgress,
                         onClick = { if (state.isPlaying) viewModel.pause() else viewModel.play() },
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .graphicsLayer {
-                                translationY = -PlayerDimens.playButtonRise.toPx() * subControlsProgress
-                            }
+                        modifier = miniPlayButtonModifier
                     )
                 }
             }
@@ -630,14 +661,76 @@ fun FullPlayerScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp, vertical = 12.dp)
                         .graphicsLayer {
-                            alpha = subControlsProgress
-                            translationY = PlayerDimens.seekBarRise.toPx() * (1f - subControlsProgress)
+                            alpha = subControlsProgress()
+                            translationY = PlayerDimens.seekBarRise.toPx() * (1f - subControlsProgress())
                         }
                 )
             }
         }
     }
 }
+/**
+ * Isolated on purpose: fires `onTrackChangeCommitted` the instant a swipe is released
+ * past the halfway point, so the seek bar can start animating toward the new track's
+ * position immediately, rather than waiting for the pager's fling-to-settle animation
+ * to fully finish.
+ *
+ * `isDragged` has to be read with a plain `by` delegate for `snapshotFlow` below to
+ * observe it, and that read has to live *somewhere's* recompose scope. Declaring it
+ * directly in FullPlayerScreen's own body put that scope at the top of the whole
+ * screen, so every drag start/stop -- i.e. exactly the moment a swipe is released to
+ * commit -- forced the entire FullPlayerScreen (header, pager, controls, subview, all
+ * of it) to recompose, even though isDragged is only ever consulted right here. Pulling
+ * it into this tiny, UI-less composable confines that recomposition to just this
+ * function instead.
+ *
+ * Gating on `isDragged` going from true to false (rather than on `targetPage`
+ * directly) matters: PagerState.targetPage already reflects its predicted
+ * destination page *while the finger is still down* -- Compose updates it live
+ * from drag distance/velocity, well before release -- so collecting it directly
+ * fired the settle tween/snap mid-drag instead of on release.
+ *
+ * Watching the pair, not just `isDragged` alone, matters too: `isDragged` and
+ * `targetPage` are separate snapshot values that don't necessarily update in the
+ * same frame. On a fast swipe that's already almost all the way to the next
+ * track, release can flip `isDragged` to false a frame before `targetPage`
+ * catches up to the new page -- a plain `snapshotFlow { isDragged }` reads
+ * `targetPage` at that exact (stale) instant and misses the commit entirely,
+ * since it only re-fires on the next `isDragged` *change*, not on `targetPage`
+ * catching up moments later. Keying the flow on both means a late `targetPage`
+ * update still produces a fresh emission to react to.
+ */
+@Composable
+private fun TrackChangeCommitEffect(
+    pagerState: PagerState,
+    currentQueueIndex: Int,
+    currentQueueSize: Int,
+    isAnimateSeekBarEnabled: Boolean,
+    seekBarProgress: SeekBarProgressState
+) {
+    // rememberUpdatedState here (rather than keying the LaunchedEffect on these values)
+    // keeps the same single, long-lived collector alive across recompositions instead
+    // of tearing it down and resubscribing to the interaction source every time the
+    // queue index changes -- matching the pattern the original effect relied on.
+    val latestQueueIndex by rememberUpdatedState(currentQueueIndex)
+    val latestQueueSize by rememberUpdatedState(currentQueueSize)
+    val latestIsAnimateSeekBarEnabled by rememberUpdatedState(isAnimateSeekBarEnabled)
+
+    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
+
+    LaunchedEffect(pagerState) {
+        snapshotFlow { isDragged to pagerState.targetPage }
+            .collect { (dragging, targetPage) ->
+                if (!dragging &&
+                    targetPage in 0 until latestQueueSize &&
+                    targetPage != latestQueueIndex
+                ) {
+                    seekBarProgress.onTrackChangeCommitted(animated = latestIsAnimateSeekBarEnabled)
+                }
+            }
+    }
+}
+
 /** Layer 1 content: handle, hi-res badge, the track hero pager, playback controls, subview shortcuts. */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -646,7 +739,12 @@ private fun SharedTransitionScope.MainPlayerContent(
     state: PlaybackState,
     pagerState: PagerState,
     density: Density,
-    configuration: android.content.res.Configuration,
+    // A stable Dp instead of the raw platform Configuration object: Configuration
+    // isn't a type the Compose compiler can prove stable, so passing it directly
+    // made this whole composable (and TrackHeroPager below it) unskippable --
+    // any unrelated parent recompose forced a full re-run instead of being able
+    // to bail out when nothing it actually reads had changed.
+    screenWidthDp: Dp,
     placeholderColor: Color,
     immersive: Boolean,
     outerVisibilityScope: AnimatedVisibilityScope,
@@ -669,7 +767,7 @@ private fun SharedTransitionScope.MainPlayerContent(
             queueIndex = state.queueIndex,
             pagerState = pagerState,
             density = density,
-            configuration = configuration,
+            screenWidthDp = screenWidthDp,
             placeholderColor = placeholderColor,
             immersive = immersive,
             outerVisibilityScope = outerVisibilityScope,
@@ -725,7 +823,7 @@ private fun SharedTransitionScope.TrackHeroPager(
     queueIndex: Int,
     pagerState: PagerState,
     density: Density,
-    configuration: android.content.res.Configuration,
+    screenWidthDp: Dp,
     placeholderColor: Color,
     immersive: Boolean,
     outerVisibilityScope: AnimatedVisibilityScope,
@@ -735,18 +833,16 @@ private fun SharedTransitionScope.TrackHeroPager(
 ) {
     val anchorPage = queueIndex.coerceAtLeast(0)
 
-    // Read the pager's *actual* measured page width/spacing instead of
-    // recomputing them from LocalConfiguration + a hardcoded padding constant.
-    // That manual calculation can drift from what the pager really laid out
-    // (insets, edge-to-edge display, dp->px rounding, multi-window), so the
-    // hero overlay below -- a duplicate of the anchor page's art, translated
-    // to sit visually on top of it -- would end up a few pixels off from the
-    // real page underneath. That drift is invisible near the center of a
-    // swipe but grows with distance, which is why it only showed up
-    // "sometimes": far enough into a swipe, the hero's copy of the old
-    // track's art visibly separates from the incoming page's real image.
-    val pageWidthPx = pagerState.layoutInfo.pageSize.toFloat()
-    val pageSpacingPx = pagerState.layoutInfo.pageSpacing.toFloat()
+    // NOTE: pagerState.layoutInfo.pageSize/pageSpacing themselves used to be read into
+    // plain vals here and only *used* inside the deferred graphicsLayer block below --
+    // but pagerState.layoutInfo is itself a snapshot-observable object that gets
+    // recomputed on every layout pass of a horizontal drag (its visiblePagesInfo moves
+    // continuously), even on frames where pageSize/pageSpacing haven't actually
+    // changed. Reading `.layoutInfo` directly at this level subscribed TrackHeroPager's
+    // own recompose scope to every one of those layout passes -- i.e. every frame of
+    // swiping between tracks -- which is exactly why the pager kept recomposing every
+    // frame even after the corner-radius fix. It's now read fresh inside the
+    // graphicsLayer block itself, alongside the other deferred pager reads there.
 
     // Whether the hero overlay needs to be composed at all. This is read
     // directly (not deferred) because it's a real composition decision --
@@ -767,25 +863,25 @@ private fun SharedTransitionScope.TrackHeroPager(
     }
 
     val miniImageSize = 44.dp
-    val fullImageSize = configuration.screenWidthDp.dp - (PlayerDimens.horizontalPagePadding * 2)
+    val fullImageSize = screenWidthDp - (PlayerDimens.horizontalPagePadding * 2)
 
     val miniRadius = (miniImageSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
 
-    // Track the outer screen transition (MiniPlayer <-> FullPlayer)
-    val outerRadius = lerp(
-        start = miniRadius,
-        stop = fullRadius,
-        fraction = playerTransitionState.progress()
-    )
-
-    val headerRadius = lerp(
-        start = fullRadius,
-        stop = miniRadius,
-        fraction = upTransitionState.progress()
-    )
-
-    val animatedCornerRadius = min(outerRadius, headerRadius)
+    // Deferred: a plain function instead of a `val`, read only inside the Hero
+    // overlay's graphicsLayer block below (draw phase) rather than here at
+    // composition time. playerTransitionState.progress() changes every frame of the
+    // outer MiniPlayer<->FullPlayer hand-off, and upTransitionState.progress() changes
+    // every frame the user drags into/out of Lyrics/Queue -- reading either directly
+    // into a `val` here would invalidate TrackHeroPager's own recompose scope on every
+    // one of those frames, which is exactly the "hero pager recomposes every frame"
+    // symptom. Calling this from inside graphicsLayer instead redraws the layer
+    // without recomposing anything.
+    fun animatedCornerRadiusPx(): Float = with(density) {
+        val outerRadius = lerp(start = miniRadius, stop = fullRadius, fraction = playerTransitionState.progress())
+        val headerRadius = lerp(start = fullRadius, stop = miniRadius, fraction = upTransitionState.progress())
+        min(outerRadius, headerRadius).toPx()
+    }
 
     Box(modifier = Modifier.fillMaxWidth()) {
         HorizontalPager(
@@ -902,7 +998,23 @@ private fun SharedTransitionScope.TrackHeroPager(
                         // Deferred reads: this layer redraws every frame of the
                         // drag without recomposing the Column (and its marquee
                         // text / sharedElement registrations) around it.
+                        //
+                        // pageWidthPx/pageSpacingPx come from the pager's *actual*
+                        // measured layout instead of being recomputed from
+                        // LocalConfiguration + a hardcoded padding constant. That
+                        // manual calculation can drift from what the pager really
+                        // laid out (insets, edge-to-edge display, dp->px rounding,
+                        // multi-window), so this hero overlay -- a duplicate of the
+                        // anchor page's art, translated to sit visually on top of
+                        // it -- would end up a few pixels off from the real page
+                        // underneath. That drift is invisible near the center of a
+                        // swipe but grows with distance, which is why it only
+                        // showed up "sometimes": far enough into a swipe, the
+                        // hero's copy of the old track's art visibly separates
+                        // from the incoming page's real image.
                         val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
+                        val pageWidthPx = pagerState.layoutInfo.pageSize.toFloat()
+                        val pageSpacingPx = pagerState.layoutInfo.pageSpacing.toFloat()
                         translationX = -offset * (pageWidthPx + pageSpacingPx)
                     }
             ) {
@@ -918,9 +1030,12 @@ private fun SharedTransitionScope.TrackHeroPager(
                             rememberSharedContentState(key = "album_art_header_${track.id}"),
                             animatedVisibilityScope = headerVisibilityScope
                         )
-                        .clip(RoundedCornerShape(animatedCornerRadius))
-                        .background(placeholderColor)
-                        .graphicsLayer { alpha = 1f },
+                        .graphicsLayer {
+                            shape = RoundedCornerShape(animatedCornerRadiusPx())
+                            clip = true
+                            alpha = 1f
+                        }
+                        .background(placeholderColor),
                     contentAlignment = Alignment.Center
                 ) {
                     if (track.albumArtPath != null) {
@@ -979,6 +1094,43 @@ private fun SharedTransitionScope.TrackHeroPager(
     }
 }
 
+/**
+ * Isolated on purpose: FoamTheme.accentColor changes every frame of a horizontal
+ * swipe (see viewModel.setDynamicAccentColor in the LaunchedEffect above). Reading
+ * it directly inside this Box, rather than inline in PlaybackControls' body, keeps
+ * that per-frame recomposition confined to just the play button instead of also
+ * dragging the Prev/Next icons and shared-element bounds along with it.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun SharedTransitionScope.PlayPauseButton(
+    track: TrackEntity,
+    isPlaying: Boolean,
+    outerVisibilityScope: AnimatedVisibilityScope,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(64.dp)
+            .sharedBounds(
+                rememberSharedContentState(key = "play_button_${track.id}"),
+                animatedVisibilityScope = outerVisibilityScope
+            )
+            .clip(CircleShape)
+            .background(FoamTheme.accentColor)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
+            contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
+            tint = FoamTheme.colors.background,
+            modifier = Modifier.size(32.dp)
+        )
+    }
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun SharedTransitionScope.PlaybackControls(
@@ -1022,25 +1174,12 @@ private fun SharedTransitionScope.PlaybackControls(
                 tint = FoamTheme.colors.textPrimary,
                 modifier = Modifier.size(32.dp).clickable(onClick = onPrevious)
             )
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .sharedBounds(
-                        rememberSharedContentState(key = "play_button_${track.id}"),
-                        animatedVisibilityScope = outerVisibilityScope
-                    )
-                    .clip(CircleShape)
-                    .background(FoamTheme.accentColor)
-                    .clickable(onClick = onPlayPause),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
-                    contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
-                    tint = FoamTheme.colors.background,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
+            PlayPauseButton(
+                track = track,
+                isPlaying = isPlaying,
+                outerVisibilityScope = outerVisibilityScope,
+                onClick = onPlayPause
+            )
             Icon(
                 imageVector = FoamTheme.icons.current.next,
                 contentDescription = stringResource(R.string.next),
@@ -1082,20 +1221,31 @@ private fun PlaybackProgressSlider(
     )
 }
 
+/**
+ * Isolated on purpose: `progress` is a lambda rather than a Float, read only where it's
+ * actually needed -- inside the graphicsLayer block (deferred, redraws without
+ * recomposing) and inside a derivedStateOf for the clickable-enabled gate (which only
+ * recomposes when it crosses the 0.01f threshold, not on every drag frame -- the same
+ * pattern TrackHeroPager's `showHero` uses). The caller hands this the same memoized
+ * lambda instance on every recomposition, so this whole composable is skipped most
+ * frames instead of re-running just to update an alpha value.
+ */
 @Composable
 private fun MiniPlayPauseButton(
     isPlaying: Boolean,
-    progress: Float,
+    progress: () -> Float,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isEnabled by remember(progress) { derivedStateOf { progress() > 0.01f } }
+
     Box(
         modifier = modifier
             .size(50.dp)
-            .graphicsLayer { alpha = progress }
+            .graphicsLayer { alpha = progress() }
             .clip(CircleShape)
             .background(FoamTheme.accentColor)
-            .clickable(enabled = progress > 0.01f, onClick = onClick),
+            .clickable(enabled = isEnabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
