@@ -568,15 +568,20 @@ fun FoamNavHost(
 
             FoamNavigationBar(
                 currentRoute = currentRoute,
-                isPlayerOpen = playerTransitionState.targetState, // Added this line
+                isPlayerOpen = playerTransitionState.targetState,
                 onNavigate = { route ->
                     if (playerTransitionState.currentState || playerTransitionState.targetState) {
                         animatePlayerTransition(open = false)
                     }
-                    navController.navigate(route) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
+                    if (currentRoute == route) return@FoamNavigationBar
+
+                    // Animate back if we're a subscreen of [route],
+                    // otherwise just open the desired screen.
+                    if (!navController.popBackStack(route, inclusive = false)) {
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.startDestinationId)
+                            launchSingleTop = true
+                        }
                     }
                 }
             )
