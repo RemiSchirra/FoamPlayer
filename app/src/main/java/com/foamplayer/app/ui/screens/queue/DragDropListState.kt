@@ -1,5 +1,8 @@
 package com.foamplayer.app.ui.screens.queue
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
@@ -12,6 +15,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -26,6 +30,9 @@ private const val AUTO_SCROLL_STEP_PX = 32f
 
 /** How often an autoscroll tick fires, in ms. */
 private const val AUTO_SCROLL_INTERVAL_MS = 16L
+
+/** Duration of the settle animation played when the drag is released, in ms. */
+private const val SETTLE_DURATION_MS = 200
 
 @Composable
 fun rememberDragDropListState(
@@ -46,6 +53,8 @@ fun rememberDragDropListState(
  *  - Swaps the dragged item with whichever item it's currently hovering over, via [onMove].
  *  - Autoscrolls the list when the drag is locked at an edge but more content exists
  *    beyond that edge.
+ *  - Settles the dragged item into its final slot with a short animation on release,
+ *    instead of snapping there instantly.
  */
 class DragDropListState(
     private val lazyListState: LazyListState,
@@ -67,12 +76,16 @@ class DragDropListState(
     private var anchor: ItemSnapshot? = null
     private var autoScrollJob: Job? = null
     private var autoScrollDirection = 0f
+    private var settleJob: Job? = null
 
     private val edgeZonePx: Float by lazy { with(density) { AUTO_SCROLL_EDGE_ZONE.toPx() } }
 
     fun isItemDragging(index: Int): Boolean = index == draggedIndex
 
     fun onDragStart(index: Int) {
+        settleJob?.cancel()
+        settleJob = null
+
         val info = lazyListState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
         draggedIndex = index
         draggedDistance = 0f
@@ -85,9 +98,13 @@ class DragDropListState(
         evaluate()
     }
 
-    fun onDragEnd() = reset()
+    fun onDragEnd() {
+        settleToRestingPosition()
+    }
 
-    fun onDragCancel() = reset()
+    fun onDragCancel() {
+        settleToRestingPosition()
+    }
 
     private fun reset() {
         stopAutoScroll()
@@ -95,6 +112,40 @@ class DragDropListState(
         draggingItemTop = 0f
         draggedDistance = 0f
         anchor = null
+    }
+
+    private fun settleToRestingPosition() {
+        stopAutoScroll()
+
+        val index = draggedIndex ?: return
+        val layoutInfo = lazyListState.layoutInfo
+        val targetInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+
+        val restingTop = targetInfo?.offset?.toFloat() ?: run {
+            val size = anchor?.size ?: 0
+            val maxTop = (layoutInfo.viewportEndOffset - size).toFloat()
+                .coerceAtLeast(layoutInfo.viewportStartOffset.toFloat())
+            draggingItemTop.coerceIn(layoutInfo.viewportStartOffset.toFloat(), maxTop)
+        }
+
+        val startTop = draggingItemTop
+
+        if (abs(restingTop - startTop) < 0.5f) {
+            reset()
+            return
+        }
+
+        settleJob?.cancel()
+        val animation = Animatable(startTop)
+        settleJob = scope.launch {
+            animation.animateTo(
+                restingTop,
+                tween(durationMillis = SETTLE_DURATION_MS, easing = FastOutSlowInEasing)
+            ) {
+                draggingItemTop = value
+            }
+            reset()
+        }
     }
 
     /** Recomputes clamped position, swap target, and autoscroll state from current inputs. */
