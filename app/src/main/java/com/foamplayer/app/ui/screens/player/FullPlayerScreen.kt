@@ -62,6 +62,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -632,11 +634,15 @@ fun FullPlayerScreen(
                         modifier = selectorRowModifier
                     )
 
-                    // Centered between the Lyrics and Queue labels. Sits in the same Box as
-                    // the row above (not inside it), so appearing/disappearing can't push
-                    // the row's layout -- only its own alpha/translationY follow
-                    // subControlsProgress, on their own path (a bigger rise than the row).
-                    val miniPlayButtonModifier = remember(subControlsProgress) {
+                    // Centered between the (now icon-only) Lyrics and Queue buttons. Sits
+                    // in the same Box as the row above (not inside it), so
+                    // appearing/disappearing can't push the row's layout -- only its own
+                    // translationY follows subControlsProgress, on its own path (a bigger
+                    // rise than the row). Previous/Next flank the mini play button exactly
+                    // like the main player's transport row; their callbacks reuse the same
+                    // skip logic (including the seek-bar restart-vs-skip handling for
+                    // Previous) so both clusters behave identically.
+                    val transportClusterModifier = remember(subControlsProgress) {
                         Modifier
                             .align(Alignment.Center)
                             .graphicsLayer {
@@ -644,12 +650,44 @@ fun FullPlayerScreen(
                             }
                     }
 
-                    MiniPlayPauseButton(
-                        isPlaying = state.isPlaying,
-                        progress = subControlsProgress,
-                        onClick = { if (state.isPlaying) viewModel.pause() else viewModel.play() },
-                        modifier = miniPlayButtonModifier
-                    )
+                    Row(
+                        modifier = transportClusterModifier,
+                        horizontalArrangement = Arrangement.spacedBy(24.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MiniTransportButton(
+                            icon = FoamTheme.icons.current.previous,
+                            contentDescription = stringResource(R.string.previous),
+                            progress = subControlsProgress,
+                            onClick = {
+                                when (
+                                    seekBarProgress.onPreviousPressed(
+                                        animated = isAnimateSeekBarEnabled,
+                                        positionMs = viewModel.positionMs.value
+                                    )
+                                ) {
+                                    PreviousAction.RESTART_CURRENT -> viewModel.seekTo(0L)
+                                    PreviousAction.SKIP_TO_PREVIOUS -> viewModel.previous()
+                                }
+                            }
+                        )
+
+                        MiniPlayPauseButton(
+                            isPlaying = state.isPlaying,
+                            progress = subControlsProgress,
+                            onClick = { if (state.isPlaying) viewModel.pause() else viewModel.play() }
+                        )
+
+                        MiniTransportButton(
+                            icon = FoamTheme.icons.current.next,
+                            contentDescription = stringResource(R.string.next),
+                            progress = subControlsProgress,
+                            onClick = {
+                                seekBarProgress.onNextPressed(animated = isAnimateSeekBarEnabled)
+                                viewModel.next()
+                            }
+                        )
+                    }
                 }
             }
 
@@ -1256,6 +1294,41 @@ private fun MiniPlayPauseButton(
             contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
             tint = FoamTheme.colors.background,
             modifier = Modifier.size(28.dp)
+        )
+    }
+}
+
+
+/**
+ * Previous/Next flank of MiniPlayPauseButton in the subview's transport cluster.
+ * Same deferred-`progress` pattern as MiniPlayPauseButton: alpha lives inside the
+ * graphicsLayer block (redraws without recomposing) and clicks are gated on the
+ * cluster actually being visible; the caller hands this the same memoized lambda
+ * instance so the whole cluster is skipped most frames.
+ */
+@Composable
+private fun MiniTransportButton(
+    icon: ImageVector,
+    contentDescription: String,
+    progress: () -> Float,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isEnabled by remember(progress) { derivedStateOf { progress() > 0.01f } }
+
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .graphicsLayer { alpha = progress() }
+            .clip(CircleShape)
+            .clickable(enabled = isEnabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = FoamTheme.colors.textPrimary,
+            modifier = Modifier.size(26.dp)
         )
     }
 }
