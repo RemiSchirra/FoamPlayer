@@ -183,7 +183,7 @@ private fun LanguageSelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val languages = listOf(
-        "auto" to stringResource(R.string.language_automatic),
+        "auto" to "Automatic",
         "en" to "English",
         "fr" to "Français"
     )
