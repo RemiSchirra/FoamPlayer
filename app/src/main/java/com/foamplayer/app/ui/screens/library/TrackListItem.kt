@@ -65,6 +65,9 @@ private val AlbumArtSize = 48.dp
  */
 private val HighlightPadding = 6.dp
 
+/** Opacity applied to auxiliary queue tracks. */
+private const val AuxiliaryAlpha = 0.55f
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun TrackListItem(
@@ -72,9 +75,11 @@ fun TrackListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     active: Boolean = false,
+    auxiliary: Boolean = false,
     showDragHandle: Boolean = false,
     dragHandleModifier: Modifier = Modifier,
     onRemove: (() -> Unit)? = null,
+    suppressItemAnimations: Boolean = false,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     isSharedTransitionSource: Boolean = false
@@ -124,15 +129,18 @@ fun TrackListItem(
         mutableFloatStateOf(selectionHighlightPaddingPx + restingArtHeightPx)
     }
     var containerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    
+
     val imageRadius = (AlbumArtSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val highlightRadius = imageRadius + HighlightPadding
     val highlightShape = RoundedCornerShape(highlightRadius)
     val highlightCornerRadiusPx = with(density) { highlightRadius.toPx() }
 
+    val rowAlpha = if (auxiliary) AuxiliaryAlpha else 1f
+
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .graphicsLayer { alpha = rowAlpha }
             .then(
                 if (active) {
                     Modifier.onGloballyPositioned { containerCoordinates = it }

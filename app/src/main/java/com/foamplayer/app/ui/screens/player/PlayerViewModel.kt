@@ -59,8 +59,14 @@ class PlayerViewModel @Inject constructor(
     fun next() = audioEngine.next()
     fun previous() = audioEngine.previous()
     fun skipToIndex(index: Int) = audioEngine.skipToIndex(index)
-    fun moveQueueItem(fromIndex: Int, toIndex: Int) = audioEngine.moveQueueItem(fromIndex, toIndex)
-    fun removeQueueItem(index: Int) = audioEngine.removeQueueItem(index)
+
+    // Queue mutations are occurrence-addressed (entry ids), resolved inside the engine
+    // against current state — never by indices captured in a possibly-stale UI snapshot.
+    fun playQueueEntry(entryId: Long) = audioEngine.playQueueEntry(entryId)
+    fun moveQueueEntry(entryId: Long, toUpcomingPosition: Int) =
+        audioEngine.moveQueueEntry(entryId, toUpcomingPosition)
+    fun removeQueueEntry(entryId: Long) = audioEngine.removeQueueEntry(entryId)
+
     fun seekTo(positionMs: Long) = audioEngine.seekTo(positionMs)
     fun toggleShuffle() = audioEngine.toggleShuffle()
     fun toggleRepeat() = audioEngine.toggleRepeat()

@@ -12,6 +12,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.foamplayer.app.audio.bitperfect.BitPerfectDetector
 import com.foamplayer.app.audio.equalizer.EqualizerManager
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.repository.TrackRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,12 +27,14 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.random.Random
 
 @Singleton
 class AudioEngine @Inject constructor(
     @ApplicationContext private val context: Context,
     private val bitPerfectDetector: BitPerfectDetector,
-    private val equalizerManager: EqualizerManager
+    private val equalizerManager: EqualizerManager,
+    private val trackRepository: TrackRepository
 ) {
     val player: ExoPlayer = ExoPlayer.Builder(context).build()
     private val scope = CoroutineScope(Dispatchers.Main + Job())
@@ -39,66 +42,64 @@ class AudioEngine @Inject constructor(
     private val _playbackState = MutableStateFlow(PlaybackState())
     val playbackState: StateFlow<PlaybackState> = _playbackState
 
-    // Deliberately separate from _playbackState. Position ticks every rendered frame
-    // while playing; if it lived on the same object as queue/currentTrack/etc, every tick
-    // would emit a brand-new PlaybackState and force recomposition of every composable
-    // that reads ANY field off `state` (not just position) — including screens far from
-    // anything that actually needs live position, like the lyrics/queue subviews.
-    // Consumers that need a live, per-frame position (seek bar, karaoke lyrics sync)
-    // should read `positionMs.value` directly inside a leaf composable/provider lambda,
-    // the same way LyricsScreen already does — not via collectAsState() at a screen's
-    // top level.
+    // Kept separate from _playbackState: position ticks every frame, and a shared
+    // state object would force full recompositions on every tick. Read positionMs
+    // directly where live position is needed (seek bar, lyrics sync).
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs
 
     private var progressJob: Job? = null
 
-    // The range of queue indices currently loaded into the player, as absolute indices
-    // into _playbackState.value.queue (player index 0 == queue index loadedRange.first).
-    // This is always kept to a small bounded window, never the whole queue — see
-    // adjustWindow() below, which is the thing that actually enforces that bound.
+    // Queue indices currently loaded into the player (player index 0 == loadedRange.first).
+    // Always a small window, never the whole queue - see adjustWindow().
+    // Stale while pendingWindowResync is set: don't seek or patch against it.
     private var loadedRange: IntRange = IntRange.EMPTY
 
-    // Guards a full "jump to a fresh window" (setQueue / loadWindowAndPlay — used when
-    // starting a new queue or skipping somewhere outside the currently loaded window).
-    // Cancelling this is how a new jump discards an in-flight one.
+    // Set when a queue move invalidated the player timeline. The rebuild is deferred
+    // to the next skip or transition: an async rebuild could land after a tap's seek
+    // and reset playback to the cursor ("starts then reverts").
+    private var pendingWindowResync: Boolean = false
+
+    // In-flight "jump to a fresh window" job; cancelled when a new jump supersedes it.
     private var windowJumpJob: Job? = null
 
-    // Serializes the small, reactive window-shift mutations triggered by
-    // onMediaItemTransition, so a burst of rapid skips can't run two adjustWindow()
-    // player mutations concurrently against each other.
+    // Generation counter: only the newest window jump may write the timeline and
+    // loadedRange. Prevents stale jumps from racing with newer ones.
+    private var windowJumpId: Long = 0L
+
+    // Serializes adjustWindow() so rapid skips can't run overlapping player mutations.
     private val windowAdjustMutex = Mutex()
 
-    // Mirrors _playbackState.value.queue: maps track id -> its index in that queue
-    private var trackIndexById: Map<Long, Int> = emptyMap()
+    // Monotonic allocator for queue entry ids (PlaybackState.queueEntryIds).
+    private var nextEntryId: Long = 0L
+
+    private fun allocateEntryId(): Long = nextEntryId++
+
+    // Snapshot of the whole library, used to draw random auxiliary tracks from.
+    private var allTracks: List<TrackEntity> = emptyList()
+
+    // True while a refill is running; prevents overlapping refills from appending duplicates.
+    private var refillScheduled: Boolean = false
 
     companion object {
-        // Steady-state number of tracks kept loaded on each side of the current track.
-        // Combined with CHUNK_SIZE below, the player never holds more than roughly
-        // 2 * WINDOW_RADIUS + CHUNK_SIZE tracks at once, no matter how large the
-        // underlying queue is.
+        // Tracks kept loaded on each side of the current track.
         private const val WINDOW_RADIUS = 15
         // Tracks fetched (or trimmed) per window shift.
         private const val CHUNK_SIZE = 10
-        // Start extending the loaded window once the current track is this close to
-        // either edge of it, so the next chunk is already loaded before playback
-        // actually reaches that edge.
+        // Extend the window when playback is this close to either edge.
         private const val EDGE_TRIGGER_MARGIN = 5
+        // Auxiliary (random) tracks always kept after the main queue.
+        private const val AUXILIARY_QUEUE_LENGTH = PlaybackState.AUXILIARY_QUEUE_LENGTH
     }
 
     init {
         setupPlayerListeners()
         startProgressTracker()
+        observeLibraryForAuxiliaryRefill()
     }
 
-    /**
-     * Suspends until just after the next display frame is rendered. Used to pace
-     * Main-thread player mutations during window loading so they land right after
-     * a frame commits instead of on an arbitrary wall-clock timer that can fire mid-frame.
-     * AudioEngine's own `scope` isn't running under a composition, so it has no
-     * MonotonicFrameClock available and can't use Compose's `withFrameNanos` directly —
-     * this goes straight to the platform Choreographer instead.
-     */
+    /** Suspends until the next frame is rendered (uses Choreographer directly,
+     *  since this scope has no Compose frame clock). */
     private suspend fun awaitFrame() = suspendCancellableCoroutine { cont ->
         val callback = Choreographer.FrameCallback { cont.resumeWith(Result.success(Unit)) }
         Choreographer.getInstance().postFrameCallback(callback)
@@ -129,23 +130,40 @@ class AudioEngine @Inject constructor(
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val trackId = mediaItem?.mediaId?.toLongOrNull() ?: return
                 val currentQueue = _playbackState.value.queue
-                val index = trackIndexById[trackId]
+
+                // The same track can appear more than once (aux pool), so use the
+                // player's timeline position to find the exact queue index, falling
+                // back to the nearest matching occurrence.
+                val index = resolveExactQueueIndex(trackId)
                 if (index != null) {
                     val track = currentQueue[index]
+
+                    // A played auxiliary track becomes a main track: unflag it,
+                    // then refill the pool with fresh random picks.
+                    val flags = _playbackState.value.auxiliaryFlags
+                    val wasAuxiliary = flags.getOrNull(index) == true
 
                     _playbackState.value = _playbackState.value.copy(
                         currentTrack = track,
                         queueIndex = index,
                         durationMs = track.duration,
-                        currentPositionMs = 0L
+                        currentPositionMs = 0L,
+                        auxiliaryFlags = if (wasAuxiliary) {
+                            flags.toMutableList().also { it[index] = false }
+                        } else flags
                     )
                     _positionMs.value = 0L
 
-                    // Reactively keep the loaded window centered on the new current
-                    // track. This — not a background loop that loads the rest of the
-                    // queue — is what keeps the player's footprint small even when the
-                    // queue itself is huge.
+                    if (pendingWindowResync) {
+                        pendingWindowResync = false
+                        loadWindowAndPlay(currentQueue, index)
+                    }
+
                     scope.launch { adjustWindow() }
+
+                    if (wasAuxiliary) {
+                        scheduleAuxiliaryRefill()
+                    }
                 }
             }
 
@@ -155,51 +173,72 @@ class AudioEngine @Inject constructor(
         })
     }
 
+    private fun observeLibraryForAuxiliaryRefill() {
+        scope.launch {
+            trackRepository.getAllTracks().collect { tracks ->
+                allTracks = tracks
+                // The library changed, refresh the auxiliary pool from it.
+                if (_playbackState.value.queue.isNotEmpty()) {
+                    scope.launch { refillAuxiliary() }
+                }
+            }
+        }
+    }
+
     fun setQueue(tracks: List<TrackEntity>, startIndex: Int = 0) {
         windowJumpJob?.cancel()
 
         if (tracks.isEmpty()) {
             loadedRange = IntRange.EMPTY
-            trackIndexById = emptyMap()
+            pendingWindowResync = false
             player.clearMediaItems()
-            _playbackState.value = _playbackState.value.copy(queue = emptyList(), queueIndex = -1)
+            _playbackState.value = _playbackState.value.copy(
+                queue = emptyList(),
+                queueIndex = -1,
+                queueEntryIds = emptyList(),
+                auxiliaryFlags = emptyList()
+            )
             return
         }
 
         val clampedStart = startIndex.coerceIn(0, tracks.lastIndex)
 
-        trackIndexById = tracks.withIndex().associate { (i, t) -> t.id to i }
+        // Generate ids for the main queue, then the auxiliary queue
+        val entryIds = List(tracks.size) { allocateEntryId() } +
+                List(AUXILIARY_QUEUE_LENGTH) { allocateEntryId() }
+        val newQueue = tracks + drawAuxiliaryTracks(emptySet(), AUXILIARY_QUEUE_LENGTH)
+
+        pendingWindowResync = false
         _playbackState.value = _playbackState.value.copy(
-            queue = tracks,
-            queueIndex = clampedStart
+            queue = newQueue,
+            queueIndex = clampedStart,
+            queueEntryIds = entryIds,
+            auxiliaryFlags = List(entryIds.size) { i -> i >= tracks.size }
         )
 
-        loadWindowAndPlay(tracks, clampedStart)
+        loadWindowAndPlay(newQueue, clampedStart)
     }
 
     /**
-     * Loads *only* a window of up to 2*WINDOW_RADIUS+1 tracks around [centerIndex]
-     * into the player and starts playback. Nothing else in the queue is touched here:
-     * the rest is loaded lazily, on demand, by adjustWindow() as playback moves
-     * through it — so a 50,000-track queue costs exactly the same as a 50-track one.
+     * Loads a window of tracks around [centerIndex] and starts playback.
+     * The rest of the queue is loaded lazily by adjustWindow().
      */
     private fun loadWindowAndPlay(tracks: List<TrackEntity>, centerIndex: Int) {
         windowJumpJob?.cancel()
+        val jumpId = ++windowJumpId
+        // This jump writes the fresh timeline, resolving any deferred resync.
+        pendingWindowResync = false
 
         val windowStart = (centerIndex - WINDOW_RADIUS).coerceAtLeast(0)
         val windowEnd = (centerIndex + WINDOW_RADIUS).coerceAtMost(tracks.lastIndex)
 
         windowJumpJob = scope.launch {
-            // Building MediaItems is pure CPU work with no player interaction (title/
-            // artist metadata, artwork URI parsing), so it belongs on Default. This used
-            // to run synchronously on Main, which meant every song switch that needed a
-            // fresh window (starting a new queue, skipping past the loaded range, tapping
-            // a track in the Queue subview) blocked Main building up to 2*WINDOW_RADIUS+1
-            // MediaItems right on the thread Compose needs for that same switch's own
-            // animations.
+            // Loads the media items for a window
             val windowItems = withContext(Dispatchers.Default) {
                 tracks.subList(windowStart, windowEnd + 1).map { it.toMediaItem() }
             }
+            // A newer jump superseded this one, drop it
+            if (jumpId != windowJumpId) return@launch
             player.setMediaItems(windowItems, centerIndex - windowStart, 0L)
             player.prepare()
             player.play()
@@ -208,20 +247,12 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Keeps the player's loaded window small and centered around the current track,
-     * regardless of how large the underlying queue is:
-     *  - extends the window by one chunk on whichever edge playback is approaching, so
-     *    that edge is loaded before playback actually reaches it, and
-     *  - trims tracks off the *opposite* edge once the window has grown well past the
-     *    target radius, so the player never accumulates the whole queue behind/ahead of
-     *    where playback actually is.
-     *
-     * A no-op while a fresh window jump (loadWindowAndPlay) is in flight — that jump
-     * establishes its own window when it completes, so adjusting the *old* window here
-     * would just be wasted, and potentially wrong, work.
+     * Extends the loaded window.
+     * Do nothing if a window jump is in running or a resync is pending.
      */
     private suspend fun adjustWindow() {
         if (windowJumpJob?.isActive == true) return
+        if (pendingWindowResync) return
         windowAdjustMutex.withLock {
             val tracks = _playbackState.value.queue
             val currentIndex = _playbackState.value.queueIndex
@@ -231,7 +262,7 @@ class AudioEngine @Inject constructor(
             var start = loadedRange.first
             var end = loadedRange.last
 
-            // Extend ahead if we're approaching the trailing edge.
+            // Extend ahead
             if (end < tracks.lastIndex && end - currentIndex < EDGE_TRIGGER_MARGIN) {
                 val newEnd = (end + CHUNK_SIZE).coerceAtMost(tracks.lastIndex)
                 val chunk = withContext(Dispatchers.Default) {
@@ -242,7 +273,7 @@ class AudioEngine @Inject constructor(
                 end = newEnd
             }
 
-            // Extend behind if we're approaching the leading edge.
+            // Extend behind
             if (start > 0 && currentIndex - start < EDGE_TRIGGER_MARGIN) {
                 val newStart = (start - CHUNK_SIZE).coerceAtLeast(0)
                 val chunk = withContext(Dispatchers.Default) {
@@ -253,10 +284,7 @@ class AudioEngine @Inject constructor(
                 start = newStart
             }
 
-            // Trim the far side once it's grown well past the target radius. This is
-            // the step that actually bounds memory/timeline size for a huge queue —
-            // without it, repeatedly extending ahead as playback advances would
-            // eventually load the entire queue into the player, one chunk at a time.
+            // Unload medias if they're too far from the window
             val overhang = WINDOW_RADIUS + CHUNK_SIZE
             if (currentIndex - start > overhang) {
                 val newStart = currentIndex - WINDOW_RADIUS
@@ -282,16 +310,9 @@ class AudioEngine @Inject constructor(
 
     fun next() {
         if (player.hasNextMediaItem()) {
-            // No seekTo(0) here: onMediaItemTransition already resets
-            // currentPositionMs/_positionMs to 0 for the new track. Calling seekTo(0)
-            // first would allocate and emit an extra PlaybackState (with the old
-            // track's metadata but a zeroed position) right before the transition's
-            // own PlaybackState emission overwrites it -- a wasted full-screen
-            // recomposition, and a one-frame position/track mismatch, on every skip.
             player.seekToNextMediaItem()
         } else {
-            // The next track exists in the full queue but hasn't been lazily loaded yet
-            // (e.g. rapid skipping outran the background loader) — jump a fresh window there.
+            // Next track not loaded, load a window
             val queue = _playbackState.value.queue
             val nextIndex = _playbackState.value.queueIndex + 1
             if (nextIndex in queue.indices) {
@@ -302,16 +323,11 @@ class AudioEngine @Inject constructor(
 
     fun previous() {
         if (player.hasPreviousMediaItem()) {
-            // Skip to previous media only if the cursor is in the first 5 seconds of the track
-            // TODO : This should be an app parameter
+            // Only change track if we're within the first 5 seconds.
+            // TODO: Make this an app parameter.
             if (player.contentPosition <= 5000L) {
-                // Actually changing tracks -- onMediaItemTransition will reset the
-                // position itself. Calling seekTo(0) here too would double-emit
-                // PlaybackState for the same reason described in next().
                 player.seekToPreviousMediaItem()
             } else {
-                // Staying on the current track (just restarting it) -- this is the
-                // only case that needs an explicit reset, since no transition fires.
                 seekTo(0)
             }
         } else if (loadedRange.first > 0) {
@@ -327,13 +343,40 @@ class AudioEngine @Inject constructor(
         val queue = _playbackState.value.queue
         if (index !in queue.indices) return
 
+
+        // Force a window jump
+        if (pendingWindowResync) {
+            jumpWindowTo(index)
+            return
+        }
+
         if (index in loadedRange) {
             player.seekTo(index - loadedRange.first, 0L)
-        } else {
-            // Tapped a track outside the currently loaded window — load a fresh window
-            // around it instead of paying to insert everything in between.
-            loadWindowAndPlay(queue, index)
+            return
         }
+
+        jumpWindowTo(index)
+    }
+
+    /**
+     * Synchronously rebuilds the window around [centerIndex] from the current queue
+     * and starts playing it. Override any in-flight jump and pending resync.
+     */
+    private fun jumpWindowTo(centerIndex: Int) {
+        val queue = _playbackState.value.queue
+        if (centerIndex !in queue.indices) return
+
+        windowJumpId++
+        windowJumpJob?.cancel()
+        pendingWindowResync = false
+
+        val windowStart = (centerIndex - WINDOW_RADIUS).coerceAtLeast(0)
+        val windowEnd = (centerIndex + WINDOW_RADIUS).coerceAtMost(queue.lastIndex)
+        val items = queue.subList(windowStart, windowEnd + 1).map { it.toMediaItem() }
+        loadedRange = windowStart..windowEnd
+        player.setMediaItems(items, centerIndex - windowStart, 0L)
+        player.prepare()
+        player.play()
     }
 
     fun seekTo(positionMs: Long) {
@@ -342,27 +385,88 @@ class AudioEngine @Inject constructor(
         _positionMs.value = positionMs
     }
 
+    /**
+     * Resolves an entry id to its current index, derived from live state so it
+     * never goes stale (unlike a cached map).
+     */
+    private fun entryIndexOf(entryId: Long): Int =
+        _playbackState.value.queueEntryIds.indexOf(entryId)
+
+    /**
+     * All indices holding [trackId].
+     */
+    private fun candidateIndexesFor(trackId: Long): List<Int> =
+        _playbackState.value.queue
+            .withIndex()
+            .filter { (_, t) -> t.id == trackId }
+            .map { (i, _) -> i }
+
+    /**
+     * Moves the entry to be played next, jumps to it, and starts playback
+     */
+    fun playQueueEntry(entryId: Long) {
+        val fromIndex = entryIndexOf(entryId)
+        if (fromIndex == -1) return
+        val nextIndex = (_playbackState.value.queueIndex + 1).coerceAtLeast(0)
+        if (fromIndex != nextIndex) {
+            moveQueueItem(fromIndex, nextIndex)
+        }
+        skipToIndex(nextIndex)
+        player.play()
+    }
+
+    /**
+     * Moves an entry to [toUpcomingPosition], relative to the current cursor.
+     */
+    fun moveQueueEntry(entryId: Long, toUpcomingPosition: Int) {
+        val fromIndex = entryIndexOf(entryId)
+        if (fromIndex == -1) return
+        val queue = _playbackState.value.queue
+        val offset = (_playbackState.value.queueIndex + 1).coerceAtLeast(0)
+        val toIndex = (offset + toUpcomingPosition).coerceIn(0, queue.lastIndex)
+        if (fromIndex == toIndex) return
+        moveQueueItem(fromIndex, toIndex)
+    }
+
+    /**
+     * Removes the occurrence identified by [entryId], wherever it currently sits.
+     */
+    fun removeQueueEntry(entryId: Long) {
+        val index = entryIndexOf(entryId)
+        if (index == -1) return
+        removeQueueItem(index)
+    }
+
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
         val currentQueue = _playbackState.value.queue
         if (fromIndex !in currentQueue.indices || toIndex !in currentQueue.indices || fromIndex == toIndex) return
+
+        val current = _playbackState.value
 
         val fromLoaded = fromIndex in loadedRange
         val toLoaded = toIndex in loadedRange
 
         if (fromLoaded && toLoaded) {
-            // Both endpoints are in the loaded window — reflect the move directly in the player.
+            // Move a media item in the player
             player.moveMediaItem(fromIndex - loadedRange.first, toIndex - loadedRange.first)
         }
-        // If only one endpoint is loaded, the move crosses the loaded/unloaded boundary; we
-        // resync the window below (after the queue list itself is updated) rather than trying
-        // to patch a partially-loaded player timeline in place.
-        val needsWindowResync = fromLoaded != toLoaded
 
         val newQueue = currentQueue.toMutableList().apply {
             add(toIndex, removeAt(fromIndex))
         }
 
-        val oldPlayingIndex = _playbackState.value.queueIndex
+        // Flags and entry ids move with their item, keeping each item's identity.
+        val newEntryIds = current.queueEntryIds.toMutableList().apply {
+            if (fromIndex < size) add(toIndex, removeAt(fromIndex))
+        }
+
+        val flags = current.auxiliaryFlags
+        val movedIsAuxiliary = flags.getOrNull(fromIndex) == true
+        val newFlags = flags.toMutableList().apply {
+            if (fromIndex < size) add(toIndex, removeAt(fromIndex))
+        }
+
+        val oldPlayingIndex = current.queueIndex
         val newPlayingIndex = when {
             oldPlayingIndex == fromIndex -> toIndex
             oldPlayingIndex in (fromIndex + 1)..toIndex -> oldPlayingIndex - 1
@@ -370,21 +474,32 @@ class AudioEngine @Inject constructor(
             else -> oldPlayingIndex
         }
 
-        trackIndexById = newQueue.withIndex().associate { (i, t) -> t.id to i }
-        _playbackState.value = _playbackState.value.copy(
+        _playbackState.value = current.copy(
             queue = newQueue,
-            queueIndex = newPlayingIndex
+            queueEntryIds = normalizeEntryIds(newEntryIds, newQueue.size),
+            queueIndex = newPlayingIndex,
+            auxiliaryFlags = normalizeAuxiliaryFlags(newFlags, newQueue.size)
         )
 
-        if (needsWindowResync) {
+        if (fromLoaded != toLoaded) {
+            // Defer the rebuild (see pendingWindowResync) and invalidate in-flight jumps.
+            windowJumpId++
             windowJumpJob?.cancel()
-            loadWindowAndPlay(newQueue, newPlayingIndex)
+            pendingWindowResync = true
+        }
+
+        if (movedIsAuxiliary) {
+            scheduleAuxiliaryRefill()
         }
     }
 
     fun removeQueueItem(index: Int) {
         val currentQueue = _playbackState.value.queue
         if (index !in currentQueue.indices) return
+
+        val current = _playbackState.value
+        val flags = current.auxiliaryFlags
+        val removedIsAuxiliary = flags.getOrNull(index) == true
 
         when {
             index in loadedRange -> {
@@ -394,26 +509,40 @@ class AudioEngine @Inject constructor(
             index < loadedRange.first -> {
                 loadedRange = (loadedRange.first - 1)..<loadedRange.last
             }
-            // index > loadedRange.last: nothing loaded needs to shift.
+            // index > loadedRange.last: nothing loaded needs to shift
         }
 
         val newQueue = currentQueue.toMutableList().apply {
             removeAt(index)
         }
 
-        val oldPlayingIndex = _playbackState.value.queueIndex
+        val newEntryIds = current.queueEntryIds.toMutableList().apply {
+            if (index < size) removeAt(index)
+        }
+
+        // Remove the flag with the item, the pool refills below if needed
+        val newFlags = flags.toMutableList().apply {
+            if (index < size) removeAt(index)
+        }
+
+        val oldPlayingIndex = current.queueIndex
         val newPlayingIndex = when {
             index < oldPlayingIndex -> oldPlayingIndex - 1
             index == oldPlayingIndex -> if (newQueue.isEmpty()) -1 else index.coerceAtMost(newQueue.size - 1)
             else -> oldPlayingIndex
         }
 
-        trackIndexById = newQueue.withIndex().associate { (i, t) -> t.id to i }
-        _playbackState.value = _playbackState.value.copy(
+        _playbackState.value = current.copy(
             queue = newQueue,
+            queueEntryIds = normalizeEntryIds(newEntryIds, newQueue.size),
             queueIndex = newPlayingIndex,
-            currentTrack = if (newPlayingIndex != -1) newQueue.getOrNull(newPlayingIndex) else null
+            currentTrack = if (newPlayingIndex != -1) newQueue.getOrNull(newPlayingIndex) else null,
+            auxiliaryFlags = normalizeAuxiliaryFlags(newFlags, newQueue.size)
         )
+
+        if (removedIsAuxiliary) {
+            scheduleAuxiliaryRefill()
+        }
     }
 
     fun toggleShuffle() {
@@ -436,18 +565,124 @@ class AudioEngine @Inject constructor(
         _playbackState.value = _playbackState.value.copy(repeatMode = nextMode)
     }
 
+    /**
+     * Finds the exact queue index of the playing track via the player's timeline
+     * position (exact even with duplicate tracks). Falls back to the nearest match.
+     */
+    private fun resolveExactQueueIndex(trackId: Long): Int? {
+        val queue = _playbackState.value.queue
+        if (queue.isEmpty() || loadedRange == IntRange.EMPTY) return resolveQueueIndex(trackId)
+
+        val playerIndex = player.currentMediaItemIndex + loadedRange.first
+        if (playerIndex in queue.indices && queue[playerIndex].id == trackId) return playerIndex
+
+        return resolveQueueIndex(trackId)
+    }
+
+    /** Nearest-occurrence fallback for [resolveExactQueueIndex]. */
+    private fun resolveQueueIndex(trackId: Long): Int? {
+        val candidates = candidateIndexesFor(trackId)
+        if (candidates.isEmpty()) return null
+        if (candidates.size == 1) return candidates[0]
+
+        val queue = _playbackState.value.queue
+        val playerIndex = player.currentMediaItemIndex + loadedRange.first
+        if (playerIndex in queue.indices && queue[playerIndex].id == trackId) return playerIndex
+
+        return candidates.minByOrNull { kotlin.math.abs(it - playerIndex) }
+    }
+
+    /** Regenerates entry ids if the list doesn't match the queue size. */
+    private fun normalizeEntryIds(entryIds: List<Long>, queueSize: Int): List<Long> =
+        if (entryIds.size == queueSize) entryIds else List(queueSize) { allocateEntryId() }
+
+    /** Falls back to all-unflagged if the flag list doesn't match the queue size. */
+    private fun normalizeAuxiliaryFlags(flags: List<Boolean>, queueSize: Int): List<Boolean> =
+        if (flags.size == queueSize) flags else List(queueSize) { false }
+
+    /**
+     * True when AUXILIARY_QUEUE_LENGTH flagged tracks are queued after the current
+     * index. Counts flags rather than comparing lengths, since the main section
+     * shrinks as the cursor advances.
+     */
+    private fun hasFullAuxiliaryPool(flags: List<Boolean>, queueIndex: Int): Boolean {
+        var count = 0
+        for (i in (queueIndex + 1)..flags.lastIndex) {
+            if (flags.getOrNull(i) == true) count++
+        }
+        return count >= AUXILIARY_QUEUE_LENGTH
+    }
+
+    /** Ids already queued after (or at) [queueIndex], for duplicate-aware drawing. */
+    private fun upcomingTrackIds(queue: List<TrackEntity>, queueIndex: Int): Set<Long> =
+        queue.drop(queueIndex + 1).mapTo(HashSet()) { it.id }
+
+    /** Picks up to [count] random tracks, preferring ids not already queued up next. */
+    private fun drawAuxiliaryTracks(existing: Collection<Long>, count: Int): List<TrackEntity> {
+        val pool = allTracks
+        if (pool.isEmpty() || count <= 0) return emptyList()
+
+        val fresh = pool.filter { it.id !in existing }
+        val draws = ArrayList<TrackEntity>(count)
+        while (draws.size < count) {
+            draws += if (fresh.isNotEmpty()) {
+                fresh[Random.nextInt(fresh.size)]
+            } else {
+                // Everything is already queued, allow repeats
+                pool[Random.nextInt(pool.size)]
+            }
+        }
+        return draws
+    }
+
+    private fun scheduleAuxiliaryRefill() {
+        if (refillScheduled) return
+        refillScheduled = true
+        scope.launch {
+            try {
+                refillAuxiliary()
+            } finally {
+                refillScheduled = false
+            }
+        }
+    }
+
+    /**
+     * Tops the auxiliary pool back up after the upcoming section. Extends (never
+     * rebuilds) flags and entry ids so existing auxiliary items keep their identity,
+     * and only appends, new entries appear nowhere else outside setQueue.
+     */
+    private fun refillAuxiliary() {
+        val current = _playbackState.value
+        val flags = current.auxiliaryFlags
+        if (current.queue.isEmpty() || flags.size != current.queue.size) return
+        if (hasFullAuxiliaryPool(flags, current.queueIndex)) return
+
+        val needed = AUXILIARY_QUEUE_LENGTH - flags.drop(current.queueIndex + 1).count { it }
+        val additions = drawAuxiliaryTracks(
+            upcomingTrackIds(current.queue, current.queueIndex),
+            needed
+        )
+        if (additions.isEmpty()) return
+
+        _playbackState.value = current.copy(
+            queue = current.queue + additions,
+            queueEntryIds = current.queueEntryIds + List(additions.size) { allocateEntryId() },
+            auxiliaryFlags = flags + List(additions.size) { true }
+        )
+    }
+
     private fun startProgressTracker() {
         progressJob?.cancel()
         progressJob = scope.launch {
             while (true) {
                 if (player.isPlaying) {
-                    // Updates the position flow every frame
+                    // Update the position flow every frame
                     _positionMs.value = player.currentPosition
                     awaitFrame()
                 } else {
-                    // Even when paused, keep position in sync to catch seeks from notification/external
+                    // Keep position in sync while paused (catches external seeks)
                     _positionMs.value = player.currentPosition
-                    // Loops every 200ms
                     delay(200)
                 }
             }
