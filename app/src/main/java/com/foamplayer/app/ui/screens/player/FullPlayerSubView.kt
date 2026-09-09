@@ -60,7 +60,7 @@ internal enum class SubViewMode(val labelRes: Int) {
  * swipe (it's driven by viewModel.setDynamicAccentColor, fired every drag frame).
  * Reading it here -- one leaf per entry -- instead of inline in
  * SubViewSelectorRow's own body confines that per-frame recomposition to just the
- * selected item's icon/label, rather than the whole row (and the row's caller).
+ * selected item's icon, rather than the whole row (and the row's caller).
  */
 @Composable
 private fun SubViewSelectorItem(
@@ -76,14 +76,24 @@ private fun SubViewSelectorItem(
         SubViewMode.QUEUE -> FoamTheme.icons.current.queue
     }
 
+    // TODO : For some reason the queue icon is smaller than lyrics icon, so sizes are hardcoded
     val label = stringResource(mode.labelRes)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable { onSelect(mode) }.padding(8.dp)
+    val iconSize = when (mode) {
+        SubViewMode.LYRICS -> 24.dp
+        SubViewMode.QUEUE -> 28.dp
+    }
+    val touchPadding = when (mode) {
+        SubViewMode.LYRICS -> 12.dp
+        SubViewMode.QUEUE -> 10.dp
+    }
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .clickable { onSelect(mode) }
+            .padding(touchPadding),
+        contentAlignment = Alignment.Center
     ) {
-        Icon(imageVector = icon, contentDescription = label, tint = color, modifier = Modifier.size(20.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        BasicText(text = label, style = FoamTheme.typography.body.copy(color = color))
+        Icon(imageVector = icon, contentDescription = label, tint = color, modifier = Modifier.size(iconSize))
     }
 }
 
