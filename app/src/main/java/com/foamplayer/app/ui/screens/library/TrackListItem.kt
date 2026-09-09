@@ -148,6 +148,8 @@ fun TrackListItem(
 
     val interactionSource = remember { MutableInteractionSource() }
 
+    val dragHandleInteractionSource = remember { MutableInteractionSource() }
+
     val density = LocalDensity.current
     val selectionHighlightPaddingPx = with(density) { HighlightPadding.toPx() }
 
@@ -360,6 +362,10 @@ fun TrackListItem(
 
                 Column(
                     modifier = dragHandleModifier
+                        .clickable(
+                            interactionSource = dragHandleInteractionSource,
+                            indication = null
+                        ) {/* Consume the click */}
                         .padding(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
