@@ -139,6 +139,7 @@ fun FullPlayerScreen(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     playerTransitionState: SeekableTransitionState<Boolean>,
+    backdropBottomExtension: Dp = 0.dp,
     isAnimateSeekBarEnabled: Boolean = false
 ) {
     val state by viewModel.playbackState.collectAsState()
@@ -464,10 +465,7 @@ fun FullPlayerScreen(
 
     with(sharedTransitionScope) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = uiAlpha }
-                .background(FoamTheme.colors.background)
+            modifier = Modifier.fillMaxSize()
         ) {
             val indexA by remember(pagerState, state.queue.size) {
                 derivedStateOf {
@@ -522,23 +520,37 @@ fun FullPlayerScreen(
                 subViewProgress = subViewBlurProgress,
                 dynamicBackgroundEnabled = settings.dynamicBackgroundEnabled,
                 backgroundBlur = settings.backgroundBlur.dp,
-                // No alpha modifier here: the enclosing Box above already applies
-                // `.graphicsLayer { alpha = uiAlpha }` to this whole subtree -- adding
-                // it again here was multiplying uiAlpha by itself, fading the backdrop
-                // out non-linearly relative to the rest of the screen.
+                // extendBottom MUST come before graphicsLayer here: extendBottom
+                // expands the constraints this composable measures itself with, and
+                // graphicsLayer's own layer bounds are whatever size the composable
+                // ends up measuring to. Put alpha first (or on an ancestor, as this
+                // used to do) and the layer -- and therefore its clip rect -- is sized
+                // to the UN-extended bounds, silently eating the extension the moment
+                // alpha stops being exactly 1f (e.g. the first frame of any drag).
+                modifier = Modifier
+                    .extendBottom(backdropBottomExtension)
+                    .graphicsLayer { alpha = uiAlpha },
             )
 
             Box(
                 modifier = Modifier
+                    .extendBottom(backdropBottomExtension)
                     .fillMaxSize()
-                    .graphicsLayer { alpha = 0.2f * subViewBlurProgress }
+                    .graphicsLayer { alpha = 0.2f * subViewBlurProgress * uiAlpha }
                     .background(Color.Black)
             )
 
             // statusBarsPadding keeps every player element (header, pager, controls,
             // subview) exactly where it was before edge-to-edge, while the backdrop
-            // behind this Box now extends up under the status bar.
-            Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+            // behind this Box now extends up under the status bar. uiAlpha lives here
+            // too (this content never extends, so ordering doesn't matter for it) --
+            // it's no longer applied once on the shared parent Box above.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = uiAlpha }
+                    .statusBarsPadding()
+            ) {
                 Box(modifier = Modifier.weight(1f)) {
                     upTransition.AnimatedVisibility(
                         visible = { !it },

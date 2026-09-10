@@ -35,6 +35,44 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.theme.FoamTheme
 
+
+/**
+ * Extends a full-bleed layer beyond the bottom edge of its parent by [extraHeight]:
+ * the measured height grows, the content stays anchored to the top, and the overflow
+ * paints over whatever sits below (Compose never clips children unless explicitly
+ * asked to, so the overflow reaches the nav zone for free).
+ *
+ * The full player's backdrop uses this so its blurred artwork + bottom black fade
+ * run behind the app's navigation zone down to the physical bottom of the screen --
+ * replacing the fake black rect the nav zone used to draw to mimic that continuation.
+ */
+internal fun Modifier.extendBottom(extraHeight: Dp): Modifier {
+    if (extraHeight <= 0.dp) return this
+    return then(
+        object : LayoutModifier {
+            override fun MeasureScope.measure(
+                measurable: Measurable,
+                constraints: Constraints
+            ): MeasureResult {
+                val expanded = Constraints(
+                    minWidth = constraints.minWidth,
+                    maxWidth = constraints.maxWidth,
+                    minHeight = constraints.minHeight,
+                    maxHeight = if (constraints.hasBoundedHeight) {
+                        constraints.maxHeight + extraHeight.roundToPx()
+                    } else {
+                        constraints.maxHeight
+                    }
+                )
+                val placeable = measurable.measure(expanded)
+                return layout(placeable.width, placeable.height) {
+                    placeable.place(0, 0)
+                }
+            }
+        }
+    )
+}
+
 /**
  * Calculate a factor for a requested [blur] radius.
  * @return an interpolated value between 0.2 (full downscale) and 1 (no downscale)

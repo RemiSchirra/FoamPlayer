@@ -8,7 +8,10 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.EaseIn
 import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.Spring
@@ -32,9 +35,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -113,14 +118,14 @@ val SharedElementEasing = FastOutSlowInEasing
 // TODO : put this in enums.kt
 enum class NavigationBarMode { DOCKED, UNDOCKED, ATTACHED }
 
-private val navigationBarMode = NavigationBarMode.ATTACHED
+private val navigationBarMode = NavigationBarMode.UNDOCKED
 
 /**
  * Control if the nav bar container is display when the full ppllayer is opened
  */
 private val navBarTransparentWhenPlayerOpen = false
 
-private fun navigationBarContentHeight(): Dp = 80.dp
+private fun navigationBarContentHeight(): Dp = 72.dp
 
 private fun isSharedElementRoute(route: String?): Boolean {
     if (route == null) return false
@@ -312,34 +317,34 @@ fun FoamNavHost(
 
             // Alpha of the nav zone's black continuation of the player's backdrop fade.
             val isPlayerOpen = playerTransitionState.targetState
-            val zoneBlackAlphaState = animateFloatAsState(
-                targetValue = if (isPlayerOpen) 1f else 0f,
-                animationSpec = if (isTransitionAnimated) {
-                    spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                } else {
-                    snap()
-                },
-                label = "NavBarZoneBlackAlpha"
-            )
-            val zoneBlackAlpha = remember(zoneBlackAlphaState) { { zoneBlackAlphaState.value } }
 
-            // v6: raw 0..1 fraction of the mini<->full player transition -- the SAME
-            // computation the open/close animation itself runs on. Because the
-            // transition is seekable, this follows the finger 1:1 during open/close
-            // drags. Used ONLY for the attached container's upward extension (read
-            // inside drawBehind). Deferred as a lambda so reading it never recomposes
-            // this scope.
+            // 0f..1f "how open is the player", read STRAIGHT off the SeekableTransitionState --
+            // the same value the open/close animation and the finger drag run on.
+            // No independent spring, so it follows the finger 1:1 and matches the tween when
+            // opened programmatically. Deferred as a lambda: reading it only invalidates the
+            // DRAW phase, never this scope.
+            val playerOpenFraction = remember(playerTransitionState) {
+                {
+                    val openProgress =
+                        if (playerTransitionState.currentState == playerTransitionState.targetState) {
+                            if (playerTransitionState.currentState) 1f else 0f
+                        } else {
+                            if (playerTransitionState.targetState) playerTransitionState.fraction
+                            else 1f - playerTransitionState.fraction
+                        }
+                    EaseInOutCubic.transform(openProgress.coerceIn(0f, 1f))
+                }
+            }
 
-            // v7: total height of the nav zone's content, EXCLUDING the gesture-bar
-            // inset: 64.dp for the docked bar, or 12.dp top margin + 56.dp bubble +
-            // 12.dp bottom margin for the floating bubble (undocked / attached share
-            // the same footprint). The mini player overlay at the bottom of this
-            // function reserves exactly this much (+ the inset) so the card keeps its
-            // previous position above the nav zone.
             val navBarContentHeight = navigationBarContentHeight()
+
+            // Extends the full player background fade in the main navigation screen
+            val navigationBarsBottomInsetPx = WindowInsets.navigationBars.getBottom(density)
+            val playerBackdropBottomExtension = with(density) {
+                navigationBarsBottomInsetPx.toDp() +
+                        if (navigationBarMode == NavigationBarMode.DOCKED) 64.dp
+                        else navBarContentHeight * 3f
+            }
 
             val handleNavBarNavigation: (String) -> Unit = { route ->
                 if (playerTransitionState.currentState || playerTransitionState.targetState) {
@@ -594,35 +599,25 @@ fun FoamNavHost(
 
                     transition.AnimatedVisibility(
                         visible = { isFull -> isFull },
-                        enter = if (isTransitionAnimated) fadeIn() else EnterTransition.None,
-                        exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
+                        enter = EnterTransition.None,
+                        exit = ExitTransition.None
                     ) {
-                        BackHandler {
-                            animatePlayerTransition(open = false)
-                        }
+                        BackHandler { animatePlayerTransition(open = false) }
                         FullPlayerScreen(
                             viewModel = playerViewModel,
-                            onDismiss = {
-                                animatePlayerTransition(open = false)
-                            },
+                            onDismiss = { animatePlayerTransition(open = false) },
                             sharedTransitionScope = this@SharedTransitionLayout,
                             animatedVisibilityScope = this@AnimatedVisibility,
                             playerTransitionState = playerTransitionState,
+                            // >>> without this line the extension silently stays 0.dp <<<
+                            backdropBottomExtension = playerBackdropBottomExtension,
                             isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
                         )
                     }
 
                 }
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .drawBehind {
-                            if (isPlayerOpen) {
-                                drawRect(Color.Black, alpha = zoneBlackAlpha())
-                            }
-                        }
-                ) {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     when (navigationBarMode) {
                         NavigationBarMode.DOCKED -> FoamNavigationBar(
                             currentRoute = currentRoute,
@@ -630,7 +625,7 @@ fun FoamNavHost(
                             isDynamicBackgroundEnabled = isDynamicBackgroundEnabled,
                             onNavigate = handleNavBarNavigation,
                             connectToMiniPlayer = playbackState.currentTrack != null,
-                            zoneBlackAlpha = zoneBlackAlpha
+                            playerOpenFraction = playerOpenFraction
                         )
                         NavigationBarMode.UNDOCKED -> Box(
                             modifier = Modifier.fillMaxWidth().navigationBarsPadding()
@@ -639,10 +634,10 @@ fun FoamNavHost(
                                 currentRoute = currentRoute,
                                 isPlayerOpen = isPlayerOpen,
                                 onNavigate = handleNavBarNavigation,
-                                attachedToMiniPlayer = true,
+                                attachedToMiniPlayer = false,
                                 connectToMiniPlayer = playbackState.currentTrack != null,
-                                zoneBlackAlpha = zoneBlackAlpha,
-                                transitionAnimated = isTransitionAnimated   // v11
+                                playerOpenFraction = playerOpenFraction,
+                                transitionAnimated = isTransitionAnimated
                             )
                         }
                         NavigationBarMode.ATTACHED -> Box(
@@ -656,12 +651,12 @@ fun FoamNavHost(
                                 onNavigate = handleNavBarNavigation,
                                 attachedToMiniPlayer = true,
                                 connectToMiniPlayer = playbackState.currentTrack != null,
-                                zoneBlackAlpha = zoneBlackAlpha
+                                playerOpenFraction = playerOpenFraction
                             )
                         }
-
                     }
                 }
+
             }
 
             // Lower the card when attached to the navigation bar
@@ -753,7 +748,6 @@ private fun FoamNavigationItems(
 
             val animatedTint by animateColorAsState(
                 targetValue = if (selected) FoamTheme.accentColor else FoamTheme.colors.textSecondary,
-                animationSpec = tween(durationMillis = 300),
                 label = "NavIconTint"
             )
 
@@ -791,7 +785,7 @@ fun FoamNavigationBar(
     isDynamicBackgroundEnabled: Boolean,
     onNavigate: (String) -> Unit,
     connectToMiniPlayer: Boolean = false,
-    zoneBlackAlpha: () -> Float = { 0f }
+    playerOpenFraction: () -> Float = { 0f }
 ) {
     val surfaceColor = FoamTheme.colors.surface
     FoamNavigationItems(
@@ -802,7 +796,7 @@ fun FoamNavigationBar(
             .fillMaxWidth()
             .drawBehind {
                 val greyAlpha = if (isPlayerOpen && navBarTransparentWhenPlayerOpen) {
-                    1f - zoneBlackAlpha()
+                    1f - playerOpenFraction()
                 } else {
                     1f
                 }
@@ -833,7 +827,7 @@ private fun FloatingNavigationBar(
     onNavigate: (String) -> Unit,
     attachedToMiniPlayer: Boolean = false,
     connectToMiniPlayer: Boolean = false,
-    zoneBlackAlpha: () -> Float = { 0f },
+    playerOpenFraction: () -> Float = { 0f },
     transitionAnimated: Boolean = true
 ) {
     val miniImageRadius = (44.dp / 2) * FoamTheme.shapes.miniPlayerRounding
@@ -874,15 +868,14 @@ private fun FloatingNavigationBar(
                 .drawBehind {
                     val radiusPx = containerRadius.toPx()
                     val greyAlpha = if (isPlayerOpen && navBarTransparentWhenPlayerOpen) {
-                        1f - zoneBlackAlpha()
-                    } else {
-                        1f
-                    }
+                        1f - playerOpenFraction()
+                    } else 1f
 
-                    // Extends the container if it should be attached to the mini bar
-                    val extensionPx = animatedExtension.toPx()
+                    // extension now follows the finger exactly: full when closed, 0 when open
+                    val extensionPx = if (attachedToMiniPlayer && connectToMiniPlayer) {
+                        3.5f * radiusPx * (1f - playerOpenFraction())
+                    } else 0f
 
-                    // Rounded rect for both floating and attached
                     drawRoundRect(
                         color = surfaceVariantColor,
                         topLeft = Offset(0f, -extensionPx),
