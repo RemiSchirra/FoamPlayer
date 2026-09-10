@@ -92,8 +92,10 @@ private fun MiniPlayerProgressSlider(
             seekBarProgress.onDragging()
             onSeek(new)
         },
-        trackHeight = 2.dp,
+        trackHeight = 4.dp,
         activeColor = activeColor,
+        inactiveColor = FoamTheme.colors.surface,
+        growFactor = 1f,
         modifier = modifier.onSeekBarReleased {
             seekBarProgress.onSeekDragFinished(
                 animated = isAnimateSeekBarEnabled,
