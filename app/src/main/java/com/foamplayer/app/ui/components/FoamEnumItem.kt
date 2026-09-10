@@ -2,6 +2,7 @@ package com.foamplayer.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,11 +16,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -51,6 +55,8 @@ fun <T : Enum<T>> FoamEnumItem(
         ) {
             options.forEach { option ->
                 val isSelected = option == selectedOption
+                val interactionSource = remember { MutableInteractionSource() }
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -59,7 +65,12 @@ fun <T : Enum<T>> FoamEnumItem(
                             if (isSelected) FoamTheme.accentColor
                             else FoamTheme.colors.surface
                         )
-                        .clickable { onOptionSelected(option) }
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = ripple(color = FoamTheme.colors.textPrimary),
+                            role = Role.RadioButton,
+                            onClick = { onOptionSelected(option) }
+                        )
                         .padding(vertical = FoamDimens.paddingMedium),
                     contentAlignment = Alignment.Center
                 ) {

@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.LocalContentColor
 import androidx.compose.material.Slider
 import androidx.compose.material.SliderDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -55,21 +57,23 @@ fun FoamSliderItem(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            onValueChangeFinished = onValueChangeFinished,
-            steps = steps ?: 0,
-            valueRange = valueRange,
-            modifier = Modifier.fillMaxWidth(),
-            colors = SliderDefaults.colors(
-                thumbColor = FoamTheme.accentColor,
-                activeTrackColor = FoamTheme.accentColor,
-                inactiveTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f),
-                activeTickColor = Color.White.copy(alpha = 0.5f),
-                inactiveTickColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)
+        CompositionLocalProvider(LocalContentColor provides FoamTheme.colors.textPrimary) {
+            Slider(
+                value = value,
+                onValueChange = onValueChange,
+                onValueChangeFinished = onValueChangeFinished,
+                steps = steps ?: 0,
+                valueRange = valueRange,
+                modifier = Modifier.fillMaxWidth(),
+                colors = SliderDefaults.colors(
+                    thumbColor = FoamTheme.accentColor,
+                    activeTrackColor = FoamTheme.accentColor,
+                    inactiveTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f),
+                    activeTickColor = Color.White.copy(alpha = 0.5f),
+                    inactiveTickColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)
+                )
             )
-        )
+        }
 
         // Min max footer
         minMaxDisplay?.let { (min, max) ->
