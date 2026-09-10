@@ -50,12 +50,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Draw behind the system status bar and gesture/navigation bar so the
+        // album-art backdrop can cover the full screen. Compose content re-adds
+        // the insets as padding (statusBarsPadding / navigationBarsPadding) where
+        // interactive elements need them, so their effective padding is unchanged.
+        enableEdgeToEdge()
         checkAndRequestPermissions()
         handleIntent(intent)
 
         setContent {
             val settings by settingsViewModel.settings.collectAsState()
-            
+
             LaunchedEffect(settings.language) {
                 val appLocale: LocaleListCompat = if (settings.language == "auto") {
                     LocaleListCompat.getEmptyLocaleList()
