@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -534,7 +535,10 @@ fun FullPlayerScreen(
                     .background(Color.Black)
             )
 
-            Column(modifier = Modifier.fillMaxSize()) {
+            // statusBarsPadding keeps every player element (header, pager, controls,
+            // subview) exactly where it was before edge-to-edge, while the backdrop
+            // behind this Box now extends up under the status bar.
+            Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
                 Box(modifier = Modifier.weight(1f)) {
                     upTransition.AnimatedVisibility(
                         visible = { !it },

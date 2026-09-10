@@ -11,8 +11,13 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.Transition
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -30,8 +35,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,10 +51,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.times
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -84,6 +96,31 @@ import kotlinx.coroutines.launch
 
 const val SharedElementTransitionDurationMs = 350
 val SharedElementEasing = FastOutSlowInEasing
+
+/**
+ * Layout mode for the app's bottom navigation bar.
+ *
+ *  DOCKED   – classic bar: pinned to the bottom edge, fills the width. Grey covers
+ *             the gesture-bar gap AND the 6.dp strip up to the mini player card.
+ *  UNDOCKED – floating "bubble": 12.dp margins, 56.dp row, 28.dp corners.
+ *  ATTACHED – same footprint as UNDOCKED (same height/position), with the mini
+ *             player's corner radius. While the player closes, its container
+ *             EXTENDS UPWARD (draw phase, following the open fraction / the
+ *             finger) until it slides behind the mini player card and connects.
+ *             Visible at all times; icons never move.
+ */
+// TODO : rename UNDOCKED into FLOATING
+// TODO : put this in enums.kt
+enum class NavigationBarMode { DOCKED, UNDOCKED, ATTACHED }
+
+private val navigationBarMode = NavigationBarMode.ATTACHED
+
+/**
+ * Control if the nav bar container is display when the full ppllayer is opened
+ */
+private val navBarTransparentWhenPlayerOpen = false
+
+private fun navigationBarContentHeight(): Dp = 80.dp
 
 private fun isSharedElementRoute(route: String?): Boolean {
     if (route == null) return false
@@ -257,324 +294,58 @@ fun FoamNavHost(
     SharedTransitionLayout {
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")
 
-        Column(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
-            fun playTrackFromList(tracks: List<com.foamplayer.app.data.db.entities.TrackEntity>, index: Int) {
-                if (isAutoOpenPlayerEnabled) {
-                    skipMiniPlayerTrackAnimation = true
-                }
-                playerViewModel.playQueue(tracks, index)
-                if (isAutoOpenPlayerEnabled) {
-                    animatePlayerTransition(
-                        open = true,
-                        sourceTrackId = tracks.getOrNull(index)?.id,
-                        precompose = true
-                    )
-                }
+        Box(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
+
+            // App-wide dynamic album-art backdrop
+            val backgroundEnabled = isDynamicBackgroundEnabled && !isSettingsRoute(currentRoute)
+            val onBackgroundTransition = if (backgroundEnabled) {
+                rememberAnimatedBackground(
+                    enabled = true,
+                    initialFrontArtPath = playbackState.currentTrack?.albumArtPath,
+                    blur = playerSettings.backgroundBlur.dp,
+                    intensity = playerSettings.dynamicBackgroundIntensity / 100f,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                remember { { _: String?, _: String?, _: Float -> } }
             }
 
-            Box(modifier = Modifier.weight(1f)) {
-                val backgroundEnabled = isDynamicBackgroundEnabled && !isSettingsRoute(currentRoute)
-                val onBackgroundTransition = if (backgroundEnabled) {
-                    rememberAnimatedBackground(
-                        enabled = true,
-                        initialFrontArtPath = playbackState.currentTrack?.albumArtPath,
-                        blur = playerSettings.backgroundBlur.dp,
-                        intensity = playerSettings.dynamicBackgroundIntensity / 100f,
-                        modifier = Modifier.fillMaxSize()
+            // Alpha of the nav zone's black continuation of the player's backdrop fade.
+            val isPlayerOpen = playerTransitionState.targetState
+            val zoneBlackAlphaState = animateFloatAsState(
+                targetValue = if (isPlayerOpen) 1f else 0f,
+                animationSpec = if (isTransitionAnimated) {
+                    spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessLow
                     )
                 } else {
-                    remember { { _: String?, _: String?, _: Float -> } }
+                    snap()
+                },
+                label = "NavBarZoneBlackAlpha"
+            )
+            val zoneBlackAlpha = remember(zoneBlackAlphaState) { { zoneBlackAlphaState.value } }
+
+            // v6: raw 0..1 fraction of the mini<->full player transition -- the SAME
+            // computation the open/close animation itself runs on. Because the
+            // transition is seekable, this follows the finger 1:1 during open/close
+            // drags. Used ONLY for the attached container's upward extension (read
+            // inside drawBehind). Deferred as a lambda so reading it never recomposes
+            // this scope.
+
+            // v7: total height of the nav zone's content, EXCLUDING the gesture-bar
+            // inset: 64.dp for the docked bar, or 12.dp top margin + 56.dp bubble +
+            // 12.dp bottom margin for the floating bubble (undocked / attached share
+            // the same footprint). The mini player overlay at the bottom of this
+            // function reserves exactly this much (+ the inset) so the card keeps its
+            // previous position above the nav zone.
+            val navBarContentHeight = navigationBarContentHeight()
+
+            val handleNavBarNavigation: (String) -> Unit = { route ->
+                if (playerTransitionState.currentState || playerTransitionState.targetState) {
+                    animatePlayerTransition(open = false)
                 }
-                transition.AnimatedVisibility(
-                    visible = { isFull -> !isFull },
-                    enter = if (isTransitionAnimated) fadeIn() else EnterTransition.None,
-                    exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    val playerTransitionVisibilityScope = this
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        NavHost(
-                            modifier = Modifier.fillMaxSize(),
-                            navController = navController,
-                            startDestination = Screen.Library.route,
-                            enterTransition = {
-                                when {
-                                    playerTransitionState.currentState -> EnterTransition.None
-                                    isSettingsRoute(initialState.destination.route) &&
-                                            isSettingsRoute(targetState.destination.route) ->
-                                        slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) + fadeIn(animationSpec = tween(400))
-                                    isSharedElementRoute(initialState.destination.route) ||
-                                            isSharedElementRoute(targetState.destination.route) ->
-                                        fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
-                                    else -> fadeIn(animationSpec = tween(400))
-                                }
-                            },
-                            exitTransition = {
-                                when {
-                                    playerTransitionState.currentState -> ExitTransition.None
-                                    isSettingsRoute(initialState.destination.route) &&
-                                            isSettingsRoute(targetState.destination.route) ->
-                                        slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = tween()) + fadeOut(animationSpec = tween(400))
-                                    isSharedElementRoute(initialState.destination.route) ||
-                                            isSharedElementRoute(targetState.destination.route) ->
-                                        fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
-                                    else -> fadeOut(animationSpec = tween(400))
-                                }
-                            },
-                            popEnterTransition = {
-                                when {
-                                    playerTransitionState.currentState -> EnterTransition.None
-                                    isSettingsRoute(initialState.destination.route) &&
-                                            isSettingsRoute(targetState.destination.route) ->
-                                        slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = tween()) + fadeIn(animationSpec = tween(400))
-                                    isSharedElementRoute(initialState.destination.route) ||
-                                            isSharedElementRoute(targetState.destination.route) ->
-                                        fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
-                                    else -> fadeIn(animationSpec = tween(400))
-                                }
-                            },
-                            popExitTransition = {
-                                when {
-                                    playerTransitionState.currentState -> ExitTransition.None
-                                    isSettingsRoute(initialState.destination.route) &&
-                                            isSettingsRoute(targetState.destination.route) ->
-                                        slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) + fadeOut(animationSpec = tween(400))
-                                    isSharedElementRoute(initialState.destination.route) ||
-                                            isSharedElementRoute(targetState.destination.route) ->
-                                        fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
-                                    else -> fadeOut(animationSpec = tween(400))
-                                }
-                            },
-                            sizeTransform = { SizeTransform(clip = false) }
-                        ) {
-                            composable(Screen.Library.route) {
-                                LibraryScreen(
-                                    viewModel = libraryViewModel,
-                                    onTrackClick = { tracks, index ->
-                                        playTrackFromList(tracks, index)
-                                    },
-                                    sharedTransitionScope = this@SharedTransitionLayout,
-                                    animatedVisibilityScope = playerTransitionVisibilityScope,
-                                    sharedTrackId = trackListTransitionTrackId,
-                                    activeTrackId = playbackState.currentTrack?.id
-                                )
-                            }
-                            composable(Screen.Playlists.route) {
-                                PlaylistsScreen(
-                                    onPlaylistClick = { playlist ->
-                                        navController.navigate(Screen.PlaylistDetail.createRoute(playlist.playlistId))
-                                    }
-                                )
-                            }
-                            composable(Screen.Search.route) {
-                                SearchScreen(
-                                    onArtistClick = { artist ->
-                                        navController.navigate(Screen.ArtistDetail.createRoute(artist))
-                                    },
-                                    onAlbumClick = { albumResult ->
-                                        navController.navigate(
-                                            Screen.AlbumDetail.createRoute(
-                                                albumResult.album,
-                                                albumResult.albumArtPath,
-                                                albumResult.artist
-                                            )
-                                        )
-                                    },
-                                    sharedTransitionScope = this@SharedTransitionLayout,
-                                    animatedVisibilityScope = this,
-                                    playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-                                    sharedTrackId = trackListTransitionTrackId,
-                                    activeTrackId = playbackState.currentTrack?.id,
-                                    onTrackClick = { track -> playTrackFromList(listOf(track), 0) }
-                                )
-                            }
-                            composable(Screen.Equalizer.route) { EqualizerScreen() }
-                            composable(Screen.Settings.route) {
-                                SettingsScreen(
-                                    onNavigateToAudio = { navController.navigate(Screen.SettingsAudio.route) },
-                                    onNavigateToUI = { navController.navigate(Screen.SettingsUI.route) },
-                                    onNavigateToLibrary = { navController.navigate(Screen.SettingsLibrary.route) },
-                                    onNavigateToLyrics = { navController.navigate(Screen.SettingsLyrics.route) },
-                                    onNavigateToTest = { navController.navigate(Screen.SettingsTest.route) }
-                                )
-                            }
-                            composable(Screen.SettingsAudio.route) {
-                                AudioSettingsScreen(onBack = { navController.popBackStack() })
-                            }
-                            composable(Screen.SettingsUI.route) {
-                                UISettingsScreen(
-                                    onBack = { navController.popBackStack() },
-                                    onNavigateToColors = { navController.navigate(Screen.SettingsColors.route) },
-                                    onNavigateToPlayer = { navController.navigate(Screen.SettingsPlayer.route) },
-                                    onNavigateToBackground = { navController.navigate(Screen.SettingsBackground.route) },
-                                )
-                            }
-                            composable(Screen.SettingsColors.route) {
-                                ColorsSettingsScreen(onBack = { navController.popBackStack() })
-                            }
-                            composable(Screen.SettingsPlayer.route) {
-                                PlayerSettingsScreen(onBack = { navController.popBackStack() })
-                            }
-                            composable(Screen.SettingsBackground.route) {
-                                BackgroundSettingsScreen(onBack = { navController.popBackStack() })
-                            }
-                            composable(Screen.SettingsLibrary.route) {
-                                LibrarySettingsScreen(onBack = { navController.popBackStack() })
-                            }
-                            composable(Screen.SettingsLyrics.route) {
-                                LyricsSettingsScreen(
-                                    onBack = { navController.popBackStack() },
-                                    onNavigateToProviders = { navController.navigate(Screen.SettingsLyricsProvider.route) }
-                                )
-                            }
-                            composable(Screen.SettingsLyricsProvider.route) {
-                                LyricsProviderSettingsScreen(onBack = { navController.popBackStack() })
-                            }
-                            composable(Screen.SettingsTest.route) {
-                                TestSettingsScreen(onBack = { navController.popBackStack() })
-                            }
-                            composable(
-                                Screen.ArtistDetail.route,
-                                arguments = listOf(navArgument("artistName") { type = NavType.StringType })
-                            ) { backStackEntry ->
-                                val artistName = backStackEntry.arguments?.getString("artistName") ?: ""
-                                ArtistDetailScreen(
-                                    artistName = artistName,
-                                    onAlbumClick = { album ->
-                                        navController.navigate(
-                                            Screen.AlbumDetail.createRoute(
-                                                album.album,
-                                                album.albumArtPath,
-                                                album.artist
-                                            )
-                                        )
-                                    },
-                                    onBack = { navController.popBackStack() },
-                                    sharedTransitionScope = this@SharedTransitionLayout,
-                                    animatedVisibilityScope = this
-                                )
-                            }
-                            composable(
-                                Screen.AlbumDetail.route,
-                                arguments = listOf(
-                                    navArgument("albumName") { type = NavType.StringType },
-                                    navArgument("artUrl") { type = NavType.StringType; defaultValue = "" },
-                                    navArgument("artist") { type = NavType.StringType; defaultValue = "" }
-                                )
-                            ) { backStackEntry ->
-                                val albumName = backStackEntry.arguments?.getString("albumName") ?: ""
-                                val artUrl = (backStackEntry.arguments?.getString("artUrl") ?: "").ifEmpty { null }
-                                val artist = (backStackEntry.arguments?.getString("artist") ?: "").ifEmpty { null }
-                                AlbumDetailScreen(
-                                    albumName = albumName,
-                                    initialImageUrl = artUrl,
-                                    initialArtistName = artist,
-                                    onTrackClick = { tracks, index ->
-                                        playTrackFromList(tracks, index)
-                                    },
-                                    onBack = { navController.popBackStack() },
-                                    sharedTransitionScope = this@SharedTransitionLayout,
-                                    animatedVisibilityScope = this,
-                                    playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-                                    sharedTrackId = trackListTransitionTrackId,
-                                    activeTrackId = playbackState.currentTrack?.id
-                                )
-                            }
-                            composable(
-                                Screen.PlaylistDetail.route,
-                                arguments = listOf(navArgument("playlistId") { type = NavType.LongType })
-                            ) { backStackEntry ->
-                                val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: -1L
-                                PlaylistDetailScreen(
-                                    playlistId = playlistId,
-                                    onTrackClick = { tracks, index ->
-                                        playTrackFromList(tracks, index)
-                                    },
-                                    onBack = { navController.popBackStack() },
-                                    sharedTransitionScope = this@SharedTransitionLayout,
-                                    animatedVisibilityScope = this,
-                                    playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-                                    sharedTrackId = trackListTransitionTrackId,
-                                    activeTrackId = playbackState.currentTrack?.id
-                                )
-                            }
-                        }
-
-                        Box(modifier = Modifier.align(Alignment.BottomCenter)) {
-                            transition.AnimatedVisibility(
-                                visible = { isFull -> !isFull },
-                                enter = if (isTransitionAnimated) fadeIn() else EnterTransition.None,
-                                exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
-                            ) {
-                                val miniPlayerVisibilityScope = this
-                                if (playbackState.currentTrack != null) {
-                                    MiniPlayer(
-                                        playbackState = playbackState,
-                                        positionMsFlow = playerViewModel.positionMs,
-                                        onPlayPauseClick = {
-                                            if (playbackState.isPlaying) playerViewModel.pause() else playerViewModel.play()
-                                        },
-                                        onSeek = { progress ->
-                                            playerViewModel.seekTo((progress * playbackState.durationMs).toLong())
-                                        },
-                                        onSkipToTrack = { index ->
-                                            playerViewModel.skipToIndex(index)
-                                        },
-                                        onColorChange = { color ->
-                                            playerViewModel.setDynamicAccentColor(color)
-                                        },
-                                        onBackgroundTransition = onBackgroundTransition,
-                                        onClick = {
-                                            animatePlayerTransition(open = true, precompose = true)
-                                        },
-                                        sharedTransitionScope = this@SharedTransitionLayout,
-                                        animatedVisibilityScope = miniPlayerVisibilityScope,
-                                        useSharedElements = trackListTransitionTrackId == null,
-                                        isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
-                                        skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,
-                                        modifier = Modifier.draggable(
-                                            state = rememberDraggableState { delta -> miniPlayerSwipeController.onDrag(delta) },
-                                            orientation = Orientation.Vertical,
-                                            onDragStopped = { velocity -> miniPlayerSwipeController.onDragStopped(velocity) }
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                transition.AnimatedVisibility(
-                    visible = { isFull -> isFull },
-                    enter = if (isTransitionAnimated) fadeIn() else EnterTransition.None,
-                    exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
-                ) {
-                    BackHandler {
-                        animatePlayerTransition(open = false)
-                    }
-                    FullPlayerScreen(
-                        viewModel = playerViewModel,
-                        onDismiss = {
-                            animatePlayerTransition(open = false)
-                        },
-                        sharedTransitionScope = this@SharedTransitionLayout,
-                        animatedVisibilityScope = this@AnimatedVisibility,
-                        playerTransitionState = playerTransitionState,
-                        isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
-                    )
-                }
-
-            }
-
-            FoamNavigationBar(
-                currentRoute = currentRoute,
-                isPlayerOpen = playerTransitionState.targetState,
-                onNavigate = { route ->
-                    if (playerTransitionState.currentState || playerTransitionState.targetState) {
-                        animatePlayerTransition(open = false)
-                    }
-                    if (currentRoute == route) return@FoamNavigationBar
-
+                if (currentRoute != route) {
                     // Animate back if we're a subscreen of [route],
                     // otherwise just open the desired screen.
                     if (!navController.popBackStack(route, inclusive = false)) {
@@ -584,16 +355,382 @@ fun FoamNavHost(
                         }
                     }
                 }
-            )
+            }
+
+            Column(modifier = Modifier.fillMaxSize()) {
+                fun playTrackFromList(tracks: List<com.foamplayer.app.data.db.entities.TrackEntity>, index: Int) {
+                    if (isAutoOpenPlayerEnabled) {
+                        skipMiniPlayerTrackAnimation = true
+                    }
+                    playerViewModel.playQueue(tracks, index)
+                    if (isAutoOpenPlayerEnabled) {
+                        animatePlayerTransition(
+                            open = true,
+                            sourceTrackId = tracks.getOrNull(index)?.id,
+                            precompose = true
+                        )
+                    }
+                }
+
+                Box(modifier = Modifier.weight(1f)) {
+                    transition.AnimatedVisibility(
+                        visible = { isFull -> !isFull },
+                        enter = if (isTransitionAnimated) fadeIn() else EnterTransition.None,
+                        exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        val playerTransitionVisibilityScope = this
+                        // Screens keep their status-bar padding; the backdrop behind them
+                        // (drawn at the root now) extends up under the status bar.
+                        Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                            NavHost(
+                                modifier = Modifier.fillMaxSize(),
+                                navController = navController,
+                                startDestination = Screen.Library.route,
+                                enterTransition = {
+                                    when {
+                                        playerTransitionState.currentState -> EnterTransition.None
+                                        isSettingsRoute(initialState.destination.route) &&
+                                                isSettingsRoute(targetState.destination.route) ->
+                                            slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) + fadeIn(animationSpec = tween(400))
+                                        isSharedElementRoute(initialState.destination.route) ||
+                                                isSharedElementRoute(targetState.destination.route) ->
+                                            fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
+                                        else -> fadeIn(animationSpec = tween(400))
+                                    }
+                                },
+                                exitTransition = {
+                                    when {
+                                        playerTransitionState.currentState -> ExitTransition.None
+                                        isSettingsRoute(initialState.destination.route) &&
+                                                isSettingsRoute(targetState.destination.route) ->
+                                            slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = tween()) + fadeOut(animationSpec = tween(400))
+                                        isSharedElementRoute(initialState.destination.route) ||
+                                                isSharedElementRoute(targetState.destination.route) ->
+                                            fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
+                                        else -> fadeOut(animationSpec = tween(400))
+                                    }
+                                },
+                                popEnterTransition = {
+                                    when {
+                                        playerTransitionState.currentState -> EnterTransition.None
+                                        isSettingsRoute(initialState.destination.route) &&
+                                                isSettingsRoute(targetState.destination.route) ->
+                                            slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = tween()) + fadeIn(animationSpec = tween(400))
+                                        isSharedElementRoute(initialState.destination.route) ||
+                                                isSharedElementRoute(targetState.destination.route) ->
+                                            fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
+                                        else -> fadeIn(animationSpec = tween(400))
+                                    }
+                                },
+                                popExitTransition = {
+                                    when {
+                                        playerTransitionState.currentState -> ExitTransition.None
+                                        isSettingsRoute(initialState.destination.route) &&
+                                                isSettingsRoute(targetState.destination.route) ->
+                                            slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) + fadeOut(animationSpec = tween(400))
+                                        isSharedElementRoute(initialState.destination.route) ||
+                                                isSharedElementRoute(targetState.destination.route) ->
+                                            fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
+                                        else -> fadeOut(animationSpec = tween(400))
+                                    }
+                                },
+                                sizeTransform = { SizeTransform(clip = false) }
+                            ) {
+                                composable(Screen.Library.route) {
+                                    LibraryScreen(
+                                        viewModel = libraryViewModel,
+                                        onTrackClick = { tracks, index ->
+                                            playTrackFromList(tracks, index)
+                                        },
+                                        sharedTransitionScope = this@SharedTransitionLayout,
+                                        animatedVisibilityScope = playerTransitionVisibilityScope,
+                                        sharedTrackId = trackListTransitionTrackId,
+                                        activeTrackId = playbackState.currentTrack?.id
+                                    )
+                                }
+                                composable(Screen.Playlists.route) {
+                                    PlaylistsScreen(
+                                        onPlaylistClick = { playlist ->
+                                            navController.navigate(Screen.PlaylistDetail.createRoute(playlist.playlistId))
+                                        }
+                                    )
+                                }
+                                composable(Screen.Search.route) {
+                                    SearchScreen(
+                                        onArtistClick = { artist ->
+                                            navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                                        },
+                                        onAlbumClick = { albumResult ->
+                                            navController.navigate(
+                                                Screen.AlbumDetail.createRoute(
+                                                    albumResult.album,
+                                                    albumResult.albumArtPath,
+                                                    albumResult.artist
+                                                )
+                                            )
+                                        },
+                                        sharedTransitionScope = this@SharedTransitionLayout,
+                                        animatedVisibilityScope = this,
+                                        playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                        sharedTrackId = trackListTransitionTrackId,
+                                        activeTrackId = playbackState.currentTrack?.id,
+                                        onTrackClick = { track -> playTrackFromList(listOf(track), 0) }
+                                    )
+                                }
+                                composable(Screen.Equalizer.route) { EqualizerScreen() }
+                                composable(Screen.Settings.route) {
+                                    SettingsScreen(
+                                        onNavigateToAudio = { navController.navigate(Screen.SettingsAudio.route) },
+                                        onNavigateToUI = { navController.navigate(Screen.SettingsUI.route) },
+                                        onNavigateToLibrary = { navController.navigate(Screen.SettingsLibrary.route) },
+                                        onNavigateToLyrics = { navController.navigate(Screen.SettingsLyrics.route) },
+                                        onNavigateToTest = { navController.navigate(Screen.SettingsTest.route) }
+                                    )
+                                }
+                                composable(Screen.SettingsAudio.route) {
+                                    AudioSettingsScreen(onBack = { navController.popBackStack() })
+                                }
+                                composable(Screen.SettingsUI.route) {
+                                    UISettingsScreen(
+                                        onBack = { navController.popBackStack() },
+                                        onNavigateToColors = { navController.navigate(Screen.SettingsColors.route) },
+                                        onNavigateToPlayer = { navController.navigate(Screen.SettingsPlayer.route) },
+                                        onNavigateToBackground = { navController.navigate(Screen.SettingsBackground.route) },
+                                    )
+                                }
+                                composable(Screen.SettingsColors.route) {
+                                    ColorsSettingsScreen(onBack = { navController.popBackStack() })
+                                }
+                                composable(Screen.SettingsPlayer.route) {
+                                    PlayerSettingsScreen(onBack = { navController.popBackStack() })
+                                }
+                                composable(Screen.SettingsBackground.route) {
+                                    BackgroundSettingsScreen(onBack = { navController.popBackStack() })
+                                }
+                                composable(Screen.SettingsLibrary.route) {
+                                    LibrarySettingsScreen(onBack = { navController.popBackStack() })
+                                }
+                                composable(Screen.SettingsLyrics.route) {
+                                    LyricsSettingsScreen(
+                                        onBack = { navController.popBackStack() },
+                                        onNavigateToProviders = { navController.navigate(Screen.SettingsLyricsProvider.route) }
+                                    )
+                                }
+                                composable(Screen.SettingsLyricsProvider.route) {
+                                    LyricsProviderSettingsScreen(onBack = { navController.popBackStack() })
+                                }
+                                composable(Screen.SettingsTest.route) {
+                                    TestSettingsScreen(onBack = { navController.popBackStack() })
+                                }
+                                composable(
+                                    Screen.ArtistDetail.route,
+                                    arguments = listOf(navArgument("artistName") { type = NavType.StringType })
+                                ) { backStackEntry ->
+                                    val artistName = backStackEntry.arguments?.getString("artistName") ?: ""
+                                    ArtistDetailScreen(
+                                        artistName = artistName,
+                                        onAlbumClick = { album ->
+                                            navController.navigate(
+                                                Screen.AlbumDetail.createRoute(
+                                                    album.album,
+                                                    album.albumArtPath,
+                                                    album.artist
+                                                )
+                                            )
+                                        },
+                                        onBack = { navController.popBackStack() },
+                                        sharedTransitionScope = this@SharedTransitionLayout,
+                                        animatedVisibilityScope = this
+                                    )
+                                }
+                                composable(
+                                    Screen.AlbumDetail.route,
+                                    arguments = listOf(
+                                        navArgument("albumName") { type = NavType.StringType },
+                                        navArgument("artUrl") { type = NavType.StringType; defaultValue = "" },
+                                        navArgument("artist") { type = NavType.StringType; defaultValue = "" }
+                                    )
+                                ) { backStackEntry ->
+                                    val albumName = backStackEntry.arguments?.getString("albumName") ?: ""
+                                    val artUrl = (backStackEntry.arguments?.getString("artUrl") ?: "").ifEmpty { null }
+                                    val artist = (backStackEntry.arguments?.getString("artist") ?: "").ifEmpty { null }
+                                    AlbumDetailScreen(
+                                        albumName = albumName,
+                                        initialImageUrl = artUrl,
+                                        initialArtistName = artist,
+                                        onTrackClick = { tracks, index ->
+                                            playTrackFromList(tracks, index)
+                                        },
+                                        onBack = { navController.popBackStack() },
+                                        sharedTransitionScope = this@SharedTransitionLayout,
+                                        animatedVisibilityScope = this,
+                                        playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                        sharedTrackId = trackListTransitionTrackId,
+                                        activeTrackId = playbackState.currentTrack?.id
+                                    )
+                                }
+                                composable(
+                                    Screen.PlaylistDetail.route,
+                                    arguments = listOf(navArgument("playlistId") { type = NavType.LongType })
+                                ) { backStackEntry ->
+                                    val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: -1L
+                                    PlaylistDetailScreen(
+                                        playlistId = playlistId,
+                                        onTrackClick = { tracks, index ->
+                                            playTrackFromList(tracks, index)
+                                        },
+                                        onBack = { navController.popBackStack() },
+                                        sharedTransitionScope = this@SharedTransitionLayout,
+                                        animatedVisibilityScope = this,
+                                        playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                        sharedTrackId = trackListTransitionTrackId,
+                                        activeTrackId = playbackState.currentTrack?.id
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    transition.AnimatedVisibility(
+                        visible = { isFull -> isFull },
+                        enter = if (isTransitionAnimated) fadeIn() else EnterTransition.None,
+                        exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
+                    ) {
+                        BackHandler {
+                            animatePlayerTransition(open = false)
+                        }
+                        FullPlayerScreen(
+                            viewModel = playerViewModel,
+                            onDismiss = {
+                                animatePlayerTransition(open = false)
+                            },
+                            sharedTransitionScope = this@SharedTransitionLayout,
+                            animatedVisibilityScope = this@AnimatedVisibility,
+                            playerTransitionState = playerTransitionState,
+                            isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
+                        )
+                    }
+
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .drawBehind {
+                            if (isPlayerOpen) {
+                                drawRect(Color.Black, alpha = zoneBlackAlpha())
+                            }
+                        }
+                ) {
+                    when (navigationBarMode) {
+                        NavigationBarMode.DOCKED -> FoamNavigationBar(
+                            currentRoute = currentRoute,
+                            isPlayerOpen = isPlayerOpen,
+                            isDynamicBackgroundEnabled = isDynamicBackgroundEnabled,
+                            onNavigate = handleNavBarNavigation,
+                            connectToMiniPlayer = playbackState.currentTrack != null,
+                            zoneBlackAlpha = zoneBlackAlpha
+                        )
+                        NavigationBarMode.UNDOCKED -> Box(
+                            modifier = Modifier.fillMaxWidth().navigationBarsPadding()
+                        ) {
+                            FloatingNavigationBar(
+                                currentRoute = currentRoute,
+                                isPlayerOpen = isPlayerOpen,
+                                onNavigate = handleNavBarNavigation,
+                                attachedToMiniPlayer = true,
+                                connectToMiniPlayer = playbackState.currentTrack != null,
+                                zoneBlackAlpha = zoneBlackAlpha,
+                                transitionAnimated = isTransitionAnimated   // v11
+                            )
+                        }
+                        NavigationBarMode.ATTACHED -> Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                        ) {
+                            FloatingNavigationBar(
+                                currentRoute = currentRoute,
+                                isPlayerOpen = isPlayerOpen,
+                                onNavigate = handleNavBarNavigation,
+                                attachedToMiniPlayer = true,
+                                connectToMiniPlayer = playbackState.currentTrack != null,
+                                zoneBlackAlpha = zoneBlackAlpha
+                            )
+                        }
+
+                    }
+                }
+            }
+
+            // Lower the card when attached to the navigation bar
+            // TODO : maybe fix these hardcoded constants
+            val miniPlayerBottomPadding = if (navigationBarMode == NavigationBarMode.ATTACHED) {
+                navBarContentHeight - 12.dp - 20.dp
+            } else {
+                navBarContentHeight
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(bottom = miniPlayerBottomPadding)
+            ) {
+                transition.AnimatedVisibility(
+                    visible = { isFull -> !isFull },
+                    enter = if (isTransitionAnimated) fadeIn() else EnterTransition.None,
+                    exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
+                ) {
+                    val miniPlayerVisibilityScope = this
+                    if (playbackState.currentTrack != null) {
+                        MiniPlayer(
+                            playbackState = playbackState,
+                            positionMsFlow = playerViewModel.positionMs,
+                            onPlayPauseClick = {
+                                if (playbackState.isPlaying) playerViewModel.pause() else playerViewModel.play()
+                            },
+                            onSeek = { progress ->
+                                playerViewModel.seekTo((progress * playbackState.durationMs).toLong())
+                            },
+                            onSkipToTrack = { index ->
+                                playerViewModel.skipToIndex(index)
+                            },
+                            onColorChange = { color ->
+                                playerViewModel.setDynamicAccentColor(color)
+                            },
+                            onBackgroundTransition = onBackgroundTransition,
+                            onClick = {
+                                animatePlayerTransition(open = true, precompose = true)
+                            },
+                            sharedTransitionScope = this@SharedTransitionLayout,
+                            animatedVisibilityScope = miniPlayerVisibilityScope,
+                            useSharedElements = trackListTransitionTrackId == null,
+                            isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                            skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,
+                            modifier = Modifier.draggable(
+                                state = rememberDraggableState { delta -> miniPlayerSwipeController.onDrag(delta) },
+                                orientation = Orientation.Vertical,
+                                onDragStopped = { velocity -> miniPlayerSwipeController.onDragStopped(velocity) }
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
+/**
+ * Row of clickable icons for the nav bar
+ */
 @Composable
-fun FoamNavigationBar(
+private fun FoamNavigationItems(
     currentRoute: String?,
     isPlayerOpen: Boolean,
-    onNavigate: (String) -> Unit
+    onNavigate: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val items = listOf(
         Screen.Library,
@@ -604,11 +741,7 @@ fun FoamNavigationBar(
     )
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(64.dp)
-            .background(FoamTheme.colors.surface)
-            .padding(horizontal = 8.dp),
+        modifier = modifier,
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -645,5 +778,120 @@ fun FoamNavigationBar(
                 )
             }
         }
+    }
+}
+
+/**
+ * Classic docked navigation bar
+ */
+@Composable
+fun FoamNavigationBar(
+    currentRoute: String?,
+    isPlayerOpen: Boolean,
+    isDynamicBackgroundEnabled: Boolean,
+    onNavigate: (String) -> Unit,
+    connectToMiniPlayer: Boolean = false,
+    zoneBlackAlpha: () -> Float = { 0f }
+) {
+    val surfaceColor = FoamTheme.colors.surface
+    FoamNavigationItems(
+        currentRoute = currentRoute,
+        isPlayerOpen = isPlayerOpen,
+        onNavigate = onNavigate,
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                val greyAlpha = if (isPlayerOpen && navBarTransparentWhenPlayerOpen) {
+                    1f - zoneBlackAlpha()
+                } else {
+                    1f
+                }
+                drawRect(surfaceColor, alpha = greyAlpha)
+                if (!isPlayerOpen && connectToMiniPlayer) {
+                    val stripPx = 6f.dp.toPx()
+                    drawRect(
+                        color = surfaceColor,
+                        topLeft = Offset(0f, -stripPx),
+                        size = androidx.compose.ui.geometry.Size(size.width, stripPx),
+                        alpha = greyAlpha
+                    )
+                }
+            }
+            .navigationBarsPadding()
+            .height(64.dp)
+            .padding(horizontal = 8.dp)
+    )
+}
+
+/**
+ * Floating navigation bar
+ */
+@Composable
+private fun FloatingNavigationBar(
+    currentRoute: String?,
+    isPlayerOpen: Boolean,
+    onNavigate: (String) -> Unit,
+    attachedToMiniPlayer: Boolean = false,
+    connectToMiniPlayer: Boolean = false,
+    zoneBlackAlpha: () -> Float = { 0f },
+    transitionAnimated: Boolean = true
+) {
+    val miniImageRadius = (44.dp / 2) * FoamTheme.shapes.miniPlayerRounding
+    val containerRadius = miniImageRadius + 8.dp
+
+    val surfaceVariantColor = FoamTheme.colors.surfaceVariant
+
+    val outerModifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp, vertical = 12.dp)
+
+    val extensionTarget = if (attachedToMiniPlayer && connectToMiniPlayer && !isPlayerOpen) {
+        // extension size for attached to mini-player
+        // TODO : maybe fix this hardcoded constant
+        3.5 * containerRadius
+    } else {
+        0.dp
+    }
+    val animatedExtension by animateDpAsState(
+        targetValue = extensionTarget,
+        animationSpec = if (transitionAnimated) {
+            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
+        } else {
+            snap()
+        },
+        label = "NavBarAttachedExtension"
+    )
+
+
+    Box(modifier = outerModifier) {
+        FoamNavigationItems(
+            currentRoute = currentRoute,
+            isPlayerOpen = isPlayerOpen,
+            onNavigate = onNavigate,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .drawBehind {
+                    val radiusPx = containerRadius.toPx()
+                    val greyAlpha = if (isPlayerOpen && navBarTransparentWhenPlayerOpen) {
+                        1f - zoneBlackAlpha()
+                    } else {
+                        1f
+                    }
+
+                    // Extends the container if it should be attached to the mini bar
+                    val extensionPx = animatedExtension.toPx()
+
+                    // Rounded rect for both floating and attached
+                    drawRoundRect(
+                        color = surfaceVariantColor,
+                        topLeft = Offset(0f, -extensionPx),
+                        size = androidx.compose.ui.geometry.Size(size.width, size.height + extensionPx),
+                        cornerRadius = CornerRadius(radiusPx),
+                        alpha = greyAlpha
+                    )
+                }
+                .padding(horizontal = 8.dp)
+        )
     }
 }
