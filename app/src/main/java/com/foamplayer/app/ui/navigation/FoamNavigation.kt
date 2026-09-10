@@ -8,16 +8,13 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.EaseIn
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.EaseInOutCubic
-import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.Transition
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
@@ -72,6 +69,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.ui.components.MiniPlayer
 import com.foamplayer.app.ui.screens.equalizer.EqualizerScreen
 import com.foamplayer.app.ui.screens.library.AlbumDetailScreen
@@ -91,6 +89,7 @@ import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.LyricsProviderSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LyricsSettingsScreen
+import com.foamplayer.app.ui.screens.settings.NavBarSettingsScreen
 import com.foamplayer.app.ui.screens.settings.PlayerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.SettingsScreen
 import com.foamplayer.app.ui.screens.settings.TestSettingsScreen
@@ -101,29 +100,6 @@ import kotlinx.coroutines.launch
 
 const val SharedElementTransitionDurationMs = 350
 val SharedElementEasing = FastOutSlowInEasing
-
-/**
- * Layout mode for the app's bottom navigation bar.
- *
- *  DOCKED   – classic bar: pinned to the bottom edge, fills the width. Grey covers
- *             the gesture-bar gap AND the 6.dp strip up to the mini player card.
- *  UNDOCKED – floating "bubble": 12.dp margins, 56.dp row, 28.dp corners.
- *  ATTACHED – same footprint as UNDOCKED (same height/position), with the mini
- *             player's corner radius. While the player closes, its container
- *             EXTENDS UPWARD (draw phase, following the open fraction / the
- *             finger) until it slides behind the mini player card and connects.
- *             Visible at all times; icons never move.
- */
-// TODO : rename UNDOCKED into FLOATING
-// TODO : put this in enums.kt
-enum class NavigationBarMode { DOCKED, UNDOCKED, ATTACHED }
-
-private val navigationBarMode = NavigationBarMode.UNDOCKED
-
-/**
- * Control if the nav bar container is display when the full ppllayer is opened
- */
-private val navBarTransparentWhenPlayerOpen = false
 
 private fun navigationBarContentHeight(): Dp = 72.dp
 
@@ -139,19 +115,6 @@ private fun isSettingsRoute(route: String?): Boolean {
     return route != null && (route == Screen.Settings.route || route.startsWith("settings/"))
 }
 
-/**
- * Owns the background-art crossfade state itself instead of hoisting it into
- * FoamNavHost. onBackgroundTransition used to write into `mutableStateOf` vars
- * declared (and read directly, undeferred) at the top of FoamNavHost -- since
- * that read sat in the same scope as the MiniPlayer and FoamNavigationBar call
- * sites, every frame of a mini-player drag (this fires every frame, by design)
- * invalidated that whole Column, forcing FoamNavigationBar to recompose and
- * MiniPlayer to fully re-run (dragging its HorizontalPager along with it).
- * Keeping the state -- and the DynamicAlbumArtBackground read of it -- entirely
- * inside this composable confines that per-frame churn to just this function.
- * The returned callback is `remember`ed with no keys, so its identity never
- * changes across recompositions and doesn't itself force callers to recompose.
- */
 @Composable
 private fun rememberAnimatedBackground(
     enabled: Boolean,
@@ -200,6 +163,8 @@ fun FoamNavHost(
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
     val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
     val isDynamicBackgroundEnabled = playerSettings.dynamicBackgroundEnabled
+    val navigationBarMode = playerSettings.navigationBarMode
+    val navBarTransparentWhenPlayerOpen = playerSettings.navBarTransparentWhenPlayerOpen
 
     // Initialize the transition state based on whether the player should be open immediately
     val initialOpenRequested = remember { playerViewModel.openPlayerRequested.value }
@@ -501,6 +466,7 @@ fun FoamNavHost(
                                         onBack = { navController.popBackStack() },
                                         onNavigateToColors = { navController.navigate(Screen.SettingsColors.route) },
                                         onNavigateToPlayer = { navController.navigate(Screen.SettingsPlayer.route) },
+                                        onNavigateToNavBar = { navController.navigate(Screen.SettingsNavBar.route) },
                                         onNavigateToBackground = { navController.navigate(Screen.SettingsBackground.route) },
                                     )
                                 }
@@ -509,6 +475,9 @@ fun FoamNavHost(
                                 }
                                 composable(Screen.SettingsPlayer.route) {
                                     PlayerSettingsScreen(onBack = { navController.popBackStack() })
+                                }
+                                composable(Screen.SettingsNavBar.route) {
+                                    NavBarSettingsScreen(onBack = { navController.popBackStack() })
                                 }
                                 composable(Screen.SettingsBackground.route) {
                                     BackgroundSettingsScreen(onBack = { navController.popBackStack() })
@@ -622,12 +591,12 @@ fun FoamNavHost(
                         NavigationBarMode.DOCKED -> FoamNavigationBar(
                             currentRoute = currentRoute,
                             isPlayerOpen = isPlayerOpen,
-                            isDynamicBackgroundEnabled = isDynamicBackgroundEnabled,
                             onNavigate = handleNavBarNavigation,
                             connectToMiniPlayer = playbackState.currentTrack != null,
-                            playerOpenFraction = playerOpenFraction
+                            playerOpenFraction = playerOpenFraction,
+                            navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen
                         )
-                        NavigationBarMode.UNDOCKED -> Box(
+                        NavigationBarMode.FLOATING -> Box(
                             modifier = Modifier.fillMaxWidth().navigationBarsPadding()
                         ) {
                             FloatingNavigationBar(
@@ -637,7 +606,8 @@ fun FoamNavHost(
                                 attachedToMiniPlayer = false,
                                 connectToMiniPlayer = playbackState.currentTrack != null,
                                 playerOpenFraction = playerOpenFraction,
-                                transitionAnimated = isTransitionAnimated
+                                transitionAnimated = isTransitionAnimated,
+                                navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen
                             )
                         }
                         NavigationBarMode.ATTACHED -> Box(
@@ -651,7 +621,8 @@ fun FoamNavHost(
                                 onNavigate = handleNavBarNavigation,
                                 attachedToMiniPlayer = true,
                                 connectToMiniPlayer = playbackState.currentTrack != null,
-                                playerOpenFraction = playerOpenFraction
+                                playerOpenFraction = playerOpenFraction,
+                                navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen
                             )
                         }
                     }
@@ -662,7 +633,7 @@ fun FoamNavHost(
             // Lower the card when attached to the navigation bar
             // TODO : maybe fix these hardcoded constants
             val miniPlayerBottomPadding = if (navigationBarMode == NavigationBarMode.ATTACHED) {
-                navBarContentHeight - 12.dp - 20.dp
+                navBarContentHeight - 12.dp - 12.dp
             } else {
                 navBarContentHeight
             }
@@ -782,10 +753,10 @@ private fun FoamNavigationItems(
 fun FoamNavigationBar(
     currentRoute: String?,
     isPlayerOpen: Boolean,
-    isDynamicBackgroundEnabled: Boolean,
     onNavigate: (String) -> Unit,
     connectToMiniPlayer: Boolean = false,
-    playerOpenFraction: () -> Float = { 0f }
+    playerOpenFraction: () -> Float = { 0f },
+    navBarTransparentWhenPlayerOpen: Boolean = false
 ) {
     val surfaceColor = FoamTheme.colors.surface
     FoamNavigationItems(
@@ -828,7 +799,8 @@ private fun FloatingNavigationBar(
     attachedToMiniPlayer: Boolean = false,
     connectToMiniPlayer: Boolean = false,
     playerOpenFraction: () -> Float = { 0f },
-    transitionAnimated: Boolean = true
+    transitionAnimated: Boolean = true,
+    navBarTransparentWhenPlayerOpen: Boolean = false
 ) {
     val miniImageRadius = (44.dp / 2) * FoamTheme.shapes.miniPlayerRounding
     val containerRadius = miniImageRadius + 8.dp
@@ -838,24 +810,6 @@ private fun FloatingNavigationBar(
     val outerModifier = Modifier
         .fillMaxWidth()
         .padding(horizontal = 12.dp, vertical = 12.dp)
-
-    val extensionTarget = if (attachedToMiniPlayer && connectToMiniPlayer && !isPlayerOpen) {
-        // extension size for attached to mini-player
-        // TODO : maybe fix this hardcoded constant
-        3.5 * containerRadius
-    } else {
-        0.dp
-    }
-    val animatedExtension by animateDpAsState(
-        targetValue = extensionTarget,
-        animationSpec = if (transitionAnimated) {
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
-        } else {
-            snap()
-        },
-        label = "NavBarAttachedExtension"
-    )
-
 
     Box(modifier = outerModifier) {
         FoamNavigationItems(

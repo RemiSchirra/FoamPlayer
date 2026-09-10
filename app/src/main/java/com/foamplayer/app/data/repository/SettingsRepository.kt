@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
+import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.constants.deserializeLyricsProviderOrder
 import com.foamplayer.app.data.settings.AppSettings
@@ -68,6 +69,11 @@ class SettingsRepository @Inject constructor(
     
     suspend fun setLanguage(language: String) = update { it.copy(language = language) }
 
+    suspend fun setNavigationBarMode(mode: NavigationBarMode) = update { it.copy(navigationBarMode = mode) }
+    suspend fun setNavBarTransparentWhenPlayerOpen(enabled: Boolean) = update {
+        it.copy(navBarTransparentWhenPlayerOpen = enabled)
+    }
+
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
@@ -92,7 +98,11 @@ class SettingsRepository @Inject constructor(
             ?.mapNotNull { name -> PreferredLyricsProvider.entries.find { it.name == name } }
             ?.toSet() ?: PreferredLyricsProvider.entries.toSet(),
         searchHistory = this[Keys.SEARCH_HISTORY]?.split("|")?.filter { it.isNotEmpty() } ?: emptyList(),
-        language = this[Keys.LANGUAGE] ?: AppSettings().language
+        language = this[Keys.LANGUAGE] ?: AppSettings().language,
+        navigationBarMode = this[Keys.NAVIGATION_BAR_MODE]
+            ?.let { runCatching { NavigationBarMode.valueOf(it) }.getOrNull() }
+            ?: AppSettings().navigationBarMode,
+        navBarTransparentWhenPlayerOpen = this[Keys.NAVBAR_TRANSPARENT_PLAYER_OPEN] ?: AppSettings().navBarTransparentWhenPlayerOpen
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -115,6 +125,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.ENABLED_LYRICS_PROVIDERS] = settings.enabledLyricsProviders.map { it.name }.toSet()
         this[Keys.SEARCH_HISTORY] = settings.searchHistory.joinToString("|")
         this[Keys.LANGUAGE] = settings.language
+        this[Keys.NAVIGATION_BAR_MODE] = settings.navigationBarMode.name
+        this[Keys.NAVBAR_TRANSPARENT_PLAYER_OPEN] = settings.navBarTransparentWhenPlayerOpen
     }
 
     private object Keys {
@@ -137,5 +149,7 @@ class SettingsRepository @Inject constructor(
         val ENABLED_LYRICS_PROVIDERS = stringSetPreferencesKey("enabled_lyrics_providers")
         val SEARCH_HISTORY = stringPreferencesKey("search_history")
         val LANGUAGE = stringPreferencesKey("language")
+        val NAVIGATION_BAR_MODE = stringPreferencesKey("navigation_bar_mode")
+        val NAVBAR_TRANSPARENT_PLAYER_OPEN = booleanPreferencesKey("navbar_transparent_player_open")
     }
 }

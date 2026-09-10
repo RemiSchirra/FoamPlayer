@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.foamplayer.app.R
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 
@@ -353,4 +354,17 @@ enum class UpdateChannel {
     STABLE,
     NIGHTLY,
     DAILY_NIGHTLY,
+}
+
+/**
+ * Layout for the app's bottom navigation bar.
+ *
+ *  DOCKED   – classic bar at the bottom of the screen
+ *  UNDOCKED – floating bubble
+ *  ATTACHED – bubble but connect to the mini player
+ */
+enum class NavigationBarMode {
+    DOCKED,
+    FLOATING,
+    ATTACHED
 }

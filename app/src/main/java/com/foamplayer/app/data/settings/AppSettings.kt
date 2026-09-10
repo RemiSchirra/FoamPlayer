@@ -1,6 +1,7 @@
 package com.foamplayer.app.data.settings
 
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
+import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
 
 /** The complete, validated set of user-configurable application preferences. */
@@ -29,7 +30,9 @@ data class AppSettings(
     val lyricsProviderOrder: List<PreferredLyricsProvider> = DefaultLyricsProviderOrder,
     val enabledLyricsProviders: Set<PreferredLyricsProvider> = PreferredLyricsProvider.entries.toSet(),
     val searchHistory: List<String> = emptyList(),
-    val language: String = "auto"
+    val language: String = "auto",
+    val navigationBarMode: NavigationBarMode = NavigationBarMode.ATTACHED,
+    val navBarTransparentWhenPlayerOpen: Boolean = false
 ) {
     fun sanitized(): AppSettings = copy(
         libraryFolders = libraryFolders.map(String::trim).filter(String::isNotEmpty).toSet(),

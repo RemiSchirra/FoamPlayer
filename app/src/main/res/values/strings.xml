@@ -56,6 +56,16 @@
     <string name="player_desc">Layout and visuals</string>
     <string name="background">Background</string>
     <string name="background_desc">Dynamic background effects</string>
+    <string name="navigation_bar">Navigation Bar</string>
+    <string name="navbar_desc">Navbar layout and transparency</string>
+    <string name="navbar_mode">Navbar Mode</string>
+    <string name="navbar_mode_desc">Choose how the bottom navigation looks</string>
+    <string name="navbar_mode_docked">Docked</string>
+    <string name="navbar_mode_floating">Floating</string>
+    <string name="navbar_mode_attached">Attached</string>
+    <string name="transparency">Transparency</string>
+    <string name="transparent_when_player_open">Transparent when player open</string>
+    <string name="transparent_when_player_open_desc">Make the navigation bar background transparent when the full player is open</string>
 
     <string name="engine_settings">Engine Settings</string>
     <string name="bit_perfect_output">Bit-Perfect Output</string>

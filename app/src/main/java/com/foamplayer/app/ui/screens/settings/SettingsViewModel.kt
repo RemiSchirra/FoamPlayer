@@ -2,6 +2,7 @@ package com.foamplayer.app.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
@@ -64,6 +65,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setLanguage(language: String) = launch {
         settingsRepository.setLanguage(language)
+    }
+
+    fun setNavigationBarMode(mode: NavigationBarMode) = launch {
+        settingsRepository.setNavigationBarMode(mode)
+    }
+
+    fun setNavBarTransparentWhenPlayerOpen(enabled: Boolean) = launch {
+        settingsRepository.setNavBarTransparentWhenPlayerOpen(enabled)
     }
 
     private fun launch(block: suspend () -> Unit) {
