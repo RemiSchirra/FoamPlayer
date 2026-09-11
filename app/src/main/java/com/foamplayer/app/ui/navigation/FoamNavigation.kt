@@ -67,6 +67,13 @@ import com.foamplayer.app.ui.components.PlaylistPickerModal
 import com.foamplayer.app.ui.components.TrackFoamModal
 import com.foamplayer.app.ui.components.rememberTrackFoamModalState
 import com.foamplayer.app.ui.screens.equalizer.EqualizerScreen
+import com.foamplayer.app.ui.screens.browse.AlbumsBrowseScreen
+import com.foamplayer.app.ui.screens.browse.ArtistsBrowseScreen
+import com.foamplayer.app.ui.screens.browse.FolderBrowseScreen
+import com.foamplayer.app.ui.screens.browse.GenresBrowseScreen
+import com.foamplayer.app.ui.screens.browse.GenreTracksScreen
+import com.foamplayer.app.ui.screens.browse.YearTracksScreen
+import com.foamplayer.app.ui.screens.browse.YearsBrowseScreen
 import com.foamplayer.app.ui.screens.library.AlbumDetailScreen
 import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
 import com.foamplayer.app.ui.screens.library.LibraryScreen
@@ -561,12 +568,102 @@ fun FoamNavHost(
                                                     )
                                                 )
                                             },
+                                            onBrowseAlbums = { navController.navigate(Screen.BrowseAlbums.route) },
+                                            onBrowseFolders = { navController.navigate(Screen.BrowseFolders.createRoute()) },
+                                            onBrowseGenres = { navController.navigate(Screen.BrowseGenres.route) },
+                                            onBrowseArtists = { navController.navigate(Screen.BrowseArtists.route) },
+                                            onBrowseYears = { navController.navigate(Screen.BrowseYears.route) },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
                                             activeTrackId = playbackState.currentTrack?.id,
                                             onTrackClick = { track -> playTrackFromList(listOf(track), 0) }
+                                        )
+                                    }
+                                    composable(Screen.BrowseAlbums.route) {
+                                        AlbumsBrowseScreen(
+                                            onAlbumClick = { album ->
+                                                navController.navigate(
+                                                    Screen.AlbumDetail.createRoute(
+                                                        album.album,
+                                                        album.albumArtPath,
+                                                        album.artist
+                                                    )
+                                                )
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this
+                                        )
+                                    }
+                                    composable(Screen.BrowseArtists.route) {
+                                        ArtistsBrowseScreen(
+                                            onArtistClick = { artist ->
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                                            },
+                                            onBack = { navController.popBackStack() }
+                                        )
+                                    }
+                                    composable(Screen.BrowseGenres.route) {
+                                        GenresBrowseScreen(
+                                            onGenreClick = { genre ->
+                                                navController.navigate(Screen.BrowseGenreDetail.createRoute(genre))
+                                            },
+                                            onBack = { navController.popBackStack() }
+                                        )
+                                    }
+                                    composable(Screen.BrowseYears.route) {
+                                        YearsBrowseScreen(
+                                            onYearClick = { year ->
+                                                navController.navigate(Screen.BrowseYearDetail.createRoute(year))
+                                            },
+                                            onBack = { navController.popBackStack() }
+                                        )
+                                    }
+                                    composable(
+                                        Screen.BrowseGenreDetail.route,
+                                        arguments = listOf(navArgument("genre") { type = NavType.StringType })
+                                    ) { backStackEntry ->
+                                        val genre = backStackEntry.arguments?.getString("genre") ?: ""
+                                        GenreTracksScreen(
+                                            genre = genre,
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index)
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            activeTrackId = playbackState.currentTrack?.id
+                                        )
+                                    }
+                                    composable(
+                                        Screen.BrowseYearDetail.route,
+                                        arguments = listOf(navArgument("year") { type = NavType.IntType })
+                                    ) { backStackEntry ->
+                                        val year = backStackEntry.arguments?.getInt("year") ?: 0
+                                        YearTracksScreen(
+                                            year = year,
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index)
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            activeTrackId = playbackState.currentTrack?.id
+                                        )
+                                    }
+                                    composable(
+                                        Screen.BrowseFolders.route,
+                                        arguments = listOf(navArgument("path") { type = NavType.StringType; defaultValue = "" })
+                                    ) { backStackEntry ->
+                                        val path = (backStackEntry.arguments?.getString("path") ?: "").ifEmpty { null }
+                                        FolderBrowseScreen(
+                                            path = path,
+                                            onFolderClick = { folderPath ->
+                                                navController.navigate(Screen.BrowseFolders.createRoute(folderPath))
+                                            },
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index)
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            activeTrackId = playbackState.currentTrack?.id
                                         )
                                     }
                                     composable(Screen.Equalizer.route) { EqualizerScreen() }

@@ -33,6 +33,38 @@ interface TrackDao {
     """)
     fun searchAlbums(query: String): Flow<List<AlbumSearchResult>>
 
+    @Query("""
+        SELECT album, 
+               GROUP_CONCAT(DISTINCT COALESCE(albumArtist, artist)) as artist, 
+               MAX(albumArtPath) as albumArtPath 
+        FROM tracks 
+        GROUP BY album
+        ORDER BY album COLLATE NOCASE ASC
+    """)
+    fun getAllAlbums(): Flow<List<AlbumSearchResult>>
+
+    @Query("SELECT DISTINCT artist FROM tracks")
+    fun getAllArtistNames(): Flow<List<String>>
+
+    @Query("SELECT DISTINCT genre FROM tracks WHERE genre IS NOT NULL AND genre != ''")
+    fun getAllGenres(): Flow<List<String>>
+
+    @Query("""
+        SELECT * FROM tracks 
+        WHERE genre = :genre 
+           OR genre LIKE :genre || '; %' 
+           OR genre LIKE '%; ' || :genre 
+           OR genre LIKE '%; ' || :genre || '; %'
+        ORDER BY title ASC
+    """)
+    fun getTracksByGenre(genre: String): Flow<List<TrackEntity>>
+
+    @Query("SELECT DISTINCT year FROM tracks WHERE year IS NOT NULL ORDER BY year DESC")
+    fun getAllYears(): Flow<List<Int>>
+
+    @Query("SELECT * FROM tracks WHERE year = :year ORDER BY album ASC, discNumber ASC, trackNumber ASC, title ASC")
+    fun getTracksByYear(year: Int): Flow<List<TrackEntity>>
+
     @Query("SELECT * FROM tracks WHERE album = :album ORDER BY discNumber ASC, trackNumber ASC, title ASC")
     fun getTracksByAlbum(album: String): Flow<List<TrackEntity>>
 

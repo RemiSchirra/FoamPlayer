@@ -40,6 +40,28 @@ class TrackRepository @Inject constructor(
 
     fun getAlbumsByArtist(artist: String): Flow<List<AlbumSearchResult>> = trackDao.getAlbumsByArtist(artist)
 
+    fun getAllAlbums(): Flow<List<AlbumSearchResult>> = trackDao.getAllAlbums()
+
+    fun getAllArtists(): Flow<List<String>> = trackDao.getAllArtistNames().map { rawArtists ->
+        rawArtists.flatMap { it.split("; ") }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+
+    fun getAllGenres(): Flow<List<String>> = trackDao.getAllGenres().map { rawGenres ->
+        rawGenres.flatMap { it.split("; ") }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+
+    fun getTracksByGenre(genre: String): Flow<List<TrackEntity>> = trackDao.getTracksByGenre(genre)
+
+    fun getAllYears(): Flow<List<Int>> = trackDao.getAllYears()
+
+    fun getTracksByYear(year: Int): Flow<List<TrackEntity>> = trackDao.getTracksByYear(year)
+
     suspend fun rescanLibrary() {
         val folders = settingsRepository.settings.first().libraryFolders
         startScan(folders)

@@ -33,4 +33,21 @@ sealed class Screen(val route: String, val title: String) {
     object PlaylistDetail : Screen("playlist/{playlistId}", "Playlist") {
         fun createRoute(playlistId: Long) = "playlist/$playlistId"
     }
+
+    object BrowseAlbums : Screen("browse/albums", "Albums")
+    object BrowseArtists : Screen("browse/artists", "Artists")
+    object BrowseGenres : Screen("browse/genres", "Genres")
+    object BrowseYears : Screen("browse/years", "Years")
+    object BrowseGenreDetail : Screen("browse/genre/{genre}", "Genre") {
+        fun createRoute(genre: String) = "browse/genre/${Uri.encode(genre)}"
+    }
+    object BrowseYearDetail : Screen("browse/year/{year}", "Year") {
+        fun createRoute(year: Int) = "browse/year/$year"
+    }
+    object BrowseFolders : Screen("browse/folders?path={path}", "Folders") {
+        fun createRoute(path: String? = null): String {
+            val encoded = Uri.encode(path.orEmpty())
+            return "browse/folders?path=$encoded"
+        }
+    }
 }

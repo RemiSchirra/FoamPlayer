@@ -21,15 +21,32 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.CalendarToday
+import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
@@ -49,11 +66,61 @@ import androidx.core.net.toUri
 // shared-element transition means the corners never have to jump between two radii.
 private val AlbumArtShape = RoundedCornerShape(12.dp)
 
+// Colors of the browse cards shown when the search bar is idle (unfocused, empty query).
+private data class BrowseCardData(
+    val title: String,
+    val color: Color,
+    val icon: ImageVector,
+    val onClick: () -> Unit
+)
+
+private val AlbumCardColor = Color(0xFFEF5350)
+private val FolderCardColor = Color(0xFFFFB300)
+private val GenreCardColor = Color(0xFF00E676)
+private val ArtistCardColor = Color(0xFF40C4FF)
+private val YearCardColor = Color(0xFFB388FF)
+
+/** Blends the color toward white, keeping the same hue — used for the card icons. */
+private fun Color.lightened(factor: Float): Color =
+    copy(
+        red = red + (1f - red) * factor,
+        green = green + (1f - green) * factor,
+        blue = blue + (1f - blue) * factor
+    )
+
+@Composable
+private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(card.color.copy(alpha = 0.5f))
+            .clickable { card.onClick() }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = card.icon,
+            contentDescription = null,
+            tint = card.color.lightened(0.1f).copy(alpha = 0.65f),
+            modifier = Modifier.size(44.dp)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        BasicText(text = card.title, style = FoamTheme.typography.titleMedium)
+    }
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SearchScreen(
     onArtistClick: (String) -> Unit,
     onAlbumClick: (AlbumSearchResult) -> Unit,
+    onBrowseAlbums: () -> Unit,
+    onBrowseFolders: () -> Unit,
+    onBrowseGenres: () -> Unit,
+    onBrowseArtists: () -> Unit,
+    onBrowseYears: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     playerTransitionVisibilityScope: AnimatedVisibilityScope,
@@ -64,6 +131,9 @@ fun SearchScreen(
 ) {
     val query by searchViewModel.query.collectAsState()
     val uiState by searchViewModel.uiState.collectAsState()
+    val focusManager = LocalFocusManager.current
+    var isSearchFocused by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
 
     Column(
         modifier = Modifier
@@ -78,117 +148,179 @@ fun SearchScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Search Bar
-        Box(
+        // Search Bar: back icon (returns to the cards view), text field, clear icon.
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .background(FoamTheme.colors.surfaceVariant)
-                .padding(16.dp)
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            if (query.isEmpty()) {
-                BasicText(
-                    text = "Search tracks, artists, albums...",
-                    style = FoamTheme.typography.body
+            if (isSearchFocused || query.isNotEmpty()) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    tint = FoamTheme.colors.textPrimary,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clickable {
+                            searchViewModel.search("")
+                            focusManager.clearFocus()
+                        }
+                        .padding(4.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Box(modifier = Modifier.weight(1f)) {
+                if (query.isEmpty()) {
+                    BasicText(
+                        text = "Search tracks, artists, albums...",
+                        style = FoamTheme.typography.body
+                    )
+                }
+                BasicTextField(
+                    value = query,
+                    onValueChange = {
+                        searchViewModel.search(it)
+                    },
+                    textStyle = FoamTheme.typography.titleMedium,
+                    cursorBrush = SolidColor(FoamTheme.accentColor),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { isSearchFocused = it.isFocused },
+                    singleLine = true
                 )
             }
-            BasicTextField(
-                value = query,
-                onValueChange = {
-                    searchViewModel.search(it)
-                },
-                textStyle = FoamTheme.typography.titleMedium,
-                cursorBrush = SolidColor(FoamTheme.accentColor),
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
+            if (query.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Clear",
+                    tint = FoamTheme.colors.textSecondary,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clickable { searchViewModel.search("") }
+                        .padding(4.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            if (query.isEmpty()) {
-                if (uiState.history.isNotEmpty()) {
-                    item(key = "history_header") {
-                        SectionHeader(
-                            title = "Recent Searches",
-                            modifier = Modifier.animateItem()
-                        )
+            when {
+                // Results while typing
+                query.isNotEmpty() -> {
+                    // Artists Section
+                    if (uiState.artists.isNotEmpty()) {
+                        item {
+                            SectionHeader("Artists")
+                        }
+                        items(uiState.artists) { artist ->
+                            ArtistSearchResultItem(artist = artist, onClick = { onArtistClick(artist) })
+                        }
                     }
-                    items(uiState.history, key = { "history_${it.path}" }) { track ->
-                        TrackListItem(
-                            track = track,
-                            onClick = {
-                                searchViewModel.addToHistory(track)
-                                onTrackClick(track)
-                            },
-                            onRemove = { searchViewModel.removeFromHistory(track) },
-                            active = track.id == activeTrackId,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = playerTransitionVisibilityScope,
-                            isSharedTransitionSource = track.id == sharedTrackId,
-                            modifier = Modifier.animateItem()
-                        )
+
+                    // Albums Section
+                    if (uiState.albums.isNotEmpty()) {
+                        item {
+                            SectionHeader("Albums")
+                        }
+                        items(uiState.albums) { album ->
+                            AlbumSearchResultItem(
+                                album = album,
+                                onClick = { onAlbumClick(album) },
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        }
                     }
-                    item(key = "history_clear") {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .animateItem()
-                                .clickable { searchViewModel.clearHistory() }
-                                .padding(vertical = 16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            BasicText(
-                                text = "Clear search history",
-                                style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor)
+
+                    // Tracks Section
+                    if (uiState.tracks.isNotEmpty()) {
+                        item {
+                            SectionHeader("Tracks")
+                        }
+                        items(uiState.tracks) { track ->
+                            TrackListItem(
+                                track = track,
+                                onClick = {
+                                    searchViewModel.addToHistory(track)
+                                    onTrackClick(track)
+                                },
+                                active = track.id == activeTrackId,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = playerTransitionVisibilityScope,
+                                isSharedTransitionSource = track.id == sharedTrackId
                             )
                         }
                     }
                 }
-            } else {
-                // Artists Section
-                if (uiState.artists.isNotEmpty()) {
-                    item {
-                        SectionHeader("Artists")
-                    }
-                    items(uiState.artists) { artist ->
-                        ArtistSearchResultItem(artist = artist, onClick = { onArtistClick(artist) })
+
+                // Search history while the bar is selected but still empty
+                isSearchFocused -> {
+                    if (uiState.history.isNotEmpty()) {
+                        item(key = "history_header") {
+                            SectionHeader(
+                                title = "Recent Searches",
+                                modifier = Modifier.animateItem()
+                            )
+                        }
+                        items(uiState.history, key = { "history_${it.path}" }) { track ->
+                            TrackListItem(
+                                track = track,
+                                onClick = {
+                                    searchViewModel.addToHistory(track)
+                                    onTrackClick(track)
+                                },
+                                onRemove = { searchViewModel.removeFromHistory(track) },
+                                active = track.id == activeTrackId,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = playerTransitionVisibilityScope,
+                                isSharedTransitionSource = track.id == sharedTrackId,
+                                modifier = Modifier.animateItem()
+                            )
+                        }
+                        item(key = "history_clear") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .animateItem()
+                                    .clickable { searchViewModel.clearHistory() }
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                BasicText(
+                                    text = "Clear search history",
+                                    style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor)
+                                )
+                            }
+                        }
                     }
                 }
 
-                // Albums Section
-                if (uiState.albums.isNotEmpty()) {
-                    item {
-                        SectionHeader("Albums")
-                    }
-                    items(uiState.albums) { album ->
-                        AlbumSearchResultItem(
-                            album = album,
-                            onClick = { onAlbumClick(album) },
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                    }
-                }
-
-                // Tracks Section
-                if (uiState.tracks.isNotEmpty()) {
-                    item {
-                        SectionHeader("Tracks")
-                    }
-                    items(uiState.tracks) { track ->
-                        TrackListItem(
-                            track = track,
-                            onClick = {
-                                searchViewModel.addToHistory(track)
-                                onTrackClick(track)
-                            },
-                            active = track.id == activeTrackId,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = playerTransitionVisibilityScope,
-                            isSharedTransitionSource = track.id == sharedTrackId
-                        )
+                // Idle: browse cards into the library list screens
+                else -> {
+                    val browseCards = listOf(
+                        BrowseCardData("Albums", AlbumCardColor, Icons.Rounded.Album, onBrowseAlbums),
+                        BrowseCardData("Folders", FolderCardColor, Icons.Rounded.Folder, onBrowseFolders),
+                        BrowseCardData("Genres", GenreCardColor, Icons.Rounded.Category, onBrowseGenres),
+                        BrowseCardData("Artists", ArtistCardColor, Icons.Rounded.Person, onBrowseArtists),
+                        BrowseCardData("Years", YearCardColor, Icons.Rounded.CalendarToday, onBrowseYears)
+                    )
+                    browseCards.forEachIndexed { index, card ->
+                        item(key = "browse_card_${card.title}") {
+                            BrowseCardItem(
+                                card = card,
+                                modifier = if (index == 0) {
+                                    Modifier.padding(top = 4.dp)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -208,9 +340,13 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun ArtistSearchResultItem(artist: String, onClick: () -> Unit) {
+fun ArtistSearchResultItem(
+    artist: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable { onClick() }
             .padding(vertical = 8.dp),
@@ -243,11 +379,12 @@ fun ArtistSearchResultItem(artist: String, onClick: () -> Unit) {
 fun AlbumSearchResultItem(
     album: AlbumSearchResult,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable { onClick() }
             .padding(vertical = 8.dp),
