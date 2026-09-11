@@ -1,12 +1,16 @@
 package com.foamplayer.app.ui.navigation
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
@@ -14,15 +18,22 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -34,6 +45,18 @@ import androidx.compose.ui.unit.times
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.ui.theme.FoamTheme
+
+/** Duration of every nav-bar slot animation */
+private const val NavBarSlotAnimMillis = 250
+
+/**
+ * Slide animation used when nav-bar items change slot (reorder / add / remove
+ * from the navigation-bar settings).
+ */
+private val NavBarSlotAnimation = tween<Dp>(durationMillis = NavBarSlotAnimMillis, easing = FastOutSlowInEasing)
+
+/** Fade/scale animation played when a nav-bar item is enabled or disabled. */
+private val NavBarSlotFadeAnimation = tween<Float>(durationMillis = NavBarSlotAnimMillis, easing = FastOutSlowInEasing)
 
 /**
  * Single source of truth for nav-bar / mini-player geometry.
@@ -220,6 +243,7 @@ private fun FoamNavItem(
     modifier: Modifier = Modifier,
     iconModifier: Modifier = Modifier,
     hitPadding: Dp = NavBarDimens.ItemHitAreaPadding,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     val animatedTint by animateColorAsState(
@@ -229,7 +253,7 @@ private fun FoamNavItem(
 
     Box(
         modifier = modifier
-            .clickable { onClick() }
+            .clickable(enabled = enabled) { onClick() }
             .padding(hitPadding),
         contentAlignment = Alignment.Center
     ) {
@@ -264,11 +288,96 @@ private fun NavBarItem.icon(): ImageVector = when (this) {
 }
 
 /**
- * Row of clickable icons for the nav bar.
+ * Row of nav-bar icon slots shared by the main row and the second-bar row.
+ *
+ * [order] is the full configured layout (enabled AND disabled items); slots are
+ * distributed across the enabled items. Every item is always composed, so its
+ * visibility animation state can never be lost:
+ * - **Enable**: the item snaps to its slot while still invisible (keyed position
+ *   state restarts) and fades/scales in in place; the other items slide to open
+ *   the gap.
+ * - **Disable**: the item holds its last position and fades/scales out in place
+ *   while the other items slide closed.
+ * - **Reorder**: enabled items slide to their new slots.
+ *
+ * Icons are placed at an animated *center* offset with a fixed-width box, so a
+ * slot-count change re-targets the centers smoothly instead of resizing the boxes
+ * (which would teleport every icon by half the slot-width delta).
+ * Disabled items are not clickable.
+ */
+@Composable
+private fun NavBarSlotRow(
+    order: List<NavBarItem>,
+    enabledItems: Set<NavBarItem>,
+    itemWidth: Dp,
+    modifier: Modifier = Modifier,
+    itemContent: @Composable (item: NavBarItem, enabled: Boolean) -> Unit
+) {
+    BoxWithConstraints(modifier = modifier) {
+        val enabledList = order.filter { it in enabledItems }
+        val slotWidth = if (enabledList.isEmpty()) maxWidth else maxWidth / enabledList.size
+
+        order.forEach { item ->
+            key(item) {
+                val isEnabled = item in enabledItems
+                val slotIndex = enabledList.indexOf(item)
+
+                // Always composed and never keyed on the toggle, so every item's
+                // enter/exit fade+scale runs the same way.
+                val visibility by animateFloatAsState(
+                    targetValue = if (isEnabled) 1f else 0f,
+                    animationSpec = NavBarSlotFadeAnimation,
+                    label = "navSlotVisibility_${item.name}"
+                )
+
+                // Frozen position for disabled items (invisible while they fade out).
+                val lastX = remember { mutableStateOf(0.dp) }
+                val x: Dp = if (isEnabled && slotIndex >= 0) {
+                    // key(isEnabled) restarts the position state on (re-)enter, so the
+                    // item appears at its slot instead of sliding in from an old spot;
+                    // while it stays enabled, layout changes slide it around.
+                    key(isEnabled) {
+                        val animatedX by animateDpAsState(
+                            targetValue = slotWidth * (slotIndex + 0.5f) - itemWidth / 2,
+                            animationSpec = NavBarSlotAnimation,
+                            label = "navSlotX_${item.name}"
+                        )
+                        SideEffect { lastX.value = animatedX }
+                        animatedX
+                    }
+                } else {
+                    lastX.value
+                }
+
+                Box(
+                    modifier = Modifier
+                        // offset OUTSIDE graphicsLayer: the layer's transform origin
+                        // (its center) must be the icon's own center, otherwise every
+                        // item but the first scales around the row's left edge.
+                        .offset(x = x)
+                        .graphicsLayer {
+                            alpha = visibility
+                            val scale = 0.4f + 0.6f * visibility
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                        .width(itemWidth)
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    itemContent(item, isEnabled)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Main row of clickable icons for the nav bar.
  * [items] is the user-configured main-bar layout, in display order, including the
  * [NavBarItem.MORE] marker which renders the expand toggle at its configured slot.
- * Callers pass showExpandToggle = false while the second bar is empty, which hides
- * the toggle entirely (wherever it sits in the order).
+ * [primaryEnabled] are the switchable items the user turned on; the toggle itself
+ * is only "enabled" while [showExpandToggle] is true (second bar non-empty).
  */
 @Composable
 private fun FoamNavigationItems(
@@ -276,73 +385,30 @@ private fun FoamNavigationItems(
     isPlayerOpen: Boolean,
     onNavigate: (String) -> Unit,
     items: List<NavBarItem>,
+    primaryEnabled: Set<NavBarItem>,
     showExpandToggle: Boolean = false,
     expandFraction: Float = 0f,
     onToggleExpand: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.SpaceAround,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        items.forEach { item ->
-            if (item == NavBarItem.MORE) {
-                if (showExpandToggle) {
-                    FoamNavItem(
-                        icon = FoamTheme.icons.current.more,
-                        contentDescription = if (expandFraction > 0.5f) "Collapse navigation" else "Expand navigation",
-                        selected = false,
-                        iconModifier = Modifier.rotate(expandFraction * 90f),
-                        onClick = onToggleExpand
-                    )
-                }
-            } else {
-                val screen = item.targetScreen()
-                val selected = !isPlayerOpen && (
-                        currentRoute == screen.route ||
-                                (screen == Screen.Settings && currentRoute?.startsWith("settings/") == true)
-                        )
+    val effectiveEnabled = if (showExpandToggle) primaryEnabled + NavBarItem.MORE else primaryEnabled
 
-                FoamNavItem(
-                    icon = item.icon(),
-                    contentDescription = screen.title,
-                    selected = selected,
-                    onClick = { onNavigate(screen.route) }
-                )
-            }
-        }
-    }
-}
-
-/**
- * Secondary row revealed above the main row while the bar is expanded.
- * [items] are the user-configured entries of the second bar, in display order.
- * [expandFraction] (0f..1f) drives both the height and the content alpha so the
- * row smoothly grows out of the bar.
- */
-@Composable
-private fun FoamNavExtraRow(
-    items: List<NavBarItem>,
-    currentRoute: String?,
-    isPlayerOpen: Boolean,
-    onNavigate: (String) -> Unit,
-    expandFraction: Float,
-    modifier: Modifier = Modifier
-) {
-    if (expandFraction <= 0f) return
-
-    Row(
+    NavBarSlotRow(
+        order = items,
+        enabledItems = effectiveEnabled,
+        itemWidth = NavBarDimens.ItemIconSize + NavBarDimens.ItemHitAreaPadding * 2,
         modifier = modifier
-            .fillMaxWidth()
-            .height(NavBarDimens.ExtraRowHeight * expandFraction)
-            .clipToBounds()
-            .alpha(expandFraction.coerceIn(0f, 1f))
-            .padding(horizontal = NavBarDimens.RowHorizontalPadding),
-        horizontalArrangement = Arrangement.SpaceAround,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        items.forEach { item ->
+    ) { item, itemEnabled ->
+        if (item == NavBarItem.MORE) {
+            FoamNavItem(
+                icon = FoamTheme.icons.current.more,
+                contentDescription = if (expandFraction > 0.5f) "Collapse navigation" else "Expand navigation",
+                selected = false,
+                enabled = itemEnabled,
+                iconModifier = Modifier.rotate(expandFraction * 90f),
+                onClick = onToggleExpand
+            )
+        } else {
             val screen = item.targetScreen()
             val selected = !isPlayerOpen && (
                     currentRoute == screen.route ||
@@ -353,10 +419,56 @@ private fun FoamNavExtraRow(
                 icon = item.icon(),
                 contentDescription = screen.title,
                 selected = selected,
-                hitPadding = NavBarDimens.ExtraRowItemHitPadding,
+                enabled = itemEnabled,
                 onClick = { onNavigate(screen.route) }
             )
         }
+    }
+}
+
+/**
+ * Secondary row revealed above the main row while the bar is expanded.
+ * [items] is the full configured second-bar layout; [enabledItems] are the user's
+ * active entries. [expandFraction] (0f..1f) drives both the height and the content
+ * alpha so the row smoothly grows out of the bar.
+ */
+@Composable
+private fun FoamNavExtraRow(
+    items: List<NavBarItem>,
+    enabledItems: Set<NavBarItem>,
+    currentRoute: String?,
+    isPlayerOpen: Boolean,
+    onNavigate: (String) -> Unit,
+    expandFraction: Float,
+    modifier: Modifier = Modifier
+) {
+    if (expandFraction <= 0f) return
+
+    NavBarSlotRow(
+        order = items,
+        enabledItems = enabledItems,
+        itemWidth = NavBarDimens.ItemIconSize + NavBarDimens.ExtraRowItemHitPadding * 2,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(NavBarDimens.ExtraRowHeight * expandFraction)
+            .clipToBounds()
+            .alpha(expandFraction.coerceIn(0f, 1f))
+            .padding(horizontal = NavBarDimens.RowHorizontalPadding)
+    ) { item, itemEnabled ->
+        val screen = item.targetScreen()
+        val selected = !isPlayerOpen && (
+                currentRoute == screen.route ||
+                        (screen == Screen.Settings && currentRoute?.startsWith("settings/") == true)
+                )
+
+        FoamNavItem(
+            icon = item.icon(),
+            contentDescription = screen.title,
+            selected = selected,
+            hitPadding = NavBarDimens.ExtraRowItemHitPadding,
+            enabled = itemEnabled,
+            onClick = { onNavigate(screen.route) }
+        )
     }
 }
 
@@ -369,7 +481,9 @@ fun FoamNavigationBar(
     isPlayerOpen: Boolean,
     onNavigate: (String) -> Unit,
     primaryItems: List<NavBarItem>,
+    primaryEnabled: Set<NavBarItem>,
     secondaryItems: List<NavBarItem>,
+    secondaryEnabled: Set<NavBarItem>,
     connectToMiniPlayer: Boolean = false,
     expandFraction: Float = 0f,
     onToggleExpand: () -> Unit = {}
@@ -408,6 +522,7 @@ fun FoamNavigationBar(
         ) {
             FoamNavExtraRow(
                 items = secondaryItems,
+                enabledItems = secondaryEnabled,
                 currentRoute = currentRoute,
                 isPlayerOpen = isPlayerOpen,
                 onNavigate = onNavigate,
@@ -420,7 +535,8 @@ fun FoamNavigationBar(
                 isPlayerOpen = isPlayerOpen,
                 onNavigate = onNavigate,
                 items = primaryItems,
-                showExpandToggle = secondaryItems.isNotEmpty(),
+                primaryEnabled = primaryEnabled,
+                showExpandToggle = secondaryEnabled.isNotEmpty(),
                 expandFraction = expandFraction,
                 onToggleExpand = onToggleExpand,
                 modifier = Modifier
@@ -441,7 +557,9 @@ internal fun FloatingNavigationBar(
     isPlayerOpen: Boolean,
     onNavigate: (String) -> Unit,
     primaryItems: List<NavBarItem>,
+    primaryEnabled: Set<NavBarItem>,
     secondaryItems: List<NavBarItem>,
+    secondaryEnabled: Set<NavBarItem>,
     attachedToMiniPlayer: Boolean = false,
     connectToMiniPlayer: Boolean = false,
     playerOpenFraction: () -> Float = { 0f },
@@ -492,6 +610,7 @@ internal fun FloatingNavigationBar(
         ) {
             FoamNavExtraRow(
                 items = secondaryItems,
+                enabledItems = secondaryEnabled,
                 currentRoute = currentRoute,
                 isPlayerOpen = isPlayerOpen,
                 onNavigate = onNavigate,
@@ -504,7 +623,8 @@ internal fun FloatingNavigationBar(
                 isPlayerOpen = isPlayerOpen,
                 onNavigate = onNavigate,
                 items = primaryItems,
-                showExpandToggle = secondaryItems.isNotEmpty(),
+                primaryEnabled = primaryEnabled,
+                showExpandToggle = secondaryEnabled.isNotEmpty(),
                 expandFraction = expandFraction,
                 onToggleExpand = onToggleExpand,
                 modifier = Modifier
