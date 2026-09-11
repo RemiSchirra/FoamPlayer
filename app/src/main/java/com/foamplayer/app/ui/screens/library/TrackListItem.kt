@@ -109,6 +109,7 @@ fun TrackListItem(
     dragHandleModifier: Modifier = Modifier,
     onRemove: (() -> Unit)? = null,
     suppressItemAnimations: Boolean = false,
+    trackNumberText: String? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     isSharedTransitionSource: Boolean = false
@@ -284,7 +285,7 @@ fun TrackListItem(
             Box(
                 modifier = Modifier
                     .size(AlbumArtSize)
-                    .sharedArtwork()
+                    .then(if (trackNumberText == null) Modifier.sharedArtwork() else Modifier)
                     .then(
                         if (active) {
                             Modifier.onGloballyPositioned { coords ->
@@ -297,11 +298,23 @@ fun TrackListItem(
                             Modifier
                         }
                     )
-                    .clip(RoundedCornerShape(imageRadius))
-                    .background(FoamTheme.colors.surfaceVariant),
+                    .then(
+                        if (trackNumberText == null) {
+                            Modifier
+                                .clip(RoundedCornerShape(imageRadius))
+                                .background(FoamTheme.colors.surfaceVariant)
+                        } else {
+                            Modifier
+                        }
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                if (track.albumArtPath != null) {
+                if (trackNumberText != null) {
+                    BasicText(
+                        text = trackNumberText,
+                        style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.textSecondary)
+                    )
+                } else if (track.albumArtPath != null) {
                     val context = LocalContext.current
                     val albumArtRequest = remember(track.albumArtPath) {
                         ImageRequest.Builder(context)

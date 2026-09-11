@@ -92,6 +92,7 @@ fun TrackListScreen(
     sharedElementKey: String? = null,
     sharedTrackId: Long? = null,
     activeTrackId: Long? = null,
+    showTrackNumbers: Boolean = false,
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
@@ -140,6 +141,11 @@ fun TrackListScreen(
                             track = track,
                             onClick = { onTrackClick(tracks, index) },
                             active = track.id == activeTrackId,
+                            trackNumberText = if (showTrackNumbers) {
+                                track.trackNumber?.toString() ?: (index + 1).toString()
+                            } else {
+                                null
+                            },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
                             isSharedTransitionSource = track.id == sharedTrackId

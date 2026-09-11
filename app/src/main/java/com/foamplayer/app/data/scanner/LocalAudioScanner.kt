@@ -138,6 +138,8 @@ class LocalAudioScanner @Inject constructor(
         var bitDepth = 16
         var size = 0L
         var albumArtPath: String? = null
+        var trackNumber: Int? = null
+        var discNumber: Int? = null
 
         try {
             context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
@@ -164,6 +166,18 @@ class LocalAudioScanner @Inject constructor(
                 bitDepth = 24
             }
 
+            // Tag values can be "3" or "3/12" — keep only the number before the slash.
+            trackNumber = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
+                ?.substringBefore('/')
+                ?.trim()
+                ?.toIntOrNull()
+            discNumber = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)
+                ?.substringBefore('/')
+                ?.trim()
+                ?.toIntOrNull()
+
             if (retriever.embeddedPicture != null) {
                 albumArtPath = uri.toString()
             }
@@ -183,8 +197,8 @@ class LocalAudioScanner @Inject constructor(
             albumArtist = processedAlbumArtist,
             genre = processedGenre,
             year = null,
-            trackNumber = null,
-            discNumber = null,
+            trackNumber = trackNumber,
+            discNumber = discNumber,
             duration = duration,
             bitrate = bitrate,
             sampleRate = sampleRate,

@@ -58,6 +58,7 @@ fun AlbumDetailScreen(
         sharedElementKey = albumName,
         sharedTrackId = sharedTrackId,
         activeTrackId = activeTrackId,
+        showTrackNumbers = true,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope
     )
 }
