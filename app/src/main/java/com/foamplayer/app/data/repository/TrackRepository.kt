@@ -81,11 +81,27 @@ class TrackRepository @Inject constructor(
         val scannedTracks = scanner.scanFoldersSync(folders, artistSeps, genreSeps) { progress, currentFile ->
             _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
         }
-        
-        trackDao.insertTracks(scannedTracks)
-        val scannedPaths = scannedTracks.map { it.path }
+
+        // insertTracks() replaces rows on conflict, which would wipe the listen
+        // stats: re-attach the existing ones to the freshly scanned entities.
+        val existingStats = trackDao.getPlayStats().associateBy { it.path }
+        val mergedTracks = scannedTracks.map { scanned ->
+            existingStats[scanned.path]?.let {
+                scanned.copy(playCount = it.playCount, lastPlayedAt = it.lastPlayedAt)
+            } ?: scanned
+        }
+
+        trackDao.insertTracks(mergedTracks)
+        val scannedPaths = mergedTracks.map { it.path }
         trackDao.deleteOrphanedTracks(scannedPaths)
-        
+
         _scanStatus.value = ScanStatus.Finished(scannedTracks.size)
     }
+
+    /** Marks [trackId] as listened once at [timestamp] (the threshold-crossing moment). */
+    suspend fun incrementPlayCount(trackId: Long, timestamp: Long) =
+        trackDao.incrementPlayCount(trackId, timestamp)
+
+    /** Resets the listen counter to 0 and clears the last-listen date. */
+    suspend fun resetPlayStats(trackId: Long) = trackDao.resetPlayStats(trackId)
 }

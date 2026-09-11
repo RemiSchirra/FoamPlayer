@@ -1,5 +1,7 @@
 package com.foamplayer.app.ui.utils
 
+import java.text.DateFormat
+import java.util.Date
 import java.util.Locale
 
 object TimeUtils {
@@ -17,4 +19,8 @@ object TimeUtils {
             String.format(Locale.getDefault(), "%02ds", seconds)
         }
     }
+
+    fun formatDateTime(timestampMs: Long): String =
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault())
+            .format(Date(timestampMs))
 }

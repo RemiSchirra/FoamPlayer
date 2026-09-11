@@ -32,5 +32,7 @@ data class TrackEntity(
     val format: String,
     val path: String,
     val size: Long,
-    val albumArtPath: String?
+    val albumArtPath: String?,
+    val playCount: Int = 0,
+    val lastPlayedAt: Long? = null
 )

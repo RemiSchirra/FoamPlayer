@@ -7,6 +7,7 @@ import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.SettingsRepository
+import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.settings.AppSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,12 +15,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val audioEngine: AudioEngine,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val trackRepository: TrackRepository
 ) : ViewModel() {
 
     val playbackState: StateFlow<PlaybackState> = audioEngine.playbackState
@@ -75,4 +78,9 @@ class PlayerViewModel @Inject constructor(
     fun seekTo(positionMs: Long) = audioEngine.seekTo(positionMs)
     fun toggleShuffle() = audioEngine.toggleShuffle()
     fun toggleRepeat() = audioEngine.toggleRepeat()
+
+    // Track details modal: reset the listen counter and last-listen date.
+    fun resetPlayStats(trackId: Long) {
+        viewModelScope.launch { trackRepository.resetPlayStats(trackId) }
+    }
 }

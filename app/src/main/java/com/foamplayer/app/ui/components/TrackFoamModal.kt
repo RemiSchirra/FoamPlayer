@@ -20,12 +20,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -76,6 +78,15 @@ class TrackFoamModalState {
     fun dismiss() {
         track = null
     }
+
+    /**
+     * Replaces the currently shown track with a transformed copy (same id), e.g.
+     * after resetting its listen stats, so the open sheet reflects it at once.
+     */
+    fun updateCurrentTrack(transform: (TrackEntity) -> TrackEntity) {
+        val current = track ?: return
+        track = transform(current)
+    }
 }
 
 @Composable
@@ -107,6 +118,7 @@ fun TrackFoamModal(
     onAddToPlaylist: (TrackEntity) -> Unit = {},
     onSeeArtist: (TrackEntity) -> Unit = {},
     onSeeAlbum: (TrackEntity) -> Unit = {},
+    onResetPlayStats: (TrackEntity) -> Unit = {},
     useAlbumArtAccent: Boolean = false,
     onDismiss: () -> Unit = { state.dismiss() }
 ) {
@@ -136,9 +148,10 @@ fun TrackFoamModal(
 
     // Details is a second page of the SAME sheet (one Dialog window), so the
     // header can genuinely persist across the switch instead of being cloned
-    // into another dialog. Reset when the sheet closes or changes track.
+    // into another dialog. Reset when the sheet closes or changes track (keyed
+    // on the id: stat updates copy the track but keep the details page open).
     var showDetails by remember { mutableStateOf(false) }
-    LaunchedEffect(state.track) {
+    LaunchedEffect(state.track?.id) {
         showDetails = false
     }
 
@@ -184,7 +197,11 @@ fun TrackFoamModal(
                                 modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
                             )
 
-                            TrackDetailsContent(track = displayTrack, accentColor = accentColor)
+                            TrackDetailsContent(
+                                track = displayTrack,
+                                accentColor = accentColor,
+                                onResetPlayStats = { onResetPlayStats(displayTrack) }
+                            )
 
                             Column(
                                 modifier = Modifier
@@ -495,6 +512,7 @@ fun TrackDetailsModal(
     track: TrackEntity?,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onResetPlayStats: (TrackEntity) -> Unit = {},
     useAlbumArtAccent: Boolean = false
 ) {
     // Same exit-animation preservation as the other modals in this file.
@@ -539,7 +557,11 @@ fun TrackDetailsModal(
                     modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
                 )
 
-                TrackDetailsContent(track = displayTrack, accentColor = accentColor)
+                TrackDetailsContent(
+                    track = displayTrack,
+                    accentColor = accentColor,
+                    onResetPlayStats = { onResetPlayStats(displayTrack) }
+                )
             }
         }
     }
@@ -547,7 +569,29 @@ fun TrackDetailsModal(
 
 /** The Tags + File sections shared by the standalone details modal and the details page of [TrackFoamModal]. */
 @Composable
-private fun TrackDetailsContent(track: TrackEntity, accentColor: Color) {
+private fun TrackDetailsContent(
+    track: TrackEntity,
+    accentColor: Color,
+    onResetPlayStats: () -> Unit
+) {
+    val hasStats = track.playCount > 0 || track.lastPlayedAt != null
+
+    DetailsSection(
+        title = "Stats",
+        accentColor = accentColor,
+        trailing = {
+            if (hasStats) {
+                TrackStatsResetButton(onClick = onResetPlayStats)
+            }
+        }
+    ) {
+        DetailRow("Listens", track.playCount.takeIf { it > 0 }?.toString())
+        DetailRow(
+            "Last played",
+            track.lastPlayedAt?.let { TimeUtils.formatDateTime(it) }
+        )
+    }
+
     DetailsSection(title = "Tags", accentColor = accentColor) {
         DetailRow("Track number", track.trackNumber?.toString())
         DetailRow("Disc number", track.discNumber?.toString())
@@ -612,6 +656,7 @@ private fun TrackModalBackButton(onBack: () -> Unit) {
 private fun DetailsSection(
     title: String,
     accentColor: Color,
+    trailing: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
@@ -621,15 +666,48 @@ private fun DetailsSection(
             .background(FoamTheme.colors.surfaceVariant)
             .padding(vertical = FoamDimens.spacingTiny)
     ) {
-        BasicText(
-            text = title,
-            style = FoamTheme.typography.caption.copy(color = accentColor),
-            modifier = Modifier.padding(
-                horizontal = FoamDimens.paddingMedium,
-                vertical = FoamDimens.spacingTiny
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = FoamDimens.paddingMedium,
+                    vertical = FoamDimens.spacingTiny
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BasicText(
+                text = title,
+                style = FoamTheme.typography.caption.copy(color = accentColor),
+                modifier = Modifier.weight(1f)
             )
-        )
+            trailing?.invoke()
+        }
         content()
+    }
+}
+
+/** Small cross button that resets a track's listen counter and last-listen date. */
+@Composable
+private fun TrackStatsResetButton(onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = Modifier
+            .size(FoamDimens.iconMedium)
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Close,
+            contentDescription = "Reset listen stats",
+            tint = FoamTheme.colors.textSecondary,
+            modifier = Modifier.size(FoamDimens.iconSmall)
+        )
     }
 }
 

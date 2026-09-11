@@ -81,6 +81,12 @@ class AudioEngine @Inject constructor(
     // True while a refill is running; prevents overlapping refills from appending duplicates.
     private var refillScheduled: Boolean = false
 
+    // Listen counting: a track counts as listened once it has been playing for
+    // LISTEN_THRESHOLD_MS. The pending id marks the current play occurrence --
+    // once counted it is cleared, so pause/resume never counts twice.
+    private var listenTimerJob: Job? = null
+    private var pendingListenTrackId: Long? = null
+
     companion object {
         // Tracks kept loaded on each side of the current track.
         private const val WINDOW_RADIUS = 15
@@ -90,6 +96,8 @@ class AudioEngine @Inject constructor(
         private const val EDGE_TRIGGER_MARGIN = 5
         // Auxiliary (random) tracks always kept after the main queue.
         private const val AUXILIARY_QUEUE_LENGTH = PlaybackState.AUXILIARY_QUEUE_LENGTH
+        // Playback time after which a track counts as listened (hardcoded 1s for now).
+        private const val LISTEN_THRESHOLD_MS = 1000L
     }
 
     init {
@@ -125,11 +133,29 @@ class AudioEngine @Inject constructor(
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _playbackState.value = _playbackState.value.copy(isPlaying = isPlaying)
+                if (isPlaying) {
+                    // (Re)start the listen timer from a clean threshold window.
+                    val trackId = player.currentMediaItem?.mediaId?.toLongOrNull()
+                    if (trackId != null && trackId == pendingListenTrackId) {
+                        scheduleListenCount(trackId)
+                    }
+                } else {
+                    // Pausing stops the count attempt; resuming restarts it.
+                    listenTimerJob?.cancel()
+                }
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val trackId = mediaItem?.mediaId?.toLongOrNull() ?: return
                 val currentQueue = _playbackState.value.queue
+
+                // New play occurrence: the previous track no longer counts toward
+                // this one, so the timer restarts from scratch.
+                listenTimerJob?.cancel()
+                pendingListenTrackId = trackId
+                if (player.isPlaying) {
+                    scheduleListenCount(trackId)
+                }
 
                 // The same track can appear more than once (aux pool), so use the
                 // player's timeline position to find the exact queue index, falling
@@ -171,6 +197,22 @@ class AudioEngine @Inject constructor(
                 equalizerManager.attachToAudioSession(audioSessionId)
             }
         })
+    }
+
+    /**
+     * Counts [trackId] as listened once it survives [LISTEN_THRESHOLD_MS] of
+     * playback. The check at fire time guards against a pause or a transition
+     * landing right on the threshold.
+     */
+    private fun scheduleListenCount(trackId: Long) {
+        listenTimerJob?.cancel()
+        listenTimerJob = scope.launch {
+            delay(LISTEN_THRESHOLD_MS)
+            if (player.isPlaying && player.currentMediaItem?.mediaId?.toLongOrNull() == trackId) {
+                pendingListenTrackId = null
+                trackRepository.incrementPlayCount(trackId, System.currentTimeMillis())
+            }
+        }
     }
 
     private fun observeLibraryForAuxiliaryRefill() {

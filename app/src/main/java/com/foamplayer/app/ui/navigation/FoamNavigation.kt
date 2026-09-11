@@ -952,6 +952,11 @@ fun FoamNavHost(
                         Screen.AlbumDetail.createRoute(track.album, track.albumArtPath, track.artist)
                     )
                 },
+                onResetPlayStats = { track ->
+                    playerViewModel.resetPlayStats(track.id)
+                    // Reflect the reset in the open sheet immediately.
+                    trackModalState.updateCurrentTrack { it.copy(playCount = 0, lastPlayedAt = null) }
+                },
                 useAlbumArtAccent = playerSettings.automaticColorEnabled
             )
 

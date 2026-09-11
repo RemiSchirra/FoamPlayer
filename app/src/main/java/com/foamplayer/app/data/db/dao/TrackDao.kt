@@ -82,6 +82,15 @@ interface TrackDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTracks(tracks: List<TrackEntity>)
 
+    @Query("UPDATE tracks SET playCount = playCount + 1, lastPlayedAt = :timestamp WHERE id = :trackId")
+    suspend fun incrementPlayCount(trackId: Long, timestamp: Long)
+
+    @Query("UPDATE tracks SET playCount = 0, lastPlayedAt = NULL WHERE id = :trackId")
+    suspend fun resetPlayStats(trackId: Long)
+
+    @Query("SELECT path, playCount, lastPlayedAt FROM tracks")
+    suspend fun getPlayStats(): List<TrackPlayStatsRow>
+
     @Query("DELETE FROM tracks WHERE path NOT IN (:existingPaths)")
     suspend fun deleteOrphanedTracks(existingPaths: List<String>)
 }
@@ -90,4 +99,10 @@ data class AlbumSearchResult(
     val album: String,
     val artist: String,
     val albumArtPath: String?
+)
+
+data class TrackPlayStatsRow(
+    val path: String,
+    val playCount: Int,
+    val lastPlayedAt: Long?
 )
