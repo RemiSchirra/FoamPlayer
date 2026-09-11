@@ -24,7 +24,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Category
@@ -49,7 +48,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
@@ -160,7 +158,6 @@ fun SearchScreen(
 ) {
     val query by searchViewModel.query.collectAsState()
     val uiState by searchViewModel.uiState.collectAsState()
-    val focusManager = LocalFocusManager.current
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
@@ -170,42 +167,24 @@ fun SearchScreen(
             .padding(horizontal = 8.dp)
     ) {
         Spacer(modifier = Modifier.height(16.dp))
-        BasicText(
-            text = "Search Library",
-            style = FoamTheme.typography.titleLarge
-        )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Search Bar: back icon (returns to the cards view), text field, clear icon.
+        // Search Bar: text field pill with the always-visible clear icon inside.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(FoamTheme.colors.surfaceVariant)
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .height(56.dp)
+                .clip(RoundedCornerShape(50))
+                .background(FoamTheme.colors.surface)
+                .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (isSearchFocused || query.isNotEmpty()) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = FoamTheme.colors.textPrimary,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clickable {
-                            searchViewModel.search("")
-                            focusManager.clearFocus()
-                        }
-                        .padding(4.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            }
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
                     BasicText(
                         text = "Search tracks, artists, albums...",
-                        style = FoamTheme.typography.body
+                        style = FoamTheme.typography.titleMedium.copy(
+                            color = FoamTheme.colors.textSecondary
+                        )
                     )
                 }
                 BasicTextField(
@@ -222,18 +201,15 @@ fun SearchScreen(
                     singleLine = true
                 )
             }
-            if (query.isNotEmpty()) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "Clear",
-                    tint = FoamTheme.colors.textSecondary,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clickable { searchViewModel.search("") }
-                        .padding(4.dp)
-                )
-            }
+            Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = "Clear",
+                tint = FoamTheme.colors.textSecondary,
+                modifier = Modifier
+                    .size(32.dp)
+                    .clickable { searchViewModel.search("") }
+                    .padding(4.dp)
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
