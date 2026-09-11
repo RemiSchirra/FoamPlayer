@@ -3,13 +3,13 @@ package com.foamplayer.app.ui.screens.player
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.EaseInCubic
+import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberTransition
@@ -113,10 +113,44 @@ private object PlayerDimens {
 
     // How far a swipe needs to travel to fully open/close the Lyrics/Queue subview.
     // Kept as a fixed distance (not a fraction of screen height) so it stays a quick,
-    // tactile flick on every device instead of scaling up on taller screens. 260dp
-    // completed too fast (felt twitchy); 420dp gives the finger more room to travel
-    // while still being far short of a full-screen swipe.
+    // tactile flick on every device instead of scaling up on taller screens.
     val subViewSwipeThreshold = 420.dp
+
+    // ---- Newly centralized (previously scattered literals) ----
+
+    /** Generic 24dp spacing rhythm shared by header, slider row and transport cluster. */
+    val screenPadding = 24.dp
+
+    /** Vertical padding around the bottom PlaybackProgressSlider row. */
+    val seekBarRowVerticalPadding = 12.dp
+
+    /** Space between the seek bar and the transport row in PlaybackControls. */
+    val controlsSpacing = 16.dp
+
+    /** Extra space under the main playback controls before the screen edge. */
+    val controlsBottomSpacer = 48.dp
+
+    /** Header blocks slide by h / headerSlideDivisor during the up-transition. */
+    const val headerSlideDivisor = 6
+
+    /** Black scrim strength over the backdrop while the Lyrics/Queue subview is up. */
+    const val scrimMaxAlpha = 0.2f
+
+    /** Backdrop blur completes at 1 / subViewBlurRushFactor of the up-drag. */
+    const val subViewBlurRushFactor = 2.5f
+
+    /** Faded controls stop being clickable below this alpha. */
+    const val visibilityEpsilon = 0.01f
+
+    // Transport / control sizes.
+    val playButtonSize = 64.dp
+    val playButtonIconSize = 32.dp
+    val miniPlayButtonSize = 50.dp
+    val miniPlayIconSize = 28.dp
+    val miniTransportButtonSize = 44.dp
+    val miniTransportIconSize = 26.dp
+    val transportIconSize = 32.dp
+    val transportSpacing = 24.dp
 }
 
 /**
@@ -156,7 +190,7 @@ fun FullPlayerScreen(
     // the sharp hero returns early instead of waiting for the final part of a drag.
     val rawSubViewProgress = upTransitionState.progress()
     val subViewBlurProgress = if (upTransitionState.targetState) {
-        (rawSubViewProgress * 2.5f).coerceIn(0f, 1f)
+        (rawSubViewProgress * PlayerDimens.subViewBlurRushFactor).coerceIn(0f, 1f)
     } else {
         rawSubViewProgress * rawSubViewProgress
     }
@@ -436,11 +470,27 @@ fun FullPlayerScreen(
         }
     }
 
-    val uiAlpha by animatedVisibilityScope.transition.animateFloat(
-        transitionSpec = { tween(durationMillis = 500, easing = EaseOutCubic) },
-        label = "uiAlpha"
-    ) { enterExitState ->
-        if (enterExitState == EnterExitState.Visible) 1f else 0f
+    // Alpha for the backdrop, scrim, and controls. Reads playerTransitionState
+    // directly and applies the same EaseInOutCubic curve as FoamNavHost's
+    // playerOpenFraction, so this is always exactly in lockstep with the docked
+    // navbar's own fade (1f - playerOpenFraction()).
+    //
+    // This used to be its own independent enter/exit animation:
+    //   animatedVisibilityScope.transition.animateFloat(tween(500, EaseOutCubic))
+    // keyed off EnterExitState -- a real, self-running 500ms timer that started
+    // climbing to 1f the moment targetState flipped toward open, regardless of
+    // where the drag itself actually was (including while held mid-drag). The
+    // navbar's own alpha, by contrast, always reflects the true drag fraction.
+    // For roughly that first 500ms of any drag the two were on completely
+    // different curves, so the backdrop would already be near-opaque and bleed
+    // over a navbar that was still supposed to be mostly solid -- most visible
+    // on docked, where the backdrop extension has no buffer to absorb it.
+    //
+    // Deferred as a lambda (like playerOpenFraction) so reading it only
+    // invalidates the draw phase, never forces a recomposition of this whole
+    // composable on every drag frame.
+    val uiAlpha = remember(playerTransitionState) {
+        { EaseInOutCubic.transform(playerTransitionState.progress().coerceIn(0f, 1f)) }
     }
 
     // Drives the bottom control cluster (selector row rise, mini play button, seek bar).
@@ -529,16 +579,17 @@ fun FullPlayerScreen(
                 // alpha stops being exactly 1f (e.g. the first frame of any drag).
                 modifier = Modifier
                     .extendBottom(backdropBottomExtension)
-                    .graphicsLayer { alpha = uiAlpha },
+                    .graphicsLayer { alpha = uiAlpha() },
             )
 
             Box(
                 modifier = Modifier
                     .extendBottom(backdropBottomExtension)
                     .fillMaxSize()
-                    .graphicsLayer { alpha = 0.2f * subViewBlurProgress * uiAlpha }
+                    .graphicsLayer { alpha = PlayerDimens.scrimMaxAlpha * subViewBlurProgress * uiAlpha() }
                     .background(Color.Black)
             )
+
 
             // statusBarsPadding keeps every player element (header, pager, controls,
             // subview) exactly where it was before edge-to-edge, while the backdrop
@@ -548,16 +599,16 @@ fun FullPlayerScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = uiAlpha }
+                    .graphicsLayer { alpha = uiAlpha() }
                     .statusBarsPadding()
             ) {
                 Box(modifier = Modifier.weight(1f)) {
                     upTransition.AnimatedVisibility(
                         visible = { !it },
                         enter = fadeIn(tween(TRANSITION_DURATION_MS)) +
-                                slideInVertically(tween(TRANSITION_DURATION_MS)) { h -> -h / 6 },
+                                slideInVertically(tween(TRANSITION_DURATION_MS)) { h -> -h / PlayerDimens.headerSlideDivisor },
                         exit = fadeOut(tween(TRANSITION_DURATION_MS)) +
-                                slideOutVertically(tween(TRANSITION_DURATION_MS)) { h -> -h / 6 },
+                                slideOutVertically(tween(TRANSITION_DURATION_MS)) { h -> -h / PlayerDimens.headerSlideDivisor },
                         modifier = Modifier.fillMaxSize().then(playerDrag)
                     ) {
                         MainPlayerContent(
@@ -608,26 +659,23 @@ fun FullPlayerScreen(
                 // inside it), so its reveal never resizes anything: the row's rise is its
                 // own independent translationY, not a reaction to a new sibling.
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    // uiAlpha itself is a `by` State read (only re-fires during the ~500ms
-                    // enter/exit fade, not per drag frame), but wrapping it in
-                    // rememberUpdatedState lets the graphicsLayer blocks below read its
-                    // latest value without the surrounding Modifier having to be rebuilt
-                    // -- which is what would otherwise force these modifiers (and the
-                    // remember calls below) to be reallocated on every recomposition.
-                    val currentUiAlpha = rememberUpdatedState(uiAlpha)
-
                     // Built once (keyed only on stable instances) instead of inline in the
                     // call below. An inline `Modifier....graphicsLayer { ... }` literal is
                     // reallocated every recomposition regardless of whether its captures
                     // changed, and a changed Modifier parameter is enough on its own to
                     // stop SubViewSelectorRow from being skipped -- reintroducing the
-                    // every-frame recompose even after `progress` was made stable.
-                    val selectorRowModifier = remember(subControlsProgress, currentUiAlpha) {
+                    // every-frame recompose even after `progress` was made stable. uiAlpha
+                    // is already a stable, memoized lambda (like subControlsProgress), so
+                    // it can be used directly here without a rememberUpdatedState wrapper.
+                    val selectorRowModifier = remember(subControlsProgress, uiAlpha) {
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 24.dp)
+                            .padding(
+                                horizontal = PlayerDimens.screenPadding,
+                                vertical = PlayerDimens.screenPadding
+                            )
                             .graphicsLayer {
-                                alpha = currentUiAlpha.value
+                                alpha = uiAlpha()
                                 translationY = -PlayerDimens.selectorRowRise.toPx() * subControlsProgress()
                             }
                     }
@@ -668,7 +716,7 @@ fun FullPlayerScreen(
 
                     Row(
                         modifier = transportClusterModifier,
-                        horizontalArrangement = Arrangement.spacedBy(24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(PlayerDimens.transportSpacing),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         MiniTransportButton(
@@ -716,7 +764,10 @@ fun FullPlayerScreen(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 12.dp)
+                        .padding(
+                            horizontal = PlayerDimens.screenPadding,
+                            vertical = PlayerDimens.seekBarRowVerticalPadding
+                        )
                         .graphicsLayer {
                             alpha = subControlsProgress()
                             translationY = PlayerDimens.seekBarRise.toPx() * (1f - subControlsProgress())
@@ -813,10 +864,10 @@ private fun SharedTransitionScope.MainPlayerContent(
     isAnimateSeekBarEnabled: Boolean
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(top = 24.dp),
+        modifier = Modifier.fillMaxSize().padding(top = PlayerDimens.screenPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(PlayerDimens.screenPadding))
 
         TrackHeroPager(
             track = track,
@@ -864,7 +915,7 @@ private fun SharedTransitionScope.MainPlayerContent(
             }
         )
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(PlayerDimens.controlsBottomSpacer))
     }
 }
 
@@ -1169,7 +1220,7 @@ private fun SharedTransitionScope.PlayPauseButton(
 ) {
     Box(
         modifier = modifier
-            .size(64.dp)
+            .size(PlayerDimens.playButtonSize)
             .sharedBounds(
                 rememberSharedContentState(key = "play_button_${track.id}"),
                 animatedVisibilityScope = outerVisibilityScope
@@ -1183,7 +1234,7 @@ private fun SharedTransitionScope.PlayPauseButton(
             imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
             contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
             tint = FoamTheme.colors.background,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(PlayerDimens.playButtonIconSize)
         )
     }
 }
@@ -1203,7 +1254,7 @@ private fun SharedTransitionScope.PlaybackControls(
     onNext: () -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = PlayerDimens.screenPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // seekBarProgress.progress tracks pagerState.currentPageOffsetFraction under
@@ -1218,7 +1269,7 @@ private fun SharedTransitionScope.PlaybackControls(
             isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
             onSeek = onSeek
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(PlayerDimens.controlsSpacing))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1229,7 +1280,7 @@ private fun SharedTransitionScope.PlaybackControls(
                 imageVector = FoamTheme.icons.current.previous,
                 contentDescription = stringResource(R.string.previous),
                 tint = FoamTheme.colors.textPrimary,
-                modifier = Modifier.size(32.dp).clickable(onClick = onPrevious)
+                modifier = Modifier.size(PlayerDimens.transportIconSize).clickable(onClick = onPrevious)
             )
             PlayPauseButton(
                 track = track,
@@ -1294,11 +1345,11 @@ private fun MiniPlayPauseButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isEnabled by remember(progress) { derivedStateOf { progress() > 0.01f } }
+    val isEnabled by remember(progress) { derivedStateOf { progress() > PlayerDimens.visibilityEpsilon } }
 
     Box(
         modifier = modifier
-            .size(50.dp)
+            .size(PlayerDimens.miniPlayButtonSize)
             .graphicsLayer { alpha = progress() }
             .clip(CircleShape)
             .background(FoamTheme.accentColor)
@@ -1309,7 +1360,7 @@ private fun MiniPlayPauseButton(
             imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
             contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
             tint = FoamTheme.colors.background,
-            modifier = Modifier.size(28.dp)
+            modifier = Modifier.size(PlayerDimens.miniPlayIconSize)
         )
     }
 }
@@ -1330,11 +1381,11 @@ private fun MiniTransportButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isEnabled by remember(progress) { derivedStateOf { progress() > 0.01f } }
+    val isEnabled by remember(progress) { derivedStateOf { progress() > PlayerDimens.visibilityEpsilon } }
 
     Box(
         modifier = modifier
-            .size(44.dp)
+            .size(PlayerDimens.miniTransportButtonSize)
             .graphicsLayer { alpha = progress() }
             .clip(CircleShape)
             .clickable(enabled = isEnabled, onClick = onClick),
@@ -1344,7 +1395,7 @@ private fun MiniTransportButton(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = FoamTheme.colors.textPrimary,
-            modifier = Modifier.size(26.dp)
+            modifier = Modifier.size(PlayerDimens.miniTransportIconSize)
         )
     }
 }
