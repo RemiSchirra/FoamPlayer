@@ -8,12 +8,14 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.EaseInOut
-import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.Transition
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -294,23 +296,16 @@ fun FoamNavHost(
             // Back button folds the extra row away before leaving the app.
             BackHandler(enabled = isNavBarExpanded) { isNavBarExpanded = false }
 
-            // 0f..1f "how open is the player", read STRAIGHT off the SeekableTransitionState --
-            // the same value the open/close animation and the finger drag run on.
-            // No independent spring, so it follows the finger 1:1 and matches the tween when
-            // opened programmatically. Deferred as a lambda: reading it only invalidates the
-            // DRAW phase, never this scope.
-            val playerOpenFraction = remember(playerTransitionState) {
-                {
-                    val openProgress =
-                        if (playerTransitionState.currentState == playerTransitionState.targetState) {
-                            if (playerTransitionState.currentState) 1f else 0f
-                        } else {
-                            if (playerTransitionState.targetState) playerTransitionState.fraction
-                            else 1f - playerTransitionState.fraction
-                        }
-                    EaseInOutCubic.transform(openProgress.coerceIn(0f, 1f))
-                }
-            }
+            // Navbar surface driver: a child of the same transition the mini player's
+            // enter/exit fade runs on, with the identical fade spring. The SeekableTransitionState
+            // seeks every child at the same playtime (fraction x total duration), so this value is
+            // always equal to the mini player's fade alpha -- during finger drags and tweened
+            // settles alike. Deferred as a lambda: reading it only invalidates the DRAW phase.
+            val playerClosedFractionState = transition.animateFloat(
+                transitionSpec = { spring(stiffness = Spring.StiffnessMediumLow) },
+                label = "PlayerClosedFraction"
+            ) { isFull -> if (isFull) 0f else 1f }
+            val playerClosedFraction = { playerClosedFractionState.value }
 
             // Extends the full player background fade into the bottom nav zone. All sizes
             // come from NavBarDimens -- the single source of truth for nav-bar geometry --
@@ -630,7 +625,7 @@ fun FoamNavHost(
                                 secondaryEnabled = playerSettings.navBarSecondaryEnabled,
                                 attachedToMiniPlayer = false,
                                 connectToMiniPlayer = playbackState.currentTrack != null,
-                                playerOpenFraction = playerOpenFraction,
+                                playerClosedFraction = playerClosedFraction,
                                 transitionAnimated = isTransitionAnimated,
                                 navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
                                 expandFraction = navBarExpandFraction,
@@ -652,7 +647,7 @@ fun FoamNavHost(
                                 secondaryEnabled = playerSettings.navBarSecondaryEnabled,
                                 attachedToMiniPlayer = true,
                                 connectToMiniPlayer = playbackState.currentTrack != null,
-                                playerOpenFraction = playerOpenFraction,
+                                playerClosedFraction = playerClosedFraction,
                                 navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
                                 expandFraction = navBarExpandFraction,
                                 onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }

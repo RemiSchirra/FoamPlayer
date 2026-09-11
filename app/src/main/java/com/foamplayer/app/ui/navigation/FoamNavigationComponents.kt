@@ -562,7 +562,7 @@ internal fun FloatingNavigationBar(
     secondaryEnabled: Set<NavBarItem>,
     attachedToMiniPlayer: Boolean = false,
     connectToMiniPlayer: Boolean = false,
-    playerOpenFraction: () -> Float = { 0f },
+    playerClosedFraction: () -> Float = { 0f },
     transitionAnimated: Boolean = true,
     navBarTransparentWhenPlayerOpen: Boolean = false,
     expandFraction: Float = 0f,
@@ -591,12 +591,12 @@ internal fun FloatingNavigationBar(
                 .requiredHeight(NavBarDimens.FloatingRowHeight + NavBarDimens.ExtraRowHeight * expandFraction)
                 .drawBehind {
                     val radiusPx = containerRadius.toPx()
-                    val greyAlpha = if (isPlayerOpen && navBarTransparentWhenPlayerOpen) {
-                        1f - playerOpenFraction()
+                    val greyAlpha = if (navBarTransparentWhenPlayerOpen) {
+                        playerClosedFraction()
                     } else 1f
 
                     val extensionPx = if (attachedToMiniPlayer && connectToMiniPlayer) {
-                        NavBarDimens.AttachedConnectorGrowFactor * radiusPx * (1f - playerOpenFraction())
+                        NavBarDimens.AttachedConnectorGrowFactor * radiusPx * playerClosedFraction()
                     } else 0f
 
                     drawRoundRect(
