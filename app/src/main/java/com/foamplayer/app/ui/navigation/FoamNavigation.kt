@@ -8,6 +8,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.Spring
@@ -27,10 +28,8 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -46,7 +45,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -70,10 +71,14 @@ import com.foamplayer.app.ui.screens.library.AlbumDetailScreen
 import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
 import com.foamplayer.app.ui.screens.library.LibraryScreen
 import com.foamplayer.app.ui.screens.library.LibraryViewModel
+import com.foamplayer.app.ui.screens.player.AlbumArtBackdrop
+import com.foamplayer.app.ui.screens.player.FullPlayerBackdropState
 import com.foamplayer.app.ui.screens.player.FullPlayerScreen
 import com.foamplayer.app.ui.screens.player.DynamicAlbumArtBackground
 import com.foamplayer.app.ui.screens.player.MiniPlayerSwipeController
+import com.foamplayer.app.ui.screens.player.PlayerDimens
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
+import com.foamplayer.app.ui.screens.player.progress
 import com.foamplayer.app.ui.screens.playlists.PlaylistDetailScreen
 import com.foamplayer.app.ui.screens.playlists.PlaylistsScreen
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
@@ -339,6 +344,60 @@ fun FoamNavHost(
                     )
                 }
 
+                // ---- Full player backdrop (root-hosted) --------------------------------------
+                // Height of the nav-bar zone, measured from the bar container below. In DOCKED
+                // mode the solid bar is painted above the backdrop, so the backdrop's black
+                // fade must land exactly on the bar's top edge; in FLOATING/ATTACHED the
+                // backdrop stays visible down to the physical bottom, where the fade ends.
+                var navZoneHeightPx by remember { mutableStateOf(0) }
+                val playerBackdropFadeInset = if (navigationBarMode == NavigationBarMode.DOCKED) {
+                    with(density) { navZoneHeightPx.toDp() }
+                } else {
+                    0.dp
+                }
+
+                // The full player's blurred backdrop is hosted here at the very root, inside
+                // the exact same fillMaxSize box as the app-wide backdrop above. Both crop the
+                // same artwork at the same size with the same blur and dim, so the open/close
+                // crossfade between them is seamless, and the blurred art + black fade reach
+                // the physical bottom of the screen by construction -- no overflow tricks an
+                // intermediate container can cut off. FullPlayerScreen feeds the pager-driven
+                // state through [fullPlayerBackdropState].
+                val fullPlayerBackdropState = remember { FullPlayerBackdropState() }
+                val playerBackdropAlpha = {
+                    EaseInOutCubic.transform(playerTransitionState.progress().coerceIn(0f, 1f))
+                }
+                if (playerTransitionState.currentState ||
+                    playerTransitionState.targetState
+                ) {
+                    AlbumArtBackdrop(
+                        frontArtPath = fullPlayerBackdropState.frontArtPath,
+                        backArtPath = fullPlayerBackdropState.backArtPath,
+                        crossfadeFraction = fullPlayerBackdropState.crossfadeFraction,
+                        immersive = fullPlayerBackdropState.immersive,
+                        subViewProgress = fullPlayerBackdropState.subViewBlurProgress,
+                        dynamicBackgroundEnabled = isDynamicBackgroundEnabled,
+                        backgroundBlur = playerSettings.backgroundBlur.dp,
+                        intensity = playerSettings.dynamicBackgroundIntensity / 100f,
+                        bottomFadeInset = playerBackdropFadeInset,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = playerBackdropAlpha() }
+                    )
+
+                    // Subview scrim, formerly drawn by the player over its own backdrop.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                alpha = PlayerDimens.scrimMaxAlpha *
+                                        fullPlayerBackdropState.subViewBlurProgress() *
+                                        playerBackdropAlpha()
+                            }
+                            .background(Color.Black)
+                    )
+                }
+
                 val isPlayerOpen = playerTransitionState.targetState
 
                 // ---- Expandable nav-bar second row ------------------------------------------
@@ -370,17 +429,6 @@ fun FoamNavHost(
                     label = "PlayerClosedFraction"
                 ) { isFull -> if (isFull) 0f else 1f }
                 val playerClosedFraction = { playerClosedFractionState.value }
-
-                // Extends the full player background fade into the bottom nav zone. All sizes
-                // come from NavBarDimens -- the single source of truth for nav-bar geometry --
-                // so this can never drift from the heights the bars themselves use.
-                val navigationBarsBottomInsetPx = WindowInsets.navigationBars.getBottom(density)
-                val playerBackdropBottomExtension = with(density) {
-                    NavBarDimens.playerBackdropBottomExtension(
-                        mode = navigationBarMode,
-                        bottomInset = navigationBarsBottomInsetPx.toDp()
-                    )
-                }
 
                 val handleNavBarNavigation: (String) -> Unit = { route ->
                     // Navigating from the bar always folds the extra row away.
@@ -653,14 +701,17 @@ fun FoamNavHost(
                                 sharedTransitionScope = this@SharedTransitionLayout,
                                 animatedVisibilityScope = this@AnimatedVisibility,
                                 playerTransitionState = playerTransitionState,
-                                // Without this the backdrop's bottom extension silently stays 0.dp.
-                                backdropBottomExtension = playerBackdropBottomExtension,
+                                backdropState = fullPlayerBackdropState,
                                 isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
                             )
                         }
                     }
 
-                    Box(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { navZoneHeightPx = it.height }
+                    ) {
                         when (navigationBarMode) {
                             NavigationBarMode.DOCKED -> Box(
                                 modifier = Modifier.fillMaxWidth().navigationBarsPadding()

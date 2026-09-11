@@ -7,8 +7,13 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithCache
@@ -37,40 +42,26 @@ import com.foamplayer.app.ui.theme.FoamTheme
 
 
 /**
- * Extends a full-bleed layer beyond the bottom edge of its parent by [extraHeight]:
- * the measured height grows, the content stays anchored to the top, and the overflow
- * paints over whatever sits below (Compose never clips children unless explicitly
- * asked to, so the overflow reaches the nav zone for free).
+ * Backdrop state written by [FullPlayerScreen] and read by the root-level backdrop host in
+ * FoamNavigation. The full player's backdrop is deliberately rendered at the very root of
+ * the hierarchy -- in the exact same fillMaxSize Box as the app-wide DynamicAlbumArtBackground --
+ * so its blurred artwork is cropped to the physical screen with no overflow tricks, no
+ * bottom-extension arithmetic and no possibility of being clipped by an intermediate
+ * container. Because both backdrops now crop the same artwork into the same box with the
+ * same blur and the same intensity dim, the open/close crossfade between them is seamless.
  *
- * The full player's backdrop uses this so its blurred artwork + bottom black fade
- * run behind the app's navigation zone down to the physical bottom of the screen --
- * replacing the fake black rect the nav zone used to draw to mimic that continuation.
+ * [frontArtPath]/[backArtPath]/[immersive] are snapshot states; [crossfadeFraction] and
+ * [subViewBlurProgress] are plain lambda fields whose bodies only read snapshot state
+ * (pager offset, transition fractions), so they are evaluated during the host's draw phase
+ * and never go stale.
  */
-internal fun Modifier.extendBottom(extraHeight: Dp): Modifier {
-    if (extraHeight <= 0.dp) return this
-    return then(
-        object : LayoutModifier {
-            override fun MeasureScope.measure(
-                measurable: Measurable,
-                constraints: Constraints
-            ): MeasureResult {
-                val expanded = Constraints(
-                    minWidth = constraints.minWidth,
-                    maxWidth = constraints.maxWidth,
-                    minHeight = constraints.minHeight,
-                    maxHeight = if (constraints.hasBoundedHeight) {
-                        constraints.maxHeight + extraHeight.roundToPx()
-                    } else {
-                        constraints.maxHeight
-                    }
-                )
-                val placeable = measurable.measure(expanded)
-                return layout(placeable.width, placeable.height) {
-                    placeable.place(0, 0)
-                }
-            }
-        }
-    )
+@Stable
+class FullPlayerBackdropState {
+    var frontArtPath by mutableStateOf<String?>(null)
+    var backArtPath by mutableStateOf<String?>(null)
+    var immersive by mutableStateOf(false)
+    var crossfadeFraction: () -> Float = { 0f }
+    var subViewBlurProgress: () -> Float = { 0f }
 }
 
 /**
@@ -209,6 +200,13 @@ internal fun DynamicAlbumArtBackground(
  * FullPlayerScreen's `programmaticBackdropCrossfade` for the piece that feeds this a smooth
  * fraction even when the queue index changes without a live pager drag behind it (e.g.
  * tapping a track in the Queue subview).
+ *
+ * [intensity] must be the same value the app-wide DynamicAlbumArtBackground uses: with
+ * identical blur, crop box and dim, this backdrop is pixel-identical to the app-wide one
+ * and the open/close crossfade between them is seamless. [bottomFadeInset] ends the black
+ * fade at the bottom of the region where the backdrop is actually visible (the docked
+ * bar's top edge hides everything below it); pass 0.dp when the backdrop is visible all
+ * the way to the physical bottom of the screen.
  */
 @Composable
 internal fun AlbumArtBackdrop(
@@ -216,9 +214,11 @@ internal fun AlbumArtBackdrop(
     backArtPath: String?,
     crossfadeFraction: () -> Float,
     immersive: Boolean,
-    subViewProgress: Float,
+    subViewProgress: () -> Float,
     dynamicBackgroundEnabled: Boolean,
     backgroundBlur: Dp,
+    intensity: Float,
+    bottomFadeInset: Dp,
     modifier: Modifier = Modifier,
     foregroundModifier: Modifier = Modifier
 ) {
@@ -228,6 +228,7 @@ internal fun AlbumArtBackdrop(
             backArtPath = backArtPath,
             crossfadeFraction = crossfadeFraction,
             subViewProgress = subViewProgress,
+            bottomFadeInset = bottomFadeInset,
             modifier = modifier,
             foregroundModifier = foregroundModifier
         )
@@ -257,9 +258,15 @@ internal fun AlbumArtBackdrop(
                     )
                 }
             }
+            // Same dim layer DynamicAlbumArtBackground draws app-wide, so both backdrops
+            // render the artwork at identical brightness during the open/close crossfade.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 1f - intensity.coerceIn(0f, 1f)))
+            )
         }
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)))
-        BackdropGradient()
+        BackdropGradient(modifier = Modifier.padding(bottom = bottomFadeInset))
     }
 }
 
@@ -272,7 +279,8 @@ private fun ImmersiveAlbumArtBackdrop(
     frontArtPath: String?,
     backArtPath: String?,
     crossfadeFraction: () -> Float,
-    subViewProgress: Float,
+    subViewProgress: () -> Float,
+    bottomFadeInset: Dp,
     modifier: Modifier = Modifier,
     foregroundModifier: Modifier = Modifier
 ) {
@@ -298,11 +306,11 @@ private fun ImmersiveAlbumArtBackdrop(
                 crossfadeFraction = crossfadeFraction,
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = 1f - subViewProgress }
+                    .graphicsLayer { alpha = 1f - subViewProgress() }
                     .fadeIntoBlur()
             )
         }
-        BackdropGradient()
+        BackdropGradient(modifier = Modifier.padding(bottom = bottomFadeInset))
     }
 }
 

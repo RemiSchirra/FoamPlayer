@@ -164,19 +164,6 @@ object NavBarDimens {
 
     // ---- Player backdrop reach into the nav zone -------------------------------
     /**
-     * Small slack so a one-frame desync between the inset read here and the bar's own
-     * inset read can never under-fill the fade during a drag.
-     */
-    val BackdropSyncBuffer = 4.dp
-
-    /**
-     * FLOATING/ATTACHED pills only cover part of the bottom zone, so the player
-     * backdrop gets a generously oversized buffer (far bigger than the real bars'
-     * height) and can never run out of fade mid-drag.
-     */
-    const val FloatingBackdropBufferFactor = 3f
-
-    /**
      * Distance from the bottom of the screen (above the system nav-bar inset) to the
      * mini player card's box bottom edge, per mode.
      *
@@ -216,19 +203,6 @@ object NavBarDimens {
             else -> ExtraRowHeight - extraRowBottomOverlap(DockedBarHeight)
         }
         return base + ride * expandFraction
-    }
-
-    /**
-     * How far the full player's backdrop fade extends below the player content, into
-     * the nav zone.
-     *
-     * DOCKED: the bar is solid and paints above the backdrop (see FoamNavigationBar),
-     * so the fade only needs to cover the system inset plus a frame-sync buffer.
-     * FLOATING/ATTACHED: a large buffer keeps the fade continuous around the pills.
-     */
-    fun playerBackdropBottomExtension(mode: NavigationBarMode, bottomInset: Dp): Dp = when (mode) {
-        NavigationBarMode.DOCKED -> bottomInset + BackdropSyncBuffer
-        else -> bottomInset + (FloatingRowHeight + FloatingBarMargin * 2) * FloatingBackdropBufferFactor
     }
 }
 

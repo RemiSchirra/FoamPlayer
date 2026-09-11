@@ -16,7 +16,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -34,6 +33,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -55,7 +55,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
@@ -74,7 +73,7 @@ fun FullPlayerScreen(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     playerTransitionState: SeekableTransitionState<Boolean>,
-    backdropBottomExtension: Dp = 0.dp,
+    backdropState: FullPlayerBackdropState,
     isAnimateSeekBarEnabled: Boolean = false
 ) {
     val state by viewModel.playbackState.collectAsState()
@@ -88,10 +87,18 @@ fun FullPlayerScreen(
     val upTransition = rememberTransition(upTransitionState, label = "UpTransition")
     
     val rawSubViewProgress = upTransitionState.progress()
-    val subViewBlurProgress = if (upTransitionState.targetState) {
-        (rawSubViewProgress * PlayerDimens.subViewBlurRushFactor).coerceIn(0f, 1f)
-    } else {
-        rawSubViewProgress * rawSubViewProgress
+    // Deferred form for the root-hosted backdrop: the lambda only reads snapshot state
+    // (transition fraction + target), so the root evaluates it during its draw phase and
+    // never needs to recompose while the subview is dragged.
+    val subViewBlurProgressProvider = remember(upTransitionState) {
+        {
+            val raw = upTransitionState.progress().coerceIn(0f, 1f)
+            if (upTransitionState.targetState) {
+                (raw * PlayerDimens.subViewBlurRushFactor).coerceIn(0f, 1f)
+            } else {
+                raw * raw
+            }
+        }
     }
 
     val configuration = LocalConfiguration.current
@@ -319,39 +326,38 @@ fun FullPlayerScreen(
             val isProgrammaticCrossfadeActive = programmaticBackdropToPath != null &&
                     programmaticBackdropCrossfade.value < 1f
 
-            AlbumArtBackdrop(
-                frontArtPath = if (isProgrammaticCrossfadeActive) programmaticBackdropFromPath else state.queue.getOrNull(indexA)?.albumArtPath,
-                backArtPath = if (isProgrammaticCrossfadeActive) {
-                    programmaticBackdropToPath
-                } else if (playerTransitionState.currentState != playerTransitionState.targetState) {
-                    null
-                } else {
-                    state.queue.getOrNull(indexB)?.albumArtPath
-                },
-                crossfadeFraction = {
+            // The blurred backdrop itself is hosted at the very root of the hierarchy (see
+            // FoamNavigation and FullPlayerBackdropState): the same fillMaxSize box as the
+            // app-wide backdrop, so both crop the artwork identically and the open/close
+            // crossfade between them is seamless. Only the pager-driven state is produced
+            // here. SideEffect runs after apply and before the frame's draw, so the host
+            // never draws a stale frame.
+            SideEffect {
+                backdropState.frontArtPath =
                     if (isProgrammaticCrossfadeActive) {
+                        programmaticBackdropFromPath
+                    } else {
+                        state.queue.getOrNull(indexA)?.albumArtPath
+                    }
+                backdropState.backArtPath =
+                    if (isProgrammaticCrossfadeActive) {
+                        programmaticBackdropToPath
+                    } else if (playerTransitionState.currentState != playerTransitionState.targetState) {
+                        null
+                    } else {
+                        state.queue.getOrNull(indexB)?.albumArtPath
+                    }
+                backdropState.immersive = isImmersiveEnabled
+                backdropState.crossfadeFraction = {
+                    if (programmaticBackdropToPath != null && programmaticBackdropCrossfade.value < 1f) {
                         programmaticBackdropCrossfade.value
                     } else {
                         val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
                         (absoluteOffset - absoluteOffset.toInt()).coerceIn(0f, 1f)
                     }
-                },
-                immersive = isImmersiveEnabled,
-                subViewProgress = subViewBlurProgress,
-                dynamicBackgroundEnabled = settings.dynamicBackgroundEnabled,
-                backgroundBlur = settings.backgroundBlur.dp,
-                modifier = Modifier
-                    .extendBottom(backdropBottomExtension)
-                    .graphicsLayer { alpha = uiAlpha() },
-            )
-
-            Box(
-                modifier = Modifier
-                    .extendBottom(backdropBottomExtension)
-                    .fillMaxSize()
-                    .graphicsLayer { alpha = PlayerDimens.scrimMaxAlpha * subViewBlurProgress * uiAlpha() }
-                    .background(Color.Black)
-            )
+                }
+                backdropState.subViewBlurProgress = subViewBlurProgressProvider
+            }
 
             Column(
                 modifier = Modifier
