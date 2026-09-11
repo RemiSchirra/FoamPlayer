@@ -2,6 +2,10 @@ package com.foamplayer.app.ui.components
 
 import android.net.Uri
 import android.provider.DocumentsContract
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -20,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
@@ -79,18 +84,20 @@ fun rememberTrackFoamModalState(): TrackFoamModalState = remember { TrackFoamMod
 /**
  * Bottom sheet shown when the user long-presses a track. Layout, top to bottom:
  * - A header on a darker container: album art with the track title and its
- *   album underneath.
- * - Three side-by-side action buttons on a lighter container: "Next" (queue
- *   right after the current track), "Queue" (append to the end of the queue)
- *   and "Playlist" (add to a playlist).
- * - Two full-width navigation buttons on a lighter container: "See Artist"
- *   and "See Album".
- * - A final "Details" button.
+ *   album underneath. It stays mounted across page switches.
+ * - The actions page: three side-by-side buttons ("Next" = queue right after
+ *   the current track, "Queue" = append to the end of the main queue,
+ *   "Playlist" = add to a playlist), then "See Artist" / "See Album" rows and
+ *   a final "Details" button.
+ * - The details page: the one-line technical spec summary plus the full track
+ *   metadata (tags, file info), reached from the Details button with a
+ *   push-style slide — the header never leaves the composition, so the
+ *   transition reads as one continuous sheet; a Back button returns to the
+ *   actions.
  *
- * Every action dismisses the sheet before invoking its callback with the
- * long-pressed track; navigation-style callbacks (artist/album/details) can
- * safely push a new screen from there, and "Playlist" typically opens a
- * playlist picker on top.
+ * Every queue/navigation action dismisses the sheet before invoking its
+ * callback with the long-pressed track; artist/album can safely push a new
+ * screen from there, and "Playlist" typically opens a playlist picker on top.
  */
 @Composable
 fun TrackFoamModal(
@@ -100,7 +107,7 @@ fun TrackFoamModal(
     onAddToPlaylist: (TrackEntity) -> Unit = {},
     onSeeArtist: (TrackEntity) -> Unit = {},
     onSeeAlbum: (TrackEntity) -> Unit = {},
-    onDetails: (TrackEntity) -> Unit = {},
+    useAlbumArtAccent: Boolean = false,
     onDismiss: () -> Unit = { state.dismiss() }
 ) {
     // FoamBottomModal stays mounted while its exit animation plays, but state.track
@@ -111,6 +118,29 @@ fun TrackFoamModal(
         if (state.track != null) lastShownTrack = state.track
     }
     val displayTrack = state.track ?: lastShownTrack
+
+    // Accent for the shared header + details page: the viewed track's own album
+    // art color when the automatic-color setting is on, else the app accent.
+    val context = LocalContext.current
+    LaunchedEffect(useAlbumArtAccent, displayTrack?.albumArtPath) {
+        if (useAlbumArtAccent) {
+            AlbumArtPaletteCache.ensure(this, context, displayTrack?.albumArtPath)
+        }
+    }
+    val artAccent = if (useAlbumArtAccent) {
+        displayTrack?.albumArtPath?.let { AlbumArtPaletteCache.colors[it] }
+    } else {
+        null
+    }
+    val accentColor = artAccent ?: FoamTheme.accentColor
+
+    // Details is a second page of the SAME sheet (one Dialog window), so the
+    // header can genuinely persist across the switch instead of being cloned
+    // into another dialog. Reset when the sheet closes or changes track.
+    var showDetails by remember { mutableStateOf(false) }
+    LaunchedEffect(state.track) {
+        showDetails = false
+    }
 
     fun perform(action: (TrackEntity) -> Unit) {
         val current = state.track ?: return
@@ -127,65 +157,104 @@ fun TrackFoamModal(
                 modifier = Modifier.padding(bottom = FoamDimens.spacingSmall),
                 verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
             ) {
-                TrackModalHeader(track = displayTrack)
+                // Shared across both pages: it stays mounted while the content
+                // below it animates, so it reads as one continuous header.
+                TrackModalHeader(track = displayTrack, accentColor = accentColor)
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                        .background(FoamTheme.colors.surfaceVariant)
-                        .padding(
-                            horizontal = FoamDimens.paddingSmall,
-                            vertical = FoamDimens.spacingTiny
-                        )
-                ) {
-                    TrackModalActionButton(
-                        icon = FoamTheme.icons.current.next,
-                        label = "Next",
-                        onClick = { perform(onPlayNext) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    TrackModalActionButton(
-                        icon = FoamTheme.icons.current.queue,
-                        label = "Queue",
-                        onClick = { perform(onAddToQueue) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    TrackModalActionButton(
-                        icon = FoamTheme.icons.current.playlists,
-                        label = "Playlist",
-                        onClick = { perform(onAddToPlaylist) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                AnimatedContent(
+                    targetState = showDetails,
+                    transitionSpec = {
+                        if (targetState) {
+                            // Push: details slides in from the right...
+                            slideInHorizontally { it } togetherWith slideOutHorizontally { -it }
+                        } else {
+                            // ...pop: back to the actions.
+                            slideInHorizontally { -it } togetherWith slideOutHorizontally { it }
+                        }
+                    },
+                    label = "TrackModalPage"
+                ) { isDetails ->
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
+                    ) {
+                        if (isDetails) {
+                            BasicText(
+                                text = audioSummaryText(displayTrack),
+                                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
+                                modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
+                            )
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                        .background(FoamTheme.colors.surfaceVariant)
-                ) {
-                    TrackModalRowButton(
-                        label = "See Artist",
-                        onClick = { perform(onSeeArtist) }
-                    )
-                    ModalSectionDivider()
-                    TrackModalRowButton(
-                        label = "See Album",
-                        onClick = { perform(onSeeAlbum) }
-                    )
-                }
+                            TrackDetailsContent(track = displayTrack, accentColor = accentColor)
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                        .background(FoamTheme.colors.surfaceVariant)
-                ) {
-                    TrackModalRowButton(
-                        label = "Details",
-                        onClick = { perform(onDetails) }
-                    )
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                                    .background(FoamTheme.colors.surfaceVariant)
+                            ) {
+                                TrackModalBackButton(onBack = { showDetails = false })
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .padding(
+                                        horizontal = FoamDimens.paddingSmall,
+                                        vertical = FoamDimens.spacingTiny
+                                    )
+                            ) {
+                                TrackModalActionButton(
+                                    icon = FoamTheme.icons.current.next,
+                                    label = "Next",
+                                    onClick = { perform(onPlayNext) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TrackModalActionButton(
+                                    icon = FoamTheme.icons.current.queue,
+                                    label = "Queue",
+                                    onClick = { perform(onAddToQueue) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TrackModalActionButton(
+                                    icon = FoamTheme.icons.current.playlists,
+                                    label = "Playlist",
+                                    onClick = { perform(onAddToPlaylist) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                                    .background(FoamTheme.colors.surfaceVariant)
+                            ) {
+                                TrackModalRowButton(
+                                    label = "See Artist",
+                                    onClick = { perform(onSeeArtist) }
+                                )
+                                ModalSectionDivider()
+                                TrackModalRowButton(
+                                    label = "See Album",
+                                    onClick = { perform(onSeeAlbum) }
+                                )
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                                    .background(FoamTheme.colors.surfaceVariant)
+                            ) {
+                                TrackModalRowButton(
+                                    label = "Details",
+                                    onClick = { showDetails = true }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -415,9 +484,11 @@ private fun TrackModalRowButton(
 }
 
 /**
- * Full metadata sheet for a track, opened from the "Details" button of
- * [TrackFoamModal]. Same visual language: the track header on a darker
- * container, then grouped label/value sections on lighter containers.
+ * Full metadata sheet for a track. Also embedded as the second page of
+ * [TrackFoamModal] (see its details button), where the header persists across
+ * the switch; this standalone hosting is kept for direct use.
+ * Same visual language: the track header on a darker container, then grouped
+ * label/value sections on lighter containers.
  */
 @Composable
 fun TrackDetailsModal(
@@ -462,42 +533,78 @@ fun TrackDetailsModal(
             ) {
                 TrackModalHeader(track = displayTrack, accentColor = accentColor)
 
-                val audioSummary = listOf(
-                    TimeUtils.formatDurationLong(displayTrack.duration),
-                    formatSampleRate(displayTrack.sampleRate),
-                    "${displayTrack.bitDepth} bit",
-                    channelsLabel(displayTrack.channels),
-                    displayTrack.bitrate.takeIf { it > 0 }?.let { "$it kbps" },
-                    formatFileSize(displayTrack.size).takeIf { displayTrack.size > 0 }
-                ).filterNotNull().joinToString("  ·  ")
-
                 BasicText(
-                    text = audioSummary,
+                    text = audioSummaryText(displayTrack),
                     style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
                     modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
                 )
 
-                DetailsSection(title = "Tags", accentColor = accentColor) {
-                    DetailRow("Track number", displayTrack.trackNumber?.toString())
-                    DetailRow("Disc number", displayTrack.discNumber?.toString())
-                    DetailRow("Year", displayTrack.year?.toString())
-                    DetailRow("Genre", displayTrack.genre)
-                    DetailRow("Artist", displayTrack.artist)
-                    DetailRow("Album artist", displayTrack.albumArtist)
-                    DetailRow("Album", displayTrack.album)
-                    DetailRow("Composer", displayTrack.composer)
-                }
-
-                DetailsSection(title = "File", accentColor = accentColor) {
-                    DetailStackedValue("File path", simplifiedDisplayPath(displayTrack.path), accentColor)
-                    DetailRow("Format", displayTrack.format)
-                    DetailRow(
-                        "Album art",
-                        if (displayTrack.albumArtPath != null) "Embedded in file" else null
-                    )
-                }
+                TrackDetailsContent(track = displayTrack, accentColor = accentColor)
             }
         }
+    }
+}
+
+/** The Tags + File sections shared by the standalone details modal and the details page of [TrackFoamModal]. */
+@Composable
+private fun TrackDetailsContent(track: TrackEntity, accentColor: Color) {
+    DetailsSection(title = "Tags", accentColor = accentColor) {
+        DetailRow("Track number", track.trackNumber?.toString())
+        DetailRow("Disc number", track.discNumber?.toString())
+        DetailRow("Year", track.year?.toString())
+        DetailRow("Genre", track.genre)
+        DetailRow("Artist", track.artist)
+        DetailRow("Album artist", track.albumArtist)
+        DetailRow("Album", track.album)
+        DetailRow("Composer", track.composer)
+    }
+
+    DetailsSection(title = "File", accentColor = accentColor) {
+        DetailStackedValue("File path", simplifiedDisplayPath(track.path), accentColor)
+        DetailRow("Format", track.format)
+        DetailRow(
+            "Album art",
+            if (track.albumArtPath != null) "Embedded in file" else null
+        )
+    }
+}
+
+private fun audioSummaryText(track: TrackEntity): String = listOf(
+    TimeUtils.formatDurationLong(track.duration),
+    formatSampleRate(track.sampleRate),
+    "${track.bitDepth} bit",
+    channelsLabel(track.channels),
+    track.bitrate.takeIf { it > 0 }?.let { "$it kbps" },
+    formatFileSize(track.size).takeIf { track.size > 0 }
+).filterNotNull().joinToString("  ·  ")
+
+/** Row button with a leading back arrow, used to return from the details page. */
+@Composable
+private fun TrackModalBackButton(onBack: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onBack
+            )
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.paddingSmall),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+            contentDescription = null,
+            tint = FoamTheme.colors.textSecondary,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
+        BasicText(
+            text = "Back",
+            style = FoamTheme.typography.titleMedium
+        )
     }
 }
 
