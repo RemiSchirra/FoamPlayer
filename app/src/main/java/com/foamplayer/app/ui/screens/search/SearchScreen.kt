@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -75,6 +76,7 @@ private data class BrowseCardData(
     val onClick: () -> Unit
 )
 
+private val AllTracksCardColor = Color(0xFF4DB6AC)
 private val AlbumCardColor = Color(0xFFEF5350)
 private val FolderCardColor = Color(0xFFFFB300)
 private val GenreCardColor = Color(0xFF00E676)
@@ -143,6 +145,7 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
 fun SearchScreen(
     onArtistClick: (String) -> Unit,
     onAlbumClick: (AlbumSearchResult) -> Unit,
+    onBrowseAllTracks: () -> Unit,
     onBrowseAlbums: () -> Unit,
     onBrowseFolders: () -> Unit,
     onBrowseGenres: () -> Unit,
@@ -309,6 +312,7 @@ fun SearchScreen(
                 // Idle: browse cards into the library list screens
                 else -> {
                     val browseCards = listOf(
+                        BrowseCardData("All tracks", AllTracksCardColor, Icons.Rounded.MusicNote, onBrowseAllTracks),
                         BrowseCardData("Albums", AlbumCardColor, Icons.Rounded.Album, onBrowseAlbums),
                         BrowseCardData("Folders", FolderCardColor, Icons.Rounded.Folder, onBrowseFolders),
                         BrowseCardData("Genres", GenreCardColor, Icons.Rounded.Category, onBrowseGenres),

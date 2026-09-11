@@ -68,6 +68,7 @@ import com.foamplayer.app.ui.components.TrackFoamModal
 import com.foamplayer.app.ui.components.rememberTrackFoamModalState
 import com.foamplayer.app.ui.screens.equalizer.EqualizerScreen
 import com.foamplayer.app.ui.screens.browse.AlbumsBrowseScreen
+import com.foamplayer.app.ui.screens.browse.AllTracksBrowseScreen
 import com.foamplayer.app.ui.screens.browse.ArtistsBrowseScreen
 import com.foamplayer.app.ui.screens.browse.FolderBrowseScreen
 import com.foamplayer.app.ui.screens.browse.GenresBrowseScreen
@@ -568,6 +569,7 @@ fun FoamNavHost(
                                                     )
                                                 )
                                             },
+                                            onBrowseAllTracks = { navController.navigate(Screen.BrowseAllTracks.route) },
                                             onBrowseAlbums = { navController.navigate(Screen.BrowseAlbums.route) },
                                             onBrowseFolders = { navController.navigate(Screen.BrowseFolders.createRoute()) },
                                             onBrowseGenres = { navController.navigate(Screen.BrowseGenres.route) },
@@ -595,6 +597,15 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this
+                                        )
+                                    }
+                                    composable(Screen.BrowseAllTracks.route) {
+                                        AllTracksBrowseScreen(
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index)
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            activeTrackId = playbackState.currentTrack?.id
                                         )
                                     }
                                     composable(Screen.BrowseArtists.route) {

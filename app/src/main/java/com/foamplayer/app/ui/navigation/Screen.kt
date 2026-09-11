@@ -35,6 +35,7 @@ sealed class Screen(val route: String, val title: String) {
     }
 
     object BrowseAlbums : Screen("browse/albums", "Albums")
+    object BrowseAllTracks : Screen("browse/tracks", "All Tracks")
     object BrowseArtists : Screen("browse/artists", "Artists")
     object BrowseGenres : Screen("browse/genres", "Genres")
     object BrowseYears : Screen("browse/years", "Years")

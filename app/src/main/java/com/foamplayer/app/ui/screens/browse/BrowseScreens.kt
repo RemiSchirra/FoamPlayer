@@ -141,6 +141,25 @@ fun YearsBrowseScreen(
 }
 
 @Composable
+fun AllTracksBrowseScreen(
+    onTrackClick: (List<TrackEntity>, Int) -> Unit,
+    onBack: () -> Unit,
+    activeTrackId: Long?,
+    viewModel: BrowseViewModel = hiltViewModel()
+) {
+    val tracks by viewModel.allTracks.collectAsState()
+
+    TrackListScreen(
+        title = "All Tracks",
+        tracks = tracks,
+        onTrackClick = onTrackClick,
+        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+        onBack = onBack,
+        activeTrackId = activeTrackId
+    )
+}
+
+@Composable
 fun GenreTracksScreen(
     genre: String,
     onTrackClick: (List<TrackEntity>, Int) -> Unit,

@@ -41,6 +41,9 @@ class BrowseViewModel @Inject constructor(
     val albums: StateFlow<List<AlbumSearchResult>> = trackRepository.getAllAlbums()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allTracks: StateFlow<List<TrackEntity>> = trackRepository.getAllTracks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val artists: StateFlow<List<String>> = trackRepository.getAllArtists()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
