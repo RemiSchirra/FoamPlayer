@@ -1,11 +1,14 @@
 package com.foamplayer.app.ui.components
 
+import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,9 +33,11 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -41,7 +47,10 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
+import com.foamplayer.app.ui.utils.TimeUtils
 import androidx.core.net.toUri
+import java.util.Locale
 
 /**
  * Holds the track currently shown in a [TrackFoamModal]. A screen owns one of
@@ -276,7 +285,8 @@ private fun ModalSectionDivider() {
 @Composable
 private fun TrackModalHeader(
     track: TrackEntity,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    accentColor: Color = FoamTheme.accentColor
 ) {
     Row(
         modifier = modifier
@@ -310,7 +320,7 @@ private fun TrackModalHeader(
             } else {
                 BasicText(
                     text = track.format,
-                    style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor)
+                    style = FoamTheme.typography.caption.copy(color = accentColor)
                 )
             }
         }
@@ -401,5 +411,241 @@ private fun TrackModalRowButton(
             tint = FoamTheme.colors.textSecondary,
             modifier = Modifier.size(20.dp)
         )
+    }
+}
+
+/**
+ * Full metadata sheet for a track, opened from the "Details" button of
+ * [TrackFoamModal]. Same visual language: the track header on a darker
+ * container, then grouped label/value sections on lighter containers.
+ */
+@Composable
+fun TrackDetailsModal(
+    track: TrackEntity?,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    useAlbumArtAccent: Boolean = false
+) {
+    // Same exit-animation preservation as the other modals in this file.
+    var lastShownTrack by remember { mutableStateOf<TrackEntity?>(null) }
+    SideEffect {
+        if (track != null) lastShownTrack = track
+    }
+    val displayTrack = track ?: lastShownTrack
+
+    // Accent texts take the color of the VIEWED track's own album art (when the
+    // automatic-color setting is on), not the playing track's dynamic accent.
+    // Extraction runs through the shared palette cache; until it lands -- or when
+    // the setting is off -- the app accent is used instead.
+    val context = LocalContext.current
+    LaunchedEffect(useAlbumArtAccent, displayTrack?.albumArtPath) {
+        if (useAlbumArtAccent) {
+            AlbumArtPaletteCache.ensure(this, context, displayTrack?.albumArtPath)
+        }
+    }
+    val artAccent = if (useAlbumArtAccent) {
+        displayTrack?.albumArtPath?.let { AlbumArtPaletteCache.colors[it] }
+    } else {
+        null
+    }
+    val accentColor = artAccent ?: FoamTheme.accentColor
+
+    FoamBottomModal(
+        visible = track != null,
+        onDismissRequest = onDismiss,
+        modifier = modifier
+    ) {
+        if (displayTrack != null) {
+            Column(
+                modifier = Modifier.padding(bottom = FoamDimens.spacingSmall),
+                verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
+            ) {
+                TrackModalHeader(track = displayTrack, accentColor = accentColor)
+
+                val audioSummary = listOf(
+                    TimeUtils.formatDurationLong(displayTrack.duration),
+                    formatSampleRate(displayTrack.sampleRate),
+                    "${displayTrack.bitDepth} bit",
+                    channelsLabel(displayTrack.channels),
+                    displayTrack.bitrate.takeIf { it > 0 }?.let { "$it kbps" },
+                    formatFileSize(displayTrack.size).takeIf { displayTrack.size > 0 }
+                ).filterNotNull().joinToString("  ·  ")
+
+                BasicText(
+                    text = audioSummary,
+                    style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
+                    modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
+                )
+
+                DetailsSection(title = "Tags", accentColor = accentColor) {
+                    DetailRow("Track number", displayTrack.trackNumber?.toString())
+                    DetailRow("Disc number", displayTrack.discNumber?.toString())
+                    DetailRow("Year", displayTrack.year?.toString())
+                    DetailRow("Genre", displayTrack.genre)
+                    DetailRow("Artist", displayTrack.artist)
+                    DetailRow("Album artist", displayTrack.albumArtist)
+                    DetailRow("Album", displayTrack.album)
+                    DetailRow("Composer", displayTrack.composer)
+                }
+
+                DetailsSection(title = "File", accentColor = accentColor) {
+                    DetailStackedValue("File path", simplifiedDisplayPath(displayTrack.path), accentColor)
+                    DetailRow("Format", displayTrack.format)
+                    DetailRow(
+                        "Album art",
+                        if (displayTrack.albumArtPath != null) "Embedded in file" else null
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailsSection(
+    title: String,
+    accentColor: Color,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(FoamDimens.itemRounding))
+            .background(FoamTheme.colors.surfaceVariant)
+            .padding(vertical = FoamDimens.spacingTiny)
+    ) {
+        BasicText(
+            text = title,
+            style = FoamTheme.typography.caption.copy(color = accentColor),
+            modifier = Modifier.padding(
+                horizontal = FoamDimens.paddingMedium,
+                vertical = FoamDimens.spacingTiny
+            )
+        )
+        content()
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String?) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingTiny),
+        verticalAlignment = Alignment.Top
+    ) {
+        BasicText(
+            text = label,
+            style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
+        BasicText(
+            text = value.takeUnless { it.isNullOrBlank() } ?: "—",
+            style = FoamTheme.typography.body.copy(
+                color = FoamTheme.colors.textPrimary,
+                textAlign = TextAlign.End
+            ),
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+/** Label above the value, for long content (file paths) that should wrap freely. */
+@Composable
+private fun DetailStackedValue(
+    label: String,
+    value: String,
+    accentColor: Color = FoamTheme.accentColor
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingTiny)
+    ) {
+        BasicText(
+            text = label,
+            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
+        )
+        Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
+        BasicText(
+            text = value,
+            style = FoamTheme.typography.monospace.copy(color = accentColor)
+        )
+    }
+}
+
+private fun channelsLabel(channels: Int): String = when (channels) {
+    1 -> "Mono"
+    2 -> "Stereo"
+    else -> "$channels channels"
+}
+
+private fun formatSampleRate(hz: Int): String {
+    val khz = hz / 1000.0
+    val value = if (khz % 1.0 == 0.0) {
+        String.format(Locale.getDefault(), "%.0f", khz)
+    } else {
+        String.format(Locale.getDefault(), "%.1f", khz)
+    }
+    return "$value kHz"
+}
+
+/**
+ * Turns the stored playback URI into a short, readable path that starts at the
+ * scanned folder, e.g. "library/subfolder/name of the song.mp3".
+ *
+ * SAF content URIs carry the scanned tree root and the document id as separate
+ * segments (".../tree/primary%3AMusic/document/primary%3AMusic%2FSub%2Fsong.mp3");
+ * pulling both through DocumentsContract decodes the %2F/%3A/%20 escapes, and the
+ * document path is then made relative to the tree and prefixed with the scanned
+ * folder's own name. Legacy file:// paths are decoded and trimmed of
+ * device-specific storage prefixes. Falls back to the raw path on any surprise.
+ */
+private fun simplifiedDisplayPath(path: String): String {
+    return runCatching {
+        val uri = Uri.parse(path)
+        when (uri.scheme) {
+            "content" -> {
+                val docPath = DocumentsContract.getDocumentId(uri)
+                    .substringAfter(':')
+                    .trimStart('/')
+                val treePath = runCatching { DocumentsContract.getTreeDocumentId(uri) }
+                    .getOrNull()
+                    ?.substringAfter(':')
+                    ?.trimStart('/')
+                val treeName = treePath?.substringAfterLast('/')
+
+                val relative = when {
+                    treePath.isNullOrEmpty() -> docPath
+                    docPath.startsWith("$treePath/") -> docPath.removePrefix("$treePath/")
+                    else -> docPath.substringAfterLast('/')
+                }
+
+                listOfNotNull(
+                    treeName?.takeIf { it.isNotBlank() },
+                    relative.takeIf { it.isNotBlank() }
+                ).joinToString("/").ifEmpty { path }
+            }
+            "file" -> {
+                val decoded = Uri.decode(uri.path ?: return@runCatching path)
+                decoded
+                    .replace(Regex("^/storage/emulated/\\d+/"), "")
+                    .removePrefix("/sdcard/")
+                    .trimStart('/')
+                    .ifEmpty { path }
+            }
+            else -> Uri.decode(path)
+        }
+    }.getOrDefault(path)
+}
+
+private fun formatFileSize(bytes: Long): String {
+    if (bytes <= 0L) return "—"
+    val mb = bytes / (1024.0 * 1024.0)
+    return if (mb >= 1.0) {
+        String.format(Locale.getDefault(), "%.1f MB", mb)
+    } else {
+        String.format(Locale.getDefault(), "%.0f KB", bytes / 1024.0)
     }
 }

@@ -9,6 +9,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.InputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -140,6 +144,8 @@ class LocalAudioScanner @Inject constructor(
         var albumArtPath: String? = null
         var trackNumber: Int? = null
         var discNumber: Int? = null
+        var composer: String? = null
+        var year: Int? = null
 
         try {
             context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
@@ -162,8 +168,36 @@ class LocalAudioScanner @Inject constructor(
                 sampleRate = it
             }
 
-            if (fileName.lowercase().let { it.endsWith(".flac") || it.endsWith(".wav") }) {
-                bitDepth = 24
+            // Real reported bit depth when the container provides one (FLAC, WAV...),
+            // falling back to the extension guess for lossy/unreported formats.
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITS_PER_SAMPLE)
+                ?.toIntOrNull()?.takeIf { it > 0 }?.let { bitDepth = it }
+                ?: run {
+                    if (fileName.lowercase().let { it.endsWith(".flac") || it.endsWith(".wav") }) {
+                        bitDepth = 24
+                    }
+                }
+
+            composer = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER)
+                ?.trim()?.takeIf { it.isNotEmpty() }
+            // YEAR is not always populated: FLAC/ID3v2.4 files often only carry a
+            // DATE tag ("2021" or full "2021-03-04"), so fall back to it and pick
+            // the first 4-digit group.
+            year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)?.toIntOrNull()
+                ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE)
+                    ?.yearPart()
+
+            // The platform FLAC extractor maps only a subset of the Vorbis comment
+            // fields, so DATE/YEAR may never surface through MediaMetadataRetriever
+            // at all. Read the VORBIS_COMMENT block straight from the file as a
+            // last resort.
+            if (year == null && fileName.lowercase().endsWith(".flac")) {
+                readFlacVorbisComments(uri)?.let { comments ->
+                    year = comments["DATE"]?.yearPart()
+                        ?: comments["YEAR"]?.yearPart()
+                        ?: comments["ORIGINALDATE"]?.yearPart()
+                        ?: comments["ORIGINALYEAR"]?.yearPart()
+                }
             }
 
             // Tag values can be "3" or "3/12" — keep only the number before the slash.
@@ -196,7 +230,8 @@ class LocalAudioScanner @Inject constructor(
             album = album,
             albumArtist = processedAlbumArtist,
             genre = processedGenre,
-            year = null,
+            composer = composer,
+            year = year,
             trackNumber = trackNumber,
             discNumber = discNumber,
             duration = duration,
@@ -243,5 +278,91 @@ class LocalAudioScanner @Inject constructor(
         )
     }
 
+    /**
+     * Reads a FLAC file's VORBIS_COMMENT metadata block directly. The platform
+     * extractor only surfaces a subset of the comment fields through
+     * MediaMetadataRetriever, so tags like DATE/YEAR/COMMENT may otherwise be
+     * invisible. Returns an empty map when the stream isn't a FLAC file or can't
+     * be parsed; never throws.
+     */
+    private fun readFlacVorbisComments(uri: Uri): Map<String, String>? = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val magic = ByteArray(4)
+            if (!readFully(input, magic) || !magic.decodeToString(0, 4).startsWith("fLaC")) {
+                return@use null
+            }
+
+            val blockHeader = ByteArray(4)
+            while (readFully(input, blockHeader)) {
+                val isLastBlock = (blockHeader[0].toInt() and 0x80) != 0
+                val blockType = blockHeader[0].toInt() and 0x7F
+                val blockLength = ((blockHeader[1].toInt() and 0xFF) shl 16) or
+                        ((blockHeader[2].toInt() and 0xFF) shl 8) or
+                        (blockHeader[3].toInt() and 0xFF)
+
+                if (blockType == 4) { // VORBIS_COMMENT
+                    val data = ByteArray(blockLength)
+                    if (!readFully(input, data)) return@use null
+                    return@use parseVorbisComments(data)
+                }
+                if (isLastBlock || !skipFully(input, blockLength.toLong())) return@use null
+            }
+            null
+        }
+    }.getOrNull()
+
+    private fun parseVorbisComments(data: ByteArray): Map<String, String> {
+        val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+        val comments = mutableMapOf<String, String>()
+
+        fun readUtf8(): String? {
+            if (buffer.remaining() < 4) return null
+            val length = buffer.int
+            if (length < 0 || length > buffer.remaining()) return null
+            val bytes = ByteArray(length)
+            buffer.get(bytes)
+            return String(bytes, Charsets.UTF_8)
+        }
+
+        readUtf8() // vendor string, unused
+        val count = if (buffer.remaining() >= 4) buffer.int else 0
+        repeat(count.coerceIn(0, 1024)) {
+            val comment = readUtf8() ?: return comments
+            val separator = comment.indexOf('=')
+            if (separator > 0) {
+                comments[comment.substring(0, separator).uppercase(Locale.US)] =
+                    comment.substring(separator + 1)
+            }
+        }
+        return comments
+    }
+
+    private fun readFully(input: InputStream, buffer: ByteArray): Boolean {
+        var read = 0
+        while (read < buffer.size) {
+            val count = input.read(buffer, read, buffer.size - read)
+            if (count < 0) return false
+            read += count
+        }
+        return true
+    }
+
+    /** Read-and-discard skip: SAF streams often don't support InputStream.skip. */
+    private fun skipFully(input: InputStream, count: Long): Boolean {
+        var remaining = count
+        val buffer = ByteArray(8192)
+        while (remaining > 0) {
+            val read = input.read(buffer, 0, minOf(remaining, buffer.size.toLong()).toInt())
+            if (read < 0) return false
+            remaining -= read
+        }
+        return true
+    }
+
     suspend fun scanDeviceAudioFiles(): List<TrackEntity> = emptyList()
 }
+
+/** First 4-digit group not glued to other digits: "2021" or "2021-03-04" -> 2021. */
+private val YearRegex = Regex("""(?<!\d)\d{4}(?!\d)""")
+
+private fun String.yearPart(): Int? = YearRegex.find(this)?.value?.toIntOrNull()

@@ -63,6 +63,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.MiniPlayer
 import com.foamplayer.app.ui.components.PlaylistPickerModal
+import com.foamplayer.app.ui.components.TrackDetailsModal
 import com.foamplayer.app.ui.components.TrackFoamModal
 import com.foamplayer.app.ui.components.rememberTrackFoamModalState
 import com.foamplayer.app.ui.screens.equalizer.EqualizerScreen
@@ -172,6 +173,7 @@ fun FoamNavHost(
     // opens the picker, which holds the pending track until a playlist is picked.
     val trackModalState = rememberTrackFoamModalState()
     var playlistPickerTrack by remember { mutableStateOf<TrackEntity?>(null) }
+    var detailsTrack by remember { mutableStateOf<TrackEntity?>(null) }
 
     val playbackState by playerViewModel.playbackState.collectAsState()
     val playerSettings by playerViewModel.settings.collectAsState()
@@ -792,7 +794,13 @@ fun FoamNavHost(
                         Screen.AlbumDetail.createRoute(track.album, track.albumArtPath, track.artist)
                     )
                 },
-                onDetails = { /* TODO: dedicated details sheet */ }
+                onDetails = { track -> detailsTrack = track }
+            )
+
+            TrackDetailsModal(
+                track = detailsTrack,
+                onDismiss = { detailsTrack = null },
+                useAlbumArtAccent = playerSettings.automaticColorEnabled
             )
 
             PlaylistPickerModal(
