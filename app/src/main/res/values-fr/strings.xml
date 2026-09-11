@@ -56,6 +56,21 @@
     <string name="player_desc">Mise en page et visuels</string>
     <string name="background">Arrière-plan</string>
     <string name="background_desc">Effets d\'arrière-plan dynamiques</string>
+    <string name="navigation_bar">Barre de navigation</string>
+    <string name="navbar_desc">Disposition et transparence de la barre</string>
+    <string name="navbar_mode">Mode de la barre</string>
+    <string name="navbar_mode_desc">Choisissez l\'apparence de la navigation basse</string>
+    <string name="navbar_mode_docked">Ancrée</string>
+    <string name="navbar_mode_floating">Flottante</string>
+    <string name="navbar_mode_attached">Attachée</string>
+    <string name="transparency">Transparence</string>
+    <string name="transparent_when_player_open">Transparent quand le lecteur est ouvert</string>
+    <string name="transparent_when_player_open_desc">Rendre l\'arrière-plan de la barre de navigation transparent quand le lecteur complet est ouvert</string>
+    <string name="navbar_main_bar">Barre principale</string>
+    <string name="navbar_main_bar_desc">Faites glisser pour réordonner et afficher ou masquer les éléments</string>
+    <string name="navbar_second_bar">Barre secondaire</string>
+    <string name="navbar_second_bar_desc">Affichée au-dessus de la barre principale quand vous touchez Plus</string>
+    <string name="navbar_item_more">Plus</string>
 
     <string name="engine_settings">Paramètres du moteur</string>
     <string name="bit_perfect_output">Sortie Bit-Perfect</string>

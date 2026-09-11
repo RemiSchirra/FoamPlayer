@@ -1,6 +1,9 @@
 package com.foamplayer.app.data.settings
 
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
+import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
+import com.foamplayer.app.constants.DefaultNavBarScreenItems
+import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
 
@@ -32,20 +35,53 @@ data class AppSettings(
     val searchHistory: List<String> = emptyList(),
     val language: String = "auto",
     val navigationBarMode: NavigationBarMode = NavigationBarMode.ATTACHED,
-    val navBarTransparentWhenPlayerOpen: Boolean = false
+    val navBarTransparentWhenPlayerOpen: Boolean = false,
+    val navBarPrimaryOrder: List<NavBarItem> = DefaultNavBarPrimaryOrder,
+    val navBarPrimaryEnabled: Set<NavBarItem> = DefaultNavBarScreenItems.toSet(),
+    val navBarSecondaryOrder: List<NavBarItem> = DefaultNavBarScreenItems,
+    val navBarSecondaryEnabled: Set<NavBarItem> = emptySet()
 ) {
-    fun sanitized(): AppSettings = copy(
-        libraryFolders = libraryFolders.map(String::trim).filter(String::isNotEmpty).toSet(),
-        miniPlayerRounding = miniPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
-        fullPlayerRounding = fullPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
-        backgroundBlur = backgroundBlur.coerceIn(MIN_BACKGROUND_BLUR, MAX_BACKGROUND_BLUR),
-        dynamicBackgroundIntensity = dynamicBackgroundIntensity.coerceIn(
-            MIN_DYNAMIC_BACKGROUND_INTENSITY,
-            MAX_DYNAMIC_BACKGROUND_INTENSITY
-        ),
-        artistSeparators = artistSeparators.normalizedSeparators(),
-        genreSeparators = genreSeparators.normalizedSeparators()
-    )
+    /**
+     * Items of the main bar, in the user's configured order. Includes the [NavBarItem.MORE]
+     * positional marker (the toggle itself is only rendered while the second bar is non-empty).
+     */
+    val primaryNavBarItems: List<NavBarItem>
+        get() = navBarPrimaryOrder.filter { it == NavBarItem.MORE || it in navBarPrimaryEnabled }
+
+    /** Enabled items of the second bar (the row the "more" button reveals). */
+    val secondaryNavBarItems: List<NavBarItem> get() = navBarSecondaryOrder.filter { it in navBarSecondaryEnabled }
+
+    fun sanitized(): AppSettings {
+        // The "more" toggle is never a switchable item; its visibility is derived
+        // from the second bar's content.
+        val primaryEnabled = navBarPrimaryEnabled.filter { it in DefaultNavBarScreenItems }.toSet()
+        val secondaryEnabled = navBarSecondaryEnabled.filter { it in DefaultNavBarScreenItems }.toSet()
+
+        // The settings entry must exist in at least one of the two bars.
+        val finalPrimaryEnabled =
+            if (NavBarItem.SETTINGS in primaryEnabled || NavBarItem.SETTINGS in secondaryEnabled) {
+                primaryEnabled
+            } else {
+                primaryEnabled + NavBarItem.SETTINGS
+            }
+
+        return copy(
+            libraryFolders = libraryFolders.map(String::trim).filter(String::isNotEmpty).toSet(),
+            miniPlayerRounding = miniPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
+            fullPlayerRounding = fullPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
+            backgroundBlur = backgroundBlur.coerceIn(MIN_BACKGROUND_BLUR, MAX_BACKGROUND_BLUR),
+            dynamicBackgroundIntensity = dynamicBackgroundIntensity.coerceIn(
+                MIN_DYNAMIC_BACKGROUND_INTENSITY,
+                MAX_DYNAMIC_BACKGROUND_INTENSITY
+            ),
+            artistSeparators = artistSeparators.normalizedSeparators(),
+            genreSeparators = genreSeparators.normalizedSeparators(),
+            navBarPrimaryOrder = normalizedNavBarOrder(navBarPrimaryOrder, DefaultNavBarPrimaryOrder),
+            navBarPrimaryEnabled = finalPrimaryEnabled,
+            navBarSecondaryOrder = normalizedNavBarOrder(navBarSecondaryOrder, DefaultNavBarScreenItems),
+            navBarSecondaryEnabled = secondaryEnabled
+        )
+    }
 
     companion object {
         // 0xFFFF5252 (the app's existing default red) as a signed ARGB Int.
@@ -64,3 +100,9 @@ data class AppSettings(
 
 private fun Set<String>.normalizedSeparators(): Set<String> =
     map(String::trim).filter(String::isNotEmpty).toSet().ifEmpty { AppSettings.DEFAULT_SEPARATORS }
+
+/** Completes a stored nav-bar order so it contains every [allowed] item exactly once. */
+private fun normalizedNavBarOrder(order: List<NavBarItem>, allowed: List<NavBarItem>): List<NavBarItem> {
+    val parsed = order.filter { it in allowed }.distinct()
+    return parsed + allowed.filterNot { it in parsed }
+}

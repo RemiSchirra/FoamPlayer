@@ -37,12 +37,13 @@ private const val SETTLE_DURATION_MS = 200
 @Composable
 fun rememberDragDropListState(
     lazyListState: LazyListState,
+    canMove: (fromIndex: Int, toIndex: Int) -> Boolean = { _, _ -> true },
     onMove: (fromIndex: Int, toIndex: Int) -> Unit
 ): DragDropListState {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     return remember(lazyListState) {
-        DragDropListState(lazyListState, scope, density, onMove)
+        DragDropListState(lazyListState, scope, density, canMove, onMove)
     }
 }
 
@@ -60,6 +61,7 @@ class DragDropListState(
     private val lazyListState: LazyListState,
     private val scope: CoroutineScope,
     private val density: Density,
+    private val canMove: (Int, Int) -> Boolean,
     private val onMove: (Int, Int) -> Unit
 ) {
     private data class ItemSnapshot(val index: Int, val offset: Int, val size: Int)
@@ -169,7 +171,7 @@ class DragDropListState(
             draggedCenter >= info.offset && draggedCenter <= info.offset + info.size
         }
         val fromIndex = draggedIndex
-        if (target != null && fromIndex != null && target.index != fromIndex) {
+        if (target != null && fromIndex != null && target.index != fromIndex && canMove(fromIndex, target.index)) {
             // 1. Record the current scroll position before the list mutates
             val firstIndex = lazyListState.firstVisibleItemIndex
             val firstOffset = lazyListState.firstVisibleItemScrollOffset

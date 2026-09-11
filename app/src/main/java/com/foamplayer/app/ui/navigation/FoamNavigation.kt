@@ -286,6 +286,11 @@ fun FoamNavHost(
             LaunchedEffect(isPlayerOpen) {
                 if (isPlayerOpen) isNavBarExpanded = false
             }
+            // The second bar disappeared (user disabled its last item): fold the row away
+            // and drop the "more" toggle, which is hidden while the second bar is empty.
+            LaunchedEffect(playerSettings.secondaryNavBarItems) {
+                if (playerSettings.secondaryNavBarItems.isEmpty()) isNavBarExpanded = false
+            }
             // Back button folds the extra row away before leaving the app.
             BackHandler(enabled = isNavBarExpanded) { isNavBarExpanded = false }
 
@@ -603,6 +608,8 @@ fun FoamNavHost(
                                 currentRoute = currentRoute,
                                 isPlayerOpen = isPlayerOpen,
                                 onNavigate = handleNavBarNavigation,
+                                primaryItems = playerSettings.primaryNavBarItems,
+                                secondaryItems = playerSettings.secondaryNavBarItems,
                                 connectToMiniPlayer = playbackState.currentTrack != null,
                                 expandFraction = navBarExpandFraction,
                                 onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }
@@ -615,6 +622,8 @@ fun FoamNavHost(
                                 currentRoute = currentRoute,
                                 isPlayerOpen = isPlayerOpen,
                                 onNavigate = handleNavBarNavigation,
+                                primaryItems = playerSettings.primaryNavBarItems,
+                                secondaryItems = playerSettings.secondaryNavBarItems,
                                 attachedToMiniPlayer = false,
                                 connectToMiniPlayer = playbackState.currentTrack != null,
                                 playerOpenFraction = playerOpenFraction,
@@ -633,6 +642,8 @@ fun FoamNavHost(
                                 currentRoute = currentRoute,
                                 isPlayerOpen = isPlayerOpen,
                                 onNavigate = handleNavBarNavigation,
+                                primaryItems = playerSettings.primaryNavBarItems,
+                                secondaryItems = playerSettings.secondaryNavBarItems,
                                 attachedToMiniPlayer = true,
                                 connectToMiniPlayer = playbackState.currentTrack != null,
                                 playerOpenFraction = playerOpenFraction,

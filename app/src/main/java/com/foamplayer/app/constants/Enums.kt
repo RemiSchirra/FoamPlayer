@@ -368,3 +368,49 @@ enum class NavigationBarMode {
     FLOATING,
     ATTACHED
 }
+
+/**
+ * An item that can be placed in one of the two navigation bars.
+ *
+ * [MORE] is a positional marker for the "more" toggle: it is only valid inside
+ * the *primary* bar order and is rendered as the expand button (never navigates),
+ * and only while the second bar is non-empty.
+ */
+enum class NavBarItem {
+    LIBRARY,
+    PLAYLISTS,
+    SEARCH,
+    EQUALIZER,
+    SETTINGS,
+    MORE,
+}
+
+/** The nav items that open a screen; [NavBarItem.MORE] is not one of them. */
+val DefaultNavBarScreenItems =
+    listOf(
+        NavBarItem.LIBRARY,
+        NavBarItem.PLAYLISTS,
+        NavBarItem.SEARCH,
+        NavBarItem.EQUALIZER,
+        NavBarItem.SETTINGS,
+    )
+
+/** Default layout of the main bar: the screen items, with the "more" toggle last. */
+val DefaultNavBarPrimaryOrder = DefaultNavBarScreenItems + NavBarItem.MORE
+
+/**
+ * Parses a stored, comma-separated [NavBarItem] order string. Unknown or missing
+ * entries are appended in their default position so the list always contains
+ * every [allowed] item exactly once.
+ */
+fun deserializeNavBarItemOrder(orderStr: String?, allowed: List<NavBarItem>): List<NavBarItem> {
+    if (orderStr.isNullOrBlank()) return allowed
+
+    val parsed =
+        orderStr
+            .split(",")
+            .mapNotNull { name -> allowed.find { it.name == name.trim() } }
+            .distinct()
+
+    return parsed + allowed.filterNot { it in parsed }
+}

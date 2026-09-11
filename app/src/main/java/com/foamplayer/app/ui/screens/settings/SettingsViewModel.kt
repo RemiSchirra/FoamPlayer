@@ -2,6 +2,7 @@ package com.foamplayer.app.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.data.repository.SettingsRepository
@@ -73,6 +74,30 @@ class SettingsViewModel @Inject constructor(
 
     fun setNavBarTransparentWhenPlayerOpen(enabled: Boolean) = launch {
         settingsRepository.setNavBarTransparentWhenPlayerOpen(enabled)
+    }
+
+    fun setNavBarPrimaryOrder(order: List<NavBarItem>) = launch {
+        settingsRepository.setNavBarPrimaryOrder(order)
+    }
+
+    fun setNavBarPrimaryItemEnabled(item: NavBarItem, enabled: Boolean) = launch {
+        val current = settings.value
+        // Settings must exist in at least one of the two bars.
+        if (item == NavBarItem.SETTINGS && !enabled && item !in current.navBarSecondaryEnabled) return@launch
+        val newEnabled = if (enabled) current.navBarPrimaryEnabled + item else current.navBarPrimaryEnabled - item
+        settingsRepository.setNavBarPrimaryEnabled(newEnabled)
+    }
+
+    fun setNavBarSecondaryOrder(order: List<NavBarItem>) = launch {
+        settingsRepository.setNavBarSecondaryOrder(order)
+    }
+
+    fun setNavBarSecondaryItemEnabled(item: NavBarItem, enabled: Boolean) = launch {
+        val current = settings.value
+        // Settings must exist in at least one of the two bars.
+        if (item == NavBarItem.SETTINGS && !enabled && item !in current.navBarPrimaryEnabled) return@launch
+        val newEnabled = if (enabled) current.navBarSecondaryEnabled + item else current.navBarSecondaryEnabled - item
+        settingsRepository.setNavBarSecondaryEnabled(newEnabled)
     }
 
     private fun launch(block: suspend () -> Unit) {

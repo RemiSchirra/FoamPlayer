@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.times
+import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -241,75 +242,91 @@ private fun FoamNavItem(
     }
 }
 
+/** The main-bar screen an editable [NavBarItem] points to. */
+private fun NavBarItem.targetScreen(): Screen = when (this) {
+    NavBarItem.LIBRARY -> Screen.Library
+    NavBarItem.PLAYLISTS -> Screen.Playlists
+    NavBarItem.SEARCH -> Screen.Search
+    NavBarItem.EQUALIZER -> Screen.Equalizer
+    NavBarItem.SETTINGS -> Screen.Settings
+    // Unreachable: MORE is rendered as the expand toggle and never navigates.
+    NavBarItem.MORE -> Screen.Settings
+}
+
+@Composable
+private fun NavBarItem.icon(): ImageVector = when (this) {
+    NavBarItem.LIBRARY -> FoamTheme.icons.current.library
+    NavBarItem.PLAYLISTS -> FoamTheme.icons.current.playlists
+    NavBarItem.SEARCH -> FoamTheme.icons.current.search
+    NavBarItem.EQUALIZER -> FoamTheme.icons.current.equalizer
+    NavBarItem.SETTINGS -> FoamTheme.icons.current.settings
+    NavBarItem.MORE -> FoamTheme.icons.current.more
+}
+
 /**
  * Row of clickable icons for the nav bar.
- * [showExpandToggle] appends the menu button that expands/collapses the extra row.
+ * [items] is the user-configured main-bar layout, in display order, including the
+ * [NavBarItem.MORE] marker which renders the expand toggle at its configured slot.
+ * Callers pass showExpandToggle = false while the second bar is empty, which hides
+ * the toggle entirely (wherever it sits in the order).
  */
 @Composable
 private fun FoamNavigationItems(
     currentRoute: String?,
     isPlayerOpen: Boolean,
     onNavigate: (String) -> Unit,
+    items: List<NavBarItem>,
     showExpandToggle: Boolean = false,
     expandFraction: Float = 0f,
     onToggleExpand: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val items = listOf(
-        Screen.Library,
-        Screen.Playlists,
-        Screen.Search,
-        Screen.Equalizer,
-        Screen.Settings
-    )
-
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        items.forEach { screen ->
-            val selected = !isPlayerOpen && (
-                    currentRoute == screen.route ||
-                            (screen == Screen.Settings && currentRoute?.startsWith("settings/") == true)
+        items.forEach { item ->
+            if (item == NavBarItem.MORE) {
+                if (showExpandToggle) {
+                    FoamNavItem(
+                        icon = FoamTheme.icons.current.more,
+                        contentDescription = if (expandFraction > 0.5f) "Collapse navigation" else "Expand navigation",
+                        selected = false,
+                        iconModifier = Modifier.rotate(expandFraction * 90f),
+                        onClick = onToggleExpand
                     )
+                }
+            } else {
+                val screen = item.targetScreen()
+                val selected = !isPlayerOpen && (
+                        currentRoute == screen.route ||
+                                (screen == Screen.Settings && currentRoute?.startsWith("settings/") == true)
+                        )
 
-            val icon = when (screen) {
-                Screen.Library -> FoamTheme.icons.current.library
-                Screen.Playlists -> FoamTheme.icons.current.playlists
-                Screen.Search -> FoamTheme.icons.current.search
-                Screen.Equalizer -> FoamTheme.icons.current.equalizer
-                Screen.Settings -> FoamTheme.icons.current.settings
-                else -> FoamTheme.icons.current.settings
+                FoamNavItem(
+                    icon = item.icon(),
+                    contentDescription = screen.title,
+                    selected = selected,
+                    onClick = { onNavigate(screen.route) }
+                )
             }
-
-            FoamNavItem(
-                icon = icon,
-                contentDescription = screen.title,
-                selected = selected,
-                onClick = { onNavigate(screen.route) }
-            )
-        }
-
-        if (showExpandToggle) {
-            FoamNavItem(
-                icon = FoamTheme.icons.current.more,
-                contentDescription = if (expandFraction > 0.5f) "Collapse navigation" else "Expand navigation",
-                selected = false,
-                iconModifier = Modifier.rotate(expandFraction * 90f),
-                onClick = onToggleExpand
-            )
         }
     }
 }
 
 /**
  * Secondary row revealed above the main row while the bar is expanded.
+ * [items] are the user-configured entries of the second bar, in display order.
  * [expandFraction] (0f..1f) drives both the height and the content alpha so the
  * row smoothly grows out of the bar.
  */
 @Composable
 private fun FoamNavExtraRow(
+    items: List<NavBarItem>,
+    currentRoute: String?,
+    isPlayerOpen: Boolean,
+    onNavigate: (String) -> Unit,
     expandFraction: Float,
     modifier: Modifier = Modifier
 ) {
@@ -325,19 +342,19 @@ private fun FoamNavExtraRow(
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // TODO: replace these placeholders with real actions/screens.
-        val placeholderItems = listOf(
-            FoamTheme.icons.current.search to "Placeholder action 1",
-            FoamTheme.icons.current.library to "Placeholder action 2",
-            FoamTheme.icons.current.equalizer to "Placeholder action 3"
-        )
-        placeholderItems.forEach { (icon, description) ->
+        items.forEach { item ->
+            val screen = item.targetScreen()
+            val selected = !isPlayerOpen && (
+                    currentRoute == screen.route ||
+                            (screen == Screen.Settings && currentRoute?.startsWith("settings/") == true)
+                    )
+
             FoamNavItem(
-                icon = icon,
-                contentDescription = description,
-                selected = false,
+                icon = item.icon(),
+                contentDescription = screen.title,
+                selected = selected,
                 hitPadding = NavBarDimens.ExtraRowItemHitPadding,
-                onClick = { /* TODO: wire up placeholder action */ }
+                onClick = { onNavigate(screen.route) }
             )
         }
     }
@@ -351,6 +368,8 @@ fun FoamNavigationBar(
     currentRoute: String?,
     isPlayerOpen: Boolean,
     onNavigate: (String) -> Unit,
+    primaryItems: List<NavBarItem>,
+    secondaryItems: List<NavBarItem>,
     connectToMiniPlayer: Boolean = false,
     expandFraction: Float = 0f,
     onToggleExpand: () -> Unit = {}
@@ -388,6 +407,10 @@ fun FoamNavigationBar(
                 }
         ) {
             FoamNavExtraRow(
+                items = secondaryItems,
+                currentRoute = currentRoute,
+                isPlayerOpen = isPlayerOpen,
+                onNavigate = onNavigate,
                 expandFraction = expandFraction,
                 modifier = Modifier.offset(y = NavBarDimens.extraRowBottomOverlap(NavBarDimens.DockedBarHeight))
             )
@@ -396,7 +419,8 @@ fun FoamNavigationBar(
                 currentRoute = currentRoute,
                 isPlayerOpen = isPlayerOpen,
                 onNavigate = onNavigate,
-                showExpandToggle = true,
+                items = primaryItems,
+                showExpandToggle = secondaryItems.isNotEmpty(),
                 expandFraction = expandFraction,
                 onToggleExpand = onToggleExpand,
                 modifier = Modifier
@@ -416,6 +440,8 @@ internal fun FloatingNavigationBar(
     currentRoute: String?,
     isPlayerOpen: Boolean,
     onNavigate: (String) -> Unit,
+    primaryItems: List<NavBarItem>,
+    secondaryItems: List<NavBarItem>,
     attachedToMiniPlayer: Boolean = false,
     connectToMiniPlayer: Boolean = false,
     playerOpenFraction: () -> Float = { 0f },
@@ -465,6 +491,10 @@ internal fun FloatingNavigationBar(
                 }
         ) {
             FoamNavExtraRow(
+                items = secondaryItems,
+                currentRoute = currentRoute,
+                isPlayerOpen = isPlayerOpen,
+                onNavigate = onNavigate,
                 expandFraction = expandFraction,
                 modifier = Modifier.offset(y = NavBarDimens.extraRowBottomOverlap(NavBarDimens.FloatingRowHeight))
             )
@@ -473,7 +503,8 @@ internal fun FloatingNavigationBar(
                 currentRoute = currentRoute,
                 isPlayerOpen = isPlayerOpen,
                 onNavigate = onNavigate,
-                showExpandToggle = true,
+                items = primaryItems,
+                showExpandToggle = secondaryItems.isNotEmpty(),
                 expandFraction = expandFraction,
                 onToggleExpand = onToggleExpand,
                 modifier = Modifier

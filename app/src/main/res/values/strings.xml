@@ -66,6 +66,11 @@
     <string name="transparency">Transparency</string>
     <string name="transparent_when_player_open">Transparent when player open</string>
     <string name="transparent_when_player_open_desc">Make the navigation bar background transparent when the full player is open</string>
+    <string name="navbar_main_bar">Main Bar</string>
+    <string name="navbar_main_bar_desc">Drag to reorder and show or hide items</string>
+    <string name="navbar_second_bar">Second Bar</string>
+    <string name="navbar_second_bar_desc">Shown above the main bar when you tap More</string>
+    <string name="navbar_item_more">More</string>
 
     <string name="engine_settings">Engine Settings</string>
     <string name="bit_perfect_output">Bit-Perfect Output</string>

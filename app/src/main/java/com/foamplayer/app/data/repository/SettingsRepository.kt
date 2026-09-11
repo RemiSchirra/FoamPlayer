@@ -9,9 +9,13 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
+import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
+import com.foamplayer.app.constants.DefaultNavBarScreenItems
+import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.constants.deserializeLyricsProviderOrder
+import com.foamplayer.app.constants.deserializeNavBarItemOrder
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.FoamIconStyle
 import java.io.IOException
@@ -74,6 +78,22 @@ class SettingsRepository @Inject constructor(
         it.copy(navBarTransparentWhenPlayerOpen = enabled)
     }
 
+    suspend fun setNavBarPrimaryOrder(order: List<NavBarItem>) = update {
+        it.copy(navBarPrimaryOrder = order)
+    }
+
+    suspend fun setNavBarPrimaryEnabled(enabled: Set<NavBarItem>) = update {
+        it.copy(navBarPrimaryEnabled = enabled)
+    }
+
+    suspend fun setNavBarSecondaryOrder(order: List<NavBarItem>) = update {
+        it.copy(navBarSecondaryOrder = order)
+    }
+
+    suspend fun setNavBarSecondaryEnabled(enabled: Set<NavBarItem>) = update {
+        it.copy(navBarSecondaryEnabled = enabled)
+    }
+
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
@@ -102,7 +122,15 @@ class SettingsRepository @Inject constructor(
         navigationBarMode = this[Keys.NAVIGATION_BAR_MODE]
             ?.let { runCatching { NavigationBarMode.valueOf(it) }.getOrNull() }
             ?: AppSettings().navigationBarMode,
-        navBarTransparentWhenPlayerOpen = this[Keys.NAVBAR_TRANSPARENT_PLAYER_OPEN] ?: AppSettings().navBarTransparentWhenPlayerOpen
+        navBarTransparentWhenPlayerOpen = this[Keys.NAVBAR_TRANSPARENT_PLAYER_OPEN] ?: AppSettings().navBarTransparentWhenPlayerOpen,
+        navBarPrimaryOrder = deserializeNavBarItemOrder(this[Keys.NAVBAR_PRIMARY_ORDER], DefaultNavBarPrimaryOrder),
+        navBarPrimaryEnabled = this[Keys.NAVBAR_PRIMARY_ENABLED]
+            ?.mapNotNull { name -> NavBarItem.entries.find { it.name == name } }
+            ?.toSet() ?: AppSettings().navBarPrimaryEnabled,
+        navBarSecondaryOrder = deserializeNavBarItemOrder(this[Keys.NAVBAR_SECONDARY_ORDER], DefaultNavBarScreenItems),
+        navBarSecondaryEnabled = this[Keys.NAVBAR_SECONDARY_ENABLED]
+            ?.mapNotNull { name -> NavBarItem.entries.find { it.name == name } }
+            ?.toSet() ?: AppSettings().navBarSecondaryEnabled
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -127,6 +155,10 @@ class SettingsRepository @Inject constructor(
         this[Keys.LANGUAGE] = settings.language
         this[Keys.NAVIGATION_BAR_MODE] = settings.navigationBarMode.name
         this[Keys.NAVBAR_TRANSPARENT_PLAYER_OPEN] = settings.navBarTransparentWhenPlayerOpen
+        this[Keys.NAVBAR_PRIMARY_ORDER] = settings.navBarPrimaryOrder.joinToString(",") { it.name }
+        this[Keys.NAVBAR_PRIMARY_ENABLED] = settings.navBarPrimaryEnabled.map { it.name }.toSet()
+        this[Keys.NAVBAR_SECONDARY_ORDER] = settings.navBarSecondaryOrder.joinToString(",") { it.name }
+        this[Keys.NAVBAR_SECONDARY_ENABLED] = settings.navBarSecondaryEnabled.map { it.name }.toSet()
     }
 
     private object Keys {
@@ -151,5 +183,9 @@ class SettingsRepository @Inject constructor(
         val LANGUAGE = stringPreferencesKey("language")
         val NAVIGATION_BAR_MODE = stringPreferencesKey("navigation_bar_mode")
         val NAVBAR_TRANSPARENT_PLAYER_OPEN = booleanPreferencesKey("navbar_transparent_player_open")
+        val NAVBAR_PRIMARY_ORDER = stringPreferencesKey("navbar_primary_order")
+        val NAVBAR_PRIMARY_ENABLED = stringSetPreferencesKey("navbar_primary_enabled")
+        val NAVBAR_SECONDARY_ORDER = stringPreferencesKey("navbar_secondary_order")
+        val NAVBAR_SECONDARY_ENABLED = stringSetPreferencesKey("navbar_secondary_enabled")
     }
 }
