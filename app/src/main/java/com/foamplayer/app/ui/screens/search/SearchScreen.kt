@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,8 +43,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
@@ -90,24 +93,50 @@ private fun Color.lightened(factor: Float): Color =
 
 @Composable
 private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) {
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(card.color.copy(alpha = 0.5f))
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        card.color.copy(alpha = 0.4f),
+                        card.color.copy(alpha = 0.2f)
+                    )
+                )
+            )
             .clickable { card.onClick() }
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = card.icon,
+                contentDescription = null,
+                tint = card.color.lightened(0.1f).copy(alpha = 0.65f),
+                modifier = Modifier.size(44.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            BasicText(text = card.title, style = FoamTheme.typography.titleMedium)
+        }
         Icon(
             imageVector = card.icon,
             contentDescription = null,
-            tint = card.color.lightened(0.1f).copy(alpha = 0.65f),
-            modifier = Modifier.size(44.dp)
+            tint = card.color.lightened(0.1f).copy(alpha = 0.3f),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .offset(x = 0.dp, y = 4.dp)
+                .size(44.dp)
+                .graphicsLayer {
+                    scaleX = 2f
+                    scaleY = 2f
+                    rotationZ = -20f
+                }
         )
-        Spacer(modifier = Modifier.width(12.dp))
-        BasicText(text = card.title, style = FoamTheme.typography.titleMedium)
     }
 }
 
