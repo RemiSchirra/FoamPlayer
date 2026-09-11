@@ -101,7 +101,111 @@ import kotlinx.coroutines.launch
 const val SharedElementTransitionDurationMs = 350
 val SharedElementEasing = FastOutSlowInEasing
 
-private fun navigationBarContentHeight(): Dp = 72.dp
+/** Longest a programmatic mini<->full player transition may take (scales with remaining distance). */
+private const val PlayerTransitionMaxDurationMs = 500
+
+/** Fade duration for non-shared-element screen-to-screen navigation. */
+private const val NavScreenFadeDurationMs = 400
+
+/** Settings subscreens slide by a fraction of their width when pushed/popped. */
+private const val SettingsSlideDivisor = 3
+
+/**
+ * Single source of truth for nav-bar / mini-player geometry.
+ *
+ * Replaces the scattered literals this file used to have (a 72dp fake "content height",
+ * a hardcoded `64.dp + 24.dp` docked backdrop extension, a `6f.dp` strip, 56dp/12dp/
+ * 44dp/3.5f in the floating bar, and the TODO'd `navBarContentHeight - 12.dp - 12.dp`
+ * mini-player offset). Values that depend on each other are derived here, so they can
+ * never drift apart again.
+ */
+object NavBarDimens {
+
+    // ---- Docked bar -----------------------------------------------------------
+    /** The icon row itself. */
+    val DockedRowHeight = 64.dp
+
+    /** Connector that joins the bar to the mini player card above it. */
+    val DockedConnector = 6.dp
+
+    /**
+     * The docked container's height in EVERY state: player open or closed, mini
+     * player present or not. The connector is folded into the container instead of
+     * being a separately-faded draw, so the visible height can never change anymore.
+     */
+    val DockedBarHeight = DockedRowHeight + DockedConnector
+
+    // ---- Floating / attached bar ----------------------------------------------
+    val FloatingRowHeight = 56.dp
+
+    /** Margin around the floating pill (horizontal and vertical). */
+    val FloatingBarMargin = 12.dp
+
+    /**
+     * Mini player artwork size the pill's corner radius hugs.
+     * Keep in sync with MiniPlayer.kt (and optionally reuse it there).
+     */
+    val MiniPlayerArtSize = 44.dp
+
+    /** How far the pill's corner radius grows past the artwork radius. */
+    val FloatingCornerOverhang = 8.dp
+
+    /** How far the attached pill stretches up toward the mini player when closed. */
+    const val AttachedConnectorGrowFactor = 3.5f
+
+    // ---- Mini player card placement --------------------------------------------
+    /** Gap between the card's bottom edge and the top of the docked bar. */
+    val DockedMiniPlayerGap = 2.dp
+
+    /** Gap between the card's bottom edge and the top of the floating pill. */
+    val FloatingMiniPlayerGap = 4.dp
+
+    /** How far the card is lowered into the bar in ATTACHED mode. */
+    val AttachedCardDrop = 24.dp
+
+    // ---- Player backdrop reach into the nav zone -------------------------------
+    /**
+     * Small slack so a one-frame desync between the inset read here and the bar's own
+     * inset read can never under-fill the fade during a drag.
+     */
+    val BackdropSyncBuffer = 4.dp
+
+    /**
+     * FLOATING/ATTACHED pills only cover part of the bottom zone, so the player
+     * backdrop gets a generously oversized buffer (far bigger than the real bars'
+     * height) and can never run out of fade mid-drag.
+     */
+    const val FloatingBackdropBufferFactor = 3f
+
+    // ---- Shared item metrics ---------------------------------------------------
+    val ItemIconSize = 24.dp
+    val ItemHitAreaPadding = 8.dp
+    val RowHorizontalPadding = 8.dp
+
+    /**
+     * Distance from the bottom of the screen (above the system nav-bar inset) to the
+     * mini player card's bottom edge, per mode. Resolves to the same values as the old
+     * literals (72dp / 72dp / 48dp) but is now derived from the bar geometry.
+     */
+    fun miniPlayerBottomPadding(mode: NavigationBarMode): Dp = when (mode) {
+        NavigationBarMode.ATTACHED -> DockedBarHeight + DockedMiniPlayerGap - AttachedCardDrop
+        NavigationBarMode.FLOATING -> FloatingRowHeight + FloatingBarMargin + FloatingMiniPlayerGap
+        else -> DockedBarHeight + DockedMiniPlayerGap
+    }
+
+    /**
+     * How far the full player's backdrop fade extends below the player content, into
+     * the nav zone.
+     *
+     * DOCKED: the bar is solid and paints above the backdrop (see FoamNavigationBar),
+     * so the fade only needs to cover the system inset plus a frame-sync buffer.
+     * FLOATING/ATTACHED: a large buffer keeps the fade continuous around the pills.
+     */
+    fun playerBackdropBottomExtension(mode: NavigationBarMode, bottomInset: Dp): Dp = when (mode) {
+        NavigationBarMode.DOCKED -> bottomInset + BackdropSyncBuffer
+        else -> bottomInset + (FloatingRowHeight + FloatingBarMargin * 2) * FloatingBackdropBufferFactor
+    }
+}
 
 private fun isSharedElementRoute(route: String?): Boolean {
     if (route == null) return false
@@ -164,6 +268,7 @@ fun FoamNavHost(
     val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
     val isDynamicBackgroundEnabled = playerSettings.dynamicBackgroundEnabled
     val navigationBarMode = playerSettings.navigationBarMode
+    // Still honored by FLOATING/ATTACHED; the docked bar ignores it (always solid).
     val navBarTransparentWhenPlayerOpen = playerSettings.navBarTransparentWhenPlayerOpen
 
     // Initialize the transition state based on whether the player should be open immediately
@@ -198,7 +303,7 @@ fun FoamNavHost(
             }
         }
         val remainingFraction = (if (targetIsFull) 1f - isOpenProgress else isOpenProgress).coerceIn(0f, 1f)
-        val dynamicDuration = (500 * remainingFraction).toInt().coerceAtLeast(1)
+        val dynamicDuration = (PlayerTransitionMaxDurationMs * remainingFraction).toInt().coerceAtLeast(1)
         tween(durationMillis = dynamicDuration, easing = EaseInOut)
     }
 
@@ -280,7 +385,6 @@ fun FoamNavHost(
                 remember { { _: String?, _: String?, _: Float -> } }
             }
 
-            // Alpha of the nav zone's black continuation of the player's backdrop fade.
             val isPlayerOpen = playerTransitionState.targetState
 
             // 0f..1f "how open is the player", read STRAIGHT off the SeekableTransitionState --
@@ -301,14 +405,21 @@ fun FoamNavHost(
                 }
             }
 
-            val navBarContentHeight = navigationBarContentHeight()
-
-            // Extends the full player background fade in the main navigation screen
+            // Extends the full player background fade into the bottom nav zone. All sizes
+            // come from NavBarDimens -- the single source of truth for nav-bar geometry --
+            // so this can never drift from the heights the bars themselves use.
+            //
+            // History: DOCKED used to hand the player a hardcoded inset + 64dp + 24dp so its
+            // fade could reach behind a TRANSPARENT docked bar. Docked bars are solid now
+            // (see FoamNavigationBar) and paint above the backdrop, so the fade only needs
+            // the system inset plus a small frame-sync buffer; FLOATING/ATTACHED keep a
+            // generous buffer because their pills cover only part of the zone.
             val navigationBarsBottomInsetPx = WindowInsets.navigationBars.getBottom(density)
             val playerBackdropBottomExtension = with(density) {
-                navigationBarsBottomInsetPx.toDp() +
-                        if (navigationBarMode == NavigationBarMode.DOCKED) 64.dp
-                        else navBarContentHeight * 3f
+                NavBarDimens.playerBackdropBottomExtension(
+                    mode = navigationBarMode,
+                    bottomInset = navigationBarsBottomInsetPx.toDp()
+                )
             }
 
             val handleNavBarNavigation: (String) -> Unit = { route ->
@@ -362,11 +473,11 @@ fun FoamNavHost(
                                         playerTransitionState.currentState -> EnterTransition.None
                                         isSettingsRoute(initialState.destination.route) &&
                                                 isSettingsRoute(targetState.destination.route) ->
-                                            slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) + fadeIn(animationSpec = tween(400))
+                                            slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                                         isSharedElementRoute(initialState.destination.route) ||
                                                 isSharedElementRoute(targetState.destination.route) ->
                                             fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
-                                        else -> fadeIn(animationSpec = tween(400))
+                                        else -> fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                                     }
                                 },
                                 exitTransition = {
@@ -374,11 +485,11 @@ fun FoamNavHost(
                                         playerTransitionState.currentState -> ExitTransition.None
                                         isSettingsRoute(initialState.destination.route) &&
                                                 isSettingsRoute(targetState.destination.route) ->
-                                            slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = tween()) + fadeOut(animationSpec = tween(400))
+                                            slideOutHorizontally(targetOffsetX = { -it / SettingsSlideDivisor }, animationSpec = tween()) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
                                         isSharedElementRoute(initialState.destination.route) ||
                                                 isSharedElementRoute(targetState.destination.route) ->
                                             fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
-                                        else -> fadeOut(animationSpec = tween(400))
+                                        else -> fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
                                     }
                                 },
                                 popEnterTransition = {
@@ -386,11 +497,11 @@ fun FoamNavHost(
                                         playerTransitionState.currentState -> EnterTransition.None
                                         isSettingsRoute(initialState.destination.route) &&
                                                 isSettingsRoute(targetState.destination.route) ->
-                                            slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = tween()) + fadeIn(animationSpec = tween(400))
+                                            slideInHorizontally(initialOffsetX = { -it / SettingsSlideDivisor }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                                         isSharedElementRoute(initialState.destination.route) ||
                                                 isSharedElementRoute(targetState.destination.route) ->
                                             fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
-                                        else -> fadeIn(animationSpec = tween(400))
+                                        else -> fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                                     }
                                 },
                                 popExitTransition = {
@@ -398,11 +509,11 @@ fun FoamNavHost(
                                         playerTransitionState.currentState -> ExitTransition.None
                                         isSettingsRoute(initialState.destination.route) &&
                                                 isSettingsRoute(targetState.destination.route) ->
-                                            slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) + fadeOut(animationSpec = tween(400))
+                                            slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
                                         isSharedElementRoute(initialState.destination.route) ||
                                                 isSharedElementRoute(targetState.destination.route) ->
                                             fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
-                                        else -> fadeOut(animationSpec = tween(400))
+                                        else -> fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
                                     }
                                 },
                                 sizeTransform = { SizeTransform(clip = false) }
@@ -578,24 +689,29 @@ fun FoamNavHost(
                             sharedTransitionScope = this@SharedTransitionLayout,
                             animatedVisibilityScope = this@AnimatedVisibility,
                             playerTransitionState = playerTransitionState,
-                            // >>> without this line the extension silently stays 0.dp <<<
+                            // Without this the backdrop's bottom extension silently stays 0.dp.
                             backdropBottomExtension = playerBackdropBottomExtension,
                             isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
                         )
                     }
-
                 }
 
                 Box(modifier = Modifier.fillMaxWidth()) {
                     when (navigationBarMode) {
-                        NavigationBarMode.DOCKED -> FoamNavigationBar(
-                            currentRoute = currentRoute,
-                            isPlayerOpen = isPlayerOpen,
-                            onNavigate = handleNavBarNavigation,
-                            connectToMiniPlayer = playbackState.currentTrack != null,
-                            playerOpenFraction = playerOpenFraction,
-                            navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen
-                        )
+                        NavigationBarMode.DOCKED -> Box(
+                            modifier = Modifier.fillMaxWidth().navigationBarsPadding()
+                        ) {
+                            // Docked bars are always solid: they ignore
+                            // navBarTransparentWhenPlayerOpen and never fade with the
+                            // player, so no playerOpenFraction is passed at all. The bar
+                            // draws ABOVE the player backdrop, so the fade can't cover it.
+                            FoamNavigationBar(
+                                currentRoute = currentRoute,
+                                isPlayerOpen = isPlayerOpen,
+                                onNavigate = handleNavBarNavigation,
+                                connectToMiniPlayer = playbackState.currentTrack != null
+                            )
+                        }
                         NavigationBarMode.FLOATING -> Box(
                             modifier = Modifier.fillMaxWidth().navigationBarsPadding()
                         ) {
@@ -627,16 +743,12 @@ fun FoamNavHost(
                         }
                     }
                 }
-
             }
 
-            // Lower the card when attached to the navigation bar
-            // TODO : maybe fix these hardcoded constants
-            val miniPlayerBottomPadding = if (navigationBarMode == NavigationBarMode.ATTACHED) {
-                navBarContentHeight - 12.dp - 12.dp
-            } else {
-                navBarContentHeight
-            }
+            // Mini player placement derives from NavBarDimens so it can never drift from
+            // the bar geometry it sits on (this replaces the old TODO'd pile of literals;
+            // values are unchanged: 72dp docked/floating, 48dp attached).
+            val miniPlayerBottomPadding = NavBarDimens.miniPlayerBottomPadding(navigationBarMode)
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -725,7 +837,7 @@ private fun FoamNavigationItems(
             Box(
                 modifier = Modifier
                     .clickable { onNavigate(screen.route) }
-                    .padding(8.dp),
+                    .padding(NavBarDimens.ItemHitAreaPadding),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -738,7 +850,7 @@ private fun FoamNavigationItems(
                         else -> FoamTheme.icons.current.settings
                     },
                     contentDescription = screen.title,
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(NavBarDimens.ItemIconSize),
                     tint = animatedTint
                 )
             }
@@ -754,37 +866,39 @@ fun FoamNavigationBar(
     currentRoute: String?,
     isPlayerOpen: Boolean,
     onNavigate: (String) -> Unit,
-    connectToMiniPlayer: Boolean = false,
-    playerOpenFraction: () -> Float = { 0f },
-    navBarTransparentWhenPlayerOpen: Boolean = false
+    connectToMiniPlayer: Boolean = false
 ) {
     val surfaceColor = FoamTheme.colors.surface
+    val density = LocalDensity.current
+    // The system's own bottom button/gesture bar sits in the inset directly below this
+    // container -- the caller applies that inset as invisible navigationBarsPadding
+    // outside this node (see FoamNavHost). Reading it here lets the fill extend all the
+    // way through it, so the OS bar reads as part of this docked container instead of
+    // showing whatever is drawn behind the whole screen (the album-art backdrop).
+    val navBarBottomInsetPx = WindowInsets.navigationBars.getBottom(density)
+
     FoamNavigationItems(
         currentRoute = currentRoute,
         isPlayerOpen = isPlayerOpen,
         onNavigate = onNavigate,
         modifier = Modifier
             .fillMaxWidth()
+            // Height locked BEFORE drawBehind (and before any insets are applied) so the
+            // visible container is exactly DockedBarHeight no matter what the system-bar
+            // insets or the player transition are doing. Insets are applied by the caller
+            // as invisible padding outside this node (see FoamNavHost).
+            .height(NavBarDimens.DockedBarHeight)
+            // One opaque fill from the container's top down through the system inset.
             .drawBehind {
-                val greyAlpha = if (isPlayerOpen && navBarTransparentWhenPlayerOpen) {
-                    1f - playerOpenFraction()
-                } else {
-                    1f
-                }
-                drawRect(surfaceColor, alpha = greyAlpha)
-                if (!isPlayerOpen && connectToMiniPlayer) {
-                    val stripPx = 6f.dp.toPx()
-                    drawRect(
-                        color = surfaceColor,
-                        topLeft = Offset(0f, -stripPx),
-                        size = androidx.compose.ui.geometry.Size(size.width, stripPx),
-                        alpha = greyAlpha
+                drawRect(
+                    color = surfaceColor,
+                    size = androidx.compose.ui.geometry.Size(
+                        width = size.width,
+                        height = size.height + navBarBottomInsetPx
                     )
-                }
+                )
             }
-            .navigationBarsPadding()
-            .height(64.dp)
-            .padding(horizontal = 8.dp)
+            .padding(horizontal = NavBarDimens.RowHorizontalPadding)
     )
 }
 
@@ -802,14 +916,17 @@ private fun FloatingNavigationBar(
     transitionAnimated: Boolean = true,
     navBarTransparentWhenPlayerOpen: Boolean = false
 ) {
-    val miniImageRadius = (44.dp / 2) * FoamTheme.shapes.miniPlayerRounding
-    val containerRadius = miniImageRadius + 8.dp
+    val miniImageRadius = (NavBarDimens.MiniPlayerArtSize / 2) * FoamTheme.shapes.miniPlayerRounding
+    val containerRadius = miniImageRadius + NavBarDimens.FloatingCornerOverhang
 
     val surfaceVariantColor = FoamTheme.colors.surfaceVariant
 
     val outerModifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 12.dp, vertical = 12.dp)
+        .padding(
+            horizontal = NavBarDimens.FloatingBarMargin,
+            vertical = NavBarDimens.FloatingBarMargin
+        )
 
     Box(modifier = outerModifier) {
         FoamNavigationItems(
@@ -818,16 +935,18 @@ private fun FloatingNavigationBar(
             onNavigate = onNavigate,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
+                .height(NavBarDimens.FloatingRowHeight)
                 .drawBehind {
                     val radiusPx = containerRadius.toPx()
                     val greyAlpha = if (isPlayerOpen && navBarTransparentWhenPlayerOpen) {
                         1f - playerOpenFraction()
                     } else 1f
 
-                    // extension now follows the finger exactly: full when closed, 0 when open
+                    // Attached: the pill stretches upward to wrap the mini player card
+                    // while the player is closed, following the drag 1:1; the stretch
+                    // collapses to 0 by the time the player is fully open.
                     val extensionPx = if (attachedToMiniPlayer && connectToMiniPlayer) {
-                        3.5f * radiusPx * (1f - playerOpenFraction())
+                        NavBarDimens.AttachedConnectorGrowFactor * radiusPx * (1f - playerOpenFraction())
                     } else 0f
 
                     drawRoundRect(
@@ -838,7 +957,7 @@ private fun FloatingNavigationBar(
                         alpha = greyAlpha
                     )
                 }
-                .padding(horizontal = 8.dp)
+                .padding(horizontal = NavBarDimens.RowHorizontalPadding)
         )
     }
 }
