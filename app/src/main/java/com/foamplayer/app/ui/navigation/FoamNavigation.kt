@@ -12,6 +12,7 @@ import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.Transition
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -274,6 +275,20 @@ fun FoamNavHost(
 
             val isPlayerOpen = playerTransitionState.targetState
 
+            // ---- Expandable nav-bar second row ------------------------------------------
+            var isNavBarExpanded by remember { mutableStateOf(false) }
+            val navBarExpandFraction by animateFloatAsState(
+                targetValue = if (isNavBarExpanded) 1f else 0f,
+                animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                label = "NavBarExpandFraction"
+            )
+            // The extra row is a browsing utility: fold it away whenever the full player opens.
+            LaunchedEffect(isPlayerOpen) {
+                if (isPlayerOpen) isNavBarExpanded = false
+            }
+            // Back button folds the extra row away before leaving the app.
+            BackHandler(enabled = isNavBarExpanded) { isNavBarExpanded = false }
+
             // 0f..1f "how open is the player", read STRAIGHT off the SeekableTransitionState --
             // the same value the open/close animation and the finger drag run on.
             // No independent spring, so it follows the finger 1:1 and matches the tween when
@@ -304,6 +319,8 @@ fun FoamNavHost(
             }
 
             val handleNavBarNavigation: (String) -> Unit = { route ->
+                // Navigating from the bar always folds the extra row away.
+                isNavBarExpanded = false
                 if (playerTransitionState.currentState || playerTransitionState.targetState) {
                     animatePlayerTransition(open = false)
                 }
@@ -586,7 +603,9 @@ fun FoamNavHost(
                                 currentRoute = currentRoute,
                                 isPlayerOpen = isPlayerOpen,
                                 onNavigate = handleNavBarNavigation,
-                                connectToMiniPlayer = playbackState.currentTrack != null
+                                connectToMiniPlayer = playbackState.currentTrack != null,
+                                expandFraction = navBarExpandFraction,
+                                onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }
                             )
                         }
                         NavigationBarMode.FLOATING -> Box(
@@ -600,7 +619,9 @@ fun FoamNavHost(
                                 connectToMiniPlayer = playbackState.currentTrack != null,
                                 playerOpenFraction = playerOpenFraction,
                                 transitionAnimated = isTransitionAnimated,
-                                navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen
+                                navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
+                                expandFraction = navBarExpandFraction,
+                                onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }
                             )
                         }
                         NavigationBarMode.ATTACHED -> Box(
@@ -615,7 +636,9 @@ fun FoamNavHost(
                                 attachedToMiniPlayer = true,
                                 connectToMiniPlayer = playbackState.currentTrack != null,
                                 playerOpenFraction = playerOpenFraction,
-                                navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen
+                                navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
+                                expandFraction = navBarExpandFraction,
+                                onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }
                             )
                         }
                     }
@@ -623,7 +646,10 @@ fun FoamNavHost(
             }
 
             // Mini player placement derives from NavBarDimens
-            val miniPlayerBottomPadding = NavBarDimens.miniPlayerBottomPadding(navigationBarMode)
+            val miniPlayerBottomPadding = NavBarDimens.miniPlayerBottomPadding(
+                mode = navigationBarMode,
+                expandFraction = navBarExpandFraction
+            )
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
