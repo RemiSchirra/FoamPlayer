@@ -29,11 +29,16 @@ import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
@@ -244,5 +249,76 @@ private fun SharedTransitionScope.MiniPlayerHeader(
             }
         }
         Icon(imageVector = Icons.Rounded.KeyboardArrowDown, contentDescription = stringResource(R.string.collapse), tint = FoamTheme.accentColor, modifier = Modifier.size(28.dp))
+    }
+}
+
+/**
+ * Isolated on purpose: `progress` is a lambda rather than a Float, read only where it's
+ * actually needed -- inside the graphicsLayer block (deferred, redraws without
+ * recomposing) and inside a derivedStateOf for the clickable-enabled gate (which only
+ * recomposes when it crosses the 0.01f threshold, not on every drag frame -- the same
+ * pattern TrackHeroPager's `showHero` uses). The caller hands this the same memoized
+ * lambda instance on every recomposition, so this whole composable is skipped most
+ * frames instead of re-running just to update an alpha value.
+ */
+@Composable
+internal fun MiniPlayPauseButton(
+    isPlaying: Boolean,
+    progress: () -> Float,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isEnabled by remember(progress) { derivedStateOf { progress() > PlayerDimens.visibilityEpsilon } }
+
+    Box(
+        modifier = modifier
+            .size(PlayerDimens.miniPlayButtonSize)
+            .graphicsLayer { alpha = progress() }
+            .clip(CircleShape)
+            .background(FoamTheme.accentColor)
+            .clickable(enabled = isEnabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
+            contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
+            tint = FoamTheme.colors.background,
+            modifier = Modifier.size(PlayerDimens.miniPlayIconSize)
+        )
+    }
+}
+
+
+/**
+ * Previous/Next flank of MiniPlayPauseButton in the subview's transport cluster.
+ * Same deferred-`progress` pattern as MiniPlayPauseButton: alpha lives inside the
+ * graphicsLayer block (redraws without recomposing) and clicks are gated on the
+ * cluster actually being visible; the caller hands this the same memoized lambda
+ * instance so the whole cluster is skipped most frames.
+ */
+@Composable
+internal fun MiniTransportButton(
+    icon: ImageVector,
+    contentDescription: String,
+    progress: () -> Float,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isEnabled by remember(progress) { derivedStateOf { progress() > PlayerDimens.visibilityEpsilon } }
+
+    Box(
+        modifier = modifier
+            .size(PlayerDimens.miniTransportButtonSize)
+            .graphicsLayer { alpha = progress() }
+            .clip(CircleShape)
+            .clickable(enabled = isEnabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = FoamTheme.colors.textPrimary,
+            modifier = Modifier.size(PlayerDimens.miniTransportIconSize)
+        )
     }
 }
