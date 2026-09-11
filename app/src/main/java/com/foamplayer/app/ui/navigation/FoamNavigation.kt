@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -108,6 +109,10 @@ private fun isSharedElementRoute(route: String?): Boolean {
 private fun isSettingsRoute(route: String?): Boolean {
     return route != null && (route == Screen.Settings.route || route.startsWith("settings/"))
 }
+
+/** Detail screens whose list background is drawn full-bleed at the root. */
+private fun isDetailListRoute(route: String?): Boolean =
+    route == Screen.AlbumDetail.route || route == Screen.PlaylistDetail.route
 
 @Composable
 private fun rememberAnimatedBackground(
@@ -273,6 +278,46 @@ fun FoamNavHost(
                 )
             } else {
                 remember { { _: String?, _: String?, _: Float -> } }
+            }
+
+            // Full-bleed backdrop for the detail list screens (album/playlist). Drawn here
+            // at the root, so it covers the status bar and the nav zone by construction --
+            // no overflow tricks that transition layers could clip. Its alpha tween runs in
+            // lock-step with the NavHost's screen fade (shared-element routes fade in 350ms,
+            // plain routes in 400ms), so the background fades with the list opening/closing.
+            // [lastListBackdropArtPath] keeps the art alive while the alpha fades back out.
+            var listBackdropArtPath by remember { mutableStateOf<String?>(null) }
+            var lastListBackdropArtPath by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(currentRoute) {
+                if (!isDetailListRoute(currentRoute)) listBackdropArtPath = null
+            }
+            val onListBackdropArt = { path: String? ->
+                if (path != null) lastListBackdropArtPath = path
+                listBackdropArtPath = path
+            }
+            val listBackdropAlpha by animateFloatAsState(
+                targetValue = if (listBackdropArtPath != null) 1f else 0f,
+                animationSpec = tween(
+                    durationMillis = if (currentRoute == Screen.AlbumDetail.route) {
+                        SharedElementTransitionDurationMs
+                    } else {
+                        NavScreenFadeDurationMs
+                    }
+                ),
+                label = "listBackdropAlpha"
+            )
+            val listBackdropDisplayPath = listBackdropArtPath ?: lastListBackdropArtPath
+            if (listBackdropDisplayPath != null && listBackdropAlpha > 0f) {
+                DynamicAlbumArtBackground(
+                    frontArtPath = listBackdropDisplayPath,
+                    backArtPath = null,
+                    crossfadeFraction = 0f,
+                    blur = playerSettings.backgroundBlur.dp,
+                    intensity = playerSettings.dynamicBackgroundIntensity / 100f,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = listBackdropAlpha }
+                )
             }
 
             val isPlayerOpen = playerTransitionState.targetState
@@ -550,7 +595,8 @@ fun FoamNavHost(
                                         animatedVisibilityScope = this,
                                         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                         sharedTrackId = trackListTransitionTrackId,
-                                        activeTrackId = playbackState.currentTrack?.id
+                                        activeTrackId = playbackState.currentTrack?.id,
+                                        onListBackdropArt = onListBackdropArt
                                     )
                                 }
                                 composable(
@@ -568,7 +614,8 @@ fun FoamNavHost(
                                         animatedVisibilityScope = this,
                                         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                         sharedTrackId = trackListTransitionTrackId,
-                                        activeTrackId = playbackState.currentTrack?.id
+                                        activeTrackId = playbackState.currentTrack?.id,
+                                        onListBackdropArt = onListBackdropArt
                                     )
                                 }
                             }

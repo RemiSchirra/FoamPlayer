@@ -38,7 +38,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -51,7 +50,6 @@ import androidx.core.net.toUri
 import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.screens.library.TrackListItem
-import com.foamplayer.app.ui.screens.player.DynamicAlbumArtBackground
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 import com.foamplayer.app.ui.utils.extractPaletteColor
@@ -78,10 +76,6 @@ val AlbumArtBoundsTransform = BoundsTransform { _, _ ->
     tween(durationMillis = SharedElementTransitionDurationMs, easing = SharedElementEasing)
 }
 
-// Uses the list image cover if true
-// TODO: hardcoded for now
-private const val SHOW_CUSTOM_BACKGROUND = true
-
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun TrackListScreen(
@@ -98,25 +92,12 @@ fun TrackListScreen(
     sharedElementKey: String? = null,
     sharedTrackId: Long? = null,
     activeTrackId: Long? = null,
-    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
-    // TODO : use the background blur app settings
-    backgroundBlur: Dp = 30.dp,
-    backgroundIntensity: Float = 0.5f
+    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (SHOW_CUSTOM_BACKGROUND) {
-            DynamicAlbumArtBackground(
-                frontArtPath = imageUrl,
-                backArtPath = null,
-                crossfadeFraction = 0f,
-                blur = backgroundBlur,
-                intensity = backgroundIntensity,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
         Column(modifier = Modifier.fillMaxSize()) {
             // Top Bar
             Row(

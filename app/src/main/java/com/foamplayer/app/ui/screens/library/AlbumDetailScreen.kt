@@ -22,6 +22,7 @@ fun AlbumDetailScreen(
     playerTransitionVisibilityScope: AnimatedVisibilityScope,
     sharedTrackId: Long?,
     activeTrackId: Long?,
+    onListBackdropArt: (String?) -> Unit = {},
     initialImageUrl: String? = null,
     initialArtistName: String? = null,
     viewModel: AlbumDetailViewModel = hiltViewModel()
@@ -35,6 +36,10 @@ fun AlbumDetailScreen(
     val firstTrack = tracks.firstOrNull()
     val imageUrl = initialImageUrl ?: firstTrack?.albumArtPath
     val artistName = firstTrack?.albumArtist ?: firstTrack?.artist ?: initialArtistName
+
+    LaunchedEffect(imageUrl) {
+        onListBackdropArt(imageUrl)
+    }
 
     TrackListScreen(
         title = albumName,

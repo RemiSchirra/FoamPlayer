@@ -22,6 +22,7 @@ fun PlaylistDetailScreen(
     playerTransitionVisibilityScope: AnimatedVisibilityScope,
     sharedTrackId: Long?,
     activeTrackId: Long?,
+    onListBackdropArt: (String?) -> Unit = {},
     viewModel: PlaylistDetailViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.tracks.collectAsState()
@@ -29,6 +30,10 @@ fun PlaylistDetailScreen(
 
     LaunchedEffect(playlistId) {
         viewModel.loadPlaylist(playlistId)
+    }
+
+    LaunchedEffect(tracks) {
+        onListBackdropArt(tracks.firstOrNull { it.albumArtPath != null }?.albumArtPath)
     }
 
     TrackListScreen(
