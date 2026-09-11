@@ -33,7 +33,7 @@ interface TrackDao {
     """)
     fun searchAlbums(query: String): Flow<List<AlbumSearchResult>>
 
-    @Query("SELECT * FROM tracks WHERE album = :album ORDER BY trackNumber ASC, title ASC")
+    @Query("SELECT * FROM tracks WHERE album = :album ORDER BY discNumber ASC, trackNumber ASC, title ASC")
     fun getTracksByAlbum(album: String): Flow<List<TrackEntity>>
 
     @Query("""
