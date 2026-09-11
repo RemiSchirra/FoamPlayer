@@ -21,6 +21,13 @@ interface PlaylistDao {
     suspend fun addTrackToPlaylist(crossRef: PlaylistTrackCrossRef)
 
     @Query("""
+        SELECT COALESCE(MAX(orderIndex), -1) + 1 
+        FROM playlist_track_cross_ref 
+        WHERE playlistId = :playlistId
+    """)
+    suspend fun nextOrderIndex(playlistId: Long): Int
+
+    @Query("""
         SELECT t.* FROM tracks t 
         INNER JOIN playlist_track_cross_ref ref ON t.id = ref.trackId 
         WHERE ref.playlistId = :playlistId 

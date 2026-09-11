@@ -7,7 +7,9 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -58,6 +60,7 @@ import coil.request.ImageRequest
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.LocalTrackFoamModalState
 import com.foamplayer.app.ui.theme.FoamTheme
 import androidx.core.net.toUri
 import kotlin.math.abs
@@ -97,12 +100,13 @@ private const val SwipeDismissDurationMs = 150
 /** Duration of the spring-back animation when the swipe is cancelled. */
 private const val SwipeReturnDurationMs = 200
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun TrackListItem(
     track: TrackEntity,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
     active: Boolean = false,
     auxiliary: Boolean = false,
     showDragHandle: Boolean = false,
@@ -150,6 +154,18 @@ fun TrackListItem(
     val interactionSource = remember { MutableInteractionSource() }
 
     val dragHandleInteractionSource = remember { MutableInteractionSource() }
+
+    // Long-press opens the track actions modal when FoamNavHost provides one at
+    // the root; an explicit [onLongClick] always wins over that default.
+    val trackModalState = LocalTrackFoamModalState.current
+    val resolvedOnLongClick: (() -> Unit)? = when {
+        onLongClick != null -> onLongClick
+        trackModalState != null -> {
+            val openModal: () -> Unit = { trackModalState.show(track) }
+            openModal
+        }
+        else -> null
+    }
 
     val density = LocalDensity.current
     val selectionHighlightPaddingPx = with(density) { HighlightPadding.toPx() }
@@ -275,10 +291,12 @@ fun TrackListItem(
                 }
                 .then(swipeModifier)
                 .clip(highlightShape)
-                .clickable(
+                .combinedClickable(
                     interactionSource = interactionSource,
-                    indication = ripple(color = FoamTheme.colors.textPrimary)
-                ) { onClick() }
+                    indication = ripple(color = FoamTheme.colors.textPrimary),
+                    onLongClick = resolvedOnLongClick,
+                    onClick = { onClick() }
+                )
                 .padding(horizontal = HighlightPadding, vertical = HighlightPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {

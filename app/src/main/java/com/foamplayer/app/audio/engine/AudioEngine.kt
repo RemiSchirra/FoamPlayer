@@ -220,6 +220,92 @@ class AudioEngine @Inject constructor(
     }
 
     /**
+     * Inserts [track] right after the current track ("play next"). With no queue
+     * active, starts a fresh queue with just this track.
+     */
+    fun playNext(track: TrackEntity) {
+        insertTrack(track, _playbackState.value.queueIndex + 1)
+    }
+
+    /**
+     * Appends [track] to the end of the MAIN queue — never behind the random
+     * auxiliary pool. Starting from the end of the queue, walks back over any
+     * trailing auxiliary tracks and inserts right after the last main-queue
+     * item found. With no queue active, starts a fresh queue with just this
+     * track.
+     */
+    fun addToQueue(track: TrackEntity) {
+        val current = _playbackState.value
+        var index = current.queue.size
+        while (index > 0 && current.auxiliaryFlags.getOrNull(index - 1) == true) {
+            index--
+        }
+        insertTrack(track, index)
+    }
+
+    /**
+     * Shared implementation for [playNext] and [addToQueue]: inserts into the
+     * queue state, then patches the player timeline in place when the insert
+     * lands inside (or at the head of) the loaded window. Inserts past the
+     * window need no timeline work — adjustWindow() loads them as playback
+     * approaches, and a pending resync rebuilds over the updated state anyway.
+     */
+    private fun insertTrack(track: TrackEntity, requestedIndex: Int) {
+        val current = _playbackState.value
+        if (current.queue.isEmpty()) {
+            setQueue(listOf(track), 0)
+            return
+        }
+
+        val insertIndex = requestedIndex.coerceIn(0, current.queue.size)
+
+        val newQueue = current.queue.toMutableList().apply {
+            add(insertIndex, track)
+        }
+
+        val newEntryIds = current.queueEntryIds.toMutableList().apply {
+            add(insertIndex.coerceAtMost(size), allocateEntryId())
+        }
+
+        // Inserted tracks are always main tracks, never part of the auxiliary pool.
+        val newFlags = current.auxiliaryFlags.toMutableList().apply {
+            add(insertIndex.coerceAtMost(size), false)
+        }
+
+        // Keep the cursor on the same track it was on: an insert at or before
+        // it shifts every later index (including the cursor's) by one.
+        val newQueueIndex =
+            if (insertIndex <= current.queueIndex) current.queueIndex + 1 else current.queueIndex
+
+        _playbackState.value = current.copy(
+            queue = newQueue,
+            queueEntryIds = newEntryIds,
+            queueIndex = newQueueIndex,
+            auxiliaryFlags = newFlags
+        )
+
+        val window = loadedRange
+        if (pendingWindowResync || window == IntRange.EMPTY) return
+        when {
+            // Before the window: queue indices shift, the player timeline doesn't.
+            insertIndex < window.first ->
+                loadedRange = (window.first + 1)..(window.last + 1)
+            // At or inside the window: slot it into the player at the same relative
+            // position. At the head (insertIndex == window.first) that's index 0,
+            // right before the playing item -- ExoPlayer keeps playback on the (now
+            // shifted) current item. At the far edge (window.last + 1) it appends,
+            // so playback never falls off the end of the loaded range (e.g. "play
+            // next" while the queue's last track is the one playing).
+            insertIndex <= window.last + 1 -> {
+                player.addMediaItem(insertIndex - window.first, track.toMediaItem())
+                loadedRange = window.first..(window.last + 1)
+            }
+            // Further past the window: nothing loaded needs to shift;
+            // adjustWindow() loads the item as playback approaches.
+        }
+    }
+
+    /**
      * Loads a window of tracks around [centerIndex] and starts playback.
      * The rest of the queue is loaded lazily by adjustWindow().
      */

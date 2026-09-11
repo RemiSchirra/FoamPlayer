@@ -125,6 +125,7 @@ fun MiniPlayer(
 ) {
     val track = playbackState.currentTrack ?: return
     val queue = playbackState.queue
+    val queueEntryIds = playbackState.queueEntryIds
     val currentIndex = playbackState.queueIndex
 
     val context = LocalContext.current
@@ -365,7 +366,10 @@ fun MiniPlayer(
                         state = pagerState,
                         modifier = Modifier.weight(1f),
                         beyondViewportPageCount = 1,
-                        key = { index -> queue.getOrNull(index)?.id ?: index }
+                        // Keyed by queue ENTRY id, not track id: the same track can
+                        // legitimately appear twice in the queue ("play next" on the
+                        // playing track), and duplicate keys crash the pager.
+                        key = { index -> queueEntryIds.getOrNull(index) ?: -(index + 1).toLong() }
                     ) { page ->
                         val jump = pendingJump
                         val pageTrack = (
@@ -387,7 +391,13 @@ fun MiniPlayer(
                         // outside the mini player's clipped bounds. Skipping
                         // the tag entirely during a jump avoids that; it
                         // reattaches cleanly on the next frame after landing.
-                        val isSettledCurrentTrackPage = jump == null && pageTrack.id == track.id
+                        // The page index must also match: the queue can hold the
+                        // same track more than once ("play next" on the playing
+                        // track), and an id match alone would tag the duplicated
+                        // neighbor page too -- two visible shared elements with
+                        // one key, which derails the close transition.
+                        val isSettledCurrentTrackPage =
+                            jump == null && page == currentIndex && pageTrack.id == track.id
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,

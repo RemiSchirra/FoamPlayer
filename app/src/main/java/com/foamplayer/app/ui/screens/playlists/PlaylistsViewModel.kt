@@ -31,4 +31,10 @@ class PlaylistsViewModel @Inject constructor(
             repository.createPlaylist(name)
         }
     }
+
+    fun addTrackToPlaylist(playlistId: Long, trackId: Long) {
+        viewModelScope.launch {
+            repository.appendTrackToPlaylist(playlistId, trackId)
+        }
+    }
 }

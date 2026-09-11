@@ -24,6 +24,11 @@ class PlaylistRepository @Inject constructor(
         playlistDao.addTrackToPlaylist(PlaylistTrackCrossRef(playlistId, trackId, orderIndex))
     }
 
+    /** Appends a track at the end of a playlist's current order. */
+    suspend fun appendTrackToPlaylist(playlistId: Long, trackId: Long) {
+        addTrackToPlaylist(playlistId, trackId, playlistDao.nextOrderIndex(playlistId))
+    }
+
     suspend fun deletePlaylist(playlistId: Long) {
         playlistDao.deletePlaylist(playlistId)
     }

@@ -87,6 +87,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
             track = track,
             queue = state.queue,
             queueIndex = state.queueIndex,
+            queueEntryIds = state.queueEntryIds,
             pagerState = pagerState,
             density = density,
             screenWidthDp = screenWidthDp,
@@ -140,6 +141,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
     track: TrackEntity,
     queue: List<TrackEntity>,
     queueIndex: Int,
+    queueEntryIds: List<Long>,
     pagerState: PagerState,
     density: Density,
     screenWidthDp: Dp,
@@ -182,7 +184,10 @@ internal fun SharedTransitionScope.TrackHeroPager(
             contentPadding = PaddingValues(horizontal = PlayerDimens.horizontalPagePadding),
             pageSpacing = PlayerDimens.pageSpacing,
             beyondViewportPageCount = 0,
-            key = { page -> queue.getOrNull(page)?.id ?: page }
+            // Keyed by queue ENTRY id, not track id: the same track can legitimately
+            // appear twice in the queue ("play next" on the playing track), and
+            // duplicate keys crash the pager.
+            key = { page -> queueEntryIds.getOrNull(page) ?: -(page + 1).toLong() }
         ) { page ->
             val pageTrack = queue.getOrNull(page) ?: return@HorizontalPager
             val isAnchorPage = page == anchorPage
@@ -233,7 +238,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         style = FoamTheme.typography.titleLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = if (immersive && pageTrack.id == track.id) {
+                        modifier = if (immersive && isAnchorPage && pageTrack.id == track.id) {
                             Modifier
                                 .sharedBounds(
                                     rememberSharedContentState(key = "track_title_${track.id}"),
@@ -253,7 +258,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         style = FoamTheme.typography.body,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = if (immersive && pageTrack.id == track.id) {
+                        modifier = if (immersive && isAnchorPage && pageTrack.id == track.id) {
                             Modifier
                                 .sharedBounds(
                                     rememberSharedContentState(key = "track_artist_${track.id}"),

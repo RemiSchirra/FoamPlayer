@@ -54,6 +54,11 @@ class PlayerViewModel @Inject constructor(
         audioEngine.setQueue(tracks, startIndex)
     }
 
+    // Long-press track actions from the library lists: queue right after the
+    // current track, or append to the end of the main queue.
+    fun playNext(track: TrackEntity) = audioEngine.playNext(track)
+    fun addToQueue(track: TrackEntity) = audioEngine.addToQueue(track)
+
     fun play() = audioEngine.play()
     fun pause() = audioEngine.pause()
     fun next() = audioEngine.next()
