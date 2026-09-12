@@ -38,6 +38,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -91,24 +93,41 @@ object NavBarDimens {
     /** Margin around the floating pill (horizontal and vertical). */
     val FloatingBarMargin = 12.dp
 
-    /**
-     * Mini player artwork size the pill's corner radius hugs.
-     * Keep in sync with MiniPlayer.kt (and optionally reuse it there).
-     */
+    /** Mini player artwork size the pill's corner radius hugs. Used by MiniPlayer.kt. */
     val MiniPlayerArtSize = 44.dp
 
     /**
      * The mini player card's own vertical padding around its content; its *visible*
      * edge sits this far inside the box that [miniPlayerBottomPadding] positions.
-     * Keep in sync with MiniPlayer.kt.
+     * Used by MiniPlayer.kt.
      */
     val MiniPlayerCardVerticalPadding = 6.dp
 
-    /** How far the pill's corner radius grows past the artwork radius. */
-    val FloatingCornerOverhang = 8.dp
+    /** The mini player card's inner padding around its content. Used by MiniPlayer.kt. */
+    val MiniPlayerContainerPadding = 8.dp
 
-    /** How far the attached pill stretches up toward the mini player when closed. */
-    const val AttachedConnectorGrowFactor = 3.5f
+    /** Vertical gap between the mini player's artwork row and its seek slider. */
+    val MiniPlayerContentSpacing = 6.dp
+
+    /** Height of the strip the mini player's seek slider occupies. */
+    val MiniPlayerSliderHeight = 12.dp
+
+    /**
+     * The mini player card's full visible height: artwork row + spacing + slider,
+     * plus the container's inner padding on both sides.
+     */
+    val MiniPlayerCardHeight = MiniPlayerArtSize +
+            MiniPlayerContentSpacing +
+            MiniPlayerSliderHeight +
+            MiniPlayerContainerPadding * 2
+
+    /**
+     * How far the pill's corner radius grows past the artwork radius. Derived from
+     * the card's container padding so the pill's radius always matches the card
+     * container's -- required for the attached extension to blend into the card's
+     * top corners.
+     */
+    val FloatingCornerOverhang = MiniPlayerContainerPadding
 
     // ---- Shared item metrics ---------------------------------------------------
     val ItemIconSize = 24.dp
@@ -203,6 +222,34 @@ object NavBarDimens {
             else -> ExtraRowHeight - extraRowBottomOverlap(DockedBarHeight)
         }
         return base + ride * expandFraction
+    }
+
+    /**
+     * Exact distance the attached pill's grey surface must stretch above its own top
+     * edge to land flush on the mini player card's top edge. In ATTACHED mode the
+     * card draws no container of its own -- the pill's extension IS the card's
+     * container -- so an overshoot pokes out above the card and a shortfall clips
+     * its top corners.
+     *
+     * [miniPlayerBoxHeight] is the mini player's MEASURED box height (its own outer
+     * padding included), so the surface reaches the card's real top edge whatever its
+     * content actually measures (font scale, text metrics, future edits) instead of
+     * trusting the derived [MiniPlayerCardHeight]. The default keeps that derived
+     * height for callers without a measurement.
+     *
+     * Derived from [miniPlayerBottomPadding] (which positions the card's box), so the
+     * two can never drift apart: while the extra row expands, the card lifts exactly
+     * as much as the pill grows and the extension stays constant.
+     */
+    fun attachedExtensionHeight(
+        expandFraction: Float = 0f,
+        miniPlayerBoxHeight: Dp = MiniPlayerCardHeight + MiniPlayerCardVerticalPadding * 2
+    ): Dp {
+        val cardTop = miniPlayerBottomPadding(NavigationBarMode.ATTACHED, expandFraction) +
+                miniPlayerBoxHeight -
+                MiniPlayerCardVerticalPadding
+        val pillTop = FloatingBarMargin + FloatingRowHeight + ExtraRowHeight * expandFraction
+        return (cardTop - pillTop).coerceAtLeast(0.dp)
     }
 }
 
@@ -536,6 +583,7 @@ internal fun FloatingNavigationBar(
     secondaryEnabled: Set<NavBarItem>,
     attachedToMiniPlayer: Boolean = false,
     connectToMiniPlayer: Boolean = false,
+    miniPlayerTopPx: () -> Float? = { null },
     playerClosedFraction: () -> Float = { 0f },
     transitionAnimated: Boolean = true,
     navBarTransparentWhenPlayerOpen: Boolean = false,
@@ -546,6 +594,12 @@ internal fun FloatingNavigationBar(
     val containerRadius = miniImageRadius + NavBarDimens.FloatingCornerOverhang
 
     val surfaceVariantColor = FoamTheme.colors.surfaceVariant
+
+    // Measured top edge (root coordinates) of the surface column. Paired with the
+    // card's measured top, it defines the attached extension directly: the surface is
+    // drawn to the literal distance between the two, with no geometry model to fall
+    // out of sync with the real layout.
+    var pillTopPx by remember { mutableStateOf(Float.NaN) }
 
     // Fixed collapsed footprint (pill + its margins): the content above never
     // resizes when the extra row folds. The pill grows upwards as an overlay.
@@ -563,14 +617,28 @@ internal fun FloatingNavigationBar(
                     bottom = NavBarDimens.FloatingBarMargin
                 )
                 .requiredHeight(NavBarDimens.FloatingRowHeight + NavBarDimens.ExtraRowHeight * expandFraction)
+                .onGloballyPositioned { pillTopPx = it.positionInRoot().y }
                 .drawBehind {
                     val radiusPx = containerRadius.toPx()
                     val greyAlpha = if (navBarTransparentWhenPlayerOpen) {
                         playerClosedFraction()
                     } else 1f
 
+                    val closed = playerClosedFraction()
                     val extensionPx = if (attachedToMiniPlayer && connectToMiniPlayer) {
-                        NavBarDimens.AttachedConnectorGrowFactor * radiusPx * playerClosedFraction()
+                        val cardTopPx = miniPlayerTopPx()
+                        if (cardTopPx != null && !pillTopPx.isNaN()) {
+                            // Measured: the surface's top lands exactly on the card's
+                            // visible top edge (its box top + the card's outer vertical
+                            // padding). The pill sits below the card, so its top edge is
+                            // the larger root-y of the two.
+                            (pillTopPx - cardTopPx -
+                                    NavBarDimens.MiniPlayerCardVerticalPadding.toPx())
+                                .coerceAtLeast(0f) * closed
+                        } else {
+                            // Layout not measured yet: fall back to the derived geometry.
+                            NavBarDimens.attachedExtensionHeight(expandFraction).toPx() * closed
+                        }
                     } else 0f
 
                     drawRoundRect(

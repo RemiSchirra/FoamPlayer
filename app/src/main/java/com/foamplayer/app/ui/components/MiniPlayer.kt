@@ -49,6 +49,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.ui.navigation.NavBarDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import kotlin.math.abs
@@ -121,6 +122,7 @@ fun MiniPlayer(
     useSharedElements: Boolean = true,
     isAnimateSeekBarEnabled: Boolean = false,
     skipTrackChangeAnimation: Boolean = false,
+    showContainer: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val track = playbackState.currentTrack ?: return
@@ -331,7 +333,7 @@ fun MiniPlayer(
     }
 
     val configuration = LocalConfiguration.current
-    val miniImageSize = 44.dp
+    val miniImageSize = NavBarDimens.MiniPlayerArtSize
     val fullImageSize = configuration.screenWidthDp.dp - 48.dp
 
     val miniRoundingPercent = FoamTheme.shapes.miniPlayerRounding
@@ -348,16 +350,22 @@ fun MiniPlayer(
         }
     }
 
-    val containerPadding = 8.dp
+    val containerPadding = NavBarDimens.MiniPlayerContainerPadding
     val containerRadius = miniImageRadius + containerPadding
 
     with(sharedTransitionScope) {
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .padding(horizontal = 12.dp, vertical = NavBarDimens.MiniPlayerCardVerticalPadding)
                 .clip(RoundedCornerShape(containerRadius))
-                .background(FoamTheme.colors.surfaceVariant)
+                .then(
+                    // In ATTACHED mode the nav bar's pill extends up behind the card and
+                    // provides the surface; painting the card's own would double the edges.
+                    if (showContainer) {
+                        Modifier.background(FoamTheme.colors.surfaceVariant)
+                    } else Modifier
+                )
                 .padding(containerPadding)
         ) {
             Column {
@@ -495,7 +503,7 @@ fun MiniPlayer(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(NavBarDimens.MiniPlayerContentSpacing))
 
                 MiniPlayerProgressSlider(
                     seekBarProgress = seekBarProgress,
@@ -504,7 +512,7 @@ fun MiniPlayer(
                         FoamTheme.colors.bitPerfectActive
                     else FoamTheme.accentColor,
                     onSeek = onSeek,
-                    modifier = Modifier.height(12.dp)
+                    modifier = Modifier.height(NavBarDimens.MiniPlayerSliderHeight)
                 )
             }
         }

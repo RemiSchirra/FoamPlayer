@@ -7,16 +7,15 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.Transition
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -47,7 +46,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -229,6 +230,12 @@ fun FoamNavHost(
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     var trackListTransitionTrackId by remember { mutableStateOf<Long?>(null) }
     var skipMiniPlayerTrackAnimation by remember { mutableStateOf(false) }
+
+    // Measured top edge (root coordinates, px) of the mini player's box. The attached
+    // nav bar's surface extension is drawn to land exactly on the card's visible top
+    // edge computed from it, so the surface and the card can never drift apart --
+    // whatever the real layout does (font scale, text metrics, second-bar lift).
+    var miniPlayerTopPx by remember { mutableStateOf(Float.NaN) }
 
     // Track whether the current or next transition should use animation.
     // If we start opened, we disable animation for the initial frame.
@@ -449,16 +456,16 @@ fun FoamNavHost(
                 // Back button folds the extra row away before leaving the app.
                 BackHandler(enabled = isNavBarExpanded) { isNavBarExpanded = false }
 
-                // Navbar surface driver: a child of the same transition the mini player's
-                // enter/exit fade runs on, with the identical fade spring. The SeekableTransitionState
-                // seeks every child at the same playtime (fraction x total duration), so this value is
-                // always equal to the mini player's fade alpha -- during finger drags and tweened
-                // settles alike. Deferred as a lambda: reading it only invalidates the DRAW phase.
-                val playerClosedFractionState = transition.animateFloat(
-                    transitionSpec = { spring(stiffness = Spring.StiffnessMediumLow) },
-                    label = "PlayerClosedFraction"
-                ) { isFull -> if (isFull) 0f else 1f }
-                val playerClosedFraction = { playerClosedFractionState.value }
+                val playerClosedFraction = {
+                    val progress = playerTransitionState.progress().coerceIn(0f, 1f)
+                    if (playerTransitionState.targetState) {
+                        // Opening: retract/fade out as soon as the transition starts.
+                        1f - EaseOutCubic.transform(progress)
+                    } else {
+                        // Closing: back as soon as the transition starts.
+                        1f - EaseInCubic.transform(progress)
+                    }
+                }
 
                 val handleNavBarNavigation: (String) -> Unit = { route ->
                     // Navigating from the bar always folds the extra row away.
@@ -942,6 +949,7 @@ fun FoamNavHost(
                                     secondaryEnabled = playerSettings.navBarSecondaryEnabled,
                                     attachedToMiniPlayer = true,
                                     connectToMiniPlayer = playbackState.currentTrack != null,
+                                    miniPlayerTopPx = { miniPlayerTopPx.takeUnless { it.isNaN() } },
                                     playerClosedFraction = playerClosedFraction,
                                     navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
                                     expandFraction = navBarExpandFraction,
@@ -995,11 +1003,14 @@ fun FoamNavHost(
                                 useSharedElements = trackListTransitionTrackId == null,
                                 isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                                 skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,
-                                modifier = Modifier.draggable(
-                                    state = rememberDraggableState { delta -> miniPlayerSwipeController.onDrag(delta) },
-                                    orientation = Orientation.Vertical,
-                                    onDragStopped = { velocity -> miniPlayerSwipeController.onDragStopped(velocity) }
-                                )
+                                showContainer = navigationBarMode != NavigationBarMode.ATTACHED,
+                                modifier = Modifier
+                                    .onGloballyPositioned { miniPlayerTopPx = it.positionInRoot().y }
+                                    .draggable(
+                                        state = rememberDraggableState { delta -> miniPlayerSwipeController.onDrag(delta) },
+                                        orientation = Orientation.Vertical,
+                                        onDragStopped = { velocity -> miniPlayerSwipeController.onDragStopped(velocity) }
+                                    )
                             )
                         }
                     }
