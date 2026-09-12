@@ -51,4 +51,14 @@ sealed class Screen(val route: String, val title: String) {
             return "browse/folders?path=$encoded"
         }
     }
+
+    // List views behind the collection modal's "See Artist" / "See Album" rows:
+    // the artists/albums held by one source collection (kind = "Genre" / "Year" /
+    // "Folder", key = genre name / year / folder path).
+    object BrowseArtistsIn : Screen("browse/artists-in/{kind}/{key}", "Artists In") {
+        fun createRoute(kind: String, key: String) = "browse/artists-in/$kind/${Uri.encode(key)}"
+    }
+    object BrowseAlbumsIn : Screen("browse/albums-in/{kind}/{key}", "Albums In") {
+        fun createRoute(kind: String, key: String) = "browse/albums-in/$kind/${Uri.encode(key)}"
+    }
 }

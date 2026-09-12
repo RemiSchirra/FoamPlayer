@@ -3,8 +3,10 @@ package com.foamplayer.app.ui.components
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -196,13 +198,14 @@ private fun CollectionHeaderSection(
  * header using the same keys as SearchScreen's album rows ("album-art-*", "album-title-*",
  * "album-artist-*").
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun CollectionListItem(
     title: String,
     subtitle: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
     imageUrl: String? = null,
     icon: ImageVector? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -213,6 +216,27 @@ fun CollectionListItem(
     val interactionSource = remember { MutableInteractionSource() }
     val imageRadius = (CollectionArtSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val highlightShape = RoundedCornerShape(imageRadius + CollectionHighlightPadding)
+
+    // Long-press opens the collection actions modal when FoamNavHost provides
+    // one at the root; an explicit [onLongClick] always wins over that default.
+    val collectionModalState = LocalCollectionFoamModalState.current
+    val resolvedOnLongClick: (() -> Unit)? = when {
+        onLongClick != null -> onLongClick
+        collectionModalState != null -> {
+            val openModal: () -> Unit = {
+                collectionModalState.show(
+                    CollectionInfo(
+                        title = title,
+                        subtitle = subtitle,
+                        imageUrl = imageUrl,
+                        icon = icon
+                    )
+                )
+            }
+            openModal
+        }
+        else -> null
+    }
 
     val sharedScope = sharedTransitionScope
     val animScope = animatedVisibilityScope
@@ -257,10 +281,11 @@ fun CollectionListItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(highlightShape)
-                .clickable(
+                .combinedClickable(
                     interactionSource = interactionSource,
                     indication = ripple(color = FoamTheme.colors.textPrimary),
-                    onClick = onClick
+                    onLongClick = resolvedOnLongClick,
+                    onClick = { onClick() }
                 )
                 .padding(
                     horizontal = CollectionHighlightPadding,

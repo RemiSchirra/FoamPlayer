@@ -61,15 +61,20 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.ui.components.CollectionFoamModal
+import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.MiniPlayer
 import com.foamplayer.app.ui.components.PlaylistPickerModal
 import com.foamplayer.app.ui.components.TrackFoamModal
+import com.foamplayer.app.ui.components.rememberCollectionFoamModalState
 import com.foamplayer.app.ui.components.rememberTrackFoamModalState
 import com.foamplayer.app.ui.screens.equalizer.EqualizerScreen
 import com.foamplayer.app.ui.screens.browse.AlbumsBrowseScreen
 import com.foamplayer.app.ui.screens.browse.AllTracksBrowseScreen
 import com.foamplayer.app.ui.screens.browse.ArtistsBrowseScreen
+import com.foamplayer.app.ui.screens.browse.CollectionAlbumsScreen
+import com.foamplayer.app.ui.screens.browse.CollectionArtistsScreen
 import com.foamplayer.app.ui.screens.browse.FolderBrowseScreen
 import com.foamplayer.app.ui.screens.browse.GenresBrowseScreen
 import com.foamplayer.app.ui.screens.browse.GenreTracksScreen
@@ -186,6 +191,10 @@ fun FoamNavHost(
     val trackModalState = rememberTrackFoamModalState()
     var playlistPickerTrack by remember { mutableStateOf<TrackEntity?>(null) }
 
+    // Long-press collection actions (albums/artists/genres/years/folders),
+    // reached by every CollectionListItem through LocalCollectionFoamModalState.
+    val collectionModalState = rememberCollectionFoamModalState()
+
     val playbackState by playerViewModel.playbackState.collectAsState()
     val playerSettings by playerViewModel.settings.collectAsState()
     val scoreOverrides by playerViewModel.scoreOverrides.collectAsState()
@@ -294,9 +303,13 @@ fun FoamNavHost(
     SharedTransitionLayout {
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")
 
-        // Every TrackListItem in the graph opens the track actions modal through
-        // this local, so no screen has to thread the state down itself.
-        CompositionLocalProvider(LocalTrackFoamModalState provides trackModalState) {
+        // Every TrackListItem / CollectionListItem in the graph opens its
+        // actions modal through these locals, so no screen has to thread the
+        // states down itself.
+        CompositionLocalProvider(
+            LocalTrackFoamModalState provides trackModalState,
+            LocalCollectionFoamModalState provides collectionModalState
+        ) {
             Box(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
 
                 // App-wide dynamic album-art backdrop
@@ -662,6 +675,44 @@ fun FoamNavHost(
                                         )
                                     }
                                     composable(
+                                        Screen.BrowseArtistsIn.route,
+                                        arguments = listOf(
+                                            navArgument("kind") { type = NavType.StringType },
+                                            navArgument("key") { type = NavType.StringType }
+                                        )
+                                    ) { backStackEntry ->
+                                        CollectionArtistsScreen(
+                                            kind = backStackEntry.arguments?.getString("kind").orEmpty(),
+                                            key = backStackEntry.arguments?.getString("key").orEmpty(),
+                                            onArtistClick = { artist ->
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                                            },
+                                            onBack = { navController.popBackStack() }
+                                        )
+                                    }
+                                    composable(
+                                        Screen.BrowseAlbumsIn.route,
+                                        arguments = listOf(
+                                            navArgument("kind") { type = NavType.StringType },
+                                            navArgument("key") { type = NavType.StringType }
+                                        )
+                                    ) { backStackEntry ->
+                                        CollectionAlbumsScreen(
+                                            kind = backStackEntry.arguments?.getString("kind").orEmpty(),
+                                            key = backStackEntry.arguments?.getString("key").orEmpty(),
+                                            onAlbumClick = { entry ->
+                                                navController.navigate(
+                                                    Screen.AlbumDetail.createRoute(
+                                                        entry.album,
+                                                        entry.albumArtPath,
+                                                        entry.artist
+                                                    )
+                                                )
+                                            },
+                                            onBack = { navController.popBackStack() }
+                                        )
+                                    }
+                                    composable(
                                         Screen.BrowseFolders.route,
                                         arguments = listOf(navArgument("path") { type = NavType.StringType; defaultValue = "" })
                                     ) { backStackEntry ->
@@ -973,6 +1024,28 @@ fun FoamNavHost(
                     playlistPickerTrack = null
                 },
                 onDismiss = { playlistPickerTrack = null }
+            )
+
+            // Long-press collection actions. The modal resolves which artist
+            // name / album to navigate to; a folder, genre or year spanning
+            // several artists/albums opens the matching list screen instead.
+            CollectionFoamModal(
+                state = collectionModalState,
+                onPlayNext = { collection -> playerViewModel.playNext(collection.tracks) },
+                onAddToQueue = { collection -> playerViewModel.addToQueue(collection.tracks) },
+                onSeeArtist = { artist ->
+                    navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                },
+                onSeeAlbum = { album, albumArtPath, artist ->
+                    navController.navigate(Screen.AlbumDetail.createRoute(album, albumArtPath, artist))
+                },
+                onSeeArtistList = { sourceKind, sourceKey ->
+                    navController.navigate(Screen.BrowseArtistsIn.createRoute(sourceKind.name, sourceKey))
+                },
+                onSeeAlbumList = { sourceKind, sourceKey ->
+                    navController.navigate(Screen.BrowseAlbumsIn.createRoute(sourceKind.name, sourceKey))
+                },
+                useAlbumArtAccent = playerSettings.automaticColorEnabled
             )
         }
     }

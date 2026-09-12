@@ -286,6 +286,48 @@ class AudioEngine @Inject constructor(
     }
 
     /**
+     * Inserts [tracks] right after the current track ("play next"), keeping
+     * their order. With no queue active, starts a fresh queue with these
+     * tracks (playing the first one).
+     */
+    fun playNextAll(tracks: List<TrackEntity>) {
+        if (tracks.isEmpty()) return
+        val current = _playbackState.value
+        if (current.queue.isEmpty()) {
+            setQueue(tracks, 0)
+            return
+        }
+        var index = current.queueIndex + 1
+        tracks.forEach { track ->
+            insertTrack(track, index)
+            index++
+        }
+    }
+
+    /**
+     * Appends [tracks] to the end of the MAIN queue, keeping their order —
+     * never behind the random auxiliary pool (same boundary rule as
+     * [addToQueue]). With no queue active, starts a fresh queue with these
+     * tracks (playing the first one).
+     */
+    fun addAllToQueue(tracks: List<TrackEntity>) {
+        if (tracks.isEmpty()) return
+        val current = _playbackState.value
+        if (current.queue.isEmpty()) {
+            setQueue(tracks, 0)
+            return
+        }
+        var index = current.queue.size
+        while (index > 0 && current.auxiliaryFlags.getOrNull(index - 1) == true) {
+            index--
+        }
+        tracks.forEach { track ->
+            insertTrack(track, index)
+            index++
+        }
+    }
+
+    /**
      * Plays [tracks] picked from a list (library, playlist, search results, ...):
      * keeps the played history up to and including the current track, drops the
      * upcoming main-queue tracks, queues [tracks] in their place and jumps to

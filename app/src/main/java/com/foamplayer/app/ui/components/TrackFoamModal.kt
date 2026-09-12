@@ -216,7 +216,7 @@ fun TrackFoamModal(
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
                                     .background(FoamTheme.colors.surfaceVariant)
                             ) {
-                                TrackModalBackButton(onBack = { showDetails = false })
+                                ModalBackButton(onBack = { showDetails = false })
                             }
                         } else {
                             Row(
@@ -229,19 +229,19 @@ fun TrackFoamModal(
                                         vertical = FoamDimens.spacingTiny
                                     )
                             ) {
-                                TrackModalActionButton(
+                                ModalActionButton(
                                     icon = FoamTheme.icons.current.next,
                                     label = "Next",
                                     onClick = { perform(onPlayNext) },
                                     modifier = Modifier.weight(1f)
                                 )
-                                TrackModalActionButton(
+                                ModalActionButton(
                                     icon = FoamTheme.icons.current.queue,
                                     label = "Queue",
                                     onClick = { perform(onAddToQueue) },
                                     modifier = Modifier.weight(1f)
                                 )
-                                TrackModalActionButton(
+                                ModalActionButton(
                                     icon = FoamTheme.icons.current.playlists,
                                     label = "Playlist",
                                     onClick = { perform(onAddToPlaylist) },
@@ -255,12 +255,12 @@ fun TrackFoamModal(
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
                                     .background(FoamTheme.colors.surfaceVariant)
                             ) {
-                                TrackModalRowButton(
+                                ModalRowButton(
                                     label = "See Artist",
                                     onClick = { perform(onSeeArtist) }
                                 )
                                 ModalSectionDivider()
-                                TrackModalRowButton(
+                                ModalRowButton(
                                     label = "See Album",
                                     onClick = { perform(onSeeAlbum) }
                                 )
@@ -272,7 +272,7 @@ fun TrackFoamModal(
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
                                     .background(FoamTheme.colors.surfaceVariant)
                             ) {
-                                TrackModalRowButton(
+                                ModalRowButton(
                                     label = "Details",
                                     onClick = { showDetails = true }
                                 )
@@ -350,7 +350,7 @@ fun PlaylistPickerModal(
                     ) {
                         playlists.forEachIndexed { index, playlist ->
                             if (index > 0) ModalSectionDivider()
-                            TrackModalRowButton(
+                            ModalRowButton(
                                 label = playlist.name,
                                 onClick = { onPick(playlist) }
                             )
@@ -364,7 +364,7 @@ fun PlaylistPickerModal(
 
 /** Inset hairline used between row buttons inside a modal section container. */
 @Composable
-private fun ModalSectionDivider() {
+internal fun ModalSectionDivider() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -450,7 +450,7 @@ private fun TrackModalHeader(
 
 /** Compact vertical action button (icon over label) used for the horizontal Next/Queue/Playlist row. */
 @Composable
-private fun TrackModalActionButton(
+internal fun ModalActionButton(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
@@ -485,10 +485,11 @@ private fun TrackModalActionButton(
 
 /** Full-width single-line button with a trailing chevron, used for See Artist / See Album / Details. */
 @Composable
-private fun TrackModalRowButton(
+internal fun ModalRowButton(
     label: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    subtitle: String? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -503,11 +504,22 @@ private fun TrackModalRowButton(
             .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.paddingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        BasicText(
-            text = label,
-            style = FoamTheme.typography.titleMedium,
-            modifier = Modifier.weight(1f)
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            BasicText(
+                text = label,
+                style = FoamTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (subtitle != null) {
+                BasicText(
+                    text = subtitle,
+                    style = FoamTheme.typography.body,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
         Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
         Icon(
             imageVector = Icons.Default.ChevronRight,
@@ -649,7 +661,7 @@ private fun audioSummaryText(track: TrackEntity): String = listOf(
 
 /** Row button with a leading back arrow, used to return from the details page. */
 @Composable
-private fun TrackModalBackButton(onBack: () -> Unit) {
+internal fun ModalBackButton(onBack: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
 
     Row(
@@ -678,7 +690,7 @@ private fun TrackModalBackButton(onBack: () -> Unit) {
 }
 
 @Composable
-private fun DetailsSection(
+internal fun DetailsSection(
     title: String,
     accentColor: Color,
     trailing: (@Composable () -> Unit)? = null,
@@ -737,7 +749,7 @@ private fun TrackStatsResetButton(onClick: () -> Unit) {
 }
 
 @Composable
-private fun DetailRow(label: String, value: String?) {
+internal fun DetailRow(label: String, value: String?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -763,7 +775,7 @@ private fun DetailRow(label: String, value: String?) {
 
 /** Label above the value, for long content (file paths) that should wrap freely. */
 @Composable
-private fun DetailStackedValue(
+internal fun DetailStackedValue(
     label: String,
     value: String,
     accentColor: Color = FoamTheme.accentColor
@@ -812,7 +824,7 @@ private fun formatSampleRate(hz: Int): String {
  * folder's own name. Legacy file:// paths are decoded and trimmed of
  * device-specific storage prefixes. Falls back to the raw path on any surprise.
  */
-private fun simplifiedDisplayPath(path: String): String {
+internal fun simplifiedDisplayPath(path: String): String {
     return runCatching {
         val uri = Uri.parse(path)
         when (uri.scheme) {

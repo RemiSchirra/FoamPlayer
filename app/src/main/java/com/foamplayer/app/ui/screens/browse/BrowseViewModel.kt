@@ -82,6 +82,33 @@ class BrowseViewModel @Inject constructor(
         }
     }
 
+    // Long-press collection actions: resolve the tracks behind a browsable
+    // collection at action time. Each mirrors the DAO query/detail screen the
+    // collection is browsed through, so queued lists match what the user sees.
+
+    /** One album in disc/track order (mirrors TrackDao.getTracksByAlbum). */
+    suspend fun tracksForAlbum(album: String): List<TrackEntity> =
+        trackRepository.getTracksByAlbum(album).first()
+
+    /** Tracks naming [artist] as artist or album artist, in album order (mirrors TrackDao.getAlbumsByArtist's matching). */
+    suspend fun tracksForArtist(artist: String): List<TrackEntity> =
+        trackRepository.getAllTracks().first()
+            .filter { it.artist == artist || it.albumArtist == artist }
+            .sortedWith(compareBy({ it.album }, { it.discNumber }, { it.trackNumber }, { it.title }))
+
+    /** Tracks tagging [genre] among their "; "-separated genres (mirrors TrackDao.getTracksByGenre's LIKE matching). */
+    suspend fun tracksForGenre(genre: String): List<TrackEntity> =
+        trackRepository.getTracksByGenre(genre).first()
+
+    /** One year's tracks in album order (mirrors TrackDao.getTracksByYear). */
+    suspend fun tracksForYear(year: Int): List<TrackEntity> =
+        trackRepository.getTracksByYear(year).first()
+
+    /** Tracks stored under [folderPath] (document-id prefix match, same rule as [buildFolderContent]). */
+    suspend fun tracksForFolder(folderPath: String): List<TrackEntity> =
+        trackRepository.getAllTracks().first()
+            .filter { documentIdOf(it.path).startsWith("$folderPath/") }
+
     private fun buildFolderContent(
         path: String?,
         tracks: List<TrackEntity>,

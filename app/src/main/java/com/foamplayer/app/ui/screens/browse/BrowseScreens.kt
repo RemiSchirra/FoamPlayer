@@ -17,17 +17,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.ui.components.CollectionAlbumEntry
+import com.foamplayer.app.ui.components.CollectionInfo
+import com.foamplayer.app.ui.components.CollectionKind
 import com.foamplayer.app.ui.components.CollectionListItem
 import com.foamplayer.app.ui.components.CollectionListScreen
+import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.TrackListScreen
+import com.foamplayer.app.ui.components.distinctCollectionAlbums
+import com.foamplayer.app.ui.components.distinctCollectionArtistNames
 import com.foamplayer.app.ui.screens.library.TrackListItem
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -39,6 +50,8 @@ fun AlbumsBrowseScreen(
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val albums by viewModel.albums.collectAsState()
+    val collectionModalState = LocalCollectionFoamModalState.current
+    val longPressScope = rememberCoroutineScope()
 
     CollectionListScreen(
         title = "Albums",
@@ -52,6 +65,19 @@ fun AlbumsBrowseScreen(
                     subtitle = album.artist,
                     imageUrl = album.albumArtPath,
                     onClick = { onAlbumClick(album) },
+                    onLongClick = {
+                        longPressScope.launch {
+                            collectionModalState?.show(
+                                CollectionInfo(
+                                    title = album.album,
+                                    artist = album.artist,
+                                    imageUrl = album.albumArtPath,
+                                    kind = CollectionKind.Album,
+                                    tracks = viewModel.tracksForAlbum(album.album)
+                                )
+                            )
+                        }
+                    },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedElementKey = album.album
@@ -68,6 +94,8 @@ fun ArtistsBrowseScreen(
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val artists by viewModel.artists.collectAsState()
+    val collectionModalState = LocalCollectionFoamModalState.current
+    val longPressScope = rememberCoroutineScope()
 
     CollectionListScreen(
         title = "Artists",
@@ -79,7 +107,18 @@ fun ArtistsBrowseScreen(
                 CollectionListItem(
                     title = artist,
                     subtitle = null,
-                    onClick = { onArtistClick(artist) }
+                    onClick = { onArtistClick(artist) },
+                    onLongClick = {
+                        longPressScope.launch {
+                            collectionModalState?.show(
+                                CollectionInfo(
+                                    title = artist,
+                                    kind = CollectionKind.Artist,
+                                    tracks = viewModel.tracksForArtist(artist)
+                                )
+                            )
+                        }
+                    }
                 )
             }
         }
@@ -93,6 +132,8 @@ fun GenresBrowseScreen(
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val genres by viewModel.genres.collectAsState()
+    val collectionModalState = LocalCollectionFoamModalState.current
+    val longPressScope = rememberCoroutineScope()
 
     CollectionListScreen(
         title = "Genres",
@@ -106,7 +147,19 @@ fun GenresBrowseScreen(
                     title = genre,
                     subtitle = null,
                     icon = Icons.Rounded.Category,
-                    onClick = { onGenreClick(genre) }
+                    onClick = { onGenreClick(genre) },
+                    onLongClick = {
+                        longPressScope.launch {
+                            collectionModalState?.show(
+                                CollectionInfo(
+                                    title = genre,
+                                    icon = Icons.Rounded.Category,
+                                    kind = CollectionKind.Genre,
+                                    tracks = viewModel.tracksForGenre(genre)
+                                )
+                            )
+                        }
+                    }
                 )
             }
         }
@@ -120,6 +173,8 @@ fun YearsBrowseScreen(
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val years by viewModel.years.collectAsState()
+    val collectionModalState = LocalCollectionFoamModalState.current
+    val longPressScope = rememberCoroutineScope()
 
     CollectionListScreen(
         title = "Years",
@@ -133,7 +188,19 @@ fun YearsBrowseScreen(
                     title = year.toString(),
                     subtitle = null,
                     icon = Icons.Rounded.CalendarToday,
-                    onClick = { onYearClick(year) }
+                    onClick = { onYearClick(year) },
+                    onLongClick = {
+                        longPressScope.launch {
+                            collectionModalState?.show(
+                                CollectionInfo(
+                                    title = year.toString(),
+                                    icon = Icons.Rounded.CalendarToday,
+                                    kind = CollectionKind.Year,
+                                    tracks = viewModel.tracksForYear(year)
+                                )
+                            )
+                        }
+                    }
                 )
             }
         }
@@ -217,6 +284,8 @@ fun FolderBrowseScreen(
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val content by viewModel.folderContent.collectAsState()
+    val collectionModalState = LocalCollectionFoamModalState.current
+    val longPressScope = rememberCoroutineScope()
 
     LaunchedEffect(path) {
         viewModel.loadFolderContent(path)
@@ -242,7 +311,21 @@ fun FolderBrowseScreen(
                     title = folder.name,
                     subtitle = "${folder.trackCount} tracks",
                     icon = Icons.Rounded.Folder,
-                    onClick = { onFolderClick(folder.path) }
+                    onClick = { onFolderClick(folder.path) },
+                    onLongClick = {
+                        longPressScope.launch {
+                            collectionModalState?.show(
+                                CollectionInfo(
+                                    title = folder.name,
+                                    subtitle = "${folder.trackCount} tracks",
+                                    icon = Icons.Rounded.Folder,
+                                    kind = CollectionKind.Folder,
+                                    tracks = viewModel.tracksForFolder(folder.path),
+                                    location = folder.path
+                                )
+                            )
+                        }
+                    }
                 )
             }
         }
@@ -267,6 +350,143 @@ fun FolderBrowseScreen(
                 ) {
                     BasicText(
                         text = "No tracks found",
+                        style = FoamTheme.typography.body
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One row of [CollectionArtistsScreen]: an artist plus how many of the source collection's albums it appears on. */
+private data class CollectionArtistRow(
+    val name: String,
+    val albumCount: Int
+)
+
+private fun List<TrackEntity>.toCollectionArtistRows(): List<CollectionArtistRow> =
+    distinctCollectionArtistNames()
+        .sortedWith(String.CASE_INSENSITIVE_ORDER)
+        .map { name ->
+            val albumCount = filter { track ->
+                listOfNotNull(track.artist, track.albumArtist).any { it.split("; ").contains(name) }
+            }.map { it.album }.distinct().size
+            CollectionArtistRow(name, albumCount)
+        }
+
+private fun collectionMembersTitle(kind: String, key: String): String = when (kind) {
+    CollectionKind.Folder.name -> key.substringAfterLast('/').ifEmpty { key.substringAfterLast(':') }
+    else -> key
+}
+
+private suspend fun BrowseViewModel.tracksForSource(kind: String, key: String): List<TrackEntity> =
+    when (kind) {
+        CollectionKind.Genre.name -> tracksForGenre(key)
+        CollectionKind.Year.name -> tracksForYear(key.toIntOrNull() ?: 0)
+        else -> tracksForFolder(key)
+    }
+
+/**
+ * List of the artists held by one source collection (folder, genre or year),
+ * opened from the collection modal's "See Artist" row when the collection
+ * spans several artists. Tapping a row opens the artist's album list.
+ */
+@Composable
+fun CollectionArtistsScreen(
+    kind: String,
+    key: String,
+    onArtistClick: (String) -> Unit,
+    onBack: () -> Unit,
+    viewModel: BrowseViewModel = hiltViewModel()
+) {
+    var artistRows by remember { mutableStateOf<List<CollectionArtistRow>>(emptyList()) }
+
+    LaunchedEffect(kind, key) {
+        artistRows = viewModel.tracksForSource(kind, key).toCollectionArtistRows()
+    }
+
+    CollectionListScreen(
+        title = collectionMembersTitle(kind, key),
+        subtitle = "Artists",
+        itemCount = artistRows.size,
+        onBack = onBack
+    ) {
+        items(artistRows, key = { "artists_in_${kind}_${it.name}" }) { row ->
+            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                CollectionListItem(
+                    title = row.name,
+                    subtitle = if (row.albumCount == 1) "1 album" else "${row.albumCount} albums",
+                    onClick = { onArtistClick(row.name) }
+                )
+            }
+        }
+
+        if (artistRows.isEmpty()) {
+            item(key = "artists_in_empty") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    BasicText(
+                        text = "No artists found",
+                        style = FoamTheme.typography.body
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * List of the albums held by one source collection (folder, genre or year),
+ * opened from the collection modal's "See Album" row when the collection
+ * spans several albums. Tapping a row opens the album detail screen.
+ */
+@Composable
+fun CollectionAlbumsScreen(
+    kind: String,
+    key: String,
+    onAlbumClick: (CollectionAlbumEntry) -> Unit,
+    onBack: () -> Unit,
+    viewModel: BrowseViewModel = hiltViewModel()
+) {
+    var albumRows by remember { mutableStateOf<List<CollectionAlbumEntry>>(emptyList()) }
+
+    LaunchedEffect(kind, key) {
+        albumRows = viewModel.tracksForSource(kind, key)
+            .distinctCollectionAlbums()
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.album })
+    }
+
+    CollectionListScreen(
+        title = collectionMembersTitle(kind, key),
+        subtitle = "Albums",
+        itemCount = albumRows.size,
+        onBack = onBack
+    ) {
+        items(albumRows, key = { "albums_in_${kind}_${it.album}" }) { entry ->
+            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                CollectionListItem(
+                    title = entry.album,
+                    subtitle = entry.artist,
+                    imageUrl = entry.albumArtPath,
+                    onClick = { onAlbumClick(entry) }
+                )
+            }
+        }
+
+        if (albumRows.isEmpty()) {
+            item(key = "albums_in_empty") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    BasicText(
+                        text = "No albums found",
                         style = FoamTheme.typography.body
                     )
                 }
