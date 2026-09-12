@@ -286,6 +286,41 @@ class AudioEngine @Inject constructor(
     }
 
     /**
+     * Plays [track] picked from a standalone list (e.g. search results): keeps
+     * the played history up to and including the current track, drops the
+     * upcoming main-queue tracks, makes [track] the next track and jumps to it.
+     * The auxiliary pool is left untouched, so no refill is needed.
+     */
+    fun playTrackReplacingUpcoming(track: TrackEntity) {
+        val current = _playbackState.value
+        if (current.queue.isEmpty() || current.queueIndex !in current.queue.indices) {
+            setQueue(listOf(track), 0)
+            return
+        }
+
+        val flags = current.auxiliaryFlags
+        // Walk back over the trailing auxiliary pool; only the upcoming
+        // main-queue section in front of it gets dropped.
+        var auxStart = current.queue.size
+        while (auxStart > current.queueIndex + 1 && flags.getOrNull(auxStart - 1) == true) {
+            auxStart--
+        }
+
+        val newQueue = current.queue.take(current.queueIndex + 1) + track +
+                current.queue.subList(auxStart, current.queue.size)
+
+        _playbackState.value = current.copy(
+            queue = newQueue,
+            queueEntryIds = current.queueEntryIds.take(current.queueIndex + 1) + allocateEntryId() +
+                    current.queueEntryIds.subList(auxStart, current.queueEntryIds.size),
+            auxiliaryFlags = flags.take(current.queueIndex + 1) + false +
+                    flags.subList(auxStart, flags.size)
+        )
+
+        jumpWindowTo(current.queueIndex + 1)
+    }
+
+    /**
      * Shared implementation for [playNext] and [addToQueue]: inserts into the
      * queue state, then patches the player timeline in place when the insert
      * lands inside (or at the head of) the loaded window. Inserts past the

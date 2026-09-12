@@ -62,6 +62,11 @@ class PlayerViewModel @Inject constructor(
     fun playNext(track: TrackEntity) = audioEngine.playNext(track)
     fun addToQueue(track: TrackEntity) = audioEngine.addToQueue(track)
 
+    // Clicking a track from search results: keep the played history, drop the
+    // upcoming queue, and play the picked track next.
+    fun playTrackReplacingUpcoming(track: TrackEntity) =
+        audioEngine.playTrackReplacingUpcoming(track)
+
     fun play() = audioEngine.play()
     fun pause() = audioEngine.pause()
     fun next() = audioEngine.next()
