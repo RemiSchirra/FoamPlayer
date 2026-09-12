@@ -97,6 +97,9 @@
     <string name="edit_playlist_name">Edit playlist name</string>
     <string name="rename_playlist_title">Rename Playlist</string>
     <string name="save">Save</string>
+    <string name="edit">Edit</string>
+    <string name="more_options">More options</string>
+    <string name="more_options_placeholder">Nothing here yet</string>
     <string name="new_playlist_fallback">New playlist</string>
     <string name="playlist_name_value">Playlist: %1$s</string>
     <string name="from_m3u_playlist">From M3U playlist</string>
