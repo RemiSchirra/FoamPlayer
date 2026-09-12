@@ -87,6 +87,8 @@ fun TrackListScreen(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedElementKey: String? = null,
+    /** First path segment of the shared element keys ("album-art-*", ...). Detail screens of other entity kinds pass their own. */
+    sharedElementPrefix: String = "album",
     sharedTrackId: Long? = null,
     activeTrackId: Long? = null,
     showTrackNumbers: Boolean = false,
@@ -136,7 +138,8 @@ fun TrackListScreen(
                         onPlayAllClick = onPlayAllClick,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
-                        sharedElementKey = sharedElementKey
+                        sharedElementKey = sharedElementKey,
+                        sharedElementPrefix = sharedElementPrefix
                     )
                 }
 
@@ -176,7 +179,8 @@ private fun HeaderSection(
     onPlayAllClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
-    sharedElementKey: String?
+    sharedElementKey: String?,
+    sharedElementPrefix: String
 ) {
     val context = LocalContext.current
     val accentColor = imageUrl?.let { path -> AlbumArtPaletteCache.colors[path] }
@@ -230,7 +234,7 @@ private fun HeaderSection(
         Box(
             modifier = Modifier
                 .size(120.dp)
-                .sharedArtworkIfAvailable("album-art-$sharedElementKey")
+                .sharedArtworkIfAvailable("$sharedElementPrefix-art-$sharedElementKey")
                 .clip(AlbumArtShape)
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
@@ -272,7 +276,7 @@ private fun HeaderSection(
                 style = FoamTheme.typography.titleLarge,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.sharedBoundsIfAvailable("album-title-$sharedElementKey")
+                modifier = Modifier.sharedBoundsIfAvailable("$sharedElementPrefix-title-$sharedElementKey")
             )
 
             if (subtitle != null) {
@@ -281,7 +285,7 @@ private fun HeaderSection(
                     style = FoamTheme.typography.titleMedium.copy(color = accentColor),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.sharedBoundsIfAvailable("album-artist-$sharedElementKey")
+                    modifier = Modifier.sharedBoundsIfAvailable("$sharedElementPrefix-artist-$sharedElementKey")
                 )
             }
             BasicText(

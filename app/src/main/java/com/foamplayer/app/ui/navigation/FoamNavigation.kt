@@ -128,8 +128,10 @@ private fun isSharedElementRoute(route: String?): Boolean {
     if (route == null) return false
     return route == Screen.Library.route ||
             route == Screen.Search.route ||
+            route == Screen.Playlists.route ||
             route.startsWith("artist/") ||
-            route.startsWith("album/")
+            route.startsWith("album/") ||
+            route.startsWith("playlist/")
 }
 
 private fun isSettingsRoute(route: String?): Boolean {
@@ -363,7 +365,7 @@ fun FoamNavHost(
                 val listBackdropAlpha by animateFloatAsState(
                     targetValue = if (listBackdropArt != null) 1f else 0f,
                     animationSpec = tween(
-                        durationMillis = if (currentRoute == Screen.AlbumDetail.route) {
+                        durationMillis = if (isSharedElementRoute(currentRoute)) {
                             SharedElementTransitionDurationMs
                         } else {
                             NavScreenFadeDurationMs
@@ -595,8 +597,16 @@ fun FoamNavHost(
                                     composable(Screen.Playlists.route) {
                                         PlaylistsScreen(
                                             onPlaylistClick = { playlist ->
-                                                navController.navigate(Screen.PlaylistDetail.createRoute(playlist.playlistId))
-                                            }
+                                                navController.navigate(
+                                                    Screen.PlaylistDetail.createRoute(
+                                                        playlist.playlistId,
+                                                        playlist.name,
+                                                        playlist.imageUrl
+                                                    )
+                                                )
+                                            },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this
                                         )
                                     }
                                     composable(Screen.Search.route) {
@@ -858,11 +868,19 @@ fun FoamNavHost(
                                     }
                                     composable(
                                         Screen.PlaylistDetail.route,
-                                        arguments = listOf(navArgument("playlistId") { type = NavType.LongType })
+                                        arguments = listOf(
+                                            navArgument("playlistId") { type = NavType.LongType },
+                                            navArgument("name") { type = NavType.StringType; defaultValue = "" },
+                                            navArgument("imageUrl") { type = NavType.StringType; defaultValue = "" }
+                                        )
                                     ) { backStackEntry ->
                                         val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: -1L
+                                        val initialName = backStackEntry.arguments?.getString("name").orEmpty()
+                                        val initialImageUrl = backStackEntry.arguments?.getString("imageUrl")?.ifEmpty { null }
                                         PlaylistDetailScreen(
                                             playlistId = playlistId,
+                                            initialName = initialName,
+                                            initialImageUrl = initialImageUrl,
                                             onTrackClick = { tracks, index ->
                                                 playTrackFromList(tracks, index)
                                             },

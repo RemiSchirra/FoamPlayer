@@ -3,6 +3,9 @@ package com.foamplayer.app.ui.screens.playlists
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -45,6 +48,7 @@ import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.scanner.ScanStatus
+import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -54,11 +58,17 @@ import com.foamplayer.app.ui.theme.FoamTheme
 private val PlaylistArtSize = 48.dp
 private val PlaylistHighlightPadding = 6.dp
 
+// Must match TrackListScreen's AlbumArtShape — using the same shape on both ends of the
+// shared-element transition means the corners never have to jump between two radii.
+private val PlaylistAlbumArtShape = RoundedCornerShape(12.dp)
+
 private val ImageMimeTypes = arrayOf("image/*")
 
 @Composable
 fun PlaylistsScreen(
     onPlaylistClick: (PlaylistEntity) -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: PlaylistsViewModel = hiltViewModel()
 ) {
     val playlists by viewModel.playlists.collectAsState()
@@ -150,7 +160,9 @@ fun PlaylistsScreen(
                         playlist = playlist,
                         trackCount = trackCounts[playlist.playlistId] ?: 0,
                         onClick = { onPlaylistClick(playlist) },
-                        onLongClick = { playlistModalState.show(playlist) }
+                        onLongClick = { playlistModalState.show(playlist) },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
                     )
                 }
 
@@ -231,20 +243,47 @@ fun PlaylistsScreen(
 /**
  * TrackListItem/CollectionListItem equivalent for a playlist: 48dp cover (the
  * user-chosen image, or the name's initial as fallback), the name and its
- * track count. Long-press opens the playlist actions modal.
+ * track count. Long-press opens the playlist actions modal. When opened, the
+ * artwork and title animate into the playlist detail header through the
+ * shared-element keys "playlist-art-*" / "playlist-title-*".
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 private fun PlaylistItemRow(
     playlist: PlaylistEntity,
     trackCount: Int,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope
 ) {
     val context = LocalContext.current
     val interactionSource = remember { MutableInteractionSource() }
     val imageRadius = (PlaylistArtSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val highlightShape = RoundedCornerShape(imageRadius + PlaylistHighlightPadding)
+
+    // Rows taking part in the shared-element transition must use the same fixed corner
+    // radius as the playlist detail header; the others round like the other list rows.
+    val artShape = PlaylistAlbumArtShape
+
+    @Composable
+    fun Modifier.sharedArtwork(): Modifier = with(sharedTransitionScope) {
+        sharedElement(
+            rememberSharedContentState(key = "playlist-art-${playlist.playlistId}"),
+            animatedVisibilityScope = animatedVisibilityScope,
+            clipInOverlayDuringTransition = OverlayClip(PlaylistAlbumArtShape),
+            boundsTransform = AlbumArtBoundsTransform
+        )
+    }
+
+    @Composable
+    fun Modifier.sharedTitle(): Modifier = with(sharedTransitionScope) {
+        sharedBounds(
+            rememberSharedContentState(key = "playlist-title-${playlist.playlistId}"),
+            animatedVisibilityScope = animatedVisibilityScope,
+            boundsTransform = AlbumArtBoundsTransform
+        )
+    }
 
     Box(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -266,7 +305,8 @@ private fun PlaylistItemRow(
             Box(
                 modifier = Modifier
                     .size(PlaylistArtSize)
-                    .clip(RoundedCornerShape(imageRadius))
+                    .sharedArtwork()
+                    .clip(artShape)
                     .background(FoamTheme.colors.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
@@ -298,7 +338,8 @@ private fun PlaylistItemRow(
                     text = playlist.name,
                     style = FoamTheme.typography.titleMedium,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.sharedTitle()
                 )
                 BasicText(
                     text = "$trackCount tracks",

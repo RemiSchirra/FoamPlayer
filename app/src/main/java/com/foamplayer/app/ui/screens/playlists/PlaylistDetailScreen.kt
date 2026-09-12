@@ -15,6 +15,8 @@ import com.foamplayer.app.ui.components.TrackListScreen
 @Composable
 fun PlaylistDetailScreen(
     playlistId: Long,
+    initialName: String,
+    initialImageUrl: String?,
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
@@ -35,8 +37,8 @@ fun PlaylistDetailScreen(
     // The playlist's own cover drives the blurred list backdrop (loaded as a
     // direct image). Without one there is NO backdrop: the app-wide background
     // of the currently playing track shows through instead.
-    LaunchedEffect(playlist?.imageUrl) {
-        val cover = playlist?.imageUrl
+    LaunchedEffect(playlist?.imageUrl, initialImageUrl) {
+        val cover = playlist?.imageUrl ?: initialImageUrl
         if (cover != null) {
             onListBackdropArt(cover, false)
         } else {
@@ -44,11 +46,13 @@ fun PlaylistDetailScreen(
         }
     }
 
-    // The user-chosen cover wins; without one, fall back to the first track's art.
-    val coverImage = playlist?.imageUrl
+    // The nav-route seeds keep the header correct on its very first frame (the
+    // DB-loaded playlist takes a moment to arrive) so the shared-element
+    // transition from the playlists list never flashes the letter fallback.
+    val coverImage = playlist?.imageUrl ?: initialImageUrl
 
     TrackListScreen(
-        title = playlist?.name ?: "Playlist",
+        title = playlist?.name ?: initialName.ifEmpty { "Playlist" },
         tracks = tracks,
         onTrackClick = onTrackClick,
         onPlayAllClick = {
@@ -61,6 +65,8 @@ fun PlaylistDetailScreen(
         imageIsEmbeddedArt = coverImage == null,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
+        sharedElementKey = playlistId.toString(),
+        sharedElementPrefix = "playlist",
         sharedTrackId = sharedTrackId,
         activeTrackId = activeTrackId,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope

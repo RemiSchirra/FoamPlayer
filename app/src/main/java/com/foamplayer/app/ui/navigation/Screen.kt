@@ -30,8 +30,14 @@ sealed class Screen(val route: String, val title: String) {
             return "album/$encodedName?artUrl=$encodedArt&artist=$encodedArtist"
         }
     }
-    object PlaylistDetail : Screen("playlist/{playlistId}", "Playlist") {
-        fun createRoute(playlistId: Long) = "playlist/$playlistId"
+    object PlaylistDetail : Screen("playlist/{playlistId}?name={name}&imageUrl={imageUrl}", "Playlist") {
+        /**
+         * [name]/[imageUrl] seed the header on its very first frame (before the
+         * DB-loaded playlist arrives) so the shared-element transition from the
+         * playlists list never flashes the letter/title fallback.
+         */
+        fun createRoute(playlistId: Long, name: String, imageUrl: String? = null): String =
+            "playlist/$playlistId?name=${Uri.encode(name)}&imageUrl=${Uri.encode(imageUrl.orEmpty())}"
     }
 
     object BrowseAlbums : Screen("browse/albums", "Albums")
