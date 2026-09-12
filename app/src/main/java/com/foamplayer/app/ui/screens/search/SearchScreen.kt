@@ -104,8 +104,8 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
             .background(
                 Brush.linearGradient(
                     colors = listOf(
-                        card.color.copy(alpha = 0.4f),
-                        card.color.copy(alpha = 0.2f)
+                        card.color.copy(alpha = 0.5f),
+                        card.color.copy(alpha = 0.3f)
                     )
                 )
             )
@@ -124,7 +124,7 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
             Icon(
                 imageVector = card.icon,
                 contentDescription = null,
-                tint = card.color.lightened(0.1f).copy(alpha = 0.65f),
+                tint = card.color.lightened(0.1f).copy(alpha = 0.7f),
                 modifier = Modifier.size(44.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -133,7 +133,7 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
         Icon(
             imageVector = card.icon,
             contentDescription = null,
-            tint = card.color.lightened(0.1f).copy(alpha = 0.3f),
+            tint = card.color.lightened(0.1f).copy(alpha = 0.4f),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .offset(x = 0.dp, y = 4.dp)
