@@ -91,6 +91,12 @@
     <string name="no_playlists_yet">Aucune playlist créée pour le moment.</string>
     <string name="create_playlist_title">Créer une playlist</string>
     <string name="playlist_name_hint">Nom de la playlist</string>
+    <string name="playlist_cover_image">Image de couverture</string>
+    <string name="playlist_cover_hint">Choisir une image (facultatif)</string>
+    <string name="edit_cover_image">Modifier l\'image de couverture</string>
+    <string name="edit_playlist_name">Modifier le nom de la playlist</string>
+    <string name="rename_playlist_title">Renommer la playlist</string>
+    <string name="save">Enregistrer</string>
     <string name="new_playlist_fallback">Nouvelle playlist</string>
     <string name="playlist_name_value">Playlist : %1$s</string>
     <string name="from_m3u_playlist">Depuis une playlist M3U</string>

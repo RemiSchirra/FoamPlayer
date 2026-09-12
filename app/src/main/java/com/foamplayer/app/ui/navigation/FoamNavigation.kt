@@ -148,6 +148,9 @@ private fun isBrowseRoute(route: String?): Boolean = route != null && route.star
 private fun isDetailListRoute(route: String?): Boolean =
     route == Screen.AlbumDetail.route || route == Screen.PlaylistDetail.route
 
+/** Art feeding the detail-list backdrop: the path plus how Coil must load it (embedded audio art vs plain image). */
+private data class ListBackdropArt(val path: String, val isEmbeddedArt: Boolean)
+
 @Composable
 private fun rememberAnimatedBackground(
     enabled: Boolean,
@@ -346,18 +349,19 @@ fun FoamNavHost(
                 // no overflow tricks that transition layers could clip. Its alpha tween runs in
                 // lock-step with the NavHost's screen fade (shared-element routes fade in 350ms,
                 // plain routes in 400ms), so the background fades with the list opening/closing.
-                // [lastListBackdropArtPath] keeps the art alive while the alpha fades back out.
-                var listBackdropArtPath by remember { mutableStateOf<String?>(null) }
-                var lastListBackdropArtPath by remember { mutableStateOf<String?>(null) }
+                // [lastListBackdropArt] keeps the art alive while the alpha fades back out.
+                var listBackdropArt by remember { mutableStateOf<ListBackdropArt?>(null) }
+                var lastListBackdropArt by remember { mutableStateOf<ListBackdropArt?>(null) }
                 LaunchedEffect(currentRoute) {
-                    if (!isDetailListRoute(currentRoute)) listBackdropArtPath = null
+                    if (!isDetailListRoute(currentRoute)) listBackdropArt = null
                 }
-                val onListBackdropArt = { path: String? ->
-                    if (path != null) lastListBackdropArtPath = path
-                    listBackdropArtPath = path
+                val onListBackdropArt = { path: String?, isEmbeddedArt: Boolean ->
+                    val art = path?.let { ListBackdropArt(it, isEmbeddedArt) }
+                    if (art != null) lastListBackdropArt = art
+                    listBackdropArt = art
                 }
                 val listBackdropAlpha by animateFloatAsState(
-                    targetValue = if (listBackdropArtPath != null) 1f else 0f,
+                    targetValue = if (listBackdropArt != null) 1f else 0f,
                     animationSpec = tween(
                         durationMillis = if (currentRoute == Screen.AlbumDetail.route) {
                             SharedElementTransitionDurationMs
@@ -367,10 +371,11 @@ fun FoamNavHost(
                     ),
                     label = "listBackdropAlpha"
                 )
-                val listBackdropDisplayPath = listBackdropArtPath ?: lastListBackdropArtPath
-                if (listBackdropDisplayPath != null && listBackdropAlpha > 0f) {
+                val listBackdropDisplay = listBackdropArt ?: lastListBackdropArt
+                if (listBackdropDisplay != null && listBackdropAlpha > 0f) {
                     DynamicAlbumArtBackground(
-                        frontArtPath = listBackdropDisplayPath,
+                        frontArtPath = listBackdropDisplay.path,
+                        frontArtIsEmbedded = listBackdropDisplay.isEmbeddedArt,
                         backArtPath = null,
                         crossfadeFraction = 0f,
                         blur = playerSettings.backgroundBlur.dp,

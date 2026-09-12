@@ -28,10 +28,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,12 +47,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.FoamBottomModal
 import com.foamplayer.app.ui.components.ModalSectionDivider
@@ -73,20 +80,24 @@ data class MissingSongsUiState(
 )
 
 /**
- * "Create Playlist" sheet: a name field, two mutually exclusive sources
- * (.m3u file or device folder, each resettable) and a Create button.
+ * "Create Playlist" sheet: a name field, an optional cover image, two mutually
+ * exclusive sources (.m3u file or device folder, each resettable) and a Create
+ * button.
  *
  * [onCreate] receives the raw name (empty falls back to "New playlist" in the
- * ViewModel) plus whichever source URI is set, or null when none is selected.
+ * ViewModel), the cover image URI if one was picked, plus whichever source URI
+ * is set, or null when none is selected.
  */
 @Composable
 fun CreatePlaylistModal(
     visible: Boolean,
     onDismiss: () -> Unit,
-    onCreate: (name: String, m3uUri: String?, folderUri: String?) -> Unit,
+    onCreate: (name: String, m3uUri: String?, folderUri: String?, coverUri: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var name by remember { mutableStateOf("") }
+    var coverUri by remember { mutableStateOf<String?>(null) }
+    var coverName by remember { mutableStateOf<String?>(null) }
     var m3uUri by remember { mutableStateOf<String?>(null) }
     var m3uName by remember { mutableStateOf<String?>(null) }
     var folderUri by remember { mutableStateOf<String?>(null) }
@@ -95,6 +106,8 @@ fun CreatePlaylistModal(
     LaunchedEffect(visible) {
         if (visible) {
             name = ""
+            coverUri = null
+            coverName = null
             m3uUri = null
             m3uName = null
             folderUri = null
@@ -103,6 +116,15 @@ fun CreatePlaylistModal(
     }
 
     val context = LocalContext.current
+    val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            coverUri = uri.toString()
+            coverName = queryDisplayName(context, uri) ?: uri.lastPathSegment
+        }
+    }
     val m3uPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching {
@@ -137,27 +159,26 @@ fun CreatePlaylistModal(
                 )
             )
 
-            Box(
+            PlaylistNameField(
+                value = name,
+                onValueChange = { name = it }
+            )
+
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(FoamDimens.itemRounding))
                     .background(FoamTheme.colors.surfaceVariant)
-                    .padding(horizontal = FoamDimens.paddingLarge, vertical = FoamDimens.spacingStandard),
-                contentAlignment = Alignment.CenterStart
             ) {
-                if (name.isEmpty()) {
-                    BasicText(
-                        text = stringResource(R.string.playlist_name_hint),
-                        style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary)
-                    )
-                }
-                BasicTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    textStyle = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
-                    cursorBrush = SolidColor(FoamTheme.accentColor),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                CoverImageRow(
+                    imageUri = coverUri,
+                    title = stringResource(R.string.playlist_cover_image),
+                    subtitle = coverName ?: stringResource(R.string.playlist_cover_hint),
+                    onClick = { coverPicker.launch(ImageMimeTypes) },
+                    onReset = {
+                        coverUri = null
+                        coverName = null
+                    }
                 )
             }
 
@@ -195,8 +216,142 @@ fun CreatePlaylistModal(
             ModalButton(
                 label = stringResource(R.string.create),
                 filled = true,
-                onClick = { onCreate(name, m3uUri, folderUri) }
+                onClick = { onCreate(name, m3uUri, folderUri, coverUri) }
             )
+        }
+    }
+}
+
+private val ImageMimeTypes = arrayOf("image/*")
+
+/**
+ * The pill-shaped playlist name input shared by the create and rename sheets.
+ * The FoamBottomModal hosting it already lifts the sheet above the soft
+ * keyboard, so the field stays visible while typing.
+ */
+@Composable
+internal fun PlaylistNameField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    hint: String = stringResource(R.string.playlist_name_hint),
+    focusRequester: FocusRequester? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(CircleShape)
+            .background(FoamTheme.colors.surfaceVariant)
+            .padding(horizontal = FoamDimens.paddingLarge, vertical = FoamDimens.spacingStandard),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        if (value.isEmpty()) {
+            BasicText(
+                text = hint,
+                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary)
+            )
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            textStyle = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
+            cursorBrush = SolidColor(FoamTheme.accentColor),
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
+            singleLine = true
+        )
+    }
+}
+
+/**
+ * Cover image chooser row: a small preview (the picked image, or an image icon
+ * placeholder), a title + filename subtitle, and a clear button once selected.
+ */
+@Composable
+private fun CoverImageRow(
+    imageUri: String?,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    onReset: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onClick
+            )
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.paddingMedium),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                .background(FoamTheme.colors.background),
+            contentAlignment = Alignment.Center
+        ) {
+            if (imageUri != null) {
+                AsyncImage(
+                    model = imageUri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Image,
+                    contentDescription = null,
+                    tint = FoamTheme.colors.textSecondary,
+                    modifier = Modifier.size(FoamDimens.iconSmall)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
+
+        Column(modifier = Modifier.weight(1f)) {
+            BasicText(
+                text = title,
+                style = FoamTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            BasicText(
+                text = subtitle,
+                style = FoamTheme.typography.body.copy(
+                    color = if (imageUri != null) FoamTheme.accentColor else FoamTheme.colors.textSecondary
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        if (imageUri != null) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = onReset
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(R.string.clear_selection),
+                    tint = FoamTheme.colors.textSecondary,
+                    modifier = Modifier.size(FoamDimens.iconSmall)
+                )
+            }
         }
     }
 }
@@ -405,8 +560,9 @@ fun MissingSongsModal(
     }
 }
 
+/** Filled (accent) or flat full-width button, shared by the playlist sheets. */
 @Composable
-private fun ModalButton(
+internal fun ModalButton(
     label: String,
     filled: Boolean,
     onClick: () -> Unit

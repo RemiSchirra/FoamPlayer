@@ -81,6 +81,8 @@ fun TrackListScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     imageUrl: String? = null,
+    /** False when [imageUrl] is a plain image URI (e.g. a playlist cover) instead of an audio file to extract art from. */
+    imageIsEmbeddedArt: Boolean = true,
     artistName: String? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -94,9 +96,9 @@ fun TrackListScreen(
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
     val context = LocalContext.current
 
-    LaunchedEffect(imageUrl) {
+    LaunchedEffect(imageUrl, imageIsEmbeddedArt) {
         if (imageUrl != null) {
-            AlbumArtPaletteCache.ensure(this, context, imageUrl)
+            AlbumArtPaletteCache.ensure(this, context, imageUrl, imageIsEmbeddedArt)
         }
     }
 
@@ -130,6 +132,7 @@ fun TrackListScreen(
                         trackCount = tracks.size,
                         durationText = durationText,
                         imageUrl = imageUrl,
+                        imageIsEmbeddedArt = imageIsEmbeddedArt,
                         onPlayAllClick = onPlayAllClick,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
@@ -169,6 +172,7 @@ private fun HeaderSection(
     trackCount: Int,
     durationText: String,
     imageUrl: String?,
+    imageIsEmbeddedArt: Boolean,
     onPlayAllClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
@@ -232,9 +236,16 @@ private fun HeaderSection(
             contentAlignment = Alignment.Center
         ) {
             if (imageUrl != null) {
-                val albumArtRequest = remember(imageUrl) {
+                val albumArtRequest = remember(imageUrl, imageIsEmbeddedArt) {
+                    // Embedded art is pulled out of the audio file itself; playlist
+                    // covers are plain image URIs Coil loads directly.
+                    val data = if (imageIsEmbeddedArt) {
+                        EmbeddedAlbumArt(imageUrl.toUri())
+                    } else {
+                        imageUrl
+                    }
                     ImageRequest.Builder(context)
-                        .data(EmbeddedAlbumArt(imageUrl.toUri()))
+                        .data(data)
                         .size(AlbumArtRequestSize)
                         .crossfade(false)
                         .build()

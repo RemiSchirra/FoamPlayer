@@ -9,6 +9,9 @@ import com.foamplayer.app.data.db.entities.PlaylistTrackCrossRef
 import com.foamplayer.app.data.db.entities.TrackEntity
 import kotlinx.coroutines.flow.Flow
 
+/** Track count per playlist, for list-row subtitles. */
+data class PlaylistTrackCount(val playlistId: Long, val trackCount: Int)
+
 @Dao
 interface PlaylistDao {
     @Query("SELECT * FROM playlists ORDER BY name ASC")
@@ -19,6 +22,19 @@ interface PlaylistDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addTrackToPlaylist(crossRef: PlaylistTrackCrossRef)
+
+    @Query("UPDATE playlists SET name = :name WHERE playlistId = :playlistId")
+    suspend fun renamePlaylist(playlistId: Long, name: String)
+
+    @Query("UPDATE playlists SET imageUrl = :imageUrl WHERE playlistId = :playlistId")
+    suspend fun setPlaylistImage(playlistId: Long, imageUrl: String?)
+
+    @Query("""
+        SELECT playlistId, COUNT(*) AS trackCount 
+        FROM playlist_track_cross_ref 
+        GROUP BY playlistId
+    """)
+    fun getPlaylistTrackCounts(): Flow<List<PlaylistTrackCount>>
 
     @Query("""
         SELECT COALESCE(MAX(orderIndex), -1) + 1 

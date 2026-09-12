@@ -68,9 +68,10 @@ object AlbumArtPaletteCache {
     /**
      * Ensures [path]'s color is present in [colors], kicking off extraction
      * at most once per path even if called concurrently from multiple
-     * screens.
+     * screens. [isEmbeddedArt] is false for plain image URIs (playlist
+     * covers) that Coil loads directly instead of reading embedded art.
      */
-    fun ensure(scope: CoroutineScope, context: Context, path: String?) {
+    fun ensure(scope: CoroutineScope, context: Context, path: String?, isEmbeddedArt: Boolean = true) {
         if (path == null) return
         if (colors.containsKey(path)) {
             touch(path)
@@ -87,7 +88,7 @@ object AlbumArtPaletteCache {
             }
             if (!shouldFetch) return@launch
             try {
-                val color = extractPaletteColor(context, path)
+                val color = extractPaletteColor(context, path, isEmbeddedArt)
                 if (color != null) {
                     colors[path] = color
                     touch(path)

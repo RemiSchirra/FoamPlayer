@@ -7,5 +7,7 @@ import androidx.room.PrimaryKey
 data class PlaylistEntity(
     @PrimaryKey(autoGenerate = true) val playlistId: Long = 0,
     val name: String,
+    /** User-chosen cover image (content URI). Null = letter fallback. */
+    val imageUrl: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )

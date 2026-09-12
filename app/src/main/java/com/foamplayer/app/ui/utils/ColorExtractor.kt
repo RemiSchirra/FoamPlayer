@@ -12,10 +12,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.core.net.toUri
 
-suspend fun extractPaletteColor(context: android.content.Context, path: String): Color? {
+/**
+ * Extracts the accent color for [path]. Embedded audio art is read out of the
+ * file itself; set [isEmbedded] to false for plain image URIs (playlist
+ * covers), which Coil loads directly.
+ */
+suspend fun extractPaletteColor(context: android.content.Context, path: String, isEmbedded: Boolean = true): Color? {
     return withContext(Dispatchers.IO) {
+        val data = if (isEmbedded) EmbeddedAlbumArt(path.toUri()) else path
         val request = ImageRequest.Builder(context)
-            .data(EmbeddedAlbumArt(path.toUri()))
+            .data(data)
             .allowHardware(false)
             .build()
 

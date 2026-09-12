@@ -21,7 +21,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
         QueueItemEntity::class,
         FolderEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -49,6 +49,13 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tracks ADD COLUMN score INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /** Adds the user-chosen cover image to the playlists table. */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE playlists ADD COLUMN imageUrl TEXT")
             }
         }
     }

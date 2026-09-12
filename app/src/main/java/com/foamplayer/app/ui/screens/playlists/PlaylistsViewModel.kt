@@ -14,6 +14,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -55,6 +56,10 @@ class PlaylistsViewModel @Inject constructor(
     private val _playlists = MutableStateFlow<List<PlaylistEntity>>(emptyList())
     val playlists: StateFlow<List<PlaylistEntity>> = _playlists
 
+    /** Track count per playlist id, for list-row subtitles. */
+    private val _trackCounts = MutableStateFlow<Map<Long, Int>>(emptyMap())
+    val trackCounts: StateFlow<Map<Long, Int>> = _trackCounts
+
     private val _createState = MutableStateFlow<CreatePlaylistState>(CreatePlaylistState.Idle)
     val createState: StateFlow<CreatePlaylistState> = _createState
 
@@ -66,17 +71,46 @@ class PlaylistsViewModel @Inject constructor(
                 _playlists.value = list
             }
         }
+        viewModelScope.launch {
+            playlistRepository.getPlaylistTrackCounts().collect { counts ->
+                _trackCounts.value = counts.associate { it.playlistId to it.trackCount }
+            }
+        }
     }
 
-    fun createPlaylistFromSource(name: String, m3uUri: String?, folderUri: String?) {
+    fun createPlaylistFromSource(name: String, m3uUri: String?, folderUri: String?, imageUri: String? = null) {
         viewModelScope.launch {
             val resolvedName = name.trim().ifEmpty { context.getString(R.string.new_playlist_fallback) }
             when {
-                m3uUri != null -> createFromM3u(resolvedName, m3uUri)
-                folderUri != null -> createFromFolder(resolvedName, folderUri)
-                else -> playlistRepository.createPlaylist(resolvedName)
+                m3uUri != null -> createFromM3u(resolvedName, m3uUri, imageUri)
+                folderUri != null -> createFromFolder(resolvedName, folderUri, imageUri)
+                else -> playlistRepository.createPlaylist(resolvedName, imageUri)
             }
         }
+    }
+
+    fun deletePlaylist(playlistId: Long) {
+        viewModelScope.launch {
+            playlistRepository.deletePlaylist(playlistId)
+        }
+    }
+
+    fun renamePlaylist(playlistId: Long, name: String) {
+        viewModelScope.launch {
+            playlistRepository.renamePlaylist(playlistId, name)
+        }
+    }
+
+    fun setPlaylistImage(playlistId: Long, imageUrl: String?) {
+        viewModelScope.launch {
+            playlistRepository.setPlaylistImage(playlistId, imageUrl)
+        }
+    }
+
+    /** Track count + total duration of a playlist, for the modal's details page. */
+    suspend fun playlistTrackStats(playlistId: Long): Pair<Int, Long> {
+        val tracks = playlistRepository.getTracksForPlaylistOnce(playlistId).firstOrNull().orEmpty()
+        return tracks.size to tracks.sumOf { it.duration }
     }
 
     /** Dismisses the missing-songs report; for a pending folder playlist, creates it with the songs found so far. */
@@ -114,9 +148,9 @@ class PlaylistsViewModel @Inject constructor(
         }
     }
 
-    private suspend fun createFromM3u(name: String, m3uUri: String) {
+    private suspend fun createFromM3u(name: String, m3uUri: String, imageUrl: String?) {
         val result = importer.importM3u(m3uUri, trackRepository.getAllTracksOnce())
-        val playlistId = playlistRepository.createPlaylist(name)
+        val playlistId = playlistRepository.createPlaylist(name, imageUrl)
         result.matched.forEach { track ->
             playlistRepository.appendTrackToPlaylist(playlistId, track.id)
         }
@@ -125,10 +159,10 @@ class PlaylistsViewModel @Inject constructor(
         }
     }
 
-    private suspend fun createFromFolder(name: String, folderUri: String) {
+    private suspend fun createFromFolder(name: String, folderUri: String, imageUrl: String?) {
         val result = importer.matchFolder(folderUri, trackRepository.getAllTracksOnce())
         if (result.missing.isEmpty()) {
-            createPlaylistWithTracks(name, result.matched.map { it.id })
+            createPlaylistWithTracks(name, result.matched.map { it.id }, imageUrl)
         } else {
             _createState.value = CreatePlaylistState.FolderSongsMissing(
                 name = name,
@@ -139,8 +173,8 @@ class PlaylistsViewModel @Inject constructor(
         }
     }
 
-    private suspend fun createPlaylistWithTracks(name: String, trackIds: List<Long>) {
-        val playlistId = playlistRepository.createPlaylist(name)
+    private suspend fun createPlaylistWithTracks(name: String, trackIds: List<Long>, imageUrl: String? = null) {
+        val playlistId = playlistRepository.createPlaylist(name, imageUrl)
         trackIds.forEach { trackId ->
             playlistRepository.appendTrackToPlaylist(playlistId, trackId)
         }

@@ -1,6 +1,7 @@
 package com.foamplayer.app.data.repository
 
 import com.foamplayer.app.data.db.dao.PlaylistDao
+import com.foamplayer.app.data.db.dao.PlaylistTrackCount
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.PlaylistTrackCrossRef
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -17,8 +18,22 @@ class PlaylistRepository @Inject constructor(
     fun getTracksForPlaylist(playlistId: Long): Flow<List<TrackEntity>> =
         playlistDao.getTracksForPlaylist(playlistId)
 
-    suspend fun createPlaylist(name: String): Long =
-        playlistDao.createPlaylist(PlaylistEntity(name = name))
+    suspend fun createPlaylist(name: String, imageUrl: String? = null): Long =
+        playlistDao.createPlaylist(PlaylistEntity(name = name, imageUrl = imageUrl))
+
+    suspend fun renamePlaylist(playlistId: Long, name: String) {
+        playlistDao.renamePlaylist(playlistId, name)
+    }
+
+    suspend fun setPlaylistImage(playlistId: Long, imageUrl: String?) {
+        playlistDao.setPlaylistImage(playlistId, imageUrl)
+    }
+
+    fun getPlaylistTrackCounts(): Flow<List<PlaylistTrackCount>> =
+        playlistDao.getPlaylistTrackCounts()
+
+    fun getTracksForPlaylistOnce(playlistId: Long): Flow<List<TrackEntity>> =
+        playlistDao.getTracksForPlaylist(playlistId)
 
     suspend fun addTrackToPlaylist(playlistId: Long, trackId: Long, orderIndex: Int) {
         playlistDao.addTrackToPlaylist(PlaylistTrackCrossRef(playlistId, trackId, orderIndex))

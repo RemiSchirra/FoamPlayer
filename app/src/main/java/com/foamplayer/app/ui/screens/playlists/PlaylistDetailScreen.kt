@@ -22,7 +22,7 @@ fun PlaylistDetailScreen(
     playerTransitionVisibilityScope: AnimatedVisibilityScope,
     sharedTrackId: Long?,
     activeTrackId: Long?,
-    onListBackdropArt: (String?) -> Unit = {},
+    onListBackdropArt: (String?, Boolean) -> Unit = { _, _ -> },
     viewModel: PlaylistDetailViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.tracks.collectAsState()
@@ -32,9 +32,20 @@ fun PlaylistDetailScreen(
         viewModel.loadPlaylist(playlistId)
     }
 
-    LaunchedEffect(tracks) {
-        onListBackdropArt(tracks.firstOrNull { it.albumArtPath != null }?.albumArtPath)
+    // The playlist's own cover drives the blurred list backdrop (loaded as a
+    // direct image). Without one there is NO backdrop: the app-wide background
+    // of the currently playing track shows through instead.
+    LaunchedEffect(playlist?.imageUrl) {
+        val cover = playlist?.imageUrl
+        if (cover != null) {
+            onListBackdropArt(cover, false)
+        } else {
+            onListBackdropArt(null, true)
+        }
     }
+
+    // The user-chosen cover wins; without one, fall back to the first track's art.
+    val coverImage = playlist?.imageUrl
 
     TrackListScreen(
         title = playlist?.name ?: "Playlist",
@@ -46,7 +57,8 @@ fun PlaylistDetailScreen(
             }
         },
         onBack = onBack,
-        imageUrl = tracks.firstOrNull { it.albumArtPath != null }?.albumArtPath,
+        imageUrl = coverImage ?: tracks.firstOrNull { it.albumArtPath != null }?.albumArtPath,
+        imageIsEmbeddedArt = coverImage == null,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         sharedTrackId = sharedTrackId,

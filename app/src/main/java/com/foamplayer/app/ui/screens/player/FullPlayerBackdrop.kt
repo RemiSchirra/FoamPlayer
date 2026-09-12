@@ -127,6 +127,10 @@ private fun Modifier.performantBlur(radius: Dp): Modifier {
 
 /**
  * A blurred, crossfading artwork layer for non-settings areas of the app.
+ *
+ * The art paths normally point at audio files whose embedded picture is read
+ * through [EmbeddedAlbumArt]; the `*IsEmbedded` flags mark the rare callers
+ * (playlist covers) that pass a plain image URI Coil must load directly.
  */
 @Composable
 internal fun DynamicAlbumArtBackground(
@@ -136,17 +140,21 @@ internal fun DynamicAlbumArtBackground(
     blur: Dp,
     intensity: Float,
     modifier: Modifier = Modifier,
+    frontArtIsEmbedded: Boolean = true,
+    backArtIsEmbedded: Boolean = true,
 ) {
     val context = LocalContext.current
 
+    fun artRequest(path: String, isEmbedded: Boolean) = ImageRequest.Builder(context)
+        .data(if (isEmbedded) EmbeddedAlbumArt(path.toUri()) else path)
+        .size(AlbumArtRequestSize)
+        .crossfade(300)
+        .build()
+
     Box(modifier = modifier) {
         frontArtPath?.let { path ->
-            val request = remember(path) {
-                ImageRequest.Builder(context)
-                    .data(EmbeddedAlbumArt(path.toUri()))
-                    .size(AlbumArtRequestSize)
-                    .crossfade(300)
-                    .build()
+            val request = remember(path, frontArtIsEmbedded) {
+                artRequest(path, frontArtIsEmbedded)
             }
             AsyncImage(
                 model = request,
@@ -156,12 +164,8 @@ internal fun DynamicAlbumArtBackground(
             )
         }
         if (backArtPath != null && backArtPath != frontArtPath) {
-            val backRequest = remember(backArtPath) {
-                ImageRequest.Builder(context)
-                    .data(EmbeddedAlbumArt(backArtPath.toUri()))
-                    .size(AlbumArtRequestSize)
-                    .crossfade(300)
-                    .build()
+            val backRequest = remember(backArtPath, backArtIsEmbedded) {
+                artRequest(backArtPath, backArtIsEmbedded)
             }
             AsyncImage(
                 model = backRequest,

@@ -1,7 +1,13 @@
 package com.foamplayer.app.ui.screens.playlists
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,12 +16,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,13 +33,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.scanner.ScanStatus
+import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+
+// Mirrors CollectionListItem's row geometry so playlist rows are visually
+// identical to the app's other list rows.
+private val PlaylistArtSize = 48.dp
+private val PlaylistHighlightPadding = 6.dp
+
+private val ImageMimeTypes = arrayOf("image/*")
 
 @Composable
 fun PlaylistsScreen(
@@ -38,14 +62,47 @@ fun PlaylistsScreen(
     viewModel: PlaylistsViewModel = hiltViewModel()
 ) {
     val playlists by viewModel.playlists.collectAsState()
+    val trackCounts by viewModel.trackCounts.collectAsState()
     val createState by viewModel.createState.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
+
     var showCreateModal by remember { mutableStateOf(false) }
+
+    // Long-press actions (edit image / rename / details / delete), hosted here
+    // like the other screens host their long-press modals.
+    val playlistModalState = rememberPlaylistFoamModalState()
+    var renameTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
+
+    // Cover image picker: armed by the header pencil, the result applies to the
+    // playlist it was opened for.
+    var imagePickerTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
+    val context = LocalContext.current
+    val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val target = imagePickerTarget
+        if (uri != null && target != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            viewModel.setPlaylistImage(target.playlistId, uri.toString())
+        }
+        imagePickerTarget = null
+    }
+
+    // Track stats for the modal's details page, loaded for the shown playlist.
+    var modalStats by remember { mutableStateOf<PlaylistModalStats?>(null) }
+    LaunchedEffect(playlistModalState.playlist?.playlistId) {
+        val id = playlistModalState.playlist?.playlistId
+        modalStats = null
+        if (id != null) {
+            val (count, durationMs) = viewModel.playlistTrackStats(id)
+            modalStats = PlaylistModalStats(id, count, durationMs)
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -59,14 +116,17 @@ fun PlaylistsScreen(
 
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(FoamDimens.buttonRounding))
                     .background(FoamTheme.accentColor)
                     .clickable { showCreateModal = true }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingSmall)
             ) {
                 BasicText(
                     text = stringResource(R.string.create_playlist),
-                    style = FoamTheme.typography.body.copy(color = FoamTheme.colors.background)
+                    style = FoamTheme.typography.body.copy(
+                        color = FoamTheme.colors.background,
+                        fontWeight = FontWeight.Bold
+                    )
                 )
             }
         }
@@ -85,12 +145,16 @@ fun PlaylistsScreen(
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(playlists) { playlist ->
+                items(playlists, key = { it.playlistId }) { playlist ->
                     PlaylistItemRow(
                         playlist = playlist,
-                        onClick = { onPlaylistClick(playlist) }
+                        trackCount = trackCounts[playlist.playlistId] ?: 0,
+                        onClick = { onPlaylistClick(playlist) },
+                        onLongClick = { playlistModalState.show(playlist) }
                     )
                 }
+
+                item { Spacer(modifier = Modifier.height(80.dp)) }
             }
         }
     }
@@ -98,10 +162,31 @@ fun PlaylistsScreen(
     CreatePlaylistModal(
         visible = showCreateModal,
         onDismiss = { showCreateModal = false },
-        onCreate = { name, m3uUri, folderUri ->
+        onCreate = { name, m3uUri, folderUri, coverUri ->
             showCreateModal = false
-            viewModel.createPlaylistFromSource(name, m3uUri, folderUri)
+            viewModel.createPlaylistFromSource(name, m3uUri, folderUri, coverUri)
         }
+    )
+
+    PlaylistFoamModal(
+        state = playlistModalState,
+        stats = modalStats,
+        onEditImage = { playlist ->
+            imagePickerTarget = playlist
+            coverPicker.launch(ImageMimeTypes)
+        },
+        onEditName = { playlist -> renameTarget = playlist },
+        onDelete = { playlist -> viewModel.deletePlaylist(playlist.playlistId) },
+        onDismiss = { playlistModalState.dismiss() }
+    )
+
+    RenamePlaylistModal(
+        playlist = renameTarget,
+        onRename = { playlistId, newName ->
+            renameTarget = null
+            viewModel.renamePlaylist(playlistId, newName)
+        },
+        onDismiss = { renameTarget = null }
     )
 
     val missingState = when (val state = createState) {
@@ -143,32 +228,85 @@ fun PlaylistsScreen(
     }
 }
 
+/**
+ * TrackListItem/CollectionListItem equivalent for a playlist: 48dp cover (the
+ * user-chosen image, or the name's initial as fallback), the name and its
+ * track count. Long-press opens the playlist actions modal.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PlaylistItemRow(playlist: PlaylistEntity, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
+private fun PlaylistItemRow(
+    playlist: PlaylistEntity,
+    trackCount: Int,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val imageRadius = (PlaylistArtSize / 2) * FoamTheme.shapes.miniPlayerRounding
+    val highlightShape = RoundedCornerShape(imageRadius + PlaylistHighlightPadding)
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(FoamTheme.colors.surfaceVariant)
-                .padding(12.dp)
+                .fillMaxWidth()
+                .clip(highlightShape)
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(color = FoamTheme.colors.textPrimary),
+                    onLongClick = onLongClick,
+                    onClick = onClick
+                )
+                .padding(
+                    horizontal = PlaylistHighlightPadding,
+                    vertical = PlaylistHighlightPadding
+                ),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            BasicText(
-                text = "📁",
-                style = FoamTheme.typography.titleMedium
-            )
+            Box(
+                modifier = Modifier
+                    .size(PlaylistArtSize)
+                    .clip(RoundedCornerShape(imageRadius))
+                    .background(FoamTheme.colors.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                if (playlist.imageUrl != null) {
+                    val coverRequest = remember(playlist.imageUrl) {
+                        ImageRequest.Builder(context)
+                            .data(playlist.imageUrl)
+                            .size(AlbumArtRequestSize)
+                            .build()
+                    }
+                    AsyncImage(
+                        model = coverRequest,
+                        contentDescription = stringResource(R.string.playlist_cover_image),
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    BasicText(
+                        text = playlist.name.take(1).uppercase(),
+                        style = FoamTheme.typography.titleMedium
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                BasicText(
+                    text = playlist.name,
+                    style = FoamTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                BasicText(
+                    text = "$trackCount tracks",
+                    style = FoamTheme.typography.body,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        BasicText(
-            text = playlist.name,
-            style = FoamTheme.typography.titleMedium
-        )
     }
 }
