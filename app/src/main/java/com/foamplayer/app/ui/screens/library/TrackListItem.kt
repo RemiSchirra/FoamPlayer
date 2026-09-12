@@ -153,6 +153,18 @@ fun TrackListItem(
         label = "activeBackgroundFade"
     )
 
+    val targetTrackNumberColor = if (active) {
+        FoamTheme.colors.textPrimary
+    } else {
+        FoamTheme.colors.textSecondary
+    }
+
+    val animatedTrackNumberColor by animateColorAsState(
+        targetValue = targetTrackNumberColor,
+        animationSpec = tween(durationMillis = 200, easing = EaseOut),
+        label = "activeTrackNumberFade"
+    )
+
     val interactionSource = remember { MutableInteractionSource() }
 
     val dragHandleInteractionSource = remember { MutableInteractionSource() }
@@ -332,7 +344,7 @@ fun TrackListItem(
                 if (trackNumberText != null) {
                     BasicText(
                         text = trackNumberText,
-                        style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.textSecondary)
+                        style = FoamTheme.typography.titleMedium.copy(color = animatedTrackNumberColor)
                     )
                 } else if (track.albumArtPath != null) {
                     val context = LocalContext.current
