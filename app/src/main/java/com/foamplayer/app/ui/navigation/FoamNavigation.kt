@@ -458,19 +458,11 @@ fun FoamNavHost(
                 }
 
                 Column(modifier = Modifier.fillMaxSize()) {
-                    fun playTrackFromList(
-                        tracks: List<com.foamplayer.app.data.db.entities.TrackEntity>,
-                        index: Int,
-                        replaceUpcoming: Boolean = false
-                    ) {
+                    fun playTrackFromList(tracks: List<com.foamplayer.app.data.db.entities.TrackEntity>, index: Int) {
                         if (isAutoOpenPlayerEnabled) {
                             skipMiniPlayerTrackAnimation = true
                         }
-                        if (replaceUpcoming) {
-                            playerViewModel.playTrackReplacingUpcoming(tracks[index])
-                        } else {
-                            playerViewModel.playQueue(tracks, index)
-                        }
+                        playerViewModel.playQueueReplacingUpcoming(tracks, index)
                         if (isAutoOpenPlayerEnabled) {
                             animatePlayerTransition(
                                 open = true,
@@ -589,9 +581,7 @@ fun FoamNavHost(
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
                                             activeTrackId = playbackState.currentTrack?.id,
-                                            onTrackClick = { track ->
-                                                playTrackFromList(listOf(track), 0, replaceUpcoming = true)
-                                            }
+                                            onTrackClick = { track -> playTrackFromList(listOf(track), 0) }
                                         )
                                     }
                                     composable(Screen.BrowseAlbums.route) {

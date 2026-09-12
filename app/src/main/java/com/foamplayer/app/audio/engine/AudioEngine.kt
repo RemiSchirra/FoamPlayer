@@ -286,15 +286,17 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Plays [track] picked from a standalone list (e.g. search results): keeps
-     * the played history up to and including the current track, drops the
-     * upcoming main-queue tracks, makes [track] the next track and jumps to it.
-     * The auxiliary pool is left untouched, so no refill is needed.
+     * Plays [tracks] picked from a list (library, playlist, search results, ...):
+     * keeps the played history up to and including the current track, drops the
+     * upcoming main-queue tracks, queues [tracks] in their place and jumps to
+     * [startIndex]. The auxiliary pool is left untouched, so no refill is needed.
      */
-    fun playTrackReplacingUpcoming(track: TrackEntity) {
+    fun playListReplacingUpcoming(tracks: List<TrackEntity>, startIndex: Int) {
+        if (tracks.isEmpty()) return
+
         val current = _playbackState.value
         if (current.queue.isEmpty() || current.queueIndex !in current.queue.indices) {
-            setQueue(listOf(track), 0)
+            setQueue(tracks, startIndex)
             return
         }
 
@@ -306,18 +308,20 @@ class AudioEngine @Inject constructor(
             auxStart--
         }
 
-        val newQueue = current.queue.take(current.queueIndex + 1) + track +
+        val keptCount = current.queueIndex + 1
+        val newQueue = current.queue.take(keptCount) + tracks +
                 current.queue.subList(auxStart, current.queue.size)
 
         _playbackState.value = current.copy(
             queue = newQueue,
-            queueEntryIds = current.queueEntryIds.take(current.queueIndex + 1) + allocateEntryId() +
+            queueEntryIds = current.queueEntryIds.take(keptCount) +
+                    List(tracks.size) { allocateEntryId() } +
                     current.queueEntryIds.subList(auxStart, current.queueEntryIds.size),
-            auxiliaryFlags = flags.take(current.queueIndex + 1) + false +
+            auxiliaryFlags = flags.take(keptCount) + List(tracks.size) { false } +
                     flags.subList(auxStart, flags.size)
         )
 
-        jumpWindowTo(current.queueIndex + 1)
+        jumpWindowTo(keptCount + startIndex.coerceIn(0, tracks.lastIndex))
     }
 
     /**

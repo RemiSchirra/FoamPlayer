@@ -53,19 +53,18 @@ class PlayerViewModel @Inject constructor(
         _openPlayerRequested.value = false
     }
 
-    fun playQueue(tracks: List<TrackEntity>, startIndex: Int) {
-        audioEngine.setQueue(tracks, startIndex)
-    }
+    // Starting a list (library, playlist, search results, ...): keep the played
+    // history, drop the upcoming main queue, and play the picked list next.
+    fun playQueueReplacingUpcoming(tracks: List<TrackEntity>, startIndex: Int) =
+        audioEngine.playListReplacingUpcoming(tracks, startIndex)
+
+    fun playTrackReplacingUpcoming(track: TrackEntity) =
+        audioEngine.playListReplacingUpcoming(listOf(track), 0)
 
     // Long-press track actions from the library lists: queue right after the
     // current track, or append to the end of the main queue.
     fun playNext(track: TrackEntity) = audioEngine.playNext(track)
     fun addToQueue(track: TrackEntity) = audioEngine.addToQueue(track)
-
-    // Clicking a track from search results: keep the played history, drop the
-    // upcoming queue, and play the picked track next.
-    fun playTrackReplacingUpcoming(track: TrackEntity) =
-        audioEngine.playTrackReplacingUpcoming(track)
 
     fun play() = audioEngine.play()
     fun pause() = audioEngine.pause()
