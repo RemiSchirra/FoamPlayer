@@ -120,8 +120,8 @@ private const val PlayerTransitionMaxDurationMs = 500
 /** Fade duration for non-shared-element screen-to-screen navigation. */
 private const val NavScreenFadeDurationMs = 400
 
-/** Settings subscreens slide by a fraction of their width when pushed/popped. */
-private const val SettingsSlideDivisor = 3
+/** Settings and browse subscreens slide by a fraction of their width when pushed/popped. */
+private const val SubScreenSlideDivisor = 3
 
 private fun isSharedElementRoute(route: String?): Boolean {
     if (route == null) return false
@@ -134,6 +134,14 @@ private fun isSharedElementRoute(route: String?): Boolean {
 private fun isSettingsRoute(route: String?): Boolean {
     return route != null && (route == Screen.Settings.route || route.startsWith("settings/"))
 }
+
+/**
+ * Browse list pages (opened from the search section's browse cards, plus their
+ * sub-pages: genre/year tracks, folders, artists-in, albums-in). They slide over
+ * the screen they leave: in from the right when pushed, back out to the right
+ * when popped.
+ */
+private fun isBrowseRoute(route: String?): Boolean = route != null && route.startsWith("browse/")
 
 /** Detail screens whose list background is drawn full-bleed at the root. */
 private fun isDetailListRoute(route: String?): Boolean =
@@ -506,6 +514,8 @@ fun FoamNavHost(
                                             isSettingsRoute(initialState.destination.route) &&
                                                     isSettingsRoute(targetState.destination.route) ->
                                                 slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
+                                            isBrowseRoute(targetState.destination.route) ->
+                                                slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                                             isSharedElementRoute(initialState.destination.route) ||
                                                     isSharedElementRoute(targetState.destination.route) ->
                                                 fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
@@ -517,7 +527,10 @@ fun FoamNavHost(
                                             playerTransitionState.currentState -> ExitTransition.None
                                             isSettingsRoute(initialState.destination.route) &&
                                                     isSettingsRoute(targetState.destination.route) ->
-                                                slideOutHorizontally(targetOffsetX = { -it / SettingsSlideDivisor }, animationSpec = tween()) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
+                                                slideOutHorizontally(targetOffsetX = { -it / SubScreenSlideDivisor }, animationSpec = tween()) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
+                                            isBrowseRoute(initialState.destination.route) &&
+                                                    isBrowseRoute(targetState.destination.route) ->
+                                                slideOutHorizontally(targetOffsetX = { -it / SubScreenSlideDivisor }, animationSpec = tween()) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
                                             isSharedElementRoute(initialState.destination.route) ||
                                                     isSharedElementRoute(targetState.destination.route) ->
                                                 fadeOut(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
@@ -529,7 +542,10 @@ fun FoamNavHost(
                                             playerTransitionState.currentState -> EnterTransition.None
                                             isSettingsRoute(initialState.destination.route) &&
                                                     isSettingsRoute(targetState.destination.route) ->
-                                                slideInHorizontally(initialOffsetX = { -it / SettingsSlideDivisor }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
+                                                slideInHorizontally(initialOffsetX = { -it / SubScreenSlideDivisor }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
+                                            isBrowseRoute(initialState.destination.route) &&
+                                                    isBrowseRoute(targetState.destination.route) ->
+                                                slideInHorizontally(initialOffsetX = { -it / SubScreenSlideDivisor }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                                             isSharedElementRoute(initialState.destination.route) ||
                                                     isSharedElementRoute(targetState.destination.route) ->
                                                 fadeIn(animationSpec = tween(SharedElementTransitionDurationMs, easing = SharedElementEasing))
@@ -541,6 +557,8 @@ fun FoamNavHost(
                                             playerTransitionState.currentState -> ExitTransition.None
                                             isSettingsRoute(initialState.destination.route) &&
                                                     isSettingsRoute(targetState.destination.route) ->
+                                                slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
+                                            isBrowseRoute(initialState.destination.route) ->
                                                 slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
                                             isSharedElementRoute(initialState.destination.route) ||
                                                     isSharedElementRoute(targetState.destination.route) ->
