@@ -77,6 +77,54 @@ class LocalAudioScanner @Inject constructor(
         return@withContext allTracks
     }
 
+    /** Lists the audio files under the given folders (recursive) without reading any metadata. */
+    suspend fun listAudioFiles(folderPaths: Set<String>): List<Pair<Uri, String>> = withContext(Dispatchers.IO) {
+        val foundFiles = mutableListOf<Pair<Uri, String>>()
+        folderPaths.forEach { pathString ->
+            try {
+                val rootUri = Uri.parse(pathString)
+                if (rootUri.scheme == "content") {
+                    val treeId = DocumentsContract.getTreeDocumentId(rootUri)
+                    collectUrisRecursive(rootUri, treeId, foundFiles) { _, _ -> }
+                } else {
+                    val rootFile = if (rootUri.scheme == "file") File(rootUri.path ?: "") else File(pathString)
+                    if (rootFile.exists() && rootFile.isDirectory) {
+                        collectLegacyFiles(rootFile, foundFiles)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        foundFiles
+    }
+
+    /** Reads only the title/album tags of the given audio files (no full scan), keyed by URI. */
+    suspend fun readTitlesAlbums(uris: List<Uri>): Map<Uri, Pair<String, String>> = withContext(Dispatchers.IO) {
+        if (uris.isEmpty()) return@withContext emptyMap()
+        val result = HashMap<Uri, Pair<String, String>>()
+        val retriever = MediaMetadataRetriever()
+        try {
+            uris.forEach { uri ->
+                try {
+                    retriever.setDataSource(context, uri)
+                    val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?.trim()
+                    if (!title.isNullOrEmpty()) {
+                        val album = retriever
+                            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+                            ?.trim().orEmpty()
+                        result[uri] = title to album
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } finally {
+            retriever.release()
+        }
+        result
+    }
+
     private fun collectUrisRecursive(rootUri: Uri, parentId: String, result: MutableList<Pair<Uri, String>>, onProgress: (Float, String) -> Unit) {
         val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(rootUri, parentId)
         val projection = arrayOf(

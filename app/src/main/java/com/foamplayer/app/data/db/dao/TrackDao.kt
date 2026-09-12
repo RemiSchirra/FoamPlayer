@@ -12,6 +12,9 @@ interface TrackDao {
     @Query("SELECT * FROM tracks ORDER BY title ASC")
     fun getAllTracks(): Flow<List<TrackEntity>>
 
+    @Query("SELECT * FROM tracks")
+    suspend fun getAllTracksOnce(): List<TrackEntity>
+
     @Query("SELECT * FROM tracks WHERE path = :path LIMIT 1")
     suspend fun getTrackByPath(path: String): TrackEntity?
 

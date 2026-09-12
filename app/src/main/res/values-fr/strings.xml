@@ -89,6 +89,22 @@
     <string name="play_all">Tout lire</string>
     <string name="create_playlist">+ Créer</string>
     <string name="no_playlists_yet">Aucune playlist créée pour le moment.</string>
+    <string name="create_playlist_title">Créer une playlist</string>
+    <string name="playlist_name_hint">Nom de la playlist</string>
+    <string name="new_playlist_fallback">Nouvelle playlist</string>
+    <string name="playlist_name_value">Playlist : %1$s</string>
+    <string name="from_m3u_playlist">Depuis une playlist M3U</string>
+    <string name="from_m3u_subtitle">Choisir un fichier .m3u</string>
+    <string name="from_folder">Depuis un dossier</string>
+    <string name="from_folder_subtitle">Choisir un dossier de musique</string>
+    <string name="create">Créer</string>
+    <string name="clear_selection">Effacer la sélection</string>
+    <string name="songs_not_found_title">Ces morceaux n\'ont pas été trouvés dans votre bibliothèque</string>
+    <string name="add_folder_and_scan">Ajouter le dossier à la bibliothèque et analyser</string>
+    <string name="create_with_found_songs">Créer avec les morceaux trouvés</string>
+    <string name="scanning_folder">Analyse du dossier…</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Annuler</string>
 
     <string name="up_next">À suivre (%1$d pistes)</string>
     <string name="track_count_duration">%1$d Pistes • %2$s</string>

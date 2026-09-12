@@ -18,12 +18,18 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.PlaylistEntity
+import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -32,6 +38,9 @@ fun PlaylistsScreen(
     viewModel: PlaylistsViewModel = hiltViewModel()
 ) {
     val playlists by viewModel.playlists.collectAsState()
+    val createState by viewModel.createState.collectAsState()
+    val scanStatus by viewModel.scanStatus.collectAsState()
+    var showCreateModal by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -43,7 +52,7 @@ fun PlaylistsScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             BasicText(
-                text = "Playlists",
+                text = stringResource(R.string.playlists),
                 style = FoamTheme.typography.titleLarge,
                 modifier = Modifier.weight(1f)
             )
@@ -52,11 +61,11 @@ fun PlaylistsScreen(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .background(FoamTheme.accentColor)
-                    .clickable { viewModel.createPlaylist("New Playlist") }
+                    .clickable { showCreateModal = true }
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 BasicText(
-                    text = "+ Create",
+                    text = stringResource(R.string.create_playlist),
                     style = FoamTheme.typography.body.copy(color = FoamTheme.colors.background)
                 )
             }
@@ -70,7 +79,7 @@ fun PlaylistsScreen(
                 contentAlignment = Alignment.Center
             ) {
                 BasicText(
-                    text = "No playlists created yet.",
+                    text = stringResource(R.string.no_playlists_yet),
                     style = FoamTheme.typography.body
                 )
             }
@@ -84,6 +93,53 @@ fun PlaylistsScreen(
                 }
             }
         }
+    }
+
+    CreatePlaylistModal(
+        visible = showCreateModal,
+        onDismiss = { showCreateModal = false },
+        onCreate = { name, m3uUri, folderUri ->
+            showCreateModal = false
+            viewModel.createPlaylistFromSource(name, m3uUri, folderUri)
+        }
+    )
+
+    val missingState = when (val state = createState) {
+        is CreatePlaylistState.M3uSongsMissing ->
+            MissingSongsUiState(
+                playlistName = state.playlistName,
+                missing = state.missing,
+                folderUri = null,
+                isScanning = false,
+                scanProgress = 0f
+            )
+        is CreatePlaylistState.FolderSongsMissing ->
+            MissingSongsUiState(
+                playlistName = state.name,
+                missing = state.missing,
+                folderUri = state.folderUri,
+                isScanning = false,
+                scanProgress = 0f
+            )
+        is CreatePlaylistState.ImportingFolder ->
+            MissingSongsUiState(
+                playlistName = state.name,
+                missing = state.missing,
+                folderUri = state.folderUri,
+                isScanning = true,
+                scanProgress = (scanStatus as? ScanStatus.Scanning)?.progress ?: 0f
+            )
+        CreatePlaylistState.Idle -> null
+    }
+
+    missingState?.let { state ->
+        MissingSongsModal(
+            state = state,
+            onDismiss = { if (!state.isScanning) viewModel.cancelMissingSongs() },
+            onKeep = { viewModel.dismissMissingSongs() },
+            onCancel = { viewModel.cancelMissingSongs() },
+            onImportFolder = { viewModel.importMissingFolderAndCreate() }
+        )
     }
 }
 

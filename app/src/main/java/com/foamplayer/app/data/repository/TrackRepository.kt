@@ -25,6 +25,8 @@ class TrackRepository @Inject constructor(
 
     fun getAllTracks(): Flow<List<TrackEntity>> = trackDao.getAllTracks()
 
+    suspend fun getAllTracksOnce(): List<TrackEntity> = trackDao.getAllTracksOnce()
+
     fun searchTracks(query: String): Flow<List<TrackEntity>> = trackDao.searchTracks(query)
 
     fun searchArtists(query: String): Flow<List<String>> = trackDao.searchArtists(query).map { rawArtists ->
@@ -96,6 +98,32 @@ class TrackRepository @Inject constructor(
         trackDao.deleteOrphanedTracks(scannedPaths)
 
         _scanStatus.value = ScanStatus.Finished(scannedTracks.size)
+    }
+
+    /**
+     * Scans a single folder and merges the result into the library WITHOUT
+     * deleting tracks from other folders (unlike [startScan], which cleans up
+     * orphans across the whole library from the scanned set).
+     */
+    suspend fun scanFolderAndMerge(folder: String) {
+        val settings = settingsRepository.settings.first()
+        val artistSeps = settings.artistSeparators
+        val genreSeps = settings.genreSeparators
+
+        _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
+        val scannedTracks = scanner.scanFoldersSync(setOf(folder), artistSeps, genreSeps) { progress, currentFile ->
+            _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
+        }
+
+        val existingStats = trackDao.getPlayStats().associateBy { it.path }
+        val mergedTracks = scannedTracks.map { scanned ->
+            existingStats[scanned.path]?.let {
+                scanned.copy(playCount = it.playCount, lastPlayedAt = it.lastPlayedAt, score = it.score)
+            } ?: scanned
+        }
+
+        trackDao.insertTracks(mergedTracks)
+        _scanStatus.value = ScanStatus.Finished(mergedTracks.size)
     }
 
     /** Marks [trackId] as listened once at [timestamp] (the threshold-crossing moment). */

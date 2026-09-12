@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -55,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
+import android.view.WindowManager
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.abs
@@ -117,6 +119,10 @@ fun FoamBottomModal(
             (dialogView.parent as? DialogWindowProvider)?.window?.let { window ->
                 window.setDimAmount(0f)
                 window.setWindowAnimations(0)
+                // Keep the sheet clear of the soft keyboard: on API 30+ the
+                // window reports IME insets we pad with below; on older APIs
+                // this resize mode keeps the sheet above the keyboard.
+                window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             }
         }
 
@@ -124,7 +130,10 @@ fun FoamBottomModal(
             val density = LocalDensity.current
             val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
             val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            val bottomSpacing = bottomInset + bottomEdgeMargin
+            // Lift the sheet above the soft keyboard whenever it is visible
+            // (the larger of the two wins so the nav bar is never double-counted).
+            val imeInset = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+            val bottomSpacing = maxOf(bottomInset, imeInset) + bottomEdgeMargin
 
             val fullPx = with(density) {
                 (maxHeight - topInset - topEdgeMargin - bottomSpacing).coerceAtLeast(0.dp).toPx()
@@ -161,9 +170,11 @@ fun FoamBottomModal(
             // finishes.
             val scrimAlpha = (capPx / restingCapPx.coerceAtLeast(1f)).coerceIn(0f, 1f) * 0.55f
 
-            // Live proxy so the remembered connection below always calls the
-            // current callback even though it is created only once.
+            // Live proxies so the remembered connection below always reads the
+            // current callback and available height even though it is created
+            // only once (fullPx now varies while the soft keyboard opens/closes).
             val latestOnDismissRequest by rememberUpdatedState(onDismissRequest)
+            val latestFullPx by rememberUpdatedState(fullPx)
 
             val nestedScrollConnection = remember {
                 object : NestedScrollConnection {
@@ -173,10 +184,10 @@ fun FoamBottomModal(
                     // recompositions, so plain locals captured at creation time
                     // (contentHeightPx was still 0 then) would be stale and break
                     // the drag math. contentHeightPx / draggedCapPx are state
-                    // delegates, so they read live; fullPx only depends on the
-                    // Dialog's fixed constraints.
+                    // delegates, so they read live; fullPx is read through the
+                    // rememberUpdatedState proxy above.
                     fun restingPx(): Float =
-                        if (contentHeightPx > 0f) minOf(contentHeightPx, fullPx) else fullPx
+                        if (contentHeightPx > 0f) minOf(contentHeightPx, latestFullPx) else latestFullPx
 
                     fun currentCapPx(): Float = draggedCapPx ?: restingPx()
 
