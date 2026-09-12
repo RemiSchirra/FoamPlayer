@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -165,6 +166,11 @@ fun CollectionFoamModal(
         showDetails = false
     }
 
+    // Horizontal gap kept between the outgoing and incoming pages while they
+    // slide (both travel one width + gap in lockstep), so their contents never
+    // touch mid-transition; at rest neither offset applies.
+    val pageGapPx = with(LocalDensity.current) { FoamDimens.spacingSmall.roundToPx() }
+
     fun perform(action: (CollectionInfo) -> Unit) {
         val current = state.collection ?: return
         state.dismiss()
@@ -189,9 +195,13 @@ fun CollectionFoamModal(
                     targetState = showDetails,
                     transitionSpec = {
                         if (targetState) {
-                            slideInHorizontally { it } togetherWith slideOutHorizontally { -it }
+                            // Push: details slides in from the right...
+                            slideInHorizontally { it + pageGapPx } togetherWith
+                                    slideOutHorizontally { -it - pageGapPx }
                         } else {
-                            slideInHorizontally { -it } togetherWith slideOutHorizontally { it }
+                            // ...pop: back to the actions.
+                            slideInHorizontally { -it - pageGapPx } togetherWith
+                                    slideOutHorizontally { it + pageGapPx }
                         }
                     },
                     label = "CollectionModalPage"
@@ -200,15 +210,6 @@ fun CollectionFoamModal(
                         verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
                     ) {
                         if (isDetails) {
-                            val summary = collectionSummaryText(displayCollection)
-                            if (summary.isNotEmpty()) {
-                                BasicText(
-                                    text = summary,
-                                    style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
-                                    modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
-                                )
-                            }
-
                             CollectionDetailsContent(
                                 collection = displayCollection,
                                 accentColor = accentColor
@@ -352,15 +353,6 @@ fun CollectionDetailsModal(
                     accentColor = accentColor
                 )
 
-                val summary = collectionSummaryText(displayCollection)
-                if (summary.isNotEmpty()) {
-                    BasicText(
-                        text = summary,
-                        style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
-                        modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
-                    )
-                }
-
                 CollectionDetailsContent(
                     collection = displayCollection,
                     accentColor = accentColor
@@ -477,12 +469,6 @@ private fun CollectionDetailsContent(
         }
     }
 }
-
-private fun collectionSummaryText(collection: CollectionInfo): String = listOf(
-    collection.tracks.size.takeIf { it > 0 }?.let { "$it tracks" },
-    collection.tracks.sumOf { it.duration }.takeIf { it > 0 }
-        ?.let { TimeUtils.formatDurationLong(it) }
-).filterNotNull().joinToString("  ·  ")
 
 /** One navigation row on the actions page: label plus the action to run on tap. */
 private data class CollectionModalNavRow(

@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -157,6 +158,11 @@ fun TrackFoamModal(
         showDetails = false
     }
 
+    // Horizontal gap kept between the outgoing and incoming pages while they
+    // slide (both travel one width + gap in lockstep), so their contents never
+    // touch mid-transition; at rest neither offset applies.
+    val pageGapPx = with(LocalDensity.current) { FoamDimens.spacingSmall.roundToPx() }
+
     fun perform(action: (TrackEntity) -> Unit) {
         val current = state.track ?: return
         state.dismiss()
@@ -186,10 +192,12 @@ fun TrackFoamModal(
                     transitionSpec = {
                         if (targetState) {
                             // Push: details slides in from the right...
-                            slideInHorizontally { it } togetherWith slideOutHorizontally { -it }
+                            slideInHorizontally { it + pageGapPx } togetherWith
+                                    slideOutHorizontally { -it - pageGapPx }
                         } else {
                             // ...pop: back to the actions.
-                            slideInHorizontally { -it } togetherWith slideOutHorizontally { it }
+                            slideInHorizontally { -it - pageGapPx } togetherWith
+                                    slideOutHorizontally { it + pageGapPx }
                         }
                     },
                     label = "TrackModalPage"
