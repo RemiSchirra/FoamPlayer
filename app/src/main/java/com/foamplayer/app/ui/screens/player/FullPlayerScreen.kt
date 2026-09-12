@@ -78,6 +78,7 @@ fun FullPlayerScreen(
 ) {
     val state by viewModel.playbackState.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val scoreOverrides by viewModel.scoreOverrides.collectAsState()
     val isImmersiveEnabled = settings.immersiveModeEnabled
     val track = state.currentTrack ?: return
 
@@ -388,7 +389,9 @@ fun FullPlayerScreen(
                             playerTransitionState = playerTransitionState,
                             upTransitionState = upTransitionState,
                             seekBarProgress = seekBarProgress,
-                            isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
+                            isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                            scoreOverrides = scoreOverrides,
+                            onSetScore = viewModel::setTrackScore
                         )
                     }
 

@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.Icon
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -61,6 +62,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.LocalTrackFoamModalState
+import com.foamplayer.app.ui.components.trackScoreVisual
 import com.foamplayer.app.ui.theme.FoamTheme
 import androidx.core.net.toUri
 import kotlin.math.abs
@@ -385,6 +387,21 @@ fun TrackListItem(
                                 Modifier
                             }
                         )
+                )
+            }
+
+            // Score indicator (like / super like / dislike): informational only,
+            // so it gets no click handling of its own — taps stay on the row.
+            // Muted (textSecondary) here, unlike the player/modal where it's white.
+            if (track.score != 0) {
+                Spacer(modifier = Modifier.width(12.dp))
+
+                val (scoreIcon, _) = trackScoreVisual(track.score)
+                Icon(
+                    imageVector = scoreIcon,
+                    contentDescription = null,
+                    tint = FoamTheme.colors.textSecondary,
+                    modifier = Modifier.size(18.dp)
                 )
             }
 

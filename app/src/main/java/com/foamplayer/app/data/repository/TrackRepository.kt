@@ -83,11 +83,11 @@ class TrackRepository @Inject constructor(
         }
 
         // insertTracks() replaces rows on conflict, which would wipe the listen
-        // stats: re-attach the existing ones to the freshly scanned entities.
+        // stats and score: re-attach the existing ones to the freshly scanned entities.
         val existingStats = trackDao.getPlayStats().associateBy { it.path }
         val mergedTracks = scannedTracks.map { scanned ->
             existingStats[scanned.path]?.let {
-                scanned.copy(playCount = it.playCount, lastPlayedAt = it.lastPlayedAt)
+                scanned.copy(playCount = it.playCount, lastPlayedAt = it.lastPlayedAt, score = it.score)
             } ?: scanned
         }
 
@@ -104,4 +104,7 @@ class TrackRepository @Inject constructor(
 
     /** Resets the listen counter to 0 and clears the last-listen date. */
     suspend fun resetPlayStats(trackId: Long) = trackDao.resetPlayStats(trackId)
+
+    /** Stores the user score (-1 dislike / 0 not noted / 1 like / 2 super like). */
+    suspend fun setScore(trackId: Long, score: Int) = trackDao.setScore(trackId, score)
 }

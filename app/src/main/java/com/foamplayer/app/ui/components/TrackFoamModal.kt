@@ -119,6 +119,8 @@ fun TrackFoamModal(
     onSeeArtist: (TrackEntity) -> Unit = {},
     onSeeAlbum: (TrackEntity) -> Unit = {},
     onResetPlayStats: (TrackEntity) -> Unit = {},
+    scoreOverrides: Map<Long, Int> = emptyMap(),
+    onSetScore: (Long, Int) -> Unit = { _, _ -> },
     useAlbumArtAccent: Boolean = false,
     onDismiss: () -> Unit = { state.dismiss() }
 ) {
@@ -172,7 +174,12 @@ fun TrackFoamModal(
             ) {
                 // Shared across both pages: it stays mounted while the content
                 // below it animates, so it reads as one continuous header.
-                TrackModalHeader(track = displayTrack, accentColor = accentColor)
+                TrackModalHeader(
+                    track = displayTrack,
+                    accentColor = accentColor,
+                    score = scoreOverrides[displayTrack.id] ?: displayTrack.score,
+                    onSetScore = { onSetScore(displayTrack.id, it) }
+                )
 
                 AnimatedContent(
                     targetState = showDetails,
@@ -367,12 +374,14 @@ private fun ModalSectionDivider() {
     )
 }
 
-/** Header block: album art on the left, title with the album underneath, on a darker container. */
+/** Header block: album art on the left, title with the album underneath, score heart on the right, on a darker container. */
 @Composable
 private fun TrackModalHeader(
     track: TrackEntity,
     modifier: Modifier = Modifier,
-    accentColor: Color = FoamTheme.accentColor
+    accentColor: Color = FoamTheme.accentColor,
+    score: Int = 0,
+    onSetScore: (Int) -> Unit = {}
 ) {
     Row(
         modifier = modifier
@@ -427,6 +436,15 @@ private fun TrackModalHeader(
                 overflow = TextOverflow.Ellipsis
             )
         }
+
+        Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
+
+        TrackScoreHeart(
+            score = score,
+            onSetScore = onSetScore,
+            iconSize = 24.dp,
+            touchTarget = 36.dp
+        )
     }
 }
 
@@ -513,6 +531,8 @@ fun TrackDetailsModal(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     onResetPlayStats: (TrackEntity) -> Unit = {},
+    scoreOverrides: Map<Long, Int> = emptyMap(),
+    onSetScore: (Long, Int) -> Unit = { _, _ -> },
     useAlbumArtAccent: Boolean = false
 ) {
     // Same exit-animation preservation as the other modals in this file.
@@ -549,7 +569,12 @@ fun TrackDetailsModal(
                 modifier = Modifier.padding(bottom = FoamDimens.spacingSmall),
                 verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
             ) {
-                TrackModalHeader(track = displayTrack, accentColor = accentColor)
+                TrackModalHeader(
+                    track = displayTrack,
+                    accentColor = accentColor,
+                    score = scoreOverrides[displayTrack.id] ?: displayTrack.score,
+                    onSetScore = { onSetScore(displayTrack.id, it) }
+                )
 
                 BasicText(
                     text = audioSummaryText(displayTrack),

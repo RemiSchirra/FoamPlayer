@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -52,6 +53,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
+import com.foamplayer.app.ui.components.TrackScoreHeart
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.components.onSeekBarReleased
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -75,7 +77,9 @@ internal fun SharedTransitionScope.MainPlayerContent(
     playerTransitionState: SeekableTransitionState<Boolean>,
     upTransitionState: SeekableTransitionState<Boolean>,
     seekBarProgress: SeekBarProgressState,
-    isAnimateSeekBarEnabled: Boolean
+    isAnimateSeekBarEnabled: Boolean,
+    scoreOverrides: Map<Long, Int>,
+    onSetScore: (Long, Int) -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(top = PlayerDimens.screenPadding),
@@ -96,7 +100,9 @@ internal fun SharedTransitionScope.MainPlayerContent(
             outerVisibilityScope = outerVisibilityScope,
             headerVisibilityScope = headerVisibilityScope,
             playerTransitionState = playerTransitionState,
-            upTransitionState = upTransitionState
+            upTransitionState = upTransitionState,
+            scoreOverrides = scoreOverrides,
+            onSetScore = onSetScore
         )
 
         Spacer(modifier = Modifier.weight(1f))
@@ -150,7 +156,9 @@ internal fun SharedTransitionScope.TrackHeroPager(
     outerVisibilityScope: AnimatedVisibilityScope,
     headerVisibilityScope: AnimatedVisibilityScope,
     playerTransitionState: SeekableTransitionState<Boolean>,
-    upTransitionState: SeekableTransitionState<Boolean>
+    upTransitionState: SeekableTransitionState<Boolean>,
+    scoreOverrides: Map<Long, Int>,
+    onSetScore: (Long, Int) -> Unit
 ) {
     val anchorPage = queueIndex.coerceAtLeast(0)
 
@@ -232,46 +240,56 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
-                Column(modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = anchorPageAlpha() }) {
-                    BasicText(
-                        text = pageTrack.title,
-                        style = FoamTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = if (immersive && isAnchorPage && pageTrack.id == track.id) {
-                            Modifier
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "track_title_${track.id}"),
-                                    animatedVisibilityScope = outerVisibilityScope
-                                )
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "track_title_header_${track.id}"),
-                                    animatedVisibilityScope = headerVisibilityScope
-                                )
-                                .pingPongMarquee()
-                        } else {
-                            Modifier
-                        }
-                    )
-                    BasicText(
-                        text = stringResource(R.string.artist_album_separator, pageTrack.artist, pageTrack.album),
-                        style = FoamTheme.typography.body,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = if (immersive && isAnchorPage && pageTrack.id == track.id) {
-                            Modifier
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "track_artist_${track.id}"),
-                                    animatedVisibilityScope = outerVisibilityScope
-                                )
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "track_artist_header_${track.id}"),
-                                    animatedVisibilityScope = headerVisibilityScope
-                                )
-                                .pingPongMarquee()
-                        } else {
-                            Modifier
-                        }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = anchorPageAlpha() }
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        BasicText(
+                            text = pageTrack.title,
+                            style = FoamTheme.typography.titleLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = if (immersive && isAnchorPage && pageTrack.id == track.id) {
+                                Modifier
+                                    .sharedBounds(
+                                        rememberSharedContentState(key = "track_title_${track.id}"),
+                                        animatedVisibilityScope = outerVisibilityScope
+                                    )
+                                    .sharedBounds(
+                                        rememberSharedContentState(key = "track_title_header_${track.id}"),
+                                        animatedVisibilityScope = headerVisibilityScope
+                                    )
+                                    .pingPongMarquee()
+                            } else {
+                                Modifier
+                            }
+                        )
+                        BasicText(
+                            text = stringResource(R.string.artist_album_separator, pageTrack.artist, pageTrack.album),
+                            style = FoamTheme.typography.body,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = if (immersive && isAnchorPage && pageTrack.id == track.id) {
+                                Modifier
+                                    .sharedBounds(
+                                        rememberSharedContentState(key = "track_artist_${track.id}"),
+                                        animatedVisibilityScope = outerVisibilityScope
+                                    )
+                                    .sharedBounds(
+                                        rememberSharedContentState(key = "track_artist_header_${track.id}"),
+                                        animatedVisibilityScope = headerVisibilityScope
+                                    )
+                                    .pingPongMarquee()
+                            } else {
+                                Modifier
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    TrackScoreHeart(
+                        score = scoreOverrides[pageTrack.id] ?: pageTrack.score,
+                        onSetScore = { value -> onSetScore(pageTrack.id, value) }
                     )
                 }
             }
@@ -327,38 +345,45 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    BasicText(
-                        text = track.title,
-                        style = FoamTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .sharedBounds(
-                                rememberSharedContentState(key = "track_title_${track.id}"),
-                                animatedVisibilityScope = outerVisibilityScope
-                            )
-                            .sharedBounds(
-                                rememberSharedContentState(key = "track_title_header_${track.id}"),
-                                animatedVisibilityScope = headerVisibilityScope
-                            )
-                            .pingPongMarquee()
-                    )
-                    BasicText(
-                        text = stringResource(R.string.artist_album_separator, track.artist, track.album),
-                        style = FoamTheme.typography.body,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .sharedBounds(
-                                rememberSharedContentState(key = "track_artist_${track.id}"),
-                                animatedVisibilityScope = outerVisibilityScope
-                            )
-                            .sharedBounds(
-                                rememberSharedContentState(key = "track_artist_header_${track.id}"),
-                                animatedVisibilityScope = headerVisibilityScope
-                            )
-                            .pingPongMarquee()
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        BasicText(
+                            text = track.title,
+                            style = FoamTheme.typography.titleLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "track_title_${track.id}"),
+                                    animatedVisibilityScope = outerVisibilityScope
+                                )
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "track_title_header_${track.id}"),
+                                    animatedVisibilityScope = headerVisibilityScope
+                                )
+                                .pingPongMarquee()
+                        )
+                        BasicText(
+                            text = stringResource(R.string.artist_album_separator, track.artist, track.album),
+                            style = FoamTheme.typography.body,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "track_artist_${track.id}"),
+                                    animatedVisibilityScope = outerVisibilityScope
+                                )
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "track_artist_header_${track.id}"),
+                                    animatedVisibilityScope = headerVisibilityScope
+                                )
+                                .pingPongMarquee()
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    TrackScoreHeart(
+                        score = scoreOverrides[track.id] ?: track.score,
+                        onSetScore = { value -> onSetScore(track.id, value) }
                     )
                 }
             }

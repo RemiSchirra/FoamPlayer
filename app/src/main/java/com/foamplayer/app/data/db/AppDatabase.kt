@@ -21,7 +21,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
         QueueItemEntity::class,
         FolderEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,6 +42,13 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tracks ADD COLUMN playCount INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE tracks ADD COLUMN lastPlayedAt INTEGER")
+            }
+        }
+
+        /** Adds the user score (-1 dislike / 0 not noted / 1 like / 2 super like) to the tracks table. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tracks ADD COLUMN score INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

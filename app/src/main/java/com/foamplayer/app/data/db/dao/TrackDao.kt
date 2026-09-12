@@ -88,7 +88,10 @@ interface TrackDao {
     @Query("UPDATE tracks SET playCount = 0, lastPlayedAt = NULL WHERE id = :trackId")
     suspend fun resetPlayStats(trackId: Long)
 
-    @Query("SELECT path, playCount, lastPlayedAt FROM tracks")
+    @Query("UPDATE tracks SET score = :score WHERE id = :trackId")
+    suspend fun setScore(trackId: Long, score: Int)
+
+    @Query("SELECT path, playCount, lastPlayedAt, score FROM tracks")
     suspend fun getPlayStats(): List<TrackPlayStatsRow>
 
     @Query("DELETE FROM tracks WHERE path NOT IN (:existingPaths)")
@@ -104,5 +107,6 @@ data class AlbumSearchResult(
 data class TrackPlayStatsRow(
     val path: String,
     val playCount: Int,
-    val lastPlayedAt: Long?
+    val lastPlayedAt: Long?,
+    val score: Int = 0
 )

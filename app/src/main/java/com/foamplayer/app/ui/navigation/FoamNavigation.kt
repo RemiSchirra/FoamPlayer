@@ -188,6 +188,7 @@ fun FoamNavHost(
 
     val playbackState by playerViewModel.playbackState.collectAsState()
     val playerSettings by playerViewModel.settings.collectAsState()
+    val scoreOverrides by playerViewModel.scoreOverrides.collectAsState()
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
     val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
     val isDynamicBackgroundEnabled = playerSettings.dynamicBackgroundEnabled
@@ -957,6 +958,8 @@ fun FoamNavHost(
                     // Reflect the reset in the open sheet immediately.
                     trackModalState.updateCurrentTrack { it.copy(playCount = 0, lastPlayedAt = null) }
                 },
+                scoreOverrides = scoreOverrides,
+                onSetScore = playerViewModel::setTrackScore,
                 useAlbumArtAccent = playerSettings.automaticColorEnabled
             )
 

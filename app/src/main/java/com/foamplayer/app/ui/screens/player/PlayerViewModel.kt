@@ -83,4 +83,15 @@ class PlayerViewModel @Inject constructor(
     fun resetPlayStats(trackId: Long) {
         viewModelScope.launch { trackRepository.resetPlayStats(trackId) }
     }
+
+    // Track scores (-1 dislike / 0 not noted / 1 like / 2 super like): the in-memory
+    // queue entities go stale the moment a score is written to the DB, so the UI
+    // overlays this id→score map on top of the entity values.
+    private val _scoreOverrides = MutableStateFlow<Map<Long, Int>>(emptyMap())
+    val scoreOverrides: StateFlow<Map<Long, Int>> = _scoreOverrides.asStateFlow()
+
+    fun setTrackScore(trackId: Long, score: Int) {
+        _scoreOverrides.value = _scoreOverrides.value + (trackId to score)
+        viewModelScope.launch { trackRepository.setScore(trackId, score) }
+    }
 }
