@@ -34,9 +34,9 @@ import com.foamplayer.app.ui.components.CollectionListItem
 import com.foamplayer.app.ui.components.CollectionListScreen
 import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.TrackListScreen
+import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.distinctCollectionAlbums
 import com.foamplayer.app.ui.components.distinctCollectionArtistNames
-import com.foamplayer.app.ui.screens.library.TrackListItem
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
 

@@ -3,11 +3,8 @@ package com.foamplayer.app.ui.components
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,7 +22,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -42,15 +38,6 @@ import coil.request.ImageRequest
 import androidx.core.net.toUri
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.theme.FoamTheme
-
-// Must match TrackListScreen's AlbumArtShape — using the same shape on both ends of the
-// shared-element transition means the corners never have to jump between two radii.
-private val CollectionAlbumArtShape = RoundedCornerShape(12.dp)
-
-// Mirrors TrackListItem's artwork geometry so collection rows are visually identical
-// to track rows.
-private val CollectionArtSize = 48.dp
-private val CollectionHighlightPadding = 6.dp
 
 /**
  * "List of lists" screen: the TrackListScreen equivalent for screens that hold a list
@@ -131,7 +118,7 @@ private fun CollectionHeaderSection(
         Box(
             modifier = Modifier
                 .size(120.dp)
-                .clip(CollectionAlbumArtShape)
+                .clip(AlbumArtShape)
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
@@ -192,13 +179,13 @@ private fun CollectionHeaderSection(
 }
 
 /**
- * TrackListItem equivalent for a collection (album, folder, genre, year...): same
- * 48dp artwork + title + subtitle row. When a [sharedElementKey] and the transition
- * scopes are provided, the artwork and texts animate into the matching album detail
- * header using the same keys as SearchScreen's album rows ("album-art-*", "album-title-*",
- * "album-artist-*").
+ * TrackListItem equivalent for a collection (album, folder, genre, year...):
+ * the same [MediaListRow] scaffold — 48dp artwork + title + subtitle row. When
+ * a [sharedElementKey] and the transition scopes are provided, the artwork and
+ * texts animate into the matching album detail header using the same keys as
+ * SearchScreen's album rows ("album-art-*", "album-title-*", "album-artist-*").
  */
-@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CollectionListItem(
     title: String,
@@ -213,9 +200,6 @@ fun CollectionListItem(
     sharedElementKey: String? = null
 ) {
     val context = LocalContext.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val imageRadius = (CollectionArtSize / 2) * FoamTheme.shapes.miniPlayerRounding
-    val highlightShape = RoundedCornerShape(imageRadius + CollectionHighlightPadding)
 
     // Long-press opens the collection actions modal when FoamNavHost provides
     // one at the root; an explicit [onLongClick] always wins over that default.
@@ -238,117 +222,78 @@ fun CollectionListItem(
         else -> null
     }
 
-    val sharedScope = sharedTransitionScope
-    val animScope = animatedVisibilityScope
+    // Rows taking part in the shared-element transition must use the same fixed
+    // corner radius as the album detail header; the others round like the
+    // other list rows.
     val elementKey = sharedElementKey
-    val isSharedElementSource = sharedScope != null && animScope != null && elementKey != null
-
-    // Rows taking part in the shared-element transition must use the same fixed corner
-    // radius as the album detail header; the others round like TrackListItem rows.
-    val artShape = if (isSharedElementSource) {
-        CollectionAlbumArtShape
+    val artShape = if (elementKey != null) {
+        AlbumArtShape
     } else {
-        RoundedCornerShape(imageRadius)
+        RoundedCornerShape(listRowArtCornerRadius())
     }
 
-    @Composable
-    fun Modifier.sharedArtworkIfAvailable(): Modifier {
-        if (!isSharedElementSource) return this
-        return with(sharedScope) {
-            this@sharedArtworkIfAvailable.sharedElement(
-                rememberSharedContentState(key = "album-art-$elementKey"),
-                animatedVisibilityScope = animScope,
-                clipInOverlayDuringTransition = OverlayClip(CollectionAlbumArtShape),
+    MediaListRow(
+        modifier = modifier,
+        onClick = onClick,
+        onLongClick = resolvedOnLongClick,
+        artworkModifier = Modifier
+            .rowSharedArtwork(
+                key = "album-art-$elementKey",
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                enabled = elementKey != null,
+                overlayClip = AlbumArtShape,
                 boundsTransform = AlbumArtBoundsTransform
             )
-        }
-    }
-
-    @Composable
-    fun Modifier.sharedTextIfAvailable(key: String): Modifier {
-        if (!isSharedElementSource) return this
-        return with(sharedScope) {
-            this@sharedTextIfAvailable.sharedBounds(
-                rememberSharedContentState(key = key),
-                animatedVisibilityScope = animScope,
-                boundsTransform = AlbumArtBoundsTransform
-            )
-        }
-    }
-
-    Box(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(highlightShape)
-                .combinedClickable(
-                    interactionSource = interactionSource,
-                    indication = ripple(color = FoamTheme.colors.textPrimary),
-                    onLongClick = resolvedOnLongClick,
-                    onClick = { onClick() }
-                )
-                .padding(
-                    horizontal = CollectionHighlightPadding,
-                    vertical = CollectionHighlightPadding
-                ),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(CollectionArtSize)
-                    .sharedArtworkIfAvailable()
-                    .clip(artShape)
-                    .background(FoamTheme.colors.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                if (imageUrl != null) {
-                    val albumArtRequest = remember(imageUrl) {
-                        ImageRequest.Builder(context)
-                            .data(EmbeddedAlbumArt(imageUrl.toUri()))
-                            .size(AlbumArtRequestSize)
-                            .build()
-                    }
-                    AsyncImage(
-                        model = albumArtRequest,
-                        contentDescription = "Album Art",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else if (icon != null) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = FoamTheme.accentColor,
-                        modifier = Modifier.size(24.dp)
-                    )
-                } else {
-                    BasicText(
-                        text = title.take(1).uppercase(),
-                        style = FoamTheme.typography.titleMedium
-                    )
+            .clip(artShape)
+            .background(FoamTheme.colors.surfaceVariant),
+        artworkContent = {
+            if (imageUrl != null) {
+                val albumArtRequest = remember(imageUrl) {
+                    ImageRequest.Builder(context)
+                        .data(EmbeddedAlbumArt(imageUrl.toUri()))
+                        .size(AlbumArtRequestSize)
+                        .build()
                 }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
+                AsyncImage(
+                    model = albumArtRequest,
+                    contentDescription = "Album Art",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = FoamTheme.accentColor,
+                    modifier = Modifier.size(24.dp)
+                )
+            } else {
                 BasicText(
-                    text = title,
-                    style = FoamTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.sharedTextIfAvailable("album-title-$elementKey")
+                    text = title.take(1).uppercase(),
+                    style = FoamTheme.typography.titleMedium
                 )
-                if (subtitle != null) {
-                    BasicText(
-                        text = subtitle,
-                        style = FoamTheme.typography.body,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.sharedTextIfAvailable("album-artist-$elementKey")
-                    )
-                }
             }
+        },
+        title = title,
+        subtitle = subtitle,
+        titleModifier = Modifier.rowSharedText(
+            key = "album-title-$elementKey",
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            enabled = elementKey != null,
+            boundsTransform = AlbumArtBoundsTransform
+        ),
+        subtitleModifier = if (subtitle != null) {
+            Modifier.rowSharedText(
+                key = "album-artist-$elementKey",
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                enabled = elementKey != null,
+                boundsTransform = AlbumArtBoundsTransform
+            )
+        } else {
+            Modifier
         }
-    }
+    )
 }

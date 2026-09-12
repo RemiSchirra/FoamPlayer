@@ -1,10 +1,8 @@
 package com.foamplayer.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -20,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -37,39 +34,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import coil.size.Size
 import androidx.compose.ui.platform.LocalContext
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import androidx.core.net.toUri
-import com.foamplayer.app.ui.navigation.SharedElementEasing
-import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
-import com.foamplayer.app.ui.screens.library.TrackListItem
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.TimeUtils
-
-// Used by both this header and the search/artist list rows for the shared-element
-// transition. Keeping it a single shared shape means the artwork never has to snap
-// between two different corner radii mid-animation.
-private val AlbumArtShape = RoundedCornerShape(12.dp)
-
-// Fixed decode size (px) for album art shared between this header and the search/artist
-// list rows. Coil's memory-cache key includes the requested size, so using the same
-// value on both ends means switching from the small list image to this big header image
-// is an instant cache hit instead of a fresh decode (which otherwise shows briefly as a
-// blank/transparent frame mid-transition).
-val AlbumArtRequestSize = Size(480, 480)
-
-// Drives the size/position animation for every shared element in this transition (both
-// this file's and SearchScreen.kt's). Uses the SAME duration/easing as the NavHost's
-// screen-level fade (SharedElementTransitionDurationMs/SharedElementEasing) so the
-// background fading in and the artwork moving/resizing finish on the same frame instead
-// of one lagging or overshooting the other, which is what read as a flicker.
-@OptIn(ExperimentalSharedTransitionApi::class)
-val AlbumArtBoundsTransform = BoundsTransform { _, _ ->
-    tween(durationMillis = SharedElementTransitionDurationMs, easing = SharedElementEasing)
-}
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable

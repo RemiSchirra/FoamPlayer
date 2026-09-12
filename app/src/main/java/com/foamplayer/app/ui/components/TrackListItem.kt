@@ -1,4 +1,4 @@
-package com.foamplayer.app.ui.screens.library
+package com.foamplayer.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -7,28 +7,23 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
-import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -58,25 +53,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.times
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import androidx.core.net.toUri
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
-import com.foamplayer.app.ui.components.AlbumArtRequestSize
-import com.foamplayer.app.ui.components.LocalTrackFoamModalState
-import com.foamplayer.app.ui.components.trackScoreVisual
 import com.foamplayer.app.ui.theme.FoamTheme
-import androidx.core.net.toUri
 import kotlin.math.abs
 import kotlin.math.max
 import kotlinx.coroutines.launch
-
-/** Size of the album art thumbnail at rest (not actively playing). */
-private val AlbumArtSize = 48.dp
-
-/**
- * Padding added around the row content, and the amount by which the
- * active-track selection rectangle is inset/expanded beyond that content.
- */
-private val HighlightPadding = 6.dp
 
 /** Opacity applied to auxiliary queue tracks. */
 private const val AuxiliaryAlpha = 0.55f
@@ -102,7 +85,16 @@ private const val SwipeDismissDurationMs = 150
 /** Duration of the spring-back animation when the swipe is cancelled. */
 private const val SwipeReturnDurationMs = 200
 
-@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
+/**
+ * One row of a track list: artwork (or track number) + title + "artist •
+ * album", with the active-track highlight, swipe-to-dismiss and drag-handle
+ * behaviors layered on top of the shared [MediaListRow] scaffold.
+ *
+ * Shared-element keys ("album_art_*", "track_title_*", "track_artist_*")
+ * match the mini/full player's artwork and text so the row animates into the
+ * player when its track starts playing.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun TrackListItem(
     track: TrackEntity,
@@ -114,32 +106,11 @@ fun TrackListItem(
     showDragHandle: Boolean = false,
     dragHandleModifier: Modifier = Modifier,
     onRemove: (() -> Unit)? = null,
-    suppressItemAnimations: Boolean = false,
     trackNumberText: String? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     isSharedTransitionSource: Boolean = false
 ) {
-    @Composable
-    fun Modifier.sharedArtwork(): Modifier =
-        if (!isSharedTransitionSource || sharedTransitionScope == null || animatedVisibilityScope == null) this
-        else with(sharedTransitionScope) {
-            this@sharedArtwork.sharedElement(
-                rememberSharedContentState(key = "album_art_${track.id}"),
-                animatedVisibilityScope = animatedVisibilityScope
-            )
-        }
-
-    @Composable
-    fun Modifier.sharedText(key: String): Modifier =
-        if (!isSharedTransitionSource || sharedTransitionScope == null || animatedVisibilityScope == null) this
-        else with(sharedTransitionScope) {
-            this@sharedText.sharedBounds(
-                rememberSharedContentState(key = key),
-                animatedVisibilityScope = animatedVisibilityScope
-            )
-        }
-
     val targetBackgroundColor = if (active) {
         FoamTheme.accentColor.copy(alpha = 0.4f)
     } else {
@@ -165,10 +136,6 @@ fun TrackListItem(
         label = "activeTrackNumberFade"
     )
 
-    val interactionSource = remember { MutableInteractionSource() }
-
-    val dragHandleInteractionSource = remember { MutableInteractionSource() }
-
     // Long-press opens the track actions modal when FoamNavHost provides one at
     // the root; an explicit [onLongClick] always wins over that default.
     val trackModalState = LocalTrackFoamModalState.current
@@ -182,9 +149,9 @@ fun TrackListItem(
     }
 
     val density = LocalDensity.current
-    val selectionHighlightPaddingPx = with(density) { HighlightPadding.toPx() }
+    val selectionHighlightPaddingPx = with(density) { ListRowHighlightPadding.toPx() }
 
-    val restingArtHeightPx = with(density) { AlbumArtSize.toPx() }
+    val restingArtHeightPx = with(density) { ListRowArtSize.toPx() }
     var artBoxHeightPx by remember { mutableFloatStateOf(restingArtHeightPx) }
     var artBoxTopPx by remember { mutableFloatStateOf(selectionHighlightPaddingPx) }
     var artistTextBottomPx by remember {
@@ -192,10 +159,8 @@ fun TrackListItem(
     }
     var containerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
-    val imageRadius = (AlbumArtSize / 2) * FoamTheme.shapes.miniPlayerRounding
-    val highlightRadius = imageRadius + HighlightPadding
-    val highlightShape = RoundedCornerShape(highlightRadius)
-    val highlightCornerRadiusPx = with(density) { highlightRadius.toPx() }
+    val artRadius = listRowArtCornerRadius()
+    val highlightCornerRadiusPx = with(density) { (artRadius + ListRowHighlightPadding).toPx() }
 
     val rowAlpha = if (auxiliary) AuxiliaryAlpha else 1f
 
@@ -258,6 +223,36 @@ fun TrackListItem(
         Modifier
     }
 
+    // Measure the artwork box while active so the highlight rectangle can hug
+    // the row's real content height.
+    val activeArtPositionedModifier = if (active) {
+        Modifier.onGloballyPositioned { coords ->
+            artBoxHeightPx = coords.size.height.toFloat()
+            containerCoordinates?.let { container ->
+                artBoxTopPx = container.localPositionOf(coords, Offset.Zero).y
+            }
+        }
+    } else {
+        Modifier
+    }
+
+    // Rows showing a track number have no artwork box (and take no part in the
+    // artwork shared-element transition).
+    val artworkModifier = if (trackNumberText == null) {
+        Modifier
+            .rowSharedArtwork(
+                key = "album_art_${track.id}",
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                enabled = isSharedTransitionSource
+            )
+            .then(activeArtPositionedModifier)
+            .clip(RoundedCornerShape(artRadius))
+            .background(FoamTheme.colors.surfaceVariant)
+    } else {
+        activeArtPositionedModifier
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -274,7 +269,7 @@ fun TrackListItem(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(AlbumArtSize + 2 * HighlightPadding)
+                .height(ListRowArtSize + 2 * ListRowHighlightPadding)
                 .drawBehind {
                     val contentBottomPx = max(
                         artBoxTopPx + artBoxHeightPx,
@@ -291,56 +286,11 @@ fun TrackListItem(
                 }
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .onSizeChanged { itemWidthPx = it.width.toFloat() }
-                .graphicsLayer {
-                    translationX = dismissOffset.value
-                    // Become slightly translucent while swiping: alpha eases
-                    // from 1f down to (1 - SwipeMaxFade) at the threshold
-                    val threshold = max(swipeThresholdPx(), 1f)
-                    val progress = (abs(dismissOffset.value) / threshold).coerceIn(0f, 1f)
-                    alpha = 1f - progress * SwipeMaxFade
-                }
-                .then(swipeModifier)
-                .clip(highlightShape)
-                .combinedClickable(
-                    interactionSource = interactionSource,
-                    indication = ripple(color = FoamTheme.colors.textPrimary),
-                    onLongClick = resolvedOnLongClick,
-                    onClick = { onClick() }
-                )
-                .padding(horizontal = HighlightPadding, vertical = HighlightPadding),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(AlbumArtSize)
-                    .then(if (trackNumberText == null) Modifier.sharedArtwork() else Modifier)
-                    .then(
-                        if (active) {
-                            Modifier.onGloballyPositioned { coords ->
-                                artBoxHeightPx = coords.size.height.toFloat()
-                                containerCoordinates?.let { container ->
-                                    artBoxTopPx = container.localPositionOf(coords, Offset.Zero).y
-                                }
-                            }
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .then(
-                        if (trackNumberText == null) {
-                            Modifier
-                                .clip(RoundedCornerShape(imageRadius))
-                                .background(FoamTheme.colors.surfaceVariant)
-                        } else {
-                            Modifier
-                        }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
+        MediaListRow(
+            onClick = onClick,
+            onLongClick = resolvedOnLongClick,
+            artworkModifier = artworkModifier,
+            artworkContent = {
                 if (trackNumberText != null) {
                     BasicText(
                         text = trackNumberText,
@@ -366,81 +316,90 @@ fun TrackListItem(
                         style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor)
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                BasicText(
-                    text = track.title,
-                    style = FoamTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.sharedText("track_title_${track.id}")
+            },
+            title = track.title,
+            subtitle = "${track.artist} • ${track.album}",
+            rowModifier = Modifier
+                .onSizeChanged { itemWidthPx = it.width.toFloat() }
+                .graphicsLayer {
+                    translationX = dismissOffset.value
+                    // Become slightly translucent while swiping: alpha eases
+                    // from 1f down to (1 - SwipeMaxFade) at the threshold
+                    val threshold = max(swipeThresholdPx(), 1f)
+                    val progress = (abs(dismissOffset.value) / threshold).coerceIn(0f, 1f)
+                    alpha = 1f - progress * SwipeMaxFade
+                }
+                .then(swipeModifier),
+            titleModifier = Modifier.rowSharedText(
+                key = "track_title_${track.id}",
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                enabled = isSharedTransitionSource
+            ),
+            subtitleModifier = Modifier
+                .rowSharedText(
+                    key = "track_artist_${track.id}",
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    enabled = isSharedTransitionSource
                 )
-                BasicText(
-                    text = "${track.artist} • ${track.album}",
-                    style = FoamTheme.typography.body,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .sharedText("track_artist_${track.id}")
-                        .then(
-                            if (active) {
-                                Modifier.onGloballyPositioned { coords ->
-                                    containerCoordinates?.let { container ->
-                                        artistTextBottomPx = container.localPositionOf(
-                                            coords,
-                                            Offset(0f, coords.size.height.toFloat())
-                                        ).y
-                                    }
-                                }
-                            } else {
-                                Modifier
+                .then(
+                    if (active) {
+                        Modifier.onGloballyPositioned { coords ->
+                            containerCoordinates?.let { container ->
+                                artistTextBottomPx = container.localPositionOf(
+                                    coords,
+                                    Offset(0f, coords.size.height.toFloat())
+                                ).y
                             }
-                        )
-                )
-            }
+                        }
+                    } else {
+                        Modifier
+                    }
+                ),
+            trailingContent = {
+                // Score indicator (like / super like / dislike): informational
+                // only, so it gets no click handling of its own — taps stay on
+                // the row. Muted (textSecondary) here, unlike the player/modal
+                // where it's white.
+                if (track.score != 0) {
+                    Spacer(modifier = Modifier.width(12.dp))
 
-            // Score indicator (like / super like / dislike): informational only,
-            // so it gets no click handling of its own — taps stay on the row.
-            // Muted (textSecondary) here, unlike the player/modal where it's white.
-            if (track.score != 0) {
-                Spacer(modifier = Modifier.width(12.dp))
+                    val (scoreIcon, _) = trackScoreVisual(track.score)
+                    Icon(
+                        imageVector = scoreIcon,
+                        contentDescription = null,
+                        tint = FoamTheme.colors.textSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
 
-                val (scoreIcon, _) = trackScoreVisual(track.score)
-                Icon(
-                    imageVector = scoreIcon,
-                    contentDescription = null,
-                    tint = FoamTheme.colors.textSecondary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+                if (showDragHandle) {
+                    Spacer(modifier = Modifier.width(12.dp))
 
-            if (showDragHandle) {
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(
-                    modifier = dragHandleModifier
-                        .clickable(
-                            interactionSource = dragHandleInteractionSource,
-                            indication = null
-                        ) {/* Consume the click */}
-                        .padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    repeat(2) {
-                        Box(
-                            modifier = Modifier
-                                .width(16.dp)
-                                .height(2.dp)
-                                .clip(RoundedCornerShape(1.dp))
-                                .background(FoamTheme.colors.textSecondary)
-                        )
+                    val dragHandleInteractionSource = remember { MutableInteractionSource() }
+                    Column(
+                        modifier = dragHandleModifier
+                            .clickable(
+                                interactionSource = dragHandleInteractionSource,
+                                indication = null
+                            ) {/* Consume the click */}
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        repeat(2) {
+                            Box(
+                                modifier = Modifier
+                                    .width(16.dp)
+                                    .height(2.dp)
+                                    .clip(RoundedCornerShape(1.dp))
+                                    .background(FoamTheme.colors.textSecondary)
+                            )
+                        }
                     }
                 }
             }
-        }
+        )
     }
 }

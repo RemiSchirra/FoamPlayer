@@ -62,13 +62,10 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
-import com.foamplayer.app.ui.screens.library.TrackListItem
+import com.foamplayer.app.ui.components.AlbumArtShape
+import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.theme.FoamTheme
 import androidx.core.net.toUri
-
-// Must match TrackListScreen's AlbumArtShape — using the same shape on both ends of the
-// shared-element transition means the corners never have to jump between two radii.
-private val AlbumArtShape = RoundedCornerShape(12.dp)
 
 // Colors of the browse cards shown when the search bar is idle (unfocused, empty query).
 private data class BrowseCardData(

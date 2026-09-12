@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.data.db.entities.TrackEntity
-import com.foamplayer.app.ui.screens.library.TrackListItem
+import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -111,7 +111,6 @@ fun QueueScreen(
                     },
                     active = false, // Current track is not in this list
                     auxiliary = item.isAuxiliary,
-                    suppressItemAnimations = item.isFreshFromRefill,
                     modifier = Modifier
                         .let { if (isDragging) it else it.animateItem() }
                         .zIndex(if (isDragging) 1f else 0f)

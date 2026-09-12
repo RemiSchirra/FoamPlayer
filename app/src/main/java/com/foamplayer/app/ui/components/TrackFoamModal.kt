@@ -295,7 +295,7 @@ fun TrackFoamModal(
 
 /**
  * Provided by [com.foamplayer.app.ui.navigation.FoamNavHost] at the app root so
- * every [com.foamplayer.app.ui.screens.library.TrackListItem] can open the track
+ * every [com.foamplayer.app.ui.components.TrackListItem] can open the track
  * modal on long-press without each screen threading it through. Screens that
  * pass an explicit onLongClick to the item always take precedence.
  */
