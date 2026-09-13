@@ -357,7 +357,7 @@ fun CollectionListItem(
     // both ends of a shared-element transition — round identically.
     val elementKey = sharedElementKey
     val artShape = AlbumArtShape()
-    val highlightBackground = activeRowHighlight(active)
+    val highlightBackground = activeRowHighlight(active, imageUrl)
 
     val sharedArtModifier = Modifier
         .rowSharedArtwork(

@@ -110,7 +110,7 @@ fun TrackListItem(
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     isSharedTransitionSource: Boolean = false
 ) {
-    val animatedBackgroundColor = activeRowHighlight(active)
+    val animatedBackgroundColor = activeRowHighlight(active, track.albumArtPath)
 
     val targetTrackNumberColor = if (active) {
         FoamTheme.colors.textPrimary

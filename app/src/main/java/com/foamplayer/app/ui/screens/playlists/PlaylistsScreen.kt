@@ -355,7 +355,7 @@ private fun PlaylistItemRow(
     animatedVisibilityScope: AnimatedVisibilityScope
 ) {
     val context = LocalContext.current
-    val highlightBackground = activeRowHighlight(active)
+    val highlightBackground = activeRowHighlight(active, playlist.imageUrl, isEmbeddedArt = false)
 
     @Composable
     fun Modifier.sharedArtwork(): Modifier = with(sharedTransitionScope) {

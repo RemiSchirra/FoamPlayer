@@ -16,6 +16,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -31,6 +32,7 @@ import com.foamplayer.app.ui.navigation.FoamNavHost
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -129,16 +131,20 @@ private fun FoamApp(
         albumArtPath = playbackState.currentTrack?.albumArtPath
     )
 
-    FoamTheme(
-        iconStyle = settings.iconStyle,
-        miniPlayerRounding = settings.miniPlayerRounding / 100f,
-        fullPlayerRounding = settings.fullPlayerRounding / 100f,
-        accentColor = accentColor
+    CompositionLocalProvider(
+        LocalAutomaticColorEnabled provides settings.automaticColorEnabled
     ) {
-        FoamNavHost(
-            modifier = Modifier.fillMaxSize(),
-            playerViewModel = playerViewModel
-        )
+        FoamTheme(
+            iconStyle = settings.iconStyle,
+            miniPlayerRounding = settings.miniPlayerRounding / 100f,
+            fullPlayerRounding = settings.fullPlayerRounding / 100f,
+            accentColor = accentColor
+        ) {
+            FoamNavHost(
+                modifier = Modifier.fillMaxSize(),
+                playerViewModel = playerViewModel
+            )
+        }
     }
 }
 

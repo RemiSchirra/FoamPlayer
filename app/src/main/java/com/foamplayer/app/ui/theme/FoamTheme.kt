@@ -110,6 +110,12 @@ val LocalFoamShapes = staticCompositionLocalOf { DefaultFoamShapes }
 // (and not everything else using FoamTheme) are invalidated on each frame.
 val LocalPrimaryAccentColor = compositionLocalOf { DefaultPrimaryAccent }
 
+// Whether the accent is derived from album art (Settings -> "Automatic Color").
+// List-row highlights read it to pick between each row's own extracted art color
+// (true) and the single app-defined accent (false). Non-static: toggling the
+// setting must immediately recolor every highlighted row.
+val LocalAutomaticColorEnabled = compositionLocalOf { true }
+
 object FoamTheme {
     val colors: FoamColors
         @Composable @ReadOnlyComposable get() = LocalFoamColors.current

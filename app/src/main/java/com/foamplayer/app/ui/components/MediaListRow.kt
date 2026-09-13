@@ -24,12 +24,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -38,6 +40,8 @@ import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
+import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import kotlin.math.roundToInt
 
 /**
@@ -89,12 +93,47 @@ val ListRowArtSize = 48.dp
 
 /**
  * Animated background of a list row's active highlight (the currently playing
- * track, or the collection the queue was started from): the accent at 40%
- * alpha, fading in/out over 200ms like every other row state change.
+ * track, or the collection the queue was started from), fading in/out over
+ * 200ms like every other row state change. Always drawn at 40% alpha.
+ *
+ * The color comes from the row's OWN image ([imagePath], extracted through
+ * [AlbumArtPaletteCache]) so each highlighted row reflects its own artwork;
+ * rows without an image — and the brief moment before a color is extracted —
+ * fall back to the app accent. With automatic (dynamic accent) color disabled
+ * the extracted colors are ignored and the app-defined accent always wins.
  */
 @Composable
-internal fun activeRowHighlight(active: Boolean): Color {
-    val target = if (active) FoamTheme.accentColor.copy(alpha = 0.4f) else Color.Transparent
+internal fun activeRowHighlight(
+    active: Boolean,
+    imagePath: String?,
+    isEmbeddedArt: Boolean = true
+): Color {
+    val automaticColorEnabled = LocalAutomaticColorEnabled.current
+
+    if (active && automaticColorEnabled) {
+        val context = LocalContext.current
+        LaunchedEffect(imagePath, isEmbeddedArt) {
+            AlbumArtPaletteCache.ensure(
+                scope = this,
+                context = context,
+                path = imagePath,
+                isEmbeddedArt = isEmbeddedArt
+            )
+        }
+    }
+
+    val extractedColor = if (active && automaticColorEnabled && imagePath != null) {
+        AlbumArtPaletteCache.colors[imagePath]
+    } else {
+        null
+    }
+
+    val target = when {
+        !active -> Color.Transparent
+        !automaticColorEnabled -> FoamTheme.accentColor.copy(alpha = 0.4f)
+        else -> (extractedColor ?: FoamTheme.accentColor).copy(alpha = 0.4f)
+    }
+
     return animateColorAsState(
         targetValue = target,
         animationSpec = tween(durationMillis = 200, easing = EaseOut),
