@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
+import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
@@ -65,6 +66,16 @@ class SettingsViewModel @Inject constructor(
         val currentEnabled = settings.value.enabledLyricsProviders
         val newEnabled = if (enabled) currentEnabled + provider else currentEnabled - provider
         settingsRepository.setEnabledLyricsProviders(newEnabled)
+    }
+
+    fun setLyricsSourceOrder(order: List<LyricsSource>) = launch {
+        settingsRepository.setLyricsSourceOrder(order)
+    }
+
+    fun setLyricsSourceEnabled(source: LyricsSource, enabled: Boolean) = launch {
+        val currentEnabled = settings.value.enabledLyricsSources
+        val newEnabled = if (enabled) currentEnabled + source else currentEnabled - source
+        settingsRepository.setEnabledLyricsSources(newEnabled)
     }
 
     fun setLanguage(language: String) = launch {

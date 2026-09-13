@@ -9,14 +9,17 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
+import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
 import com.foamplayer.app.constants.DefaultNavBarScreenItems
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
+import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.constants.deserializeLyricsProviderOrder
+import com.foamplayer.app.constants.deserializeLyricsSourceOrder
 import com.foamplayer.app.constants.deserializeNavBarItemOrder
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.FoamIconStyle
@@ -72,6 +75,14 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setEnabledLyricsProviders(enabled: Set<PreferredLyricsProvider>) = update {
         it.copy(enabledLyricsProviders = enabled)
+    }
+
+    suspend fun setLyricsSourceOrder(order: List<LyricsSource>) = update {
+        it.copy(lyricsSourceOrder = order)
+    }
+
+    suspend fun setEnabledLyricsSources(enabled: Set<LyricsSource>) = update {
+        it.copy(enabledLyricsSources = enabled)
     }
 
     suspend fun setSearchHistory(history: List<String>) = update { it.copy(searchHistory = history) }
@@ -130,6 +141,10 @@ class SettingsRepository @Inject constructor(
         enabledLyricsProviders = this[Keys.ENABLED_LYRICS_PROVIDERS]
             ?.mapNotNull { name -> PreferredLyricsProvider.entries.find { it.name == name } }
             ?.toSet() ?: PreferredLyricsProvider.entries.toSet(),
+        lyricsSourceOrder = deserializeLyricsSourceOrder(this[Keys.LYRICS_SOURCE_ORDER]),
+        enabledLyricsSources = this[Keys.ENABLED_LYRICS_SOURCES]
+            ?.mapNotNull { name -> LyricsSource.entries.find { it.name == name } }
+            ?.toSet() ?: DefaultLyricsSourceOrder.toSet(),
         searchHistory = this[Keys.SEARCH_HISTORY]?.split("|")?.filter { it.isNotEmpty() } ?: emptyList(),
         language = this[Keys.LANGUAGE] ?: AppSettings().language,
         navigationBarMode = this[Keys.NAVIGATION_BAR_MODE]
@@ -166,6 +181,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.PLAYER_BACKGROUND_INTENSITY] = settings.playerBackgroundIntensity
         this[Keys.LYRICS_PROVIDER_ORDER] = settings.lyricsProviderOrder.joinToString(",") { it.name }
         this[Keys.ENABLED_LYRICS_PROVIDERS] = settings.enabledLyricsProviders.map { it.name }.toSet()
+        this[Keys.LYRICS_SOURCE_ORDER] = settings.lyricsSourceOrder.joinToString(",") { it.name }
+        this[Keys.ENABLED_LYRICS_SOURCES] = settings.enabledLyricsSources.map { it.name }.toSet()
         this[Keys.SEARCH_HISTORY] = settings.searchHistory.joinToString("|")
         this[Keys.LANGUAGE] = settings.language
         this[Keys.NAVIGATION_BAR_MODE] = settings.navigationBarMode.name
@@ -197,6 +214,8 @@ class SettingsRepository @Inject constructor(
         val PLAYER_BACKGROUND_INTENSITY = intPreferencesKey("player_background_intensity")
         val LYRICS_PROVIDER_ORDER = stringPreferencesKey("lyrics_provider_order")
         val ENABLED_LYRICS_PROVIDERS = stringSetPreferencesKey("enabled_lyrics_providers")
+        val LYRICS_SOURCE_ORDER = stringPreferencesKey("lyrics_source_order")
+        val ENABLED_LYRICS_SOURCES = stringSetPreferencesKey("enabled_lyrics_sources")
         val SEARCH_HISTORY = stringPreferencesKey("search_history")
         val LANGUAGE = stringPreferencesKey("language")
         val NAVIGATION_BAR_MODE = stringPreferencesKey("navigation_bar_mode")

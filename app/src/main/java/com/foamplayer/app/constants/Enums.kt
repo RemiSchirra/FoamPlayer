@@ -189,6 +189,32 @@ fun deserializeLyricsProviderOrder(orderStr: String?): List<PreferredLyricsProvi
     return parsed + missing
 }
 
+enum class LyricsSource(val label: String) {
+    ONLINE("Online provider"),
+    LYRICS_FILE("Lyrics file"),
+    EMBEDDED("Embedded lyrics"),
+}
+
+val DefaultLyricsSourceOrder =
+    listOf(
+        LyricsSource.ONLINE,
+        LyricsSource.LYRICS_FILE,
+        LyricsSource.EMBEDDED,
+    )
+
+fun deserializeLyricsSourceOrder(orderStr: String?): List<LyricsSource> {
+    if (orderStr.isNullOrBlank()) return DefaultLyricsSourceOrder
+
+    val parsed =
+        orderStr
+            .split(",")
+            .mapNotNull { name -> LyricsSource.entries.find { it.name == name.trim() } }
+            .distinct()
+
+    val missing = DefaultLyricsSourceOrder.filterNot { it in parsed }
+    return parsed + missing
+}
+
 enum class LyricsAnimationStyle {
     NONE,
     FADE,

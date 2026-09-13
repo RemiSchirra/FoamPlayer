@@ -1,12 +1,14 @@
 package com.foamplayer.app.data.settings
 
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
+import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
 import com.foamplayer.app.constants.DefaultNavBarScreenItems
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
+import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.PreferredLyricsProvider
 
 /** The complete, validated set of user-configurable application preferences. */
@@ -35,6 +37,8 @@ data class AppSettings(
     val playerBackgroundIntensity: Int = DEFAULT_PLAYER_BACKGROUND_INTENSITY,
     val lyricsProviderOrder: List<PreferredLyricsProvider> = DefaultLyricsProviderOrder,
     val enabledLyricsProviders: Set<PreferredLyricsProvider> = PreferredLyricsProvider.entries.toSet(),
+    val lyricsSourceOrder: List<LyricsSource> = DefaultLyricsSourceOrder,
+    val enabledLyricsSources: Set<LyricsSource> = LyricsSource.entries.toSet(),
     val searchHistory: List<String> = emptyList(),
     val language: String = "auto",
     val navigationBarMode: NavigationBarMode = NavigationBarMode.ATTACHED,
