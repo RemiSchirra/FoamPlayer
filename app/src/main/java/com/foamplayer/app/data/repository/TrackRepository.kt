@@ -89,7 +89,7 @@ class TrackRepository @Inject constructor(
         val existingStats = trackDao.getPlayStats().associateBy { it.path }
         val mergedTracks = scannedTracks.map { scanned ->
             existingStats[scanned.path]?.let {
-                scanned.copy(playCount = it.playCount, lastPlayedAt = it.lastPlayedAt, score = it.score)
+                scanned.copy(playCount = it.playCount, lastPlayedAt = it.lastPlayedAt, score = it.score, instrumental = it.instrumental)
             } ?: scanned
         }
 
@@ -118,7 +118,7 @@ class TrackRepository @Inject constructor(
         val existingStats = trackDao.getPlayStats().associateBy { it.path }
         val mergedTracks = scannedTracks.map { scanned ->
             existingStats[scanned.path]?.let {
-                scanned.copy(playCount = it.playCount, lastPlayedAt = it.lastPlayedAt, score = it.score)
+                scanned.copy(playCount = it.playCount, lastPlayedAt = it.lastPlayedAt, score = it.score, instrumental = it.instrumental)
             } ?: scanned
         }
 
@@ -135,4 +135,11 @@ class TrackRepository @Inject constructor(
 
     /** Stores the user score (-1 dislike / 0 not noted / 1 like / 2 super like). */
     suspend fun setScore(trackId: Long, score: Int) = trackDao.setScore(trackId, score)
+
+    /** Stores the user-set instrumental flag (lyrics view shows a music note instead of lyrics). */
+    suspend fun setInstrumental(trackId: Long, instrumental: Boolean) =
+        trackDao.setInstrumental(trackId, instrumental)
+
+    /** Emits the user-set instrumental flag for [trackId], updating whenever it changes. */
+    fun observeInstrumental(trackId: Long): Flow<Boolean> = trackDao.observeInstrumental(trackId)
 }

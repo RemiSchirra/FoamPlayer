@@ -36,5 +36,7 @@ data class TrackEntity(
     val playCount: Int = 0,
     val lastPlayedAt: Long? = null,
     /** User rating: -1 = dislike, 0 = not noted, 1 = like, 2 = super like. */
-    val score: Int = 0
+    val score: Int = 0,
+    /** User-set flag: the track has no lyrics (the lyrics view shows a music note instead). */
+    val instrumental: Boolean = false
 )

@@ -94,7 +94,13 @@ interface TrackDao {
     @Query("UPDATE tracks SET score = :score WHERE id = :trackId")
     suspend fun setScore(trackId: Long, score: Int)
 
-    @Query("SELECT path, playCount, lastPlayedAt, score FROM tracks")
+    @Query("UPDATE tracks SET instrumental = :instrumental WHERE id = :trackId")
+    suspend fun setInstrumental(trackId: Long, instrumental: Boolean)
+
+    @Query("SELECT instrumental FROM tracks WHERE id = :trackId")
+    fun observeInstrumental(trackId: Long): Flow<Boolean>
+
+    @Query("SELECT path, playCount, lastPlayedAt, score, instrumental FROM tracks")
     suspend fun getPlayStats(): List<TrackPlayStatsRow>
 
     @Query("DELETE FROM tracks WHERE path NOT IN (:existingPaths)")
@@ -111,5 +117,6 @@ data class TrackPlayStatsRow(
     val path: String,
     val playCount: Int,
     val lastPlayedAt: Long?,
-    val score: Int = 0
+    val score: Int = 0,
+    val instrumental: Boolean = false
 )

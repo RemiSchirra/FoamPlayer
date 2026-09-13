@@ -20,9 +20,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.Checkbox
+import androidx.compose.material.CheckboxDefaults
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -45,6 +48,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -120,6 +124,7 @@ fun TrackFoamModal(
     onSeeArtist: (TrackEntity) -> Unit = {},
     onSeeAlbum: (TrackEntity) -> Unit = {},
     onResetPlayStats: (TrackEntity) -> Unit = {},
+    onSetInstrumental: (TrackEntity, Boolean) -> Unit = { _, _ -> },
     scoreOverrides: Map<Long, Int> = emptyMap(),
     onSetScore: (Long, Int) -> Unit = { _, _ -> },
     useAlbumArtAccent: Boolean = false,
@@ -215,7 +220,8 @@ fun TrackFoamModal(
                             TrackDetailsContent(
                                 track = displayTrack,
                                 accentColor = accentColor,
-                                onResetPlayStats = { onResetPlayStats(displayTrack) }
+                                onResetPlayStats = { onResetPlayStats(displayTrack) },
+                                onSetInstrumental = { onSetInstrumental(displayTrack, it) }
                             )
 
                             Column(
@@ -551,6 +557,7 @@ fun TrackDetailsModal(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     onResetPlayStats: (TrackEntity) -> Unit = {},
+    onSetInstrumental: (TrackEntity, Boolean) -> Unit = { _, _ -> },
     scoreOverrides: Map<Long, Int> = emptyMap(),
     onSetScore: (Long, Int) -> Unit = { _, _ -> },
     useAlbumArtAccent: Boolean = false
@@ -605,7 +612,8 @@ fun TrackDetailsModal(
                 TrackDetailsContent(
                     track = displayTrack,
                     accentColor = accentColor,
-                    onResetPlayStats = { onResetPlayStats(displayTrack) }
+                    onResetPlayStats = { onResetPlayStats(displayTrack) },
+                    onSetInstrumental = { onSetInstrumental(displayTrack, it) }
                 )
             }
         }
@@ -617,7 +625,8 @@ fun TrackDetailsModal(
 private fun TrackDetailsContent(
     track: TrackEntity,
     accentColor: Color,
-    onResetPlayStats: () -> Unit
+    onResetPlayStats: () -> Unit,
+    onSetInstrumental: (Boolean) -> Unit
 ) {
     val hasStats = track.playCount > 0 || track.lastPlayedAt != null
 
@@ -646,6 +655,11 @@ private fun TrackDetailsContent(
         DetailRow("Album artist", track.albumArtist)
         DetailRow("Album", track.album)
         DetailRow("Composer", track.composer)
+        DetailCheckboxRow(
+            label = "Instrumental",
+            checked = track.instrumental,
+            onCheckedChange = onSetInstrumental
+        )
     }
 
     DetailsSection(title = "File", accentColor = accentColor) {
@@ -752,6 +766,48 @@ private fun TrackStatsResetButton(onClick: () -> Unit) {
             contentDescription = "Reset listen stats",
             tint = FoamTheme.colors.textSecondary,
             modifier = Modifier.size(FoamDimens.iconSmall)
+        )
+    }
+}
+
+/** Detail row whose value is a checkbox (user-set booleans like "Instrumental"). */
+@Composable
+private fun DetailCheckboxRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(
+                value = checked,
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                role = Role.Checkbox,
+                onValueChange = onCheckedChange
+            )
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingTiny),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BasicText(
+            text = label,
+            style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            // 20dp = the checkbox's own drawn size; drops its 48dp built-in touch
+            // padding so the row height matches the other detail rows.
+            modifier = Modifier.size(20.dp),
+            colors = CheckboxDefaults.colors(
+                checkedColor = FoamTheme.accentColor,
+                uncheckedColor = FoamTheme.colors.textSecondary
+            )
         )
     }
 }

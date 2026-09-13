@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.data.repository.LyricsRepository
+import com.foamplayer.app.data.repository.TrackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -13,6 +15,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -22,7 +27,8 @@ import javax.inject.Inject
 @HiltViewModel
 class LyricsViewModel @Inject constructor(
     private val audioEngine: AudioEngine,
-    private val lyricsRepository: LyricsRepository
+    private val lyricsRepository: LyricsRepository,
+    private val trackRepository: TrackRepository
 ) : ViewModel() {
 
     private val _lyrics = MutableStateFlow<String?>(null)
@@ -46,6 +52,17 @@ class LyricsViewModel @Inject constructor(
         .map { it.isPlaying }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    // Instrumental flag of the current track, read straight from the DB so marking a
+    // track instrumental flips the lyrics subview to the music-note state immediately.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val isInstrumental: StateFlow<Boolean> = audioEngine.playbackState
+        .map { it.currentTrack }
+        .distinctUntilChanged { old, new -> old?.id == new?.id }
+        .flatMapLatest { track ->
+            if (track == null) flowOf(false) else trackRepository.observeInstrumental(track.id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     init {
         observeCurrentTrack()
     }
@@ -65,11 +82,26 @@ class LyricsViewModel @Inject constructor(
                     _isLoading.value = true
                     _lyrics.value = null
 
+                    // User-marked instrumental tracks never go out to the providers.
+                    val instrumental = withContext(Dispatchers.IO) {
+                        trackRepository.observeInstrumental(track.id).first()
+                    }
+                    if (instrumental) {
+                        _lyrics.value = null
+                        _isLoading.value = false
+                        return@collectLatest
+                    }
+
                     val result = withContext(Dispatchers.IO) { lyricsRepository.getLyrics(track) }
                     _lyrics.value = result
                     _isLoading.value = false
                 }
         }
+    }
+
+    fun markCurrentTrackInstrumental() {
+        val track = audioEngine.playbackState.value.currentTrack ?: return
+        viewModelScope.launch { trackRepository.setInstrumental(track.id, true) }
     }
 
     fun seekTo(positionMs: Long) {

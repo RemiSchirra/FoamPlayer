@@ -101,6 +101,11 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { trackRepository.resetPlayStats(trackId) }
     }
 
+    // Track details modal: toggle the user-set instrumental flag (lyrics view override).
+    fun setTrackInstrumental(trackId: Long, instrumental: Boolean) {
+        viewModelScope.launch { trackRepository.setInstrumental(trackId, instrumental) }
+    }
+
     // Track scores (-1 dislike / 0 not noted / 1 like / 2 super like): the in-memory
     // queue entities go stale the moment a score is written to the DB, so the UI
     // overlays this id→score map on top of the entity values.

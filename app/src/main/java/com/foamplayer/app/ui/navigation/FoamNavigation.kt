@@ -1115,6 +1115,11 @@ fun FoamNavHost(
                     // Reflect the reset in the open sheet immediately.
                     trackModalState.updateCurrentTrack { it.copy(playCount = 0, lastPlayedAt = null) }
                 },
+                onSetInstrumental = { track, instrumental ->
+                    playerViewModel.setTrackInstrumental(track.id, instrumental)
+                    // Reflect the toggle in the open sheet immediately.
+                    trackModalState.updateCurrentTrack { it.copy(instrumental = instrumental) }
+                },
                 scoreOverrides = scoreOverrides,
                 onSetScore = playerViewModel::setTrackScore,
                 useAlbumArtAccent = playerSettings.automaticColorEnabled
