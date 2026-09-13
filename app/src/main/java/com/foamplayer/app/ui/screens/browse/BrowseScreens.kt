@@ -38,7 +38,9 @@ import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.distinctCollectionAlbums
 import com.foamplayer.app.ui.components.distinctCollectionArtistNames
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Horizontal inset of one list row; grid cells get their own symmetric padding instead. */
 private fun Modifier.listRowInset(density: MediaDensity): Modifier =
@@ -457,7 +459,9 @@ fun CollectionArtistsScreen(
     var artistRows by remember { mutableStateOf<List<CollectionArtistRow>>(emptyList()) }
 
     LaunchedEffect(kind, key) {
-        artistRows = viewModel.tracksForSource(kind, key).toCollectionArtistRows()
+        artistRows = withContext(Dispatchers.Default) {
+            viewModel.tracksForSource(kind, key).toCollectionArtistRows()
+        }
     }
 
     CollectionListScreen(
@@ -517,9 +521,11 @@ fun CollectionAlbumsScreen(
     var albumRows by remember { mutableStateOf<List<CollectionAlbumEntry>>(emptyList()) }
 
     LaunchedEffect(kind, key) {
-        albumRows = viewModel.tracksForSource(kind, key)
-            .distinctCollectionAlbums()
-            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.album })
+        albumRows = withContext(Dispatchers.Default) {
+            viewModel.tracksForSource(kind, key)
+                .distinctCollectionAlbums()
+                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.album })
+        }
     }
 
     CollectionListScreen(

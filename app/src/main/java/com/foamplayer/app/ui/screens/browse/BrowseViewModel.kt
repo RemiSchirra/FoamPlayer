@@ -9,6 +9,8 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /** A browsable folder: its storage path, display name and recursive track count. */
@@ -62,14 +65,19 @@ class BrowseViewModel @Inject constructor(
     private val _folderContent = MutableStateFlow<FolderContent?>(null)
     val folderContent: StateFlow<FolderContent?> = _folderContent.asStateFlow()
 
+    private var genreTracksJob: Job? = null
+    private var yearTracksJob: Job? = null
+
     fun loadGenreTracks(genre: String) {
-        viewModelScope.launch {
+        genreTracksJob?.cancel()
+        genreTracksJob = viewModelScope.launch {
             trackRepository.getTracksByGenre(genre).collect { _genreTracks.value = it }
         }
     }
 
     fun loadYearTracks(year: Int) {
-        viewModelScope.launch {
+        yearTracksJob?.cancel()
+        yearTracksJob = viewModelScope.launch {
             trackRepository.getTracksByYear(year).collect { _yearTracks.value = it }
         }
     }
@@ -78,7 +86,10 @@ class BrowseViewModel @Inject constructor(
         viewModelScope.launch {
             val tracks = trackRepository.getAllTracks().first()
             val libraryFolders = settingsRepository.settings.first().libraryFolders
-            _folderContent.value = buildFolderContent(path, tracks, libraryFolders)
+            // Folder grouping parses a URI per track; keep it off the main thread.
+            _folderContent.value = withContext(Dispatchers.Default) {
+                buildFolderContent(path, tracks, libraryFolders)
+            }
         }
     }
 
@@ -91,10 +102,11 @@ class BrowseViewModel @Inject constructor(
         trackRepository.getTracksByAlbum(album).first()
 
     /** Tracks naming [artist] as artist or album artist, in album order (mirrors TrackDao.getAlbumsByArtist's matching). */
-    suspend fun tracksForArtist(artist: String): List<TrackEntity> =
+    suspend fun tracksForArtist(artist: String): List<TrackEntity> = withContext(Dispatchers.Default) {
         trackRepository.getAllTracks().first()
             .filter { it.artist == artist || it.albumArtist == artist }
             .sortedWith(compareBy({ it.album }, { it.discNumber }, { it.trackNumber }, { it.title }))
+    }
 
     /** Tracks tagging [genre] among their "; "-separated genres (mirrors TrackDao.getTracksByGenre's LIKE matching). */
     suspend fun tracksForGenre(genre: String): List<TrackEntity> =
@@ -105,9 +117,10 @@ class BrowseViewModel @Inject constructor(
         trackRepository.getTracksByYear(year).first()
 
     /** Tracks stored under [folderPath] (document-id prefix match, same rule as [buildFolderContent]). */
-    suspend fun tracksForFolder(folderPath: String): List<TrackEntity> =
+    suspend fun tracksForFolder(folderPath: String): List<TrackEntity> = withContext(Dispatchers.Default) {
         trackRepository.getAllTracks().first()
             .filter { documentIdOf(it.path).startsWith("$folderPath/") }
+    }
 
     private fun buildFolderContent(
         path: String?,
