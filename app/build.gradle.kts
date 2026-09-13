@@ -118,7 +118,9 @@ dependencies {
     testImplementation("org.mockito:mockito-core:5.14.2")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 
+    implementation(project(":lyrics:betterlyrics"))
     implementation(project(":lyrics:kugou"))
     implementation(project(":lyrics:lrclib"))
-    implementation(project(":lyrics:betterlyrics"))
+    implementation(project(":lyrics:paxsenix"))
+
 }
