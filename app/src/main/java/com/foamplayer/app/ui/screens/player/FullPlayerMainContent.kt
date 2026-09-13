@@ -467,18 +467,17 @@ internal fun SharedTransitionScope.PlaybackControls(
                 imageVector = FoamTheme.icons.current.next,
                 contentDescription = stringResource(R.string.next),
                 tint = FoamTheme.colors.textPrimary,
-                modifier = Modifier.size(32.dp).clickable(onClick = onNext)
+                modifier = Modifier.size(PlayerDimens.transportIconSize).clickable(onClick = onNext)
             )
         }
     }
 }
 
 /**
- * Isolated on purpose: FoamTheme.accentColor changes every frame of a horizontal
- * swipe (see viewModel.setDynamicAccentColor in the LaunchedEffect above). Reading
- * it directly inside this Box, rather than inline in PlaybackControls' body, keeps
- * that per-frame recomposition confined to just the play button instead of also
- * dragging the Prev/Next icons and shared-element bounds along with it.
+ * Isolated on purpose (same rationale as before the circle was dropped): keeping
+ * this button its own composable confines any per-frame recomposition it causes
+ * to itself instead of also dragging the Prev/Next icons and shared-element
+ * bounds along with it.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -496,15 +495,13 @@ internal fun SharedTransitionScope.PlayPauseButton(
                 rememberSharedContentState(key = "play_button_${track.id}"),
                 animatedVisibilityScope = outerVisibilityScope
             )
-            .clip(CircleShape)
-            .background(FoamTheme.accentColor)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
             contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
-            tint = FoamTheme.colors.background,
+            tint = Color.White,
             modifier = Modifier.size(PlayerDimens.playButtonIconSize)
         )
     }
@@ -516,7 +513,8 @@ internal fun PlaybackProgressSlider(
     seekBarProgress: SeekBarProgressState,
     isAnimateSeekBarEnabled: Boolean,
     onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    labelSpacing: Dp = PlayerDimens.seekBarLabelSpacing
 ) {
     Column(modifier = modifier) {
         FoamSlider(
@@ -532,7 +530,7 @@ internal fun PlaybackProgressSlider(
                 )
             }
         )
-        Spacer(modifier = Modifier.height(PlayerDimens.seekBarLabelSpacing))
+        Spacer(modifier = Modifier.height(labelSpacing))
         val labelStyle = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             BasicText(

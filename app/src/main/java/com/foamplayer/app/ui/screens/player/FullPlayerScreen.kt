@@ -466,8 +466,10 @@ fun FullPlayerScreen(
                         Modifier
                             .fillMaxWidth()
                             .padding(
-                                horizontal = PlayerDimens.screenPadding,
-                                vertical = PlayerDimens.screenPadding
+                                start = PlayerDimens.screenPadding,
+                                end = PlayerDimens.screenPadding,
+                                top = PlayerDimens.screenPadding * 2 - PlayerDimens.selectorRowBottomPadding,
+                                bottom = PlayerDimens.selectorRowBottomPadding
                             )
                             .graphicsLayer {
                                 alpha = uiAlpha()
@@ -548,12 +550,15 @@ fun FullPlayerScreen(
                     seekBarProgress = seekBarProgress,
                     isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                     onSeek = { positionMs -> viewModel.seekTo(positionMs) },
+                    labelSpacing = 2.dp,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .padding(
-                            horizontal = PlayerDimens.screenPadding,
-                            vertical = PlayerDimens.seekBarRowVerticalPadding
+                            start = PlayerDimens.screenPadding,
+                            end = PlayerDimens.screenPadding,
+                            top = PlayerDimens.seekBarRowVerticalPadding,
+                            bottom = PlayerDimens.seekBarRowBottomPadding
                         )
                         .graphicsLayer {
                             alpha = subControlsProgress()

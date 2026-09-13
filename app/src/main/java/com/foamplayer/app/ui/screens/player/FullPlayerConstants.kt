@@ -9,7 +9,7 @@ internal object PlayerDimens {
     val pageSpacing = 24.dp
 
     // Bottom control cluster in the subview (selector row + mini play button + seek bar).
-    val selectorRowRise = 20.dp
+    val selectorRowRise = 36.dp
     val playButtonRise = 28.dp
     val seekBarRise = 12.dp
 
@@ -21,11 +21,17 @@ internal object PlayerDimens {
     /** Vertical padding around the bottom PlaybackProgressSlider row. */
     val seekBarRowVerticalPadding = 12.dp
 
+    /** Gap between the subview seek bar's timings and the navbar below. */
+    val seekBarRowBottomPadding = 4.dp
+
+    /** Gap between the lyrics/queue selector row and the navbar when the subview is closed. */
+    val selectorRowBottomPadding = 4.dp
+
     /** Space between the seek bar and its position/duration labels. */
     val seekBarLabelSpacing = 4.dp
 
     /** Space between the seek bar and the transport row in PlaybackControls. */
-    val controlsSpacing = 16.dp
+    val controlsSpacing = 48.dp
 
     /** Extra space under the main playback controls before the screen edge. */
     val controlsBottomSpacer = 48.dp
@@ -44,13 +50,13 @@ internal object PlayerDimens {
 
     // Transport / control sizes.
     val playButtonSize = 64.dp
-    val playButtonIconSize = 32.dp
+    val playButtonIconSize = 64.dp
     val miniPlayButtonSize = 50.dp
     val miniPlayIconSize = 28.dp
     val miniTransportButtonSize = 44.dp
     val miniTransportIconSize = 26.dp
-    val transportIconSize = 32.dp
-    val transportSpacing = 24.dp
+    val transportIconSize = 44.dp
+    val transportSpacing = 12.dp
 }
 
 /**
