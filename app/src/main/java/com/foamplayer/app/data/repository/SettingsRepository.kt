@@ -55,8 +55,11 @@ class SettingsRepository @Inject constructor(
     suspend fun setAutoOpenPlayerEnabled(enabled: Boolean) = update { it.copy(autoOpenPlayerEnabled = enabled) }
     suspend fun setDynamicBackgroundEnabled(enabled: Boolean) = update { it.copy(dynamicBackgroundEnabled = enabled) }
     suspend fun setBackgroundBlur(blur: Int) = update { it.copy(backgroundBlur = blur) }
-    suspend fun setDynamicBackgroundIntensity(intensity: Int) = update {
-        it.copy(dynamicBackgroundIntensity = intensity)
+    suspend fun setAppBackgroundIntensity(intensity: Int) = update {
+        it.copy(appBackgroundIntensity = intensity)
+    }
+    suspend fun setPlayerBackgroundIntensity(intensity: Int) = update {
+        it.copy(playerBackgroundIntensity = intensity)
     }
     suspend fun addFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders + path) }
     suspend fun removeFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders - path) }
@@ -117,8 +120,12 @@ class SettingsRepository @Inject constructor(
         autoOpenPlayerEnabled = this[Keys.AUTO_OPEN_PLAYER] ?: AppSettings().autoOpenPlayerEnabled,
         dynamicBackgroundEnabled = this[Keys.DYNAMIC_BACKGROUND] ?: AppSettings().dynamicBackgroundEnabled,
         backgroundBlur = this[Keys.BACKGROUND_BLUR] ?: AppSettings().backgroundBlur,
-        dynamicBackgroundIntensity = this[Keys.DYNAMIC_BACKGROUND_INTENSITY]
-            ?: AppSettings().dynamicBackgroundIntensity,
+        appBackgroundIntensity = this[Keys.APP_BACKGROUND_INTENSITY]
+            // Migration: the pre-split single intensity becomes the app background's value.
+            ?: this[Keys.DYNAMIC_BACKGROUND_INTENSITY]
+            ?: AppSettings().appBackgroundIntensity,
+        playerBackgroundIntensity = this[Keys.PLAYER_BACKGROUND_INTENSITY]
+            ?: AppSettings().playerBackgroundIntensity,
         lyricsProviderOrder = deserializeLyricsProviderOrder(this[Keys.LYRICS_PROVIDER_ORDER]),
         enabledLyricsProviders = this[Keys.ENABLED_LYRICS_PROVIDERS]
             ?.mapNotNull { name -> PreferredLyricsProvider.entries.find { it.name == name } }
@@ -155,7 +162,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.AUTO_OPEN_PLAYER] = settings.autoOpenPlayerEnabled
         this[Keys.DYNAMIC_BACKGROUND] = settings.dynamicBackgroundEnabled
         this[Keys.BACKGROUND_BLUR] = settings.backgroundBlur
-        this[Keys.DYNAMIC_BACKGROUND_INTENSITY] = settings.dynamicBackgroundIntensity
+        this[Keys.APP_BACKGROUND_INTENSITY] = settings.appBackgroundIntensity
+        this[Keys.PLAYER_BACKGROUND_INTENSITY] = settings.playerBackgroundIntensity
         this[Keys.LYRICS_PROVIDER_ORDER] = settings.lyricsProviderOrder.joinToString(",") { it.name }
         this[Keys.ENABLED_LYRICS_PROVIDERS] = settings.enabledLyricsProviders.map { it.name }.toSet()
         this[Keys.SEARCH_HISTORY] = settings.searchHistory.joinToString("|")
@@ -185,6 +193,8 @@ class SettingsRepository @Inject constructor(
         val DYNAMIC_BACKGROUND = booleanPreferencesKey("dynamic_background")
         val BACKGROUND_BLUR = intPreferencesKey("background_blur")
         val DYNAMIC_BACKGROUND_INTENSITY = intPreferencesKey("dynamic_background_intensity")
+        val APP_BACKGROUND_INTENSITY = intPreferencesKey("app_background_intensity")
+        val PLAYER_BACKGROUND_INTENSITY = intPreferencesKey("player_background_intensity")
         val LYRICS_PROVIDER_ORDER = stringPreferencesKey("lyrics_provider_order")
         val ENABLED_LYRICS_PROVIDERS = stringSetPreferencesKey("enabled_lyrics_providers")
         val SEARCH_HISTORY = stringPreferencesKey("search_history")

@@ -355,7 +355,7 @@ fun FoamNavHost(
                         enabled = true,
                         initialFrontArtPath = playbackState.currentTrack?.albumArtPath,
                         blur = playerSettings.backgroundBlur.dp,
-                        intensity = playerSettings.dynamicBackgroundIntensity / 100f,
+                        intensity = playerSettings.appBackgroundIntensity / 100f,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -397,7 +397,7 @@ fun FoamNavHost(
                         backArtPath = null,
                         crossfadeFraction = 0f,
                         blur = playerSettings.backgroundBlur.dp,
-                        intensity = playerSettings.dynamicBackgroundIntensity / 100f,
+                        intensity = playerSettings.appBackgroundIntensity / 100f,
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer { alpha = listBackdropAlpha }
@@ -438,7 +438,7 @@ fun FoamNavHost(
                         subViewProgress = fullPlayerBackdropState.subViewBlurProgress,
                         dynamicBackgroundEnabled = isDynamicBackgroundEnabled,
                         backgroundBlur = playerSettings.backgroundBlur.dp,
-                        intensity = playerSettings.dynamicBackgroundIntensity / 100f,
+                        intensity = playerSettings.playerBackgroundIntensity / 100f,
                         bottomFadeInset = playerBackdropFadeInset,
                         modifier = Modifier
                             .fillMaxSize()

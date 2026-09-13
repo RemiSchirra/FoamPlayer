@@ -48,7 +48,9 @@ import com.foamplayer.app.ui.theme.FoamTheme
  * so its blurred artwork is cropped to the physical screen with no overflow tricks, no
  * bottom-extension arithmetic and no possibility of being clipped by an intermediate
  * container. Because both backdrops now crop the same artwork into the same box with the
- * same blur and the same intensity dim, the open/close crossfade between them is seamless.
+ * same blur and the same intensity dim, the open/close crossfade between them is seamless
+ * (the player now has its own intensity, so parity -- and thus seamlessness -- holds while
+ * the two intensity settings match).
  *
  * [frontArtPath]/[backArtPath]/[immersive] are snapshot states; [crossfadeFraction] and
  * [subViewBlurProgress] are plain lambda fields whose bodies only read snapshot state
@@ -205,9 +207,10 @@ internal fun DynamicAlbumArtBackground(
  * fraction even when the queue index changes without a live pager drag behind it (e.g.
  * tapping a track in the Queue subview).
  *
- * [intensity] must be the same value the app-wide DynamicAlbumArtBackground uses: with
- * identical blur, crop box and dim, this backdrop is pixel-identical to the app-wide one
- * and the open/close crossfade between them is seamless. [bottomFadeInset] ends the black
+ * [intensity] is the player's own background intensity (separate from the app-wide
+ * DynamicAlbumArtBackground's): with identical blur and crop box, this backdrop is
+ * pixel-identical to the app-wide one whenever both intensities match, and the
+ * open/close crossfade between them stays seamless. [bottomFadeInset] ends the black
  * fade at the bottom of the region where the backdrop is actually visible (the docked
  * bar's top edge hides everything below it); pass 0.dp when the backdrop is visible all
  * the way to the physical bottom of the screen.
