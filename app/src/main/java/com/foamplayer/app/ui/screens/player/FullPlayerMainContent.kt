@@ -60,6 +60,7 @@ import com.foamplayer.app.ui.components.TrackScoreHeart
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.components.onSeekBarReleased
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.utils.TimeUtils
 import com.foamplayer.app.ui.utils.pingPongMarquee
 import kotlin.math.abs
 
@@ -517,17 +518,28 @@ internal fun PlaybackProgressSlider(
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    FoamSlider(
-        value = seekBarProgress.progress,
-        onValueChange = { new ->
-            seekBarProgress.onDragging()
-            onSeek((new * durationMs).toLong())
-        },
-        modifier = modifier.onSeekBarReleased {
-            seekBarProgress.onSeekDragFinished(
-                animated = isAnimateSeekBarEnabled,
-                releasedAt = seekBarProgress.progress
+    Column(modifier = modifier) {
+        FoamSlider(
+            value = seekBarProgress.progress,
+            onValueChange = { new ->
+                seekBarProgress.onDragging()
+                onSeek((new * durationMs).toLong())
+            },
+            modifier = Modifier.onSeekBarReleased {
+                seekBarProgress.onSeekDragFinished(
+                    animated = isAnimateSeekBarEnabled,
+                    releasedAt = seekBarProgress.progress
+                )
+            }
+        )
+        Spacer(modifier = Modifier.height(PlayerDimens.seekBarLabelSpacing))
+        val labelStyle = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            BasicText(
+                text = TimeUtils.formatDurationCompact((seekBarProgress.progress * durationMs).toLong()),
+                style = labelStyle
             )
+            BasicText(text = TimeUtils.formatDurationCompact(durationMs), style = labelStyle)
         }
-    )
+    }
 }

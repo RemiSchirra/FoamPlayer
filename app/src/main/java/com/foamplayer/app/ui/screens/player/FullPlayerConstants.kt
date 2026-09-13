@@ -21,6 +21,9 @@ internal object PlayerDimens {
     /** Vertical padding around the bottom PlaybackProgressSlider row. */
     val seekBarRowVerticalPadding = 12.dp
 
+    /** Space between the seek bar and its position/duration labels. */
+    val seekBarLabelSpacing = 4.dp
+
     /** Space between the seek bar and the transport row in PlaybackControls. */
     val controlsSpacing = 16.dp
 
