@@ -25,6 +25,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -52,6 +54,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.PreviousAction
+import com.foamplayer.app.ui.components.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.TrackScoreHeart
 import com.foamplayer.app.ui.components.FoamSlider
@@ -291,6 +294,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         score = scoreOverrides[pageTrack.id] ?: pageTrack.score,
                         onSetScore = { value -> onSetScore(pageTrack.id, value) }
                     )
+                    TrackMoreButton(track = pageTrack)
                 }
             }
         }
@@ -385,9 +389,33 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         score = scoreOverrides[track.id] ?: track.score,
                         onSetScore = { value -> onSetScore(track.id, value) }
                     )
+                    TrackMoreButton(track = track)
                 }
             }
         }
+    }
+}
+
+/**
+ * The three-dots affordance to the right of the track score heart: opens the
+ * track actions modal (TrackFoamModal) for [track] via the root-provided
+ * modal state. Same 40dp touch target / 26dp icon sizing as the score heart.
+ */
+@Composable
+internal fun TrackMoreButton(track: TrackEntity) {
+    val trackModalState = LocalTrackFoamModalState.current
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clickable { trackModalState?.show(track) },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.MoreVert,
+            contentDescription = stringResource(R.string.more_options),
+            tint = FoamTheme.colors.textPrimary,
+            modifier = Modifier.size(26.dp)
+        )
     }
 }
 
