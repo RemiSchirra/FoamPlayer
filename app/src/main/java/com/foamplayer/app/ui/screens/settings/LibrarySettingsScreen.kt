@@ -24,7 +24,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -73,7 +72,7 @@ fun LibrarySettingsScreen(
     // Sorted once per folder-set change: calling sorted() inside the LazyColumn scope
     // re-allocated and re-sorted the list on every recomposition (and remember is not
     // available there -- LazyListScope is not composable).
-    val sortedFolders = remember(selectedFolders) { selectedFolders.sorted() }
+    val sortedFolders = remember(selectedFolders) { selectedFolders.sortedBy { folderDisplayName(it) } }
 
     Column(
         modifier = Modifier
@@ -141,16 +140,19 @@ fun LibrarySettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             BasicText(
-                                text = folder, 
-                                style = FoamTheme.typography.caption, 
+                                text = folderDisplayName(folder),
+                                style = FoamTheme.typography.caption,
                                 modifier = Modifier.weight(1f),
                                 maxLines = 1
                             )
                             Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
-                            BasicText(
-                                text = stringResource(R.string.remove),
-                                style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor, fontWeight = FontWeight.Bold),
-                                modifier = Modifier.clickable { viewModel.removeFolder(folder) }
+                            Icon(
+                                imageVector = FoamTheme.icons.current.close,
+                                contentDescription = stringResource(R.string.remove),
+                                tint = FoamTheme.accentColor,
+                                modifier = Modifier
+                                    .size(FoamDimens.iconSmall)
+                                    .clickable { viewModel.removeFolder(folder) }
                             )
                         }
                     }
@@ -258,6 +260,27 @@ fun LibrarySettingsScreen(
     }
 }
 
+/**
+ * Extracts a human-readable name from a SAF tree URI such as
+ * "content://com.android.externalstorage.documents/tree/primary%3AMusic/Jazz".
+ * Returns the decoded path after the volume prefix (e.g. "Music/Jazz"),
+ * falling back to the raw URI when the format is unexpected.
+ */
+private fun folderDisplayName(folderUri: String): String {
+    val segments = try {
+        Uri.parse(folderUri).pathSegments
+    } catch (_: Exception) {
+        return folderUri
+    }
+    val treeIndex = segments.indexOf("tree")
+    if (treeIndex == -1 || treeIndex >= segments.lastIndex) return folderUri
+    val treePath = segments[treeIndex + 1]
+    val relativePath = treePath.substringAfter(':', missingDelimiterValue = "")
+    if (relativePath.isNotBlank()) return relativePath
+    val volume = treePath.substringBefore(':', missingDelimiterValue = "")
+    return volume.ifBlank { folderUri }
+}
+
 @Composable
 fun SeparatorSettingsCard(
     title: String,
@@ -294,7 +317,7 @@ fun SeparatorSettingsCard(
                             BasicText(text = sep, style = FoamTheme.typography.caption)
                             Spacer(modifier = Modifier.width(FoamDimens.spacingTiny))
                             Icon(
-                                imageVector = Icons.Default.Close,
+                                imageVector = FoamTheme.icons.current.close,
                                 contentDescription = stringResource(R.string.remove),
                                 tint = FoamTheme.accentColor,
                                 modifier = Modifier

@@ -29,7 +29,8 @@ data class FoamIconSet(
     val equalizer: ImageVector,
     val settings: ImageVector,
     val dragHandle: ImageVector,
-    val more: ImageVector
+    val more: ImageVector,
+    val close: ImageVector
 )
 
 @Immutable
@@ -61,7 +62,8 @@ val DefaultFoamIcons = FoamIcons(
         equalizer = Icons.Filled.GraphicEq,
         settings = Icons.Filled.Settings,
         dragHandle = Icons.Filled.DragHandle,
-        more = Icons.Filled.Menu
+        more = Icons.Filled.Menu,
+        close = Icons.Filled.Close
     ),
     outline = FoamIconSet(
         play = Icons.Outlined.PlayArrow,
@@ -76,7 +78,8 @@ val DefaultFoamIcons = FoamIcons(
         equalizer = Icons.Outlined.GraphicEq,
         settings = Icons.Outlined.Settings,
         dragHandle = Icons.Outlined.DragHandle,
-        more = Icons.Outlined.Menu
+        more = Icons.Outlined.Menu,
+        close = Icons.Outlined.Close
     ),
     flat = FoamIconSet(
         play = Icons.Rounded.PlayArrow,
@@ -91,7 +94,8 @@ val DefaultFoamIcons = FoamIcons(
         equalizer = Icons.Rounded.GraphicEq,
         settings = Icons.Rounded.Settings,
         dragHandle = Icons.Rounded.DragHandle,
-        more = Icons.Rounded.Menu
+        more = Icons.Rounded.Menu,
+        close = Icons.Rounded.Close
     ),
     currentStyle = FoamIconStyle.FLAT
 )
