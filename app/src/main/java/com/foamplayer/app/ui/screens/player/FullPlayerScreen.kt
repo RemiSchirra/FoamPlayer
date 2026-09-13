@@ -274,7 +274,17 @@ fun FullPlayerScreen(
                 programmaticBackdropFromPath = fromPath
                 programmaticBackdropToPath = toPath
                 programmaticBackdropCrossfade.snapTo(0f)
-                programmaticBackdropCrossfade.animateTo(1f, tween(TRANSITION_DURATION_MS))
+                try {
+                    programmaticBackdropCrossfade.animateTo(1f, tween(TRANSITION_DURATION_MS))
+                } finally {
+                    // A cancelled animation (queueIndex changing again mid-crossfade, or the
+                    // player leaving composition) must not leave the crossfade "active" with
+                    // fromPath frozen into frontArtPath; clearing the programmatic paths hands
+                    // control straight back to the pager-driven state. Plain state writes run
+                    // in a cancelled coroutine's finally block without suspension.
+                    programmaticBackdropFromPath = null
+                    programmaticBackdropToPath = null
+                }
             }
         }
     }
@@ -331,6 +341,17 @@ fun FullPlayerScreen(
                 }
             }
 
+            // Composition-phase reads of the derived indices: they are otherwise only consumed
+            // inside the SideEffect below, and SideEffects re-run on recomposition. Nothing in
+            // this scope reads pager state during composition, so a pager settle changes
+            // indexA/indexB without recomposing, the SideEffect never re-runs on the settle
+            // frame, and crossfadeFraction (a draw-phase read) wraps 1f -> 0f against the stale
+            // paths -- snapping the backdrop back to the previous track's art at the end of
+            // every swipe. When no skipToIndex roundtrip follows (e.g. swiping back to the
+            // playing track's page), the stale image persists instead of correcting itself.
+            val backdropIndexA = indexA
+            val backdropIndexB = indexB
+
             val isProgrammaticCrossfadeActive = programmaticBackdropToPath != null &&
                     programmaticBackdropCrossfade.value < 1f
 
@@ -345,7 +366,7 @@ fun FullPlayerScreen(
                     if (isProgrammaticCrossfadeActive) {
                         programmaticBackdropFromPath
                     } else {
-                        state.queue.getOrNull(indexA)?.albumArtPath
+                        state.queue.getOrNull(backdropIndexA)?.albumArtPath
                     }
                 backdropState.backArtPath =
                     if (isProgrammaticCrossfadeActive) {
@@ -353,15 +374,31 @@ fun FullPlayerScreen(
                     } else if (playerTransitionState.currentState != playerTransitionState.targetState) {
                         null
                     } else {
-                        state.queue.getOrNull(indexB)?.albumArtPath
+                        state.queue.getOrNull(backdropIndexB)?.albumArtPath
                     }
                 backdropState.immersive = isImmersiveEnabled
                 backdropState.crossfadeFraction = {
                     if (programmaticBackdropToPath != null && programmaticBackdropCrossfade.value < 1f) {
                         programmaticBackdropCrossfade.value
                     } else {
+                        // Anchor the fraction to backdropIndexA -- the exact index that
+                        // produced the frontArtPath written by THIS SideEffect run -- rather
+                        // than to absoluteOffset.toInt(). The lambda is read during the host's
+                        // draw phase, which can observe a pager offset one tick fresher than
+                        // the composition that produced the paths (the settle tick of an
+                        // animateScrollToPage routinely lands after that frame's composition).
+                        // With toInt(), such a tick wraps the fraction against stale paths:
+                        // going next, offset N+1 against paths (N, N+1) wraps 1f -> 0f and
+                        // flashes the previous track at the end of the animation; going
+                        // previous, offset N-ε against resting paths (N, N+1) jumps to ~1f and
+                        // flashes the next track at the start. Anchored to backdropIndexA the
+                        // stale pairing renders coherently instead: offset N+1 -> fraction 1f
+                        // (back layer = the new track, fully covering the front), offset N-ε ->
+                        // fraction 0f (front layer = the current track). Whenever the paths are
+                        // fresh, backdropIndexA == floor(absoluteOffset), so this is identical
+                        // to the toInt() math.
                         val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                        (absoluteOffset - absoluteOffset.toInt()).coerceIn(0f, 1f)
+                        (absoluteOffset - backdropIndexA).coerceIn(0f, 1f)
                     }
                 }
                 backdropState.subViewBlurProgress = subViewBlurProgressProvider
