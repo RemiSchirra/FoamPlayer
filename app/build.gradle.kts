@@ -122,5 +122,7 @@ dependencies {
     implementation(project(":lyrics:kugou"))
     implementation(project(":lyrics:lrclib"))
     implementation(project(":lyrics:paxsenix"))
+    implementation(project(":lyrics:simpmusic"))
+    implementation(project(":lyrics:youlyplus"))
 
 }
