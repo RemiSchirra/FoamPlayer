@@ -296,7 +296,14 @@ fun FullPlayerScreen(
     }
 
     val uiAlpha = remember(playerTransitionState) {
-        { EaseInOutCubic.transform(playerTransitionState.progress().coerceIn(0f, 1f)) }
+        {
+            val raw = playerTransitionState.progress().coerceIn(0f, 1f)
+            if (playerTransitionState.targetState) {
+                EaseOutCubic.transform(raw)
+            } else {
+                EaseInCubic.transform(raw)
+            }
+        }
     }
 
     val subControlsProgress = remember(upTransitionState) {
