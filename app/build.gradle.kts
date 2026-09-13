@@ -123,6 +123,7 @@ dependencies {
     implementation(project(":lyrics:lrclib"))
     implementation(project(":lyrics:paxsenix"))
     implementation(project(":lyrics:simpmusic"))
+    implementation(project(":lyrics:unison"))
     implementation(project(":lyrics:youlyplus"))
 
 }
