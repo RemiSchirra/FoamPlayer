@@ -1,0 +1,227 @@
+package com.foamplayer.app.ui.components
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.ripple
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import com.foamplayer.app.constants.MediaDensity
+import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamTheme
+
+/**
+ * The modal opened from a media list screen's 3-dots ("more options") button.
+ * First page holds the "Organisation" row; tapping it slides in the submodal —
+ * a radio list of the six [MediaDensity] modes. Selecting a mode applies it
+ * immediately (the list behind the sheet recomposes live) and keeps the sheet
+ * open so the user can flip through options; Back returns to the first page
+ * and the scrim dismisses the sheet.
+ */
+@Composable
+fun DensityOrganisationModal(
+    visible: Boolean,
+    currentDensity: MediaDensity,
+    onSelectDensity: (MediaDensity) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // The density page is a second page of the SAME sheet (one Dialog window).
+    // It resets as soon as the sheet starts closing — never on open — so a
+    // later presentation always begins on the menu page instead of resuming
+    // (and animating away from) the radio submodal.
+    var showDensityPage by remember { mutableStateOf(false) }
+    LaunchedEffect(visible) {
+        if (!visible) showDensityPage = false
+    }
+
+    // Horizontal gap kept between the outgoing and incoming pages while they
+    // slide (same push/pop pattern as the track/collection modals' details).
+    val pageGapPx = with(LocalDensity.current) {
+        FoamDimens.spacingSmall.roundToPx()
+    }
+
+    FoamBottomModal(
+        visible = visible,
+        onDismissRequest = onDismiss
+    ) {
+        AnimatedContent(
+            targetState = showDensityPage,
+            transitionSpec = {
+                if (!visible) {
+                    // The sheet is already sliding away: swap pages silently.
+                    EnterTransition.None togetherWith ExitTransition.None
+                } else if (targetState) {
+                    slideInHorizontally { it + pageGapPx } togetherWith
+                            slideOutHorizontally { -it - pageGapPx }
+                } else {
+                    slideInHorizontally { -it - pageGapPx } togetherWith
+                            slideOutHorizontally { it + pageGapPx }
+                }
+            },
+            label = "DensityOrganisationPage"
+        ) { isDensityPage ->
+            Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
+                if (isDensityPage) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                            .background(FoamTheme.colors.surfaceVariant)
+                    ) {
+                        MediaDensity.entries.forEachIndexed { index, option ->
+                            if (index > 0) ModalSectionDivider()
+                            DensityRadioRow(
+                                label = option.label,
+                                selected = option == currentDensity,
+                                onClick = { onSelectDensity(option) }
+                            )
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                            .background(FoamTheme.colors.surfaceVariant)
+                    ) {
+                        ModalBackButton(onBack = { showDensityPage = false })
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                            .background(FoamTheme.colors.surfaceVariant)
+                    ) {
+                        ModalRowButton(
+                            label = "Organisation",
+                            onClick = { showDensityPage = true }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One selectable density option: label on the left, radio indicator on the right. */
+@Composable
+private fun DensityRadioRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                role = Role.RadioButton,
+                onClick = onClick
+            )
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.paddingSmall),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BasicText(
+            text = label,
+            style = FoamTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
+        DensityRadioButton(selected = selected)
+    }
+}
+
+/** Minimal custom radio: ring that gains an accent-filled dot when selected. */
+@Composable
+private fun DensityRadioButton(selected: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(20.dp)
+            .clip(CircleShape)
+            .border(
+                width = 2.dp,
+                color = if (selected) FoamTheme.accentColor else FoamTheme.colors.textSecondary,
+                shape = CircleShape
+            )
+            .padding(4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(FoamTheme.accentColor)
+            )
+        }
+    }
+}
+
+/**
+ * The 3-dots icon button that opens [DensityOrganisationModal]; rendered in a
+ * media list screen's top bar. Kept here so every screen shows the identical
+ * control.
+ */
+@Composable
+internal fun OrganisationMenuButton(
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onClick
+            )
+            .padding(4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.MoreVert,
+            contentDescription = contentDescription,
+            tint = FoamTheme.colors.textPrimary,
+            modifier = Modifier.size(FoamDimens.iconMedium)
+        )
+    }
+}

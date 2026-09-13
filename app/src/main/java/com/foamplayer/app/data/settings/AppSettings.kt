@@ -3,6 +3,8 @@ package com.foamplayer.app.data.settings
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
 import com.foamplayer.app.constants.DefaultNavBarScreenItems
+import com.foamplayer.app.constants.MediaDensity
+import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
@@ -39,7 +41,9 @@ data class AppSettings(
     val navBarPrimaryOrder: List<NavBarItem> = DefaultNavBarPrimaryOrder,
     val navBarPrimaryEnabled: Set<NavBarItem> = DefaultNavBarScreenItems.toSet(),
     val navBarSecondaryOrder: List<NavBarItem> = DefaultNavBarScreenItems,
-    val navBarSecondaryEnabled: Set<NavBarItem> = emptySet()
+    val navBarSecondaryEnabled: Set<NavBarItem> = emptySet(),
+    /** Per-view media list density; views missing from the map fall back to [MediaDensity.ROW_NORMAL]. */
+    val mediaDensities: Map<MediaListView, MediaDensity> = emptyMap()
 ) {
     /**
      * Items of the main bar, in the user's configured order. Includes the [NavBarItem.MORE]
@@ -50,6 +54,9 @@ data class AppSettings(
 
     /** Enabled items of the second bar (the row the "more" button reveals). */
     val secondaryNavBarItems: List<NavBarItem> get() = navBarSecondaryOrder.filter { it in navBarSecondaryEnabled }
+
+    /** The [MediaDensity] remembered by [view]; every view starts as the classic row. */
+    fun mediaDensity(view: MediaListView): MediaDensity = mediaDensities[view] ?: MediaDensity.ROW_NORMAL
 
     fun sanitized(): AppSettings {
         // The "more" toggle is never a switchable item; its visibility is derived

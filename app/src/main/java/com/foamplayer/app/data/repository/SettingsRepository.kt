@@ -11,6 +11,8 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
 import com.foamplayer.app.constants.DefaultNavBarScreenItems
+import com.foamplayer.app.constants.MediaDensity
+import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
@@ -94,6 +96,10 @@ class SettingsRepository @Inject constructor(
         it.copy(navBarSecondaryEnabled = enabled)
     }
 
+    suspend fun setMediaDensity(view: MediaListView, density: MediaDensity) = update {
+        it.copy(mediaDensities = it.mediaDensities + (view to density))
+    }
+
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
@@ -130,7 +136,8 @@ class SettingsRepository @Inject constructor(
         navBarSecondaryOrder = deserializeNavBarItemOrder(this[Keys.NAVBAR_SECONDARY_ORDER], DefaultNavBarScreenItems),
         navBarSecondaryEnabled = this[Keys.NAVBAR_SECONDARY_ENABLED]
             ?.mapNotNull { name -> NavBarItem.entries.find { it.name == name } }
-            ?.toSet() ?: AppSettings().navBarSecondaryEnabled
+            ?.toSet() ?: AppSettings().navBarSecondaryEnabled,
+        mediaDensities = deserializeMediaDensities(this[Keys.MEDIA_DENSITIES])
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -159,6 +166,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.NAVBAR_PRIMARY_ENABLED] = settings.navBarPrimaryEnabled.map { it.name }.toSet()
         this[Keys.NAVBAR_SECONDARY_ORDER] = settings.navBarSecondaryOrder.joinToString(",") { it.name }
         this[Keys.NAVBAR_SECONDARY_ENABLED] = settings.navBarSecondaryEnabled.map { it.name }.toSet()
+        this[Keys.MEDIA_DENSITIES] = serializeMediaDensities(settings.mediaDensities)
     }
 
     private object Keys {
@@ -187,5 +195,19 @@ class SettingsRepository @Inject constructor(
         val NAVBAR_PRIMARY_ENABLED = stringSetPreferencesKey("navbar_primary_enabled")
         val NAVBAR_SECONDARY_ORDER = stringPreferencesKey("navbar_secondary_order")
         val NAVBAR_SECONDARY_ENABLED = stringSetPreferencesKey("navbar_secondary_enabled")
+        val MEDIA_DENSITIES = stringPreferencesKey("media_densities")
     }
 }
+
+/** "VIEW=DENSITY;VIEW=DENSITY" — unknown views/densities are dropped, so new entries default cleanly. */
+private fun deserializeMediaDensities(stored: String?): Map<MediaListView, MediaDensity> =
+    stored?.split(";")?.mapNotNull { entry ->
+        val parts = entry.split("=", limit = 2)
+        if (parts.size != 2) return@mapNotNull null
+        val view = MediaListView.entries.find { it.name == parts[0] } ?: return@mapNotNull null
+        val density = MediaDensity.fromName(parts[1]) ?: return@mapNotNull null
+        view to density
+    }?.toMap() ?: emptyMap()
+
+private fun serializeMediaDensities(densities: Map<MediaListView, MediaDensity>): String =
+    densities.entries.joinToString(";") { "${it.key.name}=${it.value.name}" }

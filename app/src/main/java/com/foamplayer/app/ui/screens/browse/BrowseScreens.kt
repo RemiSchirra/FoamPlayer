@@ -6,8 +6,6 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarToday
@@ -25,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.CollectionAlbumEntry
@@ -40,6 +39,10 @@ import com.foamplayer.app.ui.components.distinctCollectionArtistNames
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
 
+/** Horizontal inset of one list row; grid cells get their own symmetric padding instead. */
+private fun Modifier.listRowInset(density: MediaDensity): Modifier =
+    padding(horizontal = if (density.isGrid) 0.dp else 16.dp)
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AlbumsBrowseScreen(
@@ -47,6 +50,8 @@ fun AlbumsBrowseScreen(
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val albums by viewModel.albums.collectAsState()
@@ -56,15 +61,18 @@ fun AlbumsBrowseScreen(
     CollectionListScreen(
         title = "Albums",
         itemCount = albums.size,
-        onBack = onBack
+        onBack = onBack,
+        density = density,
+        onDensityChange = onDensityChange
     ) {
         items(albums, key = { "browse_album_${it.album}" }) { album ->
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = album.album,
                     subtitle = album.artist,
                     imageUrl = album.albumArtPath,
                     onClick = { onAlbumClick(album) },
+                    density = density,
                     onLongClick = {
                         longPressScope.launch {
                             collectionModalState?.show(
@@ -91,6 +99,8 @@ fun AlbumsBrowseScreen(
 fun ArtistsBrowseScreen(
     onArtistClick: (String) -> Unit,
     onBack: () -> Unit,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val artists by viewModel.artists.collectAsState()
@@ -100,14 +110,17 @@ fun ArtistsBrowseScreen(
     CollectionListScreen(
         title = "Artists",
         itemCount = artists.size,
-        onBack = onBack
+        onBack = onBack,
+        density = density,
+        onDensityChange = onDensityChange
     ) {
         items(artists, key = { "browse_artist_$it" }) { artist ->
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = artist,
                     subtitle = null,
                     onClick = { onArtistClick(artist) },
+                    density = density,
                     onLongClick = {
                         longPressScope.launch {
                             collectionModalState?.show(
@@ -129,6 +142,8 @@ fun ArtistsBrowseScreen(
 fun GenresBrowseScreen(
     onGenreClick: (String) -> Unit,
     onBack: () -> Unit,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val genres by viewModel.genres.collectAsState()
@@ -139,15 +154,18 @@ fun GenresBrowseScreen(
         title = "Genres",
         itemCount = genres.size,
         onBack = onBack,
-        headerIcon = Icons.Rounded.Category
+        headerIcon = Icons.Rounded.Category,
+        density = density,
+        onDensityChange = onDensityChange
     ) {
         items(genres, key = { "browse_genre_$it" }) { genre ->
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = genre,
                     subtitle = null,
                     icon = Icons.Rounded.Category,
                     onClick = { onGenreClick(genre) },
+                    density = density,
                     onLongClick = {
                         longPressScope.launch {
                             collectionModalState?.show(
@@ -170,6 +188,8 @@ fun GenresBrowseScreen(
 fun YearsBrowseScreen(
     onYearClick: (Int) -> Unit,
     onBack: () -> Unit,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val years by viewModel.years.collectAsState()
@@ -180,15 +200,18 @@ fun YearsBrowseScreen(
         title = "Years",
         itemCount = years.size,
         onBack = onBack,
-        headerIcon = Icons.Rounded.CalendarToday
+        headerIcon = Icons.Rounded.CalendarToday,
+        density = density,
+        onDensityChange = onDensityChange
     ) {
         items(years, key = { "browse_year_$it" }) { year ->
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = year.toString(),
                     subtitle = null,
                     icon = Icons.Rounded.CalendarToday,
                     onClick = { onYearClick(year) },
+                    density = density,
                     onLongClick = {
                         longPressScope.launch {
                             collectionModalState?.show(
@@ -212,6 +235,8 @@ fun AllTracksBrowseScreen(
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
     onBack: () -> Unit,
     activeTrackId: Long?,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.allTracks.collectAsState()
@@ -222,7 +247,9 @@ fun AllTracksBrowseScreen(
         onTrackClick = onTrackClick,
         onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
         onBack = onBack,
-        activeTrackId = activeTrackId
+        activeTrackId = activeTrackId,
+        density = density,
+        onDensityChange = onDensityChange
     )
 }
 
@@ -232,6 +259,8 @@ fun GenreTracksScreen(
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
     onBack: () -> Unit,
     activeTrackId: Long?,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.genreTracks.collectAsState()
@@ -246,7 +275,9 @@ fun GenreTracksScreen(
         onTrackClick = onTrackClick,
         onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
         onBack = onBack,
-        activeTrackId = activeTrackId
+        activeTrackId = activeTrackId,
+        density = density,
+        onDensityChange = onDensityChange
     )
 }
 
@@ -256,6 +287,8 @@ fun YearTracksScreen(
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
     onBack: () -> Unit,
     activeTrackId: Long?,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.yearTracks.collectAsState()
@@ -270,7 +303,9 @@ fun YearTracksScreen(
         onTrackClick = onTrackClick,
         onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
         onBack = onBack,
-        activeTrackId = activeTrackId
+        activeTrackId = activeTrackId,
+        density = density,
+        onDensityChange = onDensityChange
     )
 }
 
@@ -281,6 +316,8 @@ fun FolderBrowseScreen(
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
     onBack: () -> Unit,
     activeTrackId: Long?,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val content by viewModel.folderContent.collectAsState()
@@ -303,15 +340,18 @@ fun FolderBrowseScreen(
         title = title,
         itemCount = folders.size + tracks.size,
         onBack = onBack,
-        headerIcon = Icons.Rounded.Folder
+        headerIcon = Icons.Rounded.Folder,
+        density = density,
+        onDensityChange = onDensityChange
     ) {
         items(folders, key = { "browse_folder_${it.path}" }) { folder ->
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = folder.name,
                     subtitle = "${folder.trackCount} tracks",
                     icon = Icons.Rounded.Folder,
                     onClick = { onFolderClick(folder.path) },
+                    density = density,
                     onLongClick = {
                         longPressScope.launch {
                             collectionModalState?.show(
@@ -331,11 +371,12 @@ fun FolderBrowseScreen(
         }
 
         itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Box(modifier = Modifier.listRowInset(density)) {
                 TrackListItem(
                     track = track,
                     onClick = { onTrackClick(tracks, index) },
-                    active = track.id == activeTrackId
+                    active = track.id == activeTrackId,
+                    density = density
                 )
             }
         }
@@ -397,6 +438,8 @@ fun CollectionArtistsScreen(
     key: String,
     onArtistClick: (String) -> Unit,
     onBack: () -> Unit,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     var artistRows by remember { mutableStateOf<List<CollectionArtistRow>>(emptyList()) }
@@ -409,14 +452,17 @@ fun CollectionArtistsScreen(
         title = collectionMembersTitle(kind, key),
         subtitle = "Artists",
         itemCount = artistRows.size,
-        onBack = onBack
+        onBack = onBack,
+        density = density,
+        onDensityChange = onDensityChange
     ) {
         items(artistRows, key = { "artists_in_${kind}_${it.name}" }) { row ->
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = row.name,
                     subtitle = if (row.albumCount == 1) "1 album" else "${row.albumCount} albums",
-                    onClick = { onArtistClick(row.name) }
+                    onClick = { onArtistClick(row.name) },
+                    density = density
                 )
             }
         }
@@ -450,6 +496,8 @@ fun CollectionAlbumsScreen(
     key: String,
     onAlbumClick: (CollectionAlbumEntry) -> Unit,
     onBack: () -> Unit,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     var albumRows by remember { mutableStateOf<List<CollectionAlbumEntry>>(emptyList()) }
@@ -464,15 +512,18 @@ fun CollectionAlbumsScreen(
         title = collectionMembersTitle(kind, key),
         subtitle = "Albums",
         itemCount = albumRows.size,
-        onBack = onBack
+        onBack = onBack,
+        density = density,
+        onDensityChange = onDensityChange
     ) {
         items(albumRows, key = { "albums_in_${kind}_${it.album}" }) { entry ->
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = entry.album,
                     subtitle = entry.artist,
                     imageUrl = entry.albumArtPath,
-                    onClick = { onAlbumClick(entry) }
+                    onClick = { onAlbumClick(entry) },
+                    density = density
                 )
             }
         }

@@ -60,6 +60,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.foamplayer.app.constants.MediaDensity
+import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.CollectionFoamModal
@@ -218,6 +220,12 @@ fun FoamNavHost(
     val navigationBarMode = playerSettings.navigationBarMode
     // Still honored by FLOATING/ATTACHED; the docked bar ignores it (always solid).
     val navBarTransparentWhenPlayerOpen = playerSettings.navBarTransparentWhenPlayerOpen
+
+    // Per-view media list density (organisation modal). Every view remembers its own.
+    val densityFor: (MediaListView) -> MediaDensity = { view -> playerSettings.mediaDensity(view) }
+    val setDensity: (MediaListView, MediaDensity) -> Unit = { view, value ->
+        playerViewModel.setMediaDensity(view, value)
+    }
 
     // Initialize the transition state based on whether the player should be open immediately
     val initialOpenRequested = remember { playerViewModel.openPlayerRequested.value }
@@ -591,7 +599,9 @@ fun FoamNavHost(
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
-                                            activeTrackId = playbackState.currentTrack?.id
+                                            activeTrackId = playbackState.currentTrack?.id,
+                                            density = densityFor(MediaListView.LIBRARY),
+                                            onDensityChange = { setDensity(MediaListView.LIBRARY, it) }
                                         )
                                     }
                                     composable(Screen.Playlists.route) {
@@ -606,7 +616,9 @@ fun FoamNavHost(
                                                 )
                                             },
                                             sharedTransitionScope = this@SharedTransitionLayout,
-                                            animatedVisibilityScope = this
+                                            animatedVisibilityScope = this,
+                                            density = densityFor(MediaListView.PLAYLISTS),
+                                            onDensityChange = { setDensity(MediaListView.PLAYLISTS, it) }
                                         )
                                     }
                                     composable(Screen.Search.route) {
@@ -650,7 +662,9 @@ fun FoamNavHost(
                                             },
                                             onBack = { navController.popBackStack() },
                                             sharedTransitionScope = this@SharedTransitionLayout,
-                                            animatedVisibilityScope = this
+                                            animatedVisibilityScope = this,
+                                            density = densityFor(MediaListView.BROWSE_ALBUMS),
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_ALBUMS, it) }
                                         )
                                     }
                                     composable(Screen.BrowseAllTracks.route) {
@@ -659,7 +673,9 @@ fun FoamNavHost(
                                                 playTrackFromList(tracks, index)
                                             },
                                             onBack = { navController.popBackStack() },
-                                            activeTrackId = playbackState.currentTrack?.id
+                                            activeTrackId = playbackState.currentTrack?.id,
+                                            density = densityFor(MediaListView.BROWSE_ALL_TRACKS),
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_ALL_TRACKS, it) }
                                         )
                                     }
                                     composable(Screen.BrowseArtists.route) {
@@ -667,7 +683,9 @@ fun FoamNavHost(
                                             onArtistClick = { artist ->
                                                 navController.navigate(Screen.ArtistDetail.createRoute(artist))
                                             },
-                                            onBack = { navController.popBackStack() }
+                                            onBack = { navController.popBackStack() },
+                                            density = densityFor(MediaListView.BROWSE_ARTISTS),
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_ARTISTS, it) }
                                         )
                                     }
                                     composable(Screen.BrowseGenres.route) {
@@ -675,7 +693,9 @@ fun FoamNavHost(
                                             onGenreClick = { genre ->
                                                 navController.navigate(Screen.BrowseGenreDetail.createRoute(genre))
                                             },
-                                            onBack = { navController.popBackStack() }
+                                            onBack = { navController.popBackStack() },
+                                            density = densityFor(MediaListView.BROWSE_GENRES),
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_GENRES, it) }
                                         )
                                     }
                                     composable(Screen.BrowseYears.route) {
@@ -683,7 +703,9 @@ fun FoamNavHost(
                                             onYearClick = { year ->
                                                 navController.navigate(Screen.BrowseYearDetail.createRoute(year))
                                             },
-                                            onBack = { navController.popBackStack() }
+                                            onBack = { navController.popBackStack() },
+                                            density = densityFor(MediaListView.BROWSE_YEARS),
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_YEARS, it) }
                                         )
                                     }
                                     composable(
@@ -697,7 +719,9 @@ fun FoamNavHost(
                                                 playTrackFromList(tracks, index)
                                             },
                                             onBack = { navController.popBackStack() },
-                                            activeTrackId = playbackState.currentTrack?.id
+                                            activeTrackId = playbackState.currentTrack?.id,
+                                            density = densityFor(MediaListView.BROWSE_GENRE_TRACKS),
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_GENRE_TRACKS, it) }
                                         )
                                     }
                                     composable(
@@ -711,7 +735,9 @@ fun FoamNavHost(
                                                 playTrackFromList(tracks, index)
                                             },
                                             onBack = { navController.popBackStack() },
-                                            activeTrackId = playbackState.currentTrack?.id
+                                            activeTrackId = playbackState.currentTrack?.id,
+                                            density = densityFor(MediaListView.BROWSE_YEAR_TRACKS),
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_YEAR_TRACKS, it) }
                                         )
                                     }
                                     composable(
@@ -727,7 +753,9 @@ fun FoamNavHost(
                                             onArtistClick = { artist ->
                                                 navController.navigate(Screen.ArtistDetail.createRoute(artist))
                                             },
-                                            onBack = { navController.popBackStack() }
+                                            onBack = { navController.popBackStack() },
+                                            density = densityFor(MediaListView.BROWSE_ARTISTS_IN),
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_ARTISTS_IN, it) }
                                         )
                                     }
                                     composable(
@@ -749,7 +777,9 @@ fun FoamNavHost(
                                                     )
                                                 )
                                             },
-                                            onBack = { navController.popBackStack() }
+                                            onBack = { navController.popBackStack() },
+                                            density = densityFor(MediaListView.BROWSE_ALBUMS_IN),
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_ALBUMS_IN, it) }
                                         )
                                     }
                                     composable(
@@ -766,7 +796,9 @@ fun FoamNavHost(
                                                 playTrackFromList(tracks, index)
                                             },
                                             onBack = { navController.popBackStack() },
-                                            activeTrackId = playbackState.currentTrack?.id
+                                            activeTrackId = playbackState.currentTrack?.id,
+                                            density = densityFor(MediaListView.BROWSE_FOLDERS),
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_FOLDERS, it) }
                                         )
                                     }
                                     composable(Screen.Equalizer.route) { EqualizerScreen() }
@@ -836,7 +868,9 @@ fun FoamNavHost(
                                             },
                                             onBack = { navController.popBackStack() },
                                             sharedTransitionScope = this@SharedTransitionLayout,
-                                            animatedVisibilityScope = this
+                                            animatedVisibilityScope = this,
+                                            density = densityFor(MediaListView.ARTIST_DETAIL),
+                                            onDensityChange = { setDensity(MediaListView.ARTIST_DETAIL, it) }
                                         )
                                     }
                                     composable(
@@ -890,7 +924,9 @@ fun FoamNavHost(
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
                                             activeTrackId = playbackState.currentTrack?.id,
-                                            onListBackdropArt = onListBackdropArt
+                                            onListBackdropArt = onListBackdropArt,
+                                            density = densityFor(MediaListView.PLAYLIST_DETAIL),
+                                            onDensityChange = { setDensity(MediaListView.PLAYLIST_DETAIL, it) }
                                         )
                                     }
                                 }

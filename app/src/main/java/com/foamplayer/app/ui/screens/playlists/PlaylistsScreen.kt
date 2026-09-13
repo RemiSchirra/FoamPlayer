@@ -9,9 +9,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,9 +21,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
@@ -48,29 +49,26 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.R
+import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
-import com.foamplayer.app.ui.components.FoamBottomModal
+import com.foamplayer.app.ui.components.AlbumArtShape
+import com.foamplayer.app.ui.components.DensityOrganisationModal
+import com.foamplayer.app.ui.components.MediaGridCell
+import com.foamplayer.app.ui.components.MediaListRow
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
-// Mirrors CollectionListItem's row geometry so playlist rows are visually
-// identical to the app's other list rows.
-private val PlaylistArtSize = 48.dp
-private val PlaylistHighlightPadding = 6.dp
-
-// Must match TrackListScreen's AlbumArtShape — using the same shape on both ends of the
-// shared-element transition means the corners never have to jump between two radii.
-private val PlaylistAlbumArtShape = RoundedCornerShape(12.dp)
+// The playlist row shares the app-wide list row geometry through MediaListRow /
+// MediaGridCell; artwork corners come from the shared percentage-based AlbumArtShape().
 
 private val ImageMimeTypes = arrayOf("image/*")
 
@@ -79,6 +77,8 @@ fun PlaylistsScreen(
     onPlaylistClick: (PlaylistEntity) -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: PlaylistsViewModel = hiltViewModel()
 ) {
     val playlists by viewModel.playlists.collectAsState()
@@ -182,6 +182,27 @@ fun PlaylistsScreen(
                     style = FoamTheme.typography.body
                 )
             }
+        } else if (density.isGrid) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(density.gridColumns),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(playlists, key = { it.playlistId }) { playlist ->
+                    PlaylistItemRow(
+                        playlist = playlist,
+                        trackCount = trackCounts[playlist.playlistId] ?: 0,
+                        onClick = { onPlaylistClick(playlist) },
+                        onLongClick = { playlistModalState.show(playlist) },
+                        density = density,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
+                }
+
+                item(key = "playlists_grid_spacer", span = { GridItemSpan(maxLineSpan) }) {
+                    Spacer(modifier = Modifier.height(80.dp))
+                }
+            }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(playlists, key = { it.playlistId }) { playlist ->
@@ -190,6 +211,7 @@ fun PlaylistsScreen(
                         trackCount = trackCounts[playlist.playlistId] ?: 0,
                         onClick = { onPlaylistClick(playlist) },
                         onLongClick = { playlistModalState.show(playlist) },
+                        density = density,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope
                     )
@@ -230,37 +252,14 @@ fun PlaylistsScreen(
         onDismiss = { renameTarget = null }
     )
 
-    // Placeholder for future playlist-level options (sort, export, ...).
-    FoamBottomModal(
+    // More-options sheet behind the 3-dots button: holds the Organisation row,
+    // which slides in the density radio list for the playlists view.
+    DensityOrganisationModal(
         visible = showMoreModal,
-        onDismissRequest = { showMoreModal = false }
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
-            BasicText(
-                text = stringResource(R.string.more_options),
-                style = FoamTheme.typography.titleMedium,
-                modifier = Modifier.padding(
-                    horizontal = FoamDimens.paddingSmall,
-                    vertical = FoamDimens.spacingTiny
-                )
-            )
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                    .background(FoamTheme.colors.surfaceVariant)
-                    .padding(
-                        horizontal = FoamDimens.paddingMedium,
-                        vertical = FoamDimens.paddingMedium
-                    )
-            ) {
-                BasicText(
-                    text = stringResource(R.string.more_options_placeholder),
-                    style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary)
-                )
-            }
-        }
-    }
+        currentDensity = density,
+        onSelectDensity = { onDensityChange?.invoke(it) },
+        onDismiss = { showMoreModal = false }
+    )
 
     val missingState = when (val state = createState) {
         is CreatePlaylistState.M3uSongsMissing ->
@@ -330,11 +329,12 @@ private fun PlaylistActionButton(
 }
 
 /**
- * TrackListItem/CollectionListItem equivalent for a playlist: 48dp cover (the
- * user-chosen image, or the name's initial as fallback), the name and its
- * track count. Long-press opens the playlist actions modal. When opened, the
- * artwork and title animate into the playlist detail header through the
- * shared-element keys "playlist-art-*" / "playlist-title-*".
+ * TrackListItem equivalent for a playlist: cover (the user-chosen image, or
+ * the name's initial as fallback), the name and its track count — rendered
+ * through the shared row/grid scaffolds at the view's [density]. Long-press
+ * opens the playlist actions modal. When opened, the artwork and title animate
+ * into the playlist detail header through the shared-element keys
+ * "playlist-art-*" / "playlist-title-*".
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -343,24 +343,18 @@ private fun PlaylistItemRow(
     trackCount: Int,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    density: MediaDensity,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope
 ) {
     val context = LocalContext.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val imageRadius = (PlaylistArtSize / 2) * FoamTheme.shapes.miniPlayerRounding
-    val highlightShape = RoundedCornerShape(imageRadius + PlaylistHighlightPadding)
-
-    // Rows taking part in the shared-element transition must use the same fixed corner
-    // radius as the playlist detail header; the others round like the other list rows.
-    val artShape = PlaylistAlbumArtShape
 
     @Composable
     fun Modifier.sharedArtwork(): Modifier = with(sharedTransitionScope) {
         sharedElement(
             rememberSharedContentState(key = "playlist-art-${playlist.playlistId}"),
             animatedVisibilityScope = animatedVisibilityScope,
-            clipInOverlayDuringTransition = OverlayClip(PlaylistAlbumArtShape),
+            clipInOverlayDuringTransition = OverlayClip(AlbumArtShape()),
             boundsTransform = AlbumArtBoundsTransform
         )
     }
@@ -374,69 +368,55 @@ private fun PlaylistItemRow(
         )
     }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(highlightShape)
-                .combinedClickable(
-                    interactionSource = interactionSource,
-                    indication = ripple(color = FoamTheme.colors.textPrimary),
-                    onLongClick = onLongClick,
-                    onClick = onClick
-                )
-                .padding(
-                    horizontal = PlaylistHighlightPadding,
-                    vertical = PlaylistHighlightPadding
-                ),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(PlaylistArtSize)
-                    .sharedArtwork()
-                    .clip(artShape)
-                    .background(FoamTheme.colors.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                if (playlist.imageUrl != null) {
-                    val coverRequest = remember(playlist.imageUrl) {
-                        ImageRequest.Builder(context)
-                            .data(playlist.imageUrl)
-                            .size(AlbumArtRequestSize)
-                            .build()
-                    }
-                    AsyncImage(
-                        model = coverRequest,
-                        contentDescription = stringResource(R.string.playlist_cover_image),
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    BasicText(
-                        text = playlist.name.take(1).uppercase(),
-                        style = FoamTheme.typography.titleMedium
-                    )
-                }
+    @Composable
+    fun PlaylistArtwork() {
+        if (playlist.imageUrl != null) {
+            val coverRequest = remember(playlist.imageUrl) {
+                ImageRequest.Builder(context)
+                    .data(playlist.imageUrl)
+                    .size(AlbumArtRequestSize)
+                    .build()
             }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                BasicText(
-                    text = playlist.name,
-                    style = FoamTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.sharedTitle()
-                )
-                BasicText(
-                    text = "$trackCount tracks",
-                    style = FoamTheme.typography.body,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            AsyncImage(
+                model = coverRequest,
+                contentDescription = stringResource(R.string.playlist_cover_image),
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            BasicText(
+                text = playlist.name.take(1).uppercase(),
+                style = FoamTheme.typography.titleMedium
+            )
         }
+    }
+
+    if (density.isGrid) {
+        MediaGridCell(
+            onClick = onClick,
+            onLongClick = onLongClick,
+            artworkModifier = Modifier
+                .sharedArtwork()
+                .clip(AlbumArtShape())
+                .background(FoamTheme.colors.surfaceVariant),
+            artworkContent = { PlaylistArtwork() },
+            title = playlist.name,
+            subtitle = "$trackCount tracks",
+            titleModifier = Modifier.sharedTitle()
+        )
+    } else {
+        MediaListRow(
+            onClick = onClick,
+            onLongClick = onLongClick,
+            artworkModifier = Modifier
+                .sharedArtwork()
+                .clip(AlbumArtShape())
+                .background(FoamTheme.colors.surfaceVariant),
+            artworkContent = { PlaylistArtwork() },
+            title = playlist.name,
+            subtitle = "$trackCount tracks",
+            density = density,
+            titleModifier = Modifier.sharedTitle()
+        )
     }
 }

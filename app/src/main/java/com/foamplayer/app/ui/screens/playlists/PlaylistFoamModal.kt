@@ -49,6 +49,7 @@ import com.foamplayer.app.ui.components.DetailsSection
 import com.foamplayer.app.ui.components.FoamBottomModal
 import com.foamplayer.app.ui.components.ModalBackButton
 import com.foamplayer.app.ui.components.ModalRowButton
+import com.foamplayer.app.ui.components.albumArtCornerRadius
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
@@ -240,7 +241,7 @@ private fun PlaylistModalHeader(
             Box(
                 modifier = Modifier
                     .size(64.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(albumArtCornerRadius(64.dp)))
                     .background(FoamTheme.colors.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {

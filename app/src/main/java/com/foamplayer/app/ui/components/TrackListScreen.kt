@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +17,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
@@ -24,7 +29,10 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import androidx.core.net.toUri
+import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.TimeUtils
@@ -63,11 +72,16 @@ fun TrackListScreen(
     sharedTrackId: Long? = null,
     activeTrackId: Long? = null,
     showTrackNumbers: Boolean = false,
-    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null
+    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
+    /** This view's remembered list density; ROW_NORMAL keeps the classic layout. */
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    /** When set, the top bar shows the 3-dots button opening the organisation modal. */
+    onDensityChange: ((MediaDensity) -> Unit)? = null
 ) {
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
     val context = LocalContext.current
+    var showOrganisationModal by remember { mutableStateOf(false) }
 
     LaunchedEffect(imageUrl, imageIsEmbeddedArt) {
         if (imageUrl != null) {
@@ -93,29 +107,42 @@ fun TrackListScreen(
                         .clickable { onBack() }
                         .padding(4.dp)
                 )
-            }
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                item {
-                    HeaderSection(
-                        title = title,
-                        subtitle = artistName,
-                        trackCount = tracks.size,
-                        durationText = durationText,
-                        imageUrl = imageUrl,
-                        imageIsEmbeddedArt = imageIsEmbeddedArt,
-                        onPlayAllClick = onPlayAllClick,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        sharedElementKey = sharedElementKey,
-                        sharedElementPrefix = sharedElementPrefix
+                if (onDensityChange != null) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    OrganisationMenuButton(
+                        contentDescription = "Organisation",
+                        onClick = { showOrganisationModal = true }
                     )
                 }
+            }
 
-                itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            if (density.isGrid) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(density.gridColumns),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 10.dp)
+                ) {
+                    item(
+                        key = "grid_header",
+                        span = { GridItemSpan(maxLineSpan) }
+                    ) {
+                        HeaderSection(
+                            title = title,
+                            subtitle = artistName,
+                            trackCount = tracks.size,
+                            durationText = durationText,
+                            imageUrl = imageUrl,
+                            imageIsEmbeddedArt = imageIsEmbeddedArt,
+                            onPlayAllClick = onPlayAllClick,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            sharedElementKey = sharedElementKey,
+                            sharedElementPrefix = sharedElementPrefix
+                        )
+                    }
+
+                    itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
                         TrackListItem(
                             track = track,
                             onClick = { onTrackClick(tracks, index) },
@@ -125,16 +152,72 @@ fun TrackListScreen(
                             } else {
                                 null
                             },
+                            density = density,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
                             isSharedTransitionSource = track.id == sharedTrackId
                         )
                     }
-                }
 
-                item { Spacer(modifier = Modifier.height(80.dp)) }
+                    item(
+                        key = "grid_bottom_spacer",
+                        span = { GridItemSpan(maxLineSpan) }
+                    ) {
+                        Spacer(modifier = Modifier.height(80.dp))
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    item {
+                        HeaderSection(
+                            title = title,
+                            subtitle = artistName,
+                            trackCount = tracks.size,
+                            durationText = durationText,
+                            imageUrl = imageUrl,
+                            imageIsEmbeddedArt = imageIsEmbeddedArt,
+                            onPlayAllClick = onPlayAllClick,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            sharedElementKey = sharedElementKey,
+                            sharedElementPrefix = sharedElementPrefix
+                        )
+                    }
+
+                    itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            TrackListItem(
+                                track = track,
+                                onClick = { onTrackClick(tracks, index) },
+                                active = track.id == activeTrackId,
+                                trackNumberText = if (showTrackNumbers) {
+                                    track.trackNumber?.toString() ?: (index + 1).toString()
+                                } else {
+                                    null
+                                },
+                                density = density,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
+                                isSharedTransitionSource = track.id == sharedTrackId
+                            )
+                        }
+                    }
+
+                    item { Spacer(modifier = Modifier.height(80.dp)) }
+                }
             }
         }
+    }
+
+    if (onDensityChange != null) {
+        DensityOrganisationModal(
+            visible = showOrganisationModal,
+            currentDensity = density,
+            onSelectDensity = onDensityChange,
+            onDismiss = { showOrganisationModal = false }
+        )
     }
 }
 
@@ -189,7 +272,7 @@ private fun HeaderSection(
             this@sharedArtworkIfAvailable.sharedElement(
                 rememberSharedContentState(key = key),
                 animatedVisibilityScope = animatedVisibilityScope,
-                clipInOverlayDuringTransition = OverlayClip(AlbumArtShape),
+                clipInOverlayDuringTransition = OverlayClip(AlbumArtShape()),
                 boundsTransform = AlbumArtBoundsTransform
             )
         }
@@ -206,7 +289,7 @@ private fun HeaderSection(
             modifier = Modifier
                 .size(120.dp)
                 .sharedArtworkIfAvailable("$sharedElementPrefix-art-$sharedElementKey")
-                .clip(AlbumArtShape)
+                .clip(AlbumArtShape())
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {

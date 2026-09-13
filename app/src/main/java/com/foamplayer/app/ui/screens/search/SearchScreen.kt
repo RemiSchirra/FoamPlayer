@@ -412,13 +412,13 @@ fun AlbumSearchResultItem(
                             base.sharedElement(
                                 rememberSharedContentState(key = "album-art-${album.album}"),
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                clipInOverlayDuringTransition = OverlayClip(AlbumArtShape),
+                                clipInOverlayDuringTransition = OverlayClip(AlbumArtShape()),
                                 boundsTransform = AlbumArtBoundsTransform
                             )
                         }
                     } else base
                 }
-                .clip(AlbumArtShape)
+                .clip(AlbumArtShape())
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {

@@ -26,23 +26,39 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.size.Size
+import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlin.math.roundToInt
 
 /**
- * Corner radius of every artwork taking part in the album shared-element
- * transition (list rows here, detail headers in TrackListScreen /
- * CollectionListScreen, search result rows in SearchScreen). Using ONE shape
- * on both ends of the transition means the corners never have to jump between
- * two radii mid-animation.
+ * Corner radius of an album-art surface of [artSize]: half the artwork's size
+ * times the mini-player rounding percentage — the same convention as the mini
+ * player and every list row. Use for artwork whose size is known statically;
+ * for dynamic sizes (grid cells, animating shared elements) use [AlbumArtShape].
  */
-val AlbumArtShape = RoundedCornerShape(12.dp)
+@Composable
+fun albumArtCornerRadius(artSize: Dp): Dp = (artSize / 2) * FoamTheme.shapes.miniPlayerRounding
+
+/**
+ * Corner shape of every album-art surface, percentage-based: the radius is
+ * always [albumArtCornerRadius] of the artwork's OWN size (50% of the side
+ * times the rounding percentage), so 48dp list rows, 120dp detail headers and
+ * full-width grid cells all round identically relative to their size, and
+ * artwork taking part in a shared-element transition scales its corners with
+ * the animated bounds instead of jumping between two fixed radii.
+ */
+@Composable
+fun AlbumArtShape(): Shape = RoundedCornerShape(
+    percent = (FoamTheme.shapes.miniPlayerRounding * 50).roundToInt().coerceIn(0, 50)
+)
 
 /**
  * Fixed decode size (px) for album art shared across the app. Coil's
@@ -69,24 +85,54 @@ val AlbumArtBoundsTransform = BoundsTransform { _, _ ->
 /** Size of the artwork thumbnail at the leading edge of a list row. */
 val ListRowArtSize = 48.dp
 
+/** Artwork size of the larger RowBig density. */
+val ListRowBigArtSize = 72.dp
+
+/** Artwork size of a row at [density] (RowSmall has no artwork). */
+fun rowArtSize(density: MediaDensity): Dp = when (density) {
+    MediaDensity.ROW_BIG -> ListRowBigArtSize
+    else -> ListRowArtSize
+}
+
 /** Padding added around a list row's content, which the press highlight extends beyond. */
 val ListRowHighlightPadding = 6.dp
 
+/** Tighter vertical padding of the compact RowSingle-line rows. */
+val RowSmallVerticalPadding = 2.dp
+
+/**
+ * Vertical padding around a row's content AND the distance its press/active
+ * highlight extends beyond the content: the two are the same value so the
+ * highlight rectangle always fills the row's bounds exactly. Compact RowSmall
+ * rows use tighter padding.
+ */
+@Composable
+internal fun rowVerticalPadding(density: MediaDensity): Dp =
+    if (density == MediaDensity.ROW_SMALL) RowSmallVerticalPadding else ListRowHighlightPadding
+
 /** Corner radius of a list row's artwork at rest (rounded like the mini player). */
 @Composable
-internal fun listRowArtCornerRadius(): Dp = (ListRowArtSize / 2) * FoamTheme.shapes.miniPlayerRounding
+internal fun listRowArtCornerRadius(density: MediaDensity = MediaDensity.ROW_NORMAL): Dp =
+    albumArtCornerRadius(rowArtSize(density))
 
 /**
  * Shared row scaffold for every media list row (TrackListItem,
  * CollectionListItem, ...): a full-width row with a rounded press/long-press
- * highlight, a [ListRowArtSize] artwork box on the leading edge, and a
- * title/subtitle column that [trailingContent] can extend (score badge, drag
- * handle, ...).
+ * highlight, a leading artwork box and a title/subtitle column that
+ * [trailingContent] can extend (score badge, drag handle, ...).
+ *
+ * [density] picks the row's layout: RowSmall collapses to a compact
+ * single-line title without artwork, RowNormal keeps the classic 48dp art +
+ * two-line row, RowBig grows the art to 72dp and shows the optional
+ * [tertiaryText] as a third line (tracks pass "duration • format").
  *
  * [artworkModifier] is applied to the artwork box right after its size (e.g.
  * the shared-element modifier, clip and background) and [artworkContent]
  * fills it. [rowModifier] is applied to the row before the highlight clip
  * (e.g. swipe-to-dismiss translation and width measurement).
+ * [highlightBackground] is drawn behind the row's content, clipped to the
+ * exact same rounded shape as the press ripple (used for the active-track
+ * highlight).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -101,34 +147,43 @@ internal fun MediaListRow(
     rowModifier: Modifier = Modifier,
     titleModifier: Modifier = Modifier,
     subtitleModifier: Modifier = Modifier,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    tertiaryText: String? = null,
+    highlightBackground: Color = Color.Transparent,
     trailingContent: @Composable RowScope.() -> Unit = {}
 ) {
-    val highlightShape = RoundedCornerShape(listRowArtCornerRadius() + ListRowHighlightPadding)
+    val artSize = rowArtSize(density)
+    val artCornerRadius = listRowArtCornerRadius(density)
+    val verticalPadding = rowVerticalPadding(density)
+    val highlightShape = RoundedCornerShape(artCornerRadius + verticalPadding)
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .then(rowModifier)
             .clip(highlightShape)
+            .background(highlightBackground, highlightShape)
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
                 onLongClick = onLongClick,
                 onClick = onClick
             )
-            .padding(horizontal = ListRowHighlightPadding, vertical = ListRowHighlightPadding),
+            .padding(horizontal = ListRowHighlightPadding, vertical = verticalPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(ListRowArtSize)
-                .then(artworkModifier),
-            contentAlignment = Alignment.Center
-        ) {
-            artworkContent()
-        }
+        if (density != MediaDensity.ROW_SMALL) {
+            Box(
+                modifier = Modifier
+                    .size(artSize)
+                    .then(artworkModifier),
+                contentAlignment = Alignment.Center
+            ) {
+                artworkContent()
+            }
 
-        Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(12.dp))
+        }
 
         Column(modifier = Modifier.weight(1f)) {
             BasicText(
@@ -138,13 +193,21 @@ internal fun MediaListRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = titleModifier
             )
-            if (subtitle != null) {
+            if (subtitle != null && density != MediaDensity.ROW_SMALL) {
                 BasicText(
                     text = subtitle,
                     style = FoamTheme.typography.body,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = subtitleModifier
+                )
+            }
+            if (density == MediaDensity.ROW_BIG && tertiaryText != null) {
+                BasicText(
+                    text = tertiaryText,
+                    style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

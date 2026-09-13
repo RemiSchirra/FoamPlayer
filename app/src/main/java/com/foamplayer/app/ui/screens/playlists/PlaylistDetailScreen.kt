@@ -8,6 +8,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.TrackListScreen
 
@@ -25,6 +26,8 @@ fun PlaylistDetailScreen(
     sharedTrackId: Long?,
     activeTrackId: Long?,
     onListBackdropArt: (String?, Boolean) -> Unit = { _, _ -> },
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: PlaylistDetailViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.tracks.collectAsState()
@@ -69,6 +72,8 @@ fun PlaylistDetailScreen(
         sharedElementPrefix = "playlist",
         sharedTrackId = sharedTrackId,
         activeTrackId = activeTrackId,
-        playerTransitionVisibilityScope = playerTransitionVisibilityScope
+        playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+        density = density,
+        onDensityChange = onDensityChange
     )
 }

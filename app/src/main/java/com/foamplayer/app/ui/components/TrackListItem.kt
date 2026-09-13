@@ -27,7 +27,6 @@ import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -35,16 +34,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -54,9 +47,11 @@ import androidx.compose.ui.unit.times
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.core.net.toUri
+import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.utils.TimeUtils
 import kotlin.math.abs
 import kotlin.math.max
 import kotlinx.coroutines.launch
@@ -86,9 +81,12 @@ private const val SwipeDismissDurationMs = 150
 private const val SwipeReturnDurationMs = 200
 
 /**
- * One row of a track list: artwork (or track number) + title + "artist •
- * album", with the active-track highlight, swipe-to-dismiss and drag-handle
- * behaviors layered on top of the shared [MediaListRow] scaffold.
+ * One item of a track list. At the ROW_* densities it renders the shared
+ * [MediaListRow] scaffold — artwork (or track number) + title + "artist •
+ * album" (RowBig grows the art to 72dp and adds a "duration • format" third
+ * line) — with the active-track highlight, swipe-to-dismiss and drag-handle
+ * behaviors layered on top. At the GRID_* densities it renders a square-art
+ * [MediaGridCell] with the score icon overlaid on a corner of the artwork.
  *
  * Shared-element keys ("album_art_*", "track_title_*", "track_artist_*")
  * match the mini/full player's artwork and text so the row animates into the
@@ -107,6 +105,7 @@ fun TrackListItem(
     dragHandleModifier: Modifier = Modifier,
     onRemove: (() -> Unit)? = null,
     trackNumberText: String? = null,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     isSharedTransitionSource: Boolean = false
@@ -148,20 +147,70 @@ fun TrackListItem(
         else -> null
     }
 
-    val density = LocalDensity.current
-    val selectionHighlightPaddingPx = with(density) { ListRowHighlightPadding.toPx() }
-
-    val restingArtHeightPx = with(density) { ListRowArtSize.toPx() }
-    var artBoxHeightPx by remember { mutableFloatStateOf(restingArtHeightPx) }
-    var artBoxTopPx by remember { mutableFloatStateOf(selectionHighlightPaddingPx) }
-    var artistTextBottomPx by remember {
-        mutableFloatStateOf(selectionHighlightPaddingPx + restingArtHeightPx)
+    // GRID_* densities: square artwork cell, score overlaid on the art corner.
+    // Swipe-to-dismiss / drag handles are row-only affordances (the queue, the
+    // only screen using them, does not support densities).
+    if (density.isGrid) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .graphicsLayer { alpha = if (auxiliary) AuxiliaryAlpha else 1f }
+        ) {
+            MediaGridCell(
+                onClick = onClick,
+                onLongClick = resolvedOnLongClick,
+                artworkModifier = Modifier
+                    .rowSharedArtwork(
+                        key = "album_art_${track.id}",
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        enabled = isSharedTransitionSource
+                    )
+                    .clip(AlbumArtShape())
+                    .background(FoamTheme.colors.surfaceVariant),
+                artworkContent = { TrackGridArtwork(track) },
+                title = track.title,
+                subtitle = "${track.artist} • ${track.album}",
+                highlightBackground = animatedBackgroundColor,
+                titleModifier = Modifier.rowSharedText(
+                    key = "track_title_${track.id}",
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    enabled = isSharedTransitionSource
+                ),
+                subtitleModifier = Modifier.rowSharedText(
+                    key = "track_artist_${track.id}",
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    enabled = isSharedTransitionSource
+                ),
+                artworkOverlay = {
+                    if (trackNumberText != null) {
+                        GridOverlayChip(modifier = Modifier.align(Alignment.TopStart).padding(6.dp)) {
+                            BasicText(
+                                text = trackNumberText,
+                                style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textPrimary)
+                            )
+                        }
+                    }
+                    if (track.score != 0) {
+                        val (scoreIcon, _) = trackScoreVisual(track.score)
+                        GridOverlayChip(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)) {
+                            Icon(
+                                imageVector = scoreIcon,
+                                contentDescription = null,
+                                tint = FoamTheme.colors.textPrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            )
+        }
+        return
     }
-    var containerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
-    val artRadius = listRowArtCornerRadius()
-    val highlightCornerRadiusPx = with(density) { (artRadius + ListRowHighlightPadding).toPx() }
-
+    val localDensity = LocalDensity.current
     val rowAlpha = if (auxiliary) AuxiliaryAlpha else 1f
 
     // --- Swipe-to-dismiss state (only active when onRemove is provided) ---
@@ -169,7 +218,7 @@ fun TrackListItem(
     val dismissOffset = remember { Animatable(0f) }
     var itemWidthPx by remember { mutableFloatStateOf(0f) }
     val latestOnRemove by rememberUpdatedState(onRemove)
-    val fallbackDismissThresholdPx = with(density) { SwipeDismissThreshold.toPx() }
+    val fallbackDismissThresholdPx = with(localDensity) { SwipeDismissThreshold.toPx() }
 
     // Distance (in px) the row must be dragged sideways before it is dismissed
     fun swipeThresholdPx(): Float =
@@ -223,19 +272,6 @@ fun TrackListItem(
         Modifier
     }
 
-    // Measure the artwork box while active so the highlight rectangle can hug
-    // the row's real content height.
-    val activeArtPositionedModifier = if (active) {
-        Modifier.onGloballyPositioned { coords ->
-            artBoxHeightPx = coords.size.height.toFloat()
-            containerCoordinates?.let { container ->
-                artBoxTopPx = container.localPositionOf(coords, Offset.Zero).y
-            }
-        }
-    } else {
-        Modifier
-    }
-
     // Rows showing a track number have no artwork box (and take no part in the
     // artwork shared-element transition).
     val artworkModifier = if (trackNumberText == null) {
@@ -246,46 +282,17 @@ fun TrackListItem(
                 animatedVisibilityScope = animatedVisibilityScope,
                 enabled = isSharedTransitionSource
             )
-            .then(activeArtPositionedModifier)
-            .clip(RoundedCornerShape(artRadius))
+            .clip(RoundedCornerShape(listRowArtCornerRadius(density)))
             .background(FoamTheme.colors.surfaceVariant)
     } else {
-        activeArtPositionedModifier
+        Modifier
     }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .graphicsLayer { alpha = rowAlpha }
-            .then(
-                if (active) {
-                    Modifier.onGloballyPositioned { containerCoordinates = it }
-                } else {
-                    Modifier
-                }
-            )
     ) {
-        // Active rectangle indicator
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(ListRowArtSize + 2 * ListRowHighlightPadding)
-                .drawBehind {
-                    val contentBottomPx = max(
-                        artBoxTopPx + artBoxHeightPx,
-                        artistTextBottomPx
-                    )
-                    val targetHeightPx = (contentBottomPx - artBoxTopPx) + selectionHighlightPaddingPx * 2f
-                    val topPx = artBoxTopPx - selectionHighlightPaddingPx
-                    drawRoundRect(
-                        color = animatedBackgroundColor,
-                        topLeft = Offset(0f, topPx),
-                        size = Size(size.width, targetHeightPx),
-                        cornerRadius = CornerRadius(highlightCornerRadiusPx, highlightCornerRadiusPx)
-                    )
-                }
-        )
-
         MediaListRow(
             onClick = onClick,
             onLongClick = resolvedOnLongClick,
@@ -319,6 +326,13 @@ fun TrackListItem(
             },
             title = track.title,
             subtitle = "${track.artist} • ${track.album}",
+            density = density,
+            tertiaryText = if (density == MediaDensity.ROW_BIG) {
+                "${TimeUtils.formatDurationCompact(track.duration)} • ${track.format}"
+            } else {
+                null
+            },
+            highlightBackground = animatedBackgroundColor,
             rowModifier = Modifier
                 .onSizeChanged { itemWidthPx = it.width.toFloat() }
                 .graphicsLayer {
@@ -336,27 +350,12 @@ fun TrackListItem(
                 animatedVisibilityScope = animatedVisibilityScope,
                 enabled = isSharedTransitionSource
             ),
-            subtitleModifier = Modifier
-                .rowSharedText(
-                    key = "track_artist_${track.id}",
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    enabled = isSharedTransitionSource
-                )
-                .then(
-                    if (active) {
-                        Modifier.onGloballyPositioned { coords ->
-                            containerCoordinates?.let { container ->
-                                artistTextBottomPx = container.localPositionOf(
-                                    coords,
-                                    Offset(0f, coords.size.height.toFloat())
-                                ).y
-                            }
-                        }
-                    } else {
-                        Modifier
-                    }
-                ),
+            subtitleModifier = Modifier.rowSharedText(
+                key = "track_artist_${track.id}",
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                enabled = isSharedTransitionSource
+            ),
             trailingContent = {
                 // Score indicator (like / super like / dislike): informational
                 // only, so it gets no click handling of its own — taps stay on
@@ -401,5 +400,47 @@ fun TrackListItem(
                 }
             }
         )
+    }
+}
+
+/** Album-art (or format-letter fallback) filling a grid cell's square artwork box. */
+@Composable
+private fun TrackGridArtwork(track: TrackEntity) {
+    if (track.albumArtPath != null) {
+        val context = LocalContext.current
+        val albumArtRequest = remember(track.albumArtPath) {
+            ImageRequest.Builder(context)
+                .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
+                .size(AlbumArtRequestSize)
+                .build()
+        }
+        AsyncImage(
+            model = albumArtRequest,
+            contentDescription = "Album Art",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        BasicText(
+            text = track.format,
+            style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor)
+        )
+    }
+}
+
+/** Small rounded translucent chip overlaid on a grid cell's artwork corner (score badge, track number). */
+@Composable
+private fun GridOverlayChip(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.Black.copy(alpha = 0.55f))
+            .padding(4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
     }
 }

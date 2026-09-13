@@ -94,6 +94,59 @@ enum class GridItemSize {
     SMALL,
 }
 
+/**
+ * The six list/grid density modes of the app's media lists, from the most
+ * compact to the most spacious. The ROW_* modes render the shared row scaffold
+ * (with growing artwork and text lines); the GRID_* modes render square
+ * artwork cells in a fixed number of columns.
+ */
+enum class MediaDensity(val label: String) {
+    ROW_SMALL("Row Small"),
+    ROW_NORMAL("Row Normal"),
+    ROW_BIG("Row Big"),
+    GRID_SMALL("Grid Small"),
+    GRID_NORMAL("Grid Normal"),
+    GRID_BIG("Grid Big"),
+    ;
+
+    val isGrid: Boolean
+        get() = this == GRID_SMALL || this == GRID_NORMAL || this == GRID_BIG
+
+    /** Number of columns when [isGrid]. */
+    val gridColumns: Int
+        get() = when (this) {
+            GRID_SMALL -> 4
+            GRID_NORMAL -> 3
+            GRID_BIG -> 2
+            else -> 1
+        }
+
+    companion object {
+        fun fromName(name: String?): MediaDensity? = entries.find { it.name == name }
+    }
+}
+
+/**
+ * One app view holding a media list. Each remembers its own [MediaDensity],
+ * so per-view keys must stay stable across releases (they are persisted).
+ */
+enum class MediaListView {
+    LIBRARY,
+    PLAYLISTS,
+    PLAYLIST_DETAIL,
+    ARTIST_DETAIL,
+    BROWSE_ALL_TRACKS,
+    BROWSE_ALBUMS,
+    BROWSE_ARTISTS,
+    BROWSE_GENRES,
+    BROWSE_YEARS,
+    BROWSE_FOLDERS,
+    BROWSE_GENRE_TRACKS,
+    BROWSE_YEAR_TRACKS,
+    BROWSE_ARTISTS_IN,
+    BROWSE_ALBUMS_IN,
+}
+
 enum class PreferredLyricsProvider {
     BETTER_LYRICS,
     YOULY_PLUS,

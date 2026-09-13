@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.PlaybackState
+import com.foamplayer.app.constants.MediaDensity
+import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
@@ -103,5 +105,10 @@ class PlayerViewModel @Inject constructor(
     fun setTrackScore(trackId: Long, score: Int) {
         _scoreOverrides.value = _scoreOverrides.value + (trackId to score)
         viewModelScope.launch { trackRepository.setScore(trackId, score) }
+    }
+
+    // Per-view media list density (organisation modal). Every view remembers its own.
+    fun setMediaDensity(view: MediaListView, density: MediaDensity) {
+        viewModelScope.launch { settingsRepository.setMediaDensity(view, density) }
     }
 }

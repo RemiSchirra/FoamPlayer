@@ -402,7 +402,7 @@ private fun TrackModalHeader(
         Box(
             modifier = Modifier
                 .size(64.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(albumArtCornerRadius(64.dp)))
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
