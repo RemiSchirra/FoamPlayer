@@ -170,7 +170,7 @@ fun TrackListScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    item {
+                    item(key = "list_header") {
                         HeaderSection(
                             title = title,
                             subtitle = artistName,
@@ -205,7 +205,7 @@ fun TrackListScreen(
                         }
                     }
 
-                    item { Spacer(modifier = Modifier.height(80.dp)) }
+                    item(key = "list_bottom_spacer") { Spacer(modifier = Modifier.height(80.dp)) }
                 }
             }
         }

@@ -227,20 +227,23 @@ fun SearchScreen(
                 query.isNotEmpty() -> {
                     // Artists Section
                     if (uiState.artists.isNotEmpty()) {
-                        item {
+                        item(key = "artists_header") {
                             SectionHeader("Artists")
                         }
-                        items(uiState.artists) { artist ->
+                        // Keyed by content: results change identity on every keystroke, and
+                        // without keys rows are matched by position (everything recomposes,
+                        // item state resets, shared elements animate from the wrong row).
+                        items(uiState.artists, key = { "artist_$it" }) { artist ->
                             ArtistSearchResultItem(artist = artist, onClick = { onArtistClick(artist) })
                         }
                     }
 
                     // Albums Section
                     if (uiState.albums.isNotEmpty()) {
-                        item {
+                        item(key = "albums_header") {
                             SectionHeader("Albums")
                         }
-                        items(uiState.albums) { album ->
+                        items(uiState.albums, key = { "album_${it.album}_${it.artist}" }) { album ->
                             AlbumSearchResultItem(
                                 album = album,
                                 onClick = { onAlbumClick(album) },
@@ -252,10 +255,10 @@ fun SearchScreen(
 
                     // Tracks Section
                     if (uiState.tracks.isNotEmpty()) {
-                        item {
+                        item(key = "tracks_header") {
                             SectionHeader("Tracks")
                         }
-                        items(uiState.tracks) { track ->
+                        items(uiState.tracks, key = { "track_${it.id}" }) { track ->
                             TrackListItem(
                                 track = track,
                                 onClick = {

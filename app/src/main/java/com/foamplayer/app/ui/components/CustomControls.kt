@@ -20,6 +20,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
@@ -46,6 +49,33 @@ fun FoamGlassCard(
 @Composable
 fun FoamSlider(
     value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    steps: Int? = null,
+    trackHeight: Dp = 4.dp,
+    activeColor: Color = FoamTheme.accentColor,
+    inactiveColor: Color = FoamTheme.colors.surfaceVariant,
+    growFactor: Float = 1.8f
+) = FoamSlider(
+    value = { value },
+    onValueChange = onValueChange,
+    modifier = modifier,
+    steps = steps,
+    trackHeight = trackHeight,
+    activeColor = activeColor,
+    inactiveColor = inactiveColor,
+    growFactor = growFactor
+)
+
+/**
+ * Lambda-based overload for per-frame values (seek-bar progress). The value is read
+ * during the track's draw phase instead of in composition, so position ticks and drag
+ * updates only invalidate the track's drawing -- neither the slider nor its caller
+ * recomposes while playback advances.
+ */
+@Composable
+fun FoamSlider(
+    value: () -> Float,
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
     steps: Int? = null,
@@ -109,13 +139,23 @@ fun FoamSlider(
                 .background(inactiveColor)
         )
 
-        // Progress
+        // Progress. The fraction is read inside drawBehind, so per-frame values
+        // (playback position) redraw the track without recomposing this composable.
+        // The rounded rect matches the CircleShape clip: radius = half the height.
         Box(
             modifier = Modifier
-                .fillMaxWidth(value.coerceIn(0f, 1f))
+                .fillMaxWidth()
                 .height(animatedTrackHeight)
-                .clip(CircleShape)
-                .background(activeColor)
+                .drawBehind {
+                    val fraction = value().coerceIn(0f, 1f)
+                    if (fraction > 0f) {
+                        drawRoundRect(
+                            color = activeColor,
+                            size = Size(size.width * fraction, size.height),
+                            cornerRadius = CornerRadius(size.height / 2f)
+                        )
+                    }
+                }
         )
     }
 }

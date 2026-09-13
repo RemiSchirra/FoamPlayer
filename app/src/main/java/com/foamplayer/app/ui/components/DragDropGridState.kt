@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
@@ -45,8 +46,13 @@ fun rememberDragDropGridState(
 ): DragDropGridState {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    // The callbacks are captured once by remember, so they are kept fresh through
+    // rememberUpdatedState: a lambda closing over a plain (non-snapshot) value would
+    // otherwise freeze at its first-composition value mid-drag.
+    val latestCanMove by rememberUpdatedState(canMove)
+    val latestOnMove by rememberUpdatedState(onMove)
     return remember(gridState) {
-        DragDropGridState(gridState, scope, density, canMove, onMove)
+        DragDropGridState(gridState, scope, density, { f, t -> latestCanMove(f, t) }, { f, t -> latestOnMove(f, t) })
     }
 }
 

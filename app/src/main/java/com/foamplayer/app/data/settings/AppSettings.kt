@@ -1,5 +1,6 @@
 package com.foamplayer.app.data.settings
 
+import androidx.compose.runtime.Immutable
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
@@ -18,6 +19,10 @@ enum class FoamIconStyle(val label: String) {
     FLAT("Flat")
 }
 
+// Immutable by construction, but its Set/List/Map fields make it unstable to the
+// compiler's inference. This annotation lets every composable receiving AppSettings
+// (or screens fed from it) skip when an unrelated preference changes.
+@Immutable
 data class AppSettings(
     val bitPerfectEnabled: Boolean = true,
     val libraryFolders: Set<String> = emptySet(),

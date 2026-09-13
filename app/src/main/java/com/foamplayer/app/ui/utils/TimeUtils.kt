@@ -34,7 +34,21 @@ object TimeUtils {
         }
     }
 
-    fun formatDateTime(timestampMs: Long): String =
-        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault())
-            .format(Date(timestampMs))
+    // getDateTimeInstance allocates a fresh formatter on every call, and this runs in
+    // composition (track details sheets) on every recomposition. Cached per locale so
+    // a locale change still produces a correct formatter (UI calls are main-thread,
+    // so no synchronization needed).
+    @Volatile
+    private var cachedFormatter: Pair<String, DateFormat>? = null
+
+    fun formatDateTime(timestampMs: Long): String {
+        val locale = Locale.getDefault()
+        val tag = locale.toLanguageTag()
+        val formatter = cachedFormatter
+            ?.takeIf { it.first == tag }
+            ?.second
+            ?: DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, locale)
+                .also { cachedFormatter = tag to it }
+        return formatter.format(Date(timestampMs))
+    }
 }

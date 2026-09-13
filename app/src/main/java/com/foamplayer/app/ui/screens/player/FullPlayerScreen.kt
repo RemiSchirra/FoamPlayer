@@ -87,7 +87,12 @@ fun FullPlayerScreen(
     val upTransitionState = remember { SeekableTransitionState(false) }
     val upTransition = rememberTransition(upTransitionState, label = "UpTransition")
     
-    val rawSubViewProgress = upTransitionState.progress()
+    // Boolean gate only: reading the raw transition fraction here used to re-run this
+    // whole screen body on every frame of the subview drag/settle. derivedStateOf
+    // invalidates just once, when the fraction crosses the 0f threshold.
+    val showSubViewSlider by remember(upTransitionState) {
+        derivedStateOf { upTransitionState.progress() > 0f }
+    }
     // Deferred form for the root-hosted backdrop: the lambda only reads snapshot state
     // (transition fraction + target), so the root evaluates it during its draw phase and
     // never needs to recompose while the subview is dragged.
@@ -544,7 +549,7 @@ fun FullPlayerScreen(
                 }
             }
 
-            if (rawSubViewProgress > 0f) {
+            if (showSubViewSlider) {
                 PlaybackProgressSlider(
                     durationMs = state.durationMs,
                     seekBarProgress = seekBarProgress,

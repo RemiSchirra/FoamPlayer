@@ -18,6 +18,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.ui.components.FoamSlider
+import com.foamplayer.app.ui.components.onSeekBarReleased
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -110,28 +114,54 @@ fun EqualizerScreen(
 
         state.bands.forEachIndexed { index, gainMb ->
             val freqHz = state.bandFrequencies.getOrElse(index) { 1000 }
-            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    BasicText(
-                        text = if (freqHz >= 1000) "${freqHz / 1000} kHz" else "$freqHz Hz",
-                        style = FoamTheme.typography.body
-                    )
-                    BasicText(
-                        text = "${gainMb / 100} dB",
-                        style = FoamTheme.typography.monospace
-                    )
-                }
-                FoamSlider(
-                    value = (gainMb + 1500) / 3000f,
-                    onValueChange = { normVal ->
-                        val newGain = (normVal * 3000 - 1500).toInt()
-                        viewModel.setBandGain(index, newGain)
-                    }
-                )
-            }
+            BandRow(
+                freqHz = freqHz,
+                gainMb = gainMb,
+                onCommitGain = { newGain -> viewModel.setBandGain(index, newGain) },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
+    }
+}
+
+/**
+ * One equalizer band, isolated so a drag only recomposes its own row. The gain is
+ * held locally and committed to the ViewModel on release -- mirroring the settings
+ * sliders: forwarding [EqualizerViewModel.setBandGain] per drag pixel emitted a new
+ * EqualizerState (recomposing every band) and hit the audio effect once per move.
+ *
+ * [dragGain] is keyed on [gainMb] so external changes (preset applied, equalizer
+ * toggled) resync the local value; during a drag the VM state doesn't change, so the
+ * key is stable.
+ */
+@Composable
+private fun BandRow(
+    freqHz: Int,
+    gainMb: Int,
+    onCommitGain: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var dragGain by remember(gainMb) { mutableIntStateOf(gainMb) }
+    Column(modifier = modifier.padding(vertical = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            BasicText(
+                text = if (freqHz >= 1000) "${freqHz / 1000} kHz" else "$freqHz Hz",
+                style = FoamTheme.typography.body
+            )
+            BasicText(
+                text = "${dragGain / 100} dB",
+                style = FoamTheme.typography.monospace
+            )
+        }
+        FoamSlider(
+            value = { (dragGain + 1500) / 3000f },
+            onValueChange = { normVal ->
+                dragGain = (normVal * 3000 - 1500).toInt()
+            },
+            modifier = Modifier.onSeekBarReleased { onCommitGain(dragGain) }
+        )
     }
 }

@@ -173,7 +173,6 @@ class AudioEngine @Inject constructor(
                         currentTrack = track,
                         queueIndex = index,
                         durationMs = track.duration,
-                        currentPositionMs = 0L,
                         auxiliaryFlags = if (wasAuxiliary) {
                             flags.toMutableList().also { it[index] = false }
                         } else flags
@@ -613,7 +612,10 @@ class AudioEngine @Inject constructor(
 
     fun seekTo(positionMs: Long) {
         player.seekTo(positionMs)
-        _playbackState.value = _playbackState.value.copy(currentPositionMs = positionMs)
+        // Only the dedicated position flow is updated here. Publishing position into
+        // _playbackState used to emit a new PlaybackState per drag pixel of a seek,
+        // recomposing every collector of playbackState (FoamApp, FoamNavHost,
+        // MiniPlayer, FullPlayerScreen) on each move; nothing reads it from there.
         _positionMs.value = positionMs
     }
 

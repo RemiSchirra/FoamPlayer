@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -42,11 +41,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -156,7 +157,6 @@ fun FoamBottomModal(
             // size (drag-down-to-dismiss and drag-back-up); null means "fit the
             // content".
             var draggedCapPx by remember { mutableStateOf<Float?>(null) }
-            val capPx = draggedCapPx ?: restingCapPx
 
             // A drag-dismiss springs the cap down to 0 (see settle() below); clear
             // the drag override on re-open so the sheet fits its content again.
@@ -164,11 +164,12 @@ fun FoamBottomModal(
                 if (visible) draggedCapPx = null
             }
 
-            // Scrim darkness tracks the sheet's live size instead of only the
-            // open/closed boolean, so dragging the sheet down progressively fades
-            // the background instead of leaving it fully dark until the drag
-            // finishes.
-            val scrimAlpha = (capPx / restingCapPx.coerceAtLeast(1f)).coerceIn(0f, 1f) * 0.55f
+            // NOTE: neither the cap nor the scrim alpha may be read in composition.
+            // Writing draggedCapPx on every gesture frame used to recompose this whole
+            // scope -- scrim, both AnimatedVisibilitys, and content() -- per frame.
+            // Both reads are deferred instead: the cap into the layout modifier below,
+            // the scrim alpha into a drawBehind. Composition then only re-runs when
+            // the resting size actually changes (content measured, keyboard in/out).
 
             // Live proxies so the remembered connection below always reads the
             // current callback and available height even though it is created
@@ -285,7 +286,15 @@ fun FoamBottomModal(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = scrimAlpha))
+                        // Scrim darkness tracks the sheet's live size instead of only the
+                        // open/closed boolean, so dragging the sheet down progressively
+                        // fades the background. Read in the draw phase: no recomposition
+                        // per drag frame.
+                        .drawBehind {
+                            val cap = draggedCapPx ?: restingCapPx
+                            val alpha = (cap / restingCapPx.coerceAtLeast(1f)).coerceIn(0f, 1f) * 0.55f
+                            drawRect(Color.Black.copy(alpha = alpha))
+                        }
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
@@ -307,7 +316,18 @@ fun FoamBottomModal(
                         // Float above the navigation bars so the sheet's rounded
                         // bottom edge stays visible at the bottom of the screen.
                         .padding(bottom = bottomSpacing)
-                        .heightIn(max = with(density) { capPx.toDp() })
+                        // Live height cap (replaces heightIn(max = cap)): draggedCapPx is
+                        // read inside the measure block, so drag frames re-measure only
+                        // this chain instead of recomposing the dialog's contents.
+                        .layout { measurable, constraints ->
+                            val capPx = (draggedCapPx ?: restingCapPx).toInt().coerceAtLeast(0)
+                            val cappedConstraints = constraints.copy(
+                                minHeight = 0,
+                                maxHeight = minOf(constraints.maxHeight, capPx)
+                            )
+                            val placeable = measurable.measure(cappedConstraints)
+                            layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                        }
                         .clip(RoundedCornerShape(cornerRadius))
                         .background(FoamTheme.colors.surface)
                         // Swallow taps here so they don't fall through to the scrim below.

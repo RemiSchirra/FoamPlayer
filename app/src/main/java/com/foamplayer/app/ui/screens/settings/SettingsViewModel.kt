@@ -15,10 +15,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -30,7 +28,11 @@ class SettingsViewModel @Inject constructor(
     val settings: StateFlow<AppSettings> = settingsRepository.settings.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = runBlocking { settingsRepository.settings.first() }
+        // Seed with defaults instead of a runBlocking DataStore read: this VM is created
+        // during first composition, and the blocking read used to land on the main
+        // thread's first frame. Consumers tolerate defaults for a frame until the real
+        // values arrive.
+        initialValue = AppSettings()
     )
 
     val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus

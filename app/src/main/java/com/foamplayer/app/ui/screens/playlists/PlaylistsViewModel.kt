@@ -1,6 +1,7 @@
 package com.foamplayer.app.ui.screens.playlists
 
 import android.content.Context
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.R
@@ -18,6 +19,10 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+// Immutable by construction; the List fields make it unstable to the compiler's
+// inference, which would force MissingSongsModal to recompose on every scan-progress
+// tick even when nothing visible changed.
+@Immutable
 sealed interface CreatePlaylistState {
     data object Idle : CreatePlaylistState
 
@@ -37,6 +42,7 @@ sealed interface CreatePlaylistState {
     ) : CreatePlaylistState
 
     /** The folder is being added to the library and scanned; the playlist is created once it completes. */
+    @Immutable
     data class ImportingFolder(
         val name: String,
         val folderUri: String,

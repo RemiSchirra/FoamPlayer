@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -158,20 +159,26 @@ private data class ListBackdropArt(val path: String, val isEmbeddedArt: Boolean)
 @Composable
 private fun rememberAnimatedBackground(
     enabled: Boolean,
-    initialFrontArtPath: String?,
+    initialFrontArtPath: () -> String?,
     blur: Dp,
     intensity: Float,
     modifier: Modifier = Modifier
 ): (frontArtPath: String?, backArtPath: String?, fraction: Float) -> Unit {
-    var frontArtPath by remember { mutableStateOf(initialFrontArtPath) }
+    // The initial path is evaluated lazily (once, when the state is created) so the
+    // caller can hand over a playbackState read without subscribing this scope to the
+    // whole state flow.
+    var frontArtPath by remember { mutableStateOf(initialFrontArtPath()) }
     var backArtPath by remember { mutableStateOf<String?>(null) }
-    var crossfadeFraction by remember { mutableStateOf(0f) }
+    // The crossfade fraction changes on every frame of a mini-player swipe; keeping it
+    // in a State that DynamicAlbumArtBackground reads inside its graphicsLayer makes
+    // those frames draw-only instead of recomposing the backdrop's composition.
+    val crossfadeFraction = remember { mutableStateOf(0f) }
 
     if (enabled) {
         DynamicAlbumArtBackground(
             frontArtPath = frontArtPath,
             backArtPath = backArtPath,
-            crossfadeFraction = crossfadeFraction,
+            crossfadeFraction = { crossfadeFraction.value },
             blur = blur,
             intensity = intensity,
             modifier = modifier,
@@ -182,7 +189,7 @@ private fun rememberAnimatedBackground(
         { front, back, fraction ->
             frontArtPath = front
             backArtPath = back
-            crossfadeFraction = fraction
+            crossfadeFraction.value = fraction
         }
     }
 }
@@ -211,14 +218,16 @@ fun FoamNavHost(
     // reached by every CollectionListItem through LocalCollectionFoamModalState.
     val collectionModalState = rememberCollectionFoamModalState()
 
-    val playbackState by playerViewModel.playbackState.collectAsState()
-    // Id of the collection the queue was started from (null = bare track list).
-    // Highlighted only while the cursor is still inside that collection's own
-    // section of the queue: once playback moves past it (auxiliary pool,
-    // tracks queued afterwards, older history) nothing is highlighted.
-    val activeCollectionId = playbackState.queueSourceId?.takeIf {
-        playbackState.queueSourceFlags.getOrNull(playbackState.queueIndex) == true
-    }
+    // Narrow projections instead of the whole PlaybackState: collecting the full
+    // state at the nav root re-ran this entire body (backdrop logic, every
+    // composable() destination lambda, nav-bar branches) on every playback emission
+    // -- including play/pause toggles and queue refills that don't affect any of
+    // this scope's actual decisions.
+    val activeCollectionId by playerViewModel.activeCollectionId.collectAsState()
+    val hasCurrentTrack by playerViewModel.hasCurrentTrack.collectAsState()
+    // Highlighting "the playing row" only needs the id: screens recompose when the
+    // track actually changes, not on every unrelated playback emission.
+    val activeTrackId by playerViewModel.activeTrackId.collectAsState()
     val playerSettings by playerViewModel.settings.collectAsState()
     val scoreOverrides by playerViewModel.scoreOverrides.collectAsState()
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
@@ -352,7 +361,7 @@ fun FoamNavHost(
                 val onBackgroundTransition = if (backgroundEnabled) {
                     rememberAnimatedBackground(
                         enabled = true,
-                        initialFrontArtPath = playbackState.currentTrack?.albumArtPath,
+                        initialFrontArtPath = { playerViewModel.playbackState.value.currentTrack?.albumArtPath },
                         blur = playerSettings.backgroundBlur.dp,
                         intensity = playerSettings.appBackgroundIntensity / 100f,
                         modifier = Modifier.fillMaxSize()
@@ -389,12 +398,20 @@ fun FoamNavHost(
                     label = "listBackdropAlpha"
                 )
                 val listBackdropDisplay = listBackdropArt ?: lastListBackdropArt
-                if (listBackdropDisplay != null && listBackdropAlpha > 0f) {
+                // Boolean gate via derivedStateOf: reading the animated alpha directly in
+                // this if recomposed the whole nav root on every frame of the 350-400ms
+                // backdrop fade. The derived value only flips at the fade's endpoints.
+                val showListBackdrop by remember {
+                    derivedStateOf {
+                        (listBackdropArt ?: lastListBackdropArt) != null && listBackdropAlpha > 0f
+                    }
+                }
+                if (showListBackdrop) {
                     DynamicAlbumArtBackground(
-                        frontArtPath = listBackdropDisplay.path,
-                        frontArtIsEmbedded = listBackdropDisplay.isEmbeddedArt,
+                        frontArtPath = listBackdropDisplay?.path,
+                        frontArtIsEmbedded = listBackdropDisplay?.isEmbeddedArt ?: true,
                         backArtPath = null,
-                        crossfadeFraction = 0f,
+                        crossfadeFraction = { 0f },
                         blur = playerSettings.backgroundBlur.dp,
                         intensity = playerSettings.appBackgroundIntensity / 100f,
                         modifier = Modifier
@@ -614,7 +631,7 @@ fun FoamNavHost(
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
-                                            activeTrackId = playbackState.currentTrack?.id,
+                                            activeTrackId = activeTrackId,
                                             density = densityFor(MediaListView.LIBRARY),
                                             onDensityChange = { setDensity(MediaListView.LIBRARY, it) }
                                         )
@@ -661,7 +678,7 @@ fun FoamNavHost(
                                             animatedVisibilityScope = this,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
-                                            activeTrackId = playbackState.currentTrack?.id,
+                                            activeTrackId = activeTrackId,
                                             onTrackClick = { track -> playTrackFromList(listOf(track), 0) }
                                         )
                                     }
@@ -690,7 +707,7 @@ fun FoamNavHost(
                                                 playTrackFromList(tracks, index)
                                             },
                                             onBack = { navController.popBackStack() },
-                                            activeTrackId = playbackState.currentTrack?.id,
+                                            activeTrackId = activeTrackId,
                                             density = densityFor(MediaListView.BROWSE_ALL_TRACKS),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_ALL_TRACKS, it) }
                                         )
@@ -739,7 +756,7 @@ fun FoamNavHost(
                                                 playTrackFromList(tracks, index, CollectionId.genre(genre))
                                             },
                                             onBack = { navController.popBackStack() },
-                                            activeTrackId = playbackState.currentTrack?.id,
+                                            activeTrackId = activeTrackId,
                                             density = densityFor(MediaListView.BROWSE_GENRE_TRACKS),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_GENRE_TRACKS, it) }
                                         )
@@ -755,7 +772,7 @@ fun FoamNavHost(
                                                 playTrackFromList(tracks, index, CollectionId.year(year))
                                             },
                                             onBack = { navController.popBackStack() },
-                                            activeTrackId = playbackState.currentTrack?.id,
+                                            activeTrackId = activeTrackId,
                                             density = densityFor(MediaListView.BROWSE_YEAR_TRACKS),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_YEAR_TRACKS, it) }
                                         )
@@ -818,7 +835,7 @@ fun FoamNavHost(
                                                 playTrackFromList(tracks, index, path?.let { CollectionId.folder(it) })
                                             },
                                             onBack = { navController.popBackStack() },
-                                            activeTrackId = playbackState.currentTrack?.id,
+                                            activeTrackId = activeTrackId,
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_FOLDERS),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_FOLDERS, it) }
@@ -914,7 +931,7 @@ fun FoamNavHost(
                                             animatedVisibilityScope = this,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
-                                            activeTrackId = playbackState.currentTrack?.id,
+                                            activeTrackId = activeTrackId,
                                             onListBackdropArt = onListBackdropArt
                                         )
                                     }
@@ -941,7 +958,7 @@ fun FoamNavHost(
                                             animatedVisibilityScope = this,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
-                                            activeTrackId = playbackState.currentTrack?.id,
+                                            activeTrackId = activeTrackId,
                                             onListBackdropArt = onListBackdropArt,
                                             density = densityFor(MediaListView.PLAYLIST_DETAIL),
                                             onDensityChange = { setDensity(MediaListView.PLAYLIST_DETAIL, it) }
@@ -986,7 +1003,7 @@ fun FoamNavHost(
                                     primaryEnabled = playerSettings.navBarPrimaryEnabled,
                                     secondaryItems = playerSettings.navBarSecondaryOrder,
                                     secondaryEnabled = playerSettings.navBarSecondaryEnabled,
-                                    connectToMiniPlayer = playbackState.currentTrack != null,
+                                    connectToMiniPlayer = hasCurrentTrack,
                                     expandFraction = navBarExpandFraction,
                                     onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }
                                 )
@@ -1003,7 +1020,7 @@ fun FoamNavHost(
                                     secondaryItems = playerSettings.navBarSecondaryOrder,
                                     secondaryEnabled = playerSettings.navBarSecondaryEnabled,
                                     attachedToMiniPlayer = false,
-                                    connectToMiniPlayer = playbackState.currentTrack != null,
+                                    connectToMiniPlayer = hasCurrentTrack,
                                     playerClosedFraction = playerClosedFraction,
                                     transitionAnimated = isTransitionAnimated,
                                     navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
@@ -1025,7 +1042,7 @@ fun FoamNavHost(
                                     secondaryItems = playerSettings.navBarSecondaryOrder,
                                     secondaryEnabled = playerSettings.navBarSecondaryEnabled,
                                     attachedToMiniPlayer = true,
-                                    connectToMiniPlayer = playbackState.currentTrack != null,
+                                    connectToMiniPlayer = hasCurrentTrack,
                                     miniPlayerTopPx = { miniPlayerTopPx.takeUnless { it.isNaN() } },
                                     playerClosedFraction = playerClosedFraction,
                                     navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
@@ -1055,15 +1072,22 @@ fun FoamNavHost(
                         exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
                     ) {
                         val miniPlayerVisibilityScope = this
-                        if (playbackState.currentTrack != null) {
+                        if (hasCurrentTrack) {
+                            // MiniPlayer collects playbackState internally; the lambdas below
+                            // read the flow's current value at invocation time (event
+                            // handlers, not composition), so this scope stays unsubscribed
+                            // from the whole state.
                             MiniPlayer(
-                                playbackState = playbackState,
+                                playbackStateFlow = playerViewModel.playbackState,
                                 positionMsFlow = playerViewModel.positionMs,
                                 onPlayPauseClick = {
-                                    if (playbackState.isPlaying) playerViewModel.pause() else playerViewModel.play()
+                                    val state = playerViewModel.playbackState.value
+                                    if (state.isPlaying) playerViewModel.pause() else playerViewModel.play()
                                 },
                                 onSeek = { progress ->
-                                    playerViewModel.seekTo((progress * playbackState.durationMs).toLong())
+                                    playerViewModel.seekTo(
+                                        (progress * playerViewModel.playbackState.value.durationMs).toLong()
+                                    )
                                 },
                                 onSkipToTrack = { index ->
                                     playerViewModel.skipToIndex(index)

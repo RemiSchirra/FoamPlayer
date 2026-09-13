@@ -64,6 +64,11 @@ fun QueueScreen(
     var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
     var dragOriginEntryId by remember { mutableStateOf<Long?>(null) }
 
+    // Latest upcoming list for the drag callbacks: pointerInput is keyed on the item
+    // id, so a drag cancelled after a queue change (aux refill) would otherwise
+    // restore a stale snapshot captured when the gesture handler was created.
+    val latestUpcomingItems by rememberUpdatedState(upcomingItems)
+
     LaunchedEffect(upcomingItems) {
         if (dragOriginIndex == null) {
             displayedItems = upcomingItems
@@ -152,7 +157,7 @@ fun QueueScreen(
                                 dragDropListState.onDragCancel()
                                 dragOriginIndex = null
                                 dragOriginEntryId = null
-                                displayedItems = upcomingItems
+                                displayedItems = latestUpcomingItems
                             }
                         )
                     },

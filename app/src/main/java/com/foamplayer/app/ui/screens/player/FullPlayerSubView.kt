@@ -41,11 +41,12 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.times
+import androidx.compose.ui.util.lerp as lerpFloat
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.foamplayer.app.R
@@ -185,20 +186,36 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     val miniRadius = (miniImageSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
 
-    val cornerRadius = lerp(
-        start = fullRadius,
-        stop = miniRadius,
-        fraction = EaseOutCubic.transform(upTransitionState.progress())
-    )
-
+    // Deferred reads: the transition fraction is evaluated inside the graphicsLayer
+    // blocks below, so the subview drag animates the corner radii per frame without
+    // recomposing this header (which used to re-run on every drag frame just to
+    // rebuild a RoundedCornerShape for .clip()).
+    val density = LocalDensity.current
+    val miniRadiusPx = with(density) { miniRadius.toPx() }
+    val fullRadiusPx = with(density) { fullRadius.toPx() }
+    val imageRadiusPx = remember(miniRadiusPx, fullRadiusPx, upTransitionState) {
+        {
+            lerpFloat(
+                start = fullRadiusPx,
+                stop = miniRadiusPx,
+                fraction = EaseOutCubic.transform(upTransitionState.progress())
+            )
+        }
+    }
     val containerPadding = 8.dp
-    val containerRadius = cornerRadius + containerPadding
+    val containerPaddingPx = with(density) { containerPadding.toPx() }
+    val containerRadiusPx = remember(imageRadiusPx, containerPaddingPx) {
+        { imageRadiusPx() + containerPaddingPx }
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 12.dp)
-            .clip(RoundedCornerShape(containerRadius))
+            .graphicsLayer {
+                shape = RoundedCornerShape(containerRadiusPx())
+                clip = true
+            }
             .background(Color.Black.copy(alpha = 0.2f))
             .clickable(onClick = onBack)
             .padding(8.dp),
@@ -221,7 +238,10 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                     modifier = Modifier
                         .size(48.dp)
                         .sharedElement(rememberSharedContentState(key = "album_art_header_${headerTrack.id}"), animatedVisibilityScope = headerVisibilityScope)
-                        .clip(RoundedCornerShape(cornerRadius))
+                        .graphicsLayer {
+                            shape = RoundedCornerShape(imageRadiusPx())
+                            clip = true
+                        }
                         .background(FoamTheme.colors.surfaceVariant)
                 ) {
                     headerTrack.albumArtPath?.let { path ->

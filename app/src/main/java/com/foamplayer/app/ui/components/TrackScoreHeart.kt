@@ -43,6 +43,13 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.foamplayer.app.ui.theme.FoamTheme
 
+// Hoisted: this list was rebuilt on every recomposition of the score popup.
+private val ScoreOptions = listOf(
+    2 to Icons.Filled.AutoAwesome,
+    1 to Icons.Filled.Favorite,
+    -1 to Icons.Filled.HeartBroken
+)
+
 /** Icon/tint pair for the track score heart, for a track scored [score]. Always white (textPrimary), never the accent color. */
 @Composable
 fun trackScoreVisual(score: Int): Pair<ImageVector, Color> = when (score) {
@@ -167,8 +174,7 @@ fun TrackScoreHeart(
                         .background(FoamTheme.colors.surfaceVariant)
                         .padding(vertical = 6.dp, horizontal = 4.dp)
                 ) {
-                    listOf(2 to Icons.Filled.AutoAwesome, 1 to Icons.Filled.Favorite, -1 to Icons.Filled.HeartBroken)
-                        .forEach { (option, optionIcon) ->
+                    ScoreOptions.forEach { (option, optionIcon) ->
                             val selected = score == option
                             Box(
                                 modifier = Modifier

@@ -64,6 +64,9 @@ import com.foamplayer.app.ui.utils.TimeUtils
 import androidx.core.net.toUri
 import java.util.Locale
 
+// Hoisted: this was compiled inside simplifiedDisplayPath on every composition pass.
+private val StoragePrefixRegex = Regex("^/storage/emulated/\\d+/")
+
 /**
  * Holds the track currently shown in a [TrackFoamModal]. A screen owns one of
  * these, calls [show] from a long-press handler, and renders a single
@@ -604,7 +607,7 @@ fun TrackDetailsModal(
                 )
 
                 BasicText(
-                    text = audioSummaryText(displayTrack),
+                    text = remember(displayTrack) { audioSummaryText(displayTrack) },
                     style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
                     modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
                 )
@@ -916,7 +919,7 @@ internal fun simplifiedDisplayPath(path: String): String {
             "file" -> {
                 val decoded = Uri.decode(uri.path ?: return@runCatching path)
                 decoded
-                    .replace(Regex("^/storage/emulated/\\d+/"), "")
+                    .replace(StoragePrefixRegex, "")
                     .removePrefix("/sdcard/")
                     .trimStart('/')
                     .ifEmpty { path }

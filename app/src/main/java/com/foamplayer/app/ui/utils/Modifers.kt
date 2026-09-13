@@ -4,19 +4,26 @@ import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import kotlinx.coroutines.delay
 
-
+/**
+ * Ping-pong marquee: scrolls the content to its end, pauses, scrolls back, pauses,
+ * forever. `rememberScrollState` and the drive [LaunchedEffect] live in composition
+ * (this is a @Composable modifier builder, not `composed {}`), so recompositions of
+ * the caller reuse the same state instead of tearing down and re-creating a
+ * ComposedModifier node on every pass.
+ */
+@Composable
 fun Modifier.pingPongMarquee(
     speedPxPerSecond: Float = 75f,
     pauseDuration: Long = 1500L
-): Modifier = composed {
+): Modifier {
     val scrollState = rememberScrollState()
 
-    LaunchedEffect(scrollState.maxValue) {
+    LaunchedEffect(scrollState.maxValue, speedPxPerSecond, pauseDuration) {
         if (scrollState.maxValue > 0) {
             val scrollDurationMillis = ((scrollState.maxValue / speedPxPerSecond) * 1000).toInt()
             delay(pauseDuration)
@@ -34,5 +41,5 @@ fun Modifier.pingPongMarquee(
             }
         }
     }
-    this.horizontalScroll(scrollState, enabled = false)
+    return this.horizontalScroll(scrollState, enabled = false)
 }

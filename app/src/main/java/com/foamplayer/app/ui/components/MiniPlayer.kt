@@ -27,6 +27,7 @@ import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,12 +39,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.times
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -70,38 +71,115 @@ import kotlinx.coroutines.flow.StateFlow
 private data class PendingJump(val viaPage: Int, val targetIndex: Int)
 
 /**
+ * Format fallback shown when a track has no album art. Deliberately a leaf: it is the
+ * only thing here that reads the per-frame [FoamTheme.accentColor] directly, so accent
+ * animation frames invalidates just this text, not the pager page around it.
+ */
+@Composable
+private fun FormatFallbackLabel(format: String, modifier: Modifier = Modifier) {
+    BasicText(
+        text = format.take(3),
+        style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor),
+        modifier = modifier
+    )
+}
+
+/**
+ * Play/pause button. Deliberately a leaf: the accent background changes every frame
+ * while the accent color animates, and keeping the read here means only this button
+ * recomposes per frame instead of the whole [MiniPlayer] body.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
+    trackId: Long,
+    isPlaying: Boolean,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    useSharedElements: Boolean,
+    onPlayPauseClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .then(
+                if (useSharedElements) {
+                    Modifier.sharedBounds(
+                        rememberSharedContentState(key = "play_button_$trackId"),
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
+                } else Modifier
+            )
+            .clip(RoundedCornerShape(18.dp))
+            .background(FoamTheme.accentColor)
+            .clickable(onClick = onPlayPauseClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
+            contentDescription = if (isPlaying) "Pause" else "Play",
+            tint = FoamTheme.colors.background,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+/**
  * Isolated on purpose, mirroring PlaybackProgressSlider in FullPlayerScreen.kt:
  * seekBarProgress.progress tracks pagerState.currentPageOffsetFraction under the
  * hood, which changes on essentially every frame of a horizontal swipe. Reading it
  * directly inside MiniPlayer's own body (as this used to do) forced the whole
  * function -- album art, title/artist text, and the HorizontalPager itself -- to
  * recompose on every drag pixel. Reading it here instead confines that
- * recomposition to just the slider.
+ * recomposition to just the slider, whose track fill is drawn from the value
+ * lambda without recomposition at all.
+ *
+ * The seek itself is committed only on release: onValueChange just parks the
+ * dragged position in local state, so dragging no longer issues a real media seek
+ * (and a PlaybackState emission) per pixel.
+ *
+ * Accent colors are read here rather than in MiniPlayer's body on purpose: the
+ * app-wide accent animates per frame while swiping between tracks, and reading it
+ * in the body recomposed the whole mini player (art pager, texts, play button) on
+ * every accent frame.
  */
 @Composable
 private fun MiniPlayerProgressSlider(
     seekBarProgress: SeekBarProgressState,
     isAnimateSeekBarEnabled: Boolean,
-    activeColor: Color,
+    isBitPerfectMode: Boolean,
     onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var dragValue by remember { mutableStateOf<Float?>(null) }
+    val currentOnSeek by rememberUpdatedState(onSeek)
+    val activeColor = if (isBitPerfectMode) {
+        FoamTheme.colors.bitPerfectActive
+    } else {
+        FoamTheme.accentColor
+    }
+
     FoamSlider(
-        value = seekBarProgress.progress,
+        value = { dragValue ?: seekBarProgress.progress },
         onValueChange = { new ->
             // A fresh manual drag always wins over any settle tween in flight.
             seekBarProgress.onDragging()
-            onSeek(new)
+            dragValue = new
         },
         trackHeight = 4.dp,
         activeColor = activeColor,
         inactiveColor = FoamTheme.colors.surface,
         growFactor = 1f,
         modifier = modifier.onSeekBarReleased {
-            seekBarProgress.onSeekDragFinished(
-                animated = isAnimateSeekBarEnabled,
-                releasedAt = seekBarProgress.progress
-            )
+            val released = dragValue
+            dragValue = null
+            if (released != null) {
+                currentOnSeek(released)
+                seekBarProgress.onSeekDragFinished(
+                    animated = isAnimateSeekBarEnabled,
+                    releasedAt = released
+                )
+            }
         }
     )
 }
@@ -109,7 +187,7 @@ private fun MiniPlayerProgressSlider(
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun MiniPlayer(
-    playbackState: PlaybackState,
+    playbackStateFlow: StateFlow<PlaybackState>,
     positionMsFlow: StateFlow<Long>,
     onPlayPauseClick: () -> Unit,
     onSeek: (Float) -> Unit,
@@ -125,6 +203,10 @@ fun MiniPlayer(
     showContainer: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    // Collected here instead of being passed as a parameter: this keeps playback
+    // emissions (play/pause, queue mutations, track changes) from re-running the
+    // whole FoamNavHost body just to forward state into this one composable.
+    val playbackState by playbackStateFlow.collectAsState()
     val track = playbackState.currentTrack ?: return
     val queue = playbackState.queue
     val queueEntryIds = playbackState.queueEntryIds
@@ -160,6 +242,8 @@ fun MiniPlayer(
     val latestCurrentIndex by rememberUpdatedState(currentIndex)
     val latestSkipTrackChangeAnimation by rememberUpdatedState(skipTrackChangeAnimation)
     val latestBackgroundTransition by rememberUpdatedState(onBackgroundTransition)
+    val latestIsAnimateSeekBarEnabled by rememberUpdatedState(isAnimateSeekBarEnabled)
+    val latestQueue by rememberUpdatedState(queue)
 
     // Same live computation the FoamSlider below already had -- read lazily every
     // time `.progress` is accessed, so it stays live while dragging/swiping and is
@@ -207,18 +291,24 @@ fun MiniPlayer(
     // every frame the pager is mid-drag, by design. See
     // AlbumArtPaletteCache.interpolatedColor for the shared calculation (this used to
     // be a local copy of the same index/lerp math that also lived in FullPlayerScreen).
-    LaunchedEffect(pagerState, queue, pendingJump) {
+    //
+    // Keyed on pagerState only: pendingJump is snapshot state read inside the
+    // snapshotFlow lambda (so the flow re-emits when it changes on its own), and the
+    // queue is reached through a rememberUpdatedState proxy -- keying on the List made
+    // every queue mutation tear down and resubscribe these collectors.
+    LaunchedEffect(pagerState) {
         snapshotFlow {
             val jump = pendingJump
+            val currentQueue = latestQueue
             AlbumArtPaletteCache.interpolatedColor(
                 currentPage = pagerState.currentPage,
                 currentPageOffsetFraction = pagerState.currentPageOffsetFraction,
-                pageCount = queue.size
+                pageCount = currentQueue.size
             ) { page ->
                 if (jump != null && page == jump.viaPage) {
-                    queue.getOrNull(jump.targetIndex)?.albumArtPath
+                    currentQueue.getOrNull(jump.targetIndex)?.albumArtPath
                 } else {
-                    queue.getOrNull(page)?.albumArtPath
+                    currentQueue.getOrNull(page)?.albumArtPath
                 }
             }
         }.collect { interpolatedColor ->
@@ -228,18 +318,19 @@ fun MiniPlayer(
 
     // Keep the app-wide backdrop in lockstep with the mini-player pager, including
     // while the user's finger is still dragging between two tracks.
-    LaunchedEffect(pagerState, queue, pendingJump) {
+    LaunchedEffect(pagerState) {
         snapshotFlow {
             val jump = pendingJump
+            val currentQueue = latestQueue
             val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-            val frontIndex = absoluteOffset.toInt().coerceIn(0, (queue.size - 1).coerceAtLeast(0))
-            val backIndex = (frontIndex + 1).coerceAtMost((queue.size - 1).coerceAtLeast(0))
+            val frontIndex = absoluteOffset.toInt().coerceIn(0, (currentQueue.size - 1).coerceAtLeast(0))
+            val backIndex = (frontIndex + 1).coerceAtMost((currentQueue.size - 1).coerceAtLeast(0))
             val fraction = (absoluteOffset - frontIndex).coerceIn(0f, 1f)
             val pathForPage: (Int) -> String? = { page ->
                 if (jump != null && page == jump.viaPage) {
-                    queue.getOrNull(jump.targetIndex)?.albumArtPath
+                    currentQueue.getOrNull(jump.targetIndex)?.albumArtPath
                 } else {
-                    queue.getOrNull(page)?.albumArtPath
+                    currentQueue.getOrNull(page)?.albumArtPath
                 }
             }
             Triple(pathForPage(frontIndex), pathForPage(backIndex), fraction)
@@ -255,12 +346,16 @@ fun MiniPlayer(
         }
     }
 
-    // Sync pager when track changes
+    // Sync pager when track changes. Reads the live queue through the
+    // rememberUpdatedState proxy: the queue can change (aux refill, play-next) while
+    // this effect is running, and animating against a stale snapshot could target an
+    // out-of-range page.
     LaunchedEffect(currentIndex) {
+        val currentQueue = latestQueue
         pendingJump = null
 
         // Doesn't animate is the full player is auto opening
-        if (currentIndex in queue.indices &&
+        if (currentIndex in currentQueue.indices &&
             pagerState.currentPage != currentIndex &&
             !latestSkipTrackChangeAnimation
         ) {
@@ -274,7 +369,7 @@ fun MiniPlayer(
                 } else {
                     // Distant slide : slide 1 item but renders the via as the target track
                     val direction = if (distance > 0) 1 else -1
-                    val viaPage = (pagerState.currentPage + direction).coerceIn(0, queue.size - 1)
+                    val viaPage = (pagerState.currentPage + direction).coerceIn(0, currentQueue.size - 1)
                     try {
                         pendingJump = PendingJump(viaPage, currentIndex)
                         pagerState.animateScrollToPage(viaPage)
@@ -313,10 +408,10 @@ fun MiniPlayer(
             .collect { dragging ->
                 if (!dragging &&
                     pendingJump == null &&
-                    pagerState.targetPage != currentIndex &&
-                    pagerState.targetPage in queue.indices
+                    pagerState.targetPage != latestCurrentIndex &&
+                    pagerState.targetPage in latestQueue.indices
                 ) {
-                    seekBarProgress.onTrackChangeCommitted(animated = isAnimateSeekBarEnabled)
+                    seekBarProgress.onTrackChangeCommitted(animated = latestIsAnimateSeekBarEnabled)
                 }
             }
     }
@@ -324,8 +419,8 @@ fun MiniPlayer(
     LaunchedEffect(pagerState.settledPage) {
         if (!pagerSyncState.isSyncing &&
             pendingJump == null &&
-            pagerState.settledPage != currentIndex &&
-            pagerState.settledPage in queue.indices
+            pagerState.settledPage != latestCurrentIndex &&
+            pagerState.settledPage in latestQueue.indices
         ) {
             seekBarProgress.onTrackChangeApplied()
             onSkipToTrack(pagerState.settledPage)
@@ -424,7 +519,15 @@ fun MiniPlayer(
                                             )
                                         } else Modifier
                                     )
-                                    .clip(RoundedCornerShape(animatedCornerRadius))
+                                    // The shared-element transition animates this corner radius
+                                    // every frame; consuming it inside graphicsLayer keeps that
+                                    // animation draw-only (a .clip() here recomposed the whole
+                                    // mini player per transition frame and allocated a fresh
+                                    // shape each time).
+                                    .graphicsLayer {
+                                        shape = RoundedCornerShape(animatedCornerRadius)
+                                        clip = true
+                                    }
                                     .background(FoamTheme.colors.surface),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -442,10 +545,7 @@ fun MiniPlayer(
                                         contentScale = ContentScale.Crop
                                     )
                                 } else {
-                                    BasicText(
-                                        text = pageTrack.format.take(3),
-                                        style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor)
-                                    )
+                                    FormatFallbackLabel(format = pageTrack.format)
                                 }
                             }
 
@@ -482,23 +582,13 @@ fun MiniPlayer(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .sharedBounds(
-                                rememberSharedContentState(key = "play_button_${track.id}"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(FoamTheme.accentColor)
-                            .clickable { onPlayPauseClick() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (playbackState.isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
-                            contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
-                            tint = FoamTheme.colors.background,
-                            modifier = Modifier.size(20.dp)
+                    with(sharedTransitionScope) {
+                        MiniPlayerPlayPauseButton(
+                            trackId = track.id,
+                            isPlaying = playbackState.isPlaying,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            useSharedElements = useSharedElements,
+                            onPlayPauseClick = onPlayPauseClick
                         )
                     }
                 }
@@ -508,9 +598,7 @@ fun MiniPlayer(
                 MiniPlayerProgressSlider(
                     seekBarProgress = seekBarProgress,
                     isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
-                    activeColor = if (playbackState.audioOutputInfo?.isBitPerfectMode == true)
-                        FoamTheme.colors.bitPerfectActive
-                    else FoamTheme.accentColor,
+                    isBitPerfectMode = playbackState.audioOutputInfo?.isBitPerfectMode == true,
                     onSeek = onSeek,
                     modifier = Modifier.height(NavBarDimens.MiniPlayerSliderHeight)
                 )

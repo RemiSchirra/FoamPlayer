@@ -219,6 +219,8 @@ fun TrackListItem(
             detectHorizontalDragGestures(
                 onHorizontalDrag = { change, dragAmount ->
                     change.consume()
+                    // snapTo from the composition scope: the calls serialize through the
+                    // Animatable's mutex, and the drag deltas arrive sequentially anyway.
                     scope.launch {
                         dismissOffset.snapTo(dismissOffset.value + dragAmount)
                     }

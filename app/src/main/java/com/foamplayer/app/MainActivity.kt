@@ -121,14 +121,14 @@ private fun FoamApp(
 ) {
     val settings by settingsViewModel.settings.collectAsState()
 
-    val playbackState by playerViewModel.playbackState.collectAsState()
+    val albumArtPath by playerViewModel.currentAlbumArtPath.collectAsState()
     val dynamicAccentColor by playerViewModel.dynamicAccentColor.collectAsState()
 
     val accentColor = rememberAccentColor(
         isAutomaticColor = settings.automaticColorEnabled,
         manualAccentColor = settings.accentColor,
         dynamicAccentColor = dynamicAccentColor,
-        albumArtPath = playbackState.currentTrack?.albumArtPath
+        albumArtPath = albumArtPath
     )
 
     CompositionLocalProvider(

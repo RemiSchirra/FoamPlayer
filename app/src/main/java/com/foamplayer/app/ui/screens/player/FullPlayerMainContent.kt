@@ -30,7 +30,10 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -517,27 +520,60 @@ internal fun PlaybackProgressSlider(
     labelSpacing: Dp = PlayerDimens.seekBarLabelSpacing
 ) {
     Column(modifier = modifier) {
+        // Hold the dragged position locally and commit the seek only on release.
+        // Forwarding onSeek on every change used to issue a real media seek and a
+        // PlaybackState emission per drag pixel, recomposing every collector of
+        // playbackState while the user was still holding the bar.
+        var dragValue by remember { mutableStateOf<Float?>(null) }
+        val currentOnSeek by rememberUpdatedState(onSeek)
+
         FoamSlider(
-            value = seekBarProgress.progress,
+            value = { dragValue ?: seekBarProgress.progress },
             onValueChange = { new ->
+                // A fresh manual drag always wins over any settle tween in flight.
                 seekBarProgress.onDragging()
-                onSeek((new * durationMs).toLong())
+                dragValue = new
             },
             modifier = Modifier.onSeekBarReleased {
-                seekBarProgress.onSeekDragFinished(
-                    animated = isAnimateSeekBarEnabled,
-                    releasedAt = seekBarProgress.progress
-                )
+                val released = dragValue
+                dragValue = null
+                if (released != null) {
+                    currentOnSeek((released * durationMs).toLong())
+                    seekBarProgress.onSeekDragFinished(
+                        animated = isAnimateSeekBarEnabled,
+                        releasedAt = released
+                    )
+                }
             }
         )
         Spacer(modifier = Modifier.height(labelSpacing))
         val labelStyle = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            BasicText(
-                text = TimeUtils.formatDurationCompact((seekBarProgress.progress * durationMs).toLong()),
+            ElapsedTimeLabel(
+                durationMs = durationMs,
+                seekBarProgress = seekBarProgress,
                 style = labelStyle
             )
             BasicText(text = TimeUtils.formatDurationCompact(durationMs), style = labelStyle)
         }
     }
+}
+
+/**
+ * Isolated so the per-frame position state is only observed here: [derivedStateOf]
+ * re-formats the label only when the displayed second actually changes, so position
+ * ticks neither recompose this label nor its siblings.
+ */
+@Composable
+private fun ElapsedTimeLabel(
+    durationMs: Long,
+    seekBarProgress: SeekBarProgressState,
+    style: androidx.compose.ui.text.TextStyle
+) {
+    val elapsedText by remember(durationMs) {
+        derivedStateOf {
+            TimeUtils.formatDurationCompact((seekBarProgress.progress * durationMs).toLong())
+        }
+    }
+    BasicText(text = elapsedText, style = style)
 }

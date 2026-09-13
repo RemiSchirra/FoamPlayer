@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -71,6 +72,9 @@ private val M3uMimeTypes = arrayOf(
     "text/plain"
 )
 
+// Immutable by construction; the List field makes it unstable to the compiler's
+// inference, which forced the modal to recompose on every unrelated parent pass.
+@Immutable
 data class MissingSongsUiState(
     val playlistName: String,
     val missing: List<String>,

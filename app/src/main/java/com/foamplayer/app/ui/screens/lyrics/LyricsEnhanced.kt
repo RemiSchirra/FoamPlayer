@@ -520,25 +520,33 @@ fun LyricsEnhanced(
         }
     }
 
-    val normalTextStyle =
-        FoamTheme.typography.titleMedium.copy(
+    // remember'd: these are rebuilt on every recomposition of the screen otherwise,
+    // and they feed KaraokeLyricsView whose params then never compare equal. The
+    // typography is read outside the remember lambdas (CompositionLocal reads are
+    // composable calls, not allowed in a remember calculation).
+    val typography = FoamTheme.typography
+    val normalTextStyle = remember(typography, lyricsTextSize, lyricsLineSpacing) {
+        typography.titleMedium.copy(
             fontSize = lyricsTextSize.sp,
             lineHeight = (lyricsTextSize * lyricsLineSpacing).sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = FoamTheme.typography.titleMedium.fontFamily,
+            fontFamily = typography.titleMedium.fontFamily,
         )
-    val accompanimentTextStyle =
-        FoamTheme.typography.titleLarge.copy(
+    }
+    val accompanimentTextStyle = remember(typography, lyricsTextSize, lyricsLineSpacing) {
+        typography.titleLarge.copy(
             fontSize = (lyricsTextSize * 0.82f).sp,
             lineHeight = (lyricsTextSize * 0.82f * lyricsLineSpacing).sp,
-            fontFamily = FoamTheme.typography.titleLarge.fontFamily,
+            fontFamily = typography.titleLarge.fontFamily,
         )
-    val phoneticTextStyle =
-        FoamTheme.typography.body.copy(
+    }
+    val phoneticTextStyle = remember(typography, lyricsTextSize, lyricsLineSpacing) {
+        typography.body.copy(
             fontSize = (lyricsTextSize * 0.55f).sp,
             lineHeight = (lyricsTextSize * 0.55f * lyricsLineSpacing).sp,
             fontWeight = FontWeight.Normal,
         )
+    }
     val plainLyrics =
         remember(lyricsEntries, isSynced, showTranslations) {
             PlainLyrics(

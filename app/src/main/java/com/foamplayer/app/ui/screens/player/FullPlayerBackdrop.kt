@@ -133,12 +133,16 @@ private fun Modifier.performantBlur(radius: Dp): Modifier {
  * The art paths normally point at audio files whose embedded picture is read
  * through [EmbeddedAlbumArt]; the `*IsEmbedded` flags mark the rare callers
  * (playlist covers) that pass a plain image URI Coil must load directly.
+ *
+ * [crossfadeFraction] is a deferred (lambda) read: callers feed it from per-frame
+ * sources (pager drag offsets), and consuming it inside the layer block keeps those
+ * frames draw-only instead of recomposing the backdrop.
  */
 @Composable
 internal fun DynamicAlbumArtBackground(
     frontArtPath: String?,
     backArtPath: String?,
-    crossfadeFraction: Float,
+    crossfadeFraction: () -> Float,
     blur: Dp,
     intensity: Float,
     modifier: Modifier = Modifier,
@@ -169,15 +173,15 @@ internal fun DynamicAlbumArtBackground(
             val backRequest = remember(backArtPath, backArtIsEmbedded) {
                 artRequest(backArtPath, backArtIsEmbedded)
             }
-            AsyncImage(
-                model = backRequest,
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .performantBlur(blur)
-                    .graphicsLayer { alpha = crossfadeFraction },
-                contentScale = ContentScale.Crop,
-            )
+                AsyncImage(
+                    model = backRequest,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .performantBlur(blur)
+                        .graphicsLayer { alpha = crossfadeFraction() },
+                    contentScale = ContentScale.Crop,
+                )
         }
         Box(
             modifier = Modifier
@@ -245,20 +249,35 @@ internal fun AlbumArtBackdrop(
     Box(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
         if (dynamicBackgroundEnabled) {
+            val context = LocalContext.current
             // The two art layers remain composed throughout a pager transition so the
             // currently playing track can dissolve into the next track's background.
             Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f }) {
                 if (frontArtPath != null) {
+                    val frontRequest = remember(frontArtPath) {
+                        ImageRequest.Builder(context)
+                            .data(EmbeddedAlbumArt(frontArtPath.toUri()))
+                            .size(AlbumArtRequestSize)
+                            .crossfade(false)
+                            .build()
+                    }
                     AsyncImage(
-                        model = EmbeddedAlbumArt(frontArtPath.toUri()),
+                        model = frontRequest,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize().performantBlur(backgroundBlur),
                         contentScale = ContentScale.Crop
                     )
                 }
                 if (backArtPath != null && backArtPath != frontArtPath) {
+                    val backRequest = remember(backArtPath) {
+                        ImageRequest.Builder(context)
+                            .data(EmbeddedAlbumArt(backArtPath.toUri()))
+                            .size(AlbumArtRequestSize)
+                            .crossfade(false)
+                            .build()
+                    }
                     AsyncImage(
-                        model = EmbeddedAlbumArt(backArtPath.toUri()),
+                        model = backRequest,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize().performantBlur(backgroundBlur).graphicsLayer { alpha = crossfadeFraction() },
                         contentScale = ContentScale.Crop
@@ -321,19 +340,20 @@ private fun ImmersiveAlbumArtBackdrop(
     }
 }
 
+// Constant: hoisted out of composition so every backdrop pass doesn't rebuild it.
+private val BackdropFadeBrush = Brush.verticalGradient(
+    0f to Color.Transparent,
+    0.5f to Color.Transparent,
+    0.75f to Color.Black.copy(alpha = 0.5f),
+    1f to Color.Black.copy(alpha = 1f)
+)
+
 @Composable
 private fun BackdropGradient(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    0f to Color.Transparent,
-                    0.5f to Color.Transparent,
-                    0.75f to Color.Black.copy(alpha = 0.5f),
-                    1f to Color.Black.copy(alpha = 1f)
-                )
-            )
+            .background(BackdropFadeBrush)
     )
 }
 
@@ -370,16 +390,18 @@ private fun AlbumArtImagePair(
 
     Box(modifier = modifier) {
         if (frontArtPath != null) {
+            val frontRequest = remember(frontArtPath) { request(frontArtPath) }
             AsyncImage(
-                model = request(frontArtPath),
+                model = frontRequest,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
         }
         if (backArtPath != null && backArtPath != frontArtPath) {
+            val backRequest = remember(backArtPath) { request(backArtPath) }
             AsyncImage(
-                model = request(backArtPath),
+                model = backRequest,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize().graphicsLayer { alpha = crossfadeFraction() },
                 contentScale = ContentScale.Crop

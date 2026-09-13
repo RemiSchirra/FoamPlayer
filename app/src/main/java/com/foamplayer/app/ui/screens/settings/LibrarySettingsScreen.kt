@@ -70,6 +70,11 @@ fun LibrarySettingsScreen(
         }
     }
 
+    // Sorted once per folder-set change: calling sorted() inside the LazyColumn scope
+    // re-allocated and re-sorted the list on every recomposition (and remember is not
+    // available there -- LazyListScope is not composable).
+    val sortedFolders = remember(selectedFolders) { selectedFolders.sorted() }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -123,7 +128,7 @@ fun LibrarySettingsScreen(
                     }
                 }
             } else {
-                items(selectedFolders.sorted()) { folder ->
+                items(sortedFolders, key = { it }) { folder ->
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

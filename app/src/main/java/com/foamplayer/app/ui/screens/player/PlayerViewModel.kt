@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -30,6 +32,37 @@ class PlayerViewModel @Inject constructor(
     val playbackState: StateFlow<PlaybackState> = audioEngine.playbackState
 
     val positionMs: StateFlow<Long> = audioEngine.positionMs
+
+    // Narrow projections of playbackState for the composition roots (FoamApp,
+    // FoamNavHost). Collecting these instead of the whole state keeps emissions like
+    // play/pause or queue mutations from recomposing the entire navigation body when
+    // only the presence of a track (or the source-collection highlight) matters.
+    val hasCurrentTrack: StateFlow<Boolean> = audioEngine.playbackState
+        .map { it.currentTrack != null }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val activeTrackId: StateFlow<Long?> = audioEngine.playbackState
+        .map { it.currentTrack?.id }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val currentAlbumArtPath: StateFlow<String?> = audioEngine.playbackState
+        .map { it.currentTrack?.albumArtPath }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    // Id of the collection the queue was started from (null = bare track list),
+    // highlighted only while the cursor is still inside that collection's own
+    // section of the queue.
+    val activeCollectionId: StateFlow<String?> = audioEngine.playbackState
+        .map {
+            it.queueSourceId?.takeIf { sourceId ->
+                it.queueSourceFlags.getOrNull(it.queueIndex) == true
+            }
+        }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings.stateIn(
         scope = viewModelScope,
