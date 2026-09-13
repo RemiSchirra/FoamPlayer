@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -84,6 +86,21 @@ val AlbumArtBoundsTransform = BoundsTransform { _, _ ->
 
 /** Size of the artwork thumbnail at the leading edge of a list row. */
 val ListRowArtSize = 48.dp
+
+/**
+ * Animated background of a list row's active highlight (the currently playing
+ * track, or the collection the queue was started from): the accent at 40%
+ * alpha, fading in/out over 200ms like every other row state change.
+ */
+@Composable
+internal fun activeRowHighlight(active: Boolean): Color {
+    val target = if (active) FoamTheme.accentColor.copy(alpha = 0.4f) else Color.Transparent
+    return animateColorAsState(
+        targetValue = target,
+        animationSpec = tween(durationMillis = 200, easing = EaseOut),
+        label = "activeRowHighlight"
+    ).value
+}
 
 /** Artwork size of the larger RowBig density. */
 val ListRowBigArtSize = 72.dp

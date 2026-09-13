@@ -16,7 +16,19 @@ data class PlaybackState(
     val isShuffle: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.NONE,
     val audioOutputInfo: AudioOutputInfo? = null,
-    val auxiliaryFlags: List<Boolean> = emptyList()
+    val auxiliaryFlags: List<Boolean> = emptyList(),
+    // Stable id of the collection the queue was started from ("album:…",
+    // "playlist:…", ...); null when the queue was started from a bare track
+    // list (library, search results...). Lets the UI highlight the one
+    // collection the user actually chose to play, instead of every collection
+    // that happens to contain the current track.
+    val queueSourceId: String? = null,
+    // Parallel to [auxiliaryFlags]: true for the queue entries that belong to
+    // the source collection's own section of the queue. The highlight only
+    // applies while the cursor is inside that section, so it drops by itself
+    // once the collection finishes (auxiliary pool) and never applies to
+    // tracks queued afterwards ("play next" / "queue") or to past history.
+    val queueSourceFlags: List<Boolean> = emptyList()
 ) {
     companion object {
         // Number of track in the auxiliary queue
@@ -36,7 +48,9 @@ data class PlaybackState(
                 isShuffle == other.isShuffle &&
                 repeatMode == other.repeatMode &&
                 audioOutputInfo == other.audioOutputInfo &&
-                auxiliaryFlags === other.auxiliaryFlags
+                auxiliaryFlags === other.auxiliaryFlags &&
+                queueSourceId == other.queueSourceId &&
+                queueSourceFlags === other.queueSourceFlags
     }
 
     override fun hashCode(): Int {
@@ -51,6 +65,8 @@ data class PlaybackState(
         result = 31 * result + repeatMode.hashCode()
         result = 31 * result + (audioOutputInfo?.hashCode() ?: 0)
         result = 31 * result + System.identityHashCode(auxiliaryFlags)
+        result = 31 * result + (queueSourceId?.hashCode() ?: 0)
+        result = 31 * result + System.identityHashCode(queueSourceFlags)
         return result
     }
 }

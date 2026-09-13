@@ -227,7 +227,7 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    fun setQueue(tracks: List<TrackEntity>, startIndex: Int = 0) {
+    fun setQueue(tracks: List<TrackEntity>, startIndex: Int = 0, sourceCollectionId: String? = null) {
         windowJumpJob?.cancel()
 
         if (tracks.isEmpty()) {
@@ -238,7 +238,9 @@ class AudioEngine @Inject constructor(
                 queue = emptyList(),
                 queueIndex = -1,
                 queueEntryIds = emptyList(),
-                auxiliaryFlags = emptyList()
+                auxiliaryFlags = emptyList(),
+                queueSourceId = null,
+                queueSourceFlags = emptyList()
             )
             return
         }
@@ -255,7 +257,10 @@ class AudioEngine @Inject constructor(
             queue = newQueue,
             queueIndex = clampedStart,
             queueEntryIds = entryIds,
-            auxiliaryFlags = List(entryIds.size) { i -> i >= tracks.size }
+            auxiliaryFlags = List(entryIds.size) { i -> i >= tracks.size },
+            queueSourceId = sourceCollectionId,
+            queueSourceFlags = List(tracks.size) { sourceCollectionId != null } +
+                    List(AUXILIARY_QUEUE_LENGTH) { false }
         )
 
         loadWindowAndPlay(newQueue, clampedStart)
@@ -332,13 +337,19 @@ class AudioEngine @Inject constructor(
      * keeps the played history up to and including the current track, drops the
      * upcoming main-queue tracks, queues [tracks] in their place and jumps to
      * [startIndex]. The auxiliary pool is left untouched, so no refill is needed.
+     * [sourceCollectionId], when set, marks the queue as started from that
+     * collection ([PlaybackState.queueSourceId]); a bare track list passes null.
      */
-    fun playListReplacingUpcoming(tracks: List<TrackEntity>, startIndex: Int) {
+    fun playListReplacingUpcoming(
+        tracks: List<TrackEntity>,
+        startIndex: Int,
+        sourceCollectionId: String? = null
+    ) {
         if (tracks.isEmpty()) return
 
         val current = _playbackState.value
         if (current.queue.isEmpty() || current.queueIndex !in current.queue.indices) {
-            setQueue(tracks, startIndex)
+            setQueue(tracks, startIndex, sourceCollectionId)
             return
         }
 
@@ -360,7 +371,13 @@ class AudioEngine @Inject constructor(
                     List(tracks.size) { allocateEntryId() } +
                     current.queueEntryIds.subList(auxStart, current.queueEntryIds.size),
             auxiliaryFlags = flags.take(keptCount) + List(tracks.size) { false } +
-                    flags.subList(auxStart, flags.size)
+                    flags.subList(auxStart, flags.size),
+            queueSourceId = sourceCollectionId,
+            // The re-stamped source's section starts here: entries kept as
+            // history belong to a past occurrence and are never highlighted.
+            queueSourceFlags = List(keptCount) { false } +
+                    List(tracks.size) { sourceCollectionId != null } +
+                    List(current.queue.size - auxStart) { false }
         )
 
         jumpWindowTo(keptCount + startIndex.coerceIn(0, tracks.lastIndex))
@@ -395,6 +412,11 @@ class AudioEngine @Inject constructor(
             add(insertIndex.coerceAtMost(size), false)
         }
 
+        // ...and never part of the source collection's section either.
+        val newSourceFlags = current.queueSourceFlags.toMutableList().apply {
+            add(insertIndex.coerceAtMost(size), false)
+        }
+
         // Keep the cursor on the same track it was on: an insert at or before
         // it shifts every later index (including the cursor's) by one.
         val newQueueIndex =
@@ -404,7 +426,8 @@ class AudioEngine @Inject constructor(
             queue = newQueue,
             queueEntryIds = newEntryIds,
             queueIndex = newQueueIndex,
-            auxiliaryFlags = newFlags
+            auxiliaryFlags = newFlags,
+            queueSourceFlags = newSourceFlags
         )
 
         val window = loadedRange
@@ -675,6 +698,10 @@ class AudioEngine @Inject constructor(
             if (fromIndex < size) add(toIndex, removeAt(fromIndex))
         }
 
+        val newSourceFlags = current.queueSourceFlags.toMutableList().apply {
+            if (fromIndex < size) add(toIndex, removeAt(fromIndex))
+        }
+
         val oldPlayingIndex = current.queueIndex
         val newPlayingIndex = when {
             oldPlayingIndex == fromIndex -> toIndex
@@ -687,7 +714,8 @@ class AudioEngine @Inject constructor(
             queue = newQueue,
             queueEntryIds = normalizeEntryIds(newEntryIds, newQueue.size),
             queueIndex = newPlayingIndex,
-            auxiliaryFlags = normalizeAuxiliaryFlags(newFlags, newQueue.size)
+            auxiliaryFlags = normalizeAuxiliaryFlags(newFlags, newQueue.size),
+            queueSourceFlags = normalizeQueueSourceFlags(newSourceFlags, newQueue.size)
         )
 
         if (fromLoaded != toLoaded) {
@@ -734,6 +762,10 @@ class AudioEngine @Inject constructor(
             if (index < size) removeAt(index)
         }
 
+        val newSourceFlags = current.queueSourceFlags.toMutableList().apply {
+            if (index < size) removeAt(index)
+        }
+
         val oldPlayingIndex = current.queueIndex
         val newPlayingIndex = when {
             index < oldPlayingIndex -> oldPlayingIndex - 1
@@ -746,7 +778,8 @@ class AudioEngine @Inject constructor(
             queueEntryIds = normalizeEntryIds(newEntryIds, newQueue.size),
             queueIndex = newPlayingIndex,
             currentTrack = if (newPlayingIndex != -1) newQueue.getOrNull(newPlayingIndex) else null,
-            auxiliaryFlags = normalizeAuxiliaryFlags(newFlags, newQueue.size)
+            auxiliaryFlags = normalizeAuxiliaryFlags(newFlags, newQueue.size),
+            queueSourceFlags = normalizeQueueSourceFlags(newSourceFlags, newQueue.size)
         )
 
         if (removedIsAuxiliary) {
@@ -807,6 +840,10 @@ class AudioEngine @Inject constructor(
 
     /** Falls back to all-unflagged if the flag list doesn't match the queue size. */
     private fun normalizeAuxiliaryFlags(flags: List<Boolean>, queueSize: Int): List<Boolean> =
+        if (flags.size == queueSize) flags else List(queueSize) { false }
+
+    /** Falls back to all-unflagged if the source flag list doesn't match the queue size. */
+    private fun normalizeQueueSourceFlags(flags: List<Boolean>, queueSize: Int): List<Boolean> =
         if (flags.size == queueSize) flags else List(queueSize) { false }
 
     /**
@@ -877,7 +914,8 @@ class AudioEngine @Inject constructor(
         _playbackState.value = current.copy(
             queue = current.queue + additions,
             queueEntryIds = current.queueEntryIds + List(additions.size) { allocateEntryId() },
-            auxiliaryFlags = flags + List(additions.size) { true }
+            auxiliaryFlags = flags + List(additions.size) { true },
+            queueSourceFlags = current.queueSourceFlags + List(additions.size) { false }
         )
     }
 

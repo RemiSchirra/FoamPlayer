@@ -310,6 +310,10 @@ private fun CollectionHeaderSection(
  * transition scopes are provided, the artwork and texts animate into the
  * matching album detail header using the same keys as SearchScreen's album
  * rows ("album-art-*", "album-title-*", "album-artist-*").
+ *
+ * [active] draws the "now playing" highlight: set it only when the queue was
+ * actually started from this collection (PlaybackState.queueSourceId), never
+ * merely because a track inside it happens to be playing.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -319,6 +323,7 @@ fun CollectionListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
+    active: Boolean = false,
     imageUrl: String? = null,
     icon: ImageVector? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
@@ -352,6 +357,7 @@ fun CollectionListItem(
     // both ends of a shared-element transition — round identically.
     val elementKey = sharedElementKey
     val artShape = AlbumArtShape()
+    val highlightBackground = activeRowHighlight(active)
 
     val sharedArtModifier = Modifier
         .rowSharedArtwork(
@@ -394,6 +400,7 @@ fun CollectionListItem(
             artworkContent = { CollectionArtwork(title, imageUrl, icon) },
             title = title,
             subtitle = subtitle,
+            highlightBackground = highlightBackground,
             titleModifier = sharedTitleModifier,
             subtitleModifier = sharedSubtitleModifier
         )
@@ -409,6 +416,7 @@ fun CollectionListItem(
         title = title,
         subtitle = subtitle,
         density = density,
+        highlightBackground = highlightBackground,
         titleModifier = sharedTitleModifier,
         subtitleModifier = sharedSubtitleModifier
     )

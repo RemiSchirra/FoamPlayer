@@ -110,18 +110,7 @@ fun TrackListItem(
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     isSharedTransitionSource: Boolean = false
 ) {
-    val targetBackgroundColor = if (active) {
-        FoamTheme.accentColor.copy(alpha = 0.4f)
-    } else {
-        Color.Transparent
-    }
-
-    // Animate the color change
-    val animatedBackgroundColor by animateColorAsState(
-        targetValue = targetBackgroundColor,
-        animationSpec = tween(durationMillis = 200, easing = EaseOut),
-        label = "activeBackgroundFade"
-    )
+    val animatedBackgroundColor = activeRowHighlight(active)
 
     val targetTrackNumberColor = if (active) {
         FoamTheme.colors.textPrimary

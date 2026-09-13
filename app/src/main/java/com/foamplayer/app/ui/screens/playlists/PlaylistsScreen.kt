@@ -61,9 +61,11 @@ import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
+import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.DensityOrganisationModal
 import com.foamplayer.app.ui.components.MediaGridCell
 import com.foamplayer.app.ui.components.MediaListRow
+import com.foamplayer.app.ui.components.activeRowHighlight
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -77,6 +79,7 @@ fun PlaylistsScreen(
     onPlaylistClick: (PlaylistEntity) -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
+    activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: PlaylistsViewModel = hiltViewModel()
@@ -193,6 +196,7 @@ fun PlaylistsScreen(
                         trackCount = trackCounts[playlist.playlistId] ?: 0,
                         onClick = { onPlaylistClick(playlist) },
                         onLongClick = { playlistModalState.show(playlist) },
+                        active = CollectionId.playlist(playlist.playlistId) == activeCollectionId,
                         density = density,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope
@@ -211,6 +215,7 @@ fun PlaylistsScreen(
                         trackCount = trackCounts[playlist.playlistId] ?: 0,
                         onClick = { onPlaylistClick(playlist) },
                         onLongClick = { playlistModalState.show(playlist) },
+                        active = CollectionId.playlist(playlist.playlistId) == activeCollectionId,
                         density = density,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope
@@ -334,7 +339,8 @@ private fun PlaylistActionButton(
  * through the shared row/grid scaffolds at the view's [density]. Long-press
  * opens the playlist actions modal. When opened, the artwork and title animate
  * into the playlist detail header through the shared-element keys
- * "playlist-art-*" / "playlist-title-*".
+ * "playlist-art-*" / "playlist-title-*". [active] draws the "now playing"
+ * highlight when the queue was started from this playlist.
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -343,11 +349,13 @@ private fun PlaylistItemRow(
     trackCount: Int,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    active: Boolean = false,
     density: MediaDensity,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope
 ) {
     val context = LocalContext.current
+    val highlightBackground = activeRowHighlight(active)
 
     @Composable
     fun Modifier.sharedArtwork(): Modifier = with(sharedTransitionScope) {
@@ -402,6 +410,7 @@ private fun PlaylistItemRow(
             artworkContent = { PlaylistArtwork() },
             title = playlist.name,
             subtitle = "$trackCount tracks",
+            highlightBackground = highlightBackground,
             titleModifier = Modifier.sharedTitle()
         )
     } else {
@@ -416,6 +425,7 @@ private fun PlaylistItemRow(
             title = playlist.name,
             subtitle = "$trackCount tracks",
             density = density,
+            highlightBackground = highlightBackground,
             titleModifier = Modifier.sharedTitle()
         )
     }

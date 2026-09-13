@@ -27,6 +27,7 @@ import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.CollectionAlbumEntry
+import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.CollectionInfo
 import com.foamplayer.app.ui.components.CollectionKind
 import com.foamplayer.app.ui.components.CollectionListItem
@@ -50,6 +51,7 @@ fun AlbumsBrowseScreen(
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
@@ -72,6 +74,7 @@ fun AlbumsBrowseScreen(
                     subtitle = album.artist,
                     imageUrl = album.albumArtPath,
                     onClick = { onAlbumClick(album) },
+                    active = CollectionId.album(album.album) == activeCollectionId,
                     density = density,
                     onLongClick = {
                         longPressScope.launch {
@@ -99,6 +102,7 @@ fun AlbumsBrowseScreen(
 fun ArtistsBrowseScreen(
     onArtistClick: (String) -> Unit,
     onBack: () -> Unit,
+    activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
@@ -120,6 +124,7 @@ fun ArtistsBrowseScreen(
                     title = artist,
                     subtitle = null,
                     onClick = { onArtistClick(artist) },
+                    active = CollectionId.artist(artist) == activeCollectionId,
                     density = density,
                     onLongClick = {
                         longPressScope.launch {
@@ -142,6 +147,7 @@ fun ArtistsBrowseScreen(
 fun GenresBrowseScreen(
     onGenreClick: (String) -> Unit,
     onBack: () -> Unit,
+    activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
@@ -165,6 +171,7 @@ fun GenresBrowseScreen(
                     subtitle = null,
                     icon = Icons.Rounded.Category,
                     onClick = { onGenreClick(genre) },
+                    active = CollectionId.genre(genre) == activeCollectionId,
                     density = density,
                     onLongClick = {
                         longPressScope.launch {
@@ -188,6 +195,7 @@ fun GenresBrowseScreen(
 fun YearsBrowseScreen(
     onYearClick: (Int) -> Unit,
     onBack: () -> Unit,
+    activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
@@ -211,6 +219,7 @@ fun YearsBrowseScreen(
                     subtitle = null,
                     icon = Icons.Rounded.CalendarToday,
                     onClick = { onYearClick(year) },
+                    active = CollectionId.year(year) == activeCollectionId,
                     density = density,
                     onLongClick = {
                         longPressScope.launch {
@@ -316,6 +325,7 @@ fun FolderBrowseScreen(
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
     onBack: () -> Unit,
     activeTrackId: Long?,
+    activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
@@ -351,6 +361,7 @@ fun FolderBrowseScreen(
                     subtitle = "${folder.trackCount} tracks",
                     icon = Icons.Rounded.Folder,
                     onClick = { onFolderClick(folder.path) },
+                    active = CollectionId.folder(folder.path) == activeCollectionId,
                     density = density,
                     onLongClick = {
                         longPressScope.launch {
@@ -438,6 +449,7 @@ fun CollectionArtistsScreen(
     key: String,
     onArtistClick: (String) -> Unit,
     onBack: () -> Unit,
+    activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
@@ -462,6 +474,7 @@ fun CollectionArtistsScreen(
                     title = row.name,
                     subtitle = if (row.albumCount == 1) "1 album" else "${row.albumCount} albums",
                     onClick = { onArtistClick(row.name) },
+                    active = CollectionId.artist(row.name) == activeCollectionId,
                     density = density
                 )
             }
@@ -496,6 +509,7 @@ fun CollectionAlbumsScreen(
     key: String,
     onAlbumClick: (CollectionAlbumEntry) -> Unit,
     onBack: () -> Unit,
+    activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
@@ -523,6 +537,7 @@ fun CollectionAlbumsScreen(
                     subtitle = entry.artist,
                     imageUrl = entry.albumArtPath,
                     onClick = { onAlbumClick(entry) },
+                    active = CollectionId.album(entry.album) == activeCollectionId,
                     density = density
                 )
             }

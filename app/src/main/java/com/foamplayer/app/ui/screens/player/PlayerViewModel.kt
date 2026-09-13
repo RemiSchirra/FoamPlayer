@@ -57,8 +57,13 @@ class PlayerViewModel @Inject constructor(
 
     // Starting a list (library, playlist, search results, ...): keep the played
     // history, drop the upcoming main queue, and play the picked list next.
-    fun playQueueReplacingUpcoming(tracks: List<TrackEntity>, startIndex: Int) =
-        audioEngine.playListReplacingUpcoming(tracks, startIndex)
+    // [sourceCollectionId] marks the queue as started from that collection
+    // (PlaybackState.queueSourceId), which drives the active-collection highlight.
+    fun playQueueReplacingUpcoming(
+        tracks: List<TrackEntity>,
+        startIndex: Int,
+        sourceCollectionId: String? = null
+    ) = audioEngine.playListReplacingUpcoming(tracks, startIndex, sourceCollectionId)
 
     fun playTrackReplacingUpcoming(track: TrackEntity) =
         audioEngine.playListReplacingUpcoming(listOf(track), 0)

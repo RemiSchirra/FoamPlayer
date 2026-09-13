@@ -40,6 +40,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.ui.components.CollectionListItem
+import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.DensityOrganisationModal
 import com.foamplayer.app.ui.components.OrganisationMenuButton
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -52,6 +53,7 @@ fun ArtistDetailScreen(
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
+    activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
     viewModel: ArtistDetailViewModel = hiltViewModel()
@@ -119,6 +121,7 @@ fun ArtistDetailScreen(
                         subtitle = album.artist,
                         imageUrl = album.albumArtPath,
                         onClick = { onAlbumClick(album) },
+                        active = CollectionId.album(album.album) == activeCollectionId,
                         density = density,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
@@ -150,6 +153,7 @@ fun ArtistDetailScreen(
                         subtitle = album.artist,
                         imageUrl = album.albumArtPath,
                         onClick = { onAlbumClick(album) },
+                        active = CollectionId.album(album.album) == activeCollectionId,
                         density = density,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,

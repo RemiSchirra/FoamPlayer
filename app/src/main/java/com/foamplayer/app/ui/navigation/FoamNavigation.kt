@@ -65,6 +65,7 @@ import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.CollectionFoamModal
+import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.MiniPlayer
@@ -212,6 +213,13 @@ fun FoamNavHost(
     val collectionModalState = rememberCollectionFoamModalState()
 
     val playbackState by playerViewModel.playbackState.collectAsState()
+    // Id of the collection the queue was started from (null = bare track list).
+    // Highlighted only while the cursor is still inside that collection's own
+    // section of the queue: once playback moves past it (auxiliary pool,
+    // tracks queued afterwards, older history) nothing is highlighted.
+    val activeCollectionId = playbackState.queueSourceId?.takeIf {
+        playbackState.queueSourceFlags.getOrNull(playbackState.queueIndex) == true
+    }
     val playerSettings by playerViewModel.settings.collectAsState()
     val scoreOverrides by playerViewModel.scoreOverrides.collectAsState()
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
@@ -501,11 +509,19 @@ fun FoamNavHost(
                 }
 
                 Column(modifier = Modifier.fillMaxSize()) {
-                    fun playTrackFromList(tracks: List<com.foamplayer.app.data.db.entities.TrackEntity>, index: Int) {
+                    // [collectionId] marks the queue as started from a specific
+                    // collection (album/playlist/genre/year/folder screen) so
+                    // its row can be highlighted as the active one; bare track
+                    // lists (library, search) pass null and highlight nothing.
+                    fun playTrackFromList(
+                        tracks: List<com.foamplayer.app.data.db.entities.TrackEntity>,
+                        index: Int,
+                        collectionId: String? = null
+                    ) {
                         if (isAutoOpenPlayerEnabled) {
                             skipMiniPlayerTrackAnimation = true
                         }
-                        playerViewModel.playQueueReplacingUpcoming(tracks, index)
+                        playerViewModel.playQueueReplacingUpcoming(tracks, index, collectionId)
                         if (isAutoOpenPlayerEnabled) {
                             animatePlayerTransition(
                                 open = true,
@@ -617,6 +633,7 @@ fun FoamNavHost(
                                             },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
+                                            activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.PLAYLISTS),
                                             onDensityChange = { setDensity(MediaListView.PLAYLISTS, it) }
                                         )
@@ -663,6 +680,7 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
+                                            activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_ALBUMS),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_ALBUMS, it) }
                                         )
@@ -684,6 +702,7 @@ fun FoamNavHost(
                                                 navController.navigate(Screen.ArtistDetail.createRoute(artist))
                                             },
                                             onBack = { navController.popBackStack() },
+                                            activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_ARTISTS),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_ARTISTS, it) }
                                         )
@@ -694,6 +713,7 @@ fun FoamNavHost(
                                                 navController.navigate(Screen.BrowseGenreDetail.createRoute(genre))
                                             },
                                             onBack = { navController.popBackStack() },
+                                            activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_GENRES),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_GENRES, it) }
                                         )
@@ -704,6 +724,7 @@ fun FoamNavHost(
                                                 navController.navigate(Screen.BrowseYearDetail.createRoute(year))
                                             },
                                             onBack = { navController.popBackStack() },
+                                            activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_YEARS),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_YEARS, it) }
                                         )
@@ -716,7 +737,7 @@ fun FoamNavHost(
                                         GenreTracksScreen(
                                             genre = genre,
                                             onTrackClick = { tracks, index ->
-                                                playTrackFromList(tracks, index)
+                                                playTrackFromList(tracks, index, CollectionId.genre(genre))
                                             },
                                             onBack = { navController.popBackStack() },
                                             activeTrackId = playbackState.currentTrack?.id,
@@ -732,7 +753,7 @@ fun FoamNavHost(
                                         YearTracksScreen(
                                             year = year,
                                             onTrackClick = { tracks, index ->
-                                                playTrackFromList(tracks, index)
+                                                playTrackFromList(tracks, index, CollectionId.year(year))
                                             },
                                             onBack = { navController.popBackStack() },
                                             activeTrackId = playbackState.currentTrack?.id,
@@ -754,6 +775,7 @@ fun FoamNavHost(
                                                 navController.navigate(Screen.ArtistDetail.createRoute(artist))
                                             },
                                             onBack = { navController.popBackStack() },
+                                            activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_ARTISTS_IN),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_ARTISTS_IN, it) }
                                         )
@@ -778,6 +800,7 @@ fun FoamNavHost(
                                                 )
                                             },
                                             onBack = { navController.popBackStack() },
+                                            activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_ALBUMS_IN),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_ALBUMS_IN, it) }
                                         )
@@ -793,10 +816,11 @@ fun FoamNavHost(
                                                 navController.navigate(Screen.BrowseFolders.createRoute(folderPath))
                                             },
                                             onTrackClick = { tracks, index ->
-                                                playTrackFromList(tracks, index)
+                                                playTrackFromList(tracks, index, path?.let { CollectionId.folder(it) })
                                             },
                                             onBack = { navController.popBackStack() },
                                             activeTrackId = playbackState.currentTrack?.id,
+                                            activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_FOLDERS),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_FOLDERS, it) }
                                         )
@@ -869,6 +893,7 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
+                                            activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.ARTIST_DETAIL),
                                             onDensityChange = { setDensity(MediaListView.ARTIST_DETAIL, it) }
                                         )
@@ -889,7 +914,7 @@ fun FoamNavHost(
                                             initialImageUrl = artUrl,
                                             initialArtistName = artist,
                                             onTrackClick = { tracks, index ->
-                                                playTrackFromList(tracks, index)
+                                                playTrackFromList(tracks, index, CollectionId.album(albumName))
                                             },
                                             onBack = { navController.popBackStack() },
                                             sharedTransitionScope = this@SharedTransitionLayout,
@@ -916,7 +941,7 @@ fun FoamNavHost(
                                             initialName = initialName,
                                             initialImageUrl = initialImageUrl,
                                             onTrackClick = { tracks, index ->
-                                                playTrackFromList(tracks, index)
+                                                playTrackFromList(tracks, index, CollectionId.playlist(playlistId))
                                             },
                                             onBack = { navController.popBackStack() },
                                             sharedTransitionScope = this@SharedTransitionLayout,
