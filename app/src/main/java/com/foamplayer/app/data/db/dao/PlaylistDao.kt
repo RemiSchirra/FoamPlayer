@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.PlaylistTrackCrossRef
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -14,7 +15,7 @@ data class PlaylistTrackCount(val playlistId: Long, val trackCount: Int)
 
 @Dao
 interface PlaylistDao {
-    @Query("SELECT * FROM playlists ORDER BY name ASC")
+    @Query("SELECT * FROM playlists ORDER BY sortOrder ASC, name ASC")
     fun getAllPlaylists(): Flow<List<PlaylistEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -28,6 +29,20 @@ interface PlaylistDao {
 
     @Query("UPDATE playlists SET imageUrl = :imageUrl WHERE playlistId = :playlistId")
     suspend fun setPlaylistImage(playlistId: Long, imageUrl: String?)
+
+    @Query("SELECT COALESCE(MAX(sortOrder), -1) + 1 FROM playlists")
+    suspend fun nextPlaylistSortOrder(): Int
+
+    @Query("UPDATE playlists SET sortOrder = :sortOrder WHERE playlistId = :playlistId")
+    suspend fun setPlaylistSortOrder(playlistId: Long, sortOrder: Int)
+
+    /** Persists a full drag-and-drop reordering in one transaction (no intermediate emissions). */
+    @Transaction
+    suspend fun reorderPlaylists(orders: List<Pair<Long, Int>>) {
+        orders.forEach { (playlistId, sortOrder) ->
+            setPlaylistSortOrder(playlistId, sortOrder)
+        }
+    }
 
     @Query("""
         SELECT playlistId, COUNT(*) AS trackCount 

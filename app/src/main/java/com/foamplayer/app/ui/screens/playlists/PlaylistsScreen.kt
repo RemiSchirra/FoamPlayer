@@ -1,14 +1,24 @@
 package com.foamplayer.app.ui.screens.playlists
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,11 +31,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
@@ -40,17 +52,24 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -66,6 +85,8 @@ import com.foamplayer.app.ui.components.DensityOrganisationModal
 import com.foamplayer.app.ui.components.MediaGridCell
 import com.foamplayer.app.ui.components.MediaListRow
 import com.foamplayer.app.ui.components.activeRowHighlight
+import com.foamplayer.app.ui.components.rememberDragDropGridState
+import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -91,8 +112,61 @@ fun PlaylistsScreen(
 
     var showCreateModal by remember { mutableStateOf(false) }
     var showMoreModal by remember { mutableStateOf(false) }
-    // Edition mode placeholder — toggled by the pencil, nothing editable yet.
+    // Edition mode: toggled by the pencil — playlists wiggle and can be dragged
+    // around to reorder them.
     var isEditMode by remember { mutableStateOf(false) }
+
+    // In edit mode, back means "leave edit mode", not "leave the screen".
+    BackHandler(enabled = isEditMode) {
+        isEditMode = false
+    }
+
+    // Edit-mode drag & drop: a local display list absorbs the swaps live; the
+    // DB (and the Room flow) is only written once the drag ends. While a drag
+    // is in flight, incoming playlist emissions are ignored so they can't
+    // fight the reorder.
+    var displayedPlaylists by remember { mutableStateOf(playlists) }
+    var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
+    // True once the finger lifts: the item keeps flying to its slot (settle
+    // animation) but the lift scale already animates back down in parallel.
+    var dragReleased by remember { mutableStateOf(false) }
+    LaunchedEffect(playlists) {
+        if (dragOriginIndex == null) {
+            displayedPlaylists = playlists
+        }
+    }
+
+    // Plain (non-saveable) list states: the screen always opens at the top of
+    // the list instead of restoring a stale scroll position from the nav
+    // back stack (rememberLazyListState restores via rememberSaveable).
+    val lazyListState = remember { LazyListState() }
+    val lazyGridState = remember { LazyGridState() }
+
+    // The trailing spacer item must never take part in a swap.
+    val dragDropOnMove: (Int, Int) -> Unit = { from, to ->
+        displayedPlaylists = displayedPlaylists.toMutableList().apply {
+            add(to, removeAt(from))
+        }
+    }
+    val listDragState = rememberDragDropListState(
+        lazyListState = lazyListState,
+        canMove = { _, to -> to < displayedPlaylists.size },
+        onMove = dragDropOnMove
+    )
+    val gridDragState = rememberDragDropGridState(
+        gridState = lazyGridState,
+        canMove = { _, to -> to < displayedPlaylists.size },
+        onMove = dragDropOnMove
+    )
+
+    val wiggleModifier = rememberWiggleModifier(enabled = isEditMode)
+
+    // Persists the completed drag: the display list already holds the final
+    // order, so writing it back as the new sortOrder assignment is enough.
+    fun persistReorder(finalIndex: Int?, originIndex: Int?) {
+        if (originIndex == null || finalIndex == null || originIndex == finalIndex) return
+        viewModel.reorderPlaylists(displayedPlaylists.map { it.playlistId })
+    }
 
     // Long-press actions (edit image / rename / details / delete), hosted here
     // like the other screens host their long-press modals.
@@ -188,18 +262,78 @@ fun PlaylistsScreen(
         } else if (density.isGrid) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(density.gridColumns),
+                state = lazyGridState,
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(playlists, key = { it.playlistId }) { playlist ->
+                itemsIndexed(displayedPlaylists, key = { _, playlist -> playlist.playlistId }) { index, playlist ->
+                    val isDragging = gridDragState.isItemDragging(index)
+                    val currentIndex by rememberUpdatedState(index)
+                    val liftScale by animateFloatAsState(
+                        targetValue = if (isDragging && !dragReleased) DragLiftScale else 1f,
+                        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+                        label = "playlistDragLift"
+                    )
+
                     PlaylistItemRow(
                         playlist = playlist,
                         trackCount = trackCounts[playlist.playlistId] ?: 0,
-                        onClick = { onPlaylistClick(playlist) },
+                        onClick = { if (!isEditMode) onPlaylistClick(playlist) },
                         onLongClick = { playlistModalState.show(playlist) },
                         active = CollectionId.playlist(playlist.playlistId) == activeCollectionId,
+                        lifted = isDragging && !dragReleased,
                         density = density,
                         sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        modifier = Modifier
+                            .let { if (isDragging) it else it.animateItem() }
+                            .zIndex(if (isDragging) 1f else 0f)
+                            .graphicsLayer {
+                                val itemInfo = lazyGridState.layoutInfo.visibleItemsInfo
+                                    .firstOrNull { it.index == index }
+                                translationX = if (isDragging && itemInfo != null) {
+                                    (gridDragState.draggingItemOffset.x - itemInfo.offset.x).toFloat()
+                                } else {
+                                    0f
+                                }
+                                translationY = if (isDragging && itemInfo != null) {
+                                    (gridDragState.draggingItemOffset.y - itemInfo.offset.y).toFloat()
+                                } else {
+                                    0f
+                                }
+                                scaleX = liftScale
+                                scaleY = liftScale
+                            }
+                            .then(if (!isDragging) wiggleModifier else Modifier)
+                            .then(
+                                if (isEditMode) {
+                                    Modifier.playlistEditDrag(
+                                        playlistId = playlist.playlistId,
+                                        onDragStart = {
+                                            dragOriginIndex = currentIndex
+                                            dragReleased = false
+                                            gridDragState.onDragStart(currentIndex)
+                                        },
+                                        onDrag = gridDragState::onDrag,
+                                        onDragEnd = {
+                                            val to = gridDragState.draggedIndex
+                                            // Scale-down starts with the release; the
+                                            // settle animation flies the item to its slot.
+                                            dragReleased = true
+                                            gridDragState.onDragEnd()
+                                            persistReorder(to, dragOriginIndex)
+                                            dragOriginIndex = null
+                                        },
+                                        onDragCancel = {
+                                            dragReleased = true
+                                            gridDragState.onDragCancel()
+                                            dragOriginIndex = null
+                                            displayedPlaylists = playlists
+                                        }
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            )
                     )
                 }
 
@@ -208,21 +342,82 @@ fun PlaylistsScreen(
                 }
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(playlists, key = { it.playlistId }) { playlist ->
+            LazyColumn(
+                state = lazyListState,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                itemsIndexed(displayedPlaylists, key = { _, playlist -> playlist.playlistId }) { index, playlist ->
+                    val isDragging = listDragState.isItemDragging(index)
+                    val currentIndex by rememberUpdatedState(index)
+                    val liftScale by animateFloatAsState(
+                        targetValue = if (isDragging && !dragReleased) DragLiftScale else 1f,
+                        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+                        label = "playlistDragLift"
+                    )
+
                     PlaylistItemRow(
                         playlist = playlist,
                         trackCount = trackCounts[playlist.playlistId] ?: 0,
-                        onClick = { onPlaylistClick(playlist) },
+                        onClick = { if (!isEditMode) onPlaylistClick(playlist) },
                         onLongClick = { playlistModalState.show(playlist) },
                         active = CollectionId.playlist(playlist.playlistId) == activeCollectionId,
+                        lifted = isDragging && !dragReleased,
                         density = density,
                         sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        modifier = Modifier
+                            .let { if (isDragging) it else it.animateItem() }
+                            .zIndex(if (isDragging) 1f else 0f)
+                            .graphicsLayer {
+                                translationY = if (isDragging) {
+                                    val itemInfo = lazyListState.layoutInfo.visibleItemsInfo
+                                        .firstOrNull { it.index == index }
+                                    if (itemInfo != null) {
+                                        listDragState.draggingItemTop - itemInfo.offset
+                                    } else {
+                                        0f
+                                    }
+                                } else {
+                                    0f
+                                }
+                                scaleX = liftScale
+                                scaleY = liftScale
+                            }
+                            .then(if (!isDragging) wiggleModifier else Modifier)
+                            .then(
+                                if (isEditMode) {
+                                    Modifier.playlistEditDrag(
+                                        playlistId = playlist.playlistId,
+                                        onDragStart = {
+                                            dragOriginIndex = currentIndex
+                                            dragReleased = false
+                                            listDragState.onDragStart(currentIndex)
+                                        },
+                                        onDrag = listDragState::onDrag,
+                                        onDragEnd = {
+                                            val to = listDragState.draggedIndex
+                                            // Scale-down starts with the release; the
+                                            // settle animation flies the item to its slot.
+                                            dragReleased = true
+                                            listDragState.onDragEnd()
+                                            persistReorder(to, dragOriginIndex)
+                                            dragOriginIndex = null
+                                        },
+                                        onDragCancel = {
+                                            dragReleased = true
+                                            listDragState.onDragCancel()
+                                            dragOriginIndex = null
+                                            displayedPlaylists = playlists
+                                        }
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            )
                     )
                 }
 
-                item { Spacer(modifier = Modifier.height(80.dp)) }
+                item(key = "playlists_list_spacer") { Spacer(modifier = Modifier.height(80.dp)) }
             }
         }
     }
@@ -350,12 +545,22 @@ private fun PlaylistItemRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     active: Boolean = false,
+    lifted: Boolean = false,
     density: MediaDensity,
     sharedTransitionScope: SharedTransitionScope,
-    animatedVisibilityScope: AnimatedVisibilityScope
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val highlightBackground = activeRowHighlight(active, playlist.imageUrl, isEmbeddedArt = false)
+
+    // Elevation shadow under the cover while the row is lifted by a drag;
+    // animates in step with the lift scale.
+    val artworkElevation by animateDpAsState(
+        targetValue = if (lifted) DragArtworkElevation else 0.dp,
+        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+        label = "playlistArtworkElevation"
+    )
 
     @Composable
     fun Modifier.sharedArtwork(): Modifier = with(sharedTransitionScope) {
@@ -401,10 +606,12 @@ private fun PlaylistItemRow(
 
     if (density.isGrid) {
         MediaGridCell(
+            modifier = modifier,
             onClick = onClick,
             onLongClick = onLongClick,
             artworkModifier = Modifier
                 .sharedArtwork()
+                .shadow(elevation = artworkElevation, shape = AlbumArtShape())
                 .clip(AlbumArtShape())
                 .background(FoamTheme.colors.surfaceVariant),
             artworkContent = { PlaylistArtwork() },
@@ -415,10 +622,12 @@ private fun PlaylistItemRow(
         )
     } else {
         MediaListRow(
+            modifier = modifier,
             onClick = onClick,
             onLongClick = onLongClick,
             artworkModifier = Modifier
                 .sharedArtwork()
+                .shadow(elevation = artworkElevation, shape = AlbumArtShape())
                 .clip(AlbumArtShape())
                 .background(FoamTheme.colors.surfaceVariant),
             artworkContent = { PlaylistArtwork() },
@@ -429,4 +638,52 @@ private fun PlaylistItemRow(
             titleModifier = Modifier.sharedTitle()
         )
     }
+}
+
+/** Scale-up applied to a playlist while it is being dragged, for a "lifted" feel. */
+private const val DragLiftScale = 1.05f
+
+/** Shadow elevation given to a dragged playlist's cover while it is lifted. */
+private val DragArtworkElevation: Dp = 8.dp
+
+/**
+ * iOS-style wiggle for edit mode: a small infinite rotation around the item's
+ * center, shared by every visible playlist so they jitter in sync. Returns an
+ * empty modifier while edit mode is off.
+ */
+@Composable
+private fun rememberWiggleModifier(enabled: Boolean): Modifier {
+    if (!enabled) return Modifier
+
+    val wiggleTransition = rememberInfiniteTransition(label = "playlistWiggle")
+    val rotation by wiggleTransition.animateFloat(
+        initialValue = -1.6f,
+        targetValue = 1.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 130, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "playlistWiggleRotation"
+    )
+
+    return Modifier.graphicsLayer { rotationZ = rotation }
+}
+
+/** Whole-row drag gesture driving edit-mode reordering (swaps come from the drag-drop states). */
+private fun Modifier.playlistEditDrag(
+    playlistId: Long,
+    onDragStart: () -> Unit,
+    onDrag: (Offset) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit
+): Modifier = pointerInput(playlistId) {
+    detectDragGestures(
+        onDragStart = { onDragStart() },
+        onDrag = { change, dragAmount ->
+            change.consume()
+            onDrag(dragAmount)
+        },
+        onDragEnd = onDragEnd,
+        onDragCancel = onDragCancel
+    )
 }

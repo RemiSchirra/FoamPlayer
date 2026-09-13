@@ -19,7 +19,20 @@ class PlaylistRepository @Inject constructor(
         playlistDao.getTracksForPlaylist(playlistId)
 
     suspend fun createPlaylist(name: String, imageUrl: String? = null): Long =
-        playlistDao.createPlaylist(PlaylistEntity(name = name, imageUrl = imageUrl))
+        playlistDao.createPlaylist(
+            PlaylistEntity(
+                name = name,
+                imageUrl = imageUrl,
+                sortOrder = playlistDao.nextPlaylistSortOrder()
+            )
+        )
+
+    /** Persists a manual playlist ordering (edit-mode drag & drop). */
+    suspend fun reorderPlaylists(orderedPlaylistIds: List<Long>) {
+        playlistDao.reorderPlaylists(orderedPlaylistIds.mapIndexed { index, playlistId ->
+            playlistId to index
+        })
+    }
 
     suspend fun renamePlaylist(playlistId: Long, name: String) {
         playlistDao.renamePlaylist(playlistId, name)

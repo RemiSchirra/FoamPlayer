@@ -9,5 +9,7 @@ data class PlaylistEntity(
     val name: String,
     /** User-chosen cover image (content URI). Null = letter fallback. */
     val imageUrl: String? = null,
+    /** Manual ordering rank (edit-mode drag & drop); ties fall back to name order. */
+    val sortOrder: Int = 0,
     val createdAt: Long = System.currentTimeMillis()
 )

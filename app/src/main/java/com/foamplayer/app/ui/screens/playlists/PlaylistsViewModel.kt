@@ -107,6 +107,13 @@ class PlaylistsViewModel @Inject constructor(
         }
     }
 
+    /** Persists a drag-and-drop reordering done in edit mode. */
+    fun reorderPlaylists(orderedPlaylistIds: List<Long>) {
+        viewModelScope.launch {
+            playlistRepository.reorderPlaylists(orderedPlaylistIds)
+        }
+    }
+
     /** Track count + total duration of a playlist, for the modal's details page. */
     suspend fun playlistTrackStats(playlistId: Long): Pair<Int, Long> {
         val tracks = playlistRepository.getTracksForPlaylistOnce(playlistId).firstOrNull().orEmpty()
