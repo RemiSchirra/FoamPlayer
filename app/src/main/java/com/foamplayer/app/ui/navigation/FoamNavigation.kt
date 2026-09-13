@@ -104,7 +104,6 @@ import com.foamplayer.app.ui.screens.settings.AudioSettingsScreen
 import com.foamplayer.app.ui.screens.settings.BackgroundSettingsScreen
 import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
-import com.foamplayer.app.ui.screens.settings.LyricsProviderSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LyricsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.NavBarSettingsScreen
 import com.foamplayer.app.ui.screens.settings.PlayerSettingsScreen
@@ -863,13 +862,7 @@ fun FoamNavHost(
                                         LibrarySettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     composable(Screen.SettingsLyrics.route) {
-                                        LyricsSettingsScreen(
-                                            onBack = { navController.popBackStack() },
-                                            onNavigateToProviders = { navController.navigate(Screen.SettingsLyricsProvider.route) }
-                                        )
-                                    }
-                                    composable(Screen.SettingsLyricsProvider.route) {
-                                        LyricsProviderSettingsScreen(onBack = { navController.popBackStack() })
+                                        LyricsSettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     composable(Screen.SettingsTest.route) {
                                         TestSettingsScreen(onBack = { navController.popBackStack() })

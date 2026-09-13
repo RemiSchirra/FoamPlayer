@@ -13,6 +13,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import com.foamplayer.app.ui.components.FoamNavigationButton
@@ -21,9 +25,10 @@ import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
 fun LyricsSettingsScreen(
-    onBack: () -> Unit,
-    onNavigateToProviders: () -> Unit
+    onBack: () -> Unit
 ) {
+    var showProvidersModal by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -34,7 +39,7 @@ fun LyricsSettingsScreen(
             onBack = onBack,
             modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
         )
-        
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -53,11 +58,16 @@ fun LyricsSettingsScreen(
                 FoamNavigationButton(
                     title = "Lyrics Providers",
                     description = "Enable and reorder providers",
-                    onClick = onNavigateToProviders
+                    onClick = { showProvidersModal = true }
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
         }
     }
+
+    LyricsProvidersModal(
+        visible = showProvidersModal,
+        onDismiss = { showProvidersModal = false }
+    )
 }
