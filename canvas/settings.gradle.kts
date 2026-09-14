@@ -12,6 +12,7 @@ dependencyResolutionManagement {
     }
 }
 
+include(":core")
 include(":apple")
 include(":echomusic")
 include(":tidal")
