@@ -24,6 +24,10 @@ dependencyResolutionManagement {
 
 rootProject.name = "FoamPlayer"
 include(":app")
+include(":canvas:apple")
+include(":canvas:echomusic")
+include(":canvas:tidal")
+include(":canvas:vivimusic")
 include(":lyrics:betterlyrics")
 include(":lyrics:lrclib")
 include(":lyrics:kugou")

@@ -1,6 +1,7 @@
 [versions]
 agp = "9.0.1"
 kotlin = "2.4.10"
+kotlinxSerializationJson = "1.6.3"
 ksp = "2.3.9"
 hilt = "2.59.2"
 ktor = "3.5.2"
@@ -24,6 +25,7 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 lyrics-core = { module = "com.mocharealm.accompanist:lyrics-core", version.ref = "lyricsCore" }
 lyrics-ui = { module = "com.mocharealm.accompanist:lyrics-ui", version.ref = "lyricsUi" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
