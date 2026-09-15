@@ -80,6 +80,8 @@ fun FullPlayerScreen(
     val settings by viewModel.settings.collectAsState()
     val scoreOverrides by viewModel.scoreOverrides.collectAsState()
     val isImmersiveEnabled = settings.immersiveModeEnabled
+    val isAnimatedCoverEnabled = isImmersiveEnabled && settings.animatedCoverEnabled
+    val allowMobileDataForCanvas = settings.animatedCoverAllowMobileData
     val track = state.currentTrack ?: return
 
     var subViewMode by remember { mutableStateOf(SubViewMode.LYRICS) }
@@ -129,6 +131,31 @@ fun FullPlayerScreen(
     BackHandler(enabled = upTransitionState.currentState || upTransitionState.targetState) {
         gestureController.collapseToMainPlayer()
     }
+
+    // Animated canvas resolution: only for the immersive player, only while the
+    // feature setting is on. Keyed on the track so a pager skip cancels any
+    // in-flight fetch and resolves the new track's canvas instead; null keeps
+    // the video layer out of composition entirely (zero overhead when off).
+    var animatedCoverUrl by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(track.id, isAnimatedCoverEnabled, allowMobileDataForCanvas) {
+        // Cut any previous track's video at once: the backdrop's static-art
+        // crossfade takes over while the new canvas resolves, then fades in.
+        animatedCoverUrl = null
+        if (isAnimatedCoverEnabled) {
+            animatedCoverUrl = viewModel
+                .resolveAnimatedCover(track, allowMobileDataForCanvas)
+                ?.preferredAnimationUrl
+        }
+    }
+    // Composition-phase read: the SideEffect below runs outside snapshot
+    // observation, so this local is what re-runs it when the url resolves.
+    val currentAnimatedCoverUrl = animatedCoverUrl
+    // Playback gate: pauses only at the rest endpoints -- player fully closed
+    // to the mini player, or subview fully open. Transitions (subview drag,
+    // player close flight) keep playing; the surrounding layers fade the video
+    // out visually instead.
+    val isCanvasPlaying = (playerTransitionState.currentState || playerTransitionState.targetState) &&
+            !(upTransitionState.currentState && upTransitionState.targetState)
 
     val playerDrag = Modifier.draggable(
         state = rememberDraggableState { delta -> gestureController.onDrag(delta) },
@@ -382,6 +409,16 @@ fun FullPlayerScreen(
                         state.queue.getOrNull(backdropIndexB)?.albumArtPath
                     }
                 backdropState.immersive = isImmersiveEnabled
+                backdropState.canvasUrl = currentAnimatedCoverUrl
+                backdropState.canvasPlaying = isCanvasPlaying
+                backdropState.canvasSwipeFraction = {
+                    // Distance of the pager from the playing track's page,
+                    // direction-agnostic: the canvas fades out while the page
+                    // drags either way and returns when the drag settles back.
+                    val anchor = queueIndex.coerceAtLeast(0)
+                    val offset = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                    abs(offset - anchor).coerceIn(0f, 1f)
+                }
                 backdropState.crossfadeFraction = {
                     if (programmaticBackdropToPath != null && programmaticBackdropCrossfade.value < 1f) {
                         programmaticBackdropCrossfade.value

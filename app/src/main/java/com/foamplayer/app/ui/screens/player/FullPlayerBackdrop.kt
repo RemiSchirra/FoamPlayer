@@ -62,6 +62,12 @@ class FullPlayerBackdropState {
     var frontArtPath by mutableStateOf<String?>(null)
     var backArtPath by mutableStateOf<String?>(null)
     var immersive by mutableStateOf(false)
+    /** Resolved animated-canvas stream for the current track; null = static art only. */
+    var canvasUrl by mutableStateOf<String?>(null)
+    /** False while the video is hidden (subview up / player closing): playback pauses, frame stays. */
+    var canvasPlaying by mutableStateOf(false)
+    /** Draw-phase pager-drag fade: 0 = canvas fully visible, 1 = faded out (page fully swiped). */
+    var canvasSwipeFraction: () -> Float = { 0f }
     var crossfadeFraction: () -> Float = { 0f }
     var subViewBlurProgress: () -> Float = { 0f }
 }
@@ -231,7 +237,10 @@ internal fun AlbumArtBackdrop(
     intensity: Float,
     bottomFadeInset: Dp,
     modifier: Modifier = Modifier,
-    foregroundModifier: Modifier = Modifier
+    foregroundModifier: Modifier = Modifier,
+    canvasUrl: String? = null,
+    canvasPlaying: Boolean = false,
+    canvasSwipeFraction: () -> Float = { 0f }
 ) {
     if (immersive) {
         ImmersiveAlbumArtBackdrop(
@@ -241,7 +250,10 @@ internal fun AlbumArtBackdrop(
             subViewProgress = subViewProgress,
             bottomFadeInset = bottomFadeInset,
             modifier = modifier,
-            foregroundModifier = foregroundModifier
+            foregroundModifier = foregroundModifier,
+            canvasUrl = canvasUrl,
+            canvasPlaying = canvasPlaying,
+            canvasSwipeFraction = canvasSwipeFraction
         )
         return
     }
@@ -308,7 +320,10 @@ private fun ImmersiveAlbumArtBackdrop(
     subViewProgress: () -> Float,
     bottomFadeInset: Dp,
     modifier: Modifier = Modifier,
-    foregroundModifier: Modifier = Modifier
+    foregroundModifier: Modifier = Modifier,
+    canvasUrl: String? = null,
+    canvasPlaying: Boolean = false,
+    canvasSwipeFraction: () -> Float = { 0f }
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val sharpArtHeight = maxHeight * 0.55f
@@ -334,7 +349,21 @@ private fun ImmersiveAlbumArtBackdrop(
                     .fillMaxSize()
                     .graphicsLayer { alpha = 1f - subViewProgress() }
                     .fadeIntoBlur()
-            )
+            ) {
+                // Drawn inside the sharp pair's layer so it inherits the exact
+                // same subview fade and blur-blend mask as the static art; the
+                // swipe fraction fades it out in lock-step with a horizontal
+                // page drag, like the artwork crossfade underneath.
+                if (canvasUrl != null) {
+                    AnimatedCanvasArt(
+                        url = canvasUrl,
+                        playing = canvasPlaying,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = 1f - canvasSwipeFraction() }
+                    )
+                }
+            }
         }
         BackdropGradient(modifier = Modifier.padding(bottom = bottomFadeInset))
     }
@@ -379,7 +408,8 @@ private fun AlbumArtImagePair(
     frontArtPath: String?,
     backArtPath: String?,
     crossfadeFraction: () -> Float,
-    modifier: Modifier
+    modifier: Modifier,
+    canvas: (@Composable () -> Unit)? = null
 ) {
     val context = LocalContext.current
     fun request(path: String) = ImageRequest.Builder(context)
@@ -407,5 +437,6 @@ private fun AlbumArtImagePair(
                 contentScale = ContentScale.Crop
             )
         }
+        canvas?.invoke()
     }
 }

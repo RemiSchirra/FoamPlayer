@@ -7,10 +7,12 @@ import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
+import com.foamplayer.app.data.canvas.CanvasProvider
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.canvas.CanvasArtwork
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,7 +28,8 @@ import javax.inject.Inject
 class PlayerViewModel @Inject constructor(
     private val audioEngine: AudioEngine,
     private val settingsRepository: SettingsRepository,
-    private val trackRepository: TrackRepository
+    private val trackRepository: TrackRepository,
+    private val canvasProvider: CanvasProvider
 ) : ViewModel() {
 
     val playbackState: StateFlow<PlaybackState> = audioEngine.playbackState
@@ -79,6 +82,20 @@ class PlayerViewModel @Inject constructor(
     fun setDynamicAccentColor(color: Color?) {
         _dynamicAccentColor.value = color
     }
+
+    /**
+     * Animated-canvas artwork for [track]: first available provider wins
+     * (AppleMusic -> Tidal -> ViviMusic -> EchoMusic). Network access is gated
+     * by [allowMobileData] inside [CanvasProvider]; null when disabled, offline
+     * on a disallowed network, or when no provider has a canvas.
+     */
+    suspend fun resolveAnimatedCover(track: TrackEntity, allowMobileData: Boolean): CanvasArtwork? =
+        canvasProvider.getCanvas(
+            song = track.title,
+            artist = track.artist,
+            album = track.album,
+            allowMobileData = allowMobileData
+        )
 
     fun requestOpenPlayer() {
         _openPlayerRequested.value = true

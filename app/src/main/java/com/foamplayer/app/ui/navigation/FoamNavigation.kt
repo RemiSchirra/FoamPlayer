@@ -456,6 +456,9 @@ fun FoamNavHost(
                         backgroundBlur = playerSettings.backgroundBlur.dp,
                         intensity = playerSettings.playerBackgroundIntensity / 100f,
                         bottomFadeInset = playerBackdropFadeInset,
+                        canvasUrl = fullPlayerBackdropState.canvasUrl,
+                        canvasPlaying = fullPlayerBackdropState.canvasPlaying,
+                        canvasSwipeFraction = fullPlayerBackdropState.canvasSwipeFraction,
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer { alpha = playerBackdropAlpha() }
