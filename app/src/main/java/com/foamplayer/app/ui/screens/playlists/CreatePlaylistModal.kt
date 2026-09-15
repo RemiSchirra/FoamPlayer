@@ -88,9 +88,11 @@ data class MissingSongsUiState(
  * exclusive sources (.m3u file or device folder, each resettable) and a Create
  * button.
  *
- * [onCreate] receives the raw name (empty falls back to "New playlist" in the
- * ViewModel), the cover image URI if one was picked, plus whichever source URI
- * is set, or null when none is selected.
+ * [onCreate] receives the name (picking a source prefills the field with the
+ * source's name: the .m3u file name without extension, or the folder name;
+ * "New playlist" in the ViewModel if it was left empty), the cover image URI
+ * if one was picked, plus whichever source URI is set, or null when none is
+ * selected.
  */
 @Composable
 fun CreatePlaylistModal(
@@ -100,6 +102,7 @@ fun CreatePlaylistModal(
     modifier: Modifier = Modifier
 ) {
     var name by remember { mutableStateOf("") }
+    var autoName by remember { mutableStateOf<String?>(null) }
     var coverUri by remember { mutableStateOf<String?>(null) }
     var coverName by remember { mutableStateOf<String?>(null) }
     var m3uUri by remember { mutableStateOf<String?>(null) }
@@ -110,12 +113,22 @@ fun CreatePlaylistModal(
     LaunchedEffect(visible) {
         if (visible) {
             name = ""
+            autoName = null
             coverUri = null
             coverName = null
             m3uUri = null
             m3uName = null
             folderUri = null
             folderName = null
+        }
+    }
+
+    // Prefills the name field with the picked source's name, unless the user
+    // typed one; replaces a name that came from a previously picked source.
+    val prefillName: (String?) -> Unit = { default ->
+        if (!default.isNullOrBlank() && (name.isBlank() || name == autoName)) {
+            autoName = default
+            name = default
         }
     }
 
@@ -136,6 +149,7 @@ fun CreatePlaylistModal(
             }
             m3uUri = uri.toString()
             m3uName = queryDisplayName(context, uri) ?: uri.lastPathSegment
+            prefillName(m3uName?.substringBeforeLast('.'))
         }
     }
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -145,6 +159,7 @@ fun CreatePlaylistModal(
             }
             folderUri = uri.toString()
             folderName = folderDisplayName(uri)
+            prefillName(folderName?.substringAfterLast('/'))
         }
     }
 
@@ -220,7 +235,14 @@ fun CreatePlaylistModal(
             ModalButton(
                 label = stringResource(R.string.create),
                 filled = true,
-                onClick = { onCreate(name, m3uUri, folderUri, coverUri) }
+                onClick = {
+                    val defaultName = when {
+                        m3uUri != null -> m3uName?.substringBeforeLast('.')
+                        folderUri != null -> folderName?.substringAfterLast('/')
+                        else -> null
+                    }
+                    onCreate(name.trim().ifEmpty { defaultName.orEmpty() }, m3uUri, folderUri, coverUri)
+                }
             )
         }
     }
