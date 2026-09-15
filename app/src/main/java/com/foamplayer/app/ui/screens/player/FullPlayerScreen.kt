@@ -459,6 +459,7 @@ fun FullPlayerScreen(
                             subViewMode = subViewMode,
                             viewModel = viewModel,
                             headerVisibilityScope = this@AnimatedVisibility,
+                            headerArtAlpha = { if (isImmersiveEnabled) upTransitionState.progress() else 1f },
                             modifier = playerDrag,
                             onCollapse = { gestureController.collapseToMainPlayer() },
                             upTransitionState = upTransitionState

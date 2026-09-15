@@ -1102,6 +1102,13 @@ fun FoamNavHost(
                                 sharedTransitionScope = this@SharedTransitionLayout,
                                 animatedVisibilityScope = miniPlayerVisibilityScope,
                                 useSharedElements = trackListTransitionTrackId == null,
+                                sharedArtFlightAlpha = {
+                                    if (playerSettings.immersiveModeEnabled) {
+                                        1f - playerTransitionState.progress()
+                                    } else {
+                                        1f
+                                    }
+                                },
                                 isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                                 skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,
                                 showContainer = navigationBarMode != NavigationBarMode.ATTACHED,

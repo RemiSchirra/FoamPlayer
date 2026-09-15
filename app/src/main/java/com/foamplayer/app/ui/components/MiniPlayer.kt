@@ -198,6 +198,7 @@ fun MiniPlayer(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     useSharedElements: Boolean = true,
+    sharedArtFlightAlpha: () -> Float = { 1f },
     isAnimateSeekBarEnabled: Boolean = false,
     skipTrackChangeAnimation: Boolean = false,
     showContainer: Boolean = true,
@@ -513,10 +514,12 @@ fun MiniPlayer(
                                     .size(miniImageSize)
                                     .then(
                                         if (useSharedElements && isSettledCurrentTrackPage) {
-                                            Modifier.sharedElement(
-                                                rememberSharedContentState(key = "album_art_${track.id}"),
-                                                animatedVisibilityScope = animatedVisibilityScope
-                                            )
+                                            Modifier
+                                                .sharedElement(
+                                                    rememberSharedContentState(key = "album_art_${track.id}"),
+                                                    animatedVisibilityScope = animatedVisibilityScope
+                                                )
+                                                .graphicsLayer { alpha = sharedArtFlightAlpha() }
                                         } else Modifier
                                     )
                                     // The shared-element transition animates this corner radius

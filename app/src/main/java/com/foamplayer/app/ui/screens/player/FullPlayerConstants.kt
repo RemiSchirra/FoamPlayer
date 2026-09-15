@@ -70,3 +70,6 @@ internal fun SeekableTransitionState<Boolean>.progress(): Float =
     }
 
 internal const val TRANSITION_DURATION_MS = 300
+
+/** Fraction of the open/subview-close flight over which the immersive art fades out (hero side). */
+internal const val immersiveArtFadeSpan = 0.6f

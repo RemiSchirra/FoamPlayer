@@ -130,6 +130,7 @@ internal fun SharedTransitionScope.SubViewContent(
     subViewMode: SubViewMode,
     viewModel: PlayerViewModel,
     headerVisibilityScope: AnimatedVisibilityScope,
+    headerArtAlpha: () -> Float,
     modifier: Modifier,
     onCollapse: () -> Unit,
     upTransitionState: SeekableTransitionState<Boolean>
@@ -148,6 +149,7 @@ internal fun SharedTransitionScope.SubViewContent(
             MiniPlayerHeader(
                 track = track,
                 headerVisibilityScope = headerVisibilityScope,
+                headerArtAlpha = headerArtAlpha,
                 onBack = onCollapse,
                 upTransitionState = upTransitionState
             )
@@ -176,6 +178,7 @@ internal fun SharedTransitionScope.SubViewContent(
 private fun SharedTransitionScope.MiniPlayerHeader(
     track: TrackEntity,
     headerVisibilityScope: AnimatedVisibilityScope,
+    headerArtAlpha: () -> Float,
     onBack: () -> Unit,
     upTransitionState: SeekableTransitionState<Boolean>
 ) {
@@ -241,6 +244,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                         .graphicsLayer {
                             shape = RoundedCornerShape(imageRadiusPx())
                             clip = true
+                            alpha = headerArtAlpha()
                         }
                         .background(FoamTheme.colors.surfaceVariant)
                 ) {
