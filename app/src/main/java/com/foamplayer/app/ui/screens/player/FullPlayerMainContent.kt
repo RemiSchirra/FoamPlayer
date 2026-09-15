@@ -3,6 +3,7 @@ package com.foamplayer.app.ui.screens.player
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.background
@@ -188,8 +189,20 @@ internal fun SharedTransitionScope.TrackHeroPager(
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
 
     fun animatedCornerRadiusPx(): Float = with(density) {
-        val outerRadius = lerp(start = miniRadius, stop = fullRadius, fraction = playerTransitionState.progress())
-        val headerRadius = lerp(start = fullRadius, stop = miniRadius, fraction = upTransitionState.progress())
+        val rawOuter = playerTransitionState.progress().coerceIn(0f, 1f)
+        val outerFraction = if (playerTransitionState.targetState) {
+            EaseOutCubic.transform(rawOuter)
+        } else {
+            EaseInCubic.transform(rawOuter)
+        }
+        val outerRadius = lerp(start = miniRadius, stop = fullRadius, fraction = outerFraction)
+        val rawHeader = upTransitionState.progress().coerceIn(0f, 1f)
+        val headerFraction = if (upTransitionState.targetState) {
+            EaseOutCubic.transform(rawHeader)
+        } else {
+            EaseInCubic.transform(rawHeader)
+        }
+        val headerRadius = lerp(start = fullRadius, stop = miniRadius, fraction = headerFraction)
         min(outerRadius, headerRadius).toPx()
     }
 

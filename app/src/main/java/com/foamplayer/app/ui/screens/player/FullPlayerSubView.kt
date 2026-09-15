@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.fadeIn
@@ -193,30 +194,42 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     // blocks below, so the subview drag animates the corner radii per frame without
     // recomposing this header (which used to re-run on every drag frame just to
     // rebuild a RoundedCornerShape for .clip()).
+    // The overlay records the shared element layer at the interpolated bounds each
+    // frame, so this radius lives in that changing coordinate space: it has to lerp
+    // from the hero-end full radius down to this header's mini radius, eased in the
+    // direction of travel to keep pace with the fast-start spring bounds. A constant
+    // mini radius here goes nearly square the moment the interpolated bounds exceed
+    // the header's 48dp.
     val density = LocalDensity.current
     val miniRadiusPx = with(density) { miniRadius.toPx() }
     val fullRadiusPx = with(density) { fullRadius.toPx() }
     val imageRadiusPx = remember(miniRadiusPx, fullRadiusPx, upTransitionState) {
         {
+            val raw = upTransitionState.progress().coerceIn(0f, 1f)
+            val fraction = if (upTransitionState.targetState) {
+                EaseOutCubic.transform(raw)
+            } else {
+                EaseInCubic.transform(raw)
+            }
             lerpFloat(
                 start = fullRadiusPx,
                 stop = miniRadiusPx,
-                fraction = EaseOutCubic.transform(upTransitionState.progress())
+                fraction = fraction
             )
         }
     }
-    val containerPadding = 8.dp
-    val containerPaddingPx = with(density) { containerPadding.toPx() }
-    val containerRadiusPx = remember(imageRadiusPx, containerPaddingPx) {
-        { imageRadiusPx() + containerPaddingPx }
-    }
+    // The container is not a shared element (it only slides/fades with the header), so its
+    // rounding stays fixed at the resting art-radius + padding relationship -- the same
+    // formula as the bottom mini player's container -- instead of chasing the animated
+    // shared-element radius during the flight.
+    val containerRadius = miniRadius + 8.dp
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 12.dp)
             .graphicsLayer {
-                shape = RoundedCornerShape(containerRadiusPx())
+                shape = RoundedCornerShape(containerRadius)
                 clip = true
             }
             .background(Color.Black.copy(alpha = 0.2f))
