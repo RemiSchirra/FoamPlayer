@@ -54,7 +54,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -265,6 +267,15 @@ internal fun PlaylistNameField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default
 ) {
+    // BasicTextField's String overload drops the caret at index 0 when focus
+    // is requested programmatically (the rename sheet), so the selection is
+    // tracked explicitly and restored to the end whenever the text is set
+    // from outside (prefill / re-open).
+    var textFieldValue by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    if (textFieldValue.text != value) {
+        textFieldValue = TextFieldValue(value, TextRange(value.length))
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -280,8 +291,11 @@ internal fun PlaylistNameField(
             )
         }
         BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
+            value = textFieldValue,
+            onValueChange = {
+                textFieldValue = it
+                onValueChange(it.text)
+            },
             textStyle = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
             cursorBrush = SolidColor(FoamTheme.accentColor),
             keyboardOptions = keyboardOptions,
