@@ -36,6 +36,9 @@ data class AppSettings(
     val immersiveModeEnabled: Boolean = true,
     val animateSeekBarEnabled: Boolean = false,
     val autoOpenPlayerEnabled: Boolean = false,
+    /** Animated (canvas) album cover in the immersive full player; the sub-toggle allows mobile data. */
+    val animatedCoverEnabled: Boolean = false,
+    val animatedCoverAllowMobileData: Boolean = false,
     val dynamicBackgroundEnabled: Boolean = false,
     val backgroundBlur: Int = DEFAULT_BACKGROUND_BLUR,
     val appBackgroundIntensity: Int = DEFAULT_APP_BACKGROUND_INTENSITY,

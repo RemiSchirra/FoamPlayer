@@ -40,6 +40,8 @@ fun PlayerSettingsScreen(
     val isImmersiveEnabled = settings.immersiveModeEnabled
     val isAnimateSeekBarEnabled = settings.animateSeekBarEnabled
     val isAutoOpenPlayerEnabled = settings.autoOpenPlayerEnabled
+    val isAnimatedCoverEnabled = settings.animatedCoverEnabled
+    val isAnimatedCoverAllowMobileData = settings.animatedCoverAllowMobileData
 
     LaunchedEffect(miniRounding) { localMiniRounding = miniRounding.toFloat() }
     LaunchedEffect(fullRounding) { localFullRounding = fullRounding.toFloat() }
@@ -107,6 +109,32 @@ fun PlayerSettingsScreen(
                             checked = isAnimateSeekBarEnabled,
                             onCheckedChange = { viewModel.setAnimateSeekBarEnabled(it) }
                         )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(FoamDimens.separatorHeight)
+                                .background(FoamTheme.colors.borderOverlay)
+                        )
+                        FoamSwitchItem(
+                            title = "Animated Album Cover",
+                            description = "Animated artwork in the immersive player",
+                            checked = isAnimatedCoverEnabled,
+                            onCheckedChange = { viewModel.setAnimatedCoverEnabled(it) }
+                        )
+                        if (isAnimatedCoverEnabled) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(FoamDimens.separatorHeight)
+                                    .background(FoamTheme.colors.borderOverlay)
+                            )
+                            FoamSwitchItem(
+                                title = "Allow Mobile Data",
+                                description = "Load animated covers on mobile data, not Wi-Fi only",
+                                checked = isAnimatedCoverAllowMobileData,
+                                onCheckedChange = { viewModel.setAnimatedCoverAllowMobileData(it) }
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))

@@ -50,6 +50,10 @@ class SettingsViewModel @Inject constructor(
     fun setImmersiveModeEnabled(enabled: Boolean) = launch { settingsRepository.setImmersiveModeEnabled(enabled) }
     fun setAnimateSeekBarEnabled(enabled: Boolean) = launch { settingsRepository.setAnimateSeekBarEnabled(enabled) }
     fun setAutoOpenPlayerEnabled(enabled: Boolean) = launch { settingsRepository.setAutoOpenPlayerEnabled(enabled) }
+    fun setAnimatedCoverEnabled(enabled: Boolean) = launch { settingsRepository.setAnimatedCoverEnabled(enabled) }
+    fun setAnimatedCoverAllowMobileData(enabled: Boolean) = launch {
+        settingsRepository.setAnimatedCoverAllowMobileData(enabled)
+    }
     fun setDynamicBackgroundEnabled(enabled: Boolean) = launch { settingsRepository.setDynamicBackgroundEnabled(enabled) }
     fun setBackgroundBlur(blur: Int) = launch { settingsRepository.setBackgroundBlur(blur) }
     fun setAppBackgroundIntensity(intensity: Int) = launch {

@@ -56,6 +56,10 @@ class SettingsRepository @Inject constructor(
     suspend fun setImmersiveModeEnabled(enabled: Boolean) = update { it.copy(immersiveModeEnabled = enabled) }
     suspend fun setAnimateSeekBarEnabled(enabled: Boolean) = update { it.copy(animateSeekBarEnabled = enabled) }
     suspend fun setAutoOpenPlayerEnabled(enabled: Boolean) = update { it.copy(autoOpenPlayerEnabled = enabled) }
+    suspend fun setAnimatedCoverEnabled(enabled: Boolean) = update { it.copy(animatedCoverEnabled = enabled) }
+    suspend fun setAnimatedCoverAllowMobileData(enabled: Boolean) = update {
+        it.copy(animatedCoverAllowMobileData = enabled)
+    }
     suspend fun setDynamicBackgroundEnabled(enabled: Boolean) = update { it.copy(dynamicBackgroundEnabled = enabled) }
     suspend fun setBackgroundBlur(blur: Int) = update { it.copy(backgroundBlur = blur) }
     suspend fun setAppBackgroundIntensity(intensity: Int) = update {
@@ -129,6 +133,9 @@ class SettingsRepository @Inject constructor(
         immersiveModeEnabled = this[Keys.IMMERSIVE_MODE] ?: AppSettings().immersiveModeEnabled,
         animateSeekBarEnabled = this[Keys.ANIMATE_SEEK_BAR] ?: AppSettings().animateSeekBarEnabled,
         autoOpenPlayerEnabled = this[Keys.AUTO_OPEN_PLAYER] ?: AppSettings().autoOpenPlayerEnabled,
+        animatedCoverEnabled = this[Keys.ANIMATED_COVER_ENABLED] ?: AppSettings().animatedCoverEnabled,
+        animatedCoverAllowMobileData = this[Keys.ANIMATED_COVER_ALLOW_MOBILE_DATA]
+            ?: AppSettings().animatedCoverAllowMobileData,
         dynamicBackgroundEnabled = this[Keys.DYNAMIC_BACKGROUND] ?: AppSettings().dynamicBackgroundEnabled,
         backgroundBlur = this[Keys.BACKGROUND_BLUR] ?: AppSettings().backgroundBlur,
         appBackgroundIntensity = this[Keys.APP_BACKGROUND_INTENSITY]
@@ -175,6 +182,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.IMMERSIVE_MODE] = settings.immersiveModeEnabled
         this[Keys.ANIMATE_SEEK_BAR] = settings.animateSeekBarEnabled
         this[Keys.AUTO_OPEN_PLAYER] = settings.autoOpenPlayerEnabled
+        this[Keys.ANIMATED_COVER_ENABLED] = settings.animatedCoverEnabled
+        this[Keys.ANIMATED_COVER_ALLOW_MOBILE_DATA] = settings.animatedCoverAllowMobileData
         this[Keys.DYNAMIC_BACKGROUND] = settings.dynamicBackgroundEnabled
         this[Keys.BACKGROUND_BLUR] = settings.backgroundBlur
         this[Keys.APP_BACKGROUND_INTENSITY] = settings.appBackgroundIntensity
@@ -207,6 +216,8 @@ class SettingsRepository @Inject constructor(
         val IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
         val ANIMATE_SEEK_BAR = booleanPreferencesKey("animate_seek_bar")
         val AUTO_OPEN_PLAYER = booleanPreferencesKey("auto_open_player")
+        val ANIMATED_COVER_ENABLED = booleanPreferencesKey("animated_cover_enabled")
+        val ANIMATED_COVER_ALLOW_MOBILE_DATA = booleanPreferencesKey("animated_cover_allow_mobile_data")
         val DYNAMIC_BACKGROUND = booleanPreferencesKey("dynamic_background")
         val BACKGROUND_BLUR = intPreferencesKey("background_blur")
         val DYNAMIC_BACKGROUND_INTENSITY = intPreferencesKey("dynamic_background_intensity")
