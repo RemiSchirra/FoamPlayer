@@ -38,7 +38,12 @@ private enum class LyricsViewState { LOADING, INSTRUMENTAL, NO_LYRICS, CONTENT }
 @Composable
 fun LyricsScreen(
     viewModel: LyricsViewModel = hiltViewModel(),
-    backgroundColor: Color = FoamTheme.colors.background
+    backgroundColor: Color = FoamTheme.colors.background,
+    // Vertical collapse-drag for the states that render no scrollable (loading,
+    // instrumental, "Lyrics not found"): nested-scroll overscroll from the lyrics
+    // list is what powers swipe-back-to-full-player, and these states have no list
+    // to produce it, so they need the drag wired directly.
+    dragModifier: Modifier = Modifier
 ) {
     val rawLyrics by viewModel.lyrics.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
@@ -85,8 +90,12 @@ fun LyricsScreen(
         ) { state ->
             // Full-size centering container per state: every child (spinner,
             // icon, texts) is centered on screen regardless of its own size.
+            // The collapse drag only attaches to non-scrollable states -- CONTENT
+            // keeps relying on nested-scroll overscroll from the lyrics list.
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (state != LyricsViewState.CONTENT) dragModifier else Modifier),
                 contentAlignment = Alignment.Center
             ) {
                 when (state) {
@@ -130,6 +139,7 @@ fun LyricsScreen(
                             isPlaying = isPlaying,
                             onSeek = viewModel::seekTo,
                             lyrics = rawLyrics,
+                            dragModifier = dragModifier,
                             modifier = Modifier.fillMaxSize()
                         )
                     }

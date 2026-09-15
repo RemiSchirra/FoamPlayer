@@ -204,7 +204,12 @@ internal fun SharedTransitionScope.SubViewContent(
                 label = "SubViewContent"
             ) { mode ->
                 when (mode) {
-                    SubViewMode.LYRICS -> LyricsScreen(backgroundColor = Color.Transparent)
+                    SubViewMode.LYRICS -> LyricsScreen(
+                        backgroundColor = Color.Transparent,
+                        // Same collapse-drag as the header: keeps swipe-back working in the
+                        // lyrics states that render no scrollable (loading / not found).
+                        dragModifier = modifier
+                    )
                     SubViewMode.QUEUE -> QueueScreen(viewModel = viewModel, showTitle = false, backgroundColor = Color.Transparent)
                 }
             }

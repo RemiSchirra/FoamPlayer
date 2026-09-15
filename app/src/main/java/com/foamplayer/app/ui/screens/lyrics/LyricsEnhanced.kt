@@ -160,6 +160,11 @@ fun LyricsEnhanced(
     lyricsLineBlurOverride: Boolean? = null,
     isReadyToParse: Boolean = true,
     lazyListState: LazyListState? = null,
+    // Vertical collapse-drag, applied only to the non-scrollable placeholder states
+    // (spinner / "Lyrics not found"): those branches render no scrollable, so no
+    // nested-scroll overscroll can ever bubble up to the player's connection and the
+    // swipe-back needs a direct drag handler. The scrollable branches are left alone.
+    dragModifier: Modifier = Modifier,
     lyrics: String?
 ) {
     val context = LocalContext.current
@@ -604,13 +609,19 @@ fun LyricsEnhanced(
     ) {
         when {
             isPreparingLyrics -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxSize().then(dragModifier),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator(color = FoamTheme.accentColor)
                 }
             }
 
             lyrics == LYRICS_NOT_FOUND -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxSize().then(dragModifier),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
                         text = "Lyrics not found",
                         style = FoamTheme.typography.titleMedium,
@@ -621,7 +632,10 @@ fun LyricsEnhanced(
             }
 
             isSynced && syncedLyrics.lines.isEmpty() -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxSize().then(dragModifier),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
                         text = "Lyrics not found",
                         style = FoamTheme.typography.titleMedium,
@@ -632,7 +646,10 @@ fun LyricsEnhanced(
             }
 
             !isSynced && plainLyrics.items.isEmpty() -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxSize().then(dragModifier),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
                         text = "Lyrics not found",
                         style = FoamTheme.typography.titleMedium,
