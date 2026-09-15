@@ -6,13 +6,17 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imeAnimationTarget
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,6 +38,7 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +56,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
@@ -144,7 +150,7 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
     onArtistClick: (String) -> Unit,
@@ -167,6 +173,19 @@ fun SearchScreen(
     val uiState by searchViewModel.uiState.collectAsState()
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val density = LocalDensity.current
+    // Track where the keyboard is *going* rather than where it is: the IME animation
+    // target flips to 0 the moment the hide starts, while ime visibility only updates
+    // once the hide animation has fully completed. Clearing on the target keeps the
+    // caret from blinking over the idle browse cards during the keyboard animation.
+    val imeTargetBottom = WindowInsets.imeAnimationTarget.getBottom(density)
+
+    // Compose keeps the text field focused after the keyboard is dismissed, so drop
+    // focus explicitly to stop the caret from blinking over the idle browse cards.
+    LaunchedEffect(imeTargetBottom) {
+        if (imeTargetBottom == 0) focusManager.clearFocus()
+    }
 
     Column(
         modifier = Modifier
