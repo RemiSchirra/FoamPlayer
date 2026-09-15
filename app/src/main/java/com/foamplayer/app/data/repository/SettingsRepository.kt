@@ -28,6 +28,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 @Singleton
@@ -72,6 +73,26 @@ class SettingsRepository @Inject constructor(
     suspend fun removeFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders - path) }
     suspend fun setArtistSeparators(separators: Set<String>) = update { it.copy(artistSeparators = separators) }
     suspend fun setGenreSeparators(separators: Set<String>) = update { it.copy(genreSeparators = separators) }
+
+    /**
+     * Separator sets that produced the current track cache, or null before the
+     * first scan. Tracked separately from the live settings so the scanner can
+     * reuse previously extracted metadata only when the transformation rules
+     * (artist/genre separators) have not changed since.
+     */
+    suspend fun getLastScanSeparators(): Pair<Set<String>, Set<String>>? {
+        val preferences = dataStore.data.first()
+        val artist = preferences[Keys.LAST_ARTIST_SEPARATORS] ?: return null
+        val genre = preferences[Keys.LAST_GENRE_SEPARATORS] ?: return null
+        return artist to genre
+    }
+
+    suspend fun markScanSeparators(artist: Set<String>, genre: Set<String>) {
+        dataStore.edit { preferences ->
+            preferences[Keys.LAST_ARTIST_SEPARATORS] = artist
+            preferences[Keys.LAST_GENRE_SEPARATORS] = genre
+        }
+    }
 
     suspend fun setLyricsProviderOrder(order: List<PreferredLyricsProvider>) = update {
         it.copy(lyricsProviderOrder = order)
@@ -211,6 +232,8 @@ class SettingsRepository @Inject constructor(
         val FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")
         val ARTIST_SEPARATORS = stringSetPreferencesKey("artist_separators")
         val GENRE_SEPARATORS = stringSetPreferencesKey("genre_separators")
+        val LAST_ARTIST_SEPARATORS = stringSetPreferencesKey("last_scan_artist_separators")
+        val LAST_GENRE_SEPARATORS = stringSetPreferencesKey("last_scan_genre_separators")
         val AUTOMATIC_COLOR = booleanPreferencesKey("automatic_color")
         val ACCENT_COLOR = intPreferencesKey("accent_color")
         val IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")

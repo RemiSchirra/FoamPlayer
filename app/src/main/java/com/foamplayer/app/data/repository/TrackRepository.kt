@@ -69,6 +69,19 @@ class TrackRepository @Inject constructor(
         startScan(folders)
     }
 
+    /**
+     * Previous scan results that are still valid: only when the separator
+     * settings are unchanged (they transform the extracted strings) can files
+     * with an unchanged size skip metadata re-extraction entirely.
+     */
+    private suspend fun reusableTracks(artistSeps: Set<String>, genreSeps: Set<String>): Map<String, TrackEntity> {
+        val lastSeps = settingsRepository.getLastScanSeparators()
+        if (lastSeps == null || lastSeps.first != artistSeps || lastSeps.second != genreSeps) {
+            return emptyMap()
+        }
+        return trackDao.getAllTracksOnce().associateBy { it.path }
+    }
+
     suspend fun startScan(folders: Set<String>) {
         if (folders.isEmpty()) {
             _scanStatus.value = ScanStatus.Finished(0)
@@ -78,11 +91,13 @@ class TrackRepository @Inject constructor(
         val settings = settingsRepository.settings.first()
         val artistSeps = settings.artistSeparators
         val genreSeps = settings.genreSeparators
+        val knownTracks = reusableTracks(artistSeps, genreSeps)
 
         _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
-        val scannedTracks = scanner.scanFoldersSync(folders, artistSeps, genreSeps) { progress, currentFile ->
+        val scannedTracks = scanner.scanFoldersSync(folders, artistSeps, genreSeps, knownTracks) { progress, currentFile ->
             _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
         }
+        settingsRepository.markScanSeparators(artistSeps, genreSeps)
 
         // insertTracks() replaces rows on conflict, which would wipe the listen
         // stats and score: re-attach the existing ones to the freshly scanned entities.
@@ -109,11 +124,13 @@ class TrackRepository @Inject constructor(
         val settings = settingsRepository.settings.first()
         val artistSeps = settings.artistSeparators
         val genreSeps = settings.genreSeparators
+        val knownTracks = reusableTracks(artistSeps, genreSeps)
 
         _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
-        val scannedTracks = scanner.scanFoldersSync(setOf(folder), artistSeps, genreSeps) { progress, currentFile ->
+        val scannedTracks = scanner.scanFoldersSync(setOf(folder), artistSeps, genreSeps, knownTracks) { progress, currentFile ->
             _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
         }
+        settingsRepository.markScanSeparators(artistSeps, genreSeps)
 
         val existingStats = trackDao.getPlayStats().associateBy { it.path }
         val mergedTracks = scannedTracks.map { scanned ->

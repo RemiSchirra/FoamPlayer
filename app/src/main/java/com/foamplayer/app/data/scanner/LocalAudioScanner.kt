@@ -7,12 +7,16 @@ import android.provider.DocumentsContract
 import com.foamplayer.app.data.db.entities.TrackEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,21 +26,135 @@ sealed class ScanStatus {
     data class Finished(val count: Int) : ScanStatus()
 }
 
+/** An audio file found during enumeration, with its size already resolved. */
+private data class FoundAudioFile(val uri: Uri, val name: String, val size: Long)
+
 @Singleton
 class LocalAudioScanner @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val extensions = listOf("mp3", "flac", "wav", "m4a", "ogg", "aac", "m4b", "opus")
+    private val scanDispatcher = Dispatchers.IO.limitedParallelism(SCAN_PARALLELISM)
 
+    /**
+     * Scans [folderPaths] and extracts metadata for every audio file found.
+     * When [knownTracks] contains a track for a file's URI with an unchanged
+     * size, it is reused as-is instead of re-reading the file — pass the
+     * previous scan's entities to make rescans incremental, or an empty map to
+     * force a full extraction. NOTE: callers must not reuse entries produced
+     * with different [artistSeparators]/[genreSeparators], since those
+     * transform the extracted strings.
+     */
     suspend fun scanFoldersSync(
         folderPaths: Set<String>,
         artistSeparators: Set<String>,
         genreSeparators: Set<String>,
+        knownTracks: Map<String, TrackEntity> = emptyMap(),
         onProgress: (Float, String) -> Unit
     ): List<TrackEntity> = withContext(Dispatchers.IO) {
-        val allTracks = mutableListOf<TrackEntity>()
-        val foundFiles = mutableListOf<Pair<Uri, String>>()
+        val foundFiles = collectAudioFiles(folderPaths, onProgress)
+        if (foundFiles.isEmpty()) return@withContext emptyList<TrackEntity>()
 
+        val total = foundFiles.size
+        val results = arrayOfNulls<TrackEntity>(total)
+        val freshTrack = BooleanArray(total)
+        val processed = AtomicInteger(0)
+
+        // Metadata extraction is I/O + header parsing bound: run it on a bounded
+        // worker pool instead of one file at a time. Each file gets its own
+        // MediaMetadataRetriever (not thread-safe, released right after use).
+        coroutineScope {
+            foundFiles.forEachIndexed { index, file ->
+                launch(scanDispatcher) {
+                    val cached = knownTracks[file.uri.toString()]?.takeIf { it.size == file.size }
+                    if (cached == null) {
+                        val retriever = MediaMetadataRetriever()
+                        try {
+                            results[index] = try {
+                                extractMetadataFromUri(file, retriever, artistSeparators, genreSeparators)
+                            } catch (_: Exception) {
+                                createFallbackTrack(file.uri, file.name, file.size)
+                            }
+                        } finally {
+                            runCatching { retriever.release() }
+                        }
+                    } else {
+                        results[index] = cached
+                    }
+                    freshTrack[index] = cached == null
+                    val done = processed.incrementAndGet()
+                    if (done % 5 == 0 || done == total) {
+                        onProgress(done.toFloat() / total, file.name)
+                    }
+                }
+            }
+        }
+
+        // Embedded art is effectively per album: probing retriever.embeddedPicture
+        // decodes the whole cover image, so probe one representative file per album
+        // of freshly extracted tracks and apply the verdict to all of its tracks.
+        val artByAlbum = HashMap<String, Boolean>()
+        val freshTracks = results.mapIndexedNotNull { index, track -> track?.takeIf { freshTrack[index] } }
+        coroutineScope {
+            freshTracks.groupBy { it.album }.forEach { (album, albumTracks) ->
+                launch(scanDispatcher) {
+                    val hasArt = albumHasEmbeddedArt(albumTracks.first())
+                    synchronized(artByAlbum) { artByAlbum[album] = hasArt }
+                }
+            }
+        }
+
+        // Reused entries keep their previously stored albumArtPath untouched.
+        results.mapIndexed { index, track ->
+            when {
+                track == null -> null
+                !freshTrack[index] -> track
+                artByAlbum[track.album] == true -> track.copy(albumArtPath = track.path)
+                else -> track.copy(albumArtPath = null)
+            }
+        }.filterNotNull()
+    }
+
+    /** Lists the audio files under the given folders (recursive) without reading any metadata. */
+    suspend fun listAudioFiles(folderPaths: Set<String>): List<Pair<Uri, String>> = withContext(Dispatchers.IO) {
+        collectAudioFiles(folderPaths) { _, _ -> }.map { it.uri to it.name }
+    }
+
+    /** Reads only the title/album tags of the given audio files (no full scan), keyed by URI. */
+    suspend fun readTitlesAlbums(uris: List<Uri>): Map<Uri, Pair<String, String>> = withContext(Dispatchers.IO) {
+        if (uris.isEmpty()) return@withContext emptyMap()
+        val result = ConcurrentHashMap<Uri, Pair<String, String>>()
+        coroutineScope {
+            uris.forEach { uri ->
+                launch(scanDispatcher) {
+                    // A fresh retriever per file: a failed setDataSource can leave the
+                    // instance in a bad state that would poison all subsequent files.
+                    val retriever = MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(context, uri)
+                        val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?.trim()
+                        if (!title.isNullOrEmpty()) {
+                            val album = retriever
+                                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+                                ?.trim().orEmpty()
+                            result[uri] = title to album
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    } finally {
+                        runCatching { retriever.release() }
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    private suspend fun collectAudioFiles(
+        folderPaths: Set<String>,
+        onProgress: (Float, String) -> Unit
+    ): List<FoundAudioFile> = withContext(Dispatchers.IO) {
+        val foundFiles = mutableListOf<FoundAudioFile>()
         folderPaths.forEach { pathString ->
             try {
                 val rootUri = Uri.parse(pathString)
@@ -53,117 +171,71 @@ class LocalAudioScanner @Inject constructor(
                 e.printStackTrace()
             }
         }
-
-        if (foundFiles.isEmpty()) return@withContext emptyList<TrackEntity>()
-
-        val total = foundFiles.size
-        val retriever = MediaMetadataRetriever()
-
-        foundFiles.forEachIndexed { index, (uri, fileName) ->
-            if (index % 5 == 0 || index == total - 1) {
-                onProgress(index.toFloat() / total, fileName)
-            }
-
-            try {
-                val track = extractMetadataFromUri(uri, fileName, retriever, artistSeparators, genreSeparators)
-                if (track != null) {
-                    allTracks.add(track)
-                }
-            } catch (e: Exception) {
-                allTracks.add(createFallbackTrack(uri, fileName))
-            }
-        }
-        retriever.release()
-        return@withContext allTracks
+        // Parallel traversal completes in nondeterministic order: sort by URI so
+        // repeated scans see a stable file order (stable progress, stable results).
+        foundFiles.sortBy { it.uri.toString() }
+        foundFiles
     }
 
-    /** Lists the audio files under the given folders (recursive) without reading any metadata. */
-    suspend fun listAudioFiles(folderPaths: Set<String>): List<Pair<Uri, String>> = withContext(Dispatchers.IO) {
-        val foundFiles = mutableListOf<Pair<Uri, String>>()
-        folderPaths.forEach { pathString ->
+    private suspend fun collectUrisRecursive(
+        rootUri: Uri,
+        parentId: String,
+        result: MutableList<FoundAudioFile>,
+        onProgress: (Float, String) -> Unit
+    ) {
+        coroutineScope {
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(rootUri, parentId)
+            val projection = arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_MIME_TYPE,
+                DocumentsContract.Document.COLUMN_SIZE
+            )
+
             try {
-                val rootUri = Uri.parse(pathString)
-                if (rootUri.scheme == "content") {
-                    val treeId = DocumentsContract.getTreeDocumentId(rootUri)
-                    collectUrisRecursive(rootUri, treeId, foundFiles) { _, _ -> }
-                } else {
-                    val rootFile = if (rootUri.scheme == "file") File(rootUri.path ?: "") else File(pathString)
-                    if (rootFile.exists() && rootFile.isDirectory) {
-                        collectLegacyFiles(rootFile, foundFiles)
+                context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+                    val idIdx = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                    val nameIdx = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                    val mimeIdx = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+                    val sizeIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE)
+
+                    val subFolderIds = mutableListOf<String>()
+                    while (cursor.moveToNext()) {
+                        val id = cursor.getString(idIdx)
+                        val name = cursor.getString(nameIdx) ?: "Unknown"
+                        val mime = cursor.getString(mimeIdx)
+
+                        if (DocumentsContract.Document.MIME_TYPE_DIR == mime) {
+                            onProgress(0f, "Searching in $name...")
+                            subFolderIds += id
+                        } else if (isAudioFile(name)) {
+                            val docUri = DocumentsContract.buildDocumentUriUsingTree(rootUri, id)
+                            // Size comes straight from the directory listing so no extra
+                            // openAssetFileDescriptor round-trip is needed per file later.
+                            val size = if (sizeIdx >= 0) cursor.getLong(sizeIdx) else 0L
+                            synchronized(result) {
+                                result.add(FoundAudioFile(docUri, name, size))
+                            }
+                        }
+                    }
+                    // Every subdirectory listing is a full IPC round trip: walk them
+                    // concurrently instead of one directory at a time.
+                    subFolderIds.forEach { id ->
+                        launch(scanDispatcher) { collectUrisRecursive(rootUri, id, result, onProgress) }
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
-        foundFiles
     }
 
-    /** Reads only the title/album tags of the given audio files (no full scan), keyed by URI. */
-    suspend fun readTitlesAlbums(uris: List<Uri>): Map<Uri, Pair<String, String>> = withContext(Dispatchers.IO) {
-        if (uris.isEmpty()) return@withContext emptyMap()
-        val result = HashMap<Uri, Pair<String, String>>()
-        val retriever = MediaMetadataRetriever()
-        try {
-            uris.forEach { uri ->
-                try {
-                    retriever.setDataSource(context, uri)
-                    val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?.trim()
-                    if (!title.isNullOrEmpty()) {
-                        val album = retriever
-                            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
-                            ?.trim().orEmpty()
-                        result[uri] = title to album
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        } finally {
-            retriever.release()
-        }
-        result
-    }
-
-    private fun collectUrisRecursive(rootUri: Uri, parentId: String, result: MutableList<Pair<Uri, String>>, onProgress: (Float, String) -> Unit) {
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(rootUri, parentId)
-        val projection = arrayOf(
-            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-            DocumentsContract.Document.COLUMN_MIME_TYPE
-        )
-
-        try {
-            context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-                val idIdx = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-                val nameIdx = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-                val mimeIdx = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
-
-                while (cursor.moveToNext()) {
-                    val id = cursor.getString(idIdx)
-                    val name = cursor.getString(nameIdx) ?: "Unknown"
-                    val mime = cursor.getString(mimeIdx)
-
-                    if (DocumentsContract.Document.MIME_TYPE_DIR == mime) {
-                        onProgress(0f, "Searching in $name...")
-                        collectUrisRecursive(rootUri, id, result, onProgress)
-                    } else if (isAudioFile(name)) {
-                        val docUri = DocumentsContract.buildDocumentUriUsingTree(rootUri, id)
-                        result.add(docUri to name)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private fun collectLegacyFiles(dir: File, result: MutableList<Pair<Uri, String>>) {
+    private fun collectLegacyFiles(dir: File, result: MutableList<FoundAudioFile>) {
         dir.listFiles()?.forEach { file ->
             if (file.isDirectory) {
                 collectLegacyFiles(file, result)
             } else if (isAudioFile(file.name)) {
-                result.add(Uri.fromFile(file) to file.name)
+                result.add(FoundAudioFile(Uri.fromFile(file), file.name, file.length()))
             }
         }
     }
@@ -174,12 +246,13 @@ class LocalAudioScanner @Inject constructor(
     }
 
     private fun extractMetadataFromUri(
-        uri: Uri,
-        fileName: String,
+        file: FoundAudioFile,
         retriever: MediaMetadataRetriever,
         artistSeparators: Set<String>,
         genreSeparators: Set<String>
-    ): TrackEntity? {
+    ): TrackEntity {
+        val uri = file.uri
+        val fileName = file.name
         var title = fileName.substringBeforeLast('.')
         var rawArtist = "<Unknown Artist>"
         var album = "<Unknown Album>"
@@ -188,21 +261,19 @@ class LocalAudioScanner @Inject constructor(
         var bitrate = 0
         var sampleRate = 44100
         var bitDepth = 16
-        var size = 0L
-        var albumArtPath: String? = null
+        val size = file.size
         var trackNumber: Int? = null
         var discNumber: Int? = null
         var composer: String? = null
         var year: Int? = null
 
         try {
-            context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
-                size = afd.length
+            // Direct file paths skip the ContentResolver layer entirely.
+            if (uri.scheme == "file") {
+                retriever.setDataSource(uri.path)
+            } else {
+                retriever.setDataSource(context, uri)
             }
-        } catch (_: Exception) {}
-
-        try {
-            retriever.setDataSource(context, uri)
             title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: title
             rawArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: rawArtist
             album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: album
@@ -259,10 +330,6 @@ class LocalAudioScanner @Inject constructor(
                 ?.substringBefore('/')
                 ?.trim()
                 ?.toIntOrNull()
-
-            if (retriever.embeddedPicture != null) {
-                albumArtPath = uri.toString()
-            }
         } catch (e: Exception) {
             return createFallbackTrack(uri, fileName, size)
         }
@@ -290,8 +357,21 @@ class LocalAudioScanner @Inject constructor(
             format = fileName.substringAfterLast('.', "MP3").uppercase(),
             path = uri.toString(),
             size = size,
-            albumArtPath = albumArtPath
+            albumArtPath = null
         )
+    }
+
+    /** True when [track]'s file carries an embedded picture. Never throws. */
+    private fun albumHasEmbeddedArt(track: TrackEntity): Boolean {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, Uri.parse(track.path))
+            retriever.embeddedPicture != null
+        } catch (_: Exception) {
+            false
+        } finally {
+            runCatching { retriever.release() }
+        }
     }
 
     private fun splitAndJoin(value: String, separators: Set<String>): String {
@@ -398,7 +478,7 @@ class LocalAudioScanner @Inject constructor(
     /** Read-and-discard skip: SAF streams often don't support InputStream.skip. */
     private fun skipFully(input: InputStream, count: Long): Boolean {
         var remaining = count
-        val buffer = ByteArray(8192)
+        val buffer = ByteArray(65536)
         while (remaining > 0) {
             val read = input.read(buffer, 0, minOf(remaining, buffer.size.toLong()).toInt())
             if (read < 0) return false
@@ -409,6 +489,9 @@ class LocalAudioScanner @Inject constructor(
 
     suspend fun scanDeviceAudioFiles(): List<TrackEntity> = emptyList()
 }
+
+/** Concurrent per-file metadata extractions; MediaMetadataRetriever is a native object, keep it modest. */
+private const val SCAN_PARALLELISM = 8
 
 /** First 4-digit group not glued to other digits: "2021" or "2021-03-04" -> 2021. */
 private val YearRegex = Regex("""(?<!\d)\d{4}(?!\d)""")
