@@ -2,10 +2,13 @@ package com.foamplayer.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -25,20 +28,25 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.lerp
 import coil.size.Size
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
+import com.foamplayer.app.ui.screens.player.immersiveArtFadeSpan
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -342,6 +350,72 @@ internal fun Modifier.rowSharedText(
             )
         } else {
             sharedBounds(state, animatedVisibilityScope = animatedVisibilityScope)
+        }
+    }
+}
+
+/**
+ * Artwork surface for a list row that is the shared-element ENDPOINT of a player
+ * transition (i.e. the row the full player's artwork morphs into when the player is
+ * dismissed onto its origin collection). During such a flight the shared-element
+ * overlay renders the row's own content at the interpolated bounds -- only the
+ * becoming-visible side of a [SharedTransitionScope.sharedElement] pair is drawn --
+ * so the row's clipping must follow the flight instead of staying at its rest radius,
+ * or the art would show near-square corners while the bounds are still hero-sized.
+ *
+ * The corner radius is lerped from the full player hero's radius down to the row's own
+ * percentage radius (half the element's size times the mini-player rounding -- the
+ * same convention as [AlbumArtShape], so it lands exactly on the row's rest look for
+ * 48dp rows, 72dp rows and grid cells alike). The paused-art shrink is likewise
+ * mirrored for the first frames of the flight: the hero it departs from renders
+ * scaled while playback is paused (see rememberPausedArtScale -- every endpoint of an
+ * album-art shared-element pair must render at the same scale or the art pops the
+ * instant the gesture starts), easing back to the row's unscaled rest as it lands.
+ *
+ * With [immersive] on, the overlay art also mirrors the hero's immersive fade
+ * (FullPlayerMainContent): the hero artwork is invisible at rest-open -- it lives in
+ * the backdrop -- and only fades in over the closing flight's last stretch, so the
+ * overlay must start fully transparent and follow the exact same curve instead of
+ * popping in at full alpha.
+ *
+ * Everything is driven by [animatedVisibilityScope]'s own enter/exit transition --
+ * which is seeked by the player's [androidx.compose.animation.core.SeekableTransitionState]
+ * -- so the radius, scale and fade track the finger during the interactive swipe and
+ * hand off continuously to the settle animation on release. All reads happen inside
+ * the graphicsLayer block, keeping every frame of the flight draw-only.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun Modifier.playerFlightArtwork(
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    fullArtRadius: Dp,
+    pausedArtScale: () -> Float,
+    immersive: Boolean = false
+): Modifier {
+    val flightProgress by animatedVisibilityScope.transition.animateFloat(label = "rowArtFlight") { state ->
+        if (state == EnterExitState.Visible) 1f else 0f
+    }
+    val density = LocalDensity.current
+    val fullRadiusPx = remember(fullArtRadius, density) { with(density) { fullArtRadius.toPx() } }
+    val rounding = FoamTheme.shapes.miniPlayerRounding
+    return this.graphicsLayer {
+        val progress = flightProgress
+        // Rest radius is percentage-based on the element's own (animated) size, so it
+        // scales along with the bounds throughout the flight.
+        val restRadiusPx = (size.minDimension / 2f) * rounding
+        shape = RoundedCornerShape(with(density) { lerp(fullRadiusPx, restRadiusPx, progress).toDp() })
+        clip = true
+        val paused = pausedArtScale()
+        val scale = paused + (1f - paused) * progress
+        scaleX = scale
+        scaleY = scale
+        // flightProgress runs 0 (flight start, rest-open) -> 1 (landed, rest-closed),
+        // i.e. the inverse of the hero's open progress: replicate its immersive fade
+        // exactly so the overlay art is as (in)visible as the hero it replaces.
+        alpha = if (immersive) {
+            1f - EaseOutCubic.transform(((1f - progress) / immersiveArtFadeSpan).coerceIn(0f, 1f))
+        } else {
+            1f
         }
     }
 }

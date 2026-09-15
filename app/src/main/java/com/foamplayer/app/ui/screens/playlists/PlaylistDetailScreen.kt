@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.ui.components.TrackCenterRequest
 import com.foamplayer.app.ui.components.TrackListScreen
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -28,6 +29,9 @@ fun PlaylistDetailScreen(
     onListBackdropArt: (String?, Boolean) -> Unit = { _, _ -> },
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    centerTrackRequest: TrackCenterRequest? = null,
+    isPlaying: Boolean = true,
+    immersiveMode: Boolean = false,
     viewModel: PlaylistDetailViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.tracks.collectAsState()
@@ -74,6 +78,9 @@ fun PlaylistDetailScreen(
         activeTrackId = activeTrackId,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        centerTrackRequest = centerTrackRequest,
+        isPlaying = isPlaying,
+        immersiveMode = immersiveMode
     )
 }

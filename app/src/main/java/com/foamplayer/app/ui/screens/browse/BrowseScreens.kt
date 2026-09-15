@@ -33,6 +33,7 @@ import com.foamplayer.app.ui.components.CollectionKind
 import com.foamplayer.app.ui.components.CollectionListItem
 import com.foamplayer.app.ui.components.CollectionListScreen
 import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
+import com.foamplayer.app.ui.components.TrackCenterRequest
 import com.foamplayer.app.ui.components.TrackListScreen
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.distinctCollectionAlbums
@@ -264,6 +265,7 @@ fun AllTracksBrowseScreen(
     )
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun GenreTracksScreen(
     genre: String,
@@ -272,6 +274,12 @@ fun GenreTracksScreen(
     activeTrackId: Long?,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
+    sharedTrackId: Long? = null,
+    centerTrackRequest: TrackCenterRequest? = null,
+    isPlaying: Boolean = true,
+    immersiveMode: Boolean = false,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.genreTracks.collectAsState()
@@ -288,10 +296,17 @@ fun GenreTracksScreen(
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sharedTransitionScope = sharedTransitionScope,
+        playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+        sharedTrackId = sharedTrackId,
+        centerTrackRequest = centerTrackRequest,
+        isPlaying = isPlaying,
+        immersiveMode = immersiveMode
     )
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun YearTracksScreen(
     year: Int,
@@ -300,6 +315,12 @@ fun YearTracksScreen(
     activeTrackId: Long?,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
+    sharedTrackId: Long? = null,
+    centerTrackRequest: TrackCenterRequest? = null,
+    isPlaying: Boolean = true,
+    immersiveMode: Boolean = false,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.yearTracks.collectAsState()
@@ -316,7 +337,13 @@ fun YearTracksScreen(
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sharedTransitionScope = sharedTransitionScope,
+        playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+        sharedTrackId = sharedTrackId,
+        centerTrackRequest = centerTrackRequest,
+        isPlaying = isPlaying,
+        immersiveMode = immersiveMode
     )
 }
 

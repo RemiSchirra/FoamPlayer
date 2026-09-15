@@ -18,6 +18,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.gestures.DraggableState
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +39,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,6 +54,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -65,6 +70,15 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import kotlin.math.abs
 
+/**
+ * Live geometry feeding the dismiss swipe's 1:1 finger-to-artwork mapping: the nav
+ * root reads [heroArtCenterY] (root coordinates) and pairs it with the flight target
+ * (mini player art or the origin collection's centered row) to size the swipe.
+ */
+class PlayerFlightGeometryState {
+    var heroArtCenterY: Float by mutableFloatStateOf(Float.NaN)
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun FullPlayerScreen(
@@ -74,7 +88,19 @@ fun FullPlayerScreen(
     animatedVisibilityScope: AnimatedVisibilityScope,
     playerTransitionState: SeekableTransitionState<Boolean>,
     backdropState: FullPlayerBackdropState,
-    isAnimateSeekBarEnabled: Boolean = false
+    isAnimateSeekBarEnabled: Boolean = false,
+    // Dismiss-to-origin-collection coordination (see PlayerGestureController): the
+    // nav root prepares the row-target flight on the first delta of a dismiss swipe
+    // (and on finger-down, via the press preload) and is told when the gesture
+    // settles back without committing.
+    onDismissGestureStart: (suspend () -> Unit)? = null,
+    onDismissGestureCancelled: (() -> Unit)? = null,
+    // Finger-to-artwork travel distance for the dismiss swipe (1:1 tracking); falls
+    // back to the screen height when unknown.
+    dismissSwipeDistancePx: (() -> Float)? = null,
+    // Receives the hero artwork's center so the nav root can compute the swipe
+    // distance above.
+    flightGeometry: PlayerFlightGeometryState? = null
 ) {
     val state by viewModel.playbackState.collectAsState()
     val settings by viewModel.settings.collectAsState()
@@ -132,14 +158,21 @@ fun FullPlayerScreen(
     val dragThresholdPx = screenHeightPx.coerceAtLeast(1f)
     val upDragThresholdPx = with(density) { PlayerDimens.subViewSwipeThreshold.toPx() }.coerceAtLeast(1f)
     val currentOnDismiss = rememberUpdatedState(onDismiss)
+    val currentOnDismissGestureStart = rememberUpdatedState(onDismissGestureStart)
+    val currentOnDismissGestureCancelled = rememberUpdatedState(onDismissGestureCancelled)
+    val currentDismissSwipeDistance = rememberUpdatedState(dismissSwipeDistancePx)
     val gestureController = remember(playerTransitionState, dragThresholdPx, upDragThresholdPx) {
         PlayerGestureController(
             upTransitionState = upTransitionState,
             playerTransitionState = playerTransitionState,
             scope = scope,
-            dragThresholdPx = dragThresholdPx,
+            dismissSwipeDistancePx = {
+                currentDismissSwipeDistance.value?.invoke() ?: dragThresholdPx
+            },
             upDragThresholdPx = upDragThresholdPx,
-            onDismiss = { currentOnDismiss.value() }
+            onDismiss = { currentOnDismiss.value() },
+            onDismissGestureStart = { currentOnDismissGestureStart.value?.invoke() },
+            onDismissGestureCancelled = { currentOnDismissGestureCancelled.value?.invoke() }
         )
     }
 
@@ -184,13 +217,30 @@ fun FullPlayerScreen(
 
     // Remembered so the Modifier instance stays stable across body recompositions:
     // handing MainPlayerContent/SubViewContent a fresh modifier on every pass would
-    // defeat their skipping.
+    // defeat their skipping. The pointerInput observer preloads the dismiss-to-row
+    // flight on finger-down (see PlayerGestureController.onDismissPressStarted) so
+    // the swipe responds from its first pixel; it only observes and never consumes.
     val playerDrag = remember(gestureController) {
-        Modifier.draggable(
-            state = DraggableState { delta -> gestureController.onDrag(delta) },
-            orientation = Orientation.Vertical,
-            onDragStopped = { v -> gestureController.onDragStopped(v) }
-        )
+        Modifier
+            .pointerInput(gestureController) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    gestureController.onDismissPressStarted()
+                    // Hold until this gesture ends (all pointers up -- pointer
+                    // cancellation also clears the pressed flags), then undo the
+                    // preload if no dismissal materialized.
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.changes.none { it.pressed }) break
+                    }
+                    gestureController.onDismissPressEnded()
+                }
+            }
+            .draggable(
+                state = DraggableState { delta -> gestureController.onDrag(delta) },
+                orientation = Orientation.Vertical,
+                onDragStopped = { v -> gestureController.onDragStopped(v) }
+            )
     }
 
     val nestedScrollConnection = remember(gestureController) {
@@ -518,7 +568,8 @@ fun FullPlayerScreen(
                             seekBarProgress = seekBarProgress,
                             isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                             scoreOverrides = scoreOverrides,
-                            onSetScore = viewModel::setTrackScore
+                            onSetScore = viewModel::setTrackScore,
+                            flightGeometry = flightGeometry
                         )
                     }
 

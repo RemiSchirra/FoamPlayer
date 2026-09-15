@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.navigation
 
+import android.os.Bundle
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -95,6 +96,7 @@ import com.foamplayer.app.ui.screens.player.FullPlayerScreen
 import com.foamplayer.app.ui.screens.player.DynamicAlbumArtBackground
 import com.foamplayer.app.ui.screens.player.MiniPlayerSwipeController
 import com.foamplayer.app.ui.screens.player.PlayerDimens
+import com.foamplayer.app.ui.screens.player.PlayerFlightGeometryState
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.player.progress
 import com.foamplayer.app.ui.screens.playlists.PlaylistDetailScreen
@@ -112,8 +114,11 @@ import com.foamplayer.app.ui.screens.settings.SettingsScreen
 import com.foamplayer.app.ui.screens.settings.TestSettingsScreen
 import com.foamplayer.app.ui.screens.settings.UISettingsScreen
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.components.TrackCenterRequest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.abs
 
 const val SharedElementTransitionDurationMs = 350
 val SharedElementEasing = FastOutSlowInEasing
@@ -152,6 +157,30 @@ private fun isBrowseRoute(route: String?): Boolean = route != null && route.star
 /** Detail screens whose list background is drawn full-bleed at the root. */
 private fun isDetailListRoute(route: String?): Boolean =
     route == Screen.AlbumDetail.route || route == Screen.PlaylistDetail.route
+
+/**
+ * True when the page currently on top of the back stack IS the collection the queue
+ * was started from ([activeCollectionId], the playing track's origin-collection tag)
+ * AND that page's rows render an artwork the flight can morph into (playlist / genre
+ * / year details -- all [com.foamplayer.app.ui.components.TrackListScreen]-based with
+ * artwork rows). Album detail rows show a track NUMBER instead of artwork and folder
+ * pages aren't built on the shared-element track list at all, so both keep the plain
+ * mini-player dismissal.
+ */
+private fun isOriginCollectionPage(
+    route: String?,
+    arguments: Bundle?,
+    activeCollectionId: String?
+): Boolean {
+    if (activeCollectionId == null || route == null) return false
+    val routeCollectionId = when {
+        route.startsWith("playlist/") -> CollectionId.playlist(arguments?.getLong("playlistId") ?: -1L)
+        route.startsWith("browse/genre/") -> CollectionId.genre(arguments?.getString("genre").orEmpty())
+        route.startsWith("browse/year/") -> CollectionId.year(arguments?.getInt("year") ?: 0)
+        else -> null
+    }
+    return routeCollectionId == activeCollectionId
+}
 
 /** Art feeding the detail-list backdrop: the path plus how Coil must load it (embedded audio art vs plain image). */
 private data class ListBackdropArt(val path: String, val isEmbeddedArt: Boolean)
@@ -228,6 +257,7 @@ fun FoamNavHost(
     // Highlighting "the playing row" only needs the id: screens recompose when the
     // track actually changes, not on every unrelated playback emission.
     val activeTrackId by playerViewModel.activeTrackId.collectAsState()
+    val isPlaying by playerViewModel.isPlaying.collectAsState()
     val playerSettings by playerViewModel.settings.collectAsState()
     val scoreOverrides by playerViewModel.scoreOverrides.collectAsState()
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
@@ -260,11 +290,42 @@ fun FoamNavHost(
     var trackListTransitionTrackId by remember { mutableStateOf<Long?>(null) }
     var skipMiniPlayerTrackAnimation by remember { mutableStateOf(false) }
 
+    // Dismiss-to-origin-collection session: when a swipe-down on the full player starts
+    // over the playing track's origin collection page, that page's playing row becomes
+    // the shared-element endpoint of the artwork flight (trackListTransitionTrackId --
+    // which also keeps the mini player untagged for the whole transition), and the page
+    // is asked to scroll the row to the vertical middle of the screen before the first
+    // visible frame of the flight.
+    var dismissToRowSessionActive by remember { mutableStateOf(false) }
+    var centerTrackRequest by remember { mutableStateOf<TrackCenterRequest?>(null) }
+    var centerRequestSeq by remember { mutableStateOf(0) }
+
     // Measured top edge (root coordinates, px) of the mini player's box. The attached
     // nav bar's surface extension is drawn to land exactly on the card's visible top
     // edge computed from it, so the surface and the card can never drift apart --
     // whatever the real layout does (font scale, text metrics, second-bar lift).
     var miniPlayerTopPx by remember { mutableStateOf(Float.NaN) }
+
+    // Hero artwork center (root coordinates), reported by the full player's shared
+    // element, paired with the current dismiss target (mini player art or the origin
+    // collection's centered row) to size the swipe to the artwork's travel distance.
+    val flightGeometry = remember { PlayerFlightGeometryState() }
+    val miniArtCenterOffsetPx = with(density) {
+        (NavBarDimens.MiniPlayerCardVerticalPadding +
+                NavBarDimens.MiniPlayerContainerPadding +
+                NavBarDimens.MiniPlayerArtSize / 2).toPx()
+    }
+    val dismissSwipeDistancePx = {
+        val heroY = flightGeometry.heroArtCenterY
+        val targetY = centerTrackRequest?.rowArtCenterYPx?.takeUnless { it.isNaN() }
+            ?: miniPlayerTopPx.takeUnless { it.isNaN() }?.let { it + miniArtCenterOffsetPx }
+        val distance = if (heroY.isNaN() || targetY == null) {
+            Float.NaN
+        } else {
+            abs(targetY - heroY)
+        }
+        if (distance.isNaN()) screenHeightPx else distance.coerceAtLeast(1f)
+    }
 
     // Track whether the current or next transition should use animation.
     // If we start opened, we disable animation for the initial frame.
@@ -302,6 +363,12 @@ fun FoamNavHost(
 
         if (open) {
             trackListTransitionTrackId = sourceTrackId
+            // A fresh open always supersedes any pending dismiss-to-row session; its
+            // own finally below re-clears the tag when the flight lands. Dropping the
+            // center request is what re-arms the row tag for open flights (a stale
+            // request would keep rows untagged on the freshly composed page).
+            dismissToRowSessionActive = false
+            centerTrackRequest = null
         }
         val myGeneration = ++transitionJobHolder.generation
         transitionJobHolder.job = scope.launch {
@@ -317,11 +384,66 @@ fun FoamNavHost(
                     playerTransitionState.seekTo(if (open) 1f else 0f, targetState = open)
                 }
             } finally {
-                if (open && transitionJobHolder.generation == myGeneration) {
-                    trackListTransitionTrackId = null
-                    skipMiniPlayerTrackAnimation = false
+                if (transitionJobHolder.generation == myGeneration) {
+                    if (open) {
+                        trackListTransitionTrackId = null
+                        skipMiniPlayerTrackAnimation = false
+                    } else {
+                        // Close flight finished: hand the shared-element key back to
+                        // the mini player. Only the dismiss-to-row session ever holds
+                        // the tag across a close, so this is a no-op otherwise.
+                        trackListTransitionTrackId = null
+                        dismissToRowSessionActive = false
+                        centerTrackRequest = null
+                    }
                 }
             }
+        }
+    }
+
+    /**
+     * First delta of a swipe-down dismiss over the playing track's origin collection
+     * page: installs the row shared-element tag (which simultaneously untags the mini
+     * player for the whole transition), precomposes the returning page at zero visual
+     * progress so its list can lay out, and asks the page to scroll the playing row to
+     * the vertical middle of the screen. Returns without touching anything when the
+     * current page is not the origin collection -- the plain mini-player dismissal
+     * then proceeds unchanged. The drag is held at zero progress while this runs.
+     */
+    suspend fun prepareDismissToRow() {
+        val trackId = activeTrackId ?: return
+        if (!isOriginCollectionPage(currentRoute, navBackStackEntry?.arguments, activeCollectionId)) {
+            return
+        }
+
+        dismissToRowSessionActive = true
+        trackListTransitionTrackId = trackId
+        val request = TrackCenterRequest(trackId, ++centerRequestSeq)
+
+        // Compose the returning page invisibly (fraction 0 against targetState=false
+        // is visually identical to full rest). The center request is written in the
+        // same snapshot batch as the seek, so the page's very first composition
+        // already sees it and can scroll while it lays out.
+        centerTrackRequest = request
+        playerTransitionState.seekTo(fraction = 0f, targetState = false)
+
+        // Deterministic hand-off: wait for the list to scroll the row into place, then
+        // give the recomposition that attaches the row's shared-element tag (and the
+        // match configuration that follows in that frame's layout pass) a frame of its
+        // own, so the flight's first visible frame already has its target at its final
+        // position. The timeout only guards a pathological unconsumed request -- an
+        // unbounded await here would brick the dismiss gesture.
+        withTimeoutOrNull(250) { request.scrolledIntoPlace.await() }
+        withFrameNanos { }
+        withFrameNanos { }
+    }
+
+    /** Swipe-down settled back without committing: drop the row tag (if we set it). */
+    fun clearDismissToRowSession() {
+        if (dismissToRowSessionActive) {
+            dismissToRowSessionActive = false
+            trackListTransitionTrackId = null
+            centerTrackRequest = null
         }
     }
 
@@ -761,7 +883,13 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             activeTrackId = activeTrackId,
                                             density = densityFor(MediaListView.BROWSE_GENRE_TRACKS),
-                                            onDensityChange = { setDensity(MediaListView.BROWSE_GENRE_TRACKS, it) }
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_GENRE_TRACKS, it) },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            centerTrackRequest = centerTrackRequest,
+                                            isPlaying = isPlaying,
+                                            immersiveMode = playerSettings.immersiveModeEnabled
                                         )
                                     }
                                     composable(
@@ -777,7 +905,13 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             activeTrackId = activeTrackId,
                                             density = densityFor(MediaListView.BROWSE_YEAR_TRACKS),
-                                            onDensityChange = { setDensity(MediaListView.BROWSE_YEAR_TRACKS, it) }
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_YEAR_TRACKS, it) },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            centerTrackRequest = centerTrackRequest,
+                                            isPlaying = isPlaying,
+                                            immersiveMode = playerSettings.immersiveModeEnabled
                                         )
                                     }
                                     composable(
@@ -935,7 +1069,10 @@ fun FoamNavHost(
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
                                             activeTrackId = activeTrackId,
-                                            onListBackdropArt = onListBackdropArt
+                                            onListBackdropArt = onListBackdropArt,
+                                            centerTrackRequest = centerTrackRequest,
+                                            isPlaying = isPlaying,
+                                            immersiveMode = playerSettings.immersiveModeEnabled
                                         )
                                     }
                                     composable(
@@ -964,7 +1101,10 @@ fun FoamNavHost(
                                             activeTrackId = activeTrackId,
                                             onListBackdropArt = onListBackdropArt,
                                             density = densityFor(MediaListView.PLAYLIST_DETAIL),
-                                            onDensityChange = { setDensity(MediaListView.PLAYLIST_DETAIL, it) }
+                                            onDensityChange = { setDensity(MediaListView.PLAYLIST_DETAIL, it) },
+                                            centerTrackRequest = centerTrackRequest,
+                                            isPlaying = isPlaying,
+                                            immersiveMode = playerSettings.immersiveModeEnabled
                                         )
                                     }
                                 }
@@ -980,6 +1120,10 @@ fun FoamNavHost(
                             FullPlayerScreen(
                                 viewModel = playerViewModel,
                                 onDismiss = { animatePlayerTransition(open = false) },
+                                onDismissGestureStart = { prepareDismissToRow() },
+                                onDismissGestureCancelled = { clearDismissToRowSession() },
+                                dismissSwipeDistancePx = dismissSwipeDistancePx,
+                                flightGeometry = flightGeometry,
                                 sharedTransitionScope = this@SharedTransitionLayout,
                                 animatedVisibilityScope = this@AnimatedVisibility,
                                 playerTransitionState = playerTransitionState,

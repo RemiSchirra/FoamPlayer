@@ -82,19 +82,58 @@ class PlayerGestureController(
     val upTransitionState: SeekableTransitionState<Boolean>,
     private val playerTransitionState: SeekableTransitionState<Boolean>,
     private val scope: CoroutineScope,
-    // Full mini<->full player dismiss swipe: travels the whole screen, so this is
-    // sized to screenHeightPx by the caller.
-    private val dragThresholdPx: Float,
+    // Dismiss swipe mapping: the finger travels the same distance the artwork itself
+    // travels (full player hero -> mini player art, or -> the origin collection's
+    // row), so the morph tracks the finger 1:1. The provider reads live geometry
+    // (hero art center, current flight target) and falls back to the screen height.
+    private val dismissSwipeDistancePx: () -> Float,
     // Subview (header <-> Lyrics/Queue) open/close swipe. This only ever needs to
-    // travel a small fraction of the screen -- reusing dragThresholdPx here made a
-    // small, natural upward flick barely register any progress, since the drag would
-    // need to cover most of the screen height before crossing the commit threshold.
-    // Sized independently by the caller to a fixed, device-agnostic distance instead.
+    // travel a small fraction of the screen -- reusing a screen-sized threshold here
+    // made a small, natural upward flick barely register any progress, since the drag
+    // would need to cover most of the screen height before crossing the commit
+    // threshold. Sized independently by the caller to a fixed, device-agnostic
+    // distance instead.
     private val upDragThresholdPx: Float,
-    private val onDismiss: () -> Unit
+    private val onDismiss: () -> Unit,
+    // Dismiss-to-origin-collection support: invoked on the very first delta of a fresh
+    // down-stroke from full rest, BEFORE any visual progress happens, so the host can
+    // prepare a shared-element flight into the playing track's list row (tag the row,
+    // precompose the returning page at zero progress, scroll the row into view). The
+    // drag is gated until the setup completes. Null keeps the plain mini-player
+    // dismissal.
+    private val onDismissGestureStart: (suspend () -> Unit)? = null,
+    // Called after a down-drag settles back (dismiss not committed) so the host can
+    // drop the row tag it may have installed in [onDismissGestureStart].
+    private val onDismissGestureCancelled: (() -> Unit)? = null
 ) {
     private var activeGestureJob: Job? = null
     private var lockedDirection: GestureDirection? = null
+
+    // The dismiss-to-row preparation runs OUTSIDE the per-delta [activeGestureJob]:
+    // drag deltas keep arriving while it frames by, and each one would cancel it
+    // mid-flight. Instead it gets its own job, and deltas simply hold the drag at
+    // zero progress until it finishes (see the DOWN branch). The same job doubles as
+    // the PRESS PRELOAD: [onDismissPressStarted] kicks it off on finger-down, so the
+    // list is usually already composed, scrolled and paired before the finger moves
+    // at all -- the drag then responds from its very first pixel.
+    private var dismissSetupJob: Job? = null
+    private var dismissSetupActive = false
+
+    // One preparation attempt per down-stroke: every delta is gated while the setup
+    // runs, so progress is still 0 right after it finishes -- without this flag the
+    // next delta would start the setup all over again and the drag would never move.
+    private var dismissSetupAttempted = false
+
+    // Set once the preload/setup has fully completed for the current press, so the
+    // first stroke delta can skip the gate entirely (the row target is in place).
+    private var dismissPrepared = false
+
+    // Set when a dismissal is actually committed; guards the press-end revert below
+    // against snapping the freshly launched close flight back to rest.
+    private var dismissFlightStarted = false
+
+    // Timestamp of the last processed down-drag delta, for the in-gesture rate cap.
+    private var lastDownDragTimeNanos = 0L
 
     private enum class GestureDirection { UP, DOWN }
 
@@ -153,7 +192,25 @@ class PlayerGestureController(
                 upTransitionState.seekTo(targetState = upTarget, fraction = newProgress)
             }
             GestureDirection.DOWN -> {
-                // Progressive swipe down: full player -> app mini player
+                // First delta of a fresh down-stroke from full rest: make sure the
+                // dismiss-to-row preparation exists before anything moves. A press
+                // preload usually already finished it (see [onDismissPressStarted]).
+                if (downProgress == 0f &&
+                    playerTransitionState.currentState &&
+                    onDismissGestureStart != null &&
+                    !dismissSetupAttempted
+                ) {
+                    dismissSetupAttempted = true
+                    if (!dismissSetupActive && !dismissPrepared) {
+                        beginDismissSetup()
+                    }
+                }
+                // Hold at zero progress while the setup places the row target: seeking
+                // now would match the shared element against an out-of-view (or absent)
+                // row, popping the art mid-gesture when the scroll lands.
+                if (dismissSetupActive) return@runExclusive
+
+                // Progressive swipe down, 1:1 with the artwork's own travel distance.
                 // Compensate the easing on reversing direction
                 val easingCompensation = if (delta < 0) {
                     1f + (downProgress * 2f)
@@ -161,16 +218,114 @@ class PlayerGestureController(
                     1f
                 }
 
-                val newProgress = (downProgress + (delta * easingCompensation) / (dragThresholdPx * DOWN_SWIPE_SENSITIVITY))
-                    .coerceIn(0f, 1f)
+                val swipeDistancePx = dismissSwipeDistancePx().coerceAtLeast(1f)
+                val rawProgress = downProgress + (delta * easingCompensation) / swipeDistancePx
+                val newProgress = if (rawProgress <= downProgress) {
+                    // Reversing (cancelling) is never rate-limited.
+                    rawProgress.coerceIn(0f, 1f)
+                } else {
+                    // Cap how fast the drag alone may advance the flight: a fast
+                    // flick must not complete the whole morph inside the gesture
+                    // (which reads as an instant snap). Beyond the cap the art lags
+                    // the finger slightly and the release animates the rest over a
+                    // proper duration.
+                    val now = System.nanoTime()
+                    val dtMs = if (lastDownDragTimeNanos == 0L) {
+                        Float.MAX_VALUE
+                    } else {
+                        ((now - lastDownDragTimeNanos) / 1_000_000f).coerceAtMost(100f)
+                    }
+                    lastDownDragTimeNanos = now
+                    // First delta of a stroke (or a >100ms gap): no cap.
+                    val maxStep = if (dtMs == Float.MAX_VALUE) 1f else dtMs / MIN_INTERACTIVE_FLIGHT_MS
+                    (downProgress + (rawProgress - downProgress).coerceAtMost(maxStep))
+                        .coerceIn(0f, 1f)
+                }
                 playerTransitionState.seekTo(targetState = false, fraction = newProgress)
             }
             null -> Unit
         }
     }
 
+    private fun beginDismissSetup() {
+        val onStart = onDismissGestureStart ?: return
+        if (dismissSetupJob?.isActive == true) return
+        dismissSetupActive = true
+        dismissSetupJob = scope.launch {
+            try {
+                onStart()
+                dismissPrepared = true
+            } finally {
+                dismissSetupActive = false
+            }
+        }
+    }
+
+    /**
+     * Finger down on the full player: preload the dismiss-to-row flight (compose the
+     * returning page invisibly, scroll the playing row into view, pair the shared
+     * element) while the finger is still stationary, so the drag responds from its
+     * first pixel instead of after the preparation's frames. The preload's seek only
+     * flips the transition's target at zero fraction -- a visual no-op -- and
+     * [onDismissPressEnded] collapses it back if no dismissal materialized.
+     */
+    fun onDismissPressStarted() {
+        if (onDismissGestureStart == null) return
+        // Only at full rest: a running flight or an already-seeking state must not
+        // be touched by a mere press.
+        if (!(playerTransitionState.currentState && playerTransitionState.targetState)) return
+        dismissPrepared = false
+        dismissFlightStarted = false
+        beginDismissSetup()
+    }
+
+    /**
+     * Gesture over (pointers up or cancelled) without a drag stroke: undo the press
+     * preload -- cancel any still-running setup and collapse the preload's
+     * zero-fraction seek back to rest so no invisible branch state lingers. When a
+     * drag stroke DID happen (direction locked), [onDragStopped] owns the outcome --
+     * commit, settle or subview -- and runs right after this on the same pointer-up;
+     * touching the state here would race it.
+     */
+    fun onDismissPressEnded() {
+        if (lockedDirection != null) {
+            // A drag stroke happened; onDragStopped handles commit/settle/cleanup.
+            dismissPrepared = false
+            return
+        }
+        dismissPrepared = false
+        scope.launch {
+            if (dismissSetupJob?.isActive == true) {
+                dismissSetupJob?.cancel()
+                dismissSetupJob = null
+            }
+            collapsePressPreload()
+        }
+    }
+
+    /**
+     * Collapses a press-preload seek that never turned into a dismissal: targetState
+     * points at "closed" while fraction is still 0 -- a visual no-op to undo (it just
+     * collapses targetState onto currentState so the resting transition can settle),
+     * but leaving it dangling would keep both AnimatedVisibility branches composed,
+     * including an invisible, still-hittable mini player.
+     */
+    private suspend fun collapsePressPreload() {
+        val state = playerTransitionState
+        if (!dismissFlightStarted &&
+            state.currentState &&
+            !state.targetState &&
+            state.fraction <= 0f
+        ) {
+            state.snapTo(true)
+            onDismissGestureCancelled?.invoke()
+        }
+    }
+
     fun onDragStopped(velocity: Float) = runExclusive {
         lockedDirection = null
+        dismissSetupAttempted = false
+        lastDownDragTimeNanos = 0L
 
         val upMidSeek = upTransitionState.currentState != upTransitionState.targetState
         if (upMidSeek) {
@@ -191,7 +346,15 @@ class PlayerGestureController(
             } else {
                 upTransitionState.settleBackToRest()
             }
+            // An up-stroke never turned into a dismissal: collapse the press
+            // preload's dangling zero-fraction seek, if any (visual no-op).
+            collapsePressPreload()
         } else {
+            // Serialize behind the dismiss-to-row setup: whatever happens next -- the
+            // close flight, or a snap back to rest -- must not run while the row target
+            // is still being put in place.
+            dismissSetupJob?.join()
+
             val downProgress = 1f - playerTransitionState.progress()
 
             // Prevent dismissing if you actively flick the player back up to cancel
@@ -199,8 +362,17 @@ class PlayerGestureController(
 
             val commitToDismiss = !isReverseFlick && (downProgress > DOWN_SWIPE_COMMIT_PROGRESS || velocity > DOWN_SWIPE_COMMIT_VELOCITY)
             when {
-                commitToDismiss -> onDismiss()
-                else -> playerTransitionState.settleBackToRest()
+                commitToDismiss -> {
+                    // Guards onDismissPressEnded's revert: a committed dismissal may
+                    // still be at fraction 0 on its first frame when the pointer-up
+                    // reaches the press observer.
+                    dismissFlightStarted = true
+                    onDismiss()
+                }
+                else -> {
+                    playerTransitionState.settleBackToRest()
+                    onDismissGestureCancelled?.invoke()
+                }
             }
         }
     }
@@ -214,9 +386,15 @@ class PlayerGestureController(
         private const val UP_SWIPE_MIN_PROGRESS = 0.01f
         private const val UP_SWIPE_COMMIT_PROGRESS = 0.25f
         private const val UP_SWIPE_COMMIT_VELOCITY = -500f
-        private const val DOWN_SWIPE_SENSITIVITY = 1.2f
         private const val DOWN_SWIPE_COMMIT_PROGRESS = 0.15f
         private const val DOWN_SWIPE_COMMIT_VELOCITY = 800f
+
+        /**
+         * Fastest the drag alone may complete the dismiss flight, in ms. Finger
+         * movement faster than this is rate-limited so a flick always leaves a
+         * visible, animated remainder for the release to fly.
+         */
+        private const val MIN_INTERACTIVE_FLIGHT_MS = 200f
     }
 }
 

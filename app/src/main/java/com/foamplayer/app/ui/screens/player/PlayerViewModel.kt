@@ -55,6 +55,14 @@ class PlayerViewModel @Inject constructor(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    // Narrow play/pause bit: feeds the paused-art shrink of track rows that act as the
+    // shared-element endpoint of a player-dismiss flight (see rowFlightArtwork). Kept
+    // narrow so the nav root can collect it without subscribing to the whole state.
+    val isPlaying: StateFlow<Boolean> = audioEngine.playbackState
+        .map { it.isPlaying }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     // Id of the collection the queue was started from (null = bare track list),
     // highlighted only while the cursor is still inside that collection's own
     // section of the queue.

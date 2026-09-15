@@ -43,6 +43,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,7 +101,8 @@ internal fun SharedTransitionScope.MainPlayerContent(
     seekBarProgress: SeekBarProgressState,
     isAnimateSeekBarEnabled: Boolean,
     scoreOverrides: Map<Long, Int>,
-    onSetScore: (Long, Int) -> Unit
+    onSetScore: (Long, Int) -> Unit,
+    flightGeometry: PlayerFlightGeometryState? = null
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(top = PlayerDimens.screenPadding),
@@ -123,7 +126,8 @@ internal fun SharedTransitionScope.MainPlayerContent(
             playerTransitionState = playerTransitionState,
             upTransitionState = upTransitionState,
             scoreOverrides = scoreOverrides,
-            onSetScore = onSetScore
+            onSetScore = onSetScore,
+            flightGeometry = flightGeometry
         )
 
         Spacer(modifier = Modifier.weight(1f))
@@ -182,7 +186,8 @@ internal fun SharedTransitionScope.TrackHeroPager(
     playerTransitionState: SeekableTransitionState<Boolean>,
     upTransitionState: SeekableTransitionState<Boolean>,
     scoreOverrides: Map<Long, Int>,
-    onSetScore: (Long, Int) -> Unit
+    onSetScore: (Long, Int) -> Unit,
+    flightGeometry: PlayerFlightGeometryState? = null
 ) {
     val anchorPage = queueIndex.coerceAtLeast(0)
 
@@ -355,6 +360,12 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
+                        .onGloballyPositioned { coordinates ->
+                            // Root-space center of the shared-element hero art: one
+                            // endpoint of the dismiss swipe's 1:1 distance mapping.
+                            flightGeometry?.heroArtCenterY =
+                                coordinates.positionInRoot().y + coordinates.size.height / 2f
+                        }
                         .sharedElement(
                             rememberSharedContentState(key = "album_art_${track.id}"),
                             animatedVisibilityScope = outerVisibilityScope

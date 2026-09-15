@@ -39,9 +39,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.times
 import coil.compose.AsyncImage
@@ -58,6 +60,16 @@ import kotlinx.coroutines.launch
 
 /** Opacity applied to auxiliary queue tracks. */
 private const val AuxiliaryAlpha = 0.55f
+
+/**
+ * Corner radius of the full player's hero artwork: half the square art's side
+ * (screen width minus the player's 24dp page padding on both sides) times the
+ * full-player rounding percentage. Flight-start anchor for [playerFlightArtwork];
+ * must stay in sync with TrackHeroPager's fullImageSize/fullRadius.
+ */
+@Composable
+internal fun fullPlayerArtRadius(): Dp =
+    (LocalConfiguration.current.screenWidthDp.dp - 48.dp) / 2 * FoamTheme.shapes.fullPlayerRounding
 
 /**
  * Fraction of the row width the row must be dragged sideways before the
@@ -108,6 +120,12 @@ fun TrackListItem(
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    // Deferred paused-art scale for rows that act as the shared-element endpoint of a
+    // player-dismiss flight (see [playerFlightArtwork]); only origin-collection list
+    // hosts provide it, null keeps the static rest clip everywhere else.
+    flightPausedArtScale: (() -> Float)? = null,
+    // Mirrors the hero's immersive fade for the flight overlay (see playerFlightArtwork).
+    immersiveArt: Boolean = false,
     isSharedTransitionSource: Boolean = false
 ) {
     val animatedBackgroundColor = activeRowHighlight(active, track.albumArtPath)
@@ -140,6 +158,29 @@ fun TrackListItem(
     // Swipe-to-dismiss / drag handles are row-only affordances (the queue, the
     // only screen using them, does not support densities).
     if (density.isGrid) {
+        val sharedArtworkBase: Modifier = Modifier.rowSharedArtwork(
+            key = "album_art_${track.id}",
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            enabled = isSharedTransitionSource
+        )
+        val gridArtworkModifier = if (isSharedTransitionSource &&
+            animatedVisibilityScope != null &&
+            flightPausedArtScale != null
+        ) {
+            sharedArtworkBase
+                .playerFlightArtwork(
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    fullArtRadius = fullPlayerArtRadius(),
+                    pausedArtScale = flightPausedArtScale,
+                    immersive = immersiveArt
+                )
+                .background(FoamTheme.colors.surfaceVariant)
+        } else {
+            sharedArtworkBase
+                .clip(AlbumArtShape())
+                .background(FoamTheme.colors.surfaceVariant)
+        }
         Box(
             modifier = modifier
                 .fillMaxWidth()
@@ -148,15 +189,7 @@ fun TrackListItem(
             MediaGridCell(
                 onClick = onClick,
                 onLongClick = resolvedOnLongClick,
-                artworkModifier = Modifier
-                    .rowSharedArtwork(
-                        key = "album_art_${track.id}",
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        enabled = isSharedTransitionSource
-                    )
-                    .clip(AlbumArtShape())
-                    .background(FoamTheme.colors.surfaceVariant),
+                artworkModifier = gridArtworkModifier,
                 artworkContent = { TrackGridArtwork(track) },
                 title = track.title,
                 subtitle = "${track.artist} • ${track.album}",
@@ -266,15 +299,31 @@ fun TrackListItem(
     // Rows showing a track number have no artwork box (and take no part in the
     // artwork shared-element transition).
     val artworkModifier = if (trackNumberText == null) {
-        Modifier
-            .rowSharedArtwork(
-                key = "album_art_${track.id}",
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                enabled = isSharedTransitionSource
-            )
-            .clip(RoundedCornerShape(listRowArtCornerRadius(density)))
-            .background(FoamTheme.colors.surfaceVariant)
+        val sharedArtworkBase = Modifier.rowSharedArtwork(
+            key = "album_art_${track.id}",
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            enabled = isSharedTransitionSource
+        )
+        if (isSharedTransitionSource &&
+            animatedVisibilityScope != null &&
+            flightPausedArtScale != null
+        ) {
+            // Dismiss-flight endpoint: the clip radius must ride the transition (see
+            // [playerFlightArtwork]) instead of clipping at the rest radius.
+            sharedArtworkBase
+                .playerFlightArtwork(
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    fullArtRadius = fullPlayerArtRadius(),
+                    pausedArtScale = flightPausedArtScale,
+                    immersive = immersiveArt
+                )
+                .background(FoamTheme.colors.surfaceVariant)
+        } else {
+            sharedArtworkBase
+                .clip(RoundedCornerShape(listRowArtCornerRadius(density)))
+                .background(FoamTheme.colors.surfaceVariant)
+        }
     } else {
         Modifier
     }
