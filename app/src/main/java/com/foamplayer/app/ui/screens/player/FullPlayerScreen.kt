@@ -16,9 +16,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.gestures.DraggableState
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -82,7 +82,22 @@ fun FullPlayerScreen(
     val isImmersiveEnabled = settings.immersiveModeEnabled
     val isAnimatedCoverEnabled = isImmersiveEnabled && settings.animatedCoverEnabled
     val allowMobileDataForCanvas = settings.animatedCoverAllowMobileData
-    val track = state.currentTrack ?: return
+
+    // Narrow, equality-gated projections of the playback state -- the same idea as the
+    // ViewModel's narrow projections for the composition roots, kept local. derivedStateOf
+    // only notifies its readers when the projected value actually changes, so unrelated
+    // PlaybackState emissions (play/pause flips, audio-output changes) no longer recompose
+    // this whole screen: a play/pause press now only invalidates the transport leaves that
+    // read it. isPlaying deliberately stays raw -- it is consumed exclusively through the
+    // deferred provider below, inside leaf scopes (transport buttons, paused-art scale).
+    val currentTrack by remember { derivedStateOf { state.currentTrack } }
+    val queue by remember { derivedStateOf { state.queue } }
+    val queueIndex by remember { derivedStateOf { state.queueIndex } }
+    val queueEntryIds by remember { derivedStateOf { state.queueEntryIds } }
+    val durationMs by remember { derivedStateOf { state.durationMs } }
+    val isPlayingProvider = { state.isPlaying }
+    val track = currentTrack ?: return
+    val queueSize = queue.size
 
     var subViewMode by remember { mutableStateOf(SubViewMode.LYRICS) }
 
@@ -128,7 +143,13 @@ fun FullPlayerScreen(
         )
     }
 
-    BackHandler(enabled = upTransitionState.currentState || upTransitionState.targetState) {
+    // derivedStateOf gate: currentState/targetState churn at every transition boundary
+    // (and SeekableTransitionState may touch them while seeking); only the derived
+    // boolean flipping may recompose the screen body.
+    val backHandlerEnabled by remember {
+        derivedStateOf { upTransitionState.currentState || upTransitionState.targetState }
+    }
+    BackHandler(enabled = backHandlerEnabled) {
         gestureController.collapseToMainPlayer()
     }
 
@@ -154,14 +175,23 @@ fun FullPlayerScreen(
     // to the mini player, or subview fully open. Transitions (subview drag,
     // player close flight) keep playing; the surrounding layers fade the video
     // out visually instead.
-    val isCanvasPlaying = (playerTransitionState.currentState || playerTransitionState.targetState) &&
-            !(upTransitionState.currentState && upTransitionState.targetState)
+    val isCanvasPlaying by remember {
+        derivedStateOf {
+            (playerTransitionState.currentState || playerTransitionState.targetState) &&
+                    !(upTransitionState.currentState && upTransitionState.targetState)
+        }
+    }
 
-    val playerDrag = Modifier.draggable(
-        state = rememberDraggableState { delta -> gestureController.onDrag(delta) },
-        orientation = Orientation.Vertical,
-        onDragStopped = { v -> gestureController.onDragStopped(v) }
-    )
+    // Remembered so the Modifier instance stays stable across body recompositions:
+    // handing MainPlayerContent/SubViewContent a fresh modifier on every pass would
+    // defeat their skipping.
+    val playerDrag = remember(gestureController) {
+        Modifier.draggable(
+            state = DraggableState { delta -> gestureController.onDrag(delta) },
+            orientation = Orientation.Vertical,
+            onDragStopped = { v -> gestureController.onDragStopped(v) }
+        )
+    }
 
     val nestedScrollConnection = remember(gestureController) {
         object : NestedScrollConnection {
@@ -205,22 +235,27 @@ fun FullPlayerScreen(
         }
     }
 
-    val placeholderColor = if (playerTransitionState.currentState != playerTransitionState.targetState ||
-            upTransitionState.currentState != upTransitionState.targetState) Color.Transparent else FoamTheme.colors.surfaceVariant
+    val isTransitioning by remember {
+        derivedStateOf {
+            playerTransitionState.currentState != playerTransitionState.targetState ||
+                    upTransitionState.currentState != upTransitionState.targetState
+        }
+    }
+    val placeholderColor = if (isTransitioning) Color.Transparent else FoamTheme.colors.surfaceVariant
 
     val pagerState = rememberPagerState(
-        initialPage = state.queueIndex.coerceAtLeast(0),
-        pageCount = { state.queue.size }
+        initialPage = queueIndex.coerceAtLeast(0),
+        pageCount = { queue.size }
     )
 
     val seekBarProgress = rememberSeekBarProgressState(
         positionMsFlow = viewModel.positionMs,
         liveProgress = { livePositionMs ->
-            val progress = if (state.durationMs > 0) livePositionMs.toFloat() / state.durationMs else 0f
+            val progress = if (durationMs > 0) livePositionMs.toFloat() / durationMs else 0f
 
             val activeFraction = if (isAnimateSeekBarEnabled) {
                 val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                val distanceFromCurrent = abs(scrollPosition - state.queueIndex.coerceAtLeast(0))
+                val distanceFromCurrent = abs(scrollPosition - queueIndex.coerceAtLeast(0))
                 (1f - distanceFromCurrent).coerceIn(0f, 1f)
             } else {
                 1f
@@ -230,15 +265,11 @@ fun FullPlayerScreen(
         }
     )
 
-    val queueIndex = state.queueIndex
-    val queueSize = state.queue.size
-
     fun isMainPagerVisible() = !upTransitionState.currentState
 
     val context = LocalContext.current
 
-    LaunchedEffect(pagerState, state.queue) {
-        val queue = state.queue
+    LaunchedEffect(pagerState, queue) {
         snapshotFlow { pagerState.currentPage }
             .collect { currentPage ->
                 val indices = listOf(currentPage - 1, currentPage, currentPage + 1)
@@ -249,8 +280,7 @@ fun FullPlayerScreen(
             }
     }
 
-    LaunchedEffect(pagerState, state.queue) {
-        val queue = state.queue
+    LaunchedEffect(pagerState, queue) {
         snapshotFlow {
             AlbumArtPaletteCache.interpolatedColor(
                 currentPage = pagerState.currentPage,
@@ -300,8 +330,8 @@ fun FullPlayerScreen(
             queueIndex in 0 until queueSize &&
             pagerState.currentPage != queueIndex
         ) {
-            val fromPath = state.queue.getOrNull(pagerState.currentPage)?.albumArtPath
-            val toPath = state.queue.getOrNull(queueIndex)?.albumArtPath
+            val fromPath = queue.getOrNull(pagerState.currentPage)?.albumArtPath
+            val toPath = queue.getOrNull(queueIndex)?.albumArtPath
             if (fromPath != toPath) {
                 programmaticBackdropFromPath = fromPath
                 programmaticBackdropToPath = toPath
@@ -359,17 +389,17 @@ fun FullPlayerScreen(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            val indexA by remember(pagerState, state.queue.size) {
+            val indexA by remember(pagerState, queueSize) {
                 derivedStateOf {
                     val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    absoluteOffset.toInt().coerceIn(0, (state.queue.size - 1).coerceAtLeast(0))
+                    absoluteOffset.toInt().coerceIn(0, (queueSize - 1).coerceAtLeast(0))
                 }
             }
 
-            val indexB by remember(pagerState, state.queue.size) {
+            val indexB by remember(pagerState, queueSize) {
                 derivedStateOf {
                     val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    (absoluteOffset.toInt() + 1).coerceAtMost((state.queue.size - 1).coerceAtLeast(0))
+                    (absoluteOffset.toInt() + 1).coerceAtMost((queueSize - 1).coerceAtLeast(0))
                 }
             }
 
@@ -384,8 +414,15 @@ fun FullPlayerScreen(
             val backdropIndexA = indexA
             val backdropIndexB = indexB
 
-            val isProgrammaticCrossfadeActive = programmaticBackdropToPath != null &&
-                    programmaticBackdropCrossfade.value < 1f
+            // derivedStateOf gate: programmaticBackdropCrossfade.value advances every frame
+            // of the crossfade animation, and reading it raw here recomposed this whole
+            // screen per frame for the full crossfade duration. The boolean only flips at
+            // the crossfade's start and end.
+            val isProgrammaticCrossfadeActive by remember {
+                derivedStateOf {
+                    programmaticBackdropToPath != null && programmaticBackdropCrossfade.value < 1f
+                }
+            }
 
             // The blurred backdrop itself is hosted at the very root of the hierarchy (see
             // FoamNavigation and FullPlayerBackdropState): the same fillMaxSize box as the
@@ -398,7 +435,7 @@ fun FullPlayerScreen(
                     if (isProgrammaticCrossfadeActive) {
                         programmaticBackdropFromPath
                     } else {
-                        state.queue.getOrNull(backdropIndexA)?.albumArtPath
+                        queue.getOrNull(backdropIndexA)?.albumArtPath
                     }
                 backdropState.backArtPath =
                     if (isProgrammaticCrossfadeActive) {
@@ -406,7 +443,7 @@ fun FullPlayerScreen(
                     } else if (playerTransitionState.currentState != playerTransitionState.targetState) {
                         null
                     } else {
-                        state.queue.getOrNull(backdropIndexB)?.albumArtPath
+                        queue.getOrNull(backdropIndexB)?.albumArtPath
                     }
                 backdropState.immersive = isImmersiveEnabled
                 backdropState.canvasUrl = currentAnimatedCoverUrl
@@ -463,7 +500,11 @@ fun FullPlayerScreen(
                     ) {
                         MainPlayerContent(
                             track = track,
-                            state = state,
+                            queue = queue,
+                            queueIndex = queueIndex,
+                            queueEntryIds = queueEntryIds,
+                            isPlaying = isPlayingProvider,
+                            durationMs = durationMs,
                             pagerState = pagerState,
                             density = density,
                             screenWidthDp = configuration.screenWidthDp.dp,
@@ -495,7 +536,7 @@ fun FullPlayerScreen(
                             track = track,
                             subViewMode = subViewMode,
                             viewModel = viewModel,
-                            isPlaying = state.isPlaying,
+                            isPlaying = isPlayingProvider,
                             headerVisibilityScope = this@AnimatedVisibility,
                             headerArtAlpha = { if (isImmersiveEnabled) upTransitionState.progress() else 1f },
                             modifier = playerDrag,
@@ -570,9 +611,9 @@ fun FullPlayerScreen(
                         )
 
                         MiniPlayPauseButton(
-                            isPlaying = state.isPlaying,
+                            isPlaying = isPlayingProvider,
                             progress = subControlsProgress,
-                            onClick = { if (state.isPlaying) viewModel.pause() else viewModel.play() }
+                            onClick = { if (isPlayingProvider()) viewModel.pause() else viewModel.play() }
                         )
 
                         MiniTransportButton(
@@ -590,7 +631,7 @@ fun FullPlayerScreen(
 
             if (showSubViewSlider) {
                 PlaybackProgressSlider(
-                    durationMs = state.durationMs,
+                    durationMs = durationMs,
                     seekBarProgress = seekBarProgress,
                     isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                     onSeek = { positionMs -> viewModel.seekTo(positionMs) },

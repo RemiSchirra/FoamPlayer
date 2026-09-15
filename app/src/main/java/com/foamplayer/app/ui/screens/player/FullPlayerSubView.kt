@@ -39,7 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -66,11 +65,17 @@ internal enum class SubViewMode(val labelRes: Int) {
 }
 
 /**
- * Isolated on purpose: FoamTheme.accentColor changes every frame of a horizontal
- * swipe (it's driven by viewModel.setDynamicAccentColor, fired every drag frame).
- * Reading it here -- one leaf per entry -- instead of inline in
- * SubViewSelectorRow's own body confines that per-frame recomposition to just the
- * selected item's icon, rather than the whole row (and the row's caller).
+ * Isolated on purpose, twice over:
+ *  - FoamTheme.accentColor changes every frame of a horizontal swipe (it's driven by
+ *    viewModel.setDynamicAccentColor, fired every drag frame). Reading it here -- one
+ *    leaf per entry -- instead of inline in SubViewSelectorRow's own body confines that
+ *    per-frame recomposition to just the selected item's icon, rather than the whole
+ *    row (and the row's caller).
+ *  - The selection tint tracks the subview transition fraction, which changes every
+ *    frame of the drag/settle. It's a draw-phase crossfade: progress() is read inside
+ *    the resting icon's graphicsLayer, so it only redraws the icons, where the previous
+ *    composition-phase lerp recomposed both selector items on every frame of every
+ *    subview transition.
  */
 @Composable
 private fun SubViewSelectorItem(
@@ -79,8 +84,9 @@ private fun SubViewSelectorItem(
     progress: () -> Float,
     onSelect: (SubViewMode) -> Unit
 ) {
-    val targetColor = if (isSelected) FoamTheme.accentColor else FoamTheme.colors.textSecondary
-    val color = lerp(FoamTheme.colors.textPrimary, targetColor, progress().coerceIn(0f, 1f))
+    val baseColor = FoamTheme.colors.textPrimary
+    val selectedColor = FoamTheme.accentColor
+    val deselectedColor = FoamTheme.colors.textSecondary
     val icon = when (mode) {
         SubViewMode.LYRICS -> FoamTheme.icons.current.lyrics
         SubViewMode.QUEUE -> FoamTheme.icons.current.queue
@@ -108,7 +114,27 @@ private fun SubViewSelectorItem(
             .padding(touchPadding),
         contentAlignment = Alignment.Center
     ) {
-        Icon(imageVector = icon, contentDescription = label, tint = color, modifier = Modifier.size(iconSize))
+        // Selection tint as a draw-phase crossfade: the subview transition fraction changes
+        // every frame of the drag/settle, so the interpolation between the resting and
+        // selected colors runs in graphicsLayer (redraw-only) instead of composition -- the
+        // previous single-icon composition-phase lerp recomposed both selector items on
+        // every frame of every subview transition. For two opaque colors, stacking the
+        // resting tint at alpha (1 - progress) over the selected tint composites to exactly
+        // lerp(selected, resting, progress).
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (isSelected) selectedColor else deselectedColor,
+            modifier = Modifier.size(iconSize)
+        )
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = baseColor,
+            modifier = Modifier
+                .size(iconSize)
+                .graphicsLayer { alpha = 1f - progress().coerceIn(0f, 1f) }
+        )
     }
 }
 
@@ -138,7 +164,9 @@ internal fun SharedTransitionScope.SubViewContent(
     track: TrackEntity,
     subViewMode: SubViewMode,
     viewModel: PlayerViewModel,
-    isPlaying: Boolean,
+    // Deferred: consumed only by the paused-art scale inside MiniPlayerHeader, so a
+    // play/pause flip doesn't recompose this subtree (including LyricsScreen/QueueScreen).
+    isPlaying: () -> Boolean,
     headerVisibilityScope: AnimatedVisibilityScope,
     headerArtAlpha: () -> Float,
     modifier: Modifier,
@@ -188,7 +216,7 @@ internal fun SharedTransitionScope.SubViewContent(
 @Composable
 private fun SharedTransitionScope.MiniPlayerHeader(
     track: TrackEntity,
-    isPlaying: Boolean,
+    isPlaying: () -> Boolean,
     headerVisibilityScope: AnimatedVisibilityScope,
     headerArtAlpha: () -> Float,
     onBack: () -> Unit,
@@ -315,11 +343,13 @@ private fun SharedTransitionScope.MiniPlayerHeader(
  */
 @Composable
 internal fun MiniPlayPauseButton(
-    isPlaying: Boolean,
+    isPlaying: () -> Boolean,
     progress: () -> Float,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Read in this leaf's scope: a play/pause flip recomposes only this button.
+    val isPlaying = isPlaying()
     val isEnabled by remember(progress) { derivedStateOf { progress() > PlayerDimens.visibilityEpsilon } }
     val playInteractions = remember { MutableInteractionSource() }
 

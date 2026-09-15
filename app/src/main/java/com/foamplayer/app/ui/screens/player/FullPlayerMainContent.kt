@@ -55,7 +55,6 @@ import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.R
-import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
@@ -77,7 +76,16 @@ import kotlin.math.abs
 @Composable
 internal fun SharedTransitionScope.MainPlayerContent(
     track: TrackEntity,
-    state: PlaybackState,
+    // Narrow projections of PlaybackState (see FullPlayerScreen): passing only what this
+    // subtree renders instead of the whole state object lets play/pause flips, duration
+    // ticks and audio-output changes skip the entire pager/controls tree.
+    queue: List<TrackEntity>,
+    queueIndex: Int,
+    queueEntryIds: List<Long>,
+    // Deferred isPlaying: read only by the play/pause button leaf and the paused-art
+    // scale, so a playback flip never re-runs this subtree.
+    isPlaying: () -> Boolean,
+    durationMs: Long,
     pagerState: PagerState,
     density: Density,
     screenWidthDp: Dp,
@@ -101,10 +109,10 @@ internal fun SharedTransitionScope.MainPlayerContent(
 
         TrackHeroPager(
             track = track,
-            queue = state.queue,
-            queueIndex = state.queueIndex,
-            queueEntryIds = state.queueEntryIds,
-            isPlaying = state.isPlaying,
+            queue = queue,
+            queueIndex = queueIndex,
+            queueEntryIds = queueEntryIds,
+            isPlaying = isPlaying,
             pagerState = pagerState,
             density = density,
             screenWidthDp = screenWidthDp,
@@ -122,8 +130,8 @@ internal fun SharedTransitionScope.MainPlayerContent(
 
         PlaybackControls(
             track = track,
-            isPlaying = state.isPlaying,
-            durationMs = state.durationMs,
+            isPlaying = isPlaying,
+            durationMs = durationMs,
             outerVisibilityScope = outerVisibilityScope,
             seekBarProgress = seekBarProgress,
             isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
@@ -139,7 +147,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
                     PreviousAction.SKIP_TO_PREVIOUS -> viewModel.previous()
                 }
             },
-            onPlayPause = { if (state.isPlaying) viewModel.pause() else viewModel.play() },
+            onPlayPause = { if (isPlaying()) viewModel.pause() else viewModel.play() },
             onNext = {
                 seekBarProgress.onNextPressed(animated = isAnimateSeekBarEnabled)
                 viewModel.next()
@@ -161,7 +169,9 @@ internal fun SharedTransitionScope.TrackHeroPager(
     queue: List<TrackEntity>,
     queueIndex: Int,
     queueEntryIds: List<Long>,
-    isPlaying: Boolean,
+    // Deferred: consumed only via rememberPausedArtScale, whose animation reads it
+    // inside its own scope, so play/pause flips don't recompose the pager pages.
+    isPlaying: () -> Boolean,
     pagerState: PagerState,
     density: Density,
     screenWidthDp: Dp,
@@ -473,7 +483,8 @@ internal fun TrackMoreButton(track: TrackEntity) {
 @Composable
 internal fun SharedTransitionScope.PlaybackControls(
     track: TrackEntity,
-    isPlaying: Boolean,
+    // Deferred: forwarded to PlayPauseButton, which reads it in its own scope.
+    isPlaying: () -> Boolean,
     durationMs: Long,
     outerVisibilityScope: AnimatedVisibilityScope,
     seekBarProgress: SeekBarProgressState,
@@ -548,11 +559,14 @@ internal fun SharedTransitionScope.PlaybackControls(
 @Composable
 internal fun SharedTransitionScope.PlayPauseButton(
     track: TrackEntity,
-    isPlaying: Boolean,
+    isPlaying: () -> Boolean,
     outerVisibilityScope: AnimatedVisibilityScope,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Read in this leaf's scope: a play/pause flip recomposes only this button -- the
+    // deferred provider keeps the controls row and the pager above it uninvalidated.
+    val isPlaying = isPlaying()
     val playInteractions = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
