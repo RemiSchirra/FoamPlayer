@@ -53,6 +53,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.navigation.NavBarDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
+import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import kotlin.math.abs
 import androidx.core.net.toUri
 import kotlinx.coroutines.flow.StateFlow
@@ -212,6 +213,7 @@ fun MiniPlayer(
     val queue = playbackState.queue
     val queueEntryIds = playbackState.queueEntryIds
     val currentIndex = playbackState.queueIndex
+    val pausedArtScale by rememberPausedArtScale(playbackState.isPlaying)
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -527,11 +529,13 @@ fun MiniPlayer(
                                     // animation draw-only (a .clip() here recomposed the whole
                                     // mini player per transition frame and allocated a fresh
                                     // shape each time).
-                                    .graphicsLayer {
-                                        shape = RoundedCornerShape(animatedCornerRadius)
-                                        clip = true
-                                    }
-                                    .background(FoamTheme.colors.surface),
+                    .graphicsLayer {
+                        shape = RoundedCornerShape(animatedCornerRadius)
+                        clip = true
+                        scaleX = pausedArtScale
+                        scaleY = pausedArtScale
+                    }
+                    .background(FoamTheme.colors.surface),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (pageTrack.albumArtPath != null) {

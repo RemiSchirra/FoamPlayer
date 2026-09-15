@@ -69,6 +69,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 import com.foamplayer.app.ui.utils.pingPongMarquee
 import com.foamplayer.app.ui.utils.pressShrink
+import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import kotlin.math.abs
 
 /** Layer 1 content: handle, hi-res badge, the track hero pager, playback controls, subview shortcuts. */
@@ -103,6 +104,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
             queue = state.queue,
             queueIndex = state.queueIndex,
             queueEntryIds = state.queueEntryIds,
+            isPlaying = state.isPlaying,
             pagerState = pagerState,
             density = density,
             screenWidthDp = screenWidthDp,
@@ -159,6 +161,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
     queue: List<TrackEntity>,
     queueIndex: Int,
     queueEntryIds: List<Long>,
+    isPlaying: Boolean,
     pagerState: PagerState,
     density: Density,
     screenWidthDp: Dp,
@@ -186,6 +189,8 @@ internal fun SharedTransitionScope.TrackHeroPager(
 
     val miniImageSize = 44.dp
     val fullImageSize = screenWidthDp - (PlayerDimens.horizontalPagePadding * 2)
+
+    val pausedArtScale by rememberPausedArtScale(isPlaying)
 
     val miniRadius = (miniImageSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
@@ -239,9 +244,13 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(1f)
+                            .graphicsLayer {
+                                alpha = anchorPageAlpha()
+                                scaleX = pausedArtScale
+                                scaleY = pausedArtScale
+                            }
                             .clip(RoundedCornerShape(fullRadius))
-                            .background(placeholderColor)
-                            .graphicsLayer { alpha = anchorPageAlpha() },
+                            .background(placeholderColor),
                         contentAlignment = Alignment.Center
                     ) {
                         if (pageTrack.albumArtPath != null) {
@@ -347,6 +356,8 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         .graphicsLayer {
                             shape = RoundedCornerShape(animatedCornerRadiusPx())
                             clip = true
+                            scaleX = pausedArtScale
+                            scaleY = pausedArtScale
                             alpha = if (immersive) {
                                 val openFade = 1f - EaseOutCubic.transform(
                                     (playerTransitionState.progress() / immersiveArtFadeSpan)

@@ -73,3 +73,6 @@ internal const val TRANSITION_DURATION_MS = 300
 
 /** Fraction of the open/subview-close flight over which the immersive art fades out (hero side). */
 internal const val immersiveArtFadeSpan = 0.6f
+
+/** Hero art shrink while playback is paused (also applied to the pager page art beneath it). */
+internal const val PausedArtScale = 0.97f

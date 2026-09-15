@@ -58,6 +58,7 @@ import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.pressShrink
+import com.foamplayer.app.ui.utils.rememberPausedArtScale
 
 internal enum class SubViewMode(val labelRes: Int) {
     LYRICS(R.string.lyrics),
@@ -137,6 +138,7 @@ internal fun SharedTransitionScope.SubViewContent(
     track: TrackEntity,
     subViewMode: SubViewMode,
     viewModel: PlayerViewModel,
+    isPlaying: Boolean,
     headerVisibilityScope: AnimatedVisibilityScope,
     headerArtAlpha: () -> Float,
     modifier: Modifier,
@@ -156,6 +158,7 @@ internal fun SharedTransitionScope.SubViewContent(
             )
             MiniPlayerHeader(
                 track = track,
+                isPlaying = isPlaying,
                 headerVisibilityScope = headerVisibilityScope,
                 headerArtAlpha = headerArtAlpha,
                 onBack = onCollapse,
@@ -185,6 +188,7 @@ internal fun SharedTransitionScope.SubViewContent(
 @Composable
 private fun SharedTransitionScope.MiniPlayerHeader(
     track: TrackEntity,
+    isPlaying: Boolean,
     headerVisibilityScope: AnimatedVisibilityScope,
     headerArtAlpha: () -> Float,
     onBack: () -> Unit,
@@ -196,6 +200,8 @@ private fun SharedTransitionScope.MiniPlayerHeader(
 
     val miniRadius = (miniImageSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
+
+    val pausedArtScale by rememberPausedArtScale(isPlaying)
 
     // Deferred reads: the transition fraction is evaluated inside the graphicsLayer
     // blocks below, so the subview drag animates the corner radii per frame without
@@ -265,6 +271,8 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                             shape = RoundedCornerShape(imageRadiusPx())
                             clip = true
                             alpha = headerArtAlpha()
+                            scaleX = pausedArtScale
+                            scaleY = pausedArtScale
                         }
                         .background(FoamTheme.colors.surfaceVariant)
                 ) {
