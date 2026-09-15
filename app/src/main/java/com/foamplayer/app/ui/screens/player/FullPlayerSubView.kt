@@ -13,6 +13,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,6 +57,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.utils.pressShrink
 
 internal enum class SubViewMode(val labelRes: Int) {
     LYRICS(R.string.lyrics),
@@ -93,10 +95,15 @@ private fun SubViewSelectorItem(
         SubViewMode.LYRICS -> 12.dp
         SubViewMode.QUEUE -> 10.dp
     }
+    val selectorInteractions = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .clip(CircleShape)
-            .clickable { onSelect(mode) }
+            .pressShrink(selectorInteractions)
+            .clickable(
+                interactionSource = selectorInteractions,
+                indication = null
+            ) { onSelect(mode) }
             .padding(touchPadding),
         contentAlignment = Alignment.Center
     ) {
@@ -306,14 +313,21 @@ internal fun MiniPlayPauseButton(
     modifier: Modifier = Modifier
 ) {
     val isEnabled by remember(progress) { derivedStateOf { progress() > PlayerDimens.visibilityEpsilon } }
+    val playInteractions = remember { MutableInteractionSource() }
 
     Box(
         modifier = modifier
+            .pressShrink(playInteractions)
             .size(PlayerDimens.miniPlayButtonSize)
             .graphicsLayer { alpha = progress() }
             .clip(CircleShape)
             .background(FoamTheme.accentColor)
-            .clickable(enabled = isEnabled, onClick = onClick),
+            .clickable(
+                interactionSource = playInteractions,
+                indication = null,
+                enabled = isEnabled,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -342,13 +356,20 @@ internal fun MiniTransportButton(
     modifier: Modifier = Modifier
 ) {
     val isEnabled by remember(progress) { derivedStateOf { progress() > PlayerDimens.visibilityEpsilon } }
+    val transportInteractions = remember { MutableInteractionSource() }
 
     Box(
         modifier = modifier
+            .pressShrink(transportInteractions)
             .size(PlayerDimens.miniTransportButtonSize)
             .graphicsLayer { alpha = progress() }
             .clip(CircleShape)
-            .clickable(enabled = isEnabled, onClick = onClick),
+            .clickable(
+                interactionSource = transportInteractions,
+                indication = null,
+                enabled = isEnabled,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(

@@ -8,6 +8,7 @@ import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -67,6 +68,7 @@ import com.foamplayer.app.ui.components.onSeekBarReleased
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 import com.foamplayer.app.ui.utils.pingPongMarquee
+import com.foamplayer.app.ui.utils.pressShrink
 import kotlin.math.abs
 
 /** Layer 1 content: handle, hi-res badge, the track hero pager, playback controls, subview shortcuts. */
@@ -436,10 +438,15 @@ internal fun SharedTransitionScope.TrackHeroPager(
 @Composable
 internal fun TrackMoreButton(track: TrackEntity) {
     val trackModalState = LocalTrackFoamModalState.current
+    val moreInteractions = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .size(40.dp)
-            .clickable { trackModalState?.show(track) },
+            .pressShrink(moreInteractions)
+            .clickable(
+                interactionSource = moreInteractions,
+                indication = null
+            ) { trackModalState?.show(track) },
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -482,11 +489,19 @@ internal fun SharedTransitionScope.PlaybackControls(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val previousInteractions = remember { MutableInteractionSource() }
             Icon(
                 imageVector = FoamTheme.icons.current.previous,
                 contentDescription = stringResource(R.string.previous),
                 tint = FoamTheme.colors.textPrimary,
-                modifier = Modifier.size(PlayerDimens.transportIconSize).clickable(onClick = onPrevious)
+                modifier = Modifier
+                    .size(PlayerDimens.transportIconSize)
+                    .pressShrink(previousInteractions)
+                    .clickable(
+                        interactionSource = previousInteractions,
+                        indication = null,
+                        onClick = onPrevious
+                    )
             )
             PlayPauseButton(
                 track = track,
@@ -494,11 +509,19 @@ internal fun SharedTransitionScope.PlaybackControls(
                 outerVisibilityScope = outerVisibilityScope,
                 onClick = onPlayPause
             )
+            val nextInteractions = remember { MutableInteractionSource() }
             Icon(
                 imageVector = FoamTheme.icons.current.next,
                 contentDescription = stringResource(R.string.next),
                 tint = FoamTheme.colors.textPrimary,
-                modifier = Modifier.size(PlayerDimens.transportIconSize).clickable(onClick = onNext)
+                modifier = Modifier
+                    .size(PlayerDimens.transportIconSize)
+                    .pressShrink(nextInteractions)
+                    .clickable(
+                        interactionSource = nextInteractions,
+                        indication = null,
+                        onClick = onNext
+                    )
             )
         }
     }
@@ -519,6 +542,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val playInteractions = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
             .size(PlayerDimens.playButtonSize)
@@ -526,7 +550,12 @@ internal fun SharedTransitionScope.PlayPauseButton(
                 rememberSharedContentState(key = "play_button_${track.id}"),
                 animatedVisibilityScope = outerVisibilityScope
             )
-            .clickable(onClick = onClick),
+            .pressShrink(playInteractions)
+            .clickable(
+                interactionSource = playInteractions,
+                indication = null,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
