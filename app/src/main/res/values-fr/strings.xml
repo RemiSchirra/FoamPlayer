@@ -157,4 +157,37 @@
     <string name="off">OFF</string>
 
     <string name="language">Langue</string>
+
+    <string name="lyrics_manager">Gestion des paroles</string>
+    <string name="lyrics_manager_desc">Rechercher, enregistrer et intégrer des paroles</string>
+    <string name="lyrics_manager_cached">En cache</string>
+    <string name="lyrics_manager_embedded">Intégrées</string>
+    <string name="lyrics_manager_file">Fichier</string>
+    <string name="lyrics_manager_no_lyrics">Sans paroles</string>
+    <string name="lyrics_manager_total">Total</string>
+    <string name="lyrics_manager_search_hint">Rechercher titres, artistes, albums...</string>
+    <string name="lyrics_manager_no_songs">Aucun titre ne correspond</string>
+    <string name="lyrics_manager_scanning">Analyse des paroles…</string>
+    <string name="lyrics_manager_filter_all">Tout</string>
+    <string name="lyrics_manager_delete">Supprimer les paroles</string>
+    <string name="lyrics_manager_deleted">Paroles supprimées</string>
+    <string name="lyrics_manager_deleted_partial">Paroles supprimées (paroles intégrées non supprimables dans ce format)</string>
+    <string name="lyrics_manager_delete_failed">Impossible de supprimer les paroles : %1$s</string>
+    <string name="lyrics_modal_search_prompt">Aucune paroles trouvée, rechercher des paroles ?</string>
+    <string name="lyrics_results_plain">Brutes</string>
+    <string name="lyrics_results_synced">Synchronisées</string>
+    <string name="lyrics_results_word_synced">Mot à mot</string>
+    <string name="lyrics_results_title">Résultats de recherche</string>
+    <string name="lyrics_results_provider">Fournisseur</string>
+    <string name="lyrics_results_save_as_file">Enregistrer en fichier</string>
+    <string name="lyrics_results_embed">Intégrer au fichier</string>
+    <string name="lyrics_results_saved">Paroles enregistrées dans un fichier</string>
+    <string name="lyrics_results_embedded">Paroles intégrées au fichier</string>
+    <string name="lyrics_results_save_failed">Impossible d\'enregistrer : %1$s</string>
+    <string name="lyrics_results_embed_failed">Impossible d\'intégrer : %1$s</string>
+    <string name="lyrics_results_duration_match">Durée correspondante</string>
+    <string name="lyrics_results_expand">Tout afficher</string>
+    <string name="lyrics_results_collapse">Réduire</string>
+    <string name="lyrics_view_readable">Lisible</string>
+    <string name="lyrics_view_raw">Brut</string>
 </resources>

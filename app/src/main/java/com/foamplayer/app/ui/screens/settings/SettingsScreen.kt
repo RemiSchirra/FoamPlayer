@@ -151,7 +151,8 @@ fun SettingsCategoryItem(
 fun SettingsHeader(
     title: String,
     modifier: Modifier = Modifier,
-    onBack: (() -> Unit)? = null
+    onBack: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = modifier
@@ -176,6 +177,9 @@ fun SettingsHeader(
             }
             Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
         }
-        BasicText(text = title, style = FoamTheme.typography.titleLarge)
+        BasicText(text = title, style = FoamTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        if (trailing != null) {
+            trailing()
+        }
     }
 }

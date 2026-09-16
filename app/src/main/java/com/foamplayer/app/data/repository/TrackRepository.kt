@@ -1,6 +1,7 @@
 package com.foamplayer.app.data.repository
 
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
+import com.foamplayer.app.data.db.dao.CachedLyricsDao
 import com.foamplayer.app.data.db.dao.TrackDao
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.scanner.LocalAudioScanner
@@ -18,7 +19,8 @@ import javax.inject.Singleton
 class TrackRepository @Inject constructor(
     private val trackDao: TrackDao,
     private val scanner: LocalAudioScanner,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val cachedLyricsDao: CachedLyricsDao
 ) {
     private val _scanStatus = MutableStateFlow<ScanStatus>(ScanStatus.Idle)
     val scanStatus: StateFlow<ScanStatus> = _scanStatus.asStateFlow()
@@ -26,6 +28,8 @@ class TrackRepository @Inject constructor(
     fun getAllTracks(): Flow<List<TrackEntity>> = trackDao.getAllTracks()
 
     suspend fun getAllTracksOnce(): List<TrackEntity> = trackDao.getAllTracksOnce()
+
+    suspend fun getTrackById(trackId: Long): TrackEntity? = trackDao.getTrackById(trackId)
 
     fun searchTracks(query: String): Flow<List<TrackEntity>> = trackDao.searchTracks(query)
 
@@ -111,6 +115,7 @@ class TrackRepository @Inject constructor(
         trackDao.insertTracks(mergedTracks)
         val scannedPaths = mergedTracks.map { it.path }
         trackDao.deleteOrphanedTracks(scannedPaths)
+        cachedLyricsDao.deleteOrphaned(mergedTracks.map { it.id })
 
         _scanStatus.value = ScanStatus.Finished(scannedTracks.size)
     }

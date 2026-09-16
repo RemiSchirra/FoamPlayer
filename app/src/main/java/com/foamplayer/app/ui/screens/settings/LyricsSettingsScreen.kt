@@ -51,6 +51,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 @Composable
 fun LyricsSettingsScreen(
     onBack: () -> Unit,
+    onNavigateToLyricsManager: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     var showProvidersModal by remember { mutableStateOf(false) }
@@ -98,6 +99,24 @@ fun LyricsSettingsScreen(
                     title = "Lyrics Providers",
                     description = "Enable and reorder providers",
                     onClick = { showProvidersModal = true }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+
+            BasicText(text = "Manager", style = FoamTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .background(FoamTheme.colors.surface)
+            ) {
+                FoamNavigationButton(
+                    title = stringResource(R.string.lyrics_manager),
+                    description = stringResource(R.string.lyrics_manager_desc),
+                    onClick = onNavigateToLyricsManager
                 )
             }
 

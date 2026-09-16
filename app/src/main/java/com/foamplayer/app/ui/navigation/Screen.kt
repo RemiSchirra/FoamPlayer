@@ -16,6 +16,11 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsBackground : Screen("settings/ui/background", "Background Settings")
     object SettingsLibrary : Screen("settings/library", "Library Settings")
     object SettingsLyrics : Screen("settings/lyrics", "Lyrics Settings")
+    object SettingsLyricsManager : Screen("settings/lyrics/manager", "Lyrics Manager")
+    object SettingsLyricsManagerResults :
+        Screen("settings/lyrics/manager/results?trackId={trackId}", "Lyrics Search Results") {
+        fun createRoute(trackId: Long) = "settings/lyrics/manager/results?trackId=$trackId"
+    }
     object SettingsTest : Screen("settings/test", "Component Test")
 
     object ArtistDetail : Screen("artist/{artistName}", "Artist") {

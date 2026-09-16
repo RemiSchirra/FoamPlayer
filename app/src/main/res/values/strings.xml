@@ -82,6 +82,39 @@
     <string name="search_priority">Search Priority</string>
     <string name="drag_to_reorder_desc">Drag handles to reorder. Enabled providers are searched in order.</string>
 
+    <string name="lyrics_manager">Lyrics Manager</string>
+    <string name="lyrics_manager_desc">Search, save and embed lyrics</string>
+    <string name="lyrics_manager_cached">Cached</string>
+    <string name="lyrics_manager_embedded">Embedded</string>
+    <string name="lyrics_manager_file">File</string>
+    <string name="lyrics_manager_no_lyrics">No lyrics</string>
+    <string name="lyrics_manager_total">Total</string>
+    <string name="lyrics_manager_search_hint">Search songs, artists, albums...</string>
+    <string name="lyrics_manager_no_songs">No songs match</string>
+    <string name="lyrics_manager_scanning">Analyzing lyrics…</string>
+    <string name="lyrics_manager_filter_all">All</string>
+    <string name="lyrics_manager_delete">Delete lyrics</string>
+    <string name="lyrics_manager_deleted">Lyrics deleted</string>
+    <string name="lyrics_manager_deleted_partial">Lyrics deleted (embedded lyrics could not be removed in this format)</string>
+    <string name="lyrics_manager_delete_failed">Could not delete lyrics: %1$s</string>
+    <string name="lyrics_modal_search_prompt">No lyrics found, search lyrics ?</string>
+    <string name="lyrics_results_plain">Plain</string>
+    <string name="lyrics_results_synced">Synced</string>
+    <string name="lyrics_results_word_synced">Word-synced</string>
+    <string name="lyrics_results_title">Lyrics Search Results</string>
+    <string name="lyrics_results_provider">Provider</string>
+    <string name="lyrics_results_save_as_file">Save as file</string>
+    <string name="lyrics_results_embed">Embed in file</string>
+    <string name="lyrics_results_saved">Lyrics saved to file</string>
+    <string name="lyrics_results_embedded">Lyrics embedded in file</string>
+    <string name="lyrics_results_save_failed">Could not save lyrics: %1$s</string>
+    <string name="lyrics_results_embed_failed">Could not embed lyrics: %1$s</string>
+    <string name="lyrics_results_duration_match">Duration matches</string>
+    <string name="lyrics_results_expand">Show all</string>
+    <string name="lyrics_results_collapse">Show less</string>
+    <string name="lyrics_view_readable">Readable</string>
+    <string name="lyrics_view_raw">Raw</string>
+
     <string name="equalizer_notice">⚠️ Notice: Equalizer active. Audio path is operating in high-precision mode.</string>
 
     <string name="audio_library">Audio Library</string>

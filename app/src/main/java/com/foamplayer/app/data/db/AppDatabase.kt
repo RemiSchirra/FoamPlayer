@@ -4,9 +4,11 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.foamplayer.app.data.db.dao.CachedLyricsDao
 import com.foamplayer.app.data.db.dao.PlaylistDao
 import com.foamplayer.app.data.db.dao.QueueDao
 import com.foamplayer.app.data.db.dao.TrackDao
+import com.foamplayer.app.data.db.entities.CachedLyricsEntity
 import com.foamplayer.app.data.db.entities.FolderEntity
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.PlaylistTrackCrossRef
@@ -19,15 +21,17 @@ import com.foamplayer.app.data.db.entities.TrackEntity
         PlaylistEntity::class,
         PlaylistTrackCrossRef::class,
         QueueItemEntity::class,
-        FolderEntity::class
+        FolderEntity::class,
+        CachedLyricsEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun trackDao(): TrackDao
     abstract fun playlistDao(): PlaylistDao
     abstract fun queueDao(): QueueDao
+    abstract fun cachedLyricsDao(): CachedLyricsDao
 
     companion object {
         /** Adds the composer column to the tracks table (track details modal). */
@@ -70,6 +74,19 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tracks ADD COLUMN instrumental INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /** Adds the cached-lyrics table (online-fetched lyrics persisted per track). */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS cached_lyrics (" +
+                            "trackId INTEGER NOT NULL PRIMARY KEY, " +
+                            "lyrics TEXT NOT NULL, " +
+                            "provider TEXT, " +
+                            "fetchedAtMs INTEGER NOT NULL)"
+                )
             }
         }
     }

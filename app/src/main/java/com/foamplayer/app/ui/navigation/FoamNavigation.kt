@@ -115,6 +115,8 @@ import com.foamplayer.app.ui.screens.settings.PlayerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.SettingsScreen
 import com.foamplayer.app.ui.screens.settings.TestSettingsScreen
 import com.foamplayer.app.ui.screens.settings.UISettingsScreen
+import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsManagerScreen
+import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsSearchResultsScreen
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.components.TrackCenterRequest
 import kotlinx.coroutines.Job
@@ -1055,11 +1057,34 @@ fun FoamNavHost(
                                     composable(Screen.SettingsBackground.route) {
                                         BackgroundSettingsScreen(onBack = { navController.popBackStack() })
                                     }
+                                    composable(Screen.SettingsLyricsManager.route) {
+                                        LyricsManagerScreen(
+                                            onBack = { navController.popBackStack() },
+                                            onOpenResults = { trackId ->
+                                                navController.navigate(Screen.SettingsLyricsManagerResults.createRoute(trackId))
+                                            }
+                                        )
+                                    }
+                                    composable(
+                                        Screen.SettingsLyricsManagerResults.route,
+                                        arguments = listOf(navArgument("trackId") { type = NavType.LongType })
+                                    ) { backStackEntry ->
+                                        val trackId = backStackEntry.arguments?.getLong("trackId") ?: -1L
+                                        LyricsSearchResultsScreen(
+                                            trackId = trackId,
+                                            onBack = { navController.popBackStack() }
+                                        )
+                                    }
                                     composable(Screen.SettingsLibrary.route) {
                                         LibrarySettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     composable(Screen.SettingsLyrics.route) {
-                                        LyricsSettingsScreen(onBack = { navController.popBackStack() })
+                                        LyricsSettingsScreen(
+                                            onBack = { navController.popBackStack() },
+                                            onNavigateToLyricsManager = {
+                                                navController.navigate(Screen.SettingsLyricsManager.route)
+                                            }
+                                        )
                                     }
                                     composable(Screen.SettingsTest.route) {
                                         TestSettingsScreen(onBack = { navController.popBackStack() })

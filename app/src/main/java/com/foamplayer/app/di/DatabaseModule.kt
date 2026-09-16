@@ -3,6 +3,7 @@ package com.foamplayer.app.di
 import android.content.Context
 import androidx.room.Room
 import com.foamplayer.app.data.db.AppDatabase
+import com.foamplayer.app.data.db.dao.CachedLyricsDao
 import com.foamplayer.app.data.db.dao.PlaylistDao
 import com.foamplayer.app.data.db.dao.QueueDao
 import com.foamplayer.app.data.db.dao.TrackDao
@@ -31,7 +32,8 @@ object DatabaseModule {
                 AppDatabase.MIGRATION_3_4,
                 AppDatabase.MIGRATION_4_5,
                 AppDatabase.MIGRATION_5_6,
-                AppDatabase.MIGRATION_6_7
+                AppDatabase.MIGRATION_6_7,
+                AppDatabase.MIGRATION_7_8
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -45,4 +47,7 @@ object DatabaseModule {
 
     @Provides
     fun provideQueueDao(database: AppDatabase): QueueDao = database.queueDao()
+
+    @Provides
+    fun provideCachedLyricsDao(database: AppDatabase): CachedLyricsDao = database.cachedLyricsDao()
 }
