@@ -7,6 +7,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.LyricsRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
+import com.foamplayer.app.data.settings.AppSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -17,13 +18,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+enum class SearchFilter { LYRICS, ALBUMS, ARTISTS, TRACKS }
+
+data class SearchFilters(
+    val lyrics: Boolean = true,
+    val albums: Boolean = true,
+    val artists: Boolean = true,
+    val tracks: Boolean = true
+) {
+    val allEnabled: Boolean get() = lyrics && albums && artists && tracks
+}
 
 data class SearchUiState(
     val tracks: List<TrackEntity> = emptyList(),
@@ -33,7 +47,8 @@ data class SearchUiState(
     /** Tracks whose locally available lyrics contain the query (streams in as the scan progresses). */
     val lyricsMatches: List<TrackEntity> = emptyList(),
     /** True while the background lyrics scan is still running. */
-    val lyricsSearchInProgress: Boolean = false
+    val lyricsSearchInProgress: Boolean = false,
+    val filters: SearchFilters = SearchFilters()
 )
 
 /** Progressive result of the background lyrics text scan. */
@@ -64,7 +79,7 @@ class SearchViewModel @Inject constructor(
                     val history = settings.searchHistory.mapNotNull { path ->
                         allTracks.find { it.path == path }
                     }
-                    SearchUiState(history = history)
+                    SearchUiState(history = history, filters = settings.toSearchFilters())
                 }
             } else {
                 combine(
@@ -77,7 +92,13 @@ class SearchViewModel @Inject constructor(
                     val history = settings.searchHistory.mapNotNull { path ->
                         allTracks.find { it.path == path }
                     }
-                    SearchUiState(tracks, artists, albums, history)
+                    SearchUiState(
+                        tracks = if (settings.searchInTracks) tracks else emptyList(),
+                        artists = if (settings.searchInArtists) artists else emptyList(),
+                        albums = if (settings.searchInAlbums) albums else emptyList(),
+                        history = history,
+                        filters = settings.toSearchFilters()
+                    )
                 }
             }
         }
@@ -89,10 +110,13 @@ class SearchViewModel @Inject constructor(
      * new query cancels the previous scan.
      */
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-    private val lyricsState: Flow<LyricsSearchState> = _query
-        .debounce { if (it.isBlank()) 0L else LYRICS_SEARCH_DEBOUNCE_MS }
-        .flatMapLatest { query ->
-            if (query.isBlank()) {
+    private val lyricsState: Flow<LyricsSearchState> = combine(
+        _query,
+        settingsRepository.settings.map { it.searchInLyrics }.distinctUntilChanged()
+    ) { query, lyricsEnabled -> query to lyricsEnabled }
+        .debounce { (query, _) -> if (query.isBlank()) 0L else LYRICS_SEARCH_DEBOUNCE_MS }
+        .flatMapLatest { (query, lyricsEnabled) ->
+            if (query.isBlank() || !lyricsEnabled) {
                 flowOf(LyricsSearchState())
             } else {
                 flow {
@@ -124,6 +148,41 @@ class SearchViewModel @Inject constructor(
         _query.value = query
     }
 
+    fun setLyricsFilterEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setSearchInLyrics(enabled) }
+    }
+
+    fun setAlbumsFilterEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setSearchInAlbums(enabled) }
+    }
+
+    fun setArtistsFilterEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setSearchInArtists(enabled) }
+    }
+
+    fun setTracksFilterEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setSearchInTracks(enabled) }
+    }
+
+    /** Long-press: enable only [filter], turning every other scope off. */
+    fun soloSearchFilter(filter: SearchFilter) {
+        viewModelScope.launch {
+            settingsRepository.setSearchFilters(
+                lyrics = filter == SearchFilter.LYRICS,
+                albums = filter == SearchFilter.ALBUMS,
+                artists = filter == SearchFilter.ARTISTS,
+                tracks = filter == SearchFilter.TRACKS
+            )
+        }
+    }
+
+    /** "All" chip: enable every scope, or turn everything off when tapped while fully on. */
+    fun setAllFiltersEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setSearchFilters(lyrics = enabled, albums = enabled, artists = enabled, tracks = enabled)
+        }
+    }
+
     fun addToHistory(track: TrackEntity) {
         viewModelScope.launch {
             val currentSettings = settingsRepository.settings.first()
@@ -153,3 +212,11 @@ class SearchViewModel @Inject constructor(
         const val LYRICS_SEARCH_DEBOUNCE_MS = 400L
     }
 }
+
+private fun AppSettings.toSearchFilters(): SearchFilters =
+    SearchFilters(
+        lyrics = searchInLyrics,
+        albums = searchInAlbums,
+        artists = searchInArtists,
+        tracks = searchInTracks
+    )

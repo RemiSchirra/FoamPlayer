@@ -57,6 +57,10 @@ data class AppSettings(
     /** Blur applied to non-active lines in the synced-lyrics view; off by default (GPU-costly). */
     val lyricsLineBlur: Boolean = false,
     val searchHistory: List<String> = emptyList(),
+    val searchInLyrics: Boolean = true,
+    val searchInAlbums: Boolean = true,
+    val searchInArtists: Boolean = true,
+    val searchInTracks: Boolean = true,
     val language: String = "auto",
     val navigationBarMode: NavigationBarMode = NavigationBarMode.ATTACHED,
     val navBarTransparentWhenPlayerOpen: Boolean = false,

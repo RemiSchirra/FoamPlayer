@@ -5,7 +5,9 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -209,7 +211,7 @@ fun SearchScreen(
                 if (query.isEmpty()) {
                     BasicText(
                         text = "Search tracks, artists, albums...",
-                        style = FoamTheme.typography.titleMedium.copy(
+            style = FoamTheme.typography.body.copy(
                             color = FoamTheme.colors.textSecondary
                         )
                     )
@@ -239,52 +241,58 @@ fun SearchScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(if (query.isNotEmpty()) 8.dp else 16.dp))
+
+        // Scope filters: only while actively searching, never over the idle browse cards.
+        if (query.isNotEmpty()) {
+            val filters = uiState.filters
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SearchFilterChip(
+                    label = "All",
+                    selected = filters.allEnabled,
+                    modifier = Modifier.weight(1f),
+                    onClick = { searchViewModel.setAllFiltersEnabled(!filters.allEnabled) },
+                    onLongClick = { searchViewModel.setAllFiltersEnabled(!filters.allEnabled) }
+                )
+                SearchFilterChip(
+                    label = "Artists",
+                    selected = filters.artists,
+                    modifier = Modifier.weight(1f),
+                    onClick = { searchViewModel.setArtistsFilterEnabled(!filters.artists) },
+                    onLongClick = { searchViewModel.soloSearchFilter(SearchFilter.ARTISTS) }
+                )
+                SearchFilterChip(
+                    label = "Albums",
+                    selected = filters.albums,
+                    modifier = Modifier.weight(1f),
+                    onClick = { searchViewModel.setAlbumsFilterEnabled(!filters.albums) },
+                    onLongClick = { searchViewModel.soloSearchFilter(SearchFilter.ALBUMS) }
+                )
+                SearchFilterChip(
+                    label = "Tracks",
+                    selected = filters.tracks,
+                    modifier = Modifier.weight(1f),
+                    onClick = { searchViewModel.setTracksFilterEnabled(!filters.tracks) },
+                    onLongClick = { searchViewModel.soloSearchFilter(SearchFilter.TRACKS) }
+                )
+                SearchFilterChip(
+                    label = "Lyrics",
+                    selected = filters.lyrics,
+                    modifier = Modifier.weight(1f),
+                    onClick = { searchViewModel.setLyricsFilterEnabled(!filters.lyrics) },
+                    onLongClick = { searchViewModel.soloSearchFilter(SearchFilter.LYRICS) }
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             when {
                 // Results while typing
                 query.isNotEmpty() -> {
-                    // Found in lyrics: the scan runs in the background across the whole
-                    // library (cached / sidecar / embedded lyrics only, never online),
-                    // so matches stream in here progressively until it completes.
-                    if (uiState.lyricsMatches.isNotEmpty() || uiState.lyricsSearchInProgress) {
-                        item(key = "lyrics_header") {
-                            SectionHeader(
-                                if (uiState.lyricsSearchInProgress) "Found in lyrics..." else "Found in lyrics"
-                            )
-                        }
-                        items(uiState.lyricsMatches, key = { "lyrics_${it.id}" }) { track ->
-                            TrackListItem(
-                                track = track,
-                                onClick = {
-                                    searchViewModel.addToHistory(track)
-                                    onTrackClick(track)
-                                },
-                                active = track.id == activeTrackId,
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = playerTransitionVisibilityScope,
-                                isSharedTransitionSource = track.id == sharedTrackId
-                            )
-                        }
-                        if (uiState.lyricsSearchInProgress) {
-                            item(key = "lyrics_progress") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 12.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp,
-                                        color = FoamTheme.accentColor
-                                    )
-                                }
-                            }
-                        }
-                    }
-
                     // Artists Section
                     if (uiState.artists.isNotEmpty()) {
                         item(key = "artists_header") {
@@ -330,6 +338,46 @@ fun SearchScreen(
                                 animatedVisibilityScope = playerTransitionVisibilityScope,
                                 isSharedTransitionSource = track.id == sharedTrackId
                             )
+                        }
+                    }
+
+                    // Found in lyrics: the scan runs in the background across the whole
+                    // library (cached / sidecar / embedded lyrics only, never online),
+                    // so matches stream in here progressively until it completes.
+                    if (uiState.lyricsMatches.isNotEmpty() || uiState.lyricsSearchInProgress) {
+                        item(key = "lyrics_header") {
+                            SectionHeader(
+                                if (uiState.lyricsSearchInProgress) "Found in lyrics..." else "Found in lyrics"
+                            )
+                        }
+                        items(uiState.lyricsMatches, key = { "lyrics_${it.id}" }) { track ->
+                            TrackListItem(
+                                track = track,
+                                onClick = {
+                                    searchViewModel.addToHistory(track)
+                                    onTrackClick(track)
+                                },
+                                active = track.id == activeTrackId,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = playerTransitionVisibilityScope,
+                                isSharedTransitionSource = track.id == sharedTrackId
+                            )
+                        }
+                        if (uiState.lyricsSearchInProgress) {
+                            item(key = "lyrics_progress") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+            .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = FoamTheme.accentColor
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -413,6 +461,42 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
         style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.accentColor),
         modifier = modifier.padding(vertical = 8.dp)
     )
+}
+
+@Composable
+private fun SearchFilterChip(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(FoamTheme.colors.surface)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.accentColor),
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        BasicText(
+            text = label,
+            style = FoamTheme.typography.body.copy(
+                color = if (selected) {
+                    FoamTheme.colors.textPrimary
+                } else {
+                    FoamTheme.colors.textPrimary.copy(alpha = 0.4f)
+                }
+            ),
+            maxLines = 1
+        )
+    }
 }
 
 @Composable

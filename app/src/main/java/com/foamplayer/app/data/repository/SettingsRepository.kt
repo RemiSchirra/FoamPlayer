@@ -118,7 +118,21 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setSearchHistory(history: List<String>) = update { it.copy(searchHistory = history) }
-    
+
+    suspend fun setSearchInLyrics(enabled: Boolean) = update { it.copy(searchInLyrics = enabled) }
+    suspend fun setSearchInAlbums(enabled: Boolean) = update { it.copy(searchInAlbums = enabled) }
+    suspend fun setSearchInArtists(enabled: Boolean) = update { it.copy(searchInArtists = enabled) }
+    suspend fun setSearchInTracks(enabled: Boolean) = update { it.copy(searchInTracks = enabled) }
+
+    suspend fun setSearchFilters(lyrics: Boolean, albums: Boolean, artists: Boolean, tracks: Boolean) = update {
+        it.copy(
+            searchInLyrics = lyrics,
+            searchInAlbums = albums,
+            searchInArtists = artists,
+            searchInTracks = tracks
+        )
+    }
+
     suspend fun setLanguage(language: String) = update { it.copy(language = language) }
 
     suspend fun setNavigationBarMode(mode: NavigationBarMode) = update { it.copy(navigationBarMode = mode) }
@@ -185,6 +199,10 @@ class SettingsRepository @Inject constructor(
             ?.toSet() ?: DefaultLyricsSourceOrder.toSet(),
         lyricsLineBlur = this[Keys.LYRICS_LINE_BLUR] ?: AppSettings().lyricsLineBlur,
         searchHistory = this[Keys.SEARCH_HISTORY]?.split("|")?.filter { it.isNotEmpty() } ?: emptyList(),
+        searchInLyrics = this[Keys.SEARCH_IN_LYRICS] ?: AppSettings().searchInLyrics,
+        searchInAlbums = this[Keys.SEARCH_IN_ALBUMS] ?: AppSettings().searchInAlbums,
+        searchInArtists = this[Keys.SEARCH_IN_ARTISTS] ?: AppSettings().searchInArtists,
+        searchInTracks = this[Keys.SEARCH_IN_TRACKS] ?: AppSettings().searchInTracks,
         language = this[Keys.LANGUAGE] ?: AppSettings().language,
         navigationBarMode = this[Keys.NAVIGATION_BAR_MODE]
             ?.let { runCatching { NavigationBarMode.valueOf(it) }.getOrNull() }
@@ -227,6 +245,10 @@ class SettingsRepository @Inject constructor(
         this[Keys.ENABLED_LYRICS_SOURCES] = settings.enabledLyricsSources.map { it.name }.toSet()
         this[Keys.LYRICS_LINE_BLUR] = settings.lyricsLineBlur
         this[Keys.SEARCH_HISTORY] = settings.searchHistory.joinToString("|")
+        this[Keys.SEARCH_IN_LYRICS] = settings.searchInLyrics
+        this[Keys.SEARCH_IN_ALBUMS] = settings.searchInAlbums
+        this[Keys.SEARCH_IN_ARTISTS] = settings.searchInArtists
+        this[Keys.SEARCH_IN_TRACKS] = settings.searchInTracks
         this[Keys.LANGUAGE] = settings.language
         this[Keys.NAVIGATION_BAR_MODE] = settings.navigationBarMode.name
         this[Keys.NAVBAR_TRANSPARENT_PLAYER_OPEN] = settings.navBarTransparentWhenPlayerOpen
@@ -266,6 +288,10 @@ class SettingsRepository @Inject constructor(
         val ENABLED_LYRICS_SOURCES = stringSetPreferencesKey("enabled_lyrics_sources")
         val LYRICS_LINE_BLUR = LyricsLineBlurKey
         val SEARCH_HISTORY = stringPreferencesKey("search_history")
+        val SEARCH_IN_LYRICS = booleanPreferencesKey("search_in_lyrics")
+        val SEARCH_IN_ALBUMS = booleanPreferencesKey("search_in_albums")
+        val SEARCH_IN_ARTISTS = booleanPreferencesKey("search_in_artists")
+        val SEARCH_IN_TRACKS = booleanPreferencesKey("search_in_tracks")
         val LANGUAGE = stringPreferencesKey("language")
         val NAVIGATION_BAR_MODE = stringPreferencesKey("navigation_bar_mode")
         val NAVBAR_TRANSPARENT_PLAYER_OPEN = booleanPreferencesKey("navbar_transparent_player_open")
