@@ -67,6 +67,18 @@ class SearchViewModel @Inject constructor(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
+    /**
+     * In-memory mirror of the scope filters: toggles land here first so results
+     * react instantly, while the write to DataStore happens in the background.
+     */
+    private val _filters = MutableStateFlow(SearchFilters())
+
+    init {
+        viewModelScope.launch {
+            _filters.value = settingsRepository.settings.first().toSearchFilters()
+        }
+    }
+
     /** Metadata matches (tracks/artists/albums + history): fast Room queries, no debounce. */
     @OptIn(ExperimentalCoroutinesApi::class)
     private val metadataState: Flow<SearchUiState> = _query
@@ -79,7 +91,7 @@ class SearchViewModel @Inject constructor(
                     val history = settings.searchHistory.mapNotNull { path ->
                         allTracks.find { it.path == path }
                     }
-                    SearchUiState(history = history, filters = settings.toSearchFilters())
+                    SearchUiState(history = history)
                 }
             } else {
                 combine(
@@ -92,13 +104,7 @@ class SearchViewModel @Inject constructor(
                     val history = settings.searchHistory.mapNotNull { path ->
                         allTracks.find { it.path == path }
                     }
-                    SearchUiState(
-                        tracks = if (settings.searchInTracks) tracks else emptyList(),
-                        artists = if (settings.searchInArtists) artists else emptyList(),
-                        albums = if (settings.searchInAlbums) albums else emptyList(),
-                        history = history,
-                        filters = settings.toSearchFilters()
-                    )
+                    SearchUiState(tracks, artists, albums, history)
                 }
             }
         }
@@ -111,10 +117,11 @@ class SearchViewModel @Inject constructor(
      */
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     private val lyricsState: Flow<LyricsSearchState> = combine(
-        _query,
-        settingsRepository.settings.map { it.searchInLyrics }.distinctUntilChanged()
+        // Debounce only the keystrokes: toggling the scope must cancel the running
+        // scan and drop its results immediately, without waiting out the grace period.
+        _query.debounce { if (it.isBlank()) 0L else LYRICS_SEARCH_DEBOUNCE_MS },
+        _filters.map { it.lyrics }.distinctUntilChanged()
     ) { query, lyricsEnabled -> query to lyricsEnabled }
-        .debounce { (query, _) -> if (query.isBlank()) 0L else LYRICS_SEARCH_DEBOUNCE_MS }
         .flatMapLatest { (query, lyricsEnabled) ->
             if (query.isBlank() || !lyricsEnabled) {
                 flowOf(LyricsSearchState())
@@ -133,10 +140,17 @@ class SearchViewModel @Inject constructor(
         }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<SearchUiState> = combine(metadataState, lyricsState) { metadata, lyrics ->
+    val uiState: StateFlow<SearchUiState> = combine(metadataState, lyricsState, _filters) { metadata, lyrics, filters ->
         metadata.copy(
-            lyricsMatches = lyrics.matches,
-            lyricsSearchInProgress = lyrics.inProgress
+            tracks = if (filters.tracks) metadata.tracks else emptyList(),
+            artists = if (filters.artists) metadata.artists else emptyList(),
+            albums = if (filters.albums) metadata.albums else emptyList(),
+            // Gated on the in-memory flag (not the scan flow) so toggling off hides
+            // the section in this same emission, without waiting for the scan's
+            // cancellation to round-trip back as an empty result.
+            lyricsMatches = if (filters.lyrics) lyrics.matches else emptyList(),
+            lyricsSearchInProgress = if (filters.lyrics) lyrics.inProgress else false,
+            filters = filters
         )
     }.stateIn(
         scope = viewModelScope,
@@ -149,37 +163,56 @@ class SearchViewModel @Inject constructor(
     }
 
     fun setLyricsFilterEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setSearchInLyrics(enabled) }
+        _filters.value = _filters.value.copy(lyrics = enabled)
+        persistFilters()
     }
 
     fun setAlbumsFilterEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setSearchInAlbums(enabled) }
+        _filters.value = _filters.value.copy(albums = enabled)
+        persistFilters()
     }
 
     fun setArtistsFilterEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setSearchInArtists(enabled) }
+        _filters.value = _filters.value.copy(artists = enabled)
+        persistFilters()
     }
 
     fun setTracksFilterEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setSearchInTracks(enabled) }
+        _filters.value = _filters.value.copy(tracks = enabled)
+        persistFilters()
     }
 
     /** Long-press: enable only [filter], turning every other scope off. */
     fun soloSearchFilter(filter: SearchFilter) {
-        viewModelScope.launch {
-            settingsRepository.setSearchFilters(
-                lyrics = filter == SearchFilter.LYRICS,
-                albums = filter == SearchFilter.ALBUMS,
-                artists = filter == SearchFilter.ARTISTS,
-                tracks = filter == SearchFilter.TRACKS
-            )
-        }
+        _filters.value = SearchFilters(
+            lyrics = filter == SearchFilter.LYRICS,
+            albums = filter == SearchFilter.ALBUMS,
+            artists = filter == SearchFilter.ARTISTS,
+            tracks = filter == SearchFilter.TRACKS
+        )
+        persistFilters()
     }
 
     /** "All" chip: enable every scope, or turn everything off when tapped while fully on. */
     fun setAllFiltersEnabled(enabled: Boolean) {
+        _filters.value = SearchFilters(
+            lyrics = enabled,
+            albums = enabled,
+            artists = enabled,
+            tracks = enabled
+        )
+        persistFilters()
+    }
+
+    private fun persistFilters() {
+        val current = _filters.value
         viewModelScope.launch {
-            settingsRepository.setSearchFilters(lyrics = enabled, albums = enabled, artists = enabled, tracks = enabled)
+            settingsRepository.setSearchFilters(
+                lyrics = current.lyrics,
+                albums = current.albums,
+                artists = current.artists,
+                tracks = current.tracks
+            )
         }
     }
 

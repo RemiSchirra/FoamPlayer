@@ -119,11 +119,6 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setSearchHistory(history: List<String>) = update { it.copy(searchHistory = history) }
 
-    suspend fun setSearchInLyrics(enabled: Boolean) = update { it.copy(searchInLyrics = enabled) }
-    suspend fun setSearchInAlbums(enabled: Boolean) = update { it.copy(searchInAlbums = enabled) }
-    suspend fun setSearchInArtists(enabled: Boolean) = update { it.copy(searchInArtists = enabled) }
-    suspend fun setSearchInTracks(enabled: Boolean) = update { it.copy(searchInTracks = enabled) }
-
     suspend fun setSearchFilters(lyrics: Boolean, albums: Boolean, artists: Boolean, tracks: Boolean) = update {
         it.copy(
             searchInLyrics = lyrics,
