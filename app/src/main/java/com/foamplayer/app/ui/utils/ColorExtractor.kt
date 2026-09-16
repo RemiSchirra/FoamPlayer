@@ -23,6 +23,17 @@ suspend fun extractPaletteColor(context: android.content.Context, path: String, 
         val request = ImageRequest.Builder(context)
             .data(data)
             .allowHardware(false)
+            // Palette quantization downsamples internally anyway; decoding at original
+            // resolution (covers are often 1000-3000 px) wastes tens of MB per extract
+            // and lands a huge duplicate entry in Coil's memory cache.
+            .size(PALETTE_DECODE_SIZE)
+            // Coil's memory-cache key is the data key alone (the decode size is not
+            // part of it), so this small decode must not land in the same slot the
+            // UI's shared 480px album-art requests use: a cached 96px bitmap fails
+            // the UI request's size-validity check, forcing a re-decode that renders
+            // as a one-frame blank -- visible exactly when a shared-element
+            // transition (mini player -> full player) draws from the cache slot.
+            .memoryCacheKey("palette:$path")
             .build()
 
         val result = context.imageLoader.execute(request)
@@ -58,3 +69,5 @@ suspend fun extractPaletteColor(context: android.content.Context, path: String, 
         } else null
     }
 }
+
+private const val PALETTE_DECODE_SIZE = 96

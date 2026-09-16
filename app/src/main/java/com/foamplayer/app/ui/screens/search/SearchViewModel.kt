@@ -79,19 +79,17 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    /** Metadata matches (tracks/artists/albums + history): fast Room queries, no debounce. */
-    @OptIn(ExperimentalCoroutinesApi::class)
+    /** Metadata matches (tracks/artists/albums + history): fast Room queries, short debounce. */
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     private val metadataState: Flow<SearchUiState> = _query
+        .debounce { if (it.isBlank()) 0L else METADATA_SEARCH_DEBOUNCE_MS }
         .flatMapLatest { query ->
             if (query.isBlank()) {
                 combine(
                     repository.getAllTracks(),
                     settingsRepository.settings
                 ) { allTracks, settings ->
-                    val history = settings.searchHistory.mapNotNull { path ->
-                        allTracks.find { it.path == path }
-                    }
-                    SearchUiState(history = history)
+                    SearchUiState(history = resolveHistory(settings.searchHistory, allTracks))
                 }
             } else {
                 combine(
@@ -101,13 +99,22 @@ class SearchViewModel @Inject constructor(
                     repository.getAllTracks(),
                     settingsRepository.settings
                 ) { tracks, artists, albums, allTracks, settings ->
-                    val history = settings.searchHistory.mapNotNull { path ->
-                        allTracks.find { it.path == path }
-                    }
-                    SearchUiState(tracks, artists, albums, history)
+                    SearchUiState(tracks, artists, albums, resolveHistory(settings.searchHistory, allTracks))
                 }
             }
         }
+
+    /**
+     * Resolves search-history paths to tracks in one pass. The old
+     * `searchHistory.mapNotNull { path -> allTracks.find { ... } }` was
+     * O(history × library) and re-ran on the main dispatcher for every
+     * keystroke / table / settings emission.
+     */
+    private fun resolveHistory(historyPaths: List<String>, allTracks: List<TrackEntity>): List<TrackEntity> {
+        val byPath = HashMap<String, TrackEntity>(allTracks.size)
+        for (track in allTracks) byPath[track.path] = track
+        return historyPaths.mapNotNull(byPath::get)
+    }
 
     /**
      * Lyrics scan: after a short debounce the whole library is inspected in
@@ -130,9 +137,18 @@ class SearchViewModel @Inject constructor(
                     emit(LyricsSearchState(inProgress = true))
                     val matches = mutableListOf<TrackEntity>()
                     val allTracks = repository.getAllTracksOnce()
+                    var lastEmitNanos = System.nanoTime()
                     lyricsRepository.searchLyricsText(query, allTracks).collect { match ->
                         matches += match
-                        emit(LyricsSearchState(matches = matches.toList(), inProgress = true))
+                        // Emission per match used to copy the whole list (O(n²)
+                        // cumulative) and rebuild the combined UI state once per
+                        // matched track; batching to a fixed cadence keeps the UI
+                        // streaming while bounding the recomposition rate.
+                        val now = System.nanoTime()
+                        if (now - lastEmitNanos >= LYRICS_MATCH_EMIT_INTERVAL_MS) {
+                            lastEmitNanos = now
+                            emit(LyricsSearchState(matches = matches.toList(), inProgress = true))
+                        }
                     }
                     emit(LyricsSearchState(matches = matches.toList(), inProgress = false))
                 }
@@ -243,6 +259,12 @@ class SearchViewModel @Inject constructor(
     private companion object {
         /** Grace period after the last keystroke before the (heavier) lyrics scan starts. */
         const val LYRICS_SEARCH_DEBOUNCE_MS = 400L
+
+        /** Grace period after the last keystroke before the (cheap) metadata queries run. */
+        const val METADATA_SEARCH_DEBOUNCE_MS = 120L
+
+        /** Minimum interval between streamed lyrics-scan progress emissions. */
+        const val LYRICS_MATCH_EMIT_INTERVAL_MS = 100L * 1_000_000L
     }
 }
 

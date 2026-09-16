@@ -194,20 +194,28 @@ fun FullPlayerScreen(
     // feature setting is on. Keyed on the track so a pager skip cancels any
     // in-flight fetch and resolves the new track's canvas instead; null keeps
     // the video layer out of composition entirely (zero overhead when off).
-    var animatedCoverUrl by remember { mutableStateOf<String?>(null) }
+    // The resolved url is stored WITH the track id it belongs to and is gated on
+    // the current track id here, in composition: the LaunchedEffect below clears
+    // the old url only after this frame's apply, and the SideEffect further down
+    // publishes a composition-time snapshot of the url -- without the gate, the
+    // first frame after a swipe commit pairs the STALE url with a reset swipe
+    // fraction (back to 0), flashing the old video at full opacity for exactly
+    // one frame instead of staying faded out until the new canvas resolves.
+    var animatedCoverForTrack by remember { mutableStateOf<Pair<Long, String?>?>(null) }
     LaunchedEffect(track.id, isAnimatedCoverEnabled, allowMobileDataForCanvas) {
         // Cut any previous track's video at once: the backdrop's static-art
         // crossfade takes over while the new canvas resolves, then fades in.
-        animatedCoverUrl = null
+        animatedCoverForTrack = null
         if (isAnimatedCoverEnabled) {
-            animatedCoverUrl = viewModel
+            val url = viewModel
                 .resolveAnimatedCover(track, allowMobileDataForCanvas)
                 ?.preferredAnimationUrl
+            animatedCoverForTrack = track.id to url
         }
     }
-    // Composition-phase read: the SideEffect below runs outside snapshot
-    // observation, so this local is what re-runs it when the url resolves.
-    val currentAnimatedCoverUrl = animatedCoverUrl
+    val currentAnimatedCoverUrl = animatedCoverForTrack
+        ?.takeIf { it.first == track.id }
+        ?.second
     // Playback gate: pauses only at the rest endpoints -- player fully closed
     // to the mini player, or subview fully open. Transitions (subview drag,
     // player close flight) keep playing; the surrounding layers fade the video
@@ -343,7 +351,12 @@ fun FullPlayerScreen(
             }
     }
 
-    LaunchedEffect(pagerState, queue) {
+    // The interpolated color drives the app-wide accent. When the user picked a
+    // manual accent (automaticColorEnabled = false) the value is discarded by
+    // rememberAccentColor, so the whole per-frame pipeline (snapshotFlow read,
+    // StateFlow write, FoamApp + theme recomposition) runs for nothing -- skip it.
+    LaunchedEffect(pagerState, queue, settings.automaticColorEnabled) {
+        if (!settings.automaticColorEnabled) return@LaunchedEffect
         snapshotFlow {
             AlbumArtPaletteCache.interpolatedColor(
                 currentPage = pagerState.currentPage,

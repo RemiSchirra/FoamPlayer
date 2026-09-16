@@ -13,16 +13,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.foamplayer.app.ui.components.FoamSliderItem
+import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -34,23 +30,6 @@ fun BackgroundSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsState()
-    var localBackgroundBlur by remember { mutableFloatStateOf(settings.backgroundBlur.toFloat()) }
-    var localAppIntensity by remember {
-        mutableFloatStateOf(settings.appBackgroundIntensity.toFloat())
-    }
-    var localPlayerIntensity by remember {
-        mutableFloatStateOf(settings.playerBackgroundIntensity.toFloat())
-    }
-
-    LaunchedEffect(settings.backgroundBlur) {
-        localBackgroundBlur = settings.backgroundBlur.toFloat()
-    }
-    LaunchedEffect(settings.appBackgroundIntensity) {
-        localAppIntensity = settings.appBackgroundIntensity.toFloat()
-    }
-    LaunchedEffect(settings.playerBackgroundIntensity) {
-        localPlayerIntensity = settings.playerBackgroundIntensity.toFloat()
-    }
 
     Column(
         modifier = Modifier
@@ -98,16 +77,15 @@ fun BackgroundSettingsScreen(
                     .background(FoamTheme.colors.surface)
             ) {
                 Column {
-                    FoamSliderItem(
+                    FoamSliderStateItem(
                         title = "Background Blur",
-                        value = localBackgroundBlur,
-                        onValueChange = { localBackgroundBlur = it },
+                        initialValue = settings.backgroundBlur.toFloat(),
                         onValueChangeFinished = {
-                            viewModel.setBackgroundBlur(localBackgroundBlur.roundToInt())
+                            viewModel.setBackgroundBlur(it.roundToInt())
                         },
                         steps = 9,
                         valueRange = 0f..100f,
-                        valueDisplay = "${localBackgroundBlur.roundToInt()}%",
+                        formatValue = { "${it.roundToInt()}%" },
                         minMaxDisplay = "None" to "Max",
                     )
                     Box(
@@ -116,16 +94,15 @@ fun BackgroundSettingsScreen(
                             .height(FoamDimens.separatorHeight)
                             .background(FoamTheme.colors.borderOverlay)
                     )
-                    FoamSliderItem(
+                    FoamSliderStateItem(
                         title = "App Color Intensity",
-                        value = localAppIntensity,
-                        onValueChange = { localAppIntensity = it },
+                        initialValue = settings.appBackgroundIntensity.toFloat(),
                         onValueChangeFinished = {
-                            viewModel.setAppBackgroundIntensity(localAppIntensity.roundToInt())
+                            viewModel.setAppBackgroundIntensity(it.roundToInt())
                         },
                         steps = 9,
                         valueRange = 0f..100f,
-                        valueDisplay = "${localAppIntensity.roundToInt()}%",
+                        formatValue = { "${it.roundToInt()}%" },
                         minMaxDisplay = "Dim" to "Vivid",
                     )
                     Box(
@@ -134,16 +111,15 @@ fun BackgroundSettingsScreen(
                             .height(FoamDimens.separatorHeight)
                             .background(FoamTheme.colors.borderOverlay)
                     )
-                    FoamSliderItem(
+                    FoamSliderStateItem(
                         title = "Player Color Intensity",
-                        value = localPlayerIntensity,
-                        onValueChange = { localPlayerIntensity = it },
+                        initialValue = settings.playerBackgroundIntensity.toFloat(),
                         onValueChangeFinished = {
-                            viewModel.setPlayerBackgroundIntensity(localPlayerIntensity.roundToInt())
+                            viewModel.setPlayerBackgroundIntensity(it.roundToInt())
                         },
                         steps = 9,
                         valueRange = 0f..100f,
-                        valueDisplay = "${localPlayerIntensity.roundToInt()}%",
+                        formatValue = { "${it.roundToInt()}%" },
                         minMaxDisplay = "Dim" to "Vivid",
                     )
                 }

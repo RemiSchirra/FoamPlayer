@@ -43,8 +43,13 @@ fun AnimatedCanvasArt(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var hasFirstFrame by remember { mutableStateOf(false) }
-    val fadeIn = remember { Animatable(0f) }
+    // Keyed on the url: a new canvas must start fully faded OUT on the very first
+    // frame it composes. A LaunchedEffect(url) reset runs only after that frame's
+    // apply, leaving a one-frame window where the previous animation's 1f alpha
+    // renders over the new (still preparing) video -- a full-opacity flash.
+    var hasFirstFrame by remember(url) { mutableStateOf(false) }
+    val fadeIn = remember(url) { Animatable(0f) }
+    var attachedTextureView by remember { mutableStateOf<TextureView?>(null) }
 
     val player = remember {
         ExoPlayer.Builder(context).build().apply {
@@ -63,8 +68,6 @@ fun AnimatedCanvasArt(
     }
 
     LaunchedEffect(url) {
-        hasFirstFrame = false
-        fadeIn.snapTo(0f)
         player.setMediaItem(MediaItem.fromUri(url))
         player.prepare()
         player.playWhenReady = playing
@@ -99,7 +102,14 @@ fun AnimatedCanvasArt(
                         if (w > h) scaleY = w / h else scaleX = h / w
                     }
                 },
-            update = { view -> player.setVideoTextureView(view) }
+            update = { view ->
+                // update runs on every recomposition; re-issuing setVideoTextureView
+                // needlessly detaches/reattaches the surface inside ExoPlayer.
+                if (attachedTextureView !== view) {
+                    attachedTextureView = view
+                    player.setVideoTextureView(view)
+                }
+            }
         )
     }
 }

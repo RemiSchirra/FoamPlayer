@@ -58,17 +58,16 @@ class EqualizerManager @Inject constructor() {
     }
 
     fun setBandGain(bandIndex: Int, gainMillibels: Int) {
-        equalizer?.let {
-            if (bandIndex in 0 until it.numberOfBands) {
-                it.setBandLevel(bandIndex.toShort(), gainMillibels.toShort())
-                val updatedBands = _state.value.bands.toMutableList()
-                if (bandIndex < updatedBands.size) {
-                    updatedBands[bandIndex] = gainMillibels
-                    _state.value = _state.value.copy(
-                        bands = updatedBands,
-                        selectedPreset = "Custom"
-                    )
-                }
+        val eq = equalizer ?: return
+        if (bandIndex in 0 until eq.numberOfBands) {
+            eq.setBandLevel(bandIndex.toShort(), gainMillibels.toShort())
+            val updatedBands = _state.value.bands.toMutableList()
+            if (bandIndex < updatedBands.size) {
+                updatedBands[bandIndex] = gainMillibels
+                _state.value = _state.value.copy(
+                    bands = updatedBands,
+                    selectedPreset = "Custom"
+                )
             }
         }
     }
@@ -81,10 +80,21 @@ class EqualizerManager @Inject constructor() {
             else -> listOf(0, 0, 0, 0, 0)
         }
 
-        newGains.forEachIndexed { index, gain ->
-            setBandGain(index, gain)
+        // Apply all bands to the native effect first and publish a single state
+        // update; emitting once per band caused one recomposition of the whole
+        // equalizer screen per band on every preset tap.
+        val eq = equalizer
+        if (eq != null) {
+            newGains.forEachIndexed { index, gain ->
+                if (index in 0 until eq.numberOfBands) {
+                    eq.setBandLevel(index.toShort(), gain.toShort())
+                }
+            }
         }
-        _state.value = _state.value.copy(selectedPreset = presetName)
+        _state.value = _state.value.copy(
+            bands = newGains,
+            selectedPreset = presetName
+        )
     }
 
     fun release() {

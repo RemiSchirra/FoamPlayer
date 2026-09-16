@@ -1,6 +1,7 @@
 package com.foamplayer.app.data.repository
 
 import android.content.Context
+import android.util.LruCache
 import androidx.core.net.toUri
 import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.data.db.dao.CachedLyricsDao
@@ -49,8 +50,13 @@ class LyricsRepository @Inject constructor(
     private val lyricsFileWriter: LyricsFileWriter,
     private val statusScanner: LyricsStatusScanner
 ) {
-    /** Session memo of the searchable text of a track's sidecar + embedded lyrics, keyed by size. */
-    private val searchTextCache = ConcurrentHashMap<Long, Pair<Long, String?>>()
+    /**
+     * Session memo of the searchable text of a track's sidecar + embedded lyrics,
+     * keyed by size. LRU-bounded: one entry per inspected track with lyric payloads
+     * reaching tens of KB would otherwise pin the whole library's text in memory
+     * over a long session. Evicted entries are simply re-read from disk on demand.
+     */
+    private val searchTextCache = LruCache<Long, Pair<Long, String?>>(SEARCH_TEXT_CACHE_ENTRIES)
 
     suspend fun getLyrics(track: TrackEntity): String? = resolveLyrics(track)?.content
 
@@ -217,7 +223,7 @@ class LyricsRepository @Inject constructor(
 
     /** Display text of the sidecar file + embedded tag, memoized per session. */
     private suspend fun localSearchableText(track: TrackEntity): String? {
-        searchTextCache[track.id]
+        searchTextCache.get(track.id)
             ?.takeIf { it.first == track.size }
             ?.let { return it.second }
 
@@ -227,7 +233,7 @@ class LyricsRepository @Inject constructor(
         ).joinToString("\n") { LyricsUtils.displayLyricsText(it) }
             .ifBlank { null }
 
-        searchTextCache[track.id] = track.size to text
+        searchTextCache.put(track.id, track.size to text)
         return text
     }
 
@@ -378,5 +384,8 @@ class LyricsRepository @Inject constructor(
 
         /** Parallel track inspections during the local lyrics text search. */
         const val LYRICS_SEARCH_CONCURRENCY = 16
+
+        /** Max memoized sidecar/embedded search texts kept in memory. */
+        const val SEARCH_TEXT_CACHE_ENTRIES = 256
     }
 }

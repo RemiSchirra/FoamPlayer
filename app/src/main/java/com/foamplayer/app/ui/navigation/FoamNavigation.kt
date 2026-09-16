@@ -692,8 +692,15 @@ fun FoamNavHost(
                         // otherwise just open the desired screen.
                         if (!navController.popBackStack(route, inclusive = false)) {
                             navController.navigate(route) {
-                                popUpTo(navController.graph.startDestinationId)
+                                popUpTo(navController.graph.startDestinationId) {
+                                    // Preserve the tab's back stack and UI state so
+                                    // switching tabs doesn't tear down and rebuild
+                                    // the destination (full re-composition, Coil
+                                    // re-requests, lazy list state reset).
+                                    saveState = true
+                                }
                                 launchSingleTop = true
+                                restoreState = true
                             }
                         }
                     }

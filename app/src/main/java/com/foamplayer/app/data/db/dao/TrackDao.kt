@@ -145,8 +145,14 @@ interface TrackDao {
     @Query("SELECT path, playCount, lastPlayedAt, score, instrumental FROM tracks")
     suspend fun getPlayStats(): List<TrackPlayStatsRow>
 
-    @Query("DELETE FROM tracks WHERE path NOT IN (:existingPaths)")
-    suspend fun deleteOrphanedTracks(existingPaths: List<String>)
+    @Query("SELECT path FROM tracks")
+    suspend fun getAllTrackPaths(): List<String>
+
+    @Query("SELECT id FROM tracks")
+    suspend fun getAllTrackIds(): List<Long>
+
+    @Query("DELETE FROM tracks WHERE path IN (:paths)")
+    suspend fun deleteTracksByPaths(paths: List<String>)
 }
 
 data class AlbumSearchResult(

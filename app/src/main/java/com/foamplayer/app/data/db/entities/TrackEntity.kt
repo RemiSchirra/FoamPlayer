@@ -10,7 +10,11 @@ import androidx.room.PrimaryKey
         Index(value = ["path"], unique = true),
         Index(value = ["album"]),
         Index(value = ["artist"]),
-        Index(value = ["title"])
+        Index(value = ["albumArtist"]),
+        Index(value = ["title"]),
+        Index(value = ["genre"]),
+        Index(value = ["year"]),
+        Index(value = ["lastPlayedAt"])
     ]
 )
 data class TrackEntity(

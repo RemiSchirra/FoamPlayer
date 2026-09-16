@@ -27,6 +27,6 @@ interface CachedLyricsDao {
     @Query("DELETE FROM cached_lyrics WHERE trackId = :trackId")
     suspend fun deleteByTrackId(trackId: Long)
 
-    @Query("DELETE FROM cached_lyrics WHERE trackId NOT IN (:trackIds)")
-    suspend fun deleteOrphaned(trackIds: List<Long>)
+    @Query("DELETE FROM cached_lyrics WHERE trackId IN (:trackIds)")
+    suspend fun deleteByTrackIds(trackIds: List<Long>)
 }

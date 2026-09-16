@@ -214,8 +214,16 @@ fun LyricsEnhanced(
     var showMaxSelectionToast by remember { mutableStateOf(false) }
     val maxSelectionLimit = 5
 
-    val isSynced = remember(lyrics) { lyrics != null && (isLineSyncedLrc(lyrics!!) || isTtml(lyrics!!)) }
-    val isTtmlFormat = remember(lyrics) { lyrics != null && isTtml(lyrics!!) }
+    // isTtml() normalizes the entire payload (several whole-string regex passes)
+    // before checking its markers; on a large TTML document that stalls the main
+    // thread right at track change. The '<' gate is conservative: text whose first
+    // '<' is not near the start cannot normalize into a TTML document, so it skips
+    // the full check. Non-XML lyrics (the overwhelmingly common case) now pay a
+    // single indexOf instead of full-document regex normalization.
+    val isSynced = remember(lyrics) {
+        lyrics != null && (isLineSyncedLrc(lyrics!!) || isPotentiallyTtml(lyrics!!))
+    }
+    val isTtmlFormat = remember(lyrics) { lyrics != null && isPotentiallyTtml(lyrics!!) }
 
     var lyricsEntries by remember(lyrics) { mutableStateOf<List<LyricsEntry>>(emptyList()) }
     var syncedLyrics by remember(lyrics) { mutableStateOf(SyncedLyrics(emptyList())) }
@@ -229,15 +237,18 @@ fun LyricsEnhanced(
             return@LaunchedEffect
         }
         val (entries, synced) = withContext(Dispatchers.Default) {
+            // Detect the format once; isTtml()/isLineSyncedLrc() are whole-payload
+            // passes and used to run twice more below for the same lyrics string.
+            val ttml = isTtml(lyrics)
             val builtEntries = when {
-                isTtml(lyrics) -> parseTtml(lyrics)
+                ttml -> parseTtml(lyrics)
                 isLineSyncedLrc(lyrics) -> parseLyrics(lyrics)
                 else -> lyrics
                     .lines()
                     .filter { it.isNotBlank() }
                     .map { line -> LyricsEntry(time = -1L, text = line.trim()) }
             }
-            val builtSynced = buildSyncedLyrics(builtEntries, isTtml(lyrics), emptyMap())
+            val builtSynced = buildSyncedLyrics(builtEntries, ttml, emptyMap())
             builtEntries to builtSynced
         }
         lyricsEntries = entries
@@ -294,11 +305,18 @@ fun LyricsEnhanced(
                     index to romanized
                 }
             }
-        val tempMap = mutableMapOf<Int, List<String?>>()
-        jobs.awaitAll().forEach { (index, romanized) ->
-            tempMap[index] = romanized
+        // Assembly (awaitAll + buildSyncedLyrics, which re-scans every line through
+        // BreakIterator for non-TTML formats) is real CPU work: keep it off the
+        // Main-immediate dispatcher, which is what runs composition right as the
+        // lyrics screen settles.
+        val newSynced = withContext(Dispatchers.Default) {
+            val tempMap = mutableMapOf<Int, List<String?>>()
+            jobs.awaitAll().forEach { (index, romanized) ->
+                tempMap[index] = romanized
+            }
+            buildSyncedLyrics(lyricsEntries, isTtmlFormat, tempMap)
         }
-        syncedLyrics = buildSyncedLyrics(lyricsEntries, isTtmlFormat, tempMap)
+        syncedLyrics = newSynced
     }
 
     val leadMs = if (isTtmlFormat) TTML_LEAD_MS else LRC_LEAD_MS
@@ -1182,3 +1200,15 @@ private fun buildWrappingKaraokeSyllables(
         )
     }
 }
+
+/**
+ * Cheap gate in front of [isTtml]: full TTML detection normalizes the whole payload
+ * with regex passes before checking its markers, which is wasted work (and a
+ * main-thread stall, when called during composition) for the overwhelmingly common
+ * non-XML lyrics. A TTML document always carries its first '<' near the top, so
+ * anything else can skip the expensive check.
+ */
+private fun isPotentiallyTtml(text: String): Boolean =
+    text.indexOf('<') in 0 until TTML_GATE_WINDOW && isTtml(text)
+
+private const val TTML_GATE_WINDOW = 128

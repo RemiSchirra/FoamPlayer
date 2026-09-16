@@ -24,7 +24,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
         FolderEntity::class,
         CachedLyricsEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -86,6 +86,25 @@ abstract class AppDatabase : RoomDatabase() {
                             "lyrics TEXT NOT NULL, " +
                             "provider TEXT, " +
                             "fetchedAtMs INTEGER NOT NULL)"
+                )
+            }
+        }
+
+        /**
+         * Adds the indices for the hot filter/sort columns. Without them every
+         * genre/year/recently-played/playlist query runs a full table scan plus a
+         * temp B-tree sort, re-executed on each tracks-table invalidation. Index
+         * names must match Room's generated ones for schema validation.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_albumArtist ON tracks (albumArtist)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_genre ON tracks (genre)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_year ON tracks (year)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_lastPlayedAt ON tracks (lastPlayedAt)")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_playlist_track_cross_ref_playlistId_orderIndex " +
+                            "ON playlist_track_cross_ref (playlistId, orderIndex)"
                 )
             }
         }

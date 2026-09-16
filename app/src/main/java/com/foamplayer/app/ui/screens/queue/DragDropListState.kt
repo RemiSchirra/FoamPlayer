@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -192,12 +193,18 @@ class DragDropListState(
             }
         }
 
-        updateAutoScroll(rawTop, rawTop + current.size, viewportStart, viewportEnd)
+        // Materializing LazyListLayoutInfo copies the visible-items snapshot, so pass
+        // the one we already read in evaluate() instead of re-reading per autoscroll tick.
+        updateAutoScroll(layoutInfo, rawTop, rawTop + current.size, viewportStart, viewportEnd)
     }
 
-    private fun updateAutoScroll(rawTop: Float, rawBottom: Float, viewportStart: Int, viewportEnd: Int) {
-        val layoutInfo = lazyListState.layoutInfo
-
+    private fun updateAutoScroll(
+        layoutInfo: LazyListLayoutInfo,
+        rawTop: Float,
+        rawBottom: Float,
+        viewportStart: Int,
+        viewportEnd: Int
+    ) {
         val atListStart = lazyListState.firstVisibleItemIndex == 0 &&
                 lazyListState.firstVisibleItemScrollOffset == 0
         val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()

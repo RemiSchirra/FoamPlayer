@@ -12,18 +12,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.components.FoamEnumItem
-import com.foamplayer.app.ui.components.FoamSliderItem
+import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -35,19 +31,12 @@ fun PlayerSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
-    val miniRounding = settings.miniPlayerRounding
-    val fullRounding = settings.fullPlayerRounding
-    var localMiniRounding by remember { mutableFloatStateOf(miniRounding.toFloat()) }
-    var localFullRounding by remember { mutableFloatStateOf(fullRounding.toFloat()) }
     val isImmersiveEnabled = settings.immersiveModeEnabled
     val isAnimateSeekBarEnabled = settings.animateSeekBarEnabled
     val isAutoOpenPlayerEnabled = settings.autoOpenPlayerEnabled
     val isAnimatedCoverEnabled = settings.animatedCoverEnabled
     val isAnimatedCoverAllowMobileData = settings.animatedCoverAllowMobileData
     val marqueeMode = settings.marqueeMode
-
-    LaunchedEffect(miniRounding) { localMiniRounding = miniRounding.toFloat() }
-    LaunchedEffect(fullRounding) { localFullRounding = fullRounding.toFloat() }
 
     Column(
         modifier = Modifier
@@ -171,16 +160,15 @@ fun PlayerSettingsScreen(
                             .background(FoamTheme.colors.surface)
                     ) {
                         Column {
-                            FoamSliderItem(
+                            FoamSliderStateItem(
                                 title = "Mini Player",
-                                value = localMiniRounding,
-                                onValueChange = { localMiniRounding = it },
+                                initialValue = settings.miniPlayerRounding.toFloat(),
                                 onValueChangeFinished = {
-                                    viewModel.setMiniPlayerRounding(localMiniRounding.roundToInt())
+                                    viewModel.setMiniPlayerRounding(it.roundToInt())
                                 },
                                 steps = 9,
                                 valueRange = 0f..100f,
-                                valueDisplay = "${localMiniRounding.roundToInt()}%",
+                                formatValue = { "${it.roundToInt()}%" },
                                 minMaxDisplay = "Square" to "Circle"
                             )
                             Box(
@@ -189,16 +177,15 @@ fun PlayerSettingsScreen(
                                     .height(FoamDimens.separatorHeight)
                                     .background(FoamTheme.colors.borderOverlay)
                             )
-                            FoamSliderItem(
+                            FoamSliderStateItem(
                                 title = "Full Player",
-                                value = localFullRounding,
-                                onValueChange = { localFullRounding = it },
+                                initialValue = settings.fullPlayerRounding.toFloat(),
                                 onValueChangeFinished = {
-                                    viewModel.setFullPlayerRounding(localFullRounding.roundToInt())
+                                    viewModel.setFullPlayerRounding(it.roundToInt())
                                 },
                                 steps = 9,
                                 valueRange = 0f..100f,
-                                valueDisplay = "${localFullRounding.roundToInt()}%",
+                                formatValue = { "${it.roundToInt()}%" },
                                 minMaxDisplay = "Square" to "Circle"
                             )
                         }

@@ -214,8 +214,11 @@ fun TrackFoamModal(
                         verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
                     ) {
                         if (isDetails) {
+                            // Pure formatting over the track; the modal recomposes per
+                            // animation frame while the dynamic accent animates.
+                            val trackSummary = remember(displayTrack) { audioSummaryText(displayTrack) }
                             BasicText(
-                                text = audioSummaryText(displayTrack),
+                                text = trackSummary,
                                 style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
                                 modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
                             )

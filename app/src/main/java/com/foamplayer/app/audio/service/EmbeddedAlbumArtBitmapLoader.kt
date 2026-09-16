@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.util.LruCache
 import androidx.core.graphics.scale
 import androidx.media3.common.util.BitmapLoader
 import androidx.media3.common.util.UnstableApi
@@ -33,8 +34,13 @@ class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
 
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val bitmapCache = ConcurrentHashMap<String, Bitmap>()
-    private val confirmedMissingArtwork = ConcurrentHashMap.newKeySet<String>()
+
+    // Each entry is a decoded 512x512 ARGB_8888 bitmap (~1 MB of native heap). A long
+    // listening session over a large library would otherwise pin hundreds of them for
+    // the process lifetime; artwork is cheap to re-decode from the file, so a small
+    // LRU cap costs only re-reads.
+    private val bitmapCache = object : LruCache<String, Bitmap>(BITMAP_CACHE_ENTRIES) {}
+    private val confirmedMissingArtwork = LruCache<String, Boolean>(MISS_CACHE_ENTRIES)
     private val inFlight = ConcurrentHashMap<String, ListenableFuture<Bitmap>>()
 
     @Volatile
@@ -49,11 +55,11 @@ class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
 
     override fun loadBitmap(uri: Uri): ListenableFuture<Bitmap> {
         val key = uri.toString()
-        bitmapCache[key]?.let { bitmap ->
+        bitmapCache.get(key)?.let { bitmap ->
             lastDisplayedBitmap = bitmap
             return Futures.immediateFuture(bitmap)
         }
-        if (confirmedMissingArtwork.contains(key)) {
+        if (confirmedMissingArtwork.get(key) != null) {
             return immediateNullBitmap()
         }
 
@@ -75,10 +81,10 @@ class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
                 null
             }
             if (bitmap == null) {
-                confirmedMissingArtwork.add(key)
+                confirmedMissingArtwork.put(key, true)
                 result.set(null)
             } else {
-                bitmapCache[key] = bitmap
+                bitmapCache.put(key, bitmap)
                 lastDisplayedBitmap = bitmap
                 result.set(bitmap)
             }
@@ -142,5 +148,7 @@ class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
 
     private companion object {
         private const val MAX_ARTWORK_SIZE = 512
+        private const val BITMAP_CACHE_ENTRIES = 8
+        private const val MISS_CACHE_ENTRIES = 256
     }
 }

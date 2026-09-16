@@ -253,6 +253,10 @@ object AudioLyricsTagWriter {
 
     private const val ID3_USLT = "USLT"
 
+    // Compiled once: this loop walks every frame of the tag (large MP3 files can
+    // carry hundreds), so a per-frame Regex() compile was pure overhead.
+    private val FRAME_ID_REGEX = Regex("[A-Z0-9]{4}")
+
     private class Id3TagInfo(
         val major: Int,
         val tagSize: Int,
@@ -287,7 +291,7 @@ object AudioLyricsTagWriter {
         while (pos + 10 <= frames.size) {
             if (frames[pos] == 0.toByte()) break // padding
             val id = String(frames, pos, 4, Charsets.US_ASCII)
-            if (!Regex("[A-Z0-9]{4}").matches(id)) break
+            if (!FRAME_ID_REGEX.matches(id)) break
             val size = if (major >= 4) syncSafeInt(frames, pos + 4) else beInt(frames, pos + 4)
             if (size <= 0 || pos + 10 + size > frames.size) break
             if (id == ID3_USLT) {

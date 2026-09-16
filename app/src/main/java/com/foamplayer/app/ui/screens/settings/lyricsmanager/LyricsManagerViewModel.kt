@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 /** Library-wide lyrics counters powering the manager's header stats row. */
 data class LyricsManagerStats(
@@ -97,15 +98,26 @@ class LyricsManagerViewModel @Inject constructor(
         statusMap,
         isScanning
     ) { allTracks, cachedIds, statuses, scanning ->
-        val cachedIdSet = cachedIds.toSet()
+        // Single pass over the library: the previous four `count { }` calls each
+        // re-scanned the whole list on every emission of any of the four flows.
+        val cachedIdSet = cachedIds
+        var cached = 0
+        var embedded = 0
+        var file = 0
+        var noLyrics = 0
+        for (track in allTracks) {
+            val status = statuses[track.id]
+            val isCached = track.id in cachedIdSet
+            if (isCached) cached++
+            if (status?.hasEmbedded == true) embedded++
+            if (status?.hasFile == true) file++
+            if (!isCached && status != null && !status.hasFile && !status.hasEmbedded) noLyrics++
+        }
         LyricsManagerStats(
-            cached = allTracks.count { it.id in cachedIdSet },
-            embedded = allTracks.count { statuses[it.id]?.hasEmbedded == true },
-            file = allTracks.count { statuses[it.id]?.hasFile == true },
-            noLyrics = allTracks.count { track ->
-                track.id !in cachedIdSet &&
-                        statuses[track.id]?.let { !it.hasFile && !it.hasEmbedded } == true
-            },
+            cached = cached,
+            embedded = embedded,
+            file = file,
+            noLyrics = noLyrics,
             total = allTracks.size,
             isScanning = scanning
         )
@@ -138,13 +150,33 @@ class LyricsManagerViewModel @Inject constructor(
                 val liveIds = allTracks.map { it.id }.toSet()
                 _statusMap.update { current -> current.filterKeys { it in liveIds } }
 
+                // Batch the streamed scan results. The callback fires once per track
+                // from parallel IO workers; publishing each result individually copied
+                // the whole status map and re-ran the stats/screen work O(library)
+                // times per scan. Buffering and flushing in batches bounds emissions
+                // (and thus recompositions) while keeping the progressive fill-in.
+                val pending = ConcurrentHashMap<Long, LyricsSourceStatus>()
                 lyricsRepository.scanSourceStatuses(allTracks) { trackId, status ->
-                    _statusMap.update { current -> current + (trackId to status) }
+                    pending[trackId] = status
+                    if (pending.size >= STATUS_BATCH_SIZE) {
+                        flushPendingStatuses(pending)
+                    }
                 }
+                flushPendingStatuses(pending)
             } finally {
                 isScanning.value = false
             }
         }
+    }
+
+    private fun flushPendingStatuses(pending: ConcurrentHashMap<Long, LyricsSourceStatus>) {
+        if (pending.isEmpty()) return
+        val batch = HashMap<Long, LyricsSourceStatus>(pending.size)
+        for (key in pending.keys) {
+            pending.remove(key)?.let { batch[key] = it }
+        }
+        if (batch.isEmpty()) return
+        _statusMap.update { current -> current + batch }
     }
 
     /**
@@ -197,4 +229,9 @@ class LyricsManagerViewModel @Inject constructor(
 
     private suspend fun currentTracks(): List<TrackEntity> =
         tracks.value.ifEmpty { trackRepository.getAllTracksOnce() }
+
+    private companion object {
+        /** Scan results buffered before they are published to [statusMap]. */
+        const val STATUS_BATCH_SIZE = 64
+    }
 }

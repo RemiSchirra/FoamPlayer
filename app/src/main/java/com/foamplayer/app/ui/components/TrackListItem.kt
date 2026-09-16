@@ -27,6 +27,7 @@ import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -56,6 +57,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 import kotlin.math.abs
 import kotlin.math.max
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /** Opacity applied to auxiliary queue tracks. */
@@ -184,7 +186,9 @@ fun TrackListItem(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .graphicsLayer { alpha = if (auxiliary) AuxiliaryAlpha else 1f }
+                // Only auxiliary rows need an alpha layer; the lambda-graphicsLayer
+                // variant promotes every row to its own render layer even at 1f.
+                .then(if (auxiliary) Modifier.graphicsLayer { alpha = AuxiliaryAlpha } else Modifier)
         ) {
             MediaGridCell(
                 onClick = onClick,
@@ -233,11 +237,18 @@ fun TrackListItem(
     }
 
     val localDensity = LocalDensity.current
-    val rowAlpha = if (auxiliary) AuxiliaryAlpha else 1f
 
     // --- Swipe-to-dismiss state (only active when onRemove is provided) ---
     val scope = rememberCoroutineScope()
-    val dismissOffset = remember { Animatable(0f) }
+
+    // Plain snapshot float backing the swipe offset. During the drag it is written
+    // directly in the gesture callback (read back in the row's graphicsLayer, so
+    // drags cost zero coroutines); the end-of-gesture animations run through an
+    // Animatable that feeds this same float. The old backing was an Animatable
+    // snapTo'd from a fresh coroutine per drag delta — one Job allocation plus a
+    // mutex hop at pointer-event rate (~120/s on high-refresh panels) per row.
+    var dismissOffsetValue by remember { mutableFloatStateOf(0f) }
+    val gestureAnimJob = remember { mutableStateOf<Job?>(null) }
     var itemWidthPx by remember { mutableFloatStateOf(0f) }
     val latestOnRemove by rememberUpdatedState(onRemove)
     val fallbackDismissThresholdPx = with(localDensity) { SwipeDismissThreshold.toPx() }
@@ -247,48 +258,45 @@ fun TrackListItem(
         if (itemWidthPx > 0f) itemWidthPx * SwipeDismissThresholdFraction
         else fallbackDismissThresholdPx
 
+    fun animateSwipeTo(target: Float, durationMs: Int, onEnd: () -> Unit = {}) {
+        gestureAnimJob.value?.cancel()
+        gestureAnimJob.value = scope.launch {
+            val animatable = Animatable(dismissOffsetValue)
+            animatable.animateTo(target, tween(durationMillis = durationMs)) {
+                dismissOffsetValue = value
+            }
+            onEnd()
+        }
+    }
+
     val swipeModifier = if (onRemove != null) {
         Modifier.pointerInput(Unit) {
             detectHorizontalDragGestures(
+                onDragStart = {
+                    // Grabbing a row mid return/fly-out animation takes over from it.
+                    gestureAnimJob.value?.cancel()
+                },
                 onHorizontalDrag = { change, dragAmount ->
                     change.consume()
-                    // snapTo from the composition scope: the calls serialize through the
-                    // Animatable's mutex, and the drag deltas arrive sequentially anyway.
-                    scope.launch {
-                        dismissOffset.snapTo(dismissOffset.value + dragAmount)
-                    }
+                    dismissOffsetValue += dragAmount
                 },
                 onDragEnd = {
-                    if (abs(dismissOffset.value) >= swipeThresholdPx()) {
+                    if (abs(dismissOffsetValue) >= swipeThresholdPx()) {
                         // Fling the row fully off-screen, then remove the item
                         val exitDistance =
                             if (itemWidthPx > 0f) itemWidthPx else fallbackDismissThresholdPx
                         val exitTarget =
-                            if (dismissOffset.value > 0f) exitDistance else -exitDistance
-                        scope.launch {
-                            dismissOffset.animateTo(
-                                exitTarget,
-                                tween(durationMillis = SwipeDismissDurationMs)
-                            )
+                            if (dismissOffsetValue > 0f) exitDistance else -exitDistance
+                        animateSwipeTo(exitTarget, SwipeDismissDurationMs) {
                             latestOnRemove?.invoke()
                         }
                     } else {
                         // Not dragged far enough: animate back to rest
-                        scope.launch {
-                            dismissOffset.animateTo(
-                                0f,
-                                tween(durationMillis = SwipeReturnDurationMs)
-                            )
-                        }
+                        animateSwipeTo(0f, SwipeReturnDurationMs)
                     }
                 },
                 onDragCancel = {
-                    scope.launch {
-                        dismissOffset.animateTo(
-                            0f,
-                            tween(durationMillis = SwipeReturnDurationMs)
-                        )
-                    }
+                    animateSwipeTo(0f, SwipeReturnDurationMs)
                 }
             )
         }
@@ -331,7 +339,9 @@ fun TrackListItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .graphicsLayer { alpha = rowAlpha }
+            // Only auxiliary rows need an alpha layer; the lambda-graphicsLayer
+            // variant promotes every row to its own render layer even at 1f.
+            .then(if (auxiliary) Modifier.graphicsLayer { alpha = AuxiliaryAlpha } else Modifier)
     ) {
         MediaListRow(
             onClick = onClick,
@@ -376,11 +386,11 @@ fun TrackListItem(
             rowModifier = Modifier
                 .onSizeChanged { itemWidthPx = it.width.toFloat() }
                 .graphicsLayer {
-                    translationX = dismissOffset.value
+                    translationX = dismissOffsetValue
                     // Become slightly translucent while swiping: alpha eases
                     // from 1f down to (1 - SwipeMaxFade) at the threshold
                     val threshold = max(swipeThresholdPx(), 1f)
-                    val progress = (abs(dismissOffset.value) / threshold).coerceIn(0f, 1f)
+                    val progress = (abs(dismissOffsetValue) / threshold).coerceIn(0f, 1f)
                     alpha = 1f - progress * SwipeMaxFade
                 }
                 .then(swipeModifier),

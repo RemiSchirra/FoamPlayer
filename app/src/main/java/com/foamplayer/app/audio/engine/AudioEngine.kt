@@ -13,6 +13,7 @@ import com.foamplayer.app.audio.bitperfect.BitPerfectDetector
 import com.foamplayer.app.audio.equalizer.EqualizerManager
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.TrackRepository
+import com.foamplayer.app.data.scanner.ScanStatus
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -98,6 +99,10 @@ class AudioEngine @Inject constructor(
         private const val AUXILIARY_QUEUE_LENGTH = PlaybackState.AUXILIARY_QUEUE_LENGTH
         // Playback time after which a track counts as listened (hardcoded 1s for now).
         private const val LISTEN_THRESHOLD_MS = 1000L
+        // Position poll rate when playing with no position collectors (background).
+        private const val POSITION_POLL_SLOW_INTERVAL_MS = 250L
+        // Position poll rate while paused.
+        private const val PAUSED_POLL_INTERVAL_MS = 200L
     }
 
     init {
@@ -216,11 +221,22 @@ class AudioEngine @Inject constructor(
 
     private fun observeLibraryForAuxiliaryRefill() {
         scope.launch {
-            trackRepository.getAllTracks().collect { tracks ->
-                allTracks = tracks
-                // The library changed, refresh the auxiliary pool from it.
-                if (_playbackState.value.queue.isNotEmpty()) {
-                    scope.launch { refillAuxiliary() }
+            // One-shot snapshot + refresh on completed library scans. Collecting the
+            // live getAllTracks() Flow here re-emitted the whole table on every row
+            // write -- including once per played track (incrementPlayCount invalidates
+            // the table), re-materializing a potentially multi-MB list and re-running
+            // the O(library) auxiliary refill roughly every song. Stat-only writes
+            // (play count, score, instrumental flag) cannot affect pool selection, and
+            // every library-content change goes through a scan, which finishes with
+            // ScanStatus.Finished.
+            allTracks = trackRepository.getAllTracksOnce()
+            trackRepository.scanStatus.collect { status ->
+                if (status is ScanStatus.Finished) {
+                    allTracks = trackRepository.getAllTracksOnce()
+                    // The library changed; refresh the auxiliary pool from it.
+                    if (_playbackState.value.queue.isNotEmpty()) {
+                        refillAuxiliary()
+                    }
                 }
             }
         }
@@ -301,11 +317,7 @@ class AudioEngine @Inject constructor(
             setQueue(tracks, 0)
             return
         }
-        var index = current.queueIndex + 1
-        tracks.forEach { track ->
-            insertTrack(track, index)
-            index++
-        }
+        insertTracks(tracks, current.queueIndex + 1)
     }
 
     /**
@@ -325,10 +337,7 @@ class AudioEngine @Inject constructor(
         while (index > 0 && current.auxiliaryFlags.getOrNull(index - 1) == true) {
             index--
         }
-        tracks.forEach { track ->
-            insertTrack(track, index)
-            index++
-        }
+        insertTracks(tracks, index)
     }
 
     /**
@@ -447,6 +456,72 @@ class AudioEngine @Inject constructor(
             }
             // Further past the window: nothing loaded needs to shift;
             // adjustWindow() loads the item as playback approaches.
+        }
+    }
+
+    /**
+     * Bulk variant of [insertTrack] for a contiguous [tracks] block at [requestedIndex].
+     * Publishing one [PlaybackState] and issuing one [player.addMediaItems] call
+     * instead of per-track loops keeps "play next N" / "add all to queue" O(n) instead
+     * of O(n²) list copies, N state emissions (each a recomposition of every queue UI
+     * collector) and N player timeline-change notifications.
+     */
+    private fun insertTracks(tracks: List<TrackEntity>, requestedIndex: Int) {
+        if (tracks.isEmpty()) return
+        val current = _playbackState.value
+        if (current.queue.isEmpty()) {
+            setQueue(tracks, 0)
+            return
+        }
+
+        val insertIndex = requestedIndex.coerceIn(0, current.queue.size)
+        val count = tracks.size
+
+        val newQueue = current.queue.toMutableList().apply {
+            addAll(insertIndex, tracks)
+        }
+
+        val newEntryIds = current.queueEntryIds.toMutableList().apply {
+            addAll(insertIndex.coerceAtMost(size), List(count) { allocateEntryId() })
+        }
+
+        // Inserted tracks are always main tracks, never part of the auxiliary pool...
+        val newFlags = current.auxiliaryFlags.toMutableList().apply {
+            addAll(insertIndex.coerceAtMost(size), List(count) { false })
+        }
+
+        // ...and never part of the source collection's section either.
+        val newSourceFlags = current.queueSourceFlags.toMutableList().apply {
+            addAll(insertIndex.coerceAtMost(size), List(count) { false })
+        }
+
+        // Keep the cursor on the same track it was on: an insert at or before
+        // it shifts every later index (including the cursor's) by the block size.
+        val newQueueIndex =
+            if (insertIndex <= current.queueIndex) current.queueIndex + count else current.queueIndex
+
+        _playbackState.value = current.copy(
+            queue = newQueue,
+            queueEntryIds = newEntryIds,
+            queueIndex = newQueueIndex,
+            auxiliaryFlags = newFlags,
+            queueSourceFlags = newSourceFlags
+        )
+
+        val window = loadedRange
+        if (pendingWindowResync || window == IntRange.EMPTY) return
+        when {
+            // Before the window: queue indices shift, the player timeline doesn't.
+            insertIndex < window.first ->
+                loadedRange = (window.first + count)..(window.last + count)
+            // At or inside the window: slot the block into the player at the same
+            // relative position (same edge rules as the single-item insert).
+            insertIndex <= window.last + 1 -> {
+                player.addMediaItems(insertIndex - window.first, tracks.map { it.toMediaItem() })
+                loadedRange = window.first..(window.last + count)
+            }
+            // Further past the window: nothing loaded needs to shift;
+            // adjustWindow() loads the items as playback approaches.
         }
     }
 
@@ -603,6 +678,9 @@ class AudioEngine @Inject constructor(
 
         val windowStart = (centerIndex - WINDOW_RADIUS).coerceAtLeast(0)
         val windowEnd = (centerIndex + WINDOW_RADIUS).coerceAtMost(queue.lastIndex)
+        // Deliberately synchronous (unlike loadWindowAndPlay): this must override any
+        // in-flight jump atomically, and the ~31-item window maps in low single-digit
+        // milliseconds.
         val items = queue.subList(windowStart, windowEnd + 1).map { it.toMediaItem() }
         loadedRange = windowStart..windowEnd
         player.setMediaItems(items, centerIndex - windowStart, 0L)
@@ -924,15 +1002,29 @@ class AudioEngine @Inject constructor(
     private fun startProgressTracker() {
         progressJob?.cancel()
         progressJob = scope.launch {
+            var lastEmitted = Long.MIN_VALUE
             while (true) {
+                val position = player.currentPosition
+                // Skip redundant emissions: while paused (and between track gaps) the
+                // position rarely changes, and re-emitting an identical value still
+                // wakes every collector (seek bars, lyrics interpolation) for nothing.
+                if (position != lastEmitted) {
+                    lastEmitted = position
+                    _positionMs.value = position
+                }
                 if (player.isPlaying) {
-                    // Update the position flow every frame
-                    _positionMs.value = player.currentPosition
-                    awaitFrame()
+                    if (_positionMs.subscriptionCount.value > 0) {
+                        // UI is listening: tick per rendered frame so the seek bar and
+                        // karaoke lyrics stay frame-smooth.
+                        awaitFrame()
+                    } else {
+                        // Playing with no UI listening (e.g. background playback): a
+                        // low-rate poll keeps the flow fresh without frame-rate wakeups.
+                        delay(POSITION_POLL_SLOW_INTERVAL_MS)
+                    }
                 } else {
                     // Keep position in sync while paused (catches external seeks)
-                    _positionMs.value = player.currentPosition
-                    delay(200)
+                    delay(PAUSED_POLL_INTERVAL_MS)
                 }
             }
         }

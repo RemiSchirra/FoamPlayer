@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -106,7 +107,13 @@ fun QueueScreen(
                 items = displayedItems,
                 key = { _, item -> item.entryId }
             ) { index, item ->
-                val isDragging = dragDropListState.isItemDragging(index)
+                // derivedStateOf: draggedIndex is shared by every row, so reading it
+                // directly in each row's scope would recompose the whole viewport on
+                // every swap; the derived boolean only invalidates the rows whose
+                // dragging state actually flips (the two rows involved in the swap).
+                val isDragging by remember(index) {
+                    derivedStateOf { dragDropListState.isItemDragging(index) }
+                }
                 val currentIndex = rememberUpdatedState(index)
 
                 TrackListItem(

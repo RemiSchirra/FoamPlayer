@@ -123,9 +123,21 @@ class TrackRepository @Inject constructor(
         }
 
         trackDao.insertTracks(mergedTracks)
-        val scannedPaths = mergedTracks.map { it.path }
-        trackDao.deleteOrphanedTracks(scannedPaths)
-        cachedLyricsDao.deleteOrphaned(mergedTracks.map { it.id })
+        // Chunked orphan cleanup: binding the whole library as a single NOT IN (...)
+        // parameter list crashes on API 29 devices once the library exceeds SQLite's
+        // 999 host-variable limit. Computing the diff here keeps each statement's
+        // bind count bounded (and usually empty -- nothing stale to delete).
+        val scannedPathSet = mergedTracks.mapTo(HashSet()) { it.path }
+        val stalePaths = trackDao.getAllTrackPaths().filterNot { it in scannedPathSet }
+        stalePaths.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
+            trackDao.deleteTracksByPaths(chunk)
+        }
+
+        val liveTrackIds = trackDao.getAllTrackIds().toHashSet()
+        val orphanedCachedIds = cachedLyricsDao.getCachedTrackIds().filterNot { it in liveTrackIds }
+        orphanedCachedIds.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
+            cachedLyricsDao.deleteByTrackIds(chunk)
+        }
 
         _scanStatus.value = ScanStatus.Finished(scannedTracks.size)
     }
@@ -174,4 +186,9 @@ class TrackRepository @Inject constructor(
 
     /** Emits the user-set instrumental flag for [trackId], updating whenever it changes. */
     fun observeInstrumental(trackId: Long): Flow<Boolean> = trackDao.observeInstrumental(trackId)
+
+    private companion object {
+        /** Bound below SQLite's 999 host-variable limit (API 29) per statement. */
+        const val SQL_VARIABLE_CHUNK = 900
+    }
 }

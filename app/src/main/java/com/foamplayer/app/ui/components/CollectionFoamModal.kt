@@ -248,8 +248,21 @@ fun CollectionFoamModal(
                                 )
                             }
 
+                            // distinctArtistNames()/distinctCollectionAlbums() scan the
+                            // whole track list (flatMap/split/distinct + groupBy) and
+                            // this modal recomposes per animation frame while the
+                            // dynamic accent color animates -- compute them once per
+                            // collection instead of once per recomposition.
+                            val navArtistNames = remember(displayCollection) {
+                                displayCollection.distinctArtistNames()
+                            }
+                            val navAlbums = remember(displayCollection) {
+                                displayCollection.tracks.distinctCollectionAlbums()
+                            }
                             val navigationRows = collectionNavigationRows(
                                 collection = displayCollection,
+                                artistNames = navArtistNames,
+                                albums = navAlbums,
                                 perform = { action ->
                                     state.dismiss()
                                     action()
@@ -492,6 +505,8 @@ data class CollectionAlbumEntry(
  */
 private fun collectionNavigationRows(
     collection: CollectionInfo,
+    artistNames: List<String>,
+    albums: List<CollectionAlbumEntry>,
     perform: (() -> Unit) -> Unit,
     onSeeArtist: (String) -> Unit,
     onSeeAlbum: (String, String?, String?) -> Unit,
@@ -517,7 +532,6 @@ private fun collectionNavigationRows(
                 val sourceKind = collection.kind
                 val sourceKey = collection.listSourceKey()
 
-                val artistNames = collection.distinctArtistNames()
                 when {
                     artistNames.size == 1 -> add(
                         CollectionModalNavRow("See Artist") { perform { onSeeArtist(artistNames.first()) } }
@@ -527,7 +541,6 @@ private fun collectionNavigationRows(
                     )
                 }
 
-                val albums = collection.tracks.distinctCollectionAlbums()
                 when {
                     albums.size == 1 -> {
                         val entry = albums.first()

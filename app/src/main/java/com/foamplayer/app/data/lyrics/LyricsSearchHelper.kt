@@ -11,9 +11,11 @@ object LyricsSearchHelper {
 
     /** Metadata tags that can ride along in an LRC header ([ti:] / [ar:] / [al:]). */
     data class LrcMetadata(val title: String?, val artist: String?, val album: String?)
-
     private val ENHANCED_LRC_WORD_TIME_REGEX = Regex("""<\d{1,3}:\d{2}(?:[.:]\d{2,3})?>""")
+
     private val YRC_WORD_TIME_REGEX = Regex("""\(\d{1,8},\d{1,8}(?:,\d{1,8})?\)""")
+
+    private val LRC_HEADER_TAG_REGEX = Regex("""^\[(ti|ar|al):(.*)]\s*$""", RegexOption.IGNORE_CASE)
 
     /** How close (ms) a derived result duration must be to the track's to count as a match. */
     const val DURATION_MATCH_TOLERANCE_MS = 2_000L
@@ -59,12 +61,11 @@ object LyricsSearchHelper {
 
     /** LRC header tags, when the payload carries them. */
     fun extractLrcMetadata(rawLyrics: String): LrcMetadata? {
-        val tagRegex = Regex("""^\[(ti|ar|al):(.*)]\s*$""", RegexOption.IGNORE_CASE)
         var title: String? = null
         var artist: String? = null
         var album: String? = null
         rawLyrics.lineSequence().forEach { line ->
-            val match = tagRegex.find(line.trim()) ?: return@forEach
+            val match = LRC_HEADER_TAG_REGEX.find(line.trim()) ?: return@forEach
             val value = match.groupValues[2].trim().takeIf { it.isNotEmpty() } ?: return@forEach
             when (match.groupValues[1].lowercase()) {
                 "ti" -> title = value

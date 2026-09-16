@@ -13,11 +13,17 @@ import androidx.compose.material.Slider
 import androidx.compose.material.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlin.math.roundToInt
 
 @Composable
 fun FoamSliderItem(
@@ -87,4 +93,42 @@ fun FoamSliderItem(
             }
         }
     }
+}
+
+/**
+ * Self-contained variant of [FoamSliderItem] for the commit-on-release settings
+ * pattern: the drag value lives in this row's own composition scope, so dragging
+ * recomposes only this row instead of the whole screen (hoisted local values read
+ * for `valueDisplay` used to re-run every other row of the screen per pointer
+ * frame). [onValueChangeFinished] receives the committed value on release.
+ */
+@Composable
+fun FoamSliderStateItem(
+    title: String,
+    initialValue: Float,
+    onValueChangeFinished: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    steps: Int? = null,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    description: String? = null,
+    minMaxDisplay: Pair<String, String>? = null,
+    formatValue: (Float) -> String = { it.roundToInt().toString() }
+) {
+    var localValue by remember { mutableFloatStateOf(initialValue) }
+    // Re-sync when the underlying setting changes from elsewhere (e.g. a
+    // DataStore write landing after the commit).
+    LaunchedEffect(initialValue) { localValue = initialValue }
+
+    FoamSliderItem(
+        title = title,
+        value = localValue,
+        onValueChange = { localValue = it },
+        onValueChangeFinished = { onValueChangeFinished(localValue) },
+        valueDisplay = formatValue(localValue),
+        modifier = modifier,
+        steps = steps,
+        valueRange = valueRange,
+        description = description,
+        minMaxDisplay = minMaxDisplay
+    )
 }

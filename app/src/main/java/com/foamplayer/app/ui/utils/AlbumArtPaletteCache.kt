@@ -45,6 +45,15 @@ object AlbumArtPaletteCache {
     private val inFlight = mutableSetOf<String>()
     private val inFlightLock = Mutex()
 
+    /**
+     * Paths whose extraction produced no usable swatch. Without this marker every
+     * [ensure] call for such a path would re-launch a full bitmap decode, forever
+     * (nothing is cached on failure), turning a single "no vibrant color" artwork
+     * into a retry storm. Extraction failures are effectively permanent (missing or
+     * unreadable art), so they are treated as terminal.
+     */
+    private val failedPaths = mutableSetOf<String>()
+
     // Access-ordered record of what's been read recently, driving eviction. Only the
     // paths matter; the value is a placeholder. Backed by a plain LinkedHashMap with
     // accessOrder=true so `touch` moves an entry to the end (most recently used).
@@ -77,6 +86,7 @@ object AlbumArtPaletteCache {
             touch(path)
             return
         }
+        if (path in failedPaths) return
         scope.launch {
             val shouldFetch = inFlightLock.withLock {
                 if (path in inFlight) {
@@ -92,6 +102,8 @@ object AlbumArtPaletteCache {
                 if (color != null) {
                     colors[path] = color
                     touch(path)
+                } else {
+                    failedPaths += path
                 }
             } finally {
                 // The launching scope (a LaunchedEffect) is cancelled the moment its
