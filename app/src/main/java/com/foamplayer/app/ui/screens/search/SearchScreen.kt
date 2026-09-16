@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.Icon
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.ripple
 import androidx.compose.material.icons.rounded.Album
@@ -244,6 +245,46 @@ fun SearchScreen(
             when {
                 // Results while typing
                 query.isNotEmpty() -> {
+                    // Found in lyrics: the scan runs in the background across the whole
+                    // library (cached / sidecar / embedded lyrics only, never online),
+                    // so matches stream in here progressively until it completes.
+                    if (uiState.lyricsMatches.isNotEmpty() || uiState.lyricsSearchInProgress) {
+                        item(key = "lyrics_header") {
+                            SectionHeader(
+                                if (uiState.lyricsSearchInProgress) "Found in lyrics..." else "Found in lyrics"
+                            )
+                        }
+                        items(uiState.lyricsMatches, key = { "lyrics_${it.id}" }) { track ->
+                            TrackListItem(
+                                track = track,
+                                onClick = {
+                                    searchViewModel.addToHistory(track)
+                                    onTrackClick(track)
+                                },
+                                active = track.id == activeTrackId,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = playerTransitionVisibilityScope,
+                                isSharedTransitionSource = track.id == sharedTrackId
+                            )
+                        }
+                        if (uiState.lyricsSearchInProgress) {
+                            item(key = "lyrics_progress") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = FoamTheme.accentColor
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Artists Section
                     if (uiState.artists.isNotEmpty()) {
                         item(key = "artists_header") {

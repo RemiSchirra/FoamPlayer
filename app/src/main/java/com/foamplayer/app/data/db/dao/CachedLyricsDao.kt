@@ -12,6 +12,9 @@ interface CachedLyricsDao {
     @Query("SELECT * FROM cached_lyrics WHERE trackId = :trackId LIMIT 1")
     suspend fun getByTrackId(trackId: Long): CachedLyricsEntity?
 
+    @Query("SELECT * FROM cached_lyrics")
+    suspend fun getAll(): List<CachedLyricsEntity>
+
     @Query("SELECT trackId FROM cached_lyrics")
     fun observeCachedTrackIds(): Flow<List<Long>>
 

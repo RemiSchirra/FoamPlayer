@@ -27,9 +27,15 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,6 +49,9 @@ class LyricsRepository @Inject constructor(
     private val lyricsFileWriter: LyricsFileWriter,
     private val statusScanner: LyricsStatusScanner
 ) {
+    /** Session memo of the searchable text of a track's sidecar + embedded lyrics, keyed by size. */
+    private val searchTextCache = ConcurrentHashMap<Long, Pair<Long, String?>>()
+
     suspend fun getLyrics(track: TrackEntity): String? = resolveLyrics(track)?.content
 
     /**
@@ -157,6 +166,77 @@ class LyricsRepository @Inject constructor(
     ) = statusScanner.scan(tracks, onStatus)
 
     /**
+     * Streams every track of [tracks] whose locally available lyrics contain
+     * [query]. Only the three local sources are inspected — the persisted
+     * online cache, the sidecar file and the embedded tag — never the network.
+     *
+     * Tracks are processed in parallel on Dispatchers.IO (bounded by a
+     * semaphore) and matches are emitted as soon as they are found, so the
+     * UI can fill in progressively while the scan runs. Cancelling the
+     * collector stops the scan.
+     */
+    fun searchLyricsText(query: String, tracks: List<TrackEntity>): Flow<TrackEntity> = channelFlow {
+        val needle = query.trim()
+        if (needle.isEmpty() || tracks.isEmpty()) return@channelFlow
+
+        val cachedLyrics = runCatching { cachedLyricsDao.getAll() }
+            .getOrDefault(emptyList())
+            .associate { it.trackId to it.lyrics }
+
+        val limiter = Semaphore(LYRICS_SEARCH_CONCURRENCY)
+        coroutineScope {
+            for (track in tracks) {
+                launch {
+                    limiter.withPermit {
+                        val text = searchableLyricsText(track, cachedLyrics[track.id])
+                        if (text != null && text.contains(needle, ignoreCase = true)) {
+                            send(track)
+                        }
+                    }
+                }
+            }
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /**
+     * Joins the display text of every local lyrics source of [track]: the
+     * persisted online-fetched lyrics plus the sidecar/embedded text (the
+     * latter memoized in [searchTextCache] for the app session).
+     */
+    private suspend fun searchableLyricsText(track: TrackEntity, cached: String?): String? {
+        val cachedText = cached
+            ?.takeIf { it.isNotBlank() }
+            ?.let { LyricsUtils.displayLyricsText(it) }
+        val localText = localSearchableText(track)
+        return when {
+            cachedText == null -> localText
+            localText == null -> cachedText
+            else -> "$cachedText\n$localText"
+        }
+    }
+
+    /** Display text of the sidecar file + embedded tag, memoized per session. */
+    private suspend fun localSearchableText(track: TrackEntity): String? {
+        searchTextCache[track.id]
+            ?.takeIf { it.first == track.size }
+            ?.let { return it.second }
+
+        val text = listOfNotNull(
+            runCatching { localLyricsProvider.getLyrics(track.path) }.getOrNull(),
+            runCatching { embeddedLyricsProvider.getLyrics(track.path.toUri()) }.getOrNull()
+        ).joinToString("\n") { LyricsUtils.displayLyricsText(it) }
+            .ifBlank { null }
+
+        searchTextCache[track.id] = track.size to text
+        return text
+    }
+
+    /** Drops the memoized sidecar/embedded search text of [trackId]. */
+    private fun invalidateSearchText(trackId: Long) {
+        searchTextCache.remove(trackId)
+    }
+
+    /**
      * Queries every enabled lyrics provider (in the user's configured order)
      * concurrently for the track's metadata, classifies and ranks each result:
      * metadata similarity first, then duration delta, then provider order.
@@ -193,12 +273,16 @@ class LyricsRepository @Inject constructor(
     suspend fun saveLyricsFile(track: TrackEntity, content: String, wordSynced: Boolean): Result<Unit> =
         withContext(Dispatchers.IO) {
             lyricsFileWriter.writeSidecar(track.path, content, wordSynced)
+                .onSuccess { invalidateSearchText(track.id) }
         }
 
     /** Writes [content] into the audio file's embedded lyrics tag. */
     suspend fun embedLyrics(track: TrackEntity, content: String): Result<Unit> = withContext(Dispatchers.IO) {
         AudioLyricsTagWriter.embed(context, track.path, content)
-            .onSuccess { statusScanner.invalidate(track.id) }
+            .onSuccess {
+                statusScanner.invalidate(track.id)
+                invalidateSearchText(track.id)
+            }
     }
 
     /**
@@ -211,6 +295,7 @@ class LyricsRepository @Inject constructor(
         // Force the next status scan to re-read the audio file instead of
         // reusing the cached embedded-lyrics verdict.
         statusScanner.invalidate(track.id)
+        invalidateSearchText(track.id)
 
         val hadCached = runCatching { cachedLyricsDao.getByTrackId(track.id) != null }.getOrDefault(false)
         if (hadCached) {
@@ -290,5 +375,8 @@ class LyricsRepository @Inject constructor(
     private companion object {
         /** Network searches are individually capped so one slow provider cannot stall the whole screen. */
         const val PROVIDER_SEARCH_TIMEOUT_MS = 20_000L
+
+        /** Parallel track inspections during the local lyrics text search. */
+        const val LYRICS_SEARCH_CONCURRENCY = 16
     }
 }
