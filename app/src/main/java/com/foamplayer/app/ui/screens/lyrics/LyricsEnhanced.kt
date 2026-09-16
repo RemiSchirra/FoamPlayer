@@ -175,11 +175,12 @@ fun LyricsEnhanced(
     val lyricsLineSpacing = 1.3f
     // Word-synced (karaoke) rendering is inherently heavier than plain lyrics: it drives a
     // 60fps position feed for per-syllable highlighting and renders extra composables per
-    // line (translation, phonetic, accompaniment). On top of that, a GPU blur effect was
-    // being forced on unconditionally, which is one of the most expensive things Compose
-    // can draw and gets recomputed as the highlighted line changes during playback. Until
-    // this is wired up to a real user-configurable setting (see LyricsLineBlurKey), default
-    // it off rather than always-on so word-synced lyrics aren't paying for it by default.
+    // line (translation, phonetic, accompaniment). On top of that, a GPU blur effect on the
+    // non-active lines is one of the most expensive things Compose can draw and gets
+    // recomputed as the highlighted line changes during playback. The user's choice
+    // (Settings > Lyrics > Display, persisted via LyricsLineBlurKey) arrives through
+    // lyricsLineBlurOverride; this false is only the fallback for callers that don't wire
+    // the setting, so word-synced lyrics never pay for blur by default.
     val lyricsLineBlurPreference = false
     val romanizeChinese = true
     val romanizeHindi = true

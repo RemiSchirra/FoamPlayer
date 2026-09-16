@@ -54,6 +54,8 @@ data class AppSettings(
     val enabledLyricsProviders: Set<PreferredLyricsProvider> = PreferredLyricsProvider.entries.toSet(),
     val lyricsSourceOrder: List<LyricsSource> = DefaultLyricsSourceOrder,
     val enabledLyricsSources: Set<LyricsSource> = LyricsSource.entries.toSet(),
+    /** Blur applied to non-active lines in the synced-lyrics view; off by default (GPU-costly). */
+    val lyricsLineBlur: Boolean = false,
     val searchHistory: List<String> = emptyList(),
     val language: String = "auto",
     val navigationBarMode: NavigationBarMode = NavigationBarMode.ATTACHED,

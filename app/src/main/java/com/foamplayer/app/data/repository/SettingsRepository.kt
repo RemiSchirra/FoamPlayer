@@ -12,6 +12,7 @@ import com.foamplayer.app.constants.DefaultLyricsProviderOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
 import com.foamplayer.app.constants.DefaultNavBarScreenItems
+import com.foamplayer.app.constants.LyricsLineBlurKey
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavBarItem
@@ -112,6 +113,10 @@ class SettingsRepository @Inject constructor(
         it.copy(enabledLyricsSources = enabled)
     }
 
+    suspend fun setLyricsLineBlur(enabled: Boolean) = update {
+        it.copy(lyricsLineBlur = enabled)
+    }
+
     suspend fun setSearchHistory(history: List<String>) = update { it.copy(searchHistory = history) }
     
     suspend fun setLanguage(language: String) = update { it.copy(language = language) }
@@ -178,6 +183,7 @@ class SettingsRepository @Inject constructor(
         enabledLyricsSources = this[Keys.ENABLED_LYRICS_SOURCES]
             ?.mapNotNull { name -> LyricsSource.entries.find { it.name == name } }
             ?.toSet() ?: DefaultLyricsSourceOrder.toSet(),
+        lyricsLineBlur = this[Keys.LYRICS_LINE_BLUR] ?: AppSettings().lyricsLineBlur,
         searchHistory = this[Keys.SEARCH_HISTORY]?.split("|")?.filter { it.isNotEmpty() } ?: emptyList(),
         language = this[Keys.LANGUAGE] ?: AppSettings().language,
         navigationBarMode = this[Keys.NAVIGATION_BAR_MODE]
@@ -219,6 +225,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.ENABLED_LYRICS_PROVIDERS] = settings.enabledLyricsProviders.map { it.name }.toSet()
         this[Keys.LYRICS_SOURCE_ORDER] = settings.lyricsSourceOrder.joinToString(",") { it.name }
         this[Keys.ENABLED_LYRICS_SOURCES] = settings.enabledLyricsSources.map { it.name }.toSet()
+        this[Keys.LYRICS_LINE_BLUR] = settings.lyricsLineBlur
         this[Keys.SEARCH_HISTORY] = settings.searchHistory.joinToString("|")
         this[Keys.LANGUAGE] = settings.language
         this[Keys.NAVIGATION_BAR_MODE] = settings.navigationBarMode.name
@@ -257,6 +264,7 @@ class SettingsRepository @Inject constructor(
         val ENABLED_LYRICS_PROVIDERS = stringSetPreferencesKey("enabled_lyrics_providers")
         val LYRICS_SOURCE_ORDER = stringPreferencesKey("lyrics_source_order")
         val ENABLED_LYRICS_SOURCES = stringSetPreferencesKey("enabled_lyrics_sources")
+        val LYRICS_LINE_BLUR = LyricsLineBlurKey
         val SEARCH_HISTORY = stringPreferencesKey("search_history")
         val LANGUAGE = stringPreferencesKey("language")
         val NAVIGATION_BAR_MODE = stringPreferencesKey("navigation_bar_mode")

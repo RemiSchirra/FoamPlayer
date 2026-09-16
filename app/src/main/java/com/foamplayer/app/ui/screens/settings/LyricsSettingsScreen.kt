@@ -44,6 +44,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.ui.components.FoamNavigationButton
+import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -99,6 +100,25 @@ fun LyricsSettingsScreen(
                     title = "Lyrics Providers",
                     description = "Enable and reorder providers",
                     onClick = { showProvidersModal = true }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+
+            BasicText(text = "Display", style = FoamTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .background(FoamTheme.colors.surface)
+            ) {
+                FoamSwitchItem(
+                    title = "Blur inactive lines",
+                    description = null,
+                    checked = settings.lyricsLineBlur,
+                    onCheckedChange = viewModel::setLyricsLineBlur
                 )
             }
 

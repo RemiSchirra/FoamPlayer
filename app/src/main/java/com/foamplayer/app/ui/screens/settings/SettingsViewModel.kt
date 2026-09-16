@@ -86,6 +86,10 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setEnabledLyricsSources(newEnabled)
     }
 
+    fun setLyricsLineBlur(enabled: Boolean) = launch {
+        settingsRepository.setLyricsLineBlur(enabled)
+    }
+
     fun setLanguage(language: String) = launch {
         settingsRepository.setLanguage(language)
     }

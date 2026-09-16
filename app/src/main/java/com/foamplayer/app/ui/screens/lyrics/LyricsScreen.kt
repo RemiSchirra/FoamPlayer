@@ -49,6 +49,7 @@ fun LyricsScreen(
     val isPlaying by viewModel.isPlaying.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isInstrumental by viewModel.isInstrumental.collectAsState()
+    val lyricsLineBlur by viewModel.lyricsLineBlur.collectAsState()
 
     // Handled here (not inside LyricsEnhanced) so EVERY path that ends without
     // lyrics — provider miss (null), the LYRICS_NOT_FOUND sentinel, or a blank
@@ -138,6 +139,7 @@ fun LyricsScreen(
                             currentPositionMsProvider = { viewModel.currentPositionMs.value },
                             isPlaying = isPlaying,
                             onSeek = viewModel::seekTo,
+                            lyricsLineBlurOverride = lyricsLineBlur,
                             lyrics = rawLyrics,
                             dragModifier = dragModifier,
                             modifier = Modifier.fillMaxSize()

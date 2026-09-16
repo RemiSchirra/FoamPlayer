@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.data.repository.LyricsRepository
+import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,7 @@ import javax.inject.Inject
 class LyricsViewModel @Inject constructor(
     private val audioEngine: AudioEngine,
     private val lyricsRepository: LyricsRepository,
+    private val settingsRepository: SettingsRepository,
     private val trackRepository: TrackRepository
 ) : ViewModel() {
 
@@ -50,6 +52,11 @@ class LyricsViewModel @Inject constructor(
 
     val isPlaying: StateFlow<Boolean> = audioEngine.playbackState
         .map { it.isPlaying }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    // Blur of non-active lyric lines, as chosen in Settings > Lyrics > Display.
+    val lyricsLineBlur: StateFlow<Boolean> = settingsRepository.settings
+        .map { it.lyricsLineBlur }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     // Instrumental flag of the current track, read straight from the DB so marking a
