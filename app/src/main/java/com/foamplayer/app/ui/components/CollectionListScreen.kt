@@ -39,12 +39,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.core.net.toUri
 import com.foamplayer.app.constants.MediaDensity
@@ -255,11 +254,11 @@ private fun CollectionHeaderSection(
                         .crossfade(false)
                         .build()
                 }
-                AsyncImage(
+                AlbumArtImage(
                     model = headerArtRequest,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    placeholderSize = 40.dp
                 )
             } else if (icon != null) {
                 Icon(
@@ -397,7 +396,7 @@ fun CollectionListItem(
             onClick = onClick,
             onLongClick = resolvedOnLongClick,
             artworkModifier = sharedArtModifier,
-            artworkContent = { CollectionArtwork(title, imageUrl, icon) },
+            artworkContent = { CollectionArtwork(title, imageUrl, icon, placeholderSize = 32.dp) },
             title = title,
             subtitle = subtitle,
             highlightBackground = highlightBackground,
@@ -412,7 +411,7 @@ fun CollectionListItem(
         onClick = onClick,
         onLongClick = resolvedOnLongClick,
         artworkModifier = sharedArtModifier,
-        artworkContent = { CollectionArtwork(title, imageUrl, icon) },
+        artworkContent = { CollectionArtwork(title, imageUrl, icon, placeholderSize = 20.dp) },
         title = title,
         subtitle = subtitle,
         density = density,
@@ -427,7 +426,8 @@ fun CollectionListItem(
 private fun CollectionArtwork(
     title: String,
     imageUrl: String?,
-    icon: ImageVector?
+    icon: ImageVector?,
+    placeholderSize: Dp
 ) {
     val context = LocalContext.current
     if (imageUrl != null) {
@@ -437,11 +437,11 @@ private fun CollectionArtwork(
                 .size(AlbumArtRequestSize)
                 .build()
         }
-        AsyncImage(
+        AlbumArtImage(
             model = albumArtRequest,
             contentDescription = "Album Art",
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
+            placeholderSize = placeholderSize
         )
     } else if (icon != null) {
         Icon(

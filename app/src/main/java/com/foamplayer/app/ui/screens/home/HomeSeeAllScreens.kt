@@ -17,18 +17,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.dao.AlbumRecommendation
 import com.foamplayer.app.data.db.dao.PlaylistRecommendation
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
 import com.foamplayer.app.ui.components.CollectionId
@@ -291,11 +290,11 @@ private fun HomePlaylistRow(
                     .size(AlbumArtRequestSize)
                     .build()
             }
-            AsyncImage(
+            AlbumArtImage(
                 model = coverRequest,
                 contentDescription = playlist.name,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                placeholderSize = if (density.isGrid) 32.dp else 20.dp
             )
         } else {
             BasicText(

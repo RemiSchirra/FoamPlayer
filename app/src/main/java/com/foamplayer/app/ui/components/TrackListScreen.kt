@@ -44,13 +44,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -443,11 +441,11 @@ private fun HeaderSection(
                         .crossfade(false)
                         .build()
                 }
-                AsyncImage(
+                AlbumArtImage(
                     model = albumArtRequest,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    placeholderSize = 40.dp
                 )
             } else {
                 BasicText(

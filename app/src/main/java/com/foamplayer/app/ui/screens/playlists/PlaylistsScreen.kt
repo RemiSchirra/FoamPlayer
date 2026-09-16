@@ -63,7 +63,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -71,13 +70,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
+import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
 import com.foamplayer.app.ui.components.CollectionId
@@ -590,11 +589,11 @@ private fun PlaylistItemRow(
                     .size(AlbumArtRequestSize)
                     .build()
             }
-            AsyncImage(
+            AlbumArtImage(
                 model = coverRequest,
                 contentDescription = stringResource(R.string.playlist_cover_image),
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                placeholderSize = if (density.isGrid) 32.dp else 20.dp
             )
         } else {
             BasicText(

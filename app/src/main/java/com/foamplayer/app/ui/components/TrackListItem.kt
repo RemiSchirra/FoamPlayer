@@ -38,7 +38,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -47,7 +46,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.times
-import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.core.net.toUri
 import com.foamplayer.app.constants.MediaDensity
@@ -361,11 +359,10 @@ fun TrackListItem(
                             .size(AlbumArtRequestSize)
                             .build()
                     }
-                    AsyncImage(
+                    AlbumArtImage(
                         model = albumArtRequest,
                         contentDescription = "Album Art",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        modifier = Modifier.fillMaxSize()
                     )
                 } else {
                     BasicText(
@@ -464,11 +461,11 @@ private fun TrackGridArtwork(track: TrackEntity) {
                 .size(AlbumArtRequestSize)
                 .build()
         }
-        AsyncImage(
+        AlbumArtImage(
             model = albumArtRequest,
             contentDescription = "Album Art",
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
+            placeholderSize = 32.dp
         )
     } else {
         BasicText(
