@@ -12,6 +12,7 @@ import com.foamplayer.app.data.lyrics.LyricsFileWriter
 import com.foamplayer.app.data.lyrics.LyricsSearchHelper
 import com.foamplayer.app.data.lyrics.LyricsSearchResult
 import com.foamplayer.app.data.lyrics.LyricsSourceStatus
+import com.foamplayer.app.data.lyrics.LyricsStatusScanner
 import com.foamplayer.app.data.lyrics.ResolvedLyrics
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.lyrics.LyricsProvider
@@ -39,7 +40,8 @@ class LyricsRepository @Inject constructor(
     private val localLyricsProvider: LocalLyricsProvider,
     private val embeddedLyricsProvider: EmbeddedLyricsProvider,
     private val cachedLyricsDao: CachedLyricsDao,
-    private val lyricsFileWriter: LyricsFileWriter
+    private val lyricsFileWriter: LyricsFileWriter,
+    private val statusScanner: LyricsStatusScanner
 ) {
     suspend fun getLyrics(track: TrackEntity): String? = resolveLyrics(track)?.content
 
@@ -144,6 +146,17 @@ class LyricsRepository @Inject constructor(
     }
 
     /**
+     * Batched per-track lyrics source overview for the lyrics manager. Delegates
+     * to [LyricsStatusScanner], which groups work per folder and skips tracks
+     * whose inputs did not change since the previous scan. Results stream in
+     * through [onStatus]; must be called off the main thread.
+     */
+    suspend fun scanSourceStatuses(
+        tracks: List<TrackEntity>,
+        onStatus: (Long, LyricsSourceStatus) -> Unit
+    ) = statusScanner.scan(tracks, onStatus)
+
+    /**
      * Queries every enabled lyrics provider (in the user's configured order)
      * concurrently for the track's metadata, classifies and ranks each result:
      * metadata similarity first, then duration delta, then provider order.
@@ -185,6 +198,7 @@ class LyricsRepository @Inject constructor(
     /** Writes [content] into the audio file's embedded lyrics tag. */
     suspend fun embedLyrics(track: TrackEntity, content: String): Result<Unit> = withContext(Dispatchers.IO) {
         AudioLyricsTagWriter.embed(context, track.path, content)
+            .onSuccess { statusScanner.invalidate(track.id) }
     }
 
     /**
@@ -194,6 +208,10 @@ class LyricsRepository @Inject constructor(
      * where embedded lyrics survive the removal).
      */
     suspend fun deleteLyrics(track: TrackEntity): LyricsDeleteResult = withContext(Dispatchers.IO) {
+        // Force the next status scan to re-read the audio file instead of
+        // reusing the cached embedded-lyrics verdict.
+        statusScanner.invalidate(track.id)
+
         val hadCached = runCatching { cachedLyricsDao.getByTrackId(track.id) != null }.getOrDefault(false)
         if (hadCached) {
             runCatching { cachedLyricsDao.deleteByTrackId(track.id) }

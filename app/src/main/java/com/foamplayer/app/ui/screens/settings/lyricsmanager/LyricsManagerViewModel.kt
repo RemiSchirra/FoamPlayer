@@ -12,7 +12,6 @@ import com.foamplayer.app.data.repository.TrackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,10 +22,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 /** Library-wide lyrics counters powering the manager's header stats row. */
@@ -128,7 +124,10 @@ class LyricsManagerViewModel @Inject constructor(
      * tag). Results stream in as they resolve, so the counters and filters fill
      * in progressively while the scan runs. Called on first load and again
      * whenever the screen resumes, so saves made on the results screen are
-     * reflected when the user comes back.
+     * reflected when the user comes back. Repeat scans are cheap: the online
+     * cache is read with a single query, one directory listing serves each
+     * folder, and tracks whose audio file did not change skip the embedded-tag
+     * parse entirely.
      */
     fun refresh() {
         if (!isScanning.compareAndSet(expect = false, update = true)) return
@@ -139,18 +138,9 @@ class LyricsManagerViewModel @Inject constructor(
                 val liveIds = allTracks.map { it.id }.toSet()
                 _statusMap.update { current -> current.filterKeys { it in liveIds } }
 
-                val semaphore = Semaphore(STATUS_SCAN_CONCURRENCY)
-                val jobs = mutableListOf<Job>()
-                repeat(allTracks.size) { index ->
-                    val track = allTracks[index]
-                    jobs += launch(Dispatchers.IO) {
-                        semaphore.withPermit {
-                            val status = lyricsRepository.getSourceStatus(track)
-                            _statusMap.update { current -> current + (track.id to status) }
-                        }
-                    }
+                lyricsRepository.scanSourceStatuses(allTracks) { trackId, status ->
+                    _statusMap.update { current -> current + (trackId to status) }
                 }
-                jobs.joinAll()
             } finally {
                 isScanning.value = false
             }
@@ -207,9 +197,4 @@ class LyricsManagerViewModel @Inject constructor(
 
     private suspend fun currentTracks(): List<TrackEntity> =
         tracks.value.ifEmpty { trackRepository.getAllTracksOnce() }
-
-    private companion object {
-        /** Parallel file/tag reads during the per-track status scan. */
-        const val STATUS_SCAN_CONCURRENCY = 8
-    }
 }
