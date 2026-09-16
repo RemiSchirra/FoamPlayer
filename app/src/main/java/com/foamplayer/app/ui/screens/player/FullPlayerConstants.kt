@@ -71,6 +71,9 @@ internal fun SeekableTransitionState<Boolean>.progress(): Float =
 
 internal const val TRANSITION_DURATION_MS = 300
 
+/** Down-swipe velocity (px/s) at which a dismiss gesture commits by flick. */
+internal const val DownSwipeCommitVelocityPxPerSec = 800f
+
 /** Fraction of the open/subview-close flight over which the immersive art fades out (hero side). */
 internal const val immersiveArtFadeSpan = 0.6f
 

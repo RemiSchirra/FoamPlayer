@@ -83,17 +83,18 @@ class PlayerFlightGeometryState {
 @Composable
 fun FullPlayerScreen(
     viewModel: PlayerViewModel,
-    onDismiss: () -> Unit,
+    onDismiss: (velocityPxPerSec: Float) -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     playerTransitionState: SeekableTransitionState<Boolean>,
     backdropState: FullPlayerBackdropState,
     isAnimateSeekBarEnabled: Boolean = false,
     // Dismiss-to-origin-collection coordination (see PlayerGestureController): the
-    // nav root prepares the row-target flight on the first delta of a dismiss swipe
-    // (and on finger-down, via the press preload) and is told when the gesture
-    // settles back without committing.
+    // nav root preloads the row flight on finger-down (compose the page invisibly,
+    // scroll the row into view -- no pairing), TAGS the row on the first drag delta
+    // (activation) and is told when the gesture settles back without committing.
     onDismissGestureStart: (suspend () -> Unit)? = null,
+    onDismissGestureActivate: (suspend () -> Unit)? = null,
     onDismissGestureCancelled: (() -> Unit)? = null,
     // Finger-to-artwork travel distance for the dismiss swipe (1:1 tracking); falls
     // back to the screen height when unknown.
@@ -159,6 +160,7 @@ fun FullPlayerScreen(
     val upDragThresholdPx = with(density) { PlayerDimens.subViewSwipeThreshold.toPx() }.coerceAtLeast(1f)
     val currentOnDismiss = rememberUpdatedState(onDismiss)
     val currentOnDismissGestureStart = rememberUpdatedState(onDismissGestureStart)
+    val currentOnDismissGestureActivate = rememberUpdatedState(onDismissGestureActivate)
     val currentOnDismissGestureCancelled = rememberUpdatedState(onDismissGestureCancelled)
     val currentDismissSwipeDistance = rememberUpdatedState(dismissSwipeDistancePx)
     val gestureController = remember(playerTransitionState, dragThresholdPx, upDragThresholdPx) {
@@ -170,8 +172,9 @@ fun FullPlayerScreen(
                 currentDismissSwipeDistance.value?.invoke() ?: dragThresholdPx
             },
             upDragThresholdPx = upDragThresholdPx,
-            onDismiss = { currentOnDismiss.value() },
+            onDismiss = { velocity -> currentOnDismiss.value(velocity) },
             onDismissGestureStart = { currentOnDismissGestureStart.value?.invoke() },
+            onDismissGestureActivate = { currentOnDismissGestureActivate.value?.invoke() },
             onDismissGestureCancelled = { currentOnDismissGestureCancelled.value?.invoke() }
         )
     }
@@ -218,20 +221,29 @@ fun FullPlayerScreen(
     // Remembered so the Modifier instance stays stable across body recompositions:
     // handing MainPlayerContent/SubViewContent a fresh modifier on every pass would
     // defeat their skipping. The pointerInput observer preloads the dismiss-to-row
-    // flight on finger-down (see PlayerGestureController.onDismissPressStarted) so
-    // the swipe responds from its first pixel; it only observes and never consumes.
+    // flight only once the gesture reveals itself as a DOWNWARD drag (direction check
+    // at the touch-slop crossing): a pager swipe or an upward swipe must never pay
+    // the preload's branch-composition cost. It only observes and never consumes.
     val playerDrag = remember(gestureController) {
         Modifier
             .pointerInput(gestureController) {
                 awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    gestureController.onDismissPressStarted()
-                    // Hold until this gesture ends (all pointers up -- pointer
-                    // cancellation also clears the pressed flags), then undo the
-                    // preload if no dismissal materialized.
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var preloadStarted = false
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         if (event.changes.none { it.pressed }) break
+                        if (!preloadStarted) {
+                            val change = event.changes.firstOrNull() ?: continue
+                            val dx = change.position.x - down.position.x
+                            val dy = change.position.y - down.position.y
+                            if (maxOf(abs(dx), abs(dy)) > viewConfiguration.touchSlop) {
+                                preloadStarted = true
+                                if (dy > 0f && dy >= abs(dx)) {
+                                    gestureController.onDismissPressStarted()
+                                }
+                            }
+                        }
                     }
                     gestureController.onDismissPressEnded()
                 }

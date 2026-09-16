@@ -91,6 +91,7 @@ import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
 import com.foamplayer.app.ui.screens.library.LibraryScreen
 import com.foamplayer.app.ui.screens.library.LibraryViewModel
 import com.foamplayer.app.ui.screens.player.AlbumArtBackdrop
+import com.foamplayer.app.ui.screens.player.DownSwipeCommitVelocityPxPerSec
 import com.foamplayer.app.ui.screens.player.FullPlayerBackdropState
 import com.foamplayer.app.ui.screens.player.FullPlayerScreen
 import com.foamplayer.app.ui.screens.player.DynamicAlbumArtBackground
@@ -125,6 +126,13 @@ val SharedElementEasing = FastOutSlowInEasing
 
 /** Longest a programmatic mini<->full player transition may take (scales with remaining distance). */
 private const val PlayerTransitionMaxDurationMs = 500
+
+/**
+ * Shortest a gesture-committed close flight may take when the commit was a flick:
+ * the drag's rate cap keeps the in-gesture fraction low, but the flight must always
+ * read as an animation instead of collapsing to an instant transition.
+ */
+private const val MinGestureCloseFlightMs = 240
 
 /** Fade duration for non-shared-element screen-to-screen navigation. */
 private const val NavScreenFadeDurationMs = 400
@@ -331,7 +339,7 @@ fun FoamNavHost(
     // If we start opened, we disable animation for the initial frame.
     var isTransitionAnimated by remember { mutableStateOf(!initialOpenRequested) }
 
-    val getPlayerAnimationSpec: (Boolean) -> androidx.compose.animation.core.TweenSpec<Float> = { targetIsFull ->
+    val getPlayerAnimationSpec: (Boolean, Float) -> androidx.compose.animation.core.TweenSpec<Float> = { targetIsFull, gestureVelocityPxPerSec ->
         val isOpenProgress = if (playerTransitionState.currentState == playerTransitionState.targetState) {
             if (playerTransitionState.currentState) 1f else 0f
         } else {
@@ -343,7 +351,15 @@ fun FoamNavHost(
         }
         val remainingFraction = (if (targetIsFull) 1f - isOpenProgress else isOpenProgress).coerceIn(0f, 1f)
         val dynamicDuration = (PlayerTransitionMaxDurationMs * remainingFraction).toInt().coerceAtLeast(1)
-        tween(durationMillis = dynamicDuration, easing = EaseInOut)
+        val duration = if (!gestureVelocityPxPerSec.isNaN() &&
+            gestureVelocityPxPerSec >= DownSwipeCommitVelocityPxPerSec
+        ) {
+            // Flick commit: force a real tween so the close never reads as instant.
+            dynamicDuration.coerceAtLeast(MinGestureCloseFlightMs)
+        } else {
+            dynamicDuration
+        }
+        tween(durationMillis = duration, easing = EaseInOut)
     }
 
     class TransitionJobHolder {
@@ -356,7 +372,8 @@ fun FoamNavHost(
         open: Boolean,
         sourceTrackId: Long? = null,
         precompose: Boolean = false,
-        animated: Boolean = true
+        animated: Boolean = true,
+        gestureVelocityPxPerSec: Float = Float.NaN
     ) {
         transitionJobHolder.job?.cancel()
         isTransitionAnimated = animated
@@ -379,7 +396,7 @@ fun FoamNavHost(
                         playerTransitionState.seekTo(fraction = 0f, targetState = open)
                         withFrameNanos { }
                     }
-                    playerTransitionState.animateTo(open, getPlayerAnimationSpec(open))
+                    playerTransitionState.animateTo(open, getPlayerAnimationSpec(open, gestureVelocityPxPerSec))
                 } else {
                     playerTransitionState.seekTo(if (open) 1f else 0f, targetState = open)
                 }
@@ -402,13 +419,14 @@ fun FoamNavHost(
     }
 
     /**
-     * First delta of a swipe-down dismiss over the playing track's origin collection
-     * page: installs the row shared-element tag (which simultaneously untags the mini
-     * player for the whole transition), precomposes the returning page at zero visual
-     * progress so its list can lay out, and asks the page to scroll the playing row to
-     * the vertical middle of the screen. Returns without touching anything when the
-     * current page is not the origin collection -- the plain mini-player dismissal
-     * then proceeds unchanged. The drag is held at zero progress while this runs.
+     * PRESS PRELOAD (finger down on the full player): precomposes the returning page
+     * at zero visual progress (fraction 0 against targetState=false is visually
+     * identical to full rest) and asks it to scroll the playing row to the vertical
+     * middle of the screen, so everything is in place before the finger moves.
+     * Deliberately does NOT tag the row: a rest-state pairing would keep the shared
+     * element "active" while nothing moves, hijacking the hero artwork and breaking
+     * pager swipes. Returns without touching anything when the current page is not
+     * the origin collection.
      */
     suspend fun prepareDismissToRow() {
         val trackId = activeTrackId ?: return
@@ -416,24 +434,45 @@ fun FoamNavHost(
             return
         }
 
-        dismissToRowSessionActive = true
-        trackListTransitionTrackId = trackId
         val request = TrackCenterRequest(trackId, ++centerRequestSeq)
-
-        // Compose the returning page invisibly (fraction 0 against targetState=false
-        // is visually identical to full rest). The center request is written in the
-        // same snapshot batch as the seek, so the page's very first composition
-        // already sees it and can scroll while it lays out.
+        // The center request is written in the same snapshot batch as the seek, so
+        // the page's very first composition already sees it and can scroll while it
+        // lays out.
         centerTrackRequest = request
         playerTransitionState.seekTo(fraction = 0f, targetState = false)
 
         // Deterministic hand-off: wait for the list to scroll the row into place, then
-        // give the recomposition that attaches the row's shared-element tag (and the
-        // match configuration that follows in that frame's layout pass) a frame of its
-        // own, so the flight's first visible frame already has its target at its final
-        // position. The timeout only guards a pathological unconsumed request -- an
-        // unbounded await here would brick the dismiss gesture.
+        // give its layout a frame to settle. The timeout only guards a pathological
+        // unconsumed request -- an unbounded await here would brick the dismiss gesture.
         withTimeoutOrNull(250) { request.scrolledIntoPlace.await() }
+        withFrameNanos { }
+        withFrameNanos { }
+    }
+
+    /**
+     * DRAG ACTIVATION (first delta of a down-stroke): tags the playing row so the
+     * shared element pairs, then lets one recomposition + layout pass land before the
+     * drag moves, so the flight's first visible frame already has its target at its
+     * final position. Runs after the press preload (which it falls back to when the
+     * preload was skipped, e.g. the finger landed mid-flight).
+     */
+    suspend fun activateDismissToRow() {
+        val trackId = activeTrackId ?: return
+        if (!isOriginCollectionPage(currentRoute, navBackStackEntry?.arguments, activeCollectionId)) {
+            return
+        }
+
+        val request = centerTrackRequest
+        if (request == null || request.trackId != trackId) {
+            // No usable preload: compose and scroll now (the common path never lands
+            // here, the press preload already did the work).
+            prepareDismissToRow()
+        }
+
+        dismissToRowSessionActive = true
+        trackListTransitionTrackId = trackId
+        // One frame for the recomposition that attaches the row's shared-element tag,
+        // one for the match configuration that follows in that frame's layout pass.
         withFrameNanos { }
         withFrameNanos { }
     }
@@ -443,8 +482,11 @@ fun FoamNavHost(
         if (dismissToRowSessionActive) {
             dismissToRowSessionActive = false
             trackListTransitionTrackId = null
-            centerTrackRequest = null
         }
+        // The press preload creates the request without a session; clear it whenever
+        // a dismiss gesture ends without committing so it can never suppress a later
+        // open flight's row tag.
+        centerTrackRequest = null
     }
 
     val openPlayerRequested by playerViewModel.openPlayerRequested.collectAsState()
@@ -1119,8 +1161,14 @@ fun FoamNavHost(
                             BackHandler { animatePlayerTransition(open = false) }
                             FullPlayerScreen(
                                 viewModel = playerViewModel,
-                                onDismiss = { animatePlayerTransition(open = false) },
+                                onDismiss = { velocity ->
+                                    animatePlayerTransition(
+                                        open = false,
+                                        gestureVelocityPxPerSec = velocity
+                                    )
+                                },
                                 onDismissGestureStart = { prepareDismissToRow() },
+                                onDismissGestureActivate = { activateDismissToRow() },
                                 onDismissGestureCancelled = { clearDismissToRowSession() },
                                 dismissSwipeDistancePx = dismissSwipeDistancePx,
                                 flightGeometry = flightGeometry,
@@ -1248,7 +1296,14 @@ fun FoamNavHost(
                                 },
                                 sharedTransitionScope = this@SharedTransitionLayout,
                                 animatedVisibilityScope = miniPlayerVisibilityScope,
-                                useSharedElements = trackListTransitionTrackId == null,
+                                // Untagged while a row is the flight endpoint (dismiss
+                                // session) AND while a press preload is pending: the
+                                // preload's zero-fraction seek composes this branch, and
+                                // a rest-state pairing here would pin the player's art
+                                // and texts to the matched bounds -- breaking pager
+                                // swipes -- until the track (and key) changed.
+                                useSharedElements = trackListTransitionTrackId == null &&
+                                        centerTrackRequest == null,
                                 sharedArtFlightAlpha = {
                                     if (playerSettings.immersiveModeEnabled) {
                                         1f - playerTransitionState.progress()
