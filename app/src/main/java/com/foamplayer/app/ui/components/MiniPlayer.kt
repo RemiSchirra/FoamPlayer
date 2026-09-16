@@ -43,13 +43,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.times
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.navigation.NavBarDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -201,6 +201,7 @@ fun MiniPlayer(
     useSharedElements: Boolean = true,
     sharedArtFlightAlpha: () -> Float = { 1f },
     isAnimateSeekBarEnabled: Boolean = false,
+    marqueeMode: MarqueeMode = MarqueeMode.PING_PONG,
     skipTrackChangeAnimation: Boolean = false,
     showContainer: Boolean = true,
     modifier: Modifier = Modifier
@@ -559,11 +560,11 @@ fun MiniPlayer(
                             Spacer(modifier = Modifier.width(12.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
-                                BasicText(
+                                MarqueeText(
                                     text = pageTrack.title,
                                     style = FoamTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                    mode = marqueeMode,
+                                    marqueeEnabled = isSettledCurrentTrackPage,
                                     modifier = if (useSharedElements && isSettledCurrentTrackPage) {
                                         Modifier.sharedBounds(
                                             rememberSharedContentState(key = "track_title_${track.id}"),
@@ -571,11 +572,11 @@ fun MiniPlayer(
                                         )
                                     } else Modifier
                                 )
-                                BasicText(
+                                MarqueeText(
                                     text = "${pageTrack.artist} • ${pageTrack.format}",
                                     style = FoamTheme.typography.caption,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                    mode = marqueeMode,
+                                    marqueeEnabled = isSettledCurrentTrackPage,
                                     modifier = if (useSharedElements && isSettledCurrentTrackPage) {
                                         Modifier.sharedBounds(
                                             rememberSharedContentState(key = "track_artist_${track.id}"),

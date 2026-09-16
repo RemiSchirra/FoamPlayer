@@ -1462,6 +1462,7 @@ fun FoamNavHost(
                                     }
                                 },
                                 isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                                marqueeMode = playerSettings.marqueeMode,
                                 skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,
                                 showContainer = navigationBarMode != NavigationBarMode.ATTACHED,
                                 modifier = Modifier
