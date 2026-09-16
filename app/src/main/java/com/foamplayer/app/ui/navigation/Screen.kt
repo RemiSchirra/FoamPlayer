@@ -3,7 +3,7 @@ package com.foamplayer.app.ui.navigation
 import android.net.Uri
 
 sealed class Screen(val route: String, val title: String) {
-    object Library : Screen("library", "Library")
+    object Home : Screen("home", "Home")
     object Playlists : Screen("playlists", "Playlists")
     object Search : Screen("search", "Search")
     object Equalizer : Screen("equalizer", "Equalizer")
@@ -49,6 +49,14 @@ sealed class Screen(val route: String, val title: String) {
     object BrowseArtists : Screen("browse/artists", "Artists")
     object BrowseGenres : Screen("browse/genres", "Genres")
     object BrowseYears : Screen("browse/years", "Years")
+
+    // "See all" pages behind the Home screen's rows: up to 50 items of one row's
+    // type, sorted identically to the row.
+    object HomeSeeAllPlaylists : Screen("browse/home/playlists", "Recommended Playlists")
+    object HomeSeeAllAlbums : Screen("browse/home/albums", "Recommended Albums")
+    object HomeSeeAllRecentTracks : Screen("browse/home/recent", "Recent Listens")
+    object HomeSeeAllFavoriteTracks : Screen("browse/home/favorites", "Old Favorites")
+    object HomeSeeAllArtists : Screen("browse/home/artists", "Favorite Artists")
     object BrowseGenreDetail : Screen("browse/genre/{genre}", "Genre") {
         fun createRoute(genre: String) = "browse/genre/${Uri.encode(genre)}"
     }

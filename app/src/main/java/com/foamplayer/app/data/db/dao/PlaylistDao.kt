@@ -66,6 +66,35 @@ interface PlaylistDao {
     """)
     fun getTracksForPlaylist(playlistId: Long): Flow<List<TrackEntity>>
 
+    /**
+     * Home "Recommended playlists": playlists ranked by the aggregate play
+     * count + likes of the songs they contain. Empty playlists (no tracks) are
+     * excluded — they have nothing to recommend.
+     */
+    @Query("""
+        SELECT p.playlistId AS playlistId, 
+               p.name AS name, 
+               p.imageUrl AS imageUrl, 
+               COUNT(t.id) AS trackCount, 
+               SUM(t.playCount + MAX(t.score, 0) * 10) AS totalScore 
+        FROM playlists p 
+        INNER JOIN playlist_track_cross_ref ref ON ref.playlistId = p.playlistId 
+        INNER JOIN tracks t ON t.id = ref.trackId 
+        GROUP BY p.playlistId 
+        ORDER BY totalScore DESC, p.name COLLATE NOCASE ASC 
+        LIMIT 50
+    """)
+    fun getRecommendedPlaylists(): Flow<List<PlaylistRecommendation>>
+
     @Query("DELETE FROM playlists WHERE playlistId = :playlistId")
     suspend fun deletePlaylist(playlistId: Long)
 }
+
+/** One row of [PlaylistDao.getRecommendedPlaylists]: a playlist plus its aggregate listen/like score. */
+data class PlaylistRecommendation(
+    val playlistId: Long,
+    val name: String,
+    val imageUrl: String?,
+    val trackCount: Int,
+    val totalScore: Int
+)

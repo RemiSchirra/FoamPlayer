@@ -1,6 +1,7 @@
 package com.foamplayer.app.data.repository
 
 import com.foamplayer.app.data.db.dao.PlaylistDao
+import com.foamplayer.app.data.db.dao.PlaylistRecommendation
 import com.foamplayer.app.data.db.dao.PlaylistTrackCount
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.PlaylistTrackCrossRef
@@ -44,6 +45,10 @@ class PlaylistRepository @Inject constructor(
 
     fun getPlaylistTrackCounts(): Flow<List<PlaylistTrackCount>> =
         playlistDao.getPlaylistTrackCounts()
+
+    /** Playlists ranked by the aggregate play count + likes of their tracks (Home row + see-all page). */
+    fun getRecommendedPlaylists(): Flow<List<PlaylistRecommendation>> =
+        playlistDao.getRecommendedPlaylists()
 
     fun getTracksForPlaylistOnce(playlistId: Long): Flow<List<TrackEntity>> =
         playlistDao.getTracksForPlaylist(playlistId)

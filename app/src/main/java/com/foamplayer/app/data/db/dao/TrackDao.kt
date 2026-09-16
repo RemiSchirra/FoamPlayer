@@ -85,6 +85,45 @@ interface TrackDao {
     """)
     fun getAlbumsByArtist(artist: String): Flow<List<AlbumSearchResult>>
 
+    /** Tracks with at least one listen, newest listen first (Home "Recent listens"). */
+    @Query("""
+        SELECT * FROM tracks 
+        WHERE lastPlayedAt IS NOT NULL 
+        ORDER BY lastPlayedAt DESC 
+        LIMIT 50
+    """)
+    fun getRecentlyPlayed(): Flow<List<TrackEntity>>
+
+    /**
+     * Home "Old favorites": tracks with listening history whose last listen is
+     * older than [cutoff], ranked by aggregate play count + likes (long-standing
+     * favorites rather than recent hits; never-played-but-liked tracks qualify).
+     */
+    @Query("""
+        SELECT * FROM tracks 
+        WHERE (lastPlayedAt IS NULL OR lastPlayedAt < :cutoff) 
+          AND (playCount > 0 OR score > 0) 
+        ORDER BY (playCount + MAX(score, 0) * 10) DESC, playCount DESC, title ASC 
+        LIMIT 50
+    """)
+    fun getOldFavorites(cutoff: Long): Flow<List<TrackEntity>>
+
+    /**
+     * Home "Recommended albums": albums ranked by the aggregate play count +
+     * likes of their tracks. Same art/artist projection as [getAllAlbums].
+     */
+    @Query("""
+        SELECT album, 
+               GROUP_CONCAT(DISTINCT COALESCE(albumArtist, artist)) as artist, 
+               MAX(albumArtPath) as albumArtPath, 
+               SUM(playCount + MAX(score, 0) * 10) as totalScore 
+        FROM tracks 
+        GROUP BY album 
+        ORDER BY totalScore DESC, album COLLATE NOCASE ASC 
+        LIMIT 50
+    """)
+    fun getRecommendedAlbums(): Flow<List<AlbumRecommendation>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTracks(tracks: List<TrackEntity>)
 
@@ -114,6 +153,14 @@ data class AlbumSearchResult(
     val album: String,
     val artist: String,
     val albumArtPath: String?
+)
+
+/** One row of [TrackDao.getRecommendedAlbums]: an album plus its aggregate listen/like score. */
+data class AlbumRecommendation(
+    val album: String,
+    val artist: String,
+    val albumArtPath: String?,
+    val totalScore: Int
 )
 
 data class TrackPlayStatsRow(

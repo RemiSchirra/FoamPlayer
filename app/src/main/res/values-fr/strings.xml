@@ -21,6 +21,13 @@
     <string name="search">Rechercher</string>
     <string name="playlists">Playlists</string>
     <string name="equalizer_dsp">Égaliseur &amp; DSP</string>
+    <string name="home">Accueil</string>
+    <string name="home_see_all">Tout voir</string>
+    <string name="home_row_recommended_playlists">Playlists recommandées</string>
+    <string name="home_row_recommended_albums">Albums recommandés</string>
+    <string name="home_row_recent_listens">Écoutes récentes</string>
+    <string name="home_row_old_favorites">Anciens favoris</string>
+    <string name="home_row_favorite_artists">Artistes favoris</string>
 
     <string name="library_folders">Dossiers de la bibliothèque</string>
     <string name="add_folder">Ajouter un dossier</string>

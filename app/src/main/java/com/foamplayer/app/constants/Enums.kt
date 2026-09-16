@@ -131,7 +131,6 @@ enum class MediaDensity(val label: String) {
  * so per-view keys must stay stable across releases (they are persisted).
  */
 enum class MediaListView {
-    LIBRARY,
     PLAYLISTS,
     PLAYLIST_DETAIL,
     ARTIST_DETAIL,
@@ -145,6 +144,11 @@ enum class MediaListView {
     BROWSE_YEAR_TRACKS,
     BROWSE_ARTISTS_IN,
     BROWSE_ALBUMS_IN,
+    HOME_SEE_ALL_PLAYLISTS,
+    HOME_SEE_ALL_ALBUMS,
+    HOME_SEE_ALL_RECENT_TRACKS,
+    HOME_SEE_ALL_FAVORITE_TRACKS,
+    HOME_SEE_ALL_ARTISTS,
 }
 
 enum class PreferredLyricsProvider {
@@ -456,7 +460,7 @@ enum class NavigationBarMode {
  * and only while the second bar is non-empty.
  */
 enum class NavBarItem {
-    LIBRARY,
+    HOME,
     PLAYLISTS,
     SEARCH,
     EQUALIZER,
@@ -467,7 +471,7 @@ enum class NavBarItem {
 /** The nav items that open a screen; [NavBarItem.MORE] is not one of them. */
 val DefaultNavBarScreenItems =
     listOf(
-        NavBarItem.LIBRARY,
+        NavBarItem.HOME,
         NavBarItem.PLAYLISTS,
         NavBarItem.SEARCH,
         NavBarItem.EQUALIZER,

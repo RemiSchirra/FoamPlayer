@@ -289,7 +289,7 @@ private fun FoamNavItem(
 
 /** The main-bar screen an editable [NavBarItem] points to. */
 private fun NavBarItem.targetScreen(): Screen = when (this) {
-    NavBarItem.LIBRARY -> Screen.Library
+    NavBarItem.HOME -> Screen.Home
     NavBarItem.PLAYLISTS -> Screen.Playlists
     NavBarItem.SEARCH -> Screen.Search
     NavBarItem.EQUALIZER -> Screen.Equalizer
@@ -300,7 +300,7 @@ private fun NavBarItem.targetScreen(): Screen = when (this) {
 
 @Composable
 private fun NavBarItem.icon(): ImageVector = when (this) {
-    NavBarItem.LIBRARY -> FoamTheme.icons.current.library
+    NavBarItem.HOME -> FoamTheme.icons.current.home
     NavBarItem.PLAYLISTS -> FoamTheme.icons.current.playlists
     NavBarItem.SEARCH -> FoamTheme.icons.current.search
     NavBarItem.EQUALIZER -> FoamTheme.icons.current.equalizer

@@ -391,7 +391,7 @@ private fun NavBarSettingsItem(
             Spacer(modifier = Modifier.width(12.dp))
             Icon(
                 imageVector = when (item) {
-                    NavBarItem.LIBRARY -> FoamTheme.icons.current.library
+                    NavBarItem.HOME -> FoamTheme.icons.current.home
                     NavBarItem.PLAYLISTS -> FoamTheme.icons.current.playlists
                     NavBarItem.SEARCH -> FoamTheme.icons.current.search
                     NavBarItem.EQUALIZER -> FoamTheme.icons.current.equalizer
@@ -431,7 +431,7 @@ private fun NavBarSettingsItem(
 
 @Composable
 private fun navBarItemLabel(item: NavBarItem): String = when (item) {
-    NavBarItem.LIBRARY -> stringResource(R.string.library)
+    NavBarItem.HOME -> stringResource(R.string.home)
     NavBarItem.PLAYLISTS -> stringResource(R.string.playlists)
     NavBarItem.SEARCH -> stringResource(R.string.search)
     NavBarItem.EQUALIZER -> stringResource(R.string.equalizer_dsp)

@@ -1,5 +1,6 @@
 package com.foamplayer.app.data.repository
 
+import com.foamplayer.app.data.db.dao.AlbumRecommendation
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.dao.CachedLyricsDao
 import com.foamplayer.app.data.db.dao.TrackDao
@@ -67,6 +68,15 @@ class TrackRepository @Inject constructor(
     fun getAllYears(): Flow<List<Int>> = trackDao.getAllYears()
 
     fun getTracksByYear(year: Int): Flow<List<TrackEntity>> = trackDao.getTracksByYear(year)
+
+    /** Most recently listened tracks (Home "Recent listens" row). */
+    fun getRecentlyPlayed(): Flow<List<TrackEntity>> = trackDao.getRecentlyPlayed()
+
+    /** Long-standing favorites (Home "Old favorites" row); [cutoff] bounds what counts as "not recent". */
+    fun getOldFavorites(cutoff: Long): Flow<List<TrackEntity>> = trackDao.getOldFavorites(cutoff)
+
+    /** Albums ranked by the aggregate play count + likes of their tracks (Home row + see-all page). */
+    fun getRecommendedAlbums(): Flow<List<AlbumRecommendation>> = trackDao.getRecommendedAlbums()
 
     suspend fun rescanLibrary() {
         val folders = settingsRepository.settings.first().libraryFolders

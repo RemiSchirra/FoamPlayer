@@ -242,6 +242,7 @@ fun YearsBrowseScreen(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AllTracksBrowseScreen(
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
@@ -249,6 +250,9 @@ fun AllTracksBrowseScreen(
     activeTrackId: Long?,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
+    sharedTrackId: Long? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.allTracks.collectAsState()
@@ -261,7 +265,10 @@ fun AllTracksBrowseScreen(
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sharedTransitionScope = sharedTransitionScope,
+        playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+        sharedTrackId = sharedTrackId
     )
 }
 

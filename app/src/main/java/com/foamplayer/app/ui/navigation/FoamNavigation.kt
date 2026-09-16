@@ -87,10 +87,15 @@ import com.foamplayer.app.ui.screens.browse.GenresBrowseScreen
 import com.foamplayer.app.ui.screens.browse.GenreTracksScreen
 import com.foamplayer.app.ui.screens.browse.YearTracksScreen
 import com.foamplayer.app.ui.screens.browse.YearsBrowseScreen
+import com.foamplayer.app.ui.screens.home.FavoriteArtistsSeeAllScreen
+import com.foamplayer.app.ui.screens.home.HomeScreen
+import com.foamplayer.app.ui.screens.home.HomeViewModel
+import com.foamplayer.app.ui.screens.home.OldFavoritesSeeAllScreen
+import com.foamplayer.app.ui.screens.home.RecentTracksSeeAllScreen
+import com.foamplayer.app.ui.screens.home.RecommendedAlbumsSeeAllScreen
+import com.foamplayer.app.ui.screens.home.RecommendedPlaylistsSeeAllScreen
 import com.foamplayer.app.ui.screens.library.AlbumDetailScreen
 import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
-import com.foamplayer.app.ui.screens.library.LibraryScreen
-import com.foamplayer.app.ui.screens.library.LibraryViewModel
 import com.foamplayer.app.ui.screens.player.AlbumArtBackdrop
 import com.foamplayer.app.ui.screens.player.DownSwipeCommitVelocityPxPerSec
 import com.foamplayer.app.ui.screens.player.FullPlayerBackdropState
@@ -145,7 +150,7 @@ private const val SubScreenSlideDivisor = 3
 
 private fun isSharedElementRoute(route: String?): Boolean {
     if (route == null) return false
-    return route == Screen.Library.route ||
+    return route == Screen.Home.route ||
             route == Screen.Search.route ||
             route == Screen.Playlists.route ||
             route.startsWith("artist/") ||
@@ -244,7 +249,7 @@ fun FoamNavHost(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val libraryViewModel: LibraryViewModel = hiltViewModel()
+    val homeViewModel: HomeViewModel = hiltViewModel()
     val playlistsViewModel: PlaylistsViewModel = hiltViewModel()
     val playlists by playlistsViewModel.playlists.collectAsState()
 
@@ -731,7 +736,7 @@ fun FoamNavHost(
                                 NavHost(
                                     modifier = Modifier.fillMaxSize(),
                                     navController = navController,
-                                    startDestination = Screen.Library.route,
+                                    startDestination = Screen.Home.route,
                                     enterTransition = {
                                         when {
                                             playerTransitionState.currentState -> EnterTransition.None
@@ -792,18 +797,118 @@ fun FoamNavHost(
                                     },
                                     sizeTransform = { SizeTransform(clip = false) }
                                 ) {
-                                    composable(Screen.Library.route) {
-                                        LibraryScreen(
-                                            viewModel = libraryViewModel,
+                                    composable(Screen.Home.route) {
+                                        HomeScreen(
+                                            viewModel = homeViewModel,
+                                            onPlaylistClick = { playlist ->
+                                                navController.navigate(
+                                                    Screen.PlaylistDetail.createRoute(
+                                                        playlist.playlistId,
+                                                        playlist.name,
+                                                        playlist.imageUrl
+                                                    )
+                                                )
+                                            },
+                                            onAlbumClick = { album ->
+                                                navController.navigate(
+                                                    Screen.AlbumDetail.createRoute(
+                                                        album.album,
+                                                        album.albumArtPath,
+                                                        album.artist
+                                                    )
+                                                )
+                                            },
+                                            onArtistClick = { artist ->
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                                            },
+                                            onTrackClick = { track -> playTrackFromList(listOf(track), 0) },
+                                            onSeeAllAlbums = { navController.navigate(Screen.HomeSeeAllAlbums.route) },
+                                            onSeeAllRecent = { navController.navigate(Screen.HomeSeeAllRecentTracks.route) },
+                                            onSeeAllFavorites = { navController.navigate(Screen.HomeSeeAllFavoriteTracks.route) },
+                                            onSeeAllArtists = { navController.navigate(Screen.HomeSeeAllArtists.route) },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                            sharedTrackId = trackListTransitionTrackId
+                                        )
+                                    }
+                                    composable(Screen.HomeSeeAllPlaylists.route) {
+                                        RecommendedPlaylistsSeeAllScreen(
+                                            onPlaylistClick = { playlist ->
+                                                navController.navigate(
+                                                    Screen.PlaylistDetail.createRoute(
+                                                        playlist.playlistId,
+                                                        playlist.name,
+                                                        playlist.imageUrl
+                                                    )
+                                                )
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            density = densityFor(MediaListView.HOME_SEE_ALL_PLAYLISTS),
+                                            onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_PLAYLISTS, it) },
+                                            viewModel = homeViewModel
+                                        )
+                                    }
+                                    composable(Screen.HomeSeeAllAlbums.route) {
+                                        RecommendedAlbumsSeeAllScreen(
+                                            onAlbumClick = { album ->
+                                                navController.navigate(
+                                                    Screen.AlbumDetail.createRoute(
+                                                        album.album,
+                                                        album.albumArtPath,
+                                                        album.artist
+                                                    )
+                                                )
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this,
+                                            activeCollectionId = activeCollectionId,
+                                            density = densityFor(MediaListView.HOME_SEE_ALL_ALBUMS),
+                                            onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_ALBUMS, it) },
+                                            viewModel = homeViewModel
+                                        )
+                                    }
+                                    composable(Screen.HomeSeeAllRecentTracks.route) {
+                                        RecentTracksSeeAllScreen(
                                             onTrackClick = { tracks, index ->
                                                 playTrackFromList(tracks, index)
                                             },
-                                            sharedTransitionScope = this@SharedTransitionLayout,
-                                            animatedVisibilityScope = playerTransitionVisibilityScope,
-                                            sharedTrackId = trackListTransitionTrackId,
+                                            onBack = { navController.popBackStack() },
                                             activeTrackId = activeTrackId,
-                                            density = densityFor(MediaListView.LIBRARY),
-                                            onDensityChange = { setDensity(MediaListView.LIBRARY, it) }
+                                            density = densityFor(MediaListView.HOME_SEE_ALL_RECENT_TRACKS),
+                                            onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_RECENT_TRACKS, it) },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            viewModel = homeViewModel
+                                        )
+                                    }
+                                    composable(Screen.HomeSeeAllFavoriteTracks.route) {
+                                        OldFavoritesSeeAllScreen(
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index)
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            activeTrackId = activeTrackId,
+                                            density = densityFor(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS),
+                                            onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS, it) },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            viewModel = homeViewModel
+                                        )
+                                    }
+                                    composable(Screen.HomeSeeAllArtists.route) {
+                                        FavoriteArtistsSeeAllScreen(
+                                            onArtistClick = { artist ->
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            activeCollectionId = activeCollectionId,
+                                            density = densityFor(MediaListView.HOME_SEE_ALL_ARTISTS),
+                                            onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_ARTISTS, it) },
+                                            viewModel = homeViewModel
                                         )
                                     }
                                     composable(Screen.Playlists.route) {
@@ -879,7 +984,10 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             activeTrackId = activeTrackId,
                                             density = densityFor(MediaListView.BROWSE_ALL_TRACKS),
-                                            onDensityChange = { setDensity(MediaListView.BROWSE_ALL_TRACKS, it) }
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_ALL_TRACKS, it) },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                            sharedTrackId = trackListTransitionTrackId
                                         )
                                     }
                                     composable(Screen.BrowseArtists.route) {

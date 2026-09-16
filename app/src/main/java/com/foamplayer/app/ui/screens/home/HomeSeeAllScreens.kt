@@ -1,0 +1,350 @@
+package com.foamplayer.app.ui.screens.home
+
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.foamplayer.app.R
+import com.foamplayer.app.constants.MediaDensity
+import com.foamplayer.app.data.db.dao.AlbumRecommendation
+import com.foamplayer.app.data.db.dao.PlaylistRecommendation
+import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.AlbumArtShape
+import com.foamplayer.app.ui.components.CollectionId
+import com.foamplayer.app.ui.components.CollectionInfo
+import com.foamplayer.app.ui.components.CollectionKind
+import com.foamplayer.app.ui.components.CollectionListItem
+import com.foamplayer.app.ui.components.CollectionListScreen
+import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
+import com.foamplayer.app.ui.components.MediaGridCell
+import com.foamplayer.app.ui.components.MediaListRow
+import com.foamplayer.app.ui.components.TrackListScreen
+import com.foamplayer.app.ui.theme.FoamTheme
+import kotlinx.coroutines.launch
+
+/** Horizontal inset of one list row; grid cells get their own symmetric padding instead. */
+private fun Modifier.listRowInset(density: MediaDensity): Modifier =
+    padding(horizontal = if (density.isGrid) 0.dp else 16.dp)
+
+/**
+ * "See all" page behind the Home "Recommended playlists" row: up to 50
+ * playlists in the row's aggregate play/like order. Playlist covers are plain
+ * image URIs, so these rows render through the shared list scaffolds directly
+ * instead of [CollectionListItem] (whose artwork loader expects embedded art).
+ */
+@Composable
+fun RecommendedPlaylistsSeeAllScreen(
+    onPlaylistClick: (PlaylistRecommendation) -> Unit,
+    onBack: () -> Unit,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
+    val playlists by viewModel.recommendedPlaylists.collectAsState()
+
+    CollectionListScreen(
+        title = stringResource(R.string.home_row_recommended_playlists),
+        itemCount = playlists.size,
+        onBack = onBack,
+        headerIcon = FoamTheme.icons.current.playlists,
+        density = density,
+        onDensityChange = onDensityChange
+    ) {
+        items(playlists, key = { "home_playlist_${it.playlistId}" }) { playlist ->
+            Box(modifier = Modifier.listRowInset(density)) {
+                HomePlaylistRow(
+                    playlist = playlist,
+                    onClick = { onPlaylistClick(playlist) },
+                    density = density
+                )
+            }
+        }
+
+        if (playlists.isEmpty()) {
+            item(key = "home_playlists_empty") {
+                SeeAllEmptyState(text = stringResource(R.string.no_playlists_yet))
+            }
+        }
+    }
+}
+
+/**
+ * "See all" page behind the Home "Recommended albums" row: up to 50 albums in
+ * the row's aggregate play/like order, mirroring the albums browse screen
+ * (long-press collection actions and shared elements included).
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun RecommendedAlbumsSeeAllScreen(
+    onAlbumClick: (AlbumRecommendation) -> Unit,
+    onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    activeCollectionId: String? = null,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
+    val albums by viewModel.recommendedAlbums.collectAsState()
+    val collectionModalState = LocalCollectionFoamModalState.current
+    val longPressScope = rememberCoroutineScope()
+
+    CollectionListScreen(
+        title = stringResource(R.string.home_row_recommended_albums),
+        itemCount = albums.size,
+        onBack = onBack,
+        density = density,
+        onDensityChange = onDensityChange
+    ) {
+        items(albums, key = { "home_album_${it.album}" }) { album ->
+            Box(modifier = Modifier.listRowInset(density)) {
+                CollectionListItem(
+                    title = album.album,
+                    subtitle = album.artist,
+                    imageUrl = album.albumArtPath,
+                    onClick = { onAlbumClick(album) },
+                    active = CollectionId.album(album.album) == activeCollectionId,
+                    density = density,
+                    onLongClick = {
+                        longPressScope.launch {
+                            collectionModalState?.show(
+                                CollectionInfo(
+                                    title = album.album,
+                                    artist = album.artist,
+                                    imageUrl = album.albumArtPath,
+                                    kind = CollectionKind.Album,
+                                    tracks = viewModel.tracksForAlbum(album.album)
+                                )
+                            )
+                        }
+                    },
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    sharedElementKey = album.album
+                )
+            }
+        }
+
+        if (albums.isEmpty()) {
+            item(key = "home_albums_empty") {
+                SeeAllEmptyState(text = stringResource(R.string.no_audio_detected))
+            }
+        }
+    }
+}
+
+/** "See all" page behind the Home "Recent listens" row: up to 50 newest-played tracks. */
+@Composable
+fun RecentTracksSeeAllScreen(
+    onTrackClick: (List<TrackEntity>, Int) -> Unit,
+    onBack: () -> Unit,
+    activeTrackId: Long?,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
+    sharedTrackId: Long? = null,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
+    val tracks by viewModel.recentTracks.collectAsState()
+
+    TrackListScreen(
+        title = stringResource(R.string.home_row_recent_listens),
+        tracks = tracks,
+        onTrackClick = onTrackClick,
+        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+        onBack = onBack,
+        activeTrackId = activeTrackId,
+        density = density,
+        onDensityChange = onDensityChange,
+        sharedTransitionScope = sharedTransitionScope,
+        playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+        sharedTrackId = sharedTrackId
+    )
+}
+
+/**
+ * "See all" page behind the Home "Old favorites" row: up to 50 long-standing
+ * favorites in the row's aggregate play/like order.
+ */
+@Composable
+fun OldFavoritesSeeAllScreen(
+    onTrackClick: (List<TrackEntity>, Int) -> Unit,
+    onBack: () -> Unit,
+    activeTrackId: Long?,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
+    sharedTrackId: Long? = null,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
+    val tracks by viewModel.oldFavoriteTracks.collectAsState()
+
+    TrackListScreen(
+        title = stringResource(R.string.home_row_old_favorites),
+        tracks = tracks,
+        onTrackClick = onTrackClick,
+        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+        onBack = onBack,
+        activeTrackId = activeTrackId,
+        density = density,
+        onDensityChange = onDensityChange,
+        sharedTransitionScope = sharedTransitionScope,
+        playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+        sharedTrackId = sharedTrackId
+    )
+}
+
+/**
+ * "See all" page behind the Home "Favorite artists" row: up to 50 artists by
+ * their songs' total plays, mirroring the artists browse screen.
+ */
+@Composable
+fun FavoriteArtistsSeeAllScreen(
+    onArtistClick: (String) -> Unit,
+    onBack: () -> Unit,
+    activeCollectionId: String? = null,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
+    val artists by viewModel.favoriteArtists.collectAsState()
+    val collectionModalState = LocalCollectionFoamModalState.current
+    val longPressScope = rememberCoroutineScope()
+
+    CollectionListScreen(
+        title = stringResource(R.string.home_row_favorite_artists),
+        itemCount = artists.size,
+        onBack = onBack,
+        density = density,
+        onDensityChange = onDensityChange
+    ) {
+        items(artists, key = { "home_artist_${it.name}" }) { artist ->
+            Box(modifier = Modifier.listRowInset(density)) {
+                CollectionListItem(
+                    title = artist.name,
+                    subtitle = null,
+                    onClick = { onArtistClick(artist.name) },
+                    active = CollectionId.artist(artist.name) == activeCollectionId,
+                    density = density,
+                    onLongClick = {
+                        longPressScope.launch {
+                            collectionModalState?.show(
+                                CollectionInfo(
+                                    title = artist.name,
+                                    kind = CollectionKind.Artist,
+                                    tracks = viewModel.tracksForArtist(artist.name)
+                                )
+                            )
+                        }
+                    }
+                )
+            }
+        }
+
+        if (artists.isEmpty()) {
+            item(key = "home_artists_empty") {
+                SeeAllEmptyState(text = stringResource(R.string.no_audio_detected))
+            }
+        }
+    }
+}
+
+/** One playlist row of [RecommendedPlaylistsSeeAllScreen]: cover, name and track count. */
+@Composable
+private fun HomePlaylistRow(
+    playlist: PlaylistRecommendation,
+    onClick: () -> Unit,
+    density: MediaDensity,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+
+    @Composable
+    fun PlaylistArtwork() {
+        if (playlist.imageUrl != null) {
+            val coverRequest = remember(playlist.imageUrl) {
+                ImageRequest.Builder(context)
+                    .data(playlist.imageUrl)
+                    .size(AlbumArtRequestSize)
+                    .build()
+            }
+            AsyncImage(
+                model = coverRequest,
+                contentDescription = playlist.name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            BasicText(
+                text = playlist.name.take(1).uppercase(),
+                style = FoamTheme.typography.titleMedium
+            )
+        }
+    }
+
+    val artworkModifier = Modifier
+        .clip(AlbumArtShape())
+        .background(FoamTheme.colors.surfaceVariant)
+
+    if (density.isGrid) {
+        MediaGridCell(
+            modifier = modifier,
+            onClick = onClick,
+            onLongClick = null,
+            artworkModifier = artworkModifier,
+            artworkContent = { PlaylistArtwork() },
+            title = playlist.name,
+            subtitle = "${playlist.trackCount} tracks"
+        )
+    } else {
+        MediaListRow(
+            modifier = modifier,
+            onClick = onClick,
+            onLongClick = null,
+            artworkModifier = artworkModifier,
+            artworkContent = { PlaylistArtwork() },
+            title = playlist.name,
+            subtitle = "${playlist.trackCount} tracks",
+            density = density
+        )
+    }
+}
+
+/** Centered placeholder for an empty see-all page. */
+@Composable
+private fun SeeAllEmptyState(text: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        BasicText(
+            text = text,
+            style = FoamTheme.typography.body
+        )
+    }
+}
