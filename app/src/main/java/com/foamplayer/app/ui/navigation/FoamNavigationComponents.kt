@@ -130,13 +130,13 @@ object NavBarDimens {
     val FloatingCornerOverhang = MiniPlayerContainerPadding
 
     // ---- Shared item metrics ---------------------------------------------------
-    val ItemIconSize = 24.dp
-    val ItemHitAreaPadding = 8.dp
+    val ItemIconSize = 28.dp
+    val ItemHitAreaPadding = 6.dp
     val RowHorizontalPadding = 8.dp
 
     // ---- Expandable extra row ---------------------------------------------------
     /** Tighter hit padding for the extra row's icons so the row can hug the main row. */
-    val ExtraRowItemHitPadding = 4.dp
+    val ExtraRowItemHitPadding = 2.dp
 
     /**
      * Height of the secondary row revealed above the main row when expanded.
