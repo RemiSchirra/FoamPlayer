@@ -23,6 +23,7 @@ import com.foamplayer.app.constants.deserializeLyricsSourceOrder
 import com.foamplayer.app.constants.deserializeNavBarItemOrder
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.FoamIconStyle
+import com.foamplayer.app.data.settings.MarqueeMode
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,6 +53,7 @@ class SettingsRepository @Inject constructor(
     suspend fun setIconStyle(style: FoamIconStyle) = update { it.copy(iconStyle = style) }
     suspend fun setMiniPlayerRounding(rounding: Int) = update { it.copy(miniPlayerRounding = rounding) }
     suspend fun setFullPlayerRounding(rounding: Int) = update { it.copy(fullPlayerRounding = rounding) }
+    suspend fun setMarqueeMode(mode: MarqueeMode) = update { it.copy(marqueeMode = mode) }
     suspend fun setAutomaticColorEnabled(enabled: Boolean) = update { it.copy(automaticColorEnabled = enabled) }
     suspend fun setAccentColor(color: Int) = update { it.copy(accentColor = color) }
     suspend fun setImmersiveModeEnabled(enabled: Boolean) = update { it.copy(immersiveModeEnabled = enabled) }
@@ -147,6 +149,9 @@ class SettingsRepository @Inject constructor(
             ?: AppSettings().iconStyle,
         miniPlayerRounding = this[Keys.MINI_PLAYER_ROUNDING] ?: AppSettings().miniPlayerRounding,
         fullPlayerRounding = this[Keys.FULL_PLAYER_ROUNDING] ?: AppSettings().fullPlayerRounding,
+        marqueeMode = this[Keys.MARQUEE_MODE]
+            ?.let { runCatching { MarqueeMode.valueOf(it) }.getOrNull() }
+            ?: AppSettings().marqueeMode,
         artistSeparators = this[Keys.ARTIST_SEPARATORS] ?: AppSettings.DEFAULT_SEPARATORS,
         genreSeparators = this[Keys.GENRE_SEPARATORS] ?: AppSettings.DEFAULT_SEPARATORS,
         automaticColorEnabled = this[Keys.AUTOMATIC_COLOR] ?: AppSettings().automaticColorEnabled,
@@ -196,6 +201,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.ICON_STYLE] = settings.iconStyle.name
         this[Keys.MINI_PLAYER_ROUNDING] = settings.miniPlayerRounding
         this[Keys.FULL_PLAYER_ROUNDING] = settings.fullPlayerRounding
+        this[Keys.MARQUEE_MODE] = settings.marqueeMode.name
         this[Keys.ARTIST_SEPARATORS] = settings.artistSeparators
         this[Keys.GENRE_SEPARATORS] = settings.genreSeparators
         this[Keys.AUTOMATIC_COLOR] = settings.automaticColorEnabled
@@ -230,6 +236,7 @@ class SettingsRepository @Inject constructor(
         val ICON_STYLE = stringPreferencesKey("icon_style")
         val MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")
         val FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")
+        val MARQUEE_MODE = stringPreferencesKey("marquee_mode")
         val ARTIST_SEPARATORS = stringSetPreferencesKey("artist_separators")
         val GENRE_SEPARATORS = stringSetPreferencesKey("genre_separators")
         val LAST_ARTIST_SEPARATORS = stringSetPreferencesKey("last_scan_artist_separators")

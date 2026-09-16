@@ -47,7 +47,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -59,16 +58,17 @@ import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.LocalTrackFoamModalState
+import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.TrackScoreHeart
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.components.onSeekBarReleased
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
-import com.foamplayer.app.ui.utils.pingPongMarquee
 import com.foamplayer.app.ui.utils.pressShrink
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import kotlin.math.abs
@@ -100,6 +100,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
     upTransitionState: SeekableTransitionState<Boolean>,
     seekBarProgress: SeekBarProgressState,
     isAnimateSeekBarEnabled: Boolean,
+    marqueeMode: MarqueeMode,
     scoreOverrides: Map<Long, Int>,
     onSetScore: (Long, Int) -> Unit,
     flightGeometry: PlayerFlightGeometryState? = null
@@ -127,6 +128,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
             upTransitionState = upTransitionState,
             scoreOverrides = scoreOverrides,
             onSetScore = onSetScore,
+            marqueeMode = marqueeMode,
             flightGeometry = flightGeometry
         )
 
@@ -187,6 +189,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
     upTransitionState: SeekableTransitionState<Boolean>,
     scoreOverrides: Map<Long, Int>,
     onSetScore: (Long, Int) -> Unit,
+    marqueeMode: MarqueeMode,
     flightGeometry: PlayerFlightGeometryState? = null
 ) {
     val anchorPage = queueIndex.coerceAtLeast(0)
@@ -292,11 +295,11 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = anchorPageAlpha() }
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        BasicText(
+                        MarqueeText(
                             text = pageTrack.title,
                             style = FoamTheme.typography.titleLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            mode = marqueeMode,
+                            marqueeEnabled = immersive && isAnchorPage && pageTrack.id == track.id,
                             modifier = if (immersive && isAnchorPage && pageTrack.id == track.id) {
                                 Modifier
                                     .sharedBounds(
@@ -307,16 +310,15 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                         rememberSharedContentState(key = "track_title_header_${track.id}"),
                                         animatedVisibilityScope = headerVisibilityScope
                                     )
-                                    .pingPongMarquee()
                             } else {
                                 Modifier
                             }
                         )
-                        BasicText(
+                        MarqueeText(
                             text = stringResource(R.string.artist_album_separator, pageTrack.artist, pageTrack.album),
                             style = FoamTheme.typography.body,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            mode = marqueeMode,
+                            marqueeEnabled = immersive && isAnchorPage && pageTrack.id == track.id,
                             modifier = if (immersive && isAnchorPage && pageTrack.id == track.id) {
                                 Modifier
                                     .sharedBounds(
@@ -327,7 +329,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                         rememberSharedContentState(key = "track_artist_header_${track.id}"),
                                         animatedVisibilityScope = headerVisibilityScope
                                     )
-                                    .pingPongMarquee()
                             } else {
                                 Modifier
                             }
@@ -416,11 +417,10 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     Spacer(modifier = Modifier.height(24.dp))
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.weight(1f)) {
-                            BasicText(
+                            MarqueeText(
                                 text = track.title,
                                 style = FoamTheme.typography.titleLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                mode = marqueeMode,
                                 modifier = Modifier
                                     .sharedBounds(
                                         rememberSharedContentState(key = "track_title_${track.id}"),
@@ -430,13 +430,11 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                         rememberSharedContentState(key = "track_title_header_${track.id}"),
                                         animatedVisibilityScope = headerVisibilityScope
                                     )
-                                    .pingPongMarquee()
                             )
-                            BasicText(
+                            MarqueeText(
                                 text = stringResource(R.string.artist_album_separator, track.artist, track.album),
                                 style = FoamTheme.typography.body,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                mode = marqueeMode,
                                 modifier = Modifier
                                     .sharedBounds(
                                         rememberSharedContentState(key = "track_artist_${track.id}"),
@@ -446,7 +444,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                         rememberSharedContentState(key = "track_artist_header_${track.id}"),
                                         animatedVisibilityScope = headerVisibilityScope
                                     )
-                                    .pingPongMarquee()
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))

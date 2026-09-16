@@ -21,6 +21,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.ui.components.FoamEnumItem
 import com.foamplayer.app.ui.components.FoamSliderItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -42,6 +44,7 @@ fun PlayerSettingsScreen(
     val isAutoOpenPlayerEnabled = settings.autoOpenPlayerEnabled
     val isAnimatedCoverEnabled = settings.animatedCoverEnabled
     val isAnimatedCoverAllowMobileData = settings.animatedCoverAllowMobileData
+    val marqueeMode = settings.marqueeMode
 
     LaunchedEffect(miniRounding) { localMiniRounding = miniRounding.toFloat() }
     LaunchedEffect(fullRounding) { localFullRounding = fullRounding.toFloat() }
@@ -58,70 +61,50 @@ fun PlayerSettingsScreen(
         )
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = FoamDimens.paddingMedium)
+            modifier = Modifier.fillMaxSize()
         ) {
             item {
-                BasicText(text = "Behaviour", style = FoamTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                Column(
+                    modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
                 ) {
-                    FoamSwitchItem(
-                        title = "Auto Open Player",
-                        description = "Open player screen when a track starts",
-                        checked = isAutoOpenPlayerEnabled,
-                        onCheckedChange = { viewModel.setAutoOpenPlayerEnabled(it) }
-                    )
+                    BasicText(text = "Behaviour", style = FoamTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                            .background(FoamTheme.colors.surface)
+                    ) {
+                        FoamSwitchItem(
+                            title = "Auto Open Player",
+                            description = "Open player screen when a track starts",
+                            checked = isAutoOpenPlayerEnabled,
+                            onCheckedChange = { viewModel.setAutoOpenPlayerEnabled(it) }
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
             item {
-                BasicText(text = "Visuals", style = FoamTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                Column(
+                    modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
                 ) {
-                    Column {
-                        FoamSwitchItem(
-                            title = "Immersive Mode",
-                            description = "Album art fills the entire screen",
-                            checked = isImmersiveEnabled,
-                            onCheckedChange = { viewModel.setImmersiveModeEnabled(it) }
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(FoamDimens.separatorHeight)
-                                .background(FoamTheme.colors.borderOverlay)
-                        )
-                        FoamSwitchItem(
-                            title = "Animate Seek Bar",
-                            description = "Smooth progress bar movement",
-                            checked = isAnimateSeekBarEnabled,
-                            onCheckedChange = { viewModel.setAnimateSeekBarEnabled(it) }
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(FoamDimens.separatorHeight)
-                                .background(FoamTheme.colors.borderOverlay)
-                        )
-                        FoamSwitchItem(
-                            title = "Animated Album Cover",
-                            description = "Animated artwork in the immersive player",
-                            checked = isAnimatedCoverEnabled,
-                            onCheckedChange = { viewModel.setAnimatedCoverEnabled(it) }
-                        )
-                        if (isAnimatedCoverEnabled) {
+                    BasicText(text = "Visuals", style = FoamTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                            .background(FoamTheme.colors.surface)
+                    ) {
+                        Column {
+                            FoamSwitchItem(
+                                title = "Immersive Mode",
+                                description = "Album art fills the entire screen",
+                                checked = isImmersiveEnabled,
+                                onCheckedChange = { viewModel.setImmersiveModeEnabled(it) }
+                            )
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -129,57 +112,96 @@ fun PlayerSettingsScreen(
                                     .background(FoamTheme.colors.borderOverlay)
                             )
                             FoamSwitchItem(
-                                title = "Allow Mobile Data",
-                                description = "Load animated covers on mobile data, not Wi-Fi only",
-                                checked = isAnimatedCoverAllowMobileData,
-                                onCheckedChange = { viewModel.setAnimatedCoverAllowMobileData(it) }
+                                title = "Animate Seek Bar",
+                                description = "Smooth progress bar movement",
+                                checked = isAnimateSeekBarEnabled,
+                                onCheckedChange = { viewModel.setAnimateSeekBarEnabled(it) }
                             )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(FoamDimens.separatorHeight)
+                                    .background(FoamTheme.colors.borderOverlay)
+                            )
+                            FoamSwitchItem(
+                                title = "Animated Album Cover",
+                                description = "Animated artwork in the immersive player",
+                                checked = isAnimatedCoverEnabled,
+                                onCheckedChange = { viewModel.setAnimatedCoverEnabled(it) }
+                            )
+                            if (isAnimatedCoverEnabled) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(FoamDimens.separatorHeight)
+                                        .background(FoamTheme.colors.borderOverlay)
+                                )
+                                FoamSwitchItem(
+                                    title = "Allow Mobile Data",
+                                    description = "Load animated covers on mobile data, not Wi-Fi only",
+                                    checked = isAnimatedCoverAllowMobileData,
+                                    onCheckedChange = { viewModel.setAnimatedCoverAllowMobileData(it) }
+                                )
+                            }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                FoamEnumItem(
+                    title = "Text animation",
+                    description = "Scrolling effect for long titles in the full player",
+                    options = MarqueeMode.entries.toTypedArray(),
+                    selectedOption = marqueeMode,
+                    onOptionSelected = { viewModel.setMarqueeMode(it) },
+                    getLabel = { it.label }
+                )
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
             item {
-                BasicText(text = "Interface Rounding", style = FoamTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                Column(
+                    modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
                 ) {
-                    Column {
-                        FoamSliderItem(
-                            title = "Mini Player",
-                            value = localMiniRounding,
-                            onValueChange = { localMiniRounding = it },
-                            onValueChangeFinished = {
-                                viewModel.setMiniPlayerRounding(localMiniRounding.roundToInt())
-                            },
-                            steps = 9,
-                            valueRange = 0f..100f,
-                            valueDisplay = "${localMiniRounding.roundToInt()}%",
-                            minMaxDisplay = "Square" to "Circle"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(FoamDimens.separatorHeight)
-                                .background(FoamTheme.colors.borderOverlay)
-                        )
-                        FoamSliderItem(
-                            title = "Full Player",
-                            value = localFullRounding,
-                            onValueChange = { localFullRounding = it },
-                            onValueChangeFinished = {
-                                viewModel.setFullPlayerRounding(localFullRounding.roundToInt())
-                            },
-                            steps = 9,
-                            valueRange = 0f..100f,
-                            valueDisplay = "${localFullRounding.roundToInt()}%",
-                            minMaxDisplay = "Square" to "Circle"
-                        )
+                    BasicText(text = "Interface Rounding", style = FoamTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                            .background(FoamTheme.colors.surface)
+                    ) {
+                        Column {
+                            FoamSliderItem(
+                                title = "Mini Player",
+                                value = localMiniRounding,
+                                onValueChange = { localMiniRounding = it },
+                                onValueChangeFinished = {
+                                    viewModel.setMiniPlayerRounding(localMiniRounding.roundToInt())
+                                },
+                                steps = 9,
+                                valueRange = 0f..100f,
+                                valueDisplay = "${localMiniRounding.roundToInt()}%",
+                                minMaxDisplay = "Square" to "Circle"
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(FoamDimens.separatorHeight)
+                                    .background(FoamTheme.colors.borderOverlay)
+                            )
+                            FoamSliderItem(
+                                title = "Full Player",
+                                value = localFullRounding,
+                                onValueChange = { localFullRounding = it },
+                                onValueChangeFinished = {
+                                    viewModel.setFullPlayerRounding(localFullRounding.roundToInt())
+                                },
+                                steps = 9,
+                                valueRange = 0f..100f,
+                                valueDisplay = "${localFullRounding.roundToInt()}%",
+                                minMaxDisplay = "Square" to "Circle"
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))

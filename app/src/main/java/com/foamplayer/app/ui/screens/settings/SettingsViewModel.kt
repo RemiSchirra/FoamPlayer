@@ -11,6 +11,7 @@ import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.FoamIconStyle
+import com.foamplayer.app.data.settings.MarqueeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,6 +42,7 @@ class SettingsViewModel @Inject constructor(
     fun setIconStyle(style: FoamIconStyle) = launch { settingsRepository.setIconStyle(style) }
     fun setMiniPlayerRounding(rounding: Int) = launch { settingsRepository.setMiniPlayerRounding(rounding) }
     fun setFullPlayerRounding(rounding: Int) = launch { settingsRepository.setFullPlayerRounding(rounding) }
+    fun setMarqueeMode(mode: MarqueeMode) = launch { settingsRepository.setMarqueeMode(mode) }
     fun addFolder(path: String) = launch { settingsRepository.addFolder(path) }
     fun removeFolder(path: String) = launch { settingsRepository.removeFolder(path) }
     fun setArtistSeparators(separators: Set<String>) = launch { settingsRepository.setArtistSeparators(separators) }

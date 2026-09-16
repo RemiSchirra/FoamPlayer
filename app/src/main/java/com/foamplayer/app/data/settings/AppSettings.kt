@@ -19,6 +19,12 @@ enum class FoamIconStyle(val label: String) {
     FLAT("Flat")
 }
 
+/** Scrolling effect applied to overflowing titles in the full player. */
+enum class MarqueeMode(val label: String) {
+    PING_PONG("Ping Pong"),
+    INFINITE("Infinite")
+}
+
 // Immutable by construction, but its Set/List/Map fields make it unstable to the
 // compiler's inference. This annotation lets every composable receiving AppSettings
 // (or screens fed from it) skip when an unrelated preference changes.
@@ -29,6 +35,7 @@ data class AppSettings(
     val iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
     val miniPlayerRounding: Int = 40,
     val fullPlayerRounding: Int = 40,
+    val marqueeMode: MarqueeMode = MarqueeMode.PING_PONG,
     val artistSeparators: Set<String> = DEFAULT_SEPARATORS,
     val genreSeparators: Set<String> = DEFAULT_SEPARATORS,
     val automaticColorEnabled: Boolean = true,

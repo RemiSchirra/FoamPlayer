@@ -109,6 +109,7 @@ fun FullPlayerScreen(
     val isImmersiveEnabled = settings.immersiveModeEnabled
     val isAnimatedCoverEnabled = isImmersiveEnabled && settings.animatedCoverEnabled
     val allowMobileDataForCanvas = settings.animatedCoverAllowMobileData
+    val marqueeMode = settings.marqueeMode
 
     // Narrow, equality-gated projections of the playback state -- the same idea as the
     // ViewModel's narrow projections for the composition roots, kept local. derivedStateOf
@@ -579,6 +580,7 @@ fun FullPlayerScreen(
                             upTransitionState = upTransitionState,
                             seekBarProgress = seekBarProgress,
                             isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                            marqueeMode = marqueeMode,
                             scoreOverrides = scoreOverrides,
                             onSetScore = viewModel::setTrackScore,
                             flightGeometry = flightGeometry
