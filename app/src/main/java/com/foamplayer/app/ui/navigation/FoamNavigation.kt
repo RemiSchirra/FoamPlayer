@@ -21,6 +21,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
@@ -1263,7 +1264,23 @@ fun FoamNavHost(
                 ) {
                     transition.AnimatedVisibility(
                         visible = { isFull -> !isFull },
-                        enter = if (isTransitionAnimated) fadeIn() else EnterTransition.None,
+                        enter = if (isTransitionAnimated) {
+                            if (trackListTransitionTrackId != null) {
+                                // The full player's artwork is morphing into the origin
+                                // collection's row instead of the mini player: the mini
+                                // is untagged for that flight, so it announces itself
+                                // with a fade + slide up from the bottom edge instead
+                                // of merely fading in. Both are transition animations,
+                                // so they follow the seeked flight fraction exactly
+                                // (progressive under the finger, reversed on cancel).
+                                fadeIn(tween(SharedElementTransitionDurationMs, easing = SharedElementEasing)) +
+                                        slideInVertically(tween(SharedElementTransitionDurationMs, easing = SharedElementEasing)) { it / 2 }
+                            } else {
+                                fadeIn()
+                            }
+                        } else {
+                            EnterTransition.None
+                        },
                         exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
                     ) {
                         val miniPlayerVisibilityScope = this
