@@ -55,6 +55,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.pressShrink
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
@@ -173,17 +174,8 @@ internal fun SharedTransitionScope.SubViewContent(
     onCollapse: () -> Unit,
     upTransitionState: SeekableTransitionState<Boolean>
 ) {
-    Column(modifier = Modifier.fillMaxSize().padding(top = 24.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(top = FoamDimens.paddingMedium)) {
         Column(modifier = Modifier.fillMaxWidth().then(modifier)) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .width(40.dp)
-                    .height(4.dp)
-                    .clip(CircleShape)
-                    .background(FoamTheme.colors.borderOverlay)
-                    .clickable(onClick = onCollapse)
-            )
             MiniPlayerHeader(
                 track = track,
                 isPlaying = isPlaying,
