@@ -211,7 +211,7 @@ fun SearchScreen(
                 if (query.isEmpty()) {
                     BasicText(
                         text = "Search tracks, artists, albums...",
-            style = FoamTheme.typography.body.copy(
+                        style = FoamTheme.typography.titleMedium.copy(
                             color = FoamTheme.colors.textSecondary
                         )
                     )
@@ -230,13 +230,19 @@ fun SearchScreen(
                     singleLine = true
                 )
             }
+            val clearInteractionSource = remember { MutableInteractionSource() }
             Icon(
                 imageVector = Icons.Rounded.Close,
                 contentDescription = "Clear",
                 tint = FoamTheme.colors.textSecondary,
                 modifier = Modifier
                     .size(32.dp)
-                    .clickable { searchViewModel.search("") }
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = clearInteractionSource,
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = { searchViewModel.search("") }
+                    )
                     .padding(4.dp)
             )
         }
