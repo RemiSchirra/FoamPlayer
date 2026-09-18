@@ -7,6 +7,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +27,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
@@ -141,12 +143,14 @@ private fun collectionHeroOverlayFraction(layout: CollectionHeroLayout): Float =
  * whatever the title/subtitle/button add up to.
  *
  * The measured copy is also placed at the overlay's exact position, invisible
- * (alpha 0, semantics cleared) but hit-testable: the hero draws the visible
+ * (ghost content, semantics cleared) but hit-testable: the hero draws the visible
  * block from BEHIND the list, and a full-screen scrollable shields the
  * siblings behind it from hit-testing (its pointer-input chain does not share
  * input with siblings), so taps over the hero's play pill would never reach
  * it. This invisible twin lives inside the list's own subtree, where taps do
  * land, and forwards [onPlayAllClick] — the visible pill stays purely visual.
+ * The twin's copy is ghost-rendered rather than alpha-0 so the play pill's
+ * ripple (drawn by the twin, the real hit target) is visible over the hero.
  *
  * [onVisibleHeightPx] reports the measured total (px) once the spacer is laid
  * out, so the host screen can hand the hero's 1:1 scroll-away over to the same
@@ -181,9 +185,7 @@ fun CollectionHeroImmersiveSpacer(
     SubcomposeLayout(modifier.fillMaxWidth()) { constraints ->
         val overlayContent = subcompose(Unit) {
             Box(
-                modifier = Modifier
-                    .graphicsLayer { alpha = 0f }
-                    .clearAndSetSemantics { }
+                modifier = Modifier.clearAndSetSemantics { }
             ) {
                 CollectionHeroOverlayContent(
                     title = title,
@@ -191,7 +193,8 @@ fun CollectionHeroImmersiveSpacer(
                     statsText = statsText,
                     accentColor = accentColor,
                     centered = layout == CollectionHeroLayout.Immersive,
-                    onPlayAllClick = onPlayAllClick
+                    onPlayAllClick = onPlayAllClick,
+                    ghost = true
                 )
             }
         }.first().measure(Constraints(maxWidth = overlayMaxWidthPx))
@@ -585,6 +588,11 @@ private fun CollectionHeroImmersive(
  * play pill, inset 16dp like the rest of the hero. Shared by the hero's real
  * overlay and [CollectionHeroImmersiveSpacer]'s measuring copy, so the two can
  * never drift apart.
+ *
+ * [ghost] renders everything invisible for that measuring copy — texts and
+ * pill visuals at alpha 0 — while keeping the pill hit-testable with a live
+ * ripple, which is drawn by the clickable's indication layer and therefore
+ * unaffected by the ghosting.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -595,6 +603,7 @@ private fun CollectionHeroOverlayContent(
     accentColor: Color,
     centered: Boolean,
     onPlayAllClick: (() -> Unit)?,
+    ghost: Boolean = false,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedElementKey: String? = null,
@@ -612,6 +621,7 @@ private fun CollectionHeroOverlayContent(
             statsText = statsText,
             accentColor = accentColor,
             centered = centered,
+            ghost = ghost,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             sharedElementKey = sharedElementKey,
@@ -620,7 +630,11 @@ private fun CollectionHeroOverlayContent(
 
         if (onPlayAllClick != null) {
             Spacer(modifier = Modifier.height(8.dp))
-            CollectionHeroPlayButton(onClick = onPlayAllClick, accentColor = accentColor)
+            CollectionHeroPlayButton(
+                onClick = onPlayAllClick,
+                accentColor = accentColor,
+                ghost = ghost
+            )
         }
     }
 }
@@ -676,6 +690,7 @@ private fun CollectionHeroTexts(
     statsText: String,
     accentColor: Color,
     centered: Boolean,
+    ghost: Boolean = false,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
@@ -693,7 +708,9 @@ private fun CollectionHeroTexts(
     val textWidth = if (centered) Modifier.fillMaxWidth() else Modifier
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { alpha = if (ghost) 0f else 1f },
         horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start
     ) {
         BasicText(
@@ -731,20 +748,34 @@ private fun CollectionHeroTexts(
     }
 }
 
+/**
+ * The accent play pill. [ghost] hides the pill's own visuals (background,
+ * icon, label) while keeping it hit-testable with a live ripple — used by
+ * [CollectionHeroImmersiveSpacer]'s twin, whose ripple must stay visible over
+ * the hero even though the twin renders no content of its own.
+ */
 @Composable
 private fun CollectionHeroPlayButton(
     onClick: () -> Unit,
-    accentColor: Color
+    accentColor: Color,
+    ghost: Boolean = false
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .clip(CircleShape)
-            .background(accentColor)
-            .clickable { onClick() }
+            .background(if (ghost) Color.Transparent else accentColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary)
+            ) { onClick() }
             .padding(horizontal = 24.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.graphicsLayer { alpha = if (ghost) 0f else 1f },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Icon(
                 imageVector = FoamTheme.icons.current.play,
                 contentDescription = null,
