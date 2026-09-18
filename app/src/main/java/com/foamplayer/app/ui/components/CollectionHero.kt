@@ -77,6 +77,9 @@ const val CollectionHeroImmersiveFadeStartFraction = 0.65f
 /** Vertical position of the immersive text/play block, as a fraction of the image height. */
 const val CollectionHeroImmersiveOverlayFraction = 0.75f
 
+/** Vertical position of the compact-immersive text/play block, as a fraction of the image height. */
+const val CollectionHeroCompactImmersiveOverlayFraction = 0.6f
+
 /** Alpha of the subtle scrim over the immersive hero's status-bar zone (icon contrast). */
 const val CollectionHeroStatusBarScrimAlpha = 0.35f
 
@@ -123,11 +126,17 @@ fun collectionHeroImmersiveHeight(layout: CollectionHeroLayout): Dp {
     return LocalConfiguration.current.screenHeightDp.dp * fraction
 }
 
+/** Overlay-block vertical position for [layout], as a fraction of the image height. */
+private fun collectionHeroOverlayFraction(layout: CollectionHeroLayout): Float = when (layout) {
+    CollectionHeroLayout.Immersive -> CollectionHeroImmersiveOverlayFraction
+    else -> CollectionHeroCompactImmersiveOverlayFraction
+}
+
 /**
  * Height of an immersive hero measured from the screen content's top edge: the
  * height a list's leading spacer needs so its first rows start below the hero.
  * Also keeps the rows clear of the overlay text/play block (which hangs from
- * [CollectionHeroImmersiveOverlayFraction] of the image height and can extend
+ * [collectionHeroOverlayFraction] of the image height and can extend
  * past the image's bottom edge): when it does, the rows start below the block
  * plus [CollectionHeroImmersiveListTopPadding] — the image has fully faded out
  * there, so the extra room reads as plain background.
@@ -138,7 +147,7 @@ fun collectionHeroImmersiveVisibleHeight(layout: CollectionHeroLayout): Dp {
     val density = LocalDensity.current
     val statusBarHeight = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
     val heroHeight = collectionHeroImmersiveHeight(layout)
-    val overlayBottom = heroHeight * CollectionHeroImmersiveOverlayFraction +
+    val overlayBottom = heroHeight * collectionHeroOverlayFraction(layout) +
             CollectionHeroImmersiveOverlayHeightEstimate +
             CollectionHeroImmersiveListTopPadding
     return max(heroHeight - statusBarHeight, overlayBottom - statusBarHeight)
@@ -469,7 +478,7 @@ private fun CollectionHeroImmersive(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
-                .offset(y = heroHeight * CollectionHeroImmersiveOverlayFraction)
+                .offset(y = heroHeight * collectionHeroOverlayFraction(layout))
                 .graphicsLayer { alpha = overlayTextAlpha?.invoke() ?: 1f }
                 .padding(horizontal = 16.dp),
             horizontalAlignment = if (layout == CollectionHeroLayout.Immersive) {
