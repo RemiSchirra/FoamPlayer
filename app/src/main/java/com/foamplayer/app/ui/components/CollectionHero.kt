@@ -221,6 +221,7 @@ fun CollectionHero(
     icon: ImageVector? = null,
     accentColor: Color = FoamTheme.accentColor,
     overlayTextAlpha: (() -> Float)? = null,
+    transitionAlpha: (() -> Float)? = null,
     scrollOffsetPx: (() -> Int)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -269,6 +270,7 @@ fun CollectionHero(
             onPlayAllClick = onPlayAllClick,
             accentColor = accentColor,
             overlayTextAlpha = overlayTextAlpha,
+            transitionAlpha = transitionAlpha,
             scrollOffsetPx = scrollOffsetPx,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
@@ -431,6 +433,7 @@ private fun CollectionHeroImmersive(
     onPlayAllClick: (() -> Unit)?,
     accentColor: Color,
     overlayTextAlpha: (() -> Float)?,
+    transitionAlpha: (() -> Float)?,
     scrollOffsetPx: (() -> Int)?,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
@@ -444,8 +447,7 @@ private fun CollectionHeroImmersive(
     val heroHeight = collectionHeroImmersiveHeight(layout)
     val flightFraction = rememberCollectionHeroFlightFraction(
         sharedTransitionScope = sharedTransitionScope,
-        animatedVisibilityScope = animatedVisibilityScope,
-        sharedElementKey = sharedElementKey
+        animatedVisibilityScope = animatedVisibilityScope
     )
 
     Box(
@@ -497,7 +499,10 @@ private fun CollectionHeroImmersive(
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
                 .height(statusBarHeight + CollectionHeroStatusBarScrimExtraHeight)
-                .graphicsLayer { alpha = 1f - flightFraction.value }
+                .collectionHeroOverlayLayer(sharedTransitionScope)
+                .graphicsLayer {
+                    alpha = (1f - flightFraction.value) * (transitionAlpha?.invoke() ?: 1f)
+                }
                 .background(
                     Brush.verticalGradient(
                         0f to Color.Black.copy(alpha = CollectionHeroStatusBarScrimAlpha),
@@ -511,7 +516,11 @@ private fun CollectionHeroImmersive(
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
                 .offset(y = heroHeight * collectionHeroOverlayFraction(layout))
-                .graphicsLayer { alpha = overlayTextAlpha?.invoke() ?: 1f },
+                .collectionHeroOverlayLayer(sharedTransitionScope)
+                .graphicsLayer {
+                    alpha = (overlayTextAlpha?.invoke() ?: 1f) *
+                            (1f - flightFraction.value) * (transitionAlpha?.invoke() ?: 1f)
+                },
             horizontalAlignment = if (layout == CollectionHeroLayout.Immersive) {
                 Alignment.CenterHorizontally
             } else {
@@ -715,26 +724,53 @@ private fun CollectionHeroPlayButton(
 }
 
 /**
- * The hero artwork's flight fraction: 1f while the artwork must look like the
- * SOURCE list row (theme percentage corners, no bottom fade), 0f once it is
- * settled as the immersive hero (square corners, faded bottom). It rides the
- * destination screen's own enter/exit transition, so it animates across the
- * shared-element flight with the exact same duration and easing; consumed
- * inside draw/graphicsLayer blocks, every frame of the flight is draw-only.
+ * The shared-element flight fraction of the given transition scopes: 1f while
+ * the transition is in flight (the departing screen's look), 0f once settled
+ * (Visible). Consumed inside draw/graphicsLayer blocks, every frame of the
+ * flight is draw-only. Returns a constant 0f when either scope is missing
+ * (no shared-element context, e.g. heroes rendered without transition wiring).
+ *
+ * Used both by the hero itself (artwork corner/fade morph, chrome fades) and by
+ * host screens fading their top-bar chrome in sync with the flight (see
+ * [collectionHeroOverlayLayer]).
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun rememberCollectionHeroFlightFraction(
+fun rememberCollectionHeroFlightFraction(
     sharedTransitionScope: SharedTransitionScope?,
-    animatedVisibilityScope: AnimatedVisibilityScope?,
-    sharedElementKey: String?
+    animatedVisibilityScope: AnimatedVisibilityScope?
 ): State<Float> {
     val noFlight = remember { mutableStateOf(0f) }
-    if (sharedTransitionScope == null || animatedVisibilityScope == null || sharedElementKey == null) {
+    if (sharedTransitionScope == null || animatedVisibilityScope == null) {
         return noFlight
     }
     return animatedVisibilityScope.transition.animateFloat(label = "collectionHeroFlight") { state ->
         if (state == EnterExitState.Visible) 0f else 1f
+    }
+}
+
+/**
+ * Lifts a hero chrome layer (status-bar scrim, overlay text/play block) into
+ * the shared-element transition's overlay while a transition is active, so it
+ * draws ABOVE the flying artwork (zIndexInOverlay 0f) instead of beneath it —
+ * otherwise the artwork hides the chrome mid-flight and the chrome pops back
+ * the instant the overlay empties at the end of the flight. No-op at rest and
+ * without a [SharedTransitionScope]: the layer then draws in its normal place,
+ * where the host hierarchy's own fades apply.
+ *
+ * Pair the lift with a flight alpha —
+ * `(1f - rememberCollectionHeroFlightFraction(...).value) * scrollAlpha` — so
+ * the chrome fades with the flight instead of sitting at full alpha over the
+ * departing/arriving artwork.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+fun Modifier.collectionHeroOverlayLayer(
+    sharedTransitionScope: SharedTransitionScope?,
+    zIndexInOverlay: Float = 1f
+): Modifier {
+    if (sharedTransitionScope == null) return this
+    return with(sharedTransitionScope) {
+        renderInSharedTransitionScopeOverlay(zIndexInOverlay = zIndexInOverlay)
     }
 }
 
@@ -787,7 +823,11 @@ private fun Modifier.collectionHeroSharedArtwork(
             rememberSharedContentState(key = "$sharedElementPrefix-art-$sharedElementKey"),
             animatedVisibilityScope = animatedVisibilityScope,
             clipInOverlayDuringTransition = OverlayClip(overlayShape),
-            boundsTransform = AlbumArtBoundsTransform
+            boundsTransform = AlbumArtBoundsTransform,
+            // Bottom of the transition overlay: every chrome layer lifted by
+            // [collectionHeroOverlayLayer] and the shared texts (zIndex 1f)
+            // draw above the flying artwork.
+            zIndexInOverlay = 0f
         )
     }
 }
@@ -807,7 +847,10 @@ private fun Modifier.collectionHeroSharedText(
         this@collectionHeroSharedText.sharedBounds(
             rememberSharedContentState(key = key),
             animatedVisibilityScope = animatedVisibilityScope,
-            boundsTransform = AlbumArtBoundsTransform
+            boundsTransform = AlbumArtBoundsTransform,
+            // Above the flying artwork so the title never disappears behind it
+            // mid-flight (the artwork is zIndexInOverlay 0f).
+            zIndexInOverlay = 1f
         )
     }
 }

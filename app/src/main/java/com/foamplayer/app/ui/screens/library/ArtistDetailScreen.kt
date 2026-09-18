@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -53,6 +54,8 @@ import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.CollectionListItem
 import com.foamplayer.app.ui.components.CollectionScrollTopBar
 import com.foamplayer.app.ui.components.TrackListItem
+import com.foamplayer.app.ui.components.collectionHeroOverlayLayer
+import com.foamplayer.app.ui.components.rememberCollectionHeroFlightFraction
 import com.foamplayer.app.ui.components.rememberCollectionScrollFraction
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -108,6 +111,12 @@ fun ArtistDetailScreen(
 
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(gridState)
+    // Flight fraction of this screen's nav transition: the back row is lifted
+    // into the shared-element overlay while a transition is active (see
+    // collectionHeroOverlayLayer), and the overlay escapes the hierarchy's own
+    // fade — so the row fades with the flight explicitly.
+    val flightFraction =
+        rememberCollectionHeroFlightFraction(sharedTransitionScope, animatedVisibilityScope)
     // Measured by the header spacer's layout pass (see [CollectionHeroImmersiveSpacer]);
     // read untracked inside the offset lambda, so it is always the settled value.
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
@@ -251,7 +260,16 @@ fun ArtistDetailScreen(
                 modifier = Modifier.align(Alignment.TopCenter)
             )
 
-            Box(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
+            // Lifted into the shared-element overlay during transitions so the
+            // flying artwork passes beneath the back button; the alpha mirrors
+            // the host hierarchy's fade.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .collectionHeroOverlayLayer(sharedTransitionScope)
+                    .graphicsLayer { alpha = 1f - flightFraction.value }
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

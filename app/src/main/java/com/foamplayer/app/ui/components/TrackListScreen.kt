@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
@@ -157,6 +158,20 @@ fun TrackListScreen(
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
+    // Flight fractions of this screen's two transitions: the nav flight
+    // (open/close of the collection itself) and the player-container flight
+    // (full player expanding over / collapsing back onto this screen). The
+    // hero chrome and the top bar are lifted into the shared-element overlay
+    // while any transition is active (collectionHeroOverlayLayer), and the
+    // overlay escapes the host hierarchy's own fades — so their alpha must
+    // multiply both fractions explicitly or they would pop at flight ends.
+    val navFlightFraction =
+        rememberCollectionHeroFlightFraction(sharedTransitionScope, animatedVisibilityScope)
+    val containerFlightFraction =
+        rememberCollectionHeroFlightFraction(sharedTransitionScope, playerTransitionVisibilityScope)
+    val transitionAlpha: () -> Float = {
+        (1f - navFlightFraction.value) * (1f - containerFlightFraction.value)
+    }
     // Measured by the header spacer's layout pass (see [CollectionHeroImmersiveSpacer]);
     // read untracked inside the offset lambda, so it is always the settled value.
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
@@ -252,6 +267,7 @@ fun TrackListScreen(
                 onPlayAllClick = onPlayAllClick,
                 accentColor = heroAccentColor,
                 overlayTextAlpha = { 1f - topBarFraction() },
+                transitionAlpha = transitionAlpha,
                 scrollOffsetPx = heroScrollOffsetPx,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
@@ -393,7 +409,16 @@ fun TrackListScreen(
                 modifier = Modifier.align(Alignment.TopCenter)
             )
 
-            Box(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
+            // Lifted into the shared-element overlay during transitions so the
+            // flying artwork passes beneath the back/more buttons; the alpha
+            // mirrors the host hierarchy's fades (see transitionAlpha above).
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .collectionHeroOverlayLayer(sharedTransitionScope)
+                    .graphicsLayer { alpha = transitionAlpha() }
+            ) {
                 TrackListTopBarRow(
                     onBack = onBack,
                     onDensityChange = onDensityChange,

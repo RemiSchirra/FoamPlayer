@@ -329,6 +329,10 @@ internal fun Modifier.rowSharedArtwork(
  * Marks a list row's text as the source of a shared-bounds transition
  * ([SharedTransitionScope.sharedBounds]). No-ops when not [enabled] or when
  * the transition scopes are missing.
+ *
+ * zIndexInOverlay 1f keeps the text above the flying artwork (0f) for both
+ * flight directions — on close flights this side is the becoming-visible one,
+ * so its config drives the overlay entry.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -346,10 +350,15 @@ internal fun Modifier.rowSharedText(
             sharedBounds(
                 state,
                 animatedVisibilityScope = animatedVisibilityScope,
-                boundsTransform = boundsTransform
+                boundsTransform = boundsTransform,
+                zIndexInOverlay = 1f
             )
         } else {
-            sharedBounds(state, animatedVisibilityScope = animatedVisibilityScope)
+            sharedBounds(
+                state,
+                animatedVisibilityScope = animatedVisibilityScope,
+                zIndexInOverlay = 1f
+            )
         }
     }
 }
