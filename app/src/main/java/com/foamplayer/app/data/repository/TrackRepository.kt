@@ -47,6 +47,9 @@ class TrackRepository @Inject constructor(
 
     fun getAlbumsByArtist(artist: String): Flow<List<AlbumSearchResult>> = trackDao.getAlbumsByArtist(artist)
 
+    /** All tracks naming [artist] as artist or album artist, alphabetical by title. */
+    fun getTracksByArtist(artist: String): Flow<List<TrackEntity>> = trackDao.getTracksByArtist(artist)
+
     fun getAllAlbums(): Flow<List<AlbumSearchResult>> = trackDao.getAllAlbums()
 
     fun getAllArtists(): Flow<List<String>> = trackDao.getAllArtistNames().map { rawArtists ->

@@ -96,6 +96,7 @@ import com.foamplayer.app.ui.screens.home.RecommendedAlbumsSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecommendedPlaylistsSeeAllScreen
 import com.foamplayer.app.ui.screens.library.AlbumDetailScreen
 import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
+import com.foamplayer.app.ui.screens.library.ArtistSongsScreen
 import com.foamplayer.app.ui.screens.player.AlbumArtBackdrop
 import com.foamplayer.app.ui.screens.player.DownSwipeCommitVelocityPxPerSec
 import com.foamplayer.app.ui.screens.player.FullPlayerBackdropState
@@ -172,7 +173,10 @@ private fun isBrowseRoute(route: String?): Boolean = route != null && route.star
 
 /** Detail screens whose list background is drawn full-bleed at the root. */
 private fun isDetailListRoute(route: String?): Boolean =
-    route == Screen.AlbumDetail.route || route == Screen.PlaylistDetail.route
+    route == Screen.AlbumDetail.route ||
+            route == Screen.PlaylistDetail.route ||
+            route == Screen.ArtistDetail.route ||
+            route == Screen.ArtistSongs.route
 
 /**
  * True when the page currently on top of the back stack IS the collection the queue
@@ -1220,12 +1224,40 @@ fun FoamNavHost(
                                                     )
                                                 )
                                             },
+                                            onAllSongsClick = {
+                                                navController.navigate(Screen.ArtistSongs.createRoute(artistName))
+                                            },
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index, CollectionId.artist(artistName))
+                                            },
                                             onBack = { navController.popBackStack() },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
                                             activeCollectionId = activeCollectionId,
-                                            density = densityFor(MediaListView.ARTIST_DETAIL),
-                                            onDensityChange = { setDensity(MediaListView.ARTIST_DETAIL, it) }
+                                            activeTrackId = activeTrackId,
+                                            onListBackdropArt = onListBackdropArt
+                                        )
+                                    }
+                                    composable(
+                                        Screen.ArtistSongs.route,
+                                        arguments = listOf(navArgument("artistName") { type = NavType.StringType })
+                                    ) { backStackEntry ->
+                                        val artistName = backStackEntry.arguments?.getString("artistName") ?: ""
+                                        ArtistSongsScreen(
+                                            artistName = artistName,
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index, CollectionId.artist(artistName))
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            activeTrackId = activeTrackId,
+                                            onListBackdropArt = onListBackdropArt,
+                                            centerTrackRequest = centerTrackRequest,
+                                            isPlaying = isPlaying,
+                                            immersiveMode = playerSettings.immersiveModeEnabled
                                         )
                                     }
                                     composable(

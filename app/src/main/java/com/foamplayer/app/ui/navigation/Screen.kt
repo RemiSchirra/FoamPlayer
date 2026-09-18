@@ -26,6 +26,9 @@ sealed class Screen(val route: String, val title: String) {
     object ArtistDetail : Screen("artist/{artistName}", "Artist") {
         fun createRoute(artistName: String) = "artist/${Uri.encode(artistName)}"
     }
+    object ArtistSongs : Screen("artist/{artistName}/songs", "Artist Songs") {
+        fun createRoute(artistName: String) = "artist/${Uri.encode(artistName)}/songs"
+    }
     object AlbumDetail : Screen("album/{albumName}?artUrl={artUrl}&artist={artist}", "Album") {
         fun createRoute(albumName: String, artUrl: String? = null, artist: String? = null): String {
             val encodedName = Uri.encode(albumName)

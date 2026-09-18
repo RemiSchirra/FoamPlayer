@@ -79,11 +79,36 @@ interface TrackDao {
                GROUP_CONCAT(DISTINCT COALESCE(albumArtist, artist)) as artist, 
                MAX(albumArtPath) as albumArtPath 
         FROM tracks 
-        WHERE artist = :artist OR albumArtist = :artist
+        WHERE artist = :artist 
+           OR artist LIKE :artist || '; %' 
+           OR artist LIKE '%; ' || :artist 
+           OR artist LIKE '%; ' || :artist || '; %'
+           OR albumArtist = :artist 
+           OR albumArtist LIKE :artist || '; %' 
+           OR albumArtist LIKE '%; ' || :artist 
+           OR albumArtist LIKE '%; ' || :artist || '; %'
         GROUP BY album
         ORDER BY album ASC
     """)
     fun getAlbumsByArtist(artist: String): Flow<List<AlbumSearchResult>>
+
+    /**
+     * All tracks naming [artist] as artist or album artist (the "; " multi-artist
+     * convention, same patterns as [getTracksByGenre]), alphabetical by title.
+     */
+    @Query("""
+        SELECT * FROM tracks 
+        WHERE artist = :artist 
+           OR artist LIKE :artist || '; %' 
+           OR artist LIKE '%; ' || :artist 
+           OR artist LIKE '%; ' || :artist || '; %'
+           OR albumArtist = :artist 
+           OR albumArtist LIKE :artist || '; %' 
+           OR albumArtist LIKE '%; ' || :artist 
+           OR albumArtist LIKE '%; ' || :artist || '; %'
+        ORDER BY title ASC
+    """)
+    fun getTracksByArtist(artist: String): Flow<List<TrackEntity>>
 
     /** Tracks with at least one listen, newest listen first (Home "Recent listens"). */
     @Query("""
