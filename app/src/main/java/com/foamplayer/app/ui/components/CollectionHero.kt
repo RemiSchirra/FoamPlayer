@@ -29,8 +29,11 @@ import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +51,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -135,6 +140,14 @@ private fun collectionHeroOverlayFraction(layout: CollectionHeroLayout): Float =
  * [CollectionHeroImmersiveListTopPadding] with no dead space below the artwork,
  * whatever the title/subtitle/button add up to.
  *
+ * The measured copy is also placed at the overlay's exact position, invisible
+ * (alpha 0, semantics cleared) but hit-testable: the hero draws the visible
+ * block from BEHIND the list, and a full-screen scrollable shields the
+ * siblings behind it from hit-testing (its pointer-input chain does not share
+ * input with siblings), so taps over the hero's play pill would never reach
+ * it. This invisible twin lives inside the list's own subtree, where taps do
+ * land, and forwards [onPlayAllClick] — the visible pill stays purely visual.
+ *
  * [onVisibleHeightPx] reports the measured total (px) once the spacer is laid
  * out, so the host screen can hand the hero's 1:1 scroll-away over to the same
  * constant when the spacer is scrolled past (see [CollectionHero]'s
@@ -167,21 +180,29 @@ fun CollectionHeroImmersiveSpacer(
 
     SubcomposeLayout(modifier.fillMaxWidth()) { constraints ->
         val overlayContent = subcompose(Unit) {
-            CollectionHeroOverlayContent(
-                title = title,
-                subtitle = subtitle,
-                statsText = statsText,
-                accentColor = accentColor,
-                centered = layout == CollectionHeroLayout.Immersive,
-                onPlayAllClick = onPlayAllClick
-            )
+            Box(
+                modifier = Modifier
+                    .graphicsLayer { alpha = 0f }
+                    .clearAndSetSemantics { }
+            ) {
+                CollectionHeroOverlayContent(
+                    title = title,
+                    subtitle = subtitle,
+                    statsText = statsText,
+                    accentColor = accentColor,
+                    centered = layout == CollectionHeroLayout.Immersive,
+                    onPlayAllClick = onPlayAllClick
+                )
+            }
         }.first().measure(Constraints(maxWidth = overlayMaxWidthPx))
         val visibleHeightPx = maxOf(
             heroVisiblePx,
             overlayTopPx + overlayContent.height + listTopPaddingPx
         )
         onVisibleHeightPx(visibleHeightPx)
-        layout(constraints.maxWidth, visibleHeightPx) { }
+        layout(constraints.maxWidth, visibleHeightPx) {
+            overlayContent.placeRelative(0, overlayTopPx)
+        }
     }
 }
 
@@ -449,11 +470,25 @@ private fun CollectionHeroImmersive(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
     )
+    // The overlay block hangs off the hero at [collectionHeroOverlayFraction]
+    // and is taller than the room left inside the hero image, so it extends
+    // below the Box's bottom edge. Drawing is never clipped, but hit-testing
+    // is gated by every ancestor's layout bounds — so the root Box must grow
+    // to cover the overlay or the play pill, however far it hangs, would be
+    // visible yet untappable.
+    var overlayHeightPx by remember { mutableIntStateOf(0) }
+    val heroHeightPx = with(density) { heroHeight.roundToPx() }
+    val overlayTopPx = with(density) {
+        (heroHeight * collectionHeroOverlayFraction(layout)).roundToPx()
+    }
+    val rootHeight = with(density) {
+        maxOf(heroHeightPx, overlayTopPx + overlayHeightPx).toDp()
+    }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(heroHeight)
+            .height(rootHeight)
             .offset {
                 // Bleed behind the status bar at rest, then ride the list's
                 // scroll 1:1 so the hero scrolls away like a header item.
@@ -462,7 +497,8 @@ private fun CollectionHeroImmersive(
     ) {
         Box(
             modifier = Modifier
-                .matchParentSize()
+                .fillMaxWidth()
+                .height(heroHeight)
                 .collectionHeroSharedArtwork(
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
@@ -516,6 +552,7 @@ private fun CollectionHeroImmersive(
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
                 .offset(y = heroHeight * collectionHeroOverlayFraction(layout))
+                .onSizeChanged { overlayHeightPx = it.height }
                 .collectionHeroOverlayLayer(sharedTransitionScope)
                 .graphicsLayer {
                     alpha = (overlayTextAlpha?.invoke() ?: 1f) *
