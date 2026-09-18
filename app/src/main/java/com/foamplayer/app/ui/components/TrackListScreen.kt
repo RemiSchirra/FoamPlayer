@@ -38,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,7 +47,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.data.db.entities.TrackEntity
 import androidx.compose.ui.platform.LocalContext
@@ -157,9 +157,9 @@ fun TrackListScreen(
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
-    val heroScrolledOutPx = with(LocalDensity.current) {
-        collectionHeroImmersiveVisibleHeight(heroLayout).roundToPx()
-    }
+    // Measured by the header spacer's layout pass (see [CollectionHeroImmersiveSpacer]);
+    // read untracked inside the offset lambda, so it is always the settled value.
+    val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
         // While the spacer header (item 0) is visible its scroll offset IS the
         // hero's travel; past it the hero is fully scrolled out.
@@ -167,13 +167,13 @@ fun TrackListScreen(
             if (gridState.firstVisibleItemIndex == 0) {
                 gridState.firstVisibleItemScrollOffset
             } else {
-                heroScrolledOutPx
+                heroVisibleHeightPx.intValue
             }
         } else {
             if (listState.firstVisibleItemIndex == 0) {
                 listState.firstVisibleItemScrollOffset
             } else {
-                heroScrolledOutPx
+                heroVisibleHeightPx.intValue
             }
         }
     }
@@ -301,6 +301,7 @@ fun TrackListScreen(
                             imageIsEmbeddedArt = imageIsEmbeddedArt,
                             onPlayAllClick = onPlayAllClick,
                             accentColor = heroAccentColor,
+                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
                             sharedElementKey = sharedElementKey,
@@ -349,6 +350,7 @@ fun TrackListScreen(
                             imageIsEmbeddedArt = imageIsEmbeddedArt,
                             onPlayAllClick = onPlayAllClick,
                             accentColor = heroAccentColor,
+                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
                             sharedElementKey = sharedElementKey,
@@ -411,7 +413,12 @@ fun TrackListScreen(
     }
 }
 
-/** The list's leading item: the hero for compact/normal layouts, a spacer matching the immersive hero's visible height otherwise. */
+/**
+ * The list's leading item: the hero for compact/normal layouts, a spacer
+ * measured against the immersive hero's real overlay block otherwise (its
+ * [CollectionHeroImmersiveSpacer.onVisibleHeightPx] keeps the hero's
+ * scroll-away constant in sync).
+ */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun TrackListHero(
@@ -423,16 +430,21 @@ private fun TrackListHero(
     imageIsEmbeddedArt: Boolean,
     onPlayAllClick: () -> Unit,
     accentColor: Color,
+    onVisibleHeightPx: (Int) -> Unit,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
     sharedElementPrefix: String
 ) {
     if (heroLayout.isImmersive) {
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(collectionHeroImmersiveVisibleHeight(heroLayout))
+        CollectionHeroImmersiveSpacer(
+            layout = heroLayout,
+            title = title,
+            subtitle = artistName,
+            statsText = statsText,
+            accentColor = accentColor,
+            onPlayAllClick = onPlayAllClick,
+            onVisibleHeightPx = onVisibleHeightPx
         )
         return
     }

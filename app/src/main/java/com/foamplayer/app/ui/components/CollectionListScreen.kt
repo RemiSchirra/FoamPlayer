@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,7 +44,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -142,21 +142,21 @@ fun CollectionListScreen(
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
-    val heroScrolledOutPx = with(LocalDensity.current) {
-        collectionHeroImmersiveVisibleHeight(heroLayout).roundToPx()
-    }
+    // Measured by the header spacer's layout pass (see [CollectionHeroImmersiveSpacer]);
+    // read untracked inside the offset lambda, so it is always the settled value.
+    val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
         if (density.isGrid) {
             if (gridState.firstVisibleItemIndex == 0) {
                 gridState.firstVisibleItemScrollOffset
             } else {
-                heroScrolledOutPx
+                heroVisibleHeightPx.intValue
             }
         } else {
             if (listState.firstVisibleItemIndex == 0) {
                 listState.firstVisibleItemScrollOffset
             } else {
-                heroScrolledOutPx
+                heroVisibleHeightPx.intValue
             }
         }
     }
@@ -234,7 +234,8 @@ fun CollectionListScreen(
                             subtitle = subtitle,
                             itemCount = itemCount,
                             imageUrl = headerImageUrl,
-                            icon = headerIcon
+                            icon = headerIcon,
+                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it }
                         )
                     }
 
@@ -257,7 +258,8 @@ fun CollectionListScreen(
                             subtitle = subtitle,
                             itemCount = itemCount,
                             imageUrl = headerImageUrl,
-                            icon = headerIcon
+                            icon = headerIcon,
+                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it }
                         )
                     }
 
@@ -320,8 +322,10 @@ fun CollectionListScreen(
 
 /**
  * The list's leading item: the hero (no play button — a "list of lists" page
- * has nothing to play) for compact/normal layouts, a spacer matching the
- * immersive hero's visible height otherwise.
+ * has nothing to play) for compact/normal layouts, a spacer measured against
+ * the immersive hero's real overlay block otherwise (its
+ * [CollectionHeroImmersiveSpacer.onVisibleHeightPx] keeps the hero's
+ * scroll-away constant in sync).
  */
 @Composable
 private fun CollectionListHero(
@@ -330,13 +334,16 @@ private fun CollectionListHero(
     subtitle: String?,
     itemCount: Int,
     imageUrl: String?,
-    icon: ImageVector?
+    icon: ImageVector?,
+    onVisibleHeightPx: (Int) -> Unit
 ) {
     if (heroLayout.isImmersive) {
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(collectionHeroImmersiveVisibleHeight(heroLayout))
+        CollectionHeroImmersiveSpacer(
+            layout = heroLayout,
+            title = title,
+            subtitle = subtitle,
+            statsText = "$itemCount items",
+            onVisibleHeightPx = onVisibleHeightPx
         )
         return
     }

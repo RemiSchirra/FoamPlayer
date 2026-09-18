@@ -47,17 +47,18 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import coil.request.ImageRequest
@@ -98,13 +99,6 @@ const val CollectionScrollTopBarMaxAlpha = 0.55f
 /** Horizontal padding kept clear of the back/more buttons for the scroll top bar's title. */
 val CollectionScrollTopBarTitleHorizontalPadding = 56.dp
 
-/**
- * Estimated height of the immersive overlay block (worst case: 2-line title,
- * subtitle, stats and the play pill), used to keep the list's first row clear
- * of the play button.
- */
-val CollectionHeroImmersiveOverlayHeightEstimate = 160.dp
-
 /** Padding between the immersive overlay block and the list's first row. */
 val CollectionHeroImmersiveListTopPadding = 16.dp
 
@@ -133,24 +127,62 @@ private fun collectionHeroOverlayFraction(layout: CollectionHeroLayout): Float =
 }
 
 /**
- * Height of an immersive hero measured from the screen content's top edge: the
- * height a list's leading spacer needs so its first rows start below the hero.
- * Also keeps the rows clear of the overlay text/play block (which hangs from
- * [collectionHeroOverlayFraction] of the image height and can extend
- * past the image's bottom edge): when it does, the rows start below the block
- * plus [CollectionHeroImmersiveListTopPadding] — the image has fully faded out
- * there, so the extra room reads as plain background.
+ * The immersive layouts' leading list item: an invisible spacer reserving the
+ * hero's room. Instead of estimating the overlay block's height, it
+ * subcomposes the block's real content (the same [CollectionHeroOverlayContent]
+ * the hero overlays, minus the shared-element wiring, which has no effect on
+ * layout) and measures it — so the list's first row clears the play pill by
+ * [CollectionHeroImmersiveListTopPadding] with no dead space below the artwork,
+ * whatever the title/subtitle/button add up to.
+ *
+ * [onVisibleHeightPx] reports the measured total (px) once the spacer is laid
+ * out, so the host screen can hand the hero's 1:1 scroll-away over to the same
+ * constant when the spacer is scrolled past (see [CollectionHero]'s
+ * [CollectionHero.scrollOffsetPx]).
  */
 @Composable
-fun collectionHeroImmersiveVisibleHeight(layout: CollectionHeroLayout): Dp {
-    if (!layout.isImmersive) return 0.dp
+fun CollectionHeroImmersiveSpacer(
+    layout: CollectionHeroLayout,
+    title: String,
+    subtitle: String?,
+    statsText: String,
+    onVisibleHeightPx: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    accentColor: Color = FoamTheme.accentColor,
+    onPlayAllClick: (() -> Unit)? = null
+) {
     val density = LocalDensity.current
-    val statusBarHeight = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
+    val statusBarHeightPx = WindowInsets.statusBars.getTop(density)
     val heroHeight = collectionHeroImmersiveHeight(layout)
-    val overlayBottom = heroHeight * collectionHeroOverlayFraction(layout) +
-            CollectionHeroImmersiveOverlayHeightEstimate +
-            CollectionHeroImmersiveListTopPadding
-    return max(heroHeight - statusBarHeight, overlayBottom - statusBarHeight)
+    val heroVisiblePx = with(density) { heroHeight.roundToPx() - statusBarHeightPx }
+    val overlayTopPx = with(density) {
+        (heroHeight * collectionHeroOverlayFraction(layout)).roundToPx() - statusBarHeightPx
+    }
+    val listTopPaddingPx = with(density) { CollectionHeroImmersiveListTopPadding.roundToPx() }
+    // The overlay hangs off a full-width Box with 16dp side padding; measuring
+    // at the same width keeps line wraps identical to the real block.
+    val overlayMaxWidthPx = with(density) {
+        LocalConfiguration.current.screenWidthDp.dp.roundToPx()
+    }
+
+    SubcomposeLayout(modifier.fillMaxWidth()) { constraints ->
+        val overlayContent = subcompose(Unit) {
+            CollectionHeroOverlayContent(
+                title = title,
+                subtitle = subtitle,
+                statsText = statsText,
+                accentColor = accentColor,
+                centered = layout == CollectionHeroLayout.Immersive,
+                onPlayAllClick = onPlayAllClick
+            )
+        }.first().measure(Constraints(maxWidth = overlayMaxWidthPx))
+        val visibleHeightPx = maxOf(
+            heroVisiblePx,
+            overlayTopPx + overlayContent.height + listTopPaddingPx
+        )
+        onVisibleHeightPx(visibleHeightPx)
+        layout(constraints.maxWidth, visibleHeightPx) { }
+    }
 }
 
 /**
@@ -163,8 +195,8 @@ fun collectionHeroImmersiveVisibleHeight(layout: CollectionHeroLayout): Dp {
  *
  * For the immersive layouts the composable is a screen-level layer: place it
  * from a screen-level [Box] (it offsets itself up behind the status bar) and
- * make the list's leading item a spacer of
- * [collectionHeroImmersiveVisibleHeight]. [listScrollOffsetPx] — the list's
+ * make the list's leading item a [CollectionHeroImmersiveSpacer].
+ * [listScrollOffsetPx] — the list's
  * current scroll in px — makes the hero scroll away 1:1 with the list, exactly
  * like a header item would. [overlayTextAlpha] lets the screen crossfade the
  * overlaid text out while the scroll top bar's title fades in.
@@ -479,30 +511,70 @@ private fun CollectionHeroImmersive(
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
                 .offset(y = heroHeight * collectionHeroOverlayFraction(layout))
-                .graphicsLayer { alpha = overlayTextAlpha?.invoke() ?: 1f }
-                .padding(horizontal = 16.dp),
+                .graphicsLayer { alpha = overlayTextAlpha?.invoke() ?: 1f },
             horizontalAlignment = if (layout == CollectionHeroLayout.Immersive) {
                 Alignment.CenterHorizontally
             } else {
                 Alignment.Start
             }
         ) {
-            CollectionHeroTexts(
+            CollectionHeroOverlayContent(
                 title = title,
                 subtitle = subtitle,
                 statsText = statsText,
                 accentColor = accentColor,
                 centered = layout == CollectionHeroLayout.Immersive,
+                onPlayAllClick = onPlayAllClick,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 sharedElementKey = sharedElementKey,
                 sharedElementPrefix = sharedElementPrefix
             )
+        }
+    }
+}
 
-            if (onPlayAllClick != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                CollectionHeroPlayButton(onClick = onPlayAllClick, accentColor = accentColor)
-            }
+/**
+ * The immersive overlay block's content: title/subtitle/stats and the optional
+ * play pill, inset 16dp like the rest of the hero. Shared by the hero's real
+ * overlay and [CollectionHeroImmersiveSpacer]'s measuring copy, so the two can
+ * never drift apart.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun CollectionHeroOverlayContent(
+    title: String,
+    subtitle: String?,
+    statsText: String,
+    accentColor: Color,
+    centered: Boolean,
+    onPlayAllClick: (() -> Unit)?,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    sharedElementKey: String? = null,
+    sharedElementPrefix: String = "album"
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start
+    ) {
+        CollectionHeroTexts(
+            title = title,
+            subtitle = subtitle,
+            statsText = statsText,
+            accentColor = accentColor,
+            centered = centered,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            sharedElementKey = sharedElementKey,
+            sharedElementPrefix = sharedElementPrefix
+        )
+
+        if (onPlayAllClick != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            CollectionHeroPlayButton(onClick = onPlayAllClick, accentColor = accentColor)
         }
     }
 }

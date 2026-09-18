@@ -31,12 +31,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -48,11 +48,11 @@ import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
 import com.foamplayer.app.ui.components.CollectionHero
+import com.foamplayer.app.ui.components.CollectionHeroImmersiveSpacer
 import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.CollectionListItem
 import com.foamplayer.app.ui.components.CollectionScrollTopBar
 import com.foamplayer.app.ui.components.TrackListItem
-import com.foamplayer.app.ui.components.collectionHeroImmersiveVisibleHeight
 import com.foamplayer.app.ui.components.rememberCollectionScrollFraction
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -108,14 +108,14 @@ fun ArtistDetailScreen(
 
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(gridState)
-    val heroScrolledOutPx = with(LocalDensity.current) {
-        collectionHeroImmersiveVisibleHeight(heroLayout).roundToPx()
-    }
+    // Measured by the header spacer's layout pass (see [CollectionHeroImmersiveSpacer]);
+    // read untracked inside the offset lambda, so it is always the settled value.
+    val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
         if (gridState.firstVisibleItemIndex == 0) {
             gridState.firstVisibleItemScrollOffset
         } else {
-            heroScrolledOutPx
+            heroVisibleHeightPx.intValue
         }
     }
 
@@ -180,7 +180,8 @@ fun ArtistDetailScreen(
                         imageUrl = headerArtPath,
                         trackCount = tracks.size,
                         accentColor = accentColor,
-                        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) }
+                        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+                        onVisibleHeightPx = { heroVisibleHeightPx.intValue = it }
                     )
                 }
 
@@ -274,7 +275,9 @@ fun ArtistDetailScreen(
 
 /**
  * The artist page's leading grid item: the hero for compact/normal layouts, a
- * spacer matching the immersive hero's visible height otherwise.
+ * spacer measured against the immersive hero's real overlay block otherwise
+ * (its [CollectionHeroImmersiveSpacer.onVisibleHeightPx] keeps the hero's
+ * scroll-away constant in sync).
  */
 @Composable
 private fun ArtistHero(
@@ -283,13 +286,18 @@ private fun ArtistHero(
     imageUrl: String?,
     trackCount: Int,
     accentColor: Color,
-    onPlayAllClick: () -> Unit
+    onPlayAllClick: () -> Unit,
+    onVisibleHeightPx: (Int) -> Unit
 ) {
     if (heroLayout.isImmersive) {
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(collectionHeroImmersiveVisibleHeight(heroLayout))
+        CollectionHeroImmersiveSpacer(
+            layout = heroLayout,
+            title = title,
+            subtitle = null,
+            statsText = "$trackCount Tracks",
+            accentColor = accentColor,
+            onPlayAllClick = onPlayAllClick,
+            onVisibleHeightPx = onVisibleHeightPx
         )
         return
     }
