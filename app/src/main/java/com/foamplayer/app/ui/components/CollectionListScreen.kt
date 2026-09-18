@@ -26,6 +26,9 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
@@ -40,12 +43,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.request.ImageRequest
 import androidx.core.net.toUri
+import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -129,35 +134,85 @@ fun CollectionListScreen(
     headerIcon: ImageVector? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    heroLayout: CollectionHeroLayout = LocalDefaultCollectionHeroLayout.current,
     content: MediaListContentScope.() -> Unit
 ) {
     var showOrganisationModal by remember { mutableStateOf(false) }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Top Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = FoamTheme.colors.textPrimary,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clickable { onBack() }
-                        .padding(4.dp)
-                )
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
+    val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
+    val heroScrolledOutPx = with(LocalDensity.current) {
+        collectionHeroImmersiveVisibleHeight(heroLayout).roundToPx()
+    }
+    val heroScrollOffsetPx: () -> Int = {
+        if (density.isGrid) {
+            if (gridState.firstVisibleItemIndex == 0) {
+                gridState.firstVisibleItemScrollOffset
+            } else {
+                heroScrolledOutPx
+            }
+        } else {
+            if (listState.firstVisibleItemIndex == 0) {
+                listState.firstVisibleItemScrollOffset
+            } else {
+                heroScrolledOutPx
+            }
+        }
+    }
 
-                if (onDensityChange != null) {
-                    Spacer(modifier = Modifier.weight(1f))
-                    OrganisationMenuButton(
-                        contentDescription = "Organisation",
-                        onClick = { showOrganisationModal = true }
+    Box(modifier = modifier.fillMaxSize()) {
+        if (heroLayout.isImmersive) {
+            CollectionHero(
+                layout = heroLayout,
+                title = title,
+                subtitle = subtitle,
+                statsText = "$itemCount items",
+                imageUrl = headerImageUrl,
+                icon = headerIcon,
+                onPlayAllClick = null,
+                scrollOffsetPx = heroScrollOffsetPx,
+                modifier = Modifier.align(Alignment.TopStart)
+            )
+        }
+
+        if (!heroLayout.isImmersive) {
+            // Compact/Normal: composed BEFORE the Column (whose first child is
+            // the top-bar row) so the gradient can never dim the buttons; the
+            // list never scrolls into the bar's zone in these layouts.
+            CollectionScrollTopBar(
+                title = title,
+                fraction = topBarFraction,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        }
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (!heroLayout.isImmersive) {
+                // Top Bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = FoamTheme.colors.textPrimary,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clickable { onBack() }
+                            .padding(4.dp)
                     )
+
+                    if (onDensityChange != null) {
+                        Spacer(modifier = Modifier.weight(1f))
+                        OrganisationMenuButton(
+                            contentDescription = "Organisation",
+                            onClick = { showOrganisationModal = true }
+                        )
+                    }
                 }
             }
 
@@ -165,6 +220,7 @@ fun CollectionListScreen(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(density.gridColumns),
                     modifier = Modifier.fillMaxSize(),
+                    state = gridState,
                     contentPadding = PaddingValues(horizontal = 10.dp)
                 ) {
                     val gridScope = this
@@ -172,7 +228,8 @@ fun CollectionListScreen(
                         key = "collection_header",
                         span = { GridItemSpan(maxLineSpan) }
                     ) {
-                        CollectionHeaderSection(
+                        CollectionListHero(
+                            heroLayout = heroLayout,
                             title = title,
                             subtitle = subtitle,
                             itemCount = itemCount,
@@ -189,11 +246,13 @@ fun CollectionListScreen(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState
                 ) {
                     val listScope = this
                     item(key = "collection_header") {
-                        CollectionHeaderSection(
+                        CollectionListHero(
+                            heroLayout = heroLayout,
                             title = title,
                             subtitle = subtitle,
                             itemCount = itemCount,
@@ -210,6 +269,43 @@ fun CollectionListScreen(
                 }
             }
         }
+
+        if (heroLayout.isImmersive) {
+            // Above the scrolling list (so content dims under it) but below the
+            // overlay back/more row.
+            CollectionScrollTopBar(
+                title = title,
+                fraction = topBarFraction,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+
+            Box(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = FoamTheme.colors.textPrimary,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clickable { onBack() }
+                            .padding(4.dp)
+                    )
+
+                    if (onDensityChange != null) {
+                        Spacer(modifier = Modifier.weight(1f))
+                        OrganisationMenuButton(
+                            contentDescription = "Organisation",
+                            onClick = { showOrganisationModal = true }
+                        )
+                    }
+                }
+            }
+        }
     }
 
     if (onDensityChange != null) {
@@ -222,84 +318,38 @@ fun CollectionListScreen(
     }
 }
 
+/**
+ * The list's leading item: the hero (no play button — a "list of lists" page
+ * has nothing to play) for compact/normal layouts, a spacer matching the
+ * immersive hero's visible height otherwise.
+ */
 @Composable
-private fun CollectionHeaderSection(
+private fun CollectionListHero(
+    heroLayout: CollectionHeroLayout,
     title: String,
     subtitle: String?,
     itemCount: Int,
     imageUrl: String?,
     icon: ImageVector?
 ) {
-    val context = LocalContext.current
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Cover Art
-        Box(
+    if (heroLayout.isImmersive) {
+        Spacer(
             modifier = Modifier
-                .size(120.dp)
-                .clip(AlbumArtShape())
-                .background(FoamTheme.colors.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            if (imageUrl != null) {
-                val headerArtRequest = remember(imageUrl) {
-                    ImageRequest.Builder(context)
-                        .data(EmbeddedAlbumArt(imageUrl.toUri()))
-                        .size(AlbumArtRequestSize)
-                        .crossfade(false)
-                        .build()
-                }
-                AlbumArtImage(
-                    model = headerArtRequest,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    placeholderSize = 40.dp
-                )
-            } else if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = FoamTheme.accentColor,
-                    modifier = Modifier.size(48.dp)
-                )
-            } else {
-                BasicText(
-                    text = title.take(1).uppercase(),
-                    style = FoamTheme.typography.titleLarge.copy(fontSize = 48.sp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.width(20.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            BasicText(
-                text = title,
-                style = FoamTheme.typography.titleLarge,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            if (subtitle != null) {
-                BasicText(
-                    text = subtitle,
-                    style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.accentColor),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            BasicText(
-                text = "$itemCount items",
-                style = FoamTheme.typography.body,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-        }
+                .fillMaxWidth()
+                .height(collectionHeroImmersiveVisibleHeight(heroLayout))
+        )
+        return
     }
+
+    CollectionHero(
+        layout = heroLayout,
+        title = title,
+        subtitle = subtitle,
+        statsText = "$itemCount items",
+        imageUrl = imageUrl,
+        icon = icon,
+        onPlayAllClick = null
+    )
 }
 
 /**

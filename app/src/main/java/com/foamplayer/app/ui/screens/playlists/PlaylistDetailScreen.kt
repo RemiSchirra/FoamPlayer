@@ -8,6 +8,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.TrackCenterRequest
@@ -31,6 +32,7 @@ fun PlaylistDetailScreen(
     onDensityChange: ((MediaDensity) -> Unit)? = null,
     centerTrackRequest: TrackCenterRequest? = null,
     isPlaying: Boolean = true,
+    heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     immersiveMode: Boolean = false,
     viewModel: PlaylistDetailViewModel = hiltViewModel()
 ) {
@@ -81,6 +83,7 @@ fun PlaylistDetailScreen(
         onDensityChange = onDensityChange,
         centerTrackRequest = centerTrackRequest,
         isPlaying = isPlaying,
+        heroLayout = heroLayout,
         immersiveMode = immersiveMode
     )
 }

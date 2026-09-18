@@ -63,6 +63,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.foamplayer.app.constants.CollectionHeroLayout
+import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavigationBarMode
@@ -113,6 +115,7 @@ import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 import com.foamplayer.app.ui.screens.search.SearchScreen
 import com.foamplayer.app.ui.screens.settings.AudioSettingsScreen
 import com.foamplayer.app.ui.screens.settings.BackgroundSettingsScreen
+import com.foamplayer.app.ui.screens.settings.CollectionsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.LyricsSettingsScreen
@@ -291,6 +294,13 @@ fun FoamNavHost(
     val densityFor: (MediaListView) -> MediaDensity = { view -> playerSettings.mediaDensity(view) }
     val setDensity: (MediaListView, MediaDensity) -> Unit = { view, value ->
         playerViewModel.setMediaDensity(view, value)
+    }
+
+    // Per-collection hero layout. Playlists are identified by their detail route
+    // (CollectionKind has no Playlist member), albums/artists by their detail
+    // screens; every other collection resolves to the Default value.
+    val heroLayoutFor: (CollectionHeroTarget) -> CollectionHeroLayout = { target ->
+        playerSettings.collectionHeroLayout(target)
     }
 
     // Initialize the transition state based on whether the player should be open immediately
@@ -892,6 +902,7 @@ fun FoamNavHost(
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Default),
                                             viewModel = homeViewModel
                                         )
                                     }
@@ -907,6 +918,7 @@ fun FoamNavHost(
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Default),
                                             viewModel = homeViewModel
                                         )
                                     }
@@ -998,7 +1010,8 @@ fun FoamNavHost(
                                             onDensityChange = { setDensity(MediaListView.BROWSE_ALL_TRACKS, it) },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-                                            sharedTrackId = trackListTransitionTrackId
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Default)
                                         )
                                     }
                                     composable(Screen.BrowseArtists.route) {
@@ -1053,6 +1066,7 @@ fun FoamNavHost(
                                             sharedTrackId = trackListTransitionTrackId,
                                             centerTrackRequest = centerTrackRequest,
                                             isPlaying = isPlaying,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Default),
                                             immersiveMode = playerSettings.immersiveModeEnabled
                                         )
                                     }
@@ -1075,6 +1089,7 @@ fun FoamNavHost(
                                             sharedTrackId = trackListTransitionTrackId,
                                             centerTrackRequest = centerTrackRequest,
                                             isPlaying = isPlaying,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Default),
                                             immersiveMode = playerSettings.immersiveModeEnabled
                                         )
                                     }
@@ -1162,6 +1177,7 @@ fun FoamNavHost(
                                             onNavigateToPlayer = { navController.navigate(Screen.SettingsPlayer.route) },
                                             onNavigateToNavBar = { navController.navigate(Screen.SettingsNavBar.route) },
                                             onNavigateToBackground = { navController.navigate(Screen.SettingsBackground.route) },
+                                            onNavigateToCollections = { navController.navigate(Screen.SettingsUICollections.route) },
                                         )
                                     }
                                     composable(Screen.SettingsColors.route) {
@@ -1175,6 +1191,9 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.SettingsBackground.route) {
                                         BackgroundSettingsScreen(onBack = { navController.popBackStack() })
+                                    }
+                                    composable(Screen.SettingsUICollections.route) {
+                                        CollectionsSettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     composable(Screen.SettingsLyricsManager.route) {
                                         LyricsManagerScreen(
@@ -1235,7 +1254,8 @@ fun FoamNavHost(
                                             animatedVisibilityScope = this,
                                             activeCollectionId = activeCollectionId,
                                             activeTrackId = activeTrackId,
-                                            onListBackdropArt = onListBackdropArt
+                                            onListBackdropArt = onListBackdropArt,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Artist)
                                         )
                                     }
                                     composable(
@@ -1257,6 +1277,7 @@ fun FoamNavHost(
                                             onListBackdropArt = onListBackdropArt,
                                             centerTrackRequest = centerTrackRequest,
                                             isPlaying = isPlaying,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Artist),
                                             immersiveMode = playerSettings.immersiveModeEnabled
                                         )
                                     }
@@ -1287,6 +1308,7 @@ fun FoamNavHost(
                                             onListBackdropArt = onListBackdropArt,
                                             centerTrackRequest = centerTrackRequest,
                                             isPlaying = isPlaying,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Album),
                                             immersiveMode = playerSettings.immersiveModeEnabled
                                         )
                                     }
@@ -1319,6 +1341,7 @@ fun FoamNavHost(
                                             onDensityChange = { setDensity(MediaListView.PLAYLIST_DETAIL, it) },
                                             centerTrackRequest = centerTrackRequest,
                                             isPlaying = isPlaying,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Playlist),
                                             immersiveMode = playerSettings.immersiveModeEnabled
                                         )
                                     }

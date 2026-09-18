@@ -8,6 +8,12 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.foamplayer.app.constants.CollectionHeroLayout
+import com.foamplayer.app.constants.CollectionHeroTarget
+import com.foamplayer.app.constants.CollectionLayoutAlbumKey
+import com.foamplayer.app.constants.CollectionLayoutArtistKey
+import com.foamplayer.app.constants.CollectionLayoutDefaultKey
+import com.foamplayer.app.constants.CollectionLayoutPlaylistKey
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
@@ -155,6 +161,22 @@ class SettingsRepository @Inject constructor(
         it.copy(mediaDensities = it.mediaDensities + (view to density))
     }
 
+    suspend fun setCollectionLayoutDefault(layout: CollectionHeroLayout) = update {
+        it.copy(collectionLayoutDefault = layout)
+    }
+
+    suspend fun setCollectionLayoutArtist(layout: CollectionHeroLayout) = update {
+        it.copy(collectionLayoutArtist = layout)
+    }
+
+    suspend fun setCollectionLayoutAlbum(layout: CollectionHeroLayout) = update {
+        it.copy(collectionLayoutAlbum = layout)
+    }
+
+    suspend fun setCollectionLayoutPlaylist(layout: CollectionHeroLayout) = update {
+        it.copy(collectionLayoutPlaylist = layout)
+    }
+
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
@@ -211,7 +233,15 @@ class SettingsRepository @Inject constructor(
         navBarSecondaryEnabled = this[Keys.NAVBAR_SECONDARY_ENABLED]
             ?.mapNotNull { name -> NavBarItem.entries.find { it.name == name } }
             ?.toSet() ?: AppSettings().navBarSecondaryEnabled,
-        mediaDensities = deserializeMediaDensities(this[Keys.MEDIA_DENSITIES])
+        mediaDensities = deserializeMediaDensities(this[Keys.MEDIA_DENSITIES]),
+        collectionLayoutDefault = CollectionHeroLayout.fromName(this[Keys.COLLECTION_LAYOUT_DEFAULT])
+            ?: AppSettings().collectionLayoutDefault,
+        collectionLayoutArtist = CollectionHeroLayout.fromName(this[Keys.COLLECTION_LAYOUT_ARTIST])
+            ?: AppSettings().collectionLayoutArtist,
+        collectionLayoutAlbum = CollectionHeroLayout.fromName(this[Keys.COLLECTION_LAYOUT_ALBUM])
+            ?: AppSettings().collectionLayoutAlbum,
+        collectionLayoutPlaylist = CollectionHeroLayout.fromName(this[Keys.COLLECTION_LAYOUT_PLAYLIST])
+            ?: AppSettings().collectionLayoutPlaylist
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -252,6 +282,10 @@ class SettingsRepository @Inject constructor(
         this[Keys.NAVBAR_SECONDARY_ORDER] = settings.navBarSecondaryOrder.joinToString(",") { it.name }
         this[Keys.NAVBAR_SECONDARY_ENABLED] = settings.navBarSecondaryEnabled.map { it.name }.toSet()
         this[Keys.MEDIA_DENSITIES] = serializeMediaDensities(settings.mediaDensities)
+        this[Keys.COLLECTION_LAYOUT_DEFAULT] = settings.collectionLayoutDefault.name
+        this[Keys.COLLECTION_LAYOUT_ARTIST] = settings.collectionLayoutArtist.name
+        this[Keys.COLLECTION_LAYOUT_ALBUM] = settings.collectionLayoutAlbum.name
+        this[Keys.COLLECTION_LAYOUT_PLAYLIST] = settings.collectionLayoutPlaylist.name
     }
 
     private object Keys {
@@ -295,6 +329,10 @@ class SettingsRepository @Inject constructor(
         val NAVBAR_SECONDARY_ORDER = stringPreferencesKey("navbar_secondary_order")
         val NAVBAR_SECONDARY_ENABLED = stringSetPreferencesKey("navbar_secondary_enabled")
         val MEDIA_DENSITIES = stringPreferencesKey("media_densities")
+        val COLLECTION_LAYOUT_DEFAULT = CollectionLayoutDefaultKey
+        val COLLECTION_LAYOUT_ARTIST = CollectionLayoutArtistKey
+        val COLLECTION_LAYOUT_ALBUM = CollectionLayoutAlbumKey
+        val COLLECTION_LAYOUT_PLAYLIST = CollectionLayoutPlaylistKey
     }
 }
 

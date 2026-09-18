@@ -8,6 +8,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.TrackCenterRequest
 import com.foamplayer.app.ui.components.TrackListScreen
@@ -28,6 +29,7 @@ fun AlbumDetailScreen(
     initialArtistName: String? = null,
     centerTrackRequest: TrackCenterRequest? = null,
     isPlaying: Boolean = true,
+    heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     immersiveMode: Boolean = false,
     viewModel: AlbumDetailViewModel = hiltViewModel()
 ) {
@@ -66,6 +68,7 @@ fun AlbumDetailScreen(
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
         centerTrackRequest = centerTrackRequest,
         isPlaying = isPlaying,
+        heroLayout = heroLayout,
         immersiveMode = immersiveMode
     )
 }

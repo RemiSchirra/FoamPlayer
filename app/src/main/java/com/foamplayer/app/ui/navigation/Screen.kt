@@ -14,6 +14,7 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsPlayer : Screen("settings/ui/player", "Player Settings")
     object SettingsNavBar : Screen("settings/ui/navbar", "Navigation Bar Settings")
     object SettingsBackground : Screen("settings/ui/background", "Background Settings")
+    object SettingsUICollections : Screen("settings/ui/collections", "Collection Layouts")
     object SettingsLibrary : Screen("settings/library", "Library Settings")
     object SettingsLyrics : Screen("settings/lyrics", "Lyrics Settings")
     object SettingsLyricsManager : Screen("settings/lyrics/manager", "Lyrics Manager")

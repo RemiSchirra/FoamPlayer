@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -253,6 +254,7 @@ fun AllTracksBrowseScreen(
     sharedTransitionScope: SharedTransitionScope? = null,
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
     sharedTrackId: Long? = null,
+    heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.allTracks.collectAsState()
@@ -268,7 +270,8 @@ fun AllTracksBrowseScreen(
         onDensityChange = onDensityChange,
         sharedTransitionScope = sharedTransitionScope,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-        sharedTrackId = sharedTrackId
+        sharedTrackId = sharedTrackId,
+        heroLayout = heroLayout
     )
 }
 
@@ -286,6 +289,7 @@ fun GenreTracksScreen(
     sharedTrackId: Long? = null,
     centerTrackRequest: TrackCenterRequest? = null,
     isPlaying: Boolean = true,
+    heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     immersiveMode: Boolean = false,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
@@ -309,6 +313,7 @@ fun GenreTracksScreen(
         sharedTrackId = sharedTrackId,
         centerTrackRequest = centerTrackRequest,
         isPlaying = isPlaying,
+        heroLayout = heroLayout,
         immersiveMode = immersiveMode
     )
 }
@@ -327,6 +332,7 @@ fun YearTracksScreen(
     sharedTrackId: Long? = null,
     centerTrackRequest: TrackCenterRequest? = null,
     isPlaying: Boolean = true,
+    heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     immersiveMode: Boolean = false,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
@@ -350,6 +356,7 @@ fun YearTracksScreen(
         sharedTrackId = sharedTrackId,
         centerTrackRequest = centerTrackRequest,
         isPlaying = isPlaying,
+        heroLayout = heroLayout,
         immersiveMode = immersiveMode
     )
 }

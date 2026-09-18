@@ -2,6 +2,7 @@ package com.foamplayer.app.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.LyricsSource
@@ -64,6 +65,23 @@ class SettingsViewModel @Inject constructor(
     fun setPlayerBackgroundIntensity(intensity: Int) = launch {
         settingsRepository.setPlayerBackgroundIntensity(intensity)
     }
+
+    fun setCollectionLayoutDefault(layout: CollectionHeroLayout) = launch {
+        settingsRepository.setCollectionLayoutDefault(layout)
+    }
+
+    fun setCollectionLayoutArtist(layout: CollectionHeroLayout) = launch {
+        settingsRepository.setCollectionLayoutArtist(layout)
+    }
+
+    fun setCollectionLayoutAlbum(layout: CollectionHeroLayout) = launch {
+        settingsRepository.setCollectionLayoutAlbum(layout)
+    }
+
+    fun setCollectionLayoutPlaylist(layout: CollectionHeroLayout) = launch {
+        settingsRepository.setCollectionLayoutPlaylist(layout)
+    }
+
     fun startScan() = launch { trackRepository.rescanLibrary() }
 
     fun setLyricsProviderOrder(order: List<PreferredLyricsProvider>) = launch {

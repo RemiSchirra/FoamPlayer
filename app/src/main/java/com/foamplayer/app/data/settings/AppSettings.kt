@@ -1,6 +1,8 @@
 package com.foamplayer.app.data.settings
 
 import androidx.compose.runtime.Immutable
+import com.foamplayer.app.constants.CollectionHeroLayout
+import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
@@ -69,7 +71,12 @@ data class AppSettings(
     val navBarSecondaryOrder: List<NavBarItem> = DefaultNavBarScreenItems,
     val navBarSecondaryEnabled: Set<NavBarItem> = emptySet(),
     /** Per-view media list density; views missing from the map fall back to [MediaDensity.ROW_NORMAL]. */
-    val mediaDensities: Map<MediaListView, MediaDensity> = emptyMap()
+    val mediaDensities: Map<MediaListView, MediaDensity> = emptyMap(),
+    /** Hero layout of collection screens; every kind starts as the classic compact header. */
+    val collectionLayoutDefault: CollectionHeroLayout = CollectionHeroLayout.Compact,
+    val collectionLayoutArtist: CollectionHeroLayout = CollectionHeroLayout.Compact,
+    val collectionLayoutAlbum: CollectionHeroLayout = CollectionHeroLayout.Compact,
+    val collectionLayoutPlaylist: CollectionHeroLayout = CollectionHeroLayout.Compact
 ) {
     /**
      * Items of the main bar, in the user's configured order. Includes the [NavBarItem.MORE]
@@ -83,6 +90,20 @@ data class AppSettings(
 
     /** The [MediaDensity] remembered by [view]; every view starts as the classic row. */
     fun mediaDensity(view: MediaListView): MediaDensity = mediaDensities[view] ?: MediaDensity.ROW_NORMAL
+
+    /**
+     * The hero layout configured for [target]: album detail pages use the Album
+     * value, playlist detail pages the Playlist value, the artist page the
+     * Artist value, and every other collection (genres, years, folders, all
+     * tracks, the "list of lists" screens) the Default value. Playlists are
+     * identified by their detail route, so no CollectionKind member is needed.
+     */
+    fun collectionHeroLayout(target: CollectionHeroTarget): CollectionHeroLayout = when (target) {
+        CollectionHeroTarget.Album -> collectionLayoutAlbum
+        CollectionHeroTarget.Artist -> collectionLayoutArtist
+        CollectionHeroTarget.Playlist -> collectionLayoutPlaylist
+        CollectionHeroTarget.Default -> collectionLayoutDefault
+    }
 
     fun sanitized(): AppSettings {
         // The "more" toggle is never a switchable item; its visibility is derived

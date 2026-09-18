@@ -65,6 +65,8 @@
     <string name="background_desc">Dynamic background effects</string>
     <string name="navigation_bar">Navigation Bar</string>
     <string name="navbar_desc">Navbar layout and transparency</string>
+    <string name="collections">Collections</string>
+    <string name="collections_desc">Hero layout of collection screens</string>
     <string name="navbar_mode">Navbar Mode</string>
     <string name="navbar_mode_desc">Choose how the bottom navigation looks</string>
     <string name="navbar_mode_docked">Docked</string>

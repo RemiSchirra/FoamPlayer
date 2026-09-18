@@ -47,6 +47,7 @@ fun UISettingsScreen(
     onNavigateToPlayer: () -> Unit,
     onNavigateToNavBar: () -> Unit,
     onNavigateToBackground: () -> Unit,
+    onNavigateToCollections: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
@@ -116,6 +117,17 @@ fun UISettingsScreen(
                                 title = stringResource(R.string.background),
                                 description = stringResource(R.string.background_desc),
                                 onClick = onNavigateToBackground,
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(FoamDimens.separatorHeight)
+                                    .background(FoamTheme.colors.borderOverlay)
+                            )
+                            FoamNavigationButton(
+                                title = stringResource(R.string.collections),
+                                description = stringResource(R.string.collections_desc),
+                                onClick = onNavigateToCollections,
                             )
                         }
                     }

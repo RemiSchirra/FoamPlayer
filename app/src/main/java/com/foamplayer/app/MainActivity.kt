@@ -28,6 +28,8 @@ import androidx.core.os.LocaleListCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.util.UnstableApi
 import com.foamplayer.app.audio.service.PlaybackService
+import com.foamplayer.app.constants.CollectionHeroTarget
+import com.foamplayer.app.ui.components.LocalDefaultCollectionHeroLayout
 import com.foamplayer.app.ui.navigation.FoamNavHost
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
@@ -132,7 +134,8 @@ private fun FoamApp(
     )
 
     CompositionLocalProvider(
-        LocalAutomaticColorEnabled provides settings.automaticColorEnabled
+        LocalAutomaticColorEnabled provides settings.automaticColorEnabled,
+        LocalDefaultCollectionHeroLayout provides settings.collectionHeroLayout(CollectionHeroTarget.Default)
     ) {
         FoamTheme(
             iconStyle = settings.iconStyle,

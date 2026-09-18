@@ -29,7 +29,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -43,17 +43,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import coil.request.ImageRequest
-import androidx.compose.ui.platform.LocalContext
 import com.foamplayer.app.data.db.entities.TrackEntity
-import com.foamplayer.app.data.media.EmbeddedAlbumArt
-import androidx.core.net.toUri
+import androidx.compose.ui.platform.LocalContext
+import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -146,16 +143,40 @@ fun TrackListScreen(
     centerTrackRequest: TrackCenterRequest? = null,
     /** Live play/pause bit, feeding the flight artwork's paused shrink when a row of this list is the shared-element target. */
     isPlaying: Boolean = true,
+    /** Hero layout resolved from the per-collection settings; Compact keeps the classic header. */
+    heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     /** Immersive player mode: the flight overlay art must fade in like the hero does instead of popping in. */
     immersiveMode: Boolean = false
 ) {
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
+    val trackCount = tracks.size
     val context = LocalContext.current
     var showOrganisationModal by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
+    val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
+    val heroScrolledOutPx = with(LocalDensity.current) {
+        collectionHeroImmersiveVisibleHeight(heroLayout).roundToPx()
+    }
+    val heroScrollOffsetPx: () -> Int = {
+        // While the spacer header (item 0) is visible its scroll offset IS the
+        // hero's travel; past it the hero is fully scrolled out.
+        if (density.isGrid) {
+            if (gridState.firstVisibleItemIndex == 0) {
+                gridState.firstVisibleItemScrollOffset
+            } else {
+                heroScrolledOutPx
+            }
+        } else {
+            if (listState.firstVisibleItemIndex == 0) {
+                listState.firstVisibleItemScrollOffset
+            } else {
+                heroScrolledOutPx
+            }
+        }
+    }
 
     // Only the row that can become the shared-element endpoint of the player-dismiss
     // flight needs the paused shrink; one animation is hoisted here and read by that
@@ -216,32 +237,48 @@ fun TrackListScreen(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Top Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = FoamTheme.colors.textPrimary,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clickable { onBack() }
-                        .padding(4.dp)
-                )
+    val heroAccentColor = imageUrl?.let { path -> AlbumArtPaletteCache.colors[path] }
+        ?: FoamTheme.accentColor
 
-                if (onDensityChange != null) {
-                    Spacer(modifier = Modifier.weight(1f))
-                    OrganisationMenuButton(
-                        contentDescription = "Organisation",
-                        onClick = { showOrganisationModal = true }
-                    )
-                }
+    Box(modifier = modifier.fillMaxSize()) {
+        if (heroLayout.isImmersive) {
+            CollectionHero(
+                layout = heroLayout,
+                title = title,
+                subtitle = artistName,
+                statsText = "$trackCount Tracks • $durationText",
+                imageUrl = imageUrl,
+                imageIsEmbeddedArt = imageIsEmbeddedArt,
+                onPlayAllClick = onPlayAllClick,
+                accentColor = heroAccentColor,
+                overlayTextAlpha = { 1f - topBarFraction() },
+                scrollOffsetPx = heroScrollOffsetPx,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                sharedElementKey = sharedElementKey,
+                sharedElementPrefix = sharedElementPrefix,
+                modifier = Modifier.align(Alignment.TopStart)
+            )
+        }
+
+        if (!heroLayout.isImmersive) {
+            // Compact/Normal: composed BEFORE the Column (whose first child is
+            // the top-bar row) so the gradient can never dim the buttons; the
+            // list never scrolls into the bar's zone in these layouts.
+            CollectionScrollTopBar(
+                title = title,
+                fraction = topBarFraction,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        }
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (!heroLayout.isImmersive) {
+                TrackListTopBarRow(
+                    onBack = onBack,
+                    onDensityChange = onDensityChange,
+                    onOpenOrganisation = { showOrganisationModal = true }
+                )
             }
 
             if (density.isGrid) {
@@ -255,14 +292,15 @@ fun TrackListScreen(
                         key = "grid_header",
                         span = { GridItemSpan(maxLineSpan) }
                     ) {
-                        HeaderSection(
+                        TrackListHero(
+                            heroLayout = heroLayout,
                             title = title,
-                            subtitle = artistName,
-                            trackCount = tracks.size,
-                            durationText = durationText,
+                            artistName = artistName,
+                            statsText = "$trackCount Tracks • $durationText",
                             imageUrl = imageUrl,
                             imageIsEmbeddedArt = imageIsEmbeddedArt,
                             onPlayAllClick = onPlayAllClick,
+                            accentColor = heroAccentColor,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
                             sharedElementKey = sharedElementKey,
@@ -302,14 +340,15 @@ fun TrackListScreen(
                     state = listState
                 ) {
                     item(key = "list_header") {
-                        HeaderSection(
+                        TrackListHero(
+                            heroLayout = heroLayout,
                             title = title,
-                            subtitle = artistName,
-                            trackCount = tracks.size,
-                            durationText = durationText,
+                            artistName = artistName,
+                            statsText = "$trackCount Tracks • $durationText",
                             imageUrl = imageUrl,
                             imageIsEmbeddedArt = imageIsEmbeddedArt,
                             onPlayAllClick = onPlayAllClick,
+                            accentColor = heroAccentColor,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
                             sharedElementKey = sharedElementKey,
@@ -342,6 +381,24 @@ fun TrackListScreen(
                 }
             }
         }
+
+        if (heroLayout.isImmersive) {
+            // Above the scrolling list (so tracks dim under it) but below the
+            // overlay back/more row.
+            CollectionScrollTopBar(
+                title = title,
+                fraction = topBarFraction,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+
+            Box(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
+                TrackListTopBarRow(
+                    onBack = onBack,
+                    onDensityChange = onDensityChange,
+                    onOpenOrganisation = { showOrganisationModal = true }
+                )
+            }
+        }
     }
 
     if (onDensityChange != null) {
@@ -354,158 +411,77 @@ fun TrackListScreen(
     }
 }
 
+/** The list's leading item: the hero for compact/normal layouts, a spacer matching the immersive hero's visible height otherwise. */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun HeaderSection(
+private fun TrackListHero(
+    heroLayout: CollectionHeroLayout,
     title: String,
-    subtitle: String?,
-    trackCount: Int,
-    durationText: String,
+    artistName: String?,
+    statsText: String,
     imageUrl: String?,
     imageIsEmbeddedArt: Boolean,
     onPlayAllClick: () -> Unit,
+    accentColor: Color,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
     sharedElementPrefix: String
 ) {
-    val context = LocalContext.current
-    val accentColor = imageUrl?.let { path -> AlbumArtPaletteCache.colors[path] }
-        ?: FoamTheme.accentColor
-
-    // Helper: only wraps with a shared bounds modifier when a shared-element
-    // context was actually provided (e.g. when navigating in from Search/Artist).
-    // For the title/artist TEXT: content genuinely differs between screens (different
-    // font sizes), so sharedBounds' cross-fade between the two is the right behavior.
-    @Composable
-    fun Modifier.sharedBoundsIfAvailable(key: String): Modifier {
-        if (sharedTransitionScope == null || animatedVisibilityScope == null || sharedElementKey == null) {
-            return this
-        }
-        return with(sharedTransitionScope) {
-            this@sharedBoundsIfAvailable.sharedBounds(
-                rememberSharedContentState(key = key),
-                animatedVisibilityScope = animatedVisibilityScope,
-                boundsTransform = AlbumArtBoundsTransform
-            )
-        }
+    if (heroLayout.isImmersive) {
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(collectionHeroImmersiveVisibleHeight(heroLayout))
+        )
+        return
     }
 
-    // For the ARTWORK: it's the same image on both screens, just a different size and
-    // corner radius. sharedElement animates the bounds of a single element instead of
-    // cross-fading two overlapping copies, which is what was causing the "two images
-    // clipping together" / transparency glitch. clipInOverlayDuringTransition keeps the
-    // rounded corners applied for every frame of the animation, not just the resting state.
-    @Composable
-    fun Modifier.sharedArtworkIfAvailable(key: String): Modifier {
-        if (sharedTransitionScope == null || animatedVisibilityScope == null || sharedElementKey == null) {
-            return this
-        }
-        return with(sharedTransitionScope) {
-            this@sharedArtworkIfAvailable.sharedElement(
-                rememberSharedContentState(key = key),
-                animatedVisibilityScope = animatedVisibilityScope,
-                clipInOverlayDuringTransition = OverlayClip(AlbumArtShape()),
-                boundsTransform = AlbumArtBoundsTransform
-            )
-        }
-    }
+    CollectionHero(
+        layout = heroLayout,
+        title = title,
+        subtitle = artistName,
+        statsText = statsText,
+        imageUrl = imageUrl,
+        imageIsEmbeddedArt = imageIsEmbeddedArt,
+        onPlayAllClick = onPlayAllClick,
+        accentColor = accentColor,
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope,
+        sharedElementKey = sharedElementKey,
+        sharedElementPrefix = sharedElementPrefix
+    )
+}
 
+/** Static top bar of the track list: back arrow left, 3-dots organisation button right. */
+@Composable
+private fun TrackListTopBarRow(
+    onBack: () -> Unit,
+    onDensityChange: ((MediaDensity) -> Unit)?,
+    onOpenOrganisation: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Cover Art
-        Box(
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+            contentDescription = "Back",
+            tint = FoamTheme.colors.textPrimary,
             modifier = Modifier
-                .size(120.dp)
-                .sharedArtworkIfAvailable("$sharedElementPrefix-art-$sharedElementKey")
-                .clip(AlbumArtShape())
-                .background(FoamTheme.colors.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            if (imageUrl != null) {
-                val albumArtRequest = remember(imageUrl, imageIsEmbeddedArt) {
-                    // Embedded art is pulled out of the audio file itself; playlist
-                    // covers are plain image URIs Coil loads directly.
-                    val data = if (imageIsEmbeddedArt) {
-                        EmbeddedAlbumArt(imageUrl.toUri())
-                    } else {
-                        imageUrl
-                    }
-                    ImageRequest.Builder(context)
-                        .data(data)
-                        .size(AlbumArtRequestSize)
-                        .crossfade(false)
-                        .build()
-                }
-                AlbumArtImage(
-                    model = albumArtRequest,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    placeholderSize = 40.dp
-                )
-            } else {
-                BasicText(
-                    text = title.take(1).uppercase(),
-                    style = FoamTheme.typography.titleLarge.copy(fontSize = 48.sp)
-                )
-            }
-        }
+                .size(32.dp)
+                .clickable { onBack() }
+                .padding(4.dp)
+        )
 
-        Spacer(modifier = Modifier.width(20.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            BasicText(
-                text = title,
-                style = FoamTheme.typography.titleLarge,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.sharedBoundsIfAvailable("$sharedElementPrefix-title-$sharedElementKey")
+        if (onDensityChange != null) {
+            Spacer(modifier = Modifier.weight(1f))
+            OrganisationMenuButton(
+                contentDescription = "Organisation",
+                onClick = onOpenOrganisation
             )
-
-            if (subtitle != null) {
-                BasicText(
-                    text = subtitle,
-                    style = FoamTheme.typography.titleMedium.copy(color = accentColor),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.sharedBoundsIfAvailable("$sharedElementPrefix-artist-$sharedElementKey")
-                )
-            }
-            BasicText(
-                text = "$trackCount Tracks â€¢ $durationText",
-                style = FoamTheme.typography.body,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Play Button
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(accentColor)
-                    .clickable { onPlayAllClick() }
-                    .padding(horizontal = 24.dp, vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = FoamTheme.icons.current.play,
-                        contentDescription = null,
-                        tint = FoamTheme.colors.background,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    BasicText(
-                        text = "Play All",
-                        style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.background)
-                    )
-                }
-            }
         }
     }
 }

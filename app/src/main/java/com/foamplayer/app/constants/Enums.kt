@@ -497,3 +497,42 @@ fun deserializeNavBarItemOrder(orderStr: String?, allowed: List<NavBarItem>): Li
 
     return parsed + allowed.filterNot { it in parsed }
 }
+
+/**
+ * Layout of a collection screen's hero (the artwork + title header above the
+ * list). COMPACT is the classic image-left/title-right row; the IMMERSIVE
+ * variants bleed the artwork under the status bar with the text block overlaid
+ * on it; NORMAL shows a big rounded artwork with the text block underneath.
+ */
+enum class CollectionHeroLayout(val label: String) {
+    Compact("Compact"),
+    Immersive("Immersive"),
+    CompactImmersive("Compact Immersive"),
+    Normal("Normal"),
+    ;
+
+    /** True when the artwork bleeds under the status bar with overlaid text. */
+    val isImmersive: Boolean
+        get() = this == Immersive || this == CompactImmersive
+
+    companion object {
+        fun fromName(name: String?): CollectionHeroLayout? = entries.find { it.name == name }
+    }
+}
+
+/**
+ * Which collection a hero layout applies to. Every collection that is not an
+ * album, artist or playlist detail (genres, years, folders, all tracks and the
+ * "list of lists" screens) resolves to [Default].
+ */
+enum class CollectionHeroTarget {
+    Default,
+    Artist,
+    Album,
+    Playlist,
+}
+
+val CollectionLayoutDefaultKey = stringPreferencesKey("collection_layout_default")
+val CollectionLayoutArtistKey = stringPreferencesKey("collection_layout_artist")
+val CollectionLayoutAlbumKey = stringPreferencesKey("collection_layout_album")
+val CollectionLayoutPlaylistKey = stringPreferencesKey("collection_layout_playlist")

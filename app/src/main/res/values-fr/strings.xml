@@ -65,6 +65,8 @@
     <string name="background_desc">Effets d\'arrière-plan dynamiques</string>
     <string name="navigation_bar">Barre de navigation</string>
     <string name="navbar_desc">Disposition et transparence de la barre</string>
+    <string name="collections">Collections</string>
+    <string name="collections_desc">Disposition des en-têtes de collections</string>
     <string name="navbar_mode">Mode de la barre</string>
     <string name="navbar_mode_desc">Choisissez l\'apparence de la navigation basse</string>
     <string name="navbar_mode_docked">Ancrée</string>

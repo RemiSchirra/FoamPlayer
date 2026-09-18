@@ -15,12 +15,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
@@ -33,25 +34,26 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.request.ImageRequest
+import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
-import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
+import com.foamplayer.app.ui.components.CollectionHero
 import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.CollectionListItem
+import com.foamplayer.app.ui.components.CollectionScrollTopBar
 import com.foamplayer.app.ui.components.TrackListItem
+import com.foamplayer.app.ui.components.collectionHeroImmersiveVisibleHeight
+import com.foamplayer.app.ui.components.rememberCollectionScrollFraction
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 
@@ -77,6 +79,7 @@ fun ArtistDetailScreen(
     activeCollectionId: String? = null,
     activeTrackId: Long? = null,
     onListBackdropArt: (String?, Boolean) -> Unit = { _, _ -> },
+    heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     viewModel: ArtistDetailViewModel = hiltViewModel()
 ) {
     val albums by viewModel.albums.collectAsState()
@@ -103,39 +106,83 @@ fun ArtistDetailScreen(
     val accentColor = headerArtPath?.let { AlbumArtPaletteCache.colors[it] }
         ?: FoamTheme.accentColor
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Top Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "Back",
-                tint = FoamTheme.colors.textPrimary,
-                modifier = Modifier
-                    .size(32.dp)
-                    .clickable { onBack() }
-                    .padding(4.dp)
+    val gridState = rememberLazyGridState()
+    val topBarFraction = rememberCollectionScrollFraction(gridState)
+    val heroScrolledOutPx = with(LocalDensity.current) {
+        collectionHeroImmersiveVisibleHeight(heroLayout).roundToPx()
+    }
+    val heroScrollOffsetPx: () -> Int = {
+        if (gridState.firstVisibleItemIndex == 0) {
+            gridState.firstVisibleItemScrollOffset
+        } else {
+            heroScrolledOutPx
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (heroLayout.isImmersive) {
+            CollectionHero(
+                layout = heroLayout,
+                title = artistName,
+                subtitle = null,
+                statsText = "${tracks.size} Tracks",
+                imageUrl = headerArtPath,
+                onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+                accentColor = accentColor,
+                overlayTextAlpha = { 1f - topBarFraction() },
+                scrollOffsetPx = heroScrollOffsetPx,
+                modifier = Modifier.align(Alignment.TopStart)
             )
         }
 
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(ArtistAlbumGridColumns),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 10.dp)
-        ) {
-            item(key = "artist_header", span = { GridItemSpan(maxLineSpan) }) {
-                ArtistHeaderSection(
-                    title = artistName,
-                    imageUrl = headerArtPath,
-                    trackCount = tracks.size,
-                    accentColor = accentColor,
-                    onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) }
-                )
+        if (!heroLayout.isImmersive) {
+            // Compact/Normal: composed BEFORE the Column (whose first child is
+            // the top-bar row) so the gradient can never dim the button; the
+            // grid never scrolls into the bar's zone in these layouts.
+            CollectionScrollTopBar(
+                title = artistName,
+                fraction = topBarFraction,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        }
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (!heroLayout.isImmersive) {
+                // Top Bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = FoamTheme.colors.textPrimary,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clickable { onBack() }
+                            .padding(4.dp)
+                    )
+                }
             }
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(ArtistAlbumGridColumns),
+                modifier = Modifier.fillMaxSize(),
+                state = gridState,
+                contentPadding = PaddingValues(horizontal = 10.dp)
+            ) {
+                item(key = "artist_header", span = { GridItemSpan(maxLineSpan) }) {
+                    ArtistHero(
+                        heroLayout = heroLayout,
+                        title = artistName,
+                        imageUrl = headerArtPath,
+                        trackCount = tracks.size,
+                        accentColor = accentColor,
+                        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) }
+                    )
+                }
 
             if (topTracks.isNotEmpty()) {
                 item(key = "artist_top_tracks_header", span = { GridItemSpan(maxLineSpan) }) {
@@ -192,99 +239,70 @@ fun ArtistDetailScreen(
                 Spacer(modifier = Modifier.height(80.dp))
             }
         }
+        }
+
+        if (heroLayout.isImmersive) {
+            // Above the scrolling grid (so content dims under it) but below the
+            // overlay back row.
+            CollectionScrollTopBar(
+                title = artistName,
+                fraction = topBarFraction,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+
+            Box(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = FoamTheme.colors.textPrimary,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clickable { onBack() }
+                            .padding(4.dp)
+                    )
+                }
+            }
+        }
     }
 }
 
 /**
- * Collection-style header: artwork on the left (the artist's first track's
- * embedded art), title and track count on the right above a play-all button.
+ * The artist page's leading grid item: the hero for compact/normal layouts, a
+ * spacer matching the immersive hero's visible height otherwise.
  */
 @Composable
-private fun ArtistHeaderSection(
+private fun ArtistHero(
+    heroLayout: CollectionHeroLayout,
     title: String,
     imageUrl: String?,
     trackCount: Int,
     accentColor: Color,
     onPlayAllClick: () -> Unit
 ) {
-    val context = LocalContext.current
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
+    if (heroLayout.isImmersive) {
+        Spacer(
             modifier = Modifier
-                .size(120.dp)
-                .clip(AlbumArtShape())
-                .background(FoamTheme.colors.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            if (imageUrl != null) {
-                val headerArtRequest = remember(imageUrl) {
-                    ImageRequest.Builder(context)
-                        .data(EmbeddedAlbumArt(imageUrl.toUri()))
-                        .size(AlbumArtRequestSize)
-                        .crossfade(false)
-                        .build()
-                }
-                AlbumArtImage(
-                    model = headerArtRequest,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    placeholderSize = 40.dp
-                )
-            } else {
-                BasicText(
-                    text = title.take(1).uppercase(),
-                    style = FoamTheme.typography.titleLarge.copy(fontSize = 48.sp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.width(20.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            BasicText(
-                text = title,
-                style = FoamTheme.typography.titleLarge,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            BasicText(
-                text = "$trackCount Tracks",
-                style = FoamTheme.typography.body,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(accentColor)
-                    .clickable { onPlayAllClick() }
-                    .padding(horizontal = 24.dp, vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = FoamTheme.icons.current.play,
-                        contentDescription = null,
-                        tint = FoamTheme.colors.background,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    BasicText(
-                        text = "Play All",
-                        style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.background)
-                    )
-                }
-            }
-        }
+                .fillMaxWidth()
+                .height(collectionHeroImmersiveVisibleHeight(heroLayout))
+        )
+        return
     }
+
+    CollectionHero(
+        layout = heroLayout,
+        title = title,
+        subtitle = null,
+        statsText = "$trackCount Tracks",
+        imageUrl = imageUrl,
+        onPlayAllClick = onPlayAllClick,
+        accentColor = accentColor
+    )
 }
 
 /**

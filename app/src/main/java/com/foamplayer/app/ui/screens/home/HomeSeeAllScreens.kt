@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.request.ImageRequest
 import com.foamplayer.app.R
+import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.dao.AlbumRecommendation
 import com.foamplayer.app.data.db.dao.PlaylistRecommendation
@@ -164,6 +165,7 @@ fun RecentTracksSeeAllScreen(
     sharedTransitionScope: SharedTransitionScope? = null,
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
     sharedTrackId: Long? = null,
+    heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.recentTracks.collectAsState()
@@ -179,7 +181,8 @@ fun RecentTracksSeeAllScreen(
         onDensityChange = onDensityChange,
         sharedTransitionScope = sharedTransitionScope,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-        sharedTrackId = sharedTrackId
+        sharedTrackId = sharedTrackId,
+        heroLayout = heroLayout
     )
 }
 
@@ -197,6 +200,7 @@ fun OldFavoritesSeeAllScreen(
     sharedTransitionScope: SharedTransitionScope? = null,
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
     sharedTrackId: Long? = null,
+    heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.oldFavoriteTracks.collectAsState()
@@ -212,7 +216,8 @@ fun OldFavoritesSeeAllScreen(
         onDensityChange = onDensityChange,
         sharedTransitionScope = sharedTransitionScope,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-        sharedTrackId = sharedTrackId
+        sharedTrackId = sharedTrackId,
+        heroLayout = heroLayout
     )
 }
 
