@@ -314,18 +314,22 @@ fun TrackFoamModal(
 val LocalTrackFoamModalState = staticCompositionLocalOf<TrackFoamModalState?> { null }
 
 /**
- * Simple playlist picker shown after tapping "Playlist" in [TrackFoamModal]:
- * lists the user's playlists; tapping one appends the track to it.
+ * Playlist picker shown after tapping "Playlist" in [TrackFoamModal]: lists the
+ * user's playlists with their covers. Toggling a row's checkbox applies the
+ * change at once — there is no confirm step.
  *
  * [track] drives visibility the same way [TrackFoamModalState.track] does for
  * the track modal, so the host just points it at the long-pressed track (or
- * nulls it to dismiss).
+ * nulls it to dismiss). [playlistIdsWithTrack] drives the checkbox states and
+ * is expected to stay live, so a toggle is reflected as soon as it persists.
+ * [onToggle] reports a row's new checked state.
  */
 @Composable
 fun PlaylistPickerModal(
     track: TrackEntity?,
     playlists: List<PlaylistEntity>,
-    onPick: (PlaylistEntity) -> Unit,
+    playlistIdsWithTrack: Set<Long>,
+    onToggle: (PlaylistEntity, Boolean) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -370,15 +374,97 @@ fun PlaylistPickerModal(
                     ) {
                         playlists.forEachIndexed { index, playlist ->
                             if (index > 0) ModalSectionDivider()
-                            ModalRowButton(
-                                label = playlist.name,
-                                onClick = { onPick(playlist) }
+                            PlaylistPickerRow(
+                                playlist = playlist,
+                                checked = playlist.playlistId in playlistIdsWithTrack,
+                                onCheckedChange = { checked -> onToggle(playlist, checked) }
                             )
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * One playlist row in [PlaylistPickerModal]: cover image (first-letter fallback
+ * when the playlist has none), its name, and a trailing checkbox. The whole row
+ * toggles, not just the checkbox.
+ */
+@Composable
+private fun PlaylistPickerRow(
+    playlist: PlaylistEntity,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(
+                value = checked,
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                role = Role.Checkbox,
+                onValueChange = onCheckedChange
+            )
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingSmall),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(albumArtCornerRadius(48.dp)))
+                .background(FoamTheme.colors.surface),
+            contentAlignment = Alignment.Center
+        ) {
+            if (playlist.imageUrl != null) {
+                val context = LocalContext.current
+                val coverRequest = remember(playlist.imageUrl) {
+                    ImageRequest.Builder(context)
+                        .data(playlist.imageUrl)
+                        .size(AlbumArtRequestSize)
+                        .build()
+                }
+                AsyncImage(
+                    model = coverRequest,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                BasicText(
+                    text = playlist.name.take(1).uppercase(),
+                    style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.accentColor)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
+
+        BasicText(
+            text = playlist.name,
+            style = FoamTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+
+        Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
+
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            // 20dp = the checkbox's own drawn size; drops its 48dp built-in touch
+            // padding so the row height stays compact (same as DetailCheckboxRow).
+            modifier = Modifier.size(20.dp),
+            colors = CheckboxDefaults.colors(
+                checkedColor = FoamTheme.accentColor,
+                uncheckedColor = FoamTheme.colors.textSecondary
+            )
+        )
     }
 }
 

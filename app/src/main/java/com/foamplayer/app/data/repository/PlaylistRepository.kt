@@ -7,6 +7,7 @@ import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.PlaylistTrackCrossRef
 import com.foamplayer.app.data.db.entities.TrackEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,6 +19,10 @@ class PlaylistRepository @Inject constructor(
 
     fun getTracksForPlaylist(playlistId: Long): Flow<List<TrackEntity>> =
         playlistDao.getTracksForPlaylist(playlistId)
+
+    /** Live ids of the playlists that contain a track; pre-checks their rows in the add-to-playlist picker. */
+    fun playlistIdsContainingTrack(trackId: Long): Flow<Set<Long>> =
+        playlistDao.playlistIdsContainingTrack(trackId).map { it.toSet() }
 
     suspend fun createPlaylist(name: String, imageUrl: String? = null): Long =
         playlistDao.createPlaylist(

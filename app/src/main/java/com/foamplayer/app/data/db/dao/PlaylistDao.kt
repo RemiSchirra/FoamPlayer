@@ -87,6 +87,10 @@ interface PlaylistDao {
     """)
     fun getTracksForPlaylist(playlistId: Long): Flow<List<TrackEntity>>
 
+    /** Ids of the playlists that contain a track; pre-checks their rows in the add-to-playlist picker. */
+    @Query("SELECT playlistId FROM playlist_track_cross_ref WHERE trackId = :trackId")
+    fun playlistIdsContainingTrack(trackId: Long): Flow<List<Long>>
+
     /**
      * Home "Recommended playlists": playlists ranked by the aggregate play
      * count + likes of the songs they contain. Empty playlists (no tracks) are

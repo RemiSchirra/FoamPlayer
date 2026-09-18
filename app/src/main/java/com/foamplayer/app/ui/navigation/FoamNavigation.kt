@@ -266,6 +266,16 @@ fun FoamNavHost(
     val trackModalState = rememberTrackFoamModalState()
     var playlistPickerTrack by remember { mutableStateOf<TrackEntity?>(null) }
 
+    // Playlists that already contain the track being picked for: drives the
+    // picker's checkbox states, live from Room, so each toggle is reflected as
+    // soon as it persists. Keyed on the track modal's track too, so the query
+    // has already settled by the time the picker opens (the track modal
+    // dismisses and the picker opens in the same recomposition).
+    val pickerTrackId = playlistPickerTrack?.id ?: trackModalState.track?.id
+    val playlistIdsWithTrack by remember(pickerTrackId) {
+        playlistsViewModel.playlistIdsContainingTrack(pickerTrackId)
+    }.collectAsState(initial = emptySet())
+
     // Long-press collection actions (albums/artists/genres/years/folders),
     // reached by every CollectionListItem through LocalCollectionFoamModalState.
     val collectionModalState = rememberCollectionFoamModalState()
@@ -1574,11 +1584,15 @@ fun FoamNavHost(
             PlaylistPickerModal(
                 track = playlistPickerTrack,
                 playlists = playlists,
-                onPick = { playlist ->
+                playlistIdsWithTrack = playlistIdsWithTrack,
+                onToggle = { playlist, checked ->
                     playlistPickerTrack?.let { track ->
-                        playlistsViewModel.addTrackToPlaylist(playlist.playlistId, track.id)
+                        if (checked) {
+                            playlistsViewModel.addTrackToPlaylist(playlist.playlistId, track.id)
+                        } else {
+                            playlistsViewModel.removeTrackFromPlaylist(playlist.playlistId, track.id)
+                        }
                     }
-                    playlistPickerTrack = null
                 },
                 onDismiss = { playlistPickerTrack = null }
             )

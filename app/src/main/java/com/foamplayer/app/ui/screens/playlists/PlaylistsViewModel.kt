@@ -13,9 +13,11 @@ import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ScanStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -196,6 +198,17 @@ class PlaylistsViewModel @Inject constructor(
     fun addTrackToPlaylist(playlistId: Long, trackId: Long) {
         viewModelScope.launch {
             playlistRepository.appendTrackToPlaylist(playlistId, trackId)
+        }
+    }
+
+    /** Live ids of the playlists that contain a track; drives the checkbox states in the playlist picker. */
+    fun playlistIdsContainingTrack(trackId: Long?): Flow<Set<Long>> =
+        if (trackId == null) flowOf(emptySet())
+        else playlistRepository.playlistIdsContainingTrack(trackId)
+
+    fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {
+        viewModelScope.launch {
+            playlistRepository.removeTrackFromPlaylist(playlistId, trackId)
         }
     }
 }
