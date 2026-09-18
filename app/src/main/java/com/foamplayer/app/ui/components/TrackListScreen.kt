@@ -5,6 +5,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
@@ -28,31 +30,40 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.Icon
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.foamplayer.app.data.db.entities.TrackEntity
 import androidx.compose.ui.platform.LocalContext
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.MediaDensity
+import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.TimeUtils
@@ -147,7 +158,15 @@ fun TrackListScreen(
     /** Hero layout resolved from the per-collection settings; Compact keeps the classic header. */
     heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     /** Immersive player mode: the flight overlay art must fade in like the hero does instead of popping in. */
-    immersiveMode: Boolean = false
+    immersiveMode: Boolean = false,
+    /** Playlist edit mode: rows gain swipe-to-remove and a drag handle for reordering. */
+    editMode: Boolean = false,
+    /** When set, the top bar shows the edit-mode pencil; the back arrow exits edit mode first. */
+    onEditModeChange: ((Boolean) -> Unit)? = null,
+    /** Edit-mode removal: a row's swipe-to-dismiss calls this with the swiped track. */
+    onRemoveTrack: ((TrackEntity) -> Unit)? = null,
+    /** Edit-mode reorder persistence: called with the final displayed order's track ids when a drag settles. */
+    onPersistTrackOrder: ((List<Long>) -> Unit)? = null
 ) {
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
@@ -197,6 +216,34 @@ fun TrackListScreen(
     // flight needs the paused shrink; one animation is hoisted here and read by that
     // row inside its graphicsLayer, so play/pause flips stay draw-only for the list.
     val flightPausedArtScale = rememberPausedArtScale(isPlaying)
+
+    // Edit-mode drag & drop (playlist detail): a local display list absorbs the
+    // swaps live; the DB is written once when the drag settles. While a drag is
+    // in flight, incoming track emissions are ignored so they can't fight the
+    // reorder. LazyColumn item indices include the hero (item 0) and the bottom
+    // spacer, so track index <-> list index conversions happen at the edges.
+    var displayedTracks by remember { mutableStateOf(tracks) }
+    var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(tracks, editMode) {
+        if (dragOriginIndex == null) {
+            displayedTracks = tracks
+        }
+    }
+    val listDragState = rememberDragDropListState(
+        lazyListState = listState,
+        canMove = { from, to -> from > 0 && to in 1..displayedTracks.size },
+        onMove = { from, to ->
+            displayedTracks = displayedTracks.toMutableList().apply {
+                add(to - 1, removeAt(from - 1))
+            }
+        }
+    )
+    // Fresh reads for the drag callbacks: pointerInput is keyed on the item's
+    // track id, so a gesture handler can outlive the state it was created with.
+    val latestDisplayedTracks by rememberUpdatedState(displayedTracks)
+    val latestTracks by rememberUpdatedState(tracks)
+    val latestOnRemoveTrack by rememberUpdatedState(onRemoveTrack)
+    val latestOnPersistTrackOrder by rememberUpdatedState(onPersistTrackOrder)
 
     // Dismiss-to-origin-collection: bring the playing track's row to the vertical
     // middle of the screen (clamped to the list's bounds) BEFORE the row is allowed
@@ -292,10 +339,15 @@ fun TrackListScreen(
             if (!heroLayout.isImmersive) {
                 TrackListTopBarRow(
                     onBack = onBack,
+                    editMode = editMode,
+                    onEditModeChange = onEditModeChange,
                     onDensityChange = onDensityChange,
                     onOpenOrganisation = { showOrganisationModal = true }
                 )
             }
+
+            // The drag display list only diverges from the DB list mid-drag.
+            val shownTracks = if (editMode) displayedTracks else tracks
 
             if (density.isGrid) {
                 LazyVerticalGrid(
@@ -325,7 +377,7 @@ fun TrackListScreen(
                         )
                     }
 
-                    itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+                    itemsIndexed(shownTracks, key = { _, track -> track.id }) { index, track ->
                         TrackListItem(
                             track = track,
                             onClick = { onTrackClick(tracks, index) },
@@ -374,11 +426,50 @@ fun TrackListScreen(
                         )
                     }
 
-                    itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    itemsIndexed(shownTracks, key = { _, track -> track.id }) { index, track ->
+                        // +1: the hero header sits at list item 0; the drag-drop
+                        // state works in raw LazyColumn indices.
+                        val listItemIndex = index + 1
+                        // derivedStateOf: draggedIndex is shared by every row, so reading it
+                        // directly in each row's scope would recompose the whole viewport on
+                        // every swap; the derived boolean only invalidates the rows whose
+                        // dragging state actually flips (the two rows involved in the swap).
+                        val isDragging by remember(listItemIndex) {
+                            derivedStateOf { listDragState.isItemDragging(listItemIndex) }
+                        }
+                        val currentIndex = rememberUpdatedState(index)
+
+                        Box(
+                            modifier = Modifier
+                                .let { if (isDragging) it else it.animateItem() }
+                                .zIndex(if (isDragging) 1f else 0f)
+                                .graphicsLayer {
+                                    translationY = if (isDragging) {
+                                        val itemInfo = listState.layoutInfo.visibleItemsInfo
+                                            .firstOrNull { it.index == listItemIndex }
+                                        if (itemInfo != null) {
+                                            listDragState.draggingItemTop - itemInfo.offset
+                                        } else 0f
+                                    } else {
+                                        0f
+                                    }
+                                }
+                                .padding(horizontal = 16.dp)
+                        ) {
                             TrackListItem(
                                 track = track,
-                                onClick = { onTrackClick(tracks, index) },
+                                onClick = if (editMode) {
+                                    // Taps must not start playback while editing.
+                                    ({ })
+                                } else {
+                                    { onTrackClick(tracks, index) }
+                                },
+                                onLongClick = if (editMode) {
+                                    // The track actions modal stays closed while editing.
+                                    ({ })
+                                } else {
+                                    null
+                                },
                                 active = track.id == activeTrackId,
                                 trackNumberText = if (showTrackNumbers) {
                                     track.trackNumber?.toString() ?: (index + 1).toString()
@@ -390,7 +481,44 @@ fun TrackListScreen(
                                 animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
                                 flightPausedArtScale = { flightPausedArtScale.value },
                                 immersiveArt = immersiveMode,
-                                isSharedTransitionSource = rowSharedTagActive(track.id)
+                                showDragHandle = editMode,
+                                dragHandleModifier = if (editMode) {
+                                    Modifier.pointerInput(track.id) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                dragOriginIndex = currentIndex.value + 1
+                                                listDragState.onDragStart(currentIndex.value + 1)
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                listDragState.onDrag(dragAmount)
+                                            },
+                                            onDragEnd = {
+                                                val from = dragOriginIndex
+                                                val to = listDragState.draggedIndex
+                                                listDragState.onDragEnd()
+                                                dragOriginIndex = null
+                                                if (from != null && to != null && from != to) {
+                                                    latestOnPersistTrackOrder
+                                                        ?.invoke(latestDisplayedTracks.map { it.id })
+                                                }
+                                            },
+                                            onDragCancel = {
+                                                listDragState.onDragCancel()
+                                                dragOriginIndex = null
+                                                displayedTracks = latestTracks
+                                            }
+                                        )
+                                    }
+                                } else {
+                                    Modifier
+                                },
+                                onRemove = if (editMode) {
+                                    { latestOnRemoveTrack?.invoke(track) }
+                                } else {
+                                    null
+                                },
+                                isSharedTransitionSource = rowSharedTagActive(track.id) && !editMode
                             )
                         }
                     }
@@ -421,6 +549,8 @@ fun TrackListScreen(
             ) {
                 TrackListTopBarRow(
                     onBack = onBack,
+                    editMode = editMode,
+                    onEditModeChange = onEditModeChange,
                     onDensityChange = onDensityChange,
                     onOpenOrganisation = { showOrganisationModal = true }
                 )
@@ -490,10 +620,12 @@ private fun TrackListHero(
     )
 }
 
-/** Static top bar of the track list: back arrow left, 3-dots organisation button right. */
+/** Static top bar of the track list: back arrow left, optional edit pencil + 3-dots organisation button right. */
 @Composable
 private fun TrackListTopBarRow(
     onBack: () -> Unit,
+    editMode: Boolean,
+    onEditModeChange: ((Boolean) -> Unit)?,
     onDensityChange: ((MediaDensity) -> Unit)?,
     onOpenOrganisation: () -> Unit
 ) {
@@ -509,12 +641,45 @@ private fun TrackListTopBarRow(
             tint = FoamTheme.colors.textPrimary,
             modifier = Modifier
                 .size(32.dp)
-                .clickable { onBack() }
+                .clickable {
+                    // While editing, back leaves edit mode before it leaves the screen.
+                    if (editMode) onEditModeChange?.invoke(false) else onBack()
+                }
                 .padding(4.dp)
         )
 
-        if (onDensityChange != null) {
+        if (onEditModeChange != null || onDensityChange != null) {
             Spacer(modifier = Modifier.weight(1f))
+        }
+
+        if (onEditModeChange != null) {
+            val editInteractionSource = remember { MutableInteractionSource() }
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = editInteractionSource,
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = { onEditModeChange(!editMode) }
+                    )
+                    .padding(4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Edit,
+                    contentDescription = "Edit",
+                    tint = if (editMode) FoamTheme.accentColor else FoamTheme.colors.textPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            if (onDensityChange != null) {
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+        }
+
+        if (onDensityChange != null) {
             OrganisationMenuButton(
                 contentDescription = "Organisation",
                 onClick = onOpenOrganisation

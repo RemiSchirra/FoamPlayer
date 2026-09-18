@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -7,6 +8,10 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -420,7 +425,13 @@ fun TrackListItem(
                     )
                 }
 
-                if (showDragHandle) {
+                AnimatedVisibility(
+                    visible = showDragHandle,
+                    enter = fadeIn(animationSpec = tween(durationMillis = 200)) +
+                            expandHorizontally(animationSpec = tween(durationMillis = 200)),
+                    exit = fadeOut(animationSpec = tween(durationMillis = 200)) +
+                            shrinkHorizontally(animationSpec = tween(durationMillis = 200))
+                ) {
                     Spacer(modifier = Modifier.width(12.dp))
 
                     val dragHandleInteractionSource = remember { MutableInteractionSource() }

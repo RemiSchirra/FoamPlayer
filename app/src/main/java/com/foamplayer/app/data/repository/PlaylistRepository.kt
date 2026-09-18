@@ -62,6 +62,18 @@ class PlaylistRepository @Inject constructor(
         addTrackToPlaylist(playlistId, trackId, playlistDao.nextOrderIndex(playlistId))
     }
 
+    suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {
+        playlistDao.removeTrackFromPlaylist(playlistId, trackId)
+    }
+
+    /** Persists a manual track ordering within one playlist (edit-mode drag & drop). */
+    suspend fun reorderPlaylistTracks(playlistId: Long, orderedTrackIds: List<Long>) {
+        playlistDao.reorderPlaylistTracks(
+            playlistId,
+            orderedTrackIds.mapIndexed { index, trackId -> trackId to index }
+        )
+    }
+
     suspend fun deletePlaylist(playlistId: Long) {
         playlistDao.deletePlaylist(playlistId)
     }

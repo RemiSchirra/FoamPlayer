@@ -23,6 +23,27 @@ class PlaylistDetailViewModel @Inject constructor(
     private val _playlist = MutableStateFlow<PlaylistEntity?>(null)
     val playlist: StateFlow<PlaylistEntity?> = _playlist
 
+    /** Edit mode: rows gain swipe-to-remove and a drag handle for reordering. */
+    private val _editMode = MutableStateFlow(false)
+    val editMode: StateFlow<Boolean> = _editMode
+
+    fun setEditMode(enabled: Boolean) {
+        _editMode.value = enabled
+    }
+
+    fun removeTrack(playlistId: Long, trackId: Long) {
+        viewModelScope.launch {
+            repository.removeTrackFromPlaylist(playlistId, trackId)
+        }
+    }
+
+    /** Persists a completed edit-mode drag: [orderedTrackIds] is the final displayed order. */
+    fun persistTrackOrder(playlistId: Long, orderedTrackIds: List<Long>) {
+        viewModelScope.launch {
+            repository.reorderPlaylistTracks(playlistId, orderedTrackIds)
+        }
+    }
+
     fun loadPlaylist(playlistId: Long) {
         viewModelScope.launch {
             // In a real app, you'd probably want to observe the playlist name too

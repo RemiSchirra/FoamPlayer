@@ -59,6 +59,27 @@ interface PlaylistDao {
     suspend fun nextOrderIndex(playlistId: Long): Int
 
     @Query("""
+        DELETE FROM playlist_track_cross_ref 
+        WHERE playlistId = :playlistId AND trackId = :trackId
+    """)
+    suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: Long)
+
+    @Query("""
+        UPDATE playlist_track_cross_ref 
+        SET orderIndex = :orderIndex 
+        WHERE playlistId = :playlistId AND trackId = :trackId
+    """)
+    suspend fun setPlaylistTrackOrderIndex(playlistId: Long, trackId: Long, orderIndex: Int)
+
+    /** Persists a full drag-and-drop track reordering in one transaction (no intermediate emissions). */
+    @Transaction
+    suspend fun reorderPlaylistTracks(playlistId: Long, orders: List<Pair<Long, Int>>) {
+        orders.forEach { (trackId, orderIndex) ->
+            setPlaylistTrackOrderIndex(playlistId, trackId, orderIndex)
+        }
+    }
+
+    @Query("""
         SELECT t.* FROM tracks t 
         INNER JOIN playlist_track_cross_ref ref ON t.id = ref.trackId 
         WHERE ref.playlistId = :playlistId 

@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.screens.playlists
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
@@ -38,9 +39,15 @@ fun PlaylistDetailScreen(
 ) {
     val tracks by viewModel.tracks.collectAsState()
     val playlist by viewModel.playlist.collectAsState()
+    val editMode by viewModel.editMode.collectAsState()
 
     LaunchedEffect(playlistId) {
         viewModel.loadPlaylist(playlistId)
+    }
+
+    // System back mirrors the top-bar arrow: leave edit mode first.
+    BackHandler(enabled = editMode) {
+        viewModel.setEditMode(false)
     }
 
     // The playlist's own cover drives the blurred list backdrop (loaded as a
@@ -60,6 +67,8 @@ fun PlaylistDetailScreen(
     // transition from the playlists list never flashes the letter fallback.
     val coverImage = playlist?.imageUrl ?: initialImageUrl
 
+    // Edit mode always renders as rows: swipe-to-remove and the drag handle are
+    // row-only affordances, so grid densities temporarily fall back to ROW_NORMAL.
     TrackListScreen(
         title = playlist?.name ?: initialName.ifEmpty { "Playlist" },
         tracks = tracks,
@@ -79,11 +88,15 @@ fun PlaylistDetailScreen(
         sharedTrackId = sharedTrackId,
         activeTrackId = activeTrackId,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-        density = density,
+        density = if (editMode) MediaDensity.ROW_NORMAL else density,
         onDensityChange = onDensityChange,
         centerTrackRequest = centerTrackRequest,
         isPlaying = isPlaying,
         heroLayout = heroLayout,
-        immersiveMode = immersiveMode
+        immersiveMode = immersiveMode,
+        editMode = editMode,
+        onEditModeChange = viewModel::setEditMode,
+        onRemoveTrack = { track -> viewModel.removeTrack(playlistId, track.id) },
+        onPersistTrackOrder = { orderedIds -> viewModel.persistTrackOrder(playlistId, orderedIds) }
     )
 }
