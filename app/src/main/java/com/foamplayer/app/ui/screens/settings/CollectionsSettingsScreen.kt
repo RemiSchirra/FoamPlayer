@@ -309,6 +309,7 @@ private fun ImmersivePreview(
                 )
         )
         Column(
+            horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
