@@ -66,16 +66,16 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /** Height of the immersive hero image, as a fraction of the full screen height. */
-const val CollectionHeroImmersiveHeightFraction = 0.45f
+const val CollectionHeroImmersiveHeightFraction = 0.5f
 
 /** Height of the compact-immersive hero image, as a fraction of the full screen height. */
 const val CollectionHeroCompactImmersiveHeightFraction = 0.30f
 
 /** Point (fraction of the image height) where the immersive artwork's bottom fade begins. */
-const val CollectionHeroImmersiveFadeStartFraction = 0.70f
+const val CollectionHeroImmersiveFadeStartFraction = 0.65f
 
 /** Vertical position of the immersive text/play block, as a fraction of the image height. */
-const val CollectionHeroImmersiveOverlayFraction = 0.70f
+const val CollectionHeroImmersiveOverlayFraction = 0.75f
 
 /** Alpha of the subtle scrim over the immersive hero's status-bar zone (icon contrast). */
 const val CollectionHeroStatusBarScrimAlpha = 0.35f
