@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -19,7 +20,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.Icon
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -30,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
@@ -131,7 +135,19 @@ object NavBarDimens {
 
     // ---- Shared item metrics ---------------------------------------------------
     val ItemIconSize = 28.dp
+
+    /** Hit padding for the extra row's items, whose row hugs them tightly. */
     val ItemHitAreaPadding = 6.dp
+
+    /**
+     * Square touch target for main-row items (Material's 48dp minimum). Fits
+     * inside both bars' rows, so the bars' sizes never change.
+     */
+    val ItemHitTargetSize = 48.dp
+
+    /** Padding around [ItemIconSize] that produces [ItemHitTargetSize]. */
+    val ItemHitTargetPadding = (ItemHitTargetSize - ItemIconSize) / 2
+
     val RowHorizontalPadding = 8.dp
 
     // ---- Expandable extra row ---------------------------------------------------
@@ -255,6 +271,11 @@ object NavBarDimens {
 
 /**
  * A single clickable nav-bar icon with an animated selected/unselected tint.
+ *
+ * The touch target is a fixed [NavBarDimens.ItemHitTargetSize] square, centered
+ * inside its slot, so it grows past the glyph without ever extending the bar.
+ * The node is clipped to a [CircleShape] *before* becoming clickable: the ripple
+ * is bounded by that circle and stays rounded.
  */
 @Composable
 private fun FoamNavItem(
@@ -263,10 +284,11 @@ private fun FoamNavItem(
     selected: Boolean,
     modifier: Modifier = Modifier,
     iconModifier: Modifier = Modifier,
-    hitPadding: Dp = NavBarDimens.ItemHitAreaPadding,
+    hitPadding: Dp = NavBarDimens.ItemHitTargetPadding,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     val animatedTint by animateColorAsState(
         targetValue = if (selected) FoamTheme.accentColor else FoamTheme.colors.textSecondary,
         label = "NavIconTint"
@@ -274,7 +296,12 @@ private fun FoamNavItem(
 
     Box(
         modifier = modifier
-            .clickable(enabled = enabled) { onClick() }
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                enabled = enabled
+            ) { onClick() }
             .padding(hitPadding),
         contentAlignment = Alignment.Center
     ) {
@@ -417,7 +444,7 @@ private fun FoamNavigationItems(
     NavBarSlotRow(
         order = items,
         enabledItems = effectiveEnabled,
-        itemWidth = NavBarDimens.ItemIconSize + NavBarDimens.ItemHitAreaPadding * 2,
+        itemWidth = NavBarDimens.ItemHitTargetSize,
         modifier = modifier
     ) { item, itemEnabled ->
         if (item == NavBarItem.MORE) {
