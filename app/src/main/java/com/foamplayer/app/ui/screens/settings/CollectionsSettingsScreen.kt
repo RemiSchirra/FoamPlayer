@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,8 +45,14 @@ import com.foamplayer.app.ui.theme.FoamTheme
 /** Width of one layout-preview phone thumbnail; the 9:19.5 aspect fixes its height. */
 private val CollectionLayoutPreviewWidth = 96.dp
 
-/** Height of one layout-preview phone thumbnail (9:19.5 phone aspect). */
-private val CollectionLayoutPreviewHeight = CollectionLayoutPreviewWidth * 19.5f / 9f
+/**
+ * Height of one layout-preview phone thumbnail. Intentionally much shorter than
+ * the true 9:19.5 phone aspect (which would be ~208.dp at this width) so the
+ * picker row doesn't dominate the screen. Width stays fixed; the previews below
+ * lay their content out proportionally (weights/fractions, not fixed offsets)
+ * so this can be tuned freely without content overlapping or overflowing.
+ */
+private val CollectionLayoutPreviewHeight = 128.dp
 
 /** Corner rounding of the preview phone body. */
 private val CollectionLayoutPreviewRounding = 12.dp
@@ -235,12 +240,12 @@ private fun PreviewTrackRow() {
 }
 
 @Composable
-private fun PreviewTracksColumn(modifier: Modifier = Modifier) {
+private fun PreviewTracksColumn(modifier: Modifier = Modifier, rows: Int = 3) {
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        repeat(3) { PreviewTrackRow() }
+        repeat(rows) { PreviewTrackRow() }
     }
 }
 
@@ -261,12 +266,11 @@ private fun PreviewTextBlock(centered: Boolean) {
 /** Classic compact split: image left (a third of the width, like the 120dp header), lines + play right. */
 @Composable
 private fun CompactPreview() {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 5.dp)) {
-        Spacer(modifier = Modifier.height(18.dp))
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 5.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(36.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(PreviewImageColor)
             )
@@ -275,7 +279,7 @@ private fun CompactPreview() {
                 PreviewTextBlock(centered = false)
             }
         }
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         PreviewTracksColumn()
     }
 }
@@ -308,48 +312,47 @@ private fun ImmersivePreview(
                     )
                 )
         )
-        Column(
-            horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .fillMaxWidth()
-                .offset(
-                    y = CollectionLayoutPreviewHeight * imageHeightFraction *
-                            CollectionHeroImmersiveOverlayFraction
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 5.dp)) {
+            // Same relative position within the image as before, but as a
+            // proportional spacer rather than an absolute y-offset, so the
+            // text block below it is always placed, never overlapped.
+            Spacer(
+                modifier = Modifier.fillMaxHeight(
+                    imageHeightFraction * CollectionHeroImmersiveOverlayFraction
                 )
-                .padding(horizontal = 5.dp)
-        ) {
-            PreviewTextBlock(centered = centered)
+            )
+            Column(
+                horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                PreviewTextBlock(centered = centered)
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            PreviewTracksColumn()
         }
-        PreviewTracksColumn(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .offset(y = CollectionLayoutPreviewHeight * imageHeightFraction + 8.dp)
-                .padding(horizontal = 5.dp)
-        )
     }
 }
 
 /** Big rounded artwork with normal margins, text block centered underneath. */
 @Composable
 private fun NormalPreview() {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 5.dp)) {
-        Spacer(modifier = Modifier.height(14.dp))
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 5.dp, vertical = 6.dp)) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
+                .align(Alignment.CenterHorizontally)
+                .weight(1f)
+                .aspectRatio(1f, matchHeightConstraintsFirst = true)
                 .clip(RoundedCornerShape(8.dp))
                 .background(PreviewImageColor)
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             PreviewTextBlock(centered = true)
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        PreviewTracksColumn()
+        Spacer(modifier = Modifier.height(4.dp))
+        PreviewTracksColumn(rows = 2)
     }
 }
