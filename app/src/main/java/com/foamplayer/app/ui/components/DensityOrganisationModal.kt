@@ -1,11 +1,5 @@
 package com.foamplayer.app.ui.components
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,17 +24,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
@@ -48,14 +36,13 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
- * The modal opened from a media list screen's 3-dots ("more options") button.
- * Its first page holds — when the screen supports sorting — the sort radio list
- * (one row per [CollectionSortMode]) with the "Inverse" checkbox that reverses
- * the chosen order, followed by the "Organisation" row; tapping that slides in
- * the submodal — a radio list of the six [MediaDensity] modes. Selecting an
- * option applies it immediately (the list behind the sheet recomposes live)
- * and keeps the sheet open so the user can flip through options; Back returns
- * to the first page and the scrim dismisses the sheet.
+ * The modal opened from a media list screen's 3-dots ("more options") button:
+ * one page of titled groups. When the screen supports sorting, the "Sorting"
+ * group holds one radio row per [CollectionSortMode] plus the "Inverse"
+ * checkbox that reverses the chosen order; the "Organisation" group holds the
+ * six [MediaDensity] radio rows. Selecting an option applies it immediately
+ * (the list behind the sheet recomposes live) and keeps the sheet open so the
+ * user can flip through options; the scrim dismisses the sheet.
  */
 @Composable
 fun DensityOrganisationModal(
@@ -63,115 +50,60 @@ fun DensityOrganisationModal(
     currentDensity: MediaDensity,
     onSelectDensity: (MediaDensity) -> Unit,
     onDismiss: () -> Unit,
-    /** Sort modes the screen supports; empty hides the whole sort section. */
+    /** Sort modes the screen supports; empty hides the whole sort group. */
     sortOptions: List<CollectionSortMode> = emptyList(),
     currentSort: CollectionSortMode = CollectionSortMode.NAME,
     onSelectSort: (CollectionSortMode) -> Unit = {},
     sortInverted: Boolean = false,
     onToggleSortInverted: (Boolean) -> Unit = {}
 ) {
-    // The density page is a second page of the SAME sheet (one Dialog window).
-    // It resets as soon as the sheet starts closing — never on open — so a
-    // later presentation always begins on the menu page instead of resuming
-    // (and animating away from) the radio submodal.
-    var showDensityPage by remember { mutableStateOf(false) }
-    LaunchedEffect(visible) {
-        if (!visible) showDensityPage = false
-    }
-
-    // Horizontal gap kept between the outgoing and incoming pages while they
-    // slide (same push/pop pattern as the track/collection modals' details).
-    val pageGapPx = with(LocalDensity.current) {
-        FoamDimens.spacingSmall.roundToPx()
-    }
-
     FoamBottomModal(
         visible = visible,
         onDismissRequest = onDismiss
     ) {
-        AnimatedContent(
-            targetState = showDensityPage,
-            transitionSpec = {
-                if (!visible) {
-                    // The sheet is already sliding away: swap pages silently.
-                    EnterTransition.None togetherWith ExitTransition.None
-                } else if (targetState) {
-                    slideInHorizontally { it + pageGapPx } togetherWith
-                            slideOutHorizontally { -it - pageGapPx }
-                } else {
-                    slideInHorizontally { -it - pageGapPx } togetherWith
-                            slideOutHorizontally { it + pageGapPx }
-                }
-            },
-            label = "DensityOrganisationPage"
-        ) { isDensityPage ->
-            Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
-                if (isDensityPage) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                            .background(FoamTheme.colors.surfaceVariant)
-                    ) {
-                        MediaDensity.entries.forEachIndexed { index, option ->
-                            if (index > 0) ModalSectionDivider()
-                            DensityRadioRow(
-                                label = option.label,
-                                selected = option == currentDensity,
-                                onClick = { onSelectDensity(option) }
-                            )
-                        }
-                    }
+        Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
+            if (sortOptions.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                        .background(FoamTheme.colors.surfaceVariant)
+                ) {
+                    ModalGroupTitle(label = "Sorting")
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                            .background(FoamTheme.colors.surfaceVariant)
-                    ) {
-                        ModalBackButton(onBack = { showDensityPage = false })
-                    }
-                } else {
-                    if (sortOptions.isNotEmpty()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                .background(FoamTheme.colors.surfaceVariant)
-                        ) {
-                            SortSectionTitle(label = "Sorting")
-
-                            sortOptions.forEachIndexed { index, option ->
-                                ModalSectionDivider()
-                                DensityRadioRow(
-                                    label = option.label,
-                                    selected = option == currentSort,
-                                    onClick = { onSelectSort(option) },
-                                    // Smaller, non-bold options under the section title.
-                                    textStyle = FoamTheme.typography.body
-                                )
-                            }
-
-                            ModalSectionDivider()
-
-                            SortInverseCheckboxRow(
-                                checked = sortInverted,
-                                onToggle = { onToggleSortInverted(!sortInverted) }
-                            )
-                        }
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                            .background(FoamTheme.colors.surfaceVariant)
-                    ) {
-                        ModalRowButton(
-                            label = "Organisation",
-                            onClick = { showDensityPage = true }
+                    sortOptions.forEachIndexed { index, option ->
+                        ModalSectionDivider()
+                        DensityRadioRow(
+                            label = option.label,
+                            selected = option == currentSort,
+                            onClick = { onSelectSort(option) }
                         )
                     }
+
+                    ModalSectionDivider()
+
+                    SortInverseCheckboxRow(
+                        checked = sortInverted,
+                        onToggle = { onToggleSortInverted(!sortInverted) }
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                    .background(FoamTheme.colors.surfaceVariant)
+            ) {
+                ModalGroupTitle(label = "Organisation")
+
+                MediaDensity.entries.forEachIndexed { index, option ->
+                    ModalSectionDivider()
+                    DensityRadioRow(
+                        label = option.label,
+                        selected = option == currentDensity,
+                        onClick = { onSelectDensity(option) }
+                    )
                 }
             }
         }
@@ -179,16 +111,15 @@ fun DensityOrganisationModal(
 }
 
 /**
- * One selectable density option: label on the left, radio indicator on the
- * right. [textStyle] lets the sort section render its rows smaller and
- * non-bold under its title while the density page keeps the row-title style.
+ * One selectable option of a group: label on the left, radio indicator on the
+ * right. Rendered in the smaller, non-bold body style so the group titles
+ * (row-title style) read as headers above their options.
  */
 @Composable
 private fun DensityRadioRow(
     label: String,
     selected: Boolean,
-    onClick: () -> Unit,
-    textStyle: TextStyle = FoamTheme.typography.titleMedium
+    onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -206,7 +137,7 @@ private fun DensityRadioRow(
     ) {
         BasicText(
             text = label,
-            style = textStyle,
+            style = FoamTheme.typography.body,
             modifier = Modifier.weight(1f)
         )
         Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
@@ -214,9 +145,9 @@ private fun DensityRadioRow(
     }
 }
 
-/** The sort section's header row ("Sorting") above its radio list. */
+/** A group's header row ("Sorting" / "Organisation") above its radio list. */
 @Composable
-private fun SortSectionTitle(label: String) {
+private fun ModalGroupTitle(label: String) {
     BasicText(
         text = label,
         style = FoamTheme.typography.titleMedium,
