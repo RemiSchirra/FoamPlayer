@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.offset
@@ -54,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -85,6 +87,7 @@ import com.foamplayer.app.ui.components.CollectionKind
 import com.foamplayer.app.ui.components.ListRowArtSize
 import com.foamplayer.app.ui.components.ListRowHighlightPadding
 import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
+import com.foamplayer.app.ui.components.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.albumArtCornerRadius
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -92,6 +95,7 @@ import androidx.core.net.toUri
 import kotlin.math.abs
 import kotlin.math.max
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 // Colors of the browse cards shown when the search bar is idle (unfocused, empty query).
@@ -203,9 +207,28 @@ fun SearchScreen(
     val focusManager = LocalFocusManager.current
     val density = LocalDensity.current
     val collectionModalState = LocalCollectionFoamModalState.current
+    val trackModalState = LocalTrackFoamModalState.current
     val longPressScope = rememberCoroutineScope()
+    val imeInsets = WindowInsets.ime
+
+    // Opening a modal while the keyboard is up makes its Dialog steal focus and the
+    // IME start closing; the sheet would ride the collapsing IME inset down and jump.
+    // Close the keyboard first and hold until the IME is fully gone, so the sheet
+    // opens straight at its resting position.
+    suspend fun awaitKeyboardClosed() {
+        focusManager.clearFocus()
+        snapshotFlow { imeInsets.getBottom(density) }.first { it == 0 }
+    }
+
+    val showTrackModal: (TrackEntity) -> Unit = { track ->
+        longPressScope.launch {
+            awaitKeyboardClosed()
+            trackModalState?.show(track)
+        }
+    }
     val showAlbumModal: (AlbumSearchResult) -> Unit = { album ->
         longPressScope.launch {
+            awaitKeyboardClosed()
             collectionModalState?.show(
                 CollectionInfo(
                     title = album.album,
@@ -219,6 +242,7 @@ fun SearchScreen(
     }
     val showArtistModal: (String) -> Unit = { artist ->
         longPressScope.launch {
+            awaitKeyboardClosed()
             collectionModalState?.show(
                 CollectionInfo(
                     title = artist,
@@ -408,6 +432,7 @@ fun SearchScreen(
                                     searchViewModel.addToHistory(track)
                                     onTrackClick(track)
                                 },
+                                onLongClick = { showTrackModal(track) },
                                 active = track.id == activeTrackId,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = playerTransitionVisibilityScope,
@@ -432,6 +457,7 @@ fun SearchScreen(
                                     searchViewModel.addToHistory(track)
                                     onTrackClick(track)
                                 },
+                                onLongClick = { showTrackModal(track) },
                                 active = track.id == activeTrackId,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = playerTransitionVisibilityScope,
@@ -485,6 +511,7 @@ fun SearchScreen(
                                         onTrackClick(entry.track)
                                     },
                                     onRemove = { searchViewModel.removeFromHistory(entry) },
+                                    onLongClick = { showTrackModal(entry.track) },
                                     active = entry.track.id == activeTrackId,
                                     sharedTransitionScope = sharedTransitionScope,
                                     animatedVisibilityScope = playerTransitionVisibilityScope,
