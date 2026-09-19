@@ -42,8 +42,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.scanner.ScanStatus
+import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlin.math.roundToInt
 
 @Composable
 fun LibrarySettingsScreen(
@@ -181,7 +183,33 @@ fun LibrarySettingsScreen(
                     onAdd = { viewModel.setGenreSeparators(genreSeparators + it) },
                     onRemove = { viewModel.setGenreSeparators(genreSeparators - it) }
                 )
-                
+
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+
+            // --- Statistics ---
+            item {
+                BasicText(text = stringResource(R.string.statistics), style = FoamTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    FoamSliderStateItem(
+                        title = stringResource(R.string.listened_threshold),
+                        description = stringResource(R.string.listened_threshold_description),
+                        initialValue = settings.listenedThresholdPercent.toFloat(),
+                        onValueChangeFinished = {
+                            viewModel.setListenedThresholdPercent(it.roundToInt())
+                        },
+                        steps = 9,
+                        valueRange = 0f..100f,
+                        formatValue = { "${it.roundToInt()}%" },
+                        minMaxDisplay = "0%" to "100%"
+                    )
+                }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 

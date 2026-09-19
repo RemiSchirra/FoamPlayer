@@ -12,8 +12,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.foamplayer.app.audio.bitperfect.BitPerfectDetector
 import com.foamplayer.app.audio.equalizer.EqualizerManager
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ScanStatus
+import com.foamplayer.app.data.settings.AppSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +37,7 @@ class AudioEngine @Inject constructor(
     @ApplicationContext private val context: Context,
     private val bitPerfectDetector: BitPerfectDetector,
     private val equalizerManager: EqualizerManager,
+    private val settingsRepository: SettingsRepository,
     private val trackRepository: TrackRepository
 ) {
     val player: ExoPlayer = ExoPlayer.Builder(context).build()
@@ -83,10 +86,15 @@ class AudioEngine @Inject constructor(
     private var refillScheduled: Boolean = false
 
     // Listen counting: a track counts as listened once it has been playing for
-    // LISTEN_THRESHOLD_MS. The pending id marks the current play occurrence --
-    // once counted it is cleared, so pause/resume never counts twice.
+    // listenedThresholdPercent of its duration. The pending id marks the current
+    // play occurrence -- once counted it is cleared, so pause/resume never counts twice.
     private var listenTimerJob: Job? = null
     private var pendingListenTrackId: Long? = null
+
+    // Last known user setting; kept off the settings Flow so the timer path stays
+    // synchronous. Seeded with the default until the first snapshot arrives.
+    @Volatile
+    private var listenedThresholdPercent: Int = AppSettings.DEFAULT_LISTENED_THRESHOLD_PERCENT
 
     companion object {
         // Tracks kept loaded on each side of the current track.
@@ -97,8 +105,6 @@ class AudioEngine @Inject constructor(
         private const val EDGE_TRIGGER_MARGIN = 5
         // Auxiliary (random) tracks always kept after the main queue.
         private const val AUXILIARY_QUEUE_LENGTH = PlaybackState.AUXILIARY_QUEUE_LENGTH
-        // Playback time after which a track counts as listened (hardcoded 1s for now).
-        private const val LISTEN_THRESHOLD_MS = 1000L
         // Position poll rate when playing with no position collectors (background).
         private const val POSITION_POLL_SLOW_INTERVAL_MS = 250L
         // Position poll rate while paused.
@@ -109,6 +115,7 @@ class AudioEngine @Inject constructor(
         setupPlayerListeners()
         startProgressTracker()
         observeLibraryForAuxiliaryRefill()
+        observeListenedThreshold()
     }
 
     /** Suspends until the next frame is rendered (uses Choreographer directly,
@@ -204,17 +211,40 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Counts [trackId] as listened once it survives [LISTEN_THRESHOLD_MS] of
-     * playback. The check at fire time guards against a pause or a transition
-     * landing right on the threshold.
+     * Counts [trackId] as listened once it survives [listenedThresholdPercent] of
+     * the track's duration. The check at fire time guards against a pause or a
+     * transition landing right on the threshold.
      */
     private fun scheduleListenCount(trackId: Long) {
         listenTimerJob?.cancel()
         listenTimerJob = scope.launch {
-            delay(LISTEN_THRESHOLD_MS)
+            delay(listenThresholdMs(trackId))
             if (player.isPlaying && player.currentMediaItem?.mediaId?.toLongOrNull() == trackId) {
                 pendingListenTrackId = null
                 trackRepository.incrementPlayCount(trackId, System.currentTimeMillis())
+            }
+        }
+    }
+
+    /**
+     * Playback time after which [trackId] counts as listened: the user-configured
+     * percentage of the track's duration, taken from the queue (falling back to the
+     * player's timeline, then to an immediate count when no duration is known).
+     */
+    private fun listenThresholdMs(trackId: Long): Long {
+        val percent = listenedThresholdPercent
+        if (percent <= 0) return 0L
+        val durationMs = _playbackState.value.queue.firstOrNull { it.id == trackId }?.duration
+            ?.takeIf { it > 0 }
+            ?: player.duration.takeIf { it > 0 }
+            ?: return 0L
+        return durationMs * percent / 100
+    }
+
+    private fun observeListenedThreshold() {
+        scope.launch {
+            settingsRepository.settings.collect { settings ->
+                listenedThresholdPercent = settings.listenedThresholdPercent
             }
         }
     }

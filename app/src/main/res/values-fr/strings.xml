@@ -36,6 +36,9 @@
     <string name="artist_separators">Séparateurs d\'artistes</string>
     <string name="genre_separators">Séparateurs de genres</string>
     <string name="library_scan">Analyse de la bibliothèque</string>
+    <string name="statistics">Statistiques</string>
+    <string name="listened_threshold">Seuil d\'écoute</string>
+    <string name="listened_threshold_description">Fraction d\'une piste après laquelle elle est comptée comme écoutée</string>
     <string name="scan_media">Analyser les médias</string>
     <string name="sync_library">Synchronisez votre bibliothèque musicale</string>
     <string name="start_scan">LANCER L\'ANALYSE</string>

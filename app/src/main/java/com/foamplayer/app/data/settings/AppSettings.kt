@@ -35,6 +35,8 @@ enum class MarqueeMode(val label: String) {
 @Immutable
 data class AppSettings(
     val bitPerfectEnabled: Boolean = true,
+    /** Fraction of a track's duration (in %) it must play to count as listened. */
+    val listenedThresholdPercent: Int = DEFAULT_LISTENED_THRESHOLD_PERCENT,
     val libraryFolders: Set<String> = emptySet(),
     val iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
     val miniPlayerRounding: Int = 40,
@@ -134,6 +136,10 @@ data class AppSettings(
 
         return copy(
             libraryFolders = libraryFolders.map(String::trim).filter(String::isNotEmpty).toSet(),
+            listenedThresholdPercent = listenedThresholdPercent.coerceIn(
+                MIN_LISTENED_THRESHOLD_PERCENT,
+                MAX_LISTENED_THRESHOLD_PERCENT
+            ),
             miniPlayerRounding = miniPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
             fullPlayerRounding = fullPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
             backgroundBlur = backgroundBlur.coerceIn(MIN_BACKGROUND_BLUR, MAX_BACKGROUND_BLUR),
@@ -157,6 +163,9 @@ data class AppSettings(
     companion object {
         // 0xFFFF5252 (the app's existing default red) as a signed ARGB Int.
         const val DEFAULT_ACCENT_COLOR = -44_462
+        const val MIN_LISTENED_THRESHOLD_PERCENT = 0
+        const val MAX_LISTENED_THRESHOLD_PERCENT = 100
+        const val DEFAULT_LISTENED_THRESHOLD_PERCENT = 50
         const val MIN_ROUNDING = 0
         const val MAX_ROUNDING = 100
         const val MIN_BACKGROUND_BLUR = 0

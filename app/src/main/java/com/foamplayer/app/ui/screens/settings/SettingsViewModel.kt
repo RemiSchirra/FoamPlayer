@@ -40,6 +40,9 @@ class SettingsViewModel @Inject constructor(
     val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus
 
     fun setBitPerfectEnabled(enabled: Boolean) = launch { settingsRepository.setBitPerfectEnabled(enabled) }
+    fun setListenedThresholdPercent(percent: Int) = launch {
+        settingsRepository.setListenedThresholdPercent(percent)
+    }
     fun setIconStyle(style: FoamIconStyle) = launch { settingsRepository.setIconStyle(style) }
     fun setMiniPlayerRounding(rounding: Int) = launch { settingsRepository.setMiniPlayerRounding(rounding) }
     fun setFullPlayerRounding(rounding: Int) = launch { settingsRepository.setFullPlayerRounding(rounding) }

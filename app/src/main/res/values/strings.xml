@@ -36,6 +36,9 @@
     <string name="artist_separators">Artist Separators</string>
     <string name="genre_separators">Genre Separators</string>
     <string name="library_scan">Library Scan</string>
+    <string name="statistics">Statistics</string>
+    <string name="listened_threshold">Listened Threshold</string>
+    <string name="listened_threshold_description">Fraction of a track after which it counts as listened</string>
     <string name="scan_media">Scan Media</string>
     <string name="sync_library">Sync your music library</string>
     <string name="start_scan">START SCAN</string>

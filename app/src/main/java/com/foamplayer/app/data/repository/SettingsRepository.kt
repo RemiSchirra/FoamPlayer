@@ -58,6 +58,9 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setBitPerfectEnabled(enabled: Boolean) = update { it.copy(bitPerfectEnabled = enabled) }
+    suspend fun setListenedThresholdPercent(percent: Int) = update {
+        it.copy(listenedThresholdPercent = percent)
+    }
     suspend fun setIconStyle(style: FoamIconStyle) = update { it.copy(iconStyle = style) }
     suspend fun setMiniPlayerRounding(rounding: Int) = update { it.copy(miniPlayerRounding = rounding) }
     suspend fun setFullPlayerRounding(rounding: Int) = update { it.copy(fullPlayerRounding = rounding) }
@@ -190,6 +193,8 @@ class SettingsRepository @Inject constructor(
 
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
+        listenedThresholdPercent = this[Keys.LISTENED_THRESHOLD_PERCENT]
+            ?: AppSettings().listenedThresholdPercent,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
         iconStyle = this[Keys.ICON_STYLE]
             ?.let { runCatching { FoamIconStyle.valueOf(it) }.getOrNull() }
@@ -261,6 +266,7 @@ class SettingsRepository @Inject constructor(
 
     private fun MutablePreferences.write(settings: AppSettings) {
         this[Keys.BIT_PERFECT_ENABLED] = settings.bitPerfectEnabled
+        this[Keys.LISTENED_THRESHOLD_PERCENT] = settings.listenedThresholdPercent
         this[Keys.SELECTED_FOLDERS] = settings.libraryFolders
         this[Keys.ICON_STYLE] = settings.iconStyle.name
         this[Keys.MINI_PLAYER_ROUNDING] = settings.miniPlayerRounding
@@ -307,6 +313,7 @@ class SettingsRepository @Inject constructor(
 
     private object Keys {
         val BIT_PERFECT_ENABLED = booleanPreferencesKey("bit_perfect_enabled")
+        val LISTENED_THRESHOLD_PERCENT = intPreferencesKey("listened_threshold_percent")
         val SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
         val ICON_STYLE = stringPreferencesKey("icon_style")
         val MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")
