@@ -62,7 +62,7 @@ data class AppSettings(
     val enabledLyricsSources: Set<LyricsSource> = LyricsSource.entries.toSet(),
     /** Blur applied to non-active lines in the synced-lyrics view; off by default (GPU-costly). */
     val lyricsLineBlur: Boolean = false,
-    val searchHistory: List<String> = emptyList(),
+    val searchHistory: List<SearchHistoryEntry> = emptyList(),
     val searchInLyrics: Boolean = true,
     val searchInAlbums: Boolean = true,
     val searchInArtists: Boolean = true,

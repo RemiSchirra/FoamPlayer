@@ -3,9 +3,12 @@ package com.foamplayer.app.ui.screens.search
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -44,8 +47,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +64,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -71,9 +79,19 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
+import com.foamplayer.app.ui.components.CollectionInfo
+import com.foamplayer.app.ui.components.CollectionKind
+import com.foamplayer.app.ui.components.ListRowArtSize
+import com.foamplayer.app.ui.components.ListRowHighlightPadding
+import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.TrackListItem
+import com.foamplayer.app.ui.components.albumArtCornerRadius
 import com.foamplayer.app.ui.theme.FoamTheme
 import androidx.core.net.toUri
+import kotlin.math.abs
+import kotlin.math.max
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 // Colors of the browse cards shown when the search bar is idle (unfocused, empty query).
 private data class BrowseCardData(
@@ -89,6 +107,12 @@ private val FolderCardColor = Color(0xFFFFB300)
 private val GenreCardColor = Color(0xFF00E676)
 private val ArtistCardColor = Color(0xFF40C4FF)
 private val YearCardColor = Color(0xFFB388FF)
+
+private const val SwipeDismissThresholdFraction = 0.2f
+private val SwipeDismissThreshold = 80.dp
+private const val SwipeMaxFade = 0.3f
+private const val SwipeDismissDurationMs = 150
+private const val SwipeReturnDurationMs = 200
 
 /** Blends the color toward white, keeping the same hue — used for the card icons. */
 private fun Color.lightened(factor: Float): Color =
@@ -177,6 +201,32 @@ fun SearchScreen(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val density = LocalDensity.current
+    val collectionModalState = LocalCollectionFoamModalState.current
+    val longPressScope = rememberCoroutineScope()
+    val showAlbumModal: (AlbumSearchResult) -> Unit = { album ->
+        longPressScope.launch {
+            collectionModalState?.show(
+                CollectionInfo(
+                    title = album.album,
+                    artist = album.artist,
+                    imageUrl = album.albumArtPath,
+                    kind = CollectionKind.Album,
+                    tracks = searchViewModel.tracksForAlbum(album.album)
+                )
+            )
+        }
+    }
+    val showArtistModal: (String) -> Unit = { artist ->
+        longPressScope.launch {
+            collectionModalState?.show(
+                CollectionInfo(
+                    title = artist,
+                    kind = CollectionKind.Artist,
+                    tracks = searchViewModel.tracksForArtist(artist)
+                )
+            )
+        }
+    }
     // Track where the keyboard is *going* rather than where it is: the IME animation
     // target flips to 0 the moment the hide starts, while ime visibility only updates
     // once the hide animation has fully completed. Clearing on the target keeps the
@@ -307,7 +357,14 @@ fun SearchScreen(
                         // without keys rows are matched by position (everything recomposes,
                         // item state resets, shared elements animate from the wrong row).
                         items(uiState.artists, key = { "artist_$it" }) { artist ->
-                            ArtistSearchResultItem(artist = artist, onClick = { onArtistClick(artist) })
+                            ArtistSearchResultItem(
+                                artist = artist,
+                                onClick = {
+                                    searchViewModel.addToHistory(artist)
+                                    onArtistClick(artist)
+                                },
+                                onLongClick = { showArtistModal(artist) }
+                            )
                         }
                     }
 
@@ -319,7 +376,11 @@ fun SearchScreen(
                         items(uiState.albums, key = { "album_${it.album}_${it.artist}" }) { album ->
                             AlbumSearchResultItem(
                                 album = album,
-                                onClick = { onAlbumClick(album) },
+                                onClick = {
+                                    searchViewModel.addToHistory(album)
+                                    onAlbumClick(album)
+                                },
+                                onLongClick = { showAlbumModal(album) },
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope
                             )
@@ -396,20 +457,59 @@ fun SearchScreen(
                                 modifier = Modifier.animateItem()
                             )
                         }
-                        items(uiState.history, key = { "history_${it.path}" }) { track ->
-                            TrackListItem(
-                                track = track,
-                                onClick = {
-                                    searchViewModel.addToHistory(track)
-                                    onTrackClick(track)
-                                },
-                                onRemove = { searchViewModel.removeFromHistory(track) },
-                                active = track.id == activeTrackId,
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = playerTransitionVisibilityScope,
-                                isSharedTransitionSource = track.id == sharedTrackId,
-                                modifier = Modifier.animateItem()
-                            )
+                        items(
+                            uiState.history,
+                            key = { entry ->
+                                when (entry) {
+                                    is RecentSearch.Track -> "history_track_${entry.track.path}"
+                                    is RecentSearch.Album -> "history_album_${entry.album.album}"
+                                    is RecentSearch.Artist -> "history_artist_${entry.name}"
+                                }
+                            }
+                        ) { entry ->
+                            when (entry) {
+                                is RecentSearch.Track -> TrackListItem(
+                                    track = entry.track,
+                                    onClick = {
+                                        searchViewModel.addToHistory(entry.track)
+                                        onTrackClick(entry.track)
+                                    },
+                                    onRemove = { searchViewModel.removeFromHistory(entry) },
+                                    active = entry.track.id == activeTrackId,
+                                    sharedTransitionScope = sharedTransitionScope,
+                                    animatedVisibilityScope = playerTransitionVisibilityScope,
+                                    isSharedTransitionSource = entry.track.id == sharedTrackId,
+                                    modifier = Modifier.animateItem()
+                                )
+                                is RecentSearch.Album -> SwipeDismissRow(
+                                    onRemove = { searchViewModel.removeFromHistory(entry) },
+                                    modifier = Modifier.animateItem()
+                                ) {
+                                    AlbumSearchResultItem(
+                                        album = entry.album,
+                                        onClick = {
+                                            searchViewModel.addToHistory(entry.album)
+                                            onAlbumClick(entry.album)
+                                        },
+                                        onLongClick = { showAlbumModal(entry.album) },
+                                        sharedTransitionScope = sharedTransitionScope,
+                                        animatedVisibilityScope = animatedVisibilityScope
+                                    )
+                                }
+                                is RecentSearch.Artist -> SwipeDismissRow(
+                                    onRemove = { searchViewModel.removeFromHistory(entry) },
+                                    modifier = Modifier.animateItem()
+                                ) {
+                                    ArtistSearchResultItem(
+                                        artist = entry.name,
+                                        onClick = {
+                                            searchViewModel.addToHistory(entry.name)
+                                            onArtistClick(entry.name)
+                                        },
+                                        onLongClick = { showArtistModal(entry.name) }
+                                    )
+                                }
+                            }
                         }
                         item(key = "history_clear") {
                             Box(
@@ -508,18 +608,27 @@ private fun SearchFilterChip(
 fun ArtistSearchResultItem(
     artist: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val highlightShape = RoundedCornerShape(albumArtCornerRadius(ListRowArtSize) + ListRowHighlightPadding)
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 8.dp),
+            .clip(highlightShape)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onLongClick = onLongClick,
+                onClick = onClick
+            )
+            .padding(horizontal = ListRowHighlightPadding, vertical = ListRowHighlightPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(ListRowArtSize)
                 .clip(CircleShape)
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
@@ -532,9 +641,10 @@ fun ArtistSearchResultItem(
         Spacer(modifier = Modifier.width(12.dp))
         BasicText(
             text = artist,
-            style = FoamTheme.typography.body,
+            style = FoamTheme.typography.titleMedium,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
         )
     }
 }
@@ -545,19 +655,28 @@ fun AlbumSearchResultItem(
     album: AlbumSearchResult,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val highlightShape = RoundedCornerShape(albumArtCornerRadius(ListRowArtSize) + ListRowHighlightPadding)
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 8.dp),
+            .clip(highlightShape)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onLongClick = onLongClick,
+                onClick = onClick
+            )
+            .padding(horizontal = ListRowHighlightPadding, vertical = ListRowHighlightPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(ListRowArtSize)
                 .let { base ->
                     if (sharedTransitionScope != null && animatedVisibilityScope != null) {
                         with(sharedTransitionScope) {
@@ -598,7 +717,7 @@ fun AlbumSearchResultItem(
         Column {
             BasicText(
                 text = album.album,
-                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
+                style = FoamTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.let { base ->
@@ -615,7 +734,7 @@ fun AlbumSearchResultItem(
             )
             BasicText(
                 text = album.artist,
-                style = FoamTheme.typography.caption,
+                style = FoamTheme.typography.body,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.let { base ->
@@ -631,5 +750,75 @@ fun AlbumSearchResultItem(
                 }
             )
         }
+    }
+}
+
+@Composable
+private fun SwipeDismissRow(
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var dismissOffsetValue by remember { mutableFloatStateOf(0f) }
+    val gestureAnimJob = remember { mutableStateOf<Job?>(null) }
+    var itemWidthPx by remember { mutableFloatStateOf(0f) }
+    val latestOnRemove by rememberUpdatedState(onRemove)
+    val density = LocalDensity.current
+    val fallbackDismissThresholdPx = with(density) { SwipeDismissThreshold.toPx() }
+
+    fun swipeThresholdPx(): Float =
+        if (itemWidthPx > 0f) itemWidthPx * SwipeDismissThresholdFraction
+        else fallbackDismissThresholdPx
+
+    fun animateSwipeTo(target: Float, durationMs: Int, onEnd: () -> Unit = {}) {
+        gestureAnimJob.value?.cancel()
+        gestureAnimJob.value = scope.launch {
+            val animatable = Animatable(dismissOffsetValue)
+            animatable.animateTo(target, tween(durationMillis = durationMs)) {
+                dismissOffsetValue = value
+            }
+            onEnd()
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .onSizeChanged { itemWidthPx = it.width.toFloat() }
+            .graphicsLayer {
+                translationX = dismissOffsetValue
+                val threshold = max(swipeThresholdPx(), 1f)
+                val progress = (abs(dismissOffsetValue) / threshold).coerceIn(0f, 1f)
+                alpha = 1f - progress * SwipeMaxFade
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = {
+                        gestureAnimJob.value?.cancel()
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        dismissOffsetValue += dragAmount
+                    },
+                    onDragEnd = {
+                        if (abs(dismissOffsetValue) >= swipeThresholdPx()) {
+                            val exitDistance =
+                                if (itemWidthPx > 0f) itemWidthPx else fallbackDismissThresholdPx
+                            val exitTarget =
+                                if (dismissOffsetValue > 0f) exitDistance else -exitDistance
+                            animateSwipeTo(exitTarget, SwipeDismissDurationMs) {
+                                latestOnRemove.invoke()
+                            }
+                        } else {
+                            animateSwipeTo(0f, SwipeReturnDurationMs)
+                        }
+                    },
+                    onDragCancel = {
+                        animateSwipeTo(0f, SwipeReturnDurationMs)
+                    }
+                )
+            }
+    ) {
+        content()
     }
 }

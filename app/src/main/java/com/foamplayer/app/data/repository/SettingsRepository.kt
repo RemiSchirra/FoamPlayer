@@ -32,6 +32,7 @@ import com.foamplayer.app.constants.deserializeNavBarItemOrder
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.data.settings.SearchHistoryEntry
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -127,7 +128,7 @@ class SettingsRepository @Inject constructor(
         it.copy(lyricsLineBlur = enabled)
     }
 
-    suspend fun setSearchHistory(history: List<String>) = update { it.copy(searchHistory = history) }
+    suspend fun setSearchHistory(history: List<SearchHistoryEntry>) = update { it.copy(searchHistory = history) }
 
     suspend fun setSearchFilters(lyrics: Boolean, albums: Boolean, artists: Boolean, tracks: Boolean) = update {
         it.copy(
@@ -231,7 +232,7 @@ class SettingsRepository @Inject constructor(
             ?.mapNotNull { name -> LyricsSource.entries.find { it.name == name } }
             ?.toSet() ?: DefaultLyricsSourceOrder.toSet(),
         lyricsLineBlur = this[Keys.LYRICS_LINE_BLUR] ?: AppSettings().lyricsLineBlur,
-        searchHistory = this[Keys.SEARCH_HISTORY]?.split("|")?.filter { it.isNotEmpty() } ?: emptyList(),
+        searchHistory = deserializeSearchHistory(this[Keys.SEARCH_HISTORY]),
         searchInLyrics = this[Keys.SEARCH_IN_LYRICS] ?: AppSettings().searchInLyrics,
         searchInAlbums = this[Keys.SEARCH_IN_ALBUMS] ?: AppSettings().searchInAlbums,
         searchInArtists = this[Keys.SEARCH_IN_ARTISTS] ?: AppSettings().searchInArtists,
@@ -290,7 +291,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.LYRICS_SOURCE_ORDER] = settings.lyricsSourceOrder.joinToString(",") { it.name }
         this[Keys.ENABLED_LYRICS_SOURCES] = settings.enabledLyricsSources.map { it.name }.toSet()
         this[Keys.LYRICS_LINE_BLUR] = settings.lyricsLineBlur
-        this[Keys.SEARCH_HISTORY] = settings.searchHistory.joinToString("|")
+        this[Keys.SEARCH_HISTORY] = serializeSearchHistory(settings.searchHistory)
         this[Keys.SEARCH_IN_LYRICS] = settings.searchInLyrics
         this[Keys.SEARCH_IN_ALBUMS] = settings.searchInAlbums
         this[Keys.SEARCH_IN_ARTISTS] = settings.searchInArtists
@@ -387,3 +388,33 @@ private fun deserializeMediaSortModes(stored: String?): Map<MediaListView, Colle
 
 private fun serializeMediaSortModes(modes: Map<MediaListView, CollectionSortMode>): String =
     modes.entries.joinToString(";") { "${it.key.name}=${it.value.name}" }
+
+/** "T:<path>|A:<album><US><artist>|R:<artist>"; unprefixed entries are legacy track paths. */
+private const val SEARCH_HISTORY_FIELD_SEPARATOR = '\u001F'
+
+private fun deserializeSearchHistory(stored: String?): List<SearchHistoryEntry> =
+    stored?.split("|")?.mapNotNull(::parseSearchHistoryEntry).orEmpty()
+
+private fun parseSearchHistoryEntry(raw: String): SearchHistoryEntry? {
+    if (raw.length < 2 || raw[1] != ':') {
+        return if (raw.isEmpty()) null else SearchHistoryEntry.Track(raw)
+    }
+    val payload = raw.substring(2)
+    return when (raw[0]) {
+        'T' -> SearchHistoryEntry.Track(payload)
+        'A' -> payload.split(SEARCH_HISTORY_FIELD_SEPARATOR, limit = 2)
+            .takeIf { it.size == 2 }
+            ?.let { (album, artist) -> SearchHistoryEntry.Album(album, artist) }
+        'R' -> SearchHistoryEntry.Artist(payload)
+        else -> null
+    }
+}
+
+private fun serializeSearchHistory(history: List<SearchHistoryEntry>): String =
+    history.joinToString("|") { entry ->
+        when (entry) {
+            is SearchHistoryEntry.Track -> "T:${entry.path}"
+            is SearchHistoryEntry.Album -> "A:${entry.album}$SEARCH_HISTORY_FIELD_SEPARATOR${entry.artist}"
+            is SearchHistoryEntry.Artist -> "R:${entry.name}"
+        }
+    }

@@ -8,6 +8,8 @@ import com.foamplayer.app.data.repository.LyricsRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.app.data.settings.SearchHistoryEntry
+import com.foamplayer.app.data.settings.identityKey
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -43,13 +45,20 @@ data class SearchUiState(
     val tracks: List<TrackEntity> = emptyList(),
     val artists: List<String> = emptyList(),
     val albums: List<AlbumSearchResult> = emptyList(),
-    val history: List<TrackEntity> = emptyList(),
+    val history: List<RecentSearch> = emptyList(),
     /** Tracks whose locally available lyrics contain the query (streams in as the scan progresses). */
     val lyricsMatches: List<TrackEntity> = emptyList(),
     /** True while the background lyrics scan is still running. */
     val lyricsSearchInProgress: Boolean = false,
     val filters: SearchFilters = SearchFilters()
 )
+
+/** A persisted history entry resolved against the current library for display. */
+sealed interface RecentSearch {
+    data class Track(val track: TrackEntity) : RecentSearch
+    data class Album(val album: AlbumSearchResult) : RecentSearch
+    data class Artist(val name: String) : RecentSearch
+}
 
 /** Progressive result of the background lyrics text scan. */
 private data class LyricsSearchState(
@@ -79,41 +88,56 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    /** Metadata matches (tracks/artists/albums + history): fast Room queries, short debounce. */
+    /** Metadata matches (tracks/artists/albums): fast Room queries, short debounce. */
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     private val metadataState: Flow<SearchUiState> = _query
         .debounce { if (it.isBlank()) 0L else METADATA_SEARCH_DEBOUNCE_MS }
         .flatMapLatest { query ->
             if (query.isBlank()) {
-                combine(
-                    repository.getAllTracks(),
-                    settingsRepository.settings
-                ) { allTracks, settings ->
-                    SearchUiState(history = resolveHistory(settings.searchHistory, allTracks))
-                }
+                flowOf(SearchUiState())
             } else {
                 combine(
                     repository.searchTracks(query),
                     repository.searchArtists(query),
-                    repository.searchAlbums(query),
-                    repository.getAllTracks(),
-                    settingsRepository.settings
-                ) { tracks, artists, albums, allTracks, settings ->
-                    SearchUiState(tracks, artists, albums, resolveHistory(settings.searchHistory, allTracks))
+                    repository.searchAlbums(query)
+                ) { tracks, artists, albums ->
+                    SearchUiState(tracks, artists, albums)
                 }
             }
         }
 
+    private val historyState: Flow<List<RecentSearch>> = combine(
+        settingsRepository.settings.map { it.searchHistory },
+        repository.getAllTracks(),
+        repository.getAllAlbums(),
+        repository.getAllArtists()
+    ) { history, allTracks, allAlbums, allArtists ->
+        resolveHistory(history, allTracks, allAlbums, allArtists)
+    }
+
     /**
-     * Resolves search-history paths to tracks in one pass. The old
-     * `searchHistory.mapNotNull { path -> allTracks.find { ... } }` was
-     * O(history × library) and re-ran on the main dispatcher for every
-     * keystroke / table / settings emission.
+     * Resolves persisted history entries to displayable items in one pass;
+     * entries whose track/album/artist no longer exists are dropped until
+     * they age out of the stored list.
      */
-    private fun resolveHistory(historyPaths: List<String>, allTracks: List<TrackEntity>): List<TrackEntity> {
-        val byPath = HashMap<String, TrackEntity>(allTracks.size)
-        for (track in allTracks) byPath[track.path] = track
-        return historyPaths.mapNotNull(byPath::get)
+    private fun resolveHistory(
+        history: List<SearchHistoryEntry>,
+        allTracks: List<TrackEntity>,
+        allAlbums: List<AlbumSearchResult>,
+        allArtists: List<String>
+    ): List<RecentSearch> {
+        val tracksByPath = HashMap<String, TrackEntity>(allTracks.size)
+        for (track in allTracks) tracksByPath[track.path] = track
+        val albumsByName = HashMap<String, AlbumSearchResult>(allAlbums.size)
+        for (album in allAlbums) albumsByName[album.album] = album
+        val artists = allArtists.toHashSet()
+        return history.mapNotNull { entry ->
+            when (entry) {
+                is SearchHistoryEntry.Track -> tracksByPath[entry.path]?.let(RecentSearch::Track)
+                is SearchHistoryEntry.Album -> albumsByName[entry.album]?.let(RecentSearch::Album)
+                is SearchHistoryEntry.Artist -> entry.name.takeIf { it in artists }?.let(RecentSearch::Artist)
+            }
+        }
     }
 
     /**
@@ -156,11 +180,12 @@ class SearchViewModel @Inject constructor(
         }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<SearchUiState> = combine(metadataState, lyricsState, _filters) { metadata, lyrics, filters ->
+    val uiState: StateFlow<SearchUiState> = combine(metadataState, lyricsState, historyState, _filters) { metadata, lyrics, history, filters ->
         metadata.copy(
             tracks = if (filters.tracks) metadata.tracks else emptyList(),
             artists = if (filters.artists) metadata.artists else emptyList(),
             albums = if (filters.albums) metadata.albums else emptyList(),
+            history = history,
             // Gated on the in-memory flag (not the scan flow) so toggling off hides
             // the section in this same emission, without waiting for the scan's
             // cancellation to round-trip back as an empty result.
@@ -232,20 +257,32 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    fun addToHistory(track: TrackEntity) {
+    fun addToHistory(track: TrackEntity) = addToHistory(SearchHistoryEntry.Track(track.path))
+
+    fun addToHistory(album: AlbumSearchResult) =
+        addToHistory(SearchHistoryEntry.Album(album.album, album.artist))
+
+    fun addToHistory(artist: String) = addToHistory(SearchHistoryEntry.Artist(artist))
+
+    private fun addToHistory(entry: SearchHistoryEntry) {
         viewModelScope.launch {
             val currentSettings = settingsRepository.settings.first()
-            val newHistory = (listOf(track.path) + currentSettings.searchHistory)
-                .distinct()
+            val newHistory = (listOf(entry) + currentSettings.searchHistory)
+                .distinctBy { it.identityKey }
                 .take(20)
             settingsRepository.setSearchHistory(newHistory)
         }
     }
 
-    fun removeFromHistory(track: TrackEntity) {
+    fun removeFromHistory(entry: RecentSearch) {
+        val persisted = when (entry) {
+            is RecentSearch.Track -> SearchHistoryEntry.Track(entry.track.path)
+            is RecentSearch.Album -> SearchHistoryEntry.Album(entry.album.album, entry.album.artist)
+            is RecentSearch.Artist -> SearchHistoryEntry.Artist(entry.name)
+        }
         viewModelScope.launch {
             val currentSettings = settingsRepository.settings.first()
-            val newHistory = currentSettings.searchHistory.filter { it != track.path }
+            val newHistory = currentSettings.searchHistory.filterNot { it.identityKey == persisted.identityKey }
             settingsRepository.setSearchHistory(newHistory)
         }
     }
@@ -255,6 +292,14 @@ class SearchViewModel @Inject constructor(
             settingsRepository.setSearchHistory(emptyList())
         }
     }
+
+    /** One album's tracks in disc/track order (mirrors TrackDao.getTracksByAlbum). */
+    suspend fun tracksForAlbum(album: String): List<TrackEntity> =
+        repository.getTracksByAlbum(album).first()
+
+    /** Tracks naming [artist] as artist or album artist (mirrors TrackDao.getTracksByArtist). */
+    suspend fun tracksForArtist(artist: String): List<TrackEntity> =
+        repository.getTracksByArtist(artist).first()
 
     private companion object {
         /** Grace period after the last keystroke before the (heavier) lyrics scan starts. */
