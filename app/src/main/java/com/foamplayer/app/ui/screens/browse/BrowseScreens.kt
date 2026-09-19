@@ -24,7 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.constants.CollectionHeroLayout
+import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
+import com.foamplayer.app.constants.TrackSortOptions
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.CollectionAlbumEntry
@@ -39,6 +41,9 @@ import com.foamplayer.app.ui.components.TrackListScreen
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.distinctCollectionAlbums
 import com.foamplayer.app.ui.components.distinctCollectionArtistNames
+import com.foamplayer.app.ui.components.caseInsensitiveComparator
+import com.foamplayer.app.ui.components.rememberSortedList
+import com.foamplayer.app.ui.components.rememberSortedTracks
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -58,20 +63,41 @@ fun AlbumsBrowseScreen(
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val albums by viewModel.albums.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
+    val sortedAlbums = rememberSortedList(albums, sortMode, sortInverted) { mode ->
+        when (mode) {
+            CollectionSortMode.ARTIST ->
+                caseInsensitiveComparator(AlbumSearchResult::artist)
+                    .then(caseInsensitiveComparator(AlbumSearchResult::album))
+            else -> caseInsensitiveComparator(AlbumSearchResult::album)
+        }
+    }
 
     CollectionListScreen(
         title = "Albums",
-        itemCount = albums.size,
+        itemCount = sortedAlbums.size,
         onBack = onBack,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sortOptions = listOf(
+            CollectionSortMode.NAME,
+            CollectionSortMode.ARTIST,
+            CollectionSortMode.RANDOM
+        ),
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange
     ) {
-        items(albums, key = { "browse_album_${it.album}" }) { album ->
+        items(sortedAlbums, key = { "browse_album_${it.album}" }) { album ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = album.album,
@@ -109,20 +135,32 @@ fun ArtistsBrowseScreen(
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val artists by viewModel.artists.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
+    val sortedArtists = rememberSortedList(artists, sortMode, sortInverted) {
+        caseInsensitiveComparator { it }
+    }
 
     CollectionListScreen(
         title = "Artists",
-        itemCount = artists.size,
+        itemCount = sortedArtists.size,
         onBack = onBack,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange
     ) {
-        items(artists, key = { "browse_artist_$it" }) { artist ->
+        items(sortedArtists, key = { "browse_artist_$it" }) { artist ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = artist,
@@ -154,21 +192,33 @@ fun GenresBrowseScreen(
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val genres by viewModel.genres.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
+    val sortedGenres = rememberSortedList(genres, sortMode, sortInverted) {
+        caseInsensitiveComparator { it }
+    }
 
     CollectionListScreen(
         title = "Genres",
-        itemCount = genres.size,
+        itemCount = sortedGenres.size,
         onBack = onBack,
         headerIcon = Icons.Rounded.Category,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange
     ) {
-        items(genres, key = { "browse_genre_$it" }) { genre ->
+        items(sortedGenres, key = { "browse_genre_$it" }) { genre ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = genre,
@@ -202,21 +252,35 @@ fun YearsBrowseScreen(
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val years by viewModel.years.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
+    // NAME on a years list is the year's own ascending order (the DAO starts
+    // newest-first; the sort modes give the user the reverse for free).
+    val sortedYears = rememberSortedList(years, sortMode, sortInverted) {
+        compareBy { it }
+    }
 
     CollectionListScreen(
         title = "Years",
-        itemCount = years.size,
+        itemCount = sortedYears.size,
         onBack = onBack,
         headerIcon = Icons.Rounded.CalendarToday,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange
     ) {
-        items(years, key = { "browse_year_$it" }) { year ->
+        items(sortedYears, key = { "browse_year_$it" }) { year ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = year.toString(),
@@ -251,6 +315,10 @@ fun AllTracksBrowseScreen(
     activeTrackId: Long?,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
     sharedTrackId: Long? = null,
@@ -258,16 +326,22 @@ fun AllTracksBrowseScreen(
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.allTracks.collectAsState()
+    val sortedTracks = rememberSortedTracks(tracks, sortMode, sortInverted)
 
     TrackListScreen(
         title = "All Tracks",
-        tracks = tracks,
+        tracks = sortedTracks,
         onTrackClick = onTrackClick,
-        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+        onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,
         onDensityChange = onDensityChange,
+        sortOptions = TrackSortOptions,
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange,
         sharedTransitionScope = sharedTransitionScope,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
         sharedTrackId = sharedTrackId,
@@ -284,6 +358,10 @@ fun GenreTracksScreen(
     activeTrackId: Long?,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
     sharedTrackId: Long? = null,
@@ -299,15 +377,22 @@ fun GenreTracksScreen(
         viewModel.loadGenreTracks(genre)
     }
 
+    val sortedTracks = rememberSortedTracks(tracks, sortMode, sortInverted)
+
     TrackListScreen(
         title = genre,
-        tracks = tracks,
+        tracks = sortedTracks,
         onTrackClick = onTrackClick,
-        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+        onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,
         onDensityChange = onDensityChange,
+        sortOptions = TrackSortOptions,
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange,
         sharedTransitionScope = sharedTransitionScope,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
         sharedTrackId = sharedTrackId,
@@ -327,6 +412,10 @@ fun YearTracksScreen(
     activeTrackId: Long?,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.ALBUM,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
     sharedTrackId: Long? = null,
@@ -342,15 +431,22 @@ fun YearTracksScreen(
         viewModel.loadYearTracks(year)
     }
 
+    val sortedTracks = rememberSortedTracks(tracks, sortMode, sortInverted)
+
     TrackListScreen(
         title = year.toString(),
-        tracks = tracks,
+        tracks = sortedTracks,
         onTrackClick = onTrackClick,
-        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+        onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,
         onDensityChange = onDensityChange,
+        sortOptions = TrackSortOptions,
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange,
         sharedTransitionScope = sharedTransitionScope,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
         sharedTrackId = sharedTrackId,
@@ -371,6 +467,10 @@ fun FolderBrowseScreen(
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val content by viewModel.folderContent.collectAsState()
@@ -387,17 +487,25 @@ fun FolderBrowseScreen(
         ?: "Folders"
 
     val folders = content?.folders.orEmpty()
+    val sortedFolders = rememberSortedList(folders, sortMode, sortInverted) {
+        caseInsensitiveComparator { it.name }
+    }
     val tracks = content?.tracks.orEmpty()
 
     CollectionListScreen(
         title = title,
-        itemCount = folders.size + tracks.size,
+        itemCount = sortedFolders.size + tracks.size,
         onBack = onBack,
         headerIcon = Icons.Rounded.Folder,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange
     ) {
-        items(folders, key = { "browse_folder_${it.path}" }) { folder ->
+        items(sortedFolders, key = { "browse_folder_${it.path}" }) { folder ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = folder.name,
@@ -435,7 +543,7 @@ fun FolderBrowseScreen(
             }
         }
 
-        if (folders.isEmpty() && tracks.isEmpty()) {
+        if (sortedFolders.isEmpty() && tracks.isEmpty()) {
             item(key = "browse_folder_empty") {
                 Box(
                     modifier = Modifier
@@ -495,6 +603,10 @@ fun CollectionArtistsScreen(
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     var artistRows by remember { mutableStateOf<List<CollectionArtistRow>>(emptyList()) }
@@ -505,15 +617,24 @@ fun CollectionArtistsScreen(
         }
     }
 
+    val sortedRows = rememberSortedList(artistRows, sortMode, sortInverted) {
+        caseInsensitiveComparator { it.name }
+    }
+
     CollectionListScreen(
         title = collectionMembersTitle(kind, key),
         subtitle = "Artists",
-        itemCount = artistRows.size,
+        itemCount = sortedRows.size,
         onBack = onBack,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange
     ) {
-        items(artistRows, key = { "artists_in_${kind}_${it.name}" }) { row ->
+        items(sortedRows, key = { "artists_in_${kind}_${it.name}" }) { row ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = row.name,
@@ -557,6 +678,10 @@ fun CollectionAlbumsScreen(
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     var albumRows by remember { mutableStateOf<List<CollectionAlbumEntry>>(emptyList()) }
@@ -569,15 +694,33 @@ fun CollectionAlbumsScreen(
         }
     }
 
+    val sortedRows = rememberSortedList(albumRows, sortMode, sortInverted) { mode ->
+        when (mode) {
+            CollectionSortMode.ARTIST ->
+                caseInsensitiveComparator<CollectionAlbumEntry> { it.artist ?: "" }
+                    .then(caseInsensitiveComparator { it.album })
+            else -> caseInsensitiveComparator { it.album }
+        }
+    }
+
     CollectionListScreen(
         title = collectionMembersTitle(kind, key),
         subtitle = "Albums",
-        itemCount = albumRows.size,
+        itemCount = sortedRows.size,
         onBack = onBack,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sortOptions = listOf(
+            CollectionSortMode.NAME,
+            CollectionSortMode.ARTIST,
+            CollectionSortMode.RANDOM
+        ),
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange
     ) {
-        items(albumRows, key = { "albums_in_${kind}_${it.album}" }) { entry ->
+        items(sortedRows, key = { "albums_in_${kind}_${it.album}" }) { entry ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = entry.album,

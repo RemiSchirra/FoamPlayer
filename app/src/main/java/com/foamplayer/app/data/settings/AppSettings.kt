@@ -3,6 +3,7 @@ package com.foamplayer.app.data.settings
 import androidx.compose.runtime.Immutable
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
+import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
@@ -13,6 +14,7 @@ import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.PreferredLyricsProvider
+import com.foamplayer.app.constants.defaultSortMode
 
 /** The complete, validated set of user-configurable application preferences. */
 enum class FoamIconStyle(val label: String) {
@@ -72,6 +74,10 @@ data class AppSettings(
     val navBarSecondaryEnabled: Set<NavBarItem> = emptySet(),
     /** Per-view media list density; views missing from the map fall back to [MediaDensity.ROW_NORMAL]. */
     val mediaDensities: Map<MediaListView, MediaDensity> = emptyMap(),
+    /** Per-view media list sort (organisation modal); views missing from the map use [defaultSortMode]. */
+    val mediaSortModes: Map<MediaListView, CollectionSortMode> = emptyMap(),
+    /** Views whose sort the user has inverted (the organisation modal's "Inverse" checkbox). */
+    val mediaSortInverted: Set<MediaListView> = emptySet(),
     /** Hero layout of collection screens; every kind starts as the classic compact header. */
     val collectionLayoutDefault: CollectionHeroLayout = CollectionHeroLayout.Compact,
     val collectionLayoutArtist: CollectionHeroLayout = CollectionHeroLayout.Compact,
@@ -90,6 +96,13 @@ data class AppSettings(
 
     /** The [MediaDensity] remembered by [view]; every view starts as the classic row. */
     fun mediaDensity(view: MediaListView): MediaDensity = mediaDensities[view] ?: MediaDensity.ROW_NORMAL
+
+    /** The [CollectionSortMode] remembered by [view]; every view starts at its [defaultSortMode]. */
+    fun mediaSortMode(view: MediaListView): CollectionSortMode =
+        mediaSortModes[view] ?: view.defaultSortMode()
+
+    /** Whether [view]'s sort order is inverted (organisation modal's "Inverse" checkbox). */
+    fun mediaSortIsInverted(view: MediaListView): Boolean = view in mediaSortInverted
 
     /**
      * The hero layout configured for [target]: album detail pages use the Album

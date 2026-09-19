@@ -14,6 +14,7 @@ import com.foamplayer.app.constants.CollectionLayoutAlbumKey
 import com.foamplayer.app.constants.CollectionLayoutArtistKey
 import com.foamplayer.app.constants.CollectionLayoutDefaultKey
 import com.foamplayer.app.constants.CollectionLayoutPlaylistKey
+import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
@@ -161,6 +162,16 @@ class SettingsRepository @Inject constructor(
         it.copy(mediaDensities = it.mediaDensities + (view to density))
     }
 
+    suspend fun setMediaSortMode(view: MediaListView, mode: CollectionSortMode) = update {
+        it.copy(mediaSortModes = it.mediaSortModes + (view to mode))
+    }
+
+    suspend fun setMediaSortInverted(view: MediaListView, inverted: Boolean) = update {
+        it.copy(
+            mediaSortInverted = if (inverted) it.mediaSortInverted + view else it.mediaSortInverted - view
+        )
+    }
+
     suspend fun setCollectionLayoutDefault(layout: CollectionHeroLayout) = update {
         it.copy(collectionLayoutDefault = layout)
     }
@@ -234,6 +245,10 @@ class SettingsRepository @Inject constructor(
             ?.mapNotNull { name -> NavBarItem.entries.find { it.name == name } }
             ?.toSet() ?: AppSettings().navBarSecondaryEnabled,
         mediaDensities = deserializeMediaDensities(this[Keys.MEDIA_DENSITIES]),
+        mediaSortModes = deserializeMediaSortModes(this[Keys.MEDIA_SORT_MODES]),
+        mediaSortInverted = this[Keys.MEDIA_SORT_INVERTED]
+            ?.mapNotNull { name -> MediaListView.entries.find { it.name == name } }
+            ?.toSet() ?: emptySet(),
         collectionLayoutDefault = CollectionHeroLayout.fromName(this[Keys.COLLECTION_LAYOUT_DEFAULT])
             ?: AppSettings().collectionLayoutDefault,
         collectionLayoutArtist = CollectionHeroLayout.fromName(this[Keys.COLLECTION_LAYOUT_ARTIST])
@@ -282,6 +297,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.NAVBAR_SECONDARY_ORDER] = settings.navBarSecondaryOrder.joinToString(",") { it.name }
         this[Keys.NAVBAR_SECONDARY_ENABLED] = settings.navBarSecondaryEnabled.map { it.name }.toSet()
         this[Keys.MEDIA_DENSITIES] = serializeMediaDensities(settings.mediaDensities)
+        this[Keys.MEDIA_SORT_MODES] = serializeMediaSortModes(settings.mediaSortModes)
+        this[Keys.MEDIA_SORT_INVERTED] = settings.mediaSortInverted.map { it.name }.toSet()
         this[Keys.COLLECTION_LAYOUT_DEFAULT] = settings.collectionLayoutDefault.name
         this[Keys.COLLECTION_LAYOUT_ARTIST] = settings.collectionLayoutArtist.name
         this[Keys.COLLECTION_LAYOUT_ALBUM] = settings.collectionLayoutAlbum.name
@@ -329,6 +346,8 @@ class SettingsRepository @Inject constructor(
         val NAVBAR_SECONDARY_ORDER = stringPreferencesKey("navbar_secondary_order")
         val NAVBAR_SECONDARY_ENABLED = stringSetPreferencesKey("navbar_secondary_enabled")
         val MEDIA_DENSITIES = stringPreferencesKey("media_densities")
+        val MEDIA_SORT_MODES = stringPreferencesKey("media_sort_modes")
+        val MEDIA_SORT_INVERTED = stringSetPreferencesKey("media_sort_inverted")
         val COLLECTION_LAYOUT_DEFAULT = CollectionLayoutDefaultKey
         val COLLECTION_LAYOUT_ARTIST = CollectionLayoutArtistKey
         val COLLECTION_LAYOUT_ALBUM = CollectionLayoutAlbumKey
@@ -348,3 +367,16 @@ private fun deserializeMediaDensities(stored: String?): Map<MediaListView, Media
 
 private fun serializeMediaDensities(densities: Map<MediaListView, MediaDensity>): String =
     densities.entries.joinToString(";") { "${it.key.name}=${it.value.name}" }
+
+/** "VIEW=MODE;VIEW=MODE" — unknown views/modes are dropped, so new entries default cleanly. */
+private fun deserializeMediaSortModes(stored: String?): Map<MediaListView, CollectionSortMode> =
+    stored?.split(";")?.mapNotNull { entry ->
+        val parts = entry.split("=", limit = 2)
+        if (parts.size != 2) return@mapNotNull null
+        val view = MediaListView.entries.find { it.name == parts[0] } ?: return@mapNotNull null
+        val mode = CollectionSortMode.entries.find { it.name == parts[1] } ?: return@mapNotNull null
+        view to mode
+    }?.toMap() ?: emptyMap()
+
+private fun serializeMediaSortModes(modes: Map<MediaListView, CollectionSortMode>): String =
+    modes.entries.joinToString(";") { "${it.key.name}=${it.value.name}" }

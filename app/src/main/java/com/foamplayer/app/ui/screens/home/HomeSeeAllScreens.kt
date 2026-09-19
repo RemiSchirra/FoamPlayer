@@ -24,7 +24,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
+import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
+import com.foamplayer.app.constants.TrackSortOptions
 import com.foamplayer.app.data.db.dao.AlbumRecommendation
 import com.foamplayer.app.data.db.dao.PlaylistRecommendation
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -40,6 +42,9 @@ import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.MediaGridCell
 import com.foamplayer.app.ui.components.MediaListRow
 import com.foamplayer.app.ui.components.TrackListScreen
+import com.foamplayer.app.ui.components.caseInsensitiveComparator
+import com.foamplayer.app.ui.components.rememberSortedList
+import com.foamplayer.app.ui.components.rememberSortedTracks
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
 
@@ -59,19 +64,31 @@ fun RecommendedPlaylistsSeeAllScreen(
     onBack: () -> Unit,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val playlists by viewModel.recommendedPlaylists.collectAsState()
+    val sortedPlaylists = rememberSortedList(playlists, sortMode, sortInverted) {
+        caseInsensitiveComparator { it.name }
+    }
 
     CollectionListScreen(
         title = stringResource(R.string.home_row_recommended_playlists),
-        itemCount = playlists.size,
+        itemCount = sortedPlaylists.size,
         onBack = onBack,
         headerIcon = FoamTheme.icons.current.playlists,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange
     ) {
-        items(playlists, key = { "home_playlist_${it.playlistId}" }) { playlist ->
+        items(sortedPlaylists, key = { "home_playlist_${it.playlistId}" }) { playlist ->
             Box(modifier = Modifier.listRowInset(density)) {
                 HomePlaylistRow(
                     playlist = playlist,
@@ -104,20 +121,41 @@ fun RecommendedAlbumsSeeAllScreen(
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val albums by viewModel.recommendedAlbums.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
+    val sortedAlbums = rememberSortedList(albums, sortMode, sortInverted) { mode ->
+        when (mode) {
+            CollectionSortMode.ARTIST ->
+                compareBy(String.CASE_INSENSITIVE_ORDER, AlbumRecommendation::artist)
+                    .then(compareBy(String.CASE_INSENSITIVE_ORDER, AlbumRecommendation::album))
+            else -> compareBy(String.CASE_INSENSITIVE_ORDER, AlbumRecommendation::album)
+        }
+    }
 
     CollectionListScreen(
         title = stringResource(R.string.home_row_recommended_albums),
-        itemCount = albums.size,
+        itemCount = sortedAlbums.size,
         onBack = onBack,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sortOptions = listOf(
+            CollectionSortMode.NAME,
+            CollectionSortMode.ARTIST,
+            CollectionSortMode.RANDOM
+        ),
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange
     ) {
-        items(albums, key = { "home_album_${it.album}" }) { album ->
+        items(sortedAlbums, key = { "home_album_${it.album}" }) { album ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = album.album,
@@ -162,6 +200,10 @@ fun RecentTracksSeeAllScreen(
     activeTrackId: Long?,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.LISTEN_DATE,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
     sharedTrackId: Long? = null,
@@ -169,16 +211,22 @@ fun RecentTracksSeeAllScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.recentTracks.collectAsState()
+    val sortedTracks = rememberSortedTracks(tracks, sortMode, sortInverted)
 
     TrackListScreen(
         title = stringResource(R.string.home_row_recent_listens),
-        tracks = tracks,
+        tracks = sortedTracks,
         onTrackClick = onTrackClick,
-        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+        onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,
         onDensityChange = onDensityChange,
+        sortOptions = TrackSortOptions,
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange,
         sharedTransitionScope = sharedTransitionScope,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
         sharedTrackId = sharedTrackId,
@@ -197,6 +245,10 @@ fun OldFavoritesSeeAllScreen(
     activeTrackId: Long?,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.LISTEN_COUNT,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
     sharedTrackId: Long? = null,
@@ -204,16 +256,22 @@ fun OldFavoritesSeeAllScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.oldFavoriteTracks.collectAsState()
+    val sortedTracks = rememberSortedTracks(tracks, sortMode, sortInverted)
 
     TrackListScreen(
         title = stringResource(R.string.home_row_old_favorites),
-        tracks = tracks,
+        tracks = sortedTracks,
         onTrackClick = onTrackClick,
-        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+        onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,
         onDensityChange = onDensityChange,
+        sortOptions = TrackSortOptions,
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange,
         sharedTransitionScope = sharedTransitionScope,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
         sharedTrackId = sharedTrackId,
@@ -232,20 +290,32 @@ fun FavoriteArtistsSeeAllScreen(
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val artists by viewModel.favoriteArtists.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
+    val sortedArtists = rememberSortedList(artists, sortMode, sortInverted) {
+        caseInsensitiveComparator { it.name }
+    }
 
     CollectionListScreen(
         title = stringResource(R.string.home_row_favorite_artists),
-        itemCount = artists.size,
+        itemCount = sortedArtists.size,
         onBack = onBack,
         density = density,
-        onDensityChange = onDensityChange
+        onDensityChange = onDensityChange,
+        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange
     ) {
-        items(artists, key = { "home_artist_${it.name}" }) { artist ->
+        items(sortedArtists, key = { "home_artist_${it.name}" }) { artist ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = artist.name,

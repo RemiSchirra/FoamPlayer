@@ -72,6 +72,7 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.request.ImageRequest
 import com.foamplayer.app.R
+import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.scanner.ScanStatus
@@ -85,6 +86,8 @@ import com.foamplayer.app.ui.components.MediaGridCell
 import com.foamplayer.app.ui.components.MediaListRow
 import com.foamplayer.app.ui.components.activeRowHighlight
 import com.foamplayer.app.ui.components.rememberDragDropGridState
+import com.foamplayer.app.ui.components.caseInsensitiveComparator
+import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -102,6 +105,10 @@ fun PlaylistsScreen(
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.CUSTOM,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: PlaylistsViewModel = hiltViewModel()
 ) {
     val playlists by viewModel.playlists.collectAsState()
@@ -115,9 +122,23 @@ fun PlaylistsScreen(
     // around to reorder them.
     var isEditMode by remember { mutableStateOf(false) }
 
+    // The playlist list has its own user-defined order (drag & drop writes
+    // sortOrder): reordering is only meaningful in CUSTOM, so any other sort
+    // exits edit mode and the pencil below is not rendered until then.
+    LaunchedEffect(sortMode) {
+        if (sortMode != CollectionSortMode.CUSTOM) {
+            isEditMode = false
+        }
+    }
+
     // In edit mode, back means "leave edit mode", not "leave the screen".
     BackHandler(enabled = isEditMode) {
         isEditMode = false
+    }
+
+    // The user-defined order (or the modal's sort) the rows display.
+    val sortedPlaylists = rememberSortedList(playlists, sortMode, sortInverted) {
+        caseInsensitiveComparator { it.name }
     }
 
     // Edit-mode drag & drop: a local display list absorbs the swaps live; the
@@ -129,9 +150,9 @@ fun PlaylistsScreen(
     // True once the finger lifts: the item keeps flying to its slot (settle
     // animation) but the lift scale already animates back down in parallel.
     var dragReleased by remember { mutableStateOf(false) }
-    LaunchedEffect(playlists) {
+    LaunchedEffect(sortedPlaylists) {
         if (dragOriginIndex == null) {
-            displayedPlaylists = playlists
+            displayedPlaylists = sortedPlaylists
         }
     }
 
@@ -162,9 +183,12 @@ fun PlaylistsScreen(
 
     // Persists the completed drag: the display list already holds the final
     // order, so writing it back as the new sortOrder assignment is enough.
+    // When the custom order is displayed inverted, the canonical (stored)
+    // order is the displayed list's reverse.
     fun persistReorder(finalIndex: Int?, originIndex: Int?) {
         if (originIndex == null || finalIndex == null || originIndex == finalIndex) return
-        viewModel.reorderPlaylists(displayedPlaylists.map { it.playlistId })
+        val displayedOrder = displayedPlaylists.map { it.playlistId }
+        viewModel.reorderPlaylists(if (sortInverted) displayedOrder.asReversed() else displayedOrder)
     }
 
     // Long-press actions (edit image / rename / details / delete), hosted here
@@ -225,12 +249,14 @@ fun PlaylistsScreen(
                 modifier = Modifier.weight(1f)
             )
 
-            PlaylistActionButton(
-                icon = Icons.Rounded.Edit,
-                contentDescription = stringResource(R.string.edit),
-                tint = if (isEditMode) FoamTheme.accentColor else FoamTheme.colors.textPrimary
-            ) {
-                isEditMode = !isEditMode
+            if (sortMode == CollectionSortMode.CUSTOM) {
+                PlaylistActionButton(
+                    icon = Icons.Rounded.Edit,
+                    contentDescription = stringResource(R.string.edit),
+                    tint = if (isEditMode) FoamTheme.accentColor else FoamTheme.colors.textPrimary
+                ) {
+                    isEditMode = !isEditMode
+                }
             }
             PlaylistActionButton(
                 icon = Icons.Rounded.Add,
@@ -326,7 +352,7 @@ fun PlaylistsScreen(
                                             dragReleased = true
                                             gridDragState.onDragCancel()
                                             dragOriginIndex = null
-                                            displayedPlaylists = playlists
+                                            displayedPlaylists = sortedPlaylists
                                         }
                                     )
                                 } else {
@@ -406,7 +432,7 @@ fun PlaylistsScreen(
                                             dragReleased = true
                                             listDragState.onDragCancel()
                                             dragOriginIndex = null
-                                            displayedPlaylists = playlists
+                                            displayedPlaylists = sortedPlaylists
                                         }
                                     )
                                 } else {
@@ -451,12 +477,23 @@ fun PlaylistsScreen(
         onDismiss = { renameTarget = null }
     )
 
-    // More-options sheet behind the 3-dots button: holds the Organisation row,
-    // which slides in the density radio list for the playlists view.
+    // More-options sheet behind the 3-dots button: holds the sort radio list
+    // (custom order first — the drag & drop order) with its Inverse toggle,
+    // and the Organisation row, which slides in the density radio list for the
+    // playlists view.
     DensityOrganisationModal(
         visible = showMoreModal,
         currentDensity = density,
         onSelectDensity = { onDensityChange?.invoke(it) },
+        sortOptions = if (onSortChange != null) {
+            listOf(CollectionSortMode.CUSTOM, CollectionSortMode.NAME, CollectionSortMode.RANDOM)
+        } else {
+            emptyList()
+        },
+        currentSort = sortMode,
+        onSelectSort = { onSortChange?.invoke(it) },
+        sortInverted = sortInverted,
+        onToggleSortInverted = { onSortInvertedChange?.invoke(it) },
         onDismiss = { showMoreModal = false }
     )
 

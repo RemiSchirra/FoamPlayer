@@ -62,6 +62,7 @@ import androidx.compose.ui.zIndex
 import com.foamplayer.app.data.db.entities.TrackEntity
 import androidx.compose.ui.platform.LocalContext
 import com.foamplayer.app.constants.CollectionHeroLayout
+import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -151,6 +152,16 @@ fun TrackListScreen(
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     /** When set, the top bar shows the 3-dots button opening the organisation modal. */
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    /** Sort modes the list supports; non-empty adds the sort section to the organisation modal. */
+    sortOptions: List<CollectionSortMode> = emptyList(),
+    /** The list's current sort (applied by the caller to the [tracks] it passes in). */
+    currentSort: CollectionSortMode = CollectionSortMode.NAME,
+    /** When set, the sort radio list is shown in the organisation modal. */
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    /** Whether the current sort is inverted. */
+    sortInverted: Boolean = false,
+    /** When set, the "Inverse" checkbox is shown under the sort radio list. */
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     /** Dismiss-to-origin-collection scroll request (see [TrackCenterRequest]). */
     centerTrackRequest: TrackCenterRequest? = null,
     /** Live play/pause bit, feeding the flight artwork's paused shrink when a row of this list is the shared-element target. */
@@ -563,6 +574,11 @@ fun TrackListScreen(
             visible = showOrganisationModal,
             currentDensity = density,
             onSelectDensity = onDensityChange,
+            sortOptions = if (onSortChange != null) sortOptions else emptyList(),
+            currentSort = currentSort,
+            onSelectSort = { onSortChange?.invoke(it) },
+            sortInverted = sortInverted,
+            onToggleSortInverted = { onSortInvertedChange?.invoke(it) },
             onDismiss = { showOrganisationModal = false }
         )
     }

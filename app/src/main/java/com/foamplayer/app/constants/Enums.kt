@@ -151,6 +151,58 @@ enum class MediaListView {
     HOME_SEE_ALL_ARTISTS,
 }
 
+/**
+ * Sorting of a media list's content, chosen per view from the 3-dots
+ * organisation modal and persisted per view. [CUSTOM] is only offered where a
+ * user-defined order exists (playlist tracks, the playlists list itself); the
+ * other modes apply to whatever the view holds — for track lists every mode is
+ * meaningful, for collection lists (albums, artists, genres...) only the ones
+ * the entry data supports are offered.
+ */
+enum class CollectionSortMode(val label: String) {
+    CUSTOM("Custom order"),
+    NAME("By name"),
+    TRACK_NUMBER("By track disc and track number"),
+    ARTIST("By artist"),
+    ALBUM("By album"),
+    YEAR("By year"),
+    SCORE("By score"),
+    DURATION("By duration"),
+    LISTEN_DATE("By listen date"),
+    LISTEN_COUNT("By listen count"),
+    RANDOM("By random"),
+}
+
+/** The sort modes offered for a list of tracks (everything but the playlist-only custom order). */
+val TrackSortOptions: List<CollectionSortMode> =
+    listOf(
+        CollectionSortMode.NAME,
+        CollectionSortMode.TRACK_NUMBER,
+        CollectionSortMode.ARTIST,
+        CollectionSortMode.ALBUM,
+        CollectionSortMode.YEAR,
+        CollectionSortMode.SCORE,
+        CollectionSortMode.DURATION,
+        CollectionSortMode.LISTEN_DATE,
+        CollectionSortMode.LISTEN_COUNT,
+        CollectionSortMode.RANDOM
+    )
+
+/**
+ * The sort a view starts with. Views holding a user-defined order start in it
+ * (their stored order IS the display order today); year tracks keep their
+ * album-grouped query order; the home see-all pages keep the query orders
+ * their rows are named for; everything else is alphabetical.
+ */
+fun MediaListView.defaultSortMode(): CollectionSortMode = when (this) {
+    MediaListView.PLAYLISTS,
+    MediaListView.PLAYLIST_DETAIL -> CollectionSortMode.CUSTOM
+    MediaListView.BROWSE_YEAR_TRACKS -> CollectionSortMode.ALBUM
+    MediaListView.HOME_SEE_ALL_RECENT_TRACKS -> CollectionSortMode.LISTEN_DATE
+    MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS -> CollectionSortMode.LISTEN_COUNT
+    else -> CollectionSortMode.NAME
+}
+
 enum class PreferredLyricsProvider {
     BETTER_LYRICS,
     YOULY_PLUS,

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.PlaybackState
+import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.data.canvas.CanvasProvider
@@ -178,5 +179,14 @@ class PlayerViewModel @Inject constructor(
     // Per-view media list density (organisation modal). Every view remembers its own.
     fun setMediaDensity(view: MediaListView, density: MediaDensity) {
         viewModelScope.launch { settingsRepository.setMediaDensity(view, density) }
+    }
+
+    // Per-view media list sort (organisation modal): the mode and its "Inverse" toggle.
+    fun setMediaSortMode(view: MediaListView, mode: CollectionSortMode) {
+        viewModelScope.launch { settingsRepository.setMediaSortMode(view, mode) }
+    }
+
+    fun setMediaSortInverted(view: MediaListView, inverted: Boolean) {
+        viewModelScope.launch { settingsRepository.setMediaSortInverted(view, inverted) }
     }
 }

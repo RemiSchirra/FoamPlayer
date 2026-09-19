@@ -65,6 +65,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
+import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavigationBarMode
@@ -304,6 +305,16 @@ fun FoamNavHost(
     val densityFor: (MediaListView) -> MediaDensity = { view -> playerSettings.mediaDensity(view) }
     val setDensity: (MediaListView, MediaDensity) -> Unit = { view, value ->
         playerViewModel.setMediaDensity(view, value)
+    }
+
+    // Per-view media list sort (organisation modal): the mode and its "Inverse" toggle.
+    val sortModeFor: (MediaListView) -> CollectionSortMode = { view -> playerSettings.mediaSortMode(view) }
+    val setSortMode: (MediaListView, CollectionSortMode) -> Unit = { view, value ->
+        playerViewModel.setMediaSortMode(view, value)
+    }
+    val sortInvertedFor: (MediaListView) -> Boolean = { view -> playerSettings.mediaSortIsInverted(view) }
+    val setSortInverted: (MediaListView, Boolean) -> Unit = { view, value ->
+        playerViewModel.setMediaSortInverted(view, value)
     }
 
     // Per-collection hero layout. Playlists are identified by their detail route
@@ -877,6 +888,10 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             density = densityFor(MediaListView.HOME_SEE_ALL_PLAYLISTS),
                                             onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_PLAYLISTS, it) },
+                                            sortMode = sortModeFor(MediaListView.HOME_SEE_ALL_PLAYLISTS),
+                                            onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_PLAYLISTS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_PLAYLISTS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_PLAYLISTS, it) },
                                             viewModel = homeViewModel
                                         )
                                     }
@@ -897,6 +912,10 @@ fun FoamNavHost(
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.HOME_SEE_ALL_ALBUMS),
                                             onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_ALBUMS, it) },
+                                            sortMode = sortModeFor(MediaListView.HOME_SEE_ALL_ALBUMS),
+                                            onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_ALBUMS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_ALBUMS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_ALBUMS, it) },
                                             viewModel = homeViewModel
                                         )
                                     }
@@ -909,6 +928,10 @@ fun FoamNavHost(
                                             activeTrackId = activeTrackId,
                                             density = densityFor(MediaListView.HOME_SEE_ALL_RECENT_TRACKS),
                                             onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_RECENT_TRACKS, it) },
+                                            sortMode = sortModeFor(MediaListView.HOME_SEE_ALL_RECENT_TRACKS),
+                                            onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_RECENT_TRACKS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_RECENT_TRACKS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_RECENT_TRACKS, it) },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
@@ -925,6 +948,10 @@ fun FoamNavHost(
                                             activeTrackId = activeTrackId,
                                             density = densityFor(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS),
                                             onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS, it) },
+                                            sortMode = sortModeFor(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS),
+                                            onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS, it) },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
@@ -941,6 +968,10 @@ fun FoamNavHost(
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.HOME_SEE_ALL_ARTISTS),
                                             onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_ARTISTS, it) },
+                                            sortMode = sortModeFor(MediaListView.HOME_SEE_ALL_ARTISTS),
+                                            onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_ARTISTS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_ARTISTS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_ARTISTS, it) },
                                             viewModel = homeViewModel
                                         )
                                     }
@@ -959,7 +990,11 @@ fun FoamNavHost(
                                             animatedVisibilityScope = this,
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.PLAYLISTS),
-                                            onDensityChange = { setDensity(MediaListView.PLAYLISTS, it) }
+                                            onDensityChange = { setDensity(MediaListView.PLAYLISTS, it) },
+                                            sortMode = sortModeFor(MediaListView.PLAYLISTS),
+                                            onSortChange = { setSortMode(MediaListView.PLAYLISTS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.PLAYLISTS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.PLAYLISTS, it) }
                                         )
                                     }
                                     composable(Screen.Search.route) {
@@ -1006,7 +1041,11 @@ fun FoamNavHost(
                                             animatedVisibilityScope = this,
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_ALBUMS),
-                                            onDensityChange = { setDensity(MediaListView.BROWSE_ALBUMS, it) }
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_ALBUMS, it) },
+                                            sortMode = sortModeFor(MediaListView.BROWSE_ALBUMS),
+                                            onSortChange = { setSortMode(MediaListView.BROWSE_ALBUMS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.BROWSE_ALBUMS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_ALBUMS, it) }
                                         )
                                     }
                                     composable(Screen.BrowseAllTracks.route) {
@@ -1018,6 +1057,10 @@ fun FoamNavHost(
                                             activeTrackId = activeTrackId,
                                             density = densityFor(MediaListView.BROWSE_ALL_TRACKS),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_ALL_TRACKS, it) },
+                                            sortMode = sortModeFor(MediaListView.BROWSE_ALL_TRACKS),
+                                            onSortChange = { setSortMode(MediaListView.BROWSE_ALL_TRACKS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.BROWSE_ALL_TRACKS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_ALL_TRACKS, it) },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
@@ -1032,7 +1075,11 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_ARTISTS),
-                                            onDensityChange = { setDensity(MediaListView.BROWSE_ARTISTS, it) }
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_ARTISTS, it) },
+                                            sortMode = sortModeFor(MediaListView.BROWSE_ARTISTS),
+                                            onSortChange = { setSortMode(MediaListView.BROWSE_ARTISTS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.BROWSE_ARTISTS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_ARTISTS, it) }
                                         )
                                     }
                                     composable(Screen.BrowseGenres.route) {
@@ -1043,7 +1090,11 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_GENRES),
-                                            onDensityChange = { setDensity(MediaListView.BROWSE_GENRES, it) }
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_GENRES, it) },
+                                            sortMode = sortModeFor(MediaListView.BROWSE_GENRES),
+                                            onSortChange = { setSortMode(MediaListView.BROWSE_GENRES, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.BROWSE_GENRES),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_GENRES, it) }
                                         )
                                     }
                                     composable(Screen.BrowseYears.route) {
@@ -1054,7 +1105,11 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_YEARS),
-                                            onDensityChange = { setDensity(MediaListView.BROWSE_YEARS, it) }
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_YEARS, it) },
+                                            sortMode = sortModeFor(MediaListView.BROWSE_YEARS),
+                                            onSortChange = { setSortMode(MediaListView.BROWSE_YEARS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.BROWSE_YEARS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_YEARS, it) }
                                         )
                                     }
                                     composable(
@@ -1071,6 +1126,10 @@ fun FoamNavHost(
                                             activeTrackId = activeTrackId,
                                             density = densityFor(MediaListView.BROWSE_GENRE_TRACKS),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_GENRE_TRACKS, it) },
+                                            sortMode = sortModeFor(MediaListView.BROWSE_GENRE_TRACKS),
+                                            onSortChange = { setSortMode(MediaListView.BROWSE_GENRE_TRACKS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.BROWSE_GENRE_TRACKS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_GENRE_TRACKS, it) },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
@@ -1094,6 +1153,10 @@ fun FoamNavHost(
                                             activeTrackId = activeTrackId,
                                             density = densityFor(MediaListView.BROWSE_YEAR_TRACKS),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_YEAR_TRACKS, it) },
+                                            sortMode = sortModeFor(MediaListView.BROWSE_YEAR_TRACKS),
+                                            onSortChange = { setSortMode(MediaListView.BROWSE_YEAR_TRACKS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.BROWSE_YEAR_TRACKS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_YEAR_TRACKS, it) },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
@@ -1119,7 +1182,11 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_ARTISTS_IN),
-                                            onDensityChange = { setDensity(MediaListView.BROWSE_ARTISTS_IN, it) }
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_ARTISTS_IN, it) },
+                                            sortMode = sortModeFor(MediaListView.BROWSE_ARTISTS_IN),
+                                            onSortChange = { setSortMode(MediaListView.BROWSE_ARTISTS_IN, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.BROWSE_ARTISTS_IN),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_ARTISTS_IN, it) }
                                         )
                                     }
                                     composable(
@@ -1144,7 +1211,11 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_ALBUMS_IN),
-                                            onDensityChange = { setDensity(MediaListView.BROWSE_ALBUMS_IN, it) }
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_ALBUMS_IN, it) },
+                                            sortMode = sortModeFor(MediaListView.BROWSE_ALBUMS_IN),
+                                            onSortChange = { setSortMode(MediaListView.BROWSE_ALBUMS_IN, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.BROWSE_ALBUMS_IN),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_ALBUMS_IN, it) }
                                         )
                                     }
                                     composable(
@@ -1164,7 +1235,11 @@ fun FoamNavHost(
                                             activeTrackId = activeTrackId,
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_FOLDERS),
-                                            onDensityChange = { setDensity(MediaListView.BROWSE_FOLDERS, it) }
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_FOLDERS, it) },
+                                            sortMode = sortModeFor(MediaListView.BROWSE_FOLDERS),
+                                            onSortChange = { setSortMode(MediaListView.BROWSE_FOLDERS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.BROWSE_FOLDERS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_FOLDERS, it) }
                                         )
                                     }
                                     composable(Screen.Equalizer.route) { EqualizerScreen() }
@@ -1349,6 +1424,10 @@ fun FoamNavHost(
                                             onListBackdropArt = onListBackdropArt,
                                             density = densityFor(MediaListView.PLAYLIST_DETAIL),
                                             onDensityChange = { setDensity(MediaListView.PLAYLIST_DETAIL, it) },
+                                            sortMode = sortModeFor(MediaListView.PLAYLIST_DETAIL),
+                                            onSortChange = { setSortMode(MediaListView.PLAYLIST_DETAIL, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.PLAYLIST_DETAIL),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.PLAYLIST_DETAIL, it) },
                                             centerTrackRequest = centerTrackRequest,
                                             isPlaying = isPlaying,
                                             heroLayout = heroLayoutFor(CollectionHeroTarget.Playlist),

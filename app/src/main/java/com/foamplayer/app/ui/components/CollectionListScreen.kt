@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import coil.request.ImageRequest
 import androidx.core.net.toUri
 import com.foamplayer.app.constants.CollectionHeroLayout
+import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -134,6 +135,16 @@ fun CollectionListScreen(
     headerIcon: ImageVector? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
+    /** Sort modes the list supports; non-empty adds the sort section to the organisation modal. */
+    sortOptions: List<CollectionSortMode> = emptyList(),
+    /** The list's current sort (applied by the caller to the items it renders). */
+    currentSort: CollectionSortMode = CollectionSortMode.NAME,
+    /** When set, the sort radio list is shown in the organisation modal. */
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    /** Whether the current sort is inverted. */
+    sortInverted: Boolean = false,
+    /** When set, the "Inverse" checkbox is shown under the sort radio list. */
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
     heroLayout: CollectionHeroLayout = LocalDefaultCollectionHeroLayout.current,
     content: MediaListContentScope.() -> Unit
 ) {
@@ -315,6 +326,11 @@ fun CollectionListScreen(
             visible = showOrganisationModal,
             currentDensity = density,
             onSelectDensity = onDensityChange,
+            sortOptions = if (onSortChange != null) sortOptions else emptyList(),
+            currentSort = currentSort,
+            onSelectSort = { onSortChange?.invoke(it) },
+            sortInverted = sortInverted,
+            onToggleSortInverted = { onSortInvertedChange?.invoke(it) },
             onDismiss = { showOrganisationModal = false }
         )
     }
