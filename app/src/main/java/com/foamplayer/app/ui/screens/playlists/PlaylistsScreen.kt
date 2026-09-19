@@ -90,6 +90,7 @@ import com.foamplayer.app.ui.components.caseInsensitiveComparator
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 
 // The playlist row shares the app-wide list row geometry through MediaListRow /
@@ -364,7 +365,7 @@ fun PlaylistsScreen(
                 }
 
                 item(key = "playlists_grid_spacer", span = { GridItemSpan(maxLineSpan) }) {
-                    Spacer(modifier = Modifier.height(80.dp))
+                    Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
                 }
             }
         } else {
@@ -443,7 +444,7 @@ fun PlaylistsScreen(
                     )
                 }
 
-                item(key = "playlists_list_spacer") { Spacer(modifier = Modifier.height(80.dp)) }
+                item(key = "playlists_list_spacer") { Spacer(modifier = Modifier.height(LocalBottomBarClearance.current)) }
             }
         }
     }

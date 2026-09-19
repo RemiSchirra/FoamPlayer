@@ -54,6 +54,7 @@ import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
@@ -253,7 +254,7 @@ fun CollectionListScreen(
                     GridMediaContentScope(gridScope).content()
 
                     item(key = "collection_bottom_spacer", span = { GridItemSpan(maxLineSpan) }) {
-                        Spacer(modifier = Modifier.height(80.dp))
+                        Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
                     }
                 }
             } else {
@@ -277,7 +278,7 @@ fun CollectionListScreen(
                     ListMediaContentScope(listScope).content()
 
                     item(key = "collection_bottom_spacer") {
-                        Spacer(modifier = Modifier.height(80.dp))
+                        Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
                     }
                 }
             }

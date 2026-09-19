@@ -57,6 +57,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.lyrics.LyricsUtils
 import com.foamplayer.app.ui.screens.settings.SettingsHeader
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 
@@ -143,7 +144,7 @@ fun LyricsSearchResultsScreen(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = FoamDimens.paddingMedium)
+                .padding(bottom = FoamDimens.paddingMedium + LocalBottomBarClearance.current)
         )
     }
 }
@@ -241,7 +242,10 @@ private fun LyricsResultsList(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = FoamDimens.spacingLarge),
+            contentPadding = PaddingValues(
+                top = FoamDimens.spacingSmall,
+                bottom = FoamDimens.spacingLarge + LocalBottomBarClearance.current
+            ),
             verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
         ) {
             items(visibleResults, key = { "${it.providerName}_${it.content.hashCode()}" }) { result ->

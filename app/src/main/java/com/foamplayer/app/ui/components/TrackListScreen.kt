@@ -68,6 +68,7 @@ import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.TimeUtils
+import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import kotlinx.coroutines.CompletableDeferred
 
@@ -411,7 +412,7 @@ fun TrackListScreen(
                         key = "grid_bottom_spacer",
                         span = { GridItemSpan(maxLineSpan) }
                     ) {
-                        Spacer(modifier = Modifier.height(80.dp))
+                        Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
                     }
                 }
             } else {
@@ -534,7 +535,7 @@ fun TrackListScreen(
                         }
                     }
 
-                    item(key = "list_bottom_spacer") { Spacer(modifier = Modifier.height(80.dp)) }
+                    item(key = "list_bottom_spacer") { Spacer(modifier = Modifier.height(LocalBottomBarClearance.current)) }
                 }
             }
         }

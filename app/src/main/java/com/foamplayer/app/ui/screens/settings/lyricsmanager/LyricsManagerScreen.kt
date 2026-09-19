@@ -69,6 +69,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.screens.settings.SettingsHeader
 import com.foamplayer.app.ui.theme.DefaultPrimaryAccent
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 import kotlinx.coroutines.launch
@@ -219,7 +220,8 @@ fun LyricsManagerScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
-                        vertical = FoamDimens.spacingSmall
+                        top = FoamDimens.spacingSmall,
+                        bottom = FoamDimens.spacingSmall + LocalBottomBarClearance.current
                     ),
                     verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingTiny)
                 ) {
@@ -241,7 +243,7 @@ fun LyricsManagerScreen(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = FoamDimens.paddingMedium)
+                .padding(bottom = FoamDimens.paddingMedium + LocalBottomBarClearance.current)
         )
     }
 

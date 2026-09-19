@@ -90,6 +90,7 @@ import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.albumArtCornerRadius
+import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import androidx.core.net.toUri
 import kotlin.math.abs
@@ -591,7 +592,7 @@ fun SearchScreen(
                 }
             }
 
-            item { Spacer(modifier = Modifier.height(80.dp)) }
+            item { Spacer(modifier = Modifier.height(LocalBottomBarClearance.current)) }
         }
     }
 }

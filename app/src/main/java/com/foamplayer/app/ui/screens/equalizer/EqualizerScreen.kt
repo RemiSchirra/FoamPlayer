@@ -29,6 +29,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.components.onSeekBarReleased
+import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -43,6 +44,7 @@ fun EqualizerScreen(
             .fillMaxSize()
             .verticalScroll(scrollState)
             .padding(16.dp)
+            .padding(bottom = LocalBottomBarClearance.current)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

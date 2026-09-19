@@ -21,10 +21,12 @@ import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -37,10 +39,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -63,6 +68,16 @@ private val NavBarSlotAnimation = tween<Dp>(durationMillis = NavBarSlotAnimMilli
 
 /** Fade/scale animation played when a nav-bar item is enabled or disabled. */
 private val NavBarSlotFadeAnimation = tween<Float>(durationMillis = NavBarSlotAnimMillis, easing = FastOutSlowInEasing)
+
+/**
+ * Bottom strip of the screen -- nav-bar zone plus floating mini player card, system
+ * nav-bar inset included -- that edge-to-edge scrollable content should keep its
+ * trailing rows clear of. Screens scroll BEHIND the floating bar and card (they are
+ * occluded, not clipped), and add this value as a trailing spacer / bottom content
+ * padding so the last rows can be scrolled up past them. Provided at the navigation
+ * root; 0 when unconstrained.
+ */
+val LocalBottomBarClearance = compositionLocalOf { 0.dp }
 
 /**
  * Single source of truth for nav-bar / mini-player geometry.
@@ -239,6 +254,20 @@ object NavBarDimens {
         }
         return base + ride * expandFraction
     }
+
+    /**
+     * Fixed collapsed footprint (excluding the system nav-bar inset) of the nav-zone
+     * container in the nav Column: the docked bar's surface height, or the floating
+     * pill's height including its margins. The expandable extra row grows UPWARDS as
+     * an overlay inside this fixed footprint, so the zone's height never changes.
+     */
+    fun navBarZoneHeight(mode: NavigationBarMode): Dp = when (mode) {
+        NavigationBarMode.DOCKED -> DockedBarHeight + DockedBarBottomMargin
+        else -> FloatingRowHeight + FloatingBarMargin * 2
+    }
+
+    /** Fade length of the elevation scrim drawn at a bar surface's top edge. */
+    val BarElevationScrimHeight = 16.dp
 
     /**
      * Exact distance the attached pill's grey surface must stretch above its own top
@@ -553,6 +582,11 @@ fun FoamNavigationBar(
                 .padding(bottom = NavBarDimens.DockedBarBottomMargin)
                 .fillMaxWidth()
                 .requiredHeight(NavBarDimens.DockedBarHeight + NavBarDimens.ExtraRowHeight * expandFraction)
+                // Elevation over the scrolling content: the shadow wraps the surface's
+                // own bounds; the part below them is painted over by the surface
+                // extension that reaches down through the bottom margin and inset.
+                // clip stays off so that extension (drawn outside the bounds) survives.
+                .shadow(elevation = 6.dp, shape = RectangleShape, clip = false)
                 .drawBehind {
                     // Solid surface behind the extra row + main row, landing on the
                     // bottom of the screen: it extends down through the bottom
@@ -644,6 +678,11 @@ internal fun FloatingNavigationBar(
                     bottom = NavBarDimens.FloatingBarMargin
                 )
                 .requiredHeight(NavBarDimens.FloatingRowHeight + NavBarDimens.ExtraRowHeight * expandFraction)
+                // Elevation over the scrolling content. In ATTACHED mode the shadow's
+                // top edge is hidden behind the card-connected surface extension; the
+                // extension's own top edge gets its depth from the scrim drawn below.
+                // clip stays off so the extension drawing outside the bounds survives.
+                .shadow(elevation = 6.dp, shape = RoundedCornerShape(containerRadius), clip = false)
                 .onGloballyPositioned { pillTopPx = it.positionInRoot().y }
                 .drawBehind {
                     val radiusPx = containerRadius.toPx()

@@ -58,6 +58,7 @@ import com.foamplayer.app.ui.components.collectionHeroOverlayLayer
 import com.foamplayer.app.ui.components.rememberCollectionHeroFlightFraction
 import com.foamplayer.app.ui.components.rememberCollectionScrollFraction
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 
 /** Number of columns of the artist's album grid. */
@@ -246,7 +247,7 @@ fun ArtistDetailScreen(
             }
 
             item(key = "artist_albums_spacer", span = { GridItemSpan(maxLineSpan) }) {
-                Spacer(modifier = Modifier.height(80.dp))
+                Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
             }
         }
         }

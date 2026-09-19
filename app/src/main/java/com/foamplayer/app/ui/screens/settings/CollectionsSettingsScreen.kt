@@ -40,6 +40,7 @@ import com.foamplayer.app.ui.components.CollectionHeroImmersiveFadeStartFraction
 import com.foamplayer.app.ui.components.CollectionHeroImmersiveHeightFraction
 import com.foamplayer.app.ui.components.CollectionHeroImmersiveOverlayFraction
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /** Width of one layout-preview phone thumbnail; the 9:19.5 aspect fixes its height. */
@@ -85,7 +86,8 @@ fun CollectionsSettingsScreen(
         )
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
         ) {
             items(
                 items = CollectionHeroTarget.entries,

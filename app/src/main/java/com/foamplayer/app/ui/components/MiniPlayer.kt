@@ -38,6 +38,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -457,6 +458,17 @@ fun MiniPlayer(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = NavBarDimens.MiniPlayerCardVerticalPadding)
+                .then(
+                    // Elevation over the scrolling content. Only when the card paints
+                    // its own surface: in ATTACHED mode the nav bar's extension IS the
+                    // card's surface and carries the unit's elevation instead.
+                    if (showContainer) {
+                        Modifier.shadow(
+                            elevation = 8.dp,
+                            shape = RoundedCornerShape(containerRadius)
+                        )
+                    } else Modifier
+                )
                 .clip(RoundedCornerShape(containerRadius))
                 .then(
                     // In ATTACHED mode the nav bar's pill extends up behind the card and

@@ -21,6 +21,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.roundToInt
 
@@ -46,7 +47,8 @@ fun BackgroundSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = FoamDimens.paddingMedium),
+                .padding(horizontal = FoamDimens.paddingMedium)
+                .padding(bottom = LocalBottomBarClearance.current),
         ) {
             BasicText(text = "Dynamic Effects", style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))

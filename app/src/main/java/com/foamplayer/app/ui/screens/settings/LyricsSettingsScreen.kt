@@ -47,6 +47,7 @@ import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -74,6 +75,7 @@ fun LyricsSettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = FoamDimens.paddingMedium)
+                .padding(bottom = LocalBottomBarClearance.current)
         ) {
             BasicText(text = "Lyrics sources", style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))

@@ -43,6 +43,7 @@ import com.foamplayer.app.ui.components.CollectionInfo
 import com.foamplayer.app.ui.components.CollectionKind
 import com.foamplayer.app.ui.components.HomeRow
 import com.foamplayer.app.ui.components.HomeRowCard
+import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.components.HomeRowCardSmallWidth
 import com.foamplayer.app.ui.components.HomeRowSpacing
 import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
@@ -160,7 +161,7 @@ fun HomeScreen(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(HomeRowSpacing),
-        contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
+        contentPadding = PaddingValues(top = 8.dp, bottom = LocalBottomBarClearance.current)
     ) {
         item(key = "home_header") {
             Row(

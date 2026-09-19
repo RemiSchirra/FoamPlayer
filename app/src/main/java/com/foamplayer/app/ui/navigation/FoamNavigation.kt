@@ -28,9 +28,11 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -357,6 +359,41 @@ fun FoamNavHost(
     // whatever the real layout does (font scale, text metrics, second-bar lift).
     var miniPlayerTopPx by remember { mutableStateOf(Float.NaN) }
 
+    // Measured height (px) of the mini player's box, outer padding included. Font
+    // scale can grow the card past its derived dp metrics, so the content clearance
+    // below prefers this measurement and only falls back to the derived height
+    // before the first layout has reported.
+    var miniPlayerBoxHeightPx by remember { mutableStateOf(0) }
+
+    // ---- Bottom-bar zone geometry for content layering ---------------------------
+    // The nav bar and the floating mini player card are overlays: every screen
+    // scrolls BEHIND them (occluded, not clipped) and keeps its trailing rows
+    // reachable via [LocalBottomBarClearance] spacers.
+    //
+    // The card's height prefers the live measurement over the derived metrics.
+    val miniPlayerBoxHeight = with(density) {
+        miniPlayerBoxHeightPx.takeIf { it > 0 }?.toDp()
+            ?: (NavBarDimens.MiniPlayerCardHeight + NavBarDimens.MiniPlayerCardVerticalPadding * 2)
+    }
+    // Trailing clearance for edge-to-edge lists: everything from the screen's
+    // bottom edge (system inset included) up past the floating card, or up past
+    // the bar while no track is loaded.
+    val bottomBarClearance = with(density) {
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+                (if (hasCurrentTrack) {
+                    NavBarDimens.miniPlayerBottomPadding(navigationBarMode, 0f) + miniPlayerBoxHeight
+                } else {
+                    NavBarDimens.navBarZoneHeight(navigationBarMode)
+                }) +
+                16.dp
+    }
+    // The full player keeps its classic footprint: it ends at the nav zone's top
+    // edge, whose black backdrop fade lands exactly on the bar (DOCKED).
+    val playerBottomPadding = with(density) {
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+                NavBarDimens.navBarZoneHeight(navigationBarMode)
+    }
+
     // Hero artwork center (root coordinates), reported by the full player's shared
     // element, paired with the current dismiss target (mini player art or the origin
     // collection's centered row) to size the swipe to the artwork's travel distance.
@@ -556,10 +593,13 @@ fun FoamNavHost(
 
         // Every TrackListItem / CollectionListItem in the graph opens its
         // actions modal through these locals, so no screen has to thread the
-        // states down itself.
+        // states down itself. [LocalBottomBarClearance] tells edge-to-edge
+        // screens how much trailing space keeps their last rows clear of the
+        // floating nav bar + mini player card.
         CompositionLocalProvider(
             LocalTrackFoamModalState provides trackModalState,
-            LocalCollectionFoamModalState provides collectionModalState
+            LocalCollectionFoamModalState provides collectionModalState,
+            LocalBottomBarClearance provides bottomBarClearance
         ) {
             Box(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
 
@@ -741,7 +781,7 @@ fun FoamNavHost(
                     }
                 }
 
-                Column(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.fillMaxSize()) {
                     // [collectionId] marks the queue as started from a specific
                     // collection (album/playlist/genre/year/folder screen) so
                     // its row can be highlighted as the active one; bare track
@@ -764,7 +804,7 @@ fun FoamNavHost(
                         }
                     }
 
-                    Box(modifier = Modifier.weight(1f)) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                         transition.AnimatedVisibility(
                             visible = { isFull -> !isFull },
                             enter = if (isTransitionAnimated) fadeIn() else EnterTransition.None,
@@ -772,8 +812,10 @@ fun FoamNavHost(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             val playerTransitionVisibilityScope = this
-                            // Screens keep their status-bar padding; the backdrop behind them
-                            // (drawn at the root now) extends up under the status bar.
+                            // Screens keep their status-bar padding; the backdrop behind
+                            // them (drawn at the root now) extends up under the status
+                            // bar. They run edge-to-edge to the screen's bottom edge,
+                            // scrolling behind the nav bar and mini player card.
                             Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
                                 NavHost(
                                     modifier = Modifier.fillMaxSize(),
@@ -1242,7 +1284,9 @@ fun FoamNavHost(
                                             onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_FOLDERS, it) }
                                         )
                                     }
-                                    composable(Screen.Equalizer.route) { EqualizerScreen() }
+                                    composable(Screen.Equalizer.route) {
+                                        EqualizerScreen()
+                                    }
                                     composable(Screen.Settings.route) {
                                         SettingsScreen(
                                             onNavigateToAudio = { navController.navigate(Screen.SettingsAudio.route) },
@@ -1441,7 +1485,11 @@ fun FoamNavHost(
                         transition.AnimatedVisibility(
                             visible = { isFull -> isFull },
                             enter = EnterTransition.None,
-                            exit = ExitTransition.None
+                            exit = ExitTransition.None,
+                            // The player keeps its classic footprint: it ends at the
+                            // nav zone's top edge (the bar renders below it and the
+                            // backdrop's black fade lands on the bar, DOCKED).
+                            modifier = Modifier.fillMaxSize().padding(bottom = playerBottomPadding)
                         ) {
                             BackHandler { animatePlayerTransition(open = false) }
                             FullPlayerScreen(
@@ -1465,13 +1513,17 @@ fun FoamNavHost(
                             )
                         }
                     }
+                }
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onSizeChanged { navZoneHeightPx = it.height }
-                    ) {
-                        when (navigationBarMode) {
+                // The nav bar floats over the edge-to-edge content as an overlay at
+                // the screen's bottom; the mini player card is layered above it.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .onSizeChanged { navZoneHeightPx = it.height }
+                ) {
+                    when (navigationBarMode) {
                             NavigationBarMode.DOCKED -> Box(
                                 modifier = Modifier.fillMaxWidth().navigationBarsPadding()
                             ) {
@@ -1527,14 +1579,13 @@ fun FoamNavHost(
                                     playerClosedFraction = playerClosedFraction,
                                     navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
                                     expandFraction = navBarExpandFraction,
-                                    onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }
-                                )
-                            }
-                        }
-                    }
-                }
+                                     onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }
+                                 )
+                             }
+                         }
+                     }
 
-                // Mini player placement derives from NavBarDimens
+                 // Mini player placement derives from NavBarDimens
                 val miniPlayerBottomPadding = NavBarDimens.miniPlayerBottomPadding(
                     mode = navigationBarMode,
                     expandFraction = navBarExpandFraction
@@ -1618,6 +1669,7 @@ fun FoamNavHost(
                                 showContainer = navigationBarMode != NavigationBarMode.ATTACHED,
                                 modifier = Modifier
                                     .onGloballyPositioned { miniPlayerTopPx = it.positionInRoot().y }
+                                    .onSizeChanged { miniPlayerBoxHeightPx = it.height }
                                     .draggable(
                                         state = rememberDraggableState { delta -> miniPlayerSwipeController.onDrag(delta) },
                                         orientation = Orientation.Vertical,
