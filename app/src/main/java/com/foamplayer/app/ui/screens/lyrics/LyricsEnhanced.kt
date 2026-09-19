@@ -641,7 +641,7 @@ fun LyricsEnhanced(
                         modifier =
                             Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 4.dp),
+                                .padding(horizontal = 24.dp),
                     )
                 }
             }
