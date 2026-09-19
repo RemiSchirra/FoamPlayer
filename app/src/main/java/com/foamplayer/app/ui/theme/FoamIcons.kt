@@ -1,10 +1,13 @@
 package com.foamplayer.app.ui.theme
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.filled.*
@@ -31,7 +34,8 @@ data class FoamIconSet(
     val settings: ImageVector,
     val dragHandle: ImageVector,
     val more: ImageVector,
-    val close: ImageVector
+    val close: ImageVector,
+    val arrowForward: ImageVector
 )
 
 @Immutable
@@ -65,7 +69,8 @@ val DefaultFoamIcons = FoamIcons(
         settings = Icons.Filled.Settings,
         dragHandle = Icons.Filled.DragHandle,
         more = Icons.Filled.Menu,
-        close = Icons.Filled.Close
+        close = Icons.Filled.Close,
+        arrowForward = Icons.AutoMirrored.Filled.ArrowForward
     ),
     outline = FoamIconSet(
         play = Icons.Outlined.PlayArrow,
@@ -82,7 +87,8 @@ val DefaultFoamIcons = FoamIcons(
         settings = Icons.Outlined.Settings,
         dragHandle = Icons.Outlined.DragHandle,
         more = Icons.Outlined.Menu,
-        close = Icons.Outlined.Close
+        close = Icons.Outlined.Close,
+        arrowForward = Icons.AutoMirrored.Outlined.ArrowForward
     ),
     flat = FoamIconSet(
         play = Icons.Rounded.PlayArrow,
@@ -99,7 +105,8 @@ val DefaultFoamIcons = FoamIcons(
         settings = Icons.Rounded.Settings,
         dragHandle = Icons.Rounded.DragHandle,
         more = Icons.Rounded.Menu,
-        close = Icons.Rounded.Close
+        close = Icons.Rounded.Close,
+        arrowForward = Icons.AutoMirrored.Rounded.ArrowForward
     ),
     currentStyle = FoamIconStyle.FLAT
 )

@@ -69,9 +69,10 @@ private val HomeRowHeaderSpacing = 4.dp
 
 /**
  * One horizontal section of the Home screen: a header line with the row title
- * (left) and an optional "See all" text button (right), above a lazily
- * scrolling pager of cards built through [itemContent]. The row hides itself
- * entirely while [items] is empty so sparse libraries stay graceful.
+ * (left) and an optional arrow button (right) leading to the row's "See all"
+ * page, above a lazily scrolling pager of cards built through [itemContent].
+ * The row hides itself entirely while [items] is empty so sparse libraries
+ * stay graceful.
  *
  * Callers compose each card out of the shared [HomeRowCard] so every row's
  * items look identical.
@@ -103,13 +104,25 @@ fun <T> HomeRow(
             )
 
             if (onSeeAllClick != null) {
-                BasicText(
-                    text = stringResource(R.string.home_see_all),
-                    style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor),
+                Box(
                     modifier = Modifier
-                        .clickable(onClick = onSeeAllClick)
-                        .padding(start = HomeRowEdgePadding, top = 8.dp, bottom = 8.dp)
-                )
+                        .padding(start = HomeRowEdgePadding)
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
+                            onClick = onSeeAllClick
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = FoamTheme.icons.current.arrowForward,
+                        contentDescription = stringResource(R.string.home_see_all),
+                        tint = FoamTheme.accentColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
 
