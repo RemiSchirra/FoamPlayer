@@ -95,6 +95,8 @@ fun rememberPlaylistFoamModalState(): PlaylistFoamModalState = remember { Playli
  * of the name (opens the rename sheet). The actions page holds a Details row
  * plus a Delete row at the end; the details page shows the playlist's
  * metadata with a push-style slide, the header persisting across the switch.
+ * Delete dismisses this sheet; the host is expected to then show the
+ * confirmation sheet ([DeletePlaylistConfirmModal]) before actually deleting.
  *
  * Every action dismisses the sheet before invoking its callback.
  */

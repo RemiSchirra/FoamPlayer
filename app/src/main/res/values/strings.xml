@@ -141,6 +141,9 @@
     <string name="edit_cover_image">Edit cover image</string>
     <string name="edit_playlist_name">Edit playlist name</string>
     <string name="rename_playlist_title">Rename Playlist</string>
+    <string name="delete_playlist_title">Delete Playlist</string>
+    <string name="delete_playlist_message">\"%1$s\" will be removed. The tracks in it stay in your library.</string>
+    <string name="delete">Delete</string>
     <string name="save">Save</string>
     <string name="edit">Edit</string>
     <string name="more_options">More options</string>

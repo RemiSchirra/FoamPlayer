@@ -47,6 +47,7 @@ import com.foamplayer.app.ui.components.HomeRowCardSmallWidth
 import com.foamplayer.app.ui.components.HomeRowSpacing
 import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.LocalTrackFoamModalState
+import com.foamplayer.app.ui.screens.playlists.DeletePlaylistConfirmModal
 import com.foamplayer.app.ui.screens.playlists.PlaylistFoamModal
 import com.foamplayer.app.ui.screens.playlists.PlaylistModalStats
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
@@ -110,6 +111,7 @@ fun HomeScreen(
     // hosted here with the same edit/rename/delete wiring as PlaylistsScreen.
     val playlistModalState = rememberPlaylistFoamModalState()
     var renameTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
+    var deleteConfirmTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
 
     // Cover image picker: armed by the modal's edit-image action, the result
     // applies to the playlist it was opened for.
@@ -322,7 +324,7 @@ fun HomeScreen(
             coverPicker.launch(ImageMimeTypes)
         },
         onEditName = { playlist -> renameTarget = playlist },
-        onDelete = { playlist -> playlistsViewModel.deletePlaylist(playlist.playlistId) },
+        onDelete = { playlist -> deleteConfirmTarget = playlist },
         onDismiss = { playlistModalState.dismiss() }
     )
 
@@ -333,5 +335,14 @@ fun HomeScreen(
             playlistsViewModel.renamePlaylist(playlistId, newName)
         },
         onDismiss = { renameTarget = null }
+    )
+
+    DeletePlaylistConfirmModal(
+        playlist = deleteConfirmTarget,
+        onConfirm = { playlistId ->
+            deleteConfirmTarget = null
+            playlistsViewModel.deletePlaylist(playlistId)
+        },
+        onDismiss = { deleteConfirmTarget = null }
     )
 }

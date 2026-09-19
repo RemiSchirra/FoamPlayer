@@ -108,6 +108,9 @@
     <string name="edit_cover_image">Modifier l\'image de couverture</string>
     <string name="edit_playlist_name">Modifier le nom de la playlist</string>
     <string name="rename_playlist_title">Renommer la playlist</string>
+    <string name="delete_playlist_title">Supprimer la playlist</string>
+    <string name="delete_playlist_message">«\u00A0%1$s\u00A0» sera supprimée. Les morceaux qu\'elle contient restent dans votre bibliothèque.</string>
+    <string name="delete">Supprimer</string>
     <string name="save">Enregistrer</string>
     <string name="edit">Modifier</string>
     <string name="more_options">Plus d\'options</string>

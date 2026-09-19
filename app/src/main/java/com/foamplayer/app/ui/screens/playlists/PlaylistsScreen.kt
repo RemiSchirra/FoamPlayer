@@ -195,6 +195,7 @@ fun PlaylistsScreen(
     // like the other screens host their long-press modals.
     val playlistModalState = rememberPlaylistFoamModalState()
     var renameTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
+    var deleteConfirmTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
 
     // Cover image picker: armed by the header pencil, the result applies to the
     // playlist it was opened for.
@@ -464,7 +465,7 @@ fun PlaylistsScreen(
             coverPicker.launch(ImageMimeTypes)
         },
         onEditName = { playlist -> renameTarget = playlist },
-        onDelete = { playlist -> viewModel.deletePlaylist(playlist.playlistId) },
+        onDelete = { playlist -> deleteConfirmTarget = playlist },
         onDismiss = { playlistModalState.dismiss() }
     )
 
@@ -475,6 +476,15 @@ fun PlaylistsScreen(
             viewModel.renamePlaylist(playlistId, newName)
         },
         onDismiss = { renameTarget = null }
+    )
+
+    DeletePlaylistConfirmModal(
+        playlist = deleteConfirmTarget,
+        onConfirm = { playlistId ->
+            deleteConfirmTarget = null
+            viewModel.deletePlaylist(playlistId)
+        },
+        onDismiss = { deleteConfirmTarget = null }
     )
 
     // More-options sheet behind the 3-dots button: holds the sort radio list
