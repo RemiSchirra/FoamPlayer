@@ -641,7 +641,7 @@ internal fun PlaybackProgressSlider(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             ElapsedTimeLabel(
                 durationMs = durationMs,
-                seekBarProgress = seekBarProgress,
+                progress = { dragValue ?: seekBarProgress.progress },
                 style = labelStyle
             )
             BasicText(text = TimeUtils.formatDurationCompact(durationMs), style = labelStyle)
@@ -652,17 +652,20 @@ internal fun PlaybackProgressSlider(
 /**
  * Isolated so the per-frame position state is only observed here: [derivedStateOf]
  * re-formats the label only when the displayed second actually changes, so position
- * ticks neither recompose this label nor its siblings.
+ * ticks neither recompose this label nor its siblings. [progress] is the same value
+ * the bar renders (drag position while dragging, engine position otherwise), so the
+ * label tracks a drag in realtime and only touches the audio engine's position again
+ * once the seek commits.
  */
 @Composable
 private fun ElapsedTimeLabel(
     durationMs: Long,
-    seekBarProgress: SeekBarProgressState,
+    progress: () -> Float,
     style: androidx.compose.ui.text.TextStyle
 ) {
     val elapsedText by remember(durationMs) {
         derivedStateOf {
-            TimeUtils.formatDurationCompact((seekBarProgress.progress * durationMs).toLong())
+            TimeUtils.formatDurationCompact((progress() * durationMs).toLong())
         }
     }
     BasicText(text = elapsedText, style = style)
