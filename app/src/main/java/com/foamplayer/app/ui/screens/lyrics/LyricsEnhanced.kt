@@ -3,13 +3,10 @@ package com.foamplayer.app.ui.screens.lyrics
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.view.WindowManager
-import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,20 +36,19 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.material.rememberModalBottomSheetState
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -61,10 +57,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -208,11 +207,6 @@ fun LyricsEnhanced(
 
     val textColor = Color.White
     val lyricsLineBlur = lyricsLineBlurOverride ?: lyricsLineBlurPreference
-
-    var isSelectionModeActive by rememberSaveable { mutableStateOf(false) }
-    val selectedLineKeys = remember { mutableStateListOf<String>() }
-    var showMaxSelectionToast by remember { mutableStateOf(false) }
-    val maxSelectionLimit = 5
 
     // isTtml() normalizes the entire payload (several whole-string regex passes)
     // before checking its markers; on a large TTML document that stalls the main
@@ -459,7 +453,7 @@ fun LyricsEnhanced(
                     available: Offset,
                     source: NestedScrollSource,
                 ): Offset {
-                    if (!isSelectionModeActive && source == NestedScrollSource.UserInput) {
+                    if (source == NestedScrollSource.UserInput) {
                         markManualScroll()
                     }
                     return Offset.Zero
@@ -469,7 +463,7 @@ fun LyricsEnhanced(
                     consumed: Velocity,
                     available: Velocity,
                 ): Velocity {
-                    if (!isSelectionModeActive && isManualScrolling) {
+                    if (isManualScrolling) {
                         scheduleManualScrollReset()
                     }
                     return Velocity.Zero
@@ -493,7 +487,7 @@ fun LyricsEnhanced(
         var lastIndex: Int? = null
         while (isActive) {
             val index =
-                if (isManualScrolling || isSelectionModeActive) {
+                if (isManualScrolling) {
                     null
                 } else {
                     syncedLyrics
@@ -516,23 +510,6 @@ fun LyricsEnhanced(
                 }
             }
             delay(LYRIC_FOCUS_POLL_INTERVAL_MS)
-        }
-    }
-
-    BackHandler(enabled = isSelectionModeActive) {
-        isSelectionModeActive = false
-        selectedLineKeys.clear()
-    }
-
-    LaunchedEffect(showMaxSelectionToast) {
-        if (showMaxSelectionToast) {
-            Toast
-                .makeText(
-                    context,
-                    "Selection limit is $maxSelectionLimit.",
-                    Toast.LENGTH_SHORT,
-                ).show()
-            showMaxSelectionToast = false
         }
     }
 
@@ -583,11 +560,9 @@ fun LyricsEnhanced(
                             if (text.isBlank()) {
                                 null
                             } else {
-                                val selectionId = "plain:$index:${text.hashCode()}"
                                 val translation = if (showTranslations) providedTranslationTextForEntry(entry) else null
                                 PlainLyricLine(
-                                    itemId = "$selectionId#$index",
-                                    selectionId = selectionId,
+                                    itemId = "plain:$index",
                                     text = text,
                                     translation = translation,
                                 )
@@ -596,28 +571,6 @@ fun LyricsEnhanced(
                     },
             )
         }
-    // selectedLineKeys is already a SnapshotStateList, so reads of it are tracked and
-    // recomposition happens exactly when its contents change. Wrapping it in
-    // `.toList()` first creates a new list identity on every recomposition, which
-    // defeated the `remember(selectedLineKeySnapshot)` below (its key never compared
-    // equal to itself), so the `.toSet()` conversion ran unmemoized every time. A plain
-    // derivedStateOf recomputes only when the underlying list's structural content
-    // actually changes.
-    val selectedLineKeySet by remember { derivedStateOf { selectedLineKeys.toSet() } }
-    val dismissSelection = {
-        isSelectionModeActive = false
-        selectedLineKeys.clear()
-    }
-    val toggleSelectedLine: (String) -> Unit = { lineKey ->
-        if (selectedLineKeys.contains(lineKey)) {
-            selectedLineKeys.remove(lineKey)
-            if (selectedLineKeys.isEmpty()) isSelectionModeActive = false
-        } else if (selectedLineKeys.size < maxSelectionLimit) {
-            selectedLineKeys.add(lineKey)
-        } else {
-            showMaxSelectionToast = true
-        }
-    }
 
     Box(
         contentAlignment = Alignment.TopCenter,
@@ -679,30 +632,18 @@ fun LyricsEnhanced(
             }
 
             !isSynced -> {
-                PlainLyricsView(
-                    lines = plainLyrics,
-                    listState = listState,
-                    selectedLineKeys = selectedLineKeySet,
-                    textColor = textColor,
-                    textStyle = normalTextStyle,
-                    onLineClicked = { lineKey ->
-                        if (isSelectionModeActive) toggleSelectedLine(lineKey)
-                    },
-                    onLinePressed = { lineKey ->
-                        if (!isSelectionModeActive) {
-                            isSelectionModeActive = true
-                            if (!selectedLineKeys.contains(lineKey)) {
-                                selectedLineKeys.add(lineKey)
-                            }
-                        } else if (!selectedLineKeys.contains(lineKey)) {
-                            toggleSelectedLine(lineKey)
-                        }
-                    },
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 4.dp),
-                )
+                LyricPressFeedback {
+                    PlainLyricsView(
+                        lines = plainLyrics,
+                        listState = listState,
+                        textColor = textColor,
+                        textStyle = normalTextStyle,
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 4.dp),
+                    )
+                }
             }
 
             else -> {
@@ -714,43 +655,34 @@ fun LyricsEnhanced(
                 ) {
                     val lyricsViewportOffset = remember(maxHeight) { maxHeight * 0.32f }
 
-                    KaraokeLyricsView(
-                        listState = listState,
-                        lyrics = syncedLyrics,
-                        currentPosition = playbackSyncPosition,
-                        onLineClicked = { line ->
-                            if (isSelectionModeActive) {
-                                toggleSelectedLine(line.selectionKey())
-                            } else if (lyricsClick && isSynced && line.start > 0) {
-                                onSeek(line.start.toLong())
-                            }
-                        },
-                        onLinePressed = { line ->
-                            val lineKey = line.selectionKey()
-                            if (!isSelectionModeActive) {
-                                isSelectionModeActive = true
-                                if (!selectedLineKeys.contains(lineKey)) {
-                                    selectedLineKeys.add(lineKey)
+                    LyricPressFeedback {
+                        KaraokeLyricsView(
+                            listState = listState,
+                            lyrics = syncedLyrics,
+                            currentPosition = playbackSyncPosition,
+                            onLineClicked = { line ->
+                                if (lyricsClick && isSynced && line.start > 0) {
+                                    onSeek(line.start.toLong())
                                 }
-                            } else if (!selectedLineKeys.contains(lineKey)) {
-                                toggleSelectedLine(lineKey)
-                            }
-                        },
-                        textColor = textColor,
-                        normalLineTextStyle = normalTextStyle,
-                        accompanimentLineTextStyle = accompanimentTextStyle,
-                        phoneticTextStyle = phoneticTextStyle,
-                        blendMode = BlendMode.SrcOver,
-                        useBlurEffect = lyricsLineBlur && isReadyToParse,
-                        showTranslation = showTranslations,
-                        showPhonetic = romanizationPreferences.isEnabled,
-                        offset = lyricsViewportOffset,
-                        keepAliveZone = 72.dp,
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 4.dp),
-                    )
+                            },
+                            // Long-press no longer enters selection mode.
+                            onLinePressed = { },
+                            textColor = textColor,
+                            normalLineTextStyle = normalTextStyle,
+                            accompanimentLineTextStyle = accompanimentTextStyle,
+                            phoneticTextStyle = phoneticTextStyle,
+                            blendMode = BlendMode.SrcOver,
+                            useBlurEffect = lyricsLineBlur && isReadyToParse,
+                            showTranslation = showTranslations,
+                            showPhonetic = romanizationPreferences.isEnabled,
+                            offset = lyricsViewportOffset,
+                            keepAliveZone = 72.dp,
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 4.dp),
+                        )
+                    }
                 }
             }
         }
@@ -763,10 +695,27 @@ private data class PlainLyrics(
     val items: List<PlainLyricLine>,
 )
 
+// FoamTheme never installs an Indication, so pressed lyric lines fall back to
+// foundation's DefaultDebugIndication — a flat 30% black rectangle overlay — and the
+// accompanist library's combinedClickable plays a LongPress buzz for any held press.
+// Both lyric branches run under this provider so a press only ripples, never dims or
+// vibrates; ripple(color) matches the tint used by every other pressable in the app.
+@Composable
+private fun LyricPressFeedback(content: @Composable () -> Unit) {
+    CompositionLocalProvider(
+        LocalIndication provides ripple(color = FoamTheme.colors.textPrimary),
+        LocalHapticFeedback provides SilentHapticFeedback,
+        content = content,
+    )
+}
+
+private object SilentHapticFeedback : HapticFeedback {
+    override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) = Unit
+}
+
 @Immutable
 private data class PlainLyricLine(
     val itemId: String,
-    val selectionId: String,
     val text: String,
     val translation: String? = null,
 )
@@ -775,11 +724,8 @@ private data class PlainLyricLine(
 private fun PlainLyricsView(
     lines: PlainLyrics,
     listState: LazyListState,
-    selectedLineKeys: Set<String>,
     textColor: Color,
     textStyle: TextStyle,
-    onLineClicked: (String) -> Unit,
-    onLinePressed: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val contentPadding =
@@ -803,40 +749,24 @@ private fun PlainLyricsView(
         ) { line ->
             PlainLyricLineItem(
                 line = line,
-                selected = line.selectionId in selectedLineKeys,
                 textColor = textColor,
                 textStyle = textStyle,
-                onLineClicked = onLineClicked,
-                onLinePressed = onLinePressed,
             )
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PlainLyricLineItem(
     line: PlainLyricLine,
-    selected: Boolean,
     textColor: Color,
     textStyle: TextStyle,
-    onLineClicked: (String) -> Unit,
-    onLinePressed: (String) -> Unit,
 ) {
-    val contentColor =
-        if (selected) {
-            FoamTheme.colors.textPrimary
-        } else {
-            textColor
-        }
-
+    // Pressing (tap or long-press) only plays the default ripple; selection was removed.
     val modifier = Modifier
         .fillMaxWidth()
         .heightIn(min = 48.dp)
-        .combinedClickable(
-            onClick = { onLineClicked(line.selectionId) },
-            onLongClick = { onLinePressed(line.selectionId) },
-        )
+        .clickable { }
         .padding(vertical = 8.dp)
 
     if (line.translation != null) {
@@ -844,7 +774,7 @@ private fun PlainLyricLineItem(
             Text(
                 text = line.text,
                 style = textStyle,
-                color = contentColor,
+                color = textColor,
             )
             Text(
                 text = line.translation,
@@ -853,7 +783,7 @@ private fun PlainLyricLineItem(
                     lineHeight = (textStyle.fontSize.value * 0.75f).sp,
                     fontWeight = FontWeight.Normal,
                 ),
-                color = contentColor.copy(alpha = 0.76f),
+                color = textColor.copy(alpha = 0.76f),
                 modifier = Modifier.padding(top = (textStyle.fontSize.value * 0.3f).dp),
             )
         }
@@ -861,7 +791,7 @@ private fun PlainLyricLineItem(
         Text(
             text = line.text,
             style = textStyle,
-            color = contentColor,
+            color = textColor,
             modifier = modifier,
         )
     }
@@ -925,15 +855,6 @@ private suspend fun LazyListState.scrollLyricIntoFocus(
         )
     }
 }
-
-private fun ISyncedLine.lineText(): String =
-    when (this) {
-        is KaraokeLine -> syllables.joinToString("") { it.content }
-        is SyncedLine -> content
-        else -> ""
-    }
-
-private fun ISyncedLine.selectionKey(text: String = lineText()): String = "$start:$end:${text.hashCode()}"
 
 private fun SyncedLyrics.positionForStableLineFocus(time: Int): Int {
     if (lines.isEmpty()) return time
