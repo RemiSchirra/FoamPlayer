@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.screens.search
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -197,7 +198,7 @@ fun SearchScreen(
 ) {
     val query by searchViewModel.query.collectAsState()
     val uiState by searchViewModel.uiState.collectAsState()
-    var isSearchFocused by remember { mutableStateOf(false) }
+    var searchActive by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val density = LocalDensity.current
@@ -239,6 +240,14 @@ fun SearchScreen(
         if (imeTargetBottom == 0) focusManager.clearFocus()
     }
 
+    // Back leaves the history open while it dismisses the keyboard (the IME consumes
+    // that press before it reaches the app); only a back press with the keyboard
+    // already closed lands here and closes the history.
+    BackHandler(enabled = searchActive && query.isEmpty()) {
+        searchActive = false
+        focusManager.clearFocus()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -275,7 +284,7 @@ fun SearchScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focusRequester)
-                        .onFocusChanged { isSearchFocused = it.isFocused },
+                        .onFocusChanged { if (it.isFocused) searchActive = true },
                     singleLine = true
                 )
             }
@@ -448,8 +457,9 @@ fun SearchScreen(
                     }
                 }
 
-                // Search history while the bar is selected but still empty
-                isSearchFocused -> {
+                // Search history while search mode is active but still empty;
+                // stays up after the keyboard closes until the back button ends it
+                searchActive -> {
                     if (uiState.history.isNotEmpty()) {
                         item(key = "history_header") {
                             SectionHeader(
