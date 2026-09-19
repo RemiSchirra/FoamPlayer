@@ -31,6 +31,9 @@ object LyricsUtils {
     private val INLINE_MILLISECONDS_TIME_REGEX = Regex("""<\d{1,8}(?:,\d{1,8})?>""")
     private val YRC_LINE_REGEX = Regex("""\[(\d{1,8}),\d{1,8}\](.*)""")
     private val YRC_WORD_TIME_REGEX = Regex("""\(\d{1,8},\d{1,8}(?:,\d{1,8})?\)""")
+    private val INLINE_WORD_TIMING_TAG_REGEX =
+        Regex("""<\d{1,3}:\d{2}(?:[.:]\d{2,3})?>|<\d{1,8}(?:,\d{1,8})?>|\(\d{1,8},\d{1,8}(?:,\d{1,8})?\)""")
+    private val TIMED_WORD_CHUNK_REGEX = Regex("""\S+\s*""")
     private val INVISIBLE_CHARS_REGEX = Regex("""[\u200B\u200C\u200D\u2060\u00AD]""")
     private const val NBSP = '\u00A0'
     private const val GENERIC_ROMANIZATION_TRANSFORM = "Any-Latin; Latin-ASCII"
@@ -431,7 +434,7 @@ object LyricsUtils {
                 result.addAll(entries)
             }
         }
-        return mergeLineSyncedTranslations(result).sorted()
+        return applyFallbackWordEndTimes(mergeLineSyncedTranslations(result).sorted())
     }
 
     fun normalizeLyricsText(lyrics: String): String {
@@ -572,11 +575,13 @@ object LyricsUtils {
         }
         val matchResult = LINE_REGEX.matchEntire(line.trim()) ?: return null
         val times = matchResult.groupValues[1]
-        val text = cleanInlineWordTimingText(matchResult.groupValues[3])
+        val rawText = matchResult.groupValues[3]
+        val text = cleanInlineWordTimingText(rawText)
+        val words = extractInlineWordTimings(rawText)
         val timeMatchResults = TIME_REGEX.findAll(times)
 
         return timeMatchResults
-            .map { timeMatchResult ->
+            .mapIndexed { index, timeMatchResult ->
                 val min = timeMatchResult.groupValues[1].toLong()
                 val sec = timeMatchResult.groupValues[2].toLong()
                 val milString = timeMatchResult.groupValues[3]
@@ -586,7 +591,7 @@ object LyricsUtils {
                     2 -> mil *= 10
                 }
                 val time = min * DateUtils.MINUTE_IN_MILLIS + sec * DateUtils.SECOND_IN_MILLIS + mil
-                LyricsEntry(time, text)
+                LyricsEntry(time, text, words.takeIf { index == 0 })
             }.toList()
     }
 
@@ -596,8 +601,9 @@ object LyricsUtils {
         }
         val matchResult = YRC_LINE_REGEX.matchEntire(line.trim()) ?: return null
         val time = matchResult.groupValues[1].toLongOrNull() ?: return null
-        val text = cleanInlineWordTimingText(matchResult.groupValues[2])
-        return listOf(LyricsEntry(time, text))
+        val rawText = matchResult.groupValues[2]
+        val text = cleanInlineWordTimingText(rawText)
+        return listOf(LyricsEntry(time, text, words = extractInlineWordTimings(rawText)))
     }
 
     private fun mergeLineSyncedTranslations(entries: List<LyricsEntry>): List<LyricsEntry> {
@@ -629,6 +635,192 @@ object LyricsUtils {
             .replace(YRC_WORD_TIME_REGEX, "")
             .replace(WHITESPACE_REGEX, " ")
             .trim { it.isWhitespace() || it == NBSP }
+
+    private const val WORD_TAIL_GAP_THRESHOLD_MS = 3000L
+    private const val WORD_TAIL_FALLBACK_MS = 4000L
+
+    /**
+     * Extracts per-word timings from the inline tags of an LRC-style line: the
+     * enhanced-LRC (A2) <mm:ss.xx> start tags, NetEase YRC (start,duration) tags
+     * and bare millisecond <start[,duration]> tags. Each tag timestamps the word
+     * text that follows it, matching what [cleanInlineWordTimingText] strips so
+     * the produced words still concatenate back to the cleaned line text.
+     * Returns null when the line carries no word-timing tags.
+     */
+    private fun extractInlineWordTimings(rawText: String): List<WordTimestamp>? {
+        val tagMatches = INLINE_WORD_TIMING_TAG_REGEX.findAll(rawText).toList()
+        if (tagMatches.isEmpty()) return null
+
+        var pendingStartSeconds = -1.0
+        var pendingDurationSeconds = -1.0
+        var hasPendingTag = false
+        var lastTagStartSeconds = -1.0
+        var lastTagDurationSeconds: Double? = null
+        var lastTagFollowedByBlank = true
+        var cursor = 0
+        val words = mutableListOf<WordTimestamp>()
+
+        fun flushSegment(segment: String) {
+            if (!hasPendingTag) return
+            appendTimedWordSegment(segment, pendingStartSeconds, pendingDurationSeconds, words)
+        }
+
+        for (match in tagMatches) {
+            val segment = rawText.substring(cursor, match.range.first)
+            flushSegment(segment)
+            if (hasPendingTag && segment.isNotBlank()) {
+                lastTagFollowedByBlank = false
+            }
+            parseInlineWordTimingTag(match.value)?.let { (startMs, durationMs) ->
+                pendingStartSeconds = startMs / 1000.0
+                pendingDurationSeconds = durationMs?.let { it / 1000.0 } ?: -1.0
+                hasPendingTag = true
+                lastTagStartSeconds = pendingStartSeconds
+                lastTagDurationSeconds = durationMs?.let { it / 1000.0 }
+                lastTagFollowedByBlank = true
+            }
+            cursor = match.range.last + 1
+        }
+        val tail = rawText.substring(cursor)
+        flushSegment(tail)
+        if (hasPendingTag && tail.isNotBlank()) {
+            lastTagFollowedByBlank = false
+        }
+
+        if (words.isEmpty()) return null
+
+        for (i in 0 until words.lastIndex) {
+            val word = words[i]
+            if (word.endTime <= word.startTime) {
+                val nextStart = words[i + 1].startTime
+                if (nextStart > word.startTime) {
+                    words[i] = word.copy(endTime = nextStart)
+                }
+            }
+        }
+
+        val lastWord = words.last()
+        if (lastWord.endTime <= lastWord.startTime) {
+            val explicitEnd = lastTagDurationSeconds?.let { lastTagStartSeconds + it }
+            val trailingTagEnd =
+                if (lastTagFollowedByBlank && lastTagDurationSeconds == null) {
+                    lastTagStartSeconds
+                } else {
+                    null
+                }
+            val endSeconds = maxOf(explicitEnd ?: -1.0, trailingTagEnd ?: -1.0)
+            if (endSeconds > lastWord.startTime) {
+                words[words.lastIndex] = lastWord.copy(endTime = endSeconds)
+            }
+        }
+
+        return words
+    }
+
+    /** Returns (startMs, durationMs?) for an inline word-timing tag, or null. */
+    private fun parseInlineWordTimingTag(token: String): Pair<Long, Long?>? =
+        when {
+            token.startsWith("(") -> {
+                val parts = token.trim('(', ')').split(',')
+                val start = parts.getOrNull(0)?.toLongOrNull() ?: return null
+                val duration = parts.getOrNull(1)?.toLongOrNull() ?: return null
+                start to duration
+            }
+
+            token.endsWith(">") -> {
+                val inner = token.substring(1, token.length - 1)
+                if (inner.contains(':')) {
+                    parseEnhancedLrcTagMillis(inner)?.let { start -> start to null }
+                } else {
+                    val parts = inner.split(',')
+                    val start = parts.getOrNull(0)?.toLongOrNull() ?: return null
+                    start to parts.getOrNull(1)?.toLongOrNull()
+                }
+            }
+
+            else -> null
+        }
+
+    private fun parseEnhancedLrcTagMillis(inner: String): Long? {
+        val colonIndex = inner.indexOf(':')
+        if (colonIndex <= 0) return null
+        val minutes = inner.substring(0, colonIndex).toLongOrNull() ?: return null
+        val rest = inner.substring(colonIndex + 1)
+        val separatorIndex = rest.indexOfFirst { it == '.' || it == ':' }
+        val seconds: Long
+        val fractionMs: Long
+        if (separatorIndex >= 0) {
+            seconds = rest.substring(0, separatorIndex).toLongOrNull() ?: return null
+            val fraction = rest.substring(separatorIndex + 1)
+            val value = fraction.toLongOrNull() ?: 0L
+            fractionMs =
+                when (fraction.length) {
+                    1 -> value * 100L
+                    2 -> value * 10L
+                    else -> value
+                }
+        } else {
+            seconds = rest.toLongOrNull() ?: return null
+            fractionMs = 0L
+        }
+        return minutes * DateUtils.MINUTE_IN_MILLIS + seconds * DateUtils.SECOND_IN_MILLIS + fractionMs
+    }
+
+    private fun appendTimedWordSegment(
+        segment: String,
+        startSeconds: Double,
+        durationSeconds: Double,
+        words: MutableList<WordTimestamp>,
+    ) {
+        if (segment.isEmpty()) return
+
+        val firstContentIndex = segment.indexOfFirst { !it.isWhitespace() }
+        if (firstContentIndex < 0) {
+            if (words.isNotEmpty()) {
+                val lastWord = words.last()
+                words[words.lastIndex] = lastWord.copy(text = lastWord.text + segment)
+            }
+            return
+        }
+        if (firstContentIndex > 0 && words.isNotEmpty()) {
+            val lastWord = words.last()
+            words[words.lastIndex] = lastWord.copy(text = lastWord.text + segment.substring(0, firstContentIndex))
+        }
+
+        val endSeconds = if (durationSeconds >= 0.0) startSeconds + durationSeconds else startSeconds
+        TIMED_WORD_CHUNK_REGEX.findAll(segment, firstContentIndex).forEach { chunk ->
+            words += WordTimestamp(
+                text = chunk.value,
+                startTime = startSeconds,
+                endTime = endSeconds,
+            )
+        }
+    }
+
+    /**
+     * Enhanced-LRC lines often omit a trailing word tag, leaving the final word
+     * without an end time. Bound it by the next line's start (mirroring the
+     * line-synced gap heuristic) so the karaoke sweep neither stalls on the last
+     * word nor flashes past it.
+     */
+    private fun applyFallbackWordEndTimes(entries: List<LyricsEntry>): List<LyricsEntry> =
+        entries.mapIndexed { index, entry ->
+            val words = entry.words ?: return@mapIndexed entry
+            val lastWord = words.lastOrNull() ?: return@mapIndexed entry
+            if (lastWord.endTime > lastWord.startTime) return@mapIndexed entry
+
+            val startMs = (lastWord.startTime * 1000.0).toLong()
+            val nextTime = entries.getOrNull(index + 1)?.time ?: -1L
+            val endMs =
+                when {
+                    nextTime <= startMs -> startMs + WORD_TAIL_FALLBACK_MS
+                    (nextTime - startMs) > WORD_TAIL_GAP_THRESHOLD_MS ->
+                        minOf(nextTime - 1L, startMs + WORD_TAIL_FALLBACK_MS)
+
+                    else -> nextTime - 1L
+                }
+            entry.copy(words = words.dropLast(1) + lastWord.copy(endTime = endMs / 1000.0))
+        }
 
     fun findCurrentLineIndex(
         lines: List<LyricsEntry>,

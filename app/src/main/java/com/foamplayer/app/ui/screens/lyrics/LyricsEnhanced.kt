@@ -221,9 +221,9 @@ fun LyricsEnhanced(
     // the full check. Non-XML lyrics (the overwhelmingly common case) now pay a
     // single indexOf instead of full-document regex normalization.
     val isSynced = remember(lyrics) {
-        lyrics != null && (isLineSyncedLrc(lyrics!!) || isPotentiallyTtml(lyrics!!))
+        lyrics != null && (isLineSyncedLrc(lyrics) || isPotentiallyTtml(lyrics))
     }
-    val isTtmlFormat = remember(lyrics) { lyrics != null && isPotentiallyTtml(lyrics!!) }
+    val isTtmlFormat = remember(lyrics) { lyrics != null && isPotentiallyTtml(lyrics) }
 
     var lyricsEntries by remember(lyrics) { mutableStateOf<List<LyricsEntry>>(emptyList()) }
     var syncedLyrics by remember(lyrics) { mutableStateOf(SyncedLyrics(emptyList())) }
@@ -248,7 +248,7 @@ fun LyricsEnhanced(
                     .filter { it.isNotBlank() }
                     .map { line -> LyricsEntry(time = -1L, text = line.trim()) }
             }
-            val builtSynced = buildSyncedLyrics(builtEntries, ttml, emptyMap())
+            val builtSynced = buildSyncedLyrics(builtEntries, emptyMap())
             builtEntries to builtSynced
         }
         lyricsEntries = entries
@@ -281,10 +281,10 @@ fun LyricsEnhanced(
                 async(Dispatchers.Default) {
                     val romanized: List<String?> =
                         try {
-                            if (isTtmlFormat && entry.words != null) {
-                                val mainWordCount = entry.words!!.count { !it.isBackground }
+                            if (entry.words != null) {
+                                val mainWordCount = entry.words.count { !it.isBackground }
                                 providedRomanizedWordsForEntry(entry, mainWordCount, romanizationPreferences)
-                                    ?: entry.words!!.filter { !it.isBackground }.map { word ->
+                                    ?: entry.words.filter { !it.isBackground }.map { word ->
                                         romanizeLyricsWordWithLineContext(word.text, entry.text, romanizationPreferences)
                                     }
                             } else {
@@ -296,8 +296,8 @@ fun LyricsEnhanced(
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            if (isTtmlFormat && entry.words != null) {
-                                List(entry.words!!.count { !it.isBackground }) { null }
+                            if (entry.words != null) {
+                                List(entry.words.count { !it.isBackground }) { null }
                             } else {
                                 listOf(null)
                             }
@@ -314,7 +314,7 @@ fun LyricsEnhanced(
             jobs.awaitAll().forEach { (index, romanized) ->
                 tempMap[index] = romanized
             }
-            buildSyncedLyrics(lyricsEntries, isTtmlFormat, tempMap)
+            buildSyncedLyrics(lyricsEntries, tempMap)
         }
         syncedLyrics = newSynced
     }
@@ -986,7 +986,6 @@ private fun Double.toMilliseconds(): Int = (this * 1000.0).roundToInt().coerceAt
 
 private fun buildSyncedLyrics(
     entries: List<LyricsEntry>,
-    isTtml: Boolean,
     romanizationMap: Map<Int, List<String?>>,
 ): SyncedLyrics {
     if (entries.isEmpty()) return SyncedLyrics(emptyList())
@@ -997,7 +996,7 @@ private fun buildSyncedLyrics(
         if (entry.isInstrumental) return@forEachIndexed
         if (entry.text.isBlank() && entry.words.isNullOrEmpty()) return@forEachIndexed
 
-        if (isTtml && entry.words != null) {
+        if (entry.words != null) {
             val translation = providedTranslationTextForEntry(entry)
             val mainWords = entry.words!!.filter { !it.isBackground }
             val bgWords = entry.words!!.filter { it.isBackground }
