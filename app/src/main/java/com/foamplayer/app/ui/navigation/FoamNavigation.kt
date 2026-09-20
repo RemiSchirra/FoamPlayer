@@ -147,6 +147,13 @@ val SharedElementEasing = FastOutSlowInEasing
 private const val PlayerTransitionMaxDurationMs = 500
 
 /**
+ * Duration budget for a PROGRAMMATIC close flight (nav-bar screen switch, back button,
+ * navigate-while-open): no finger is on screen providing inertia, so the full-residue
+ * flight needs more time than the gesture close to not read as an instant snap.
+ */
+private const val AutoCloseFlightDurationMs = 700
+
+/**
  * Shortest a gesture-committed close flight may take when the commit was a flick:
  * the drag's rate cap keeps the in-gesture fraction low, but the flight must always
  * read as an animation instead of collapsing to an instant transition.
@@ -451,7 +458,12 @@ fun FoamNavHost(
             }
         }
         val remainingFraction = (if (targetIsFull) 1f - isOpenProgress else isOpenProgress).coerceIn(0f, 1f)
-        val dynamicDuration = (PlayerTransitionMaxDurationMs * remainingFraction).toInt().coerceAtLeast(1)
+        val maxDuration = if (!targetIsFull && gestureVelocityPxPerSec.isNaN()) {
+            AutoCloseFlightDurationMs
+        } else {
+            PlayerTransitionMaxDurationMs
+        }
+        val dynamicDuration = (maxDuration * remainingFraction).toInt().coerceAtLeast(1)
         val duration = if (!gestureVelocityPxPerSec.isNaN() &&
             gestureVelocityPxPerSec >= DownSwipeCommitVelocityPxPerSec
         ) {
