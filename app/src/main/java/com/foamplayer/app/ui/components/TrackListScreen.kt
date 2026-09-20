@@ -351,6 +351,7 @@ fun TrackListScreen(
             if (!heroLayout.isImmersive) {
                 TrackListTopBarRow(
                     onBack = onBack,
+                    accentColor = heroAccentColor,
                     editMode = editMode,
                     onEditModeChange = onEditModeChange,
                     onDensityChange = onDensityChange,
@@ -561,6 +562,7 @@ fun TrackListScreen(
             ) {
                 TrackListTopBarRow(
                     onBack = onBack,
+                    accentColor = heroAccentColor,
                     editMode = editMode,
                     onEditModeChange = onEditModeChange,
                     onDensityChange = onDensityChange,
@@ -641,6 +643,7 @@ private fun TrackListHero(
 @Composable
 private fun TrackListTopBarRow(
     onBack: () -> Unit,
+    accentColor: Color,
     editMode: Boolean,
     onEditModeChange: ((Boolean) -> Unit)?,
     onDensityChange: ((MediaDensity) -> Unit)?,
@@ -686,7 +689,7 @@ private fun TrackListTopBarRow(
                 Icon(
                     imageVector = Icons.Rounded.Edit,
                     contentDescription = "Edit",
-                    tint = if (editMode) FoamTheme.accentColor else FoamTheme.colors.textPrimary,
+                    tint = if (editMode) accentColor else FoamTheme.colors.textPrimary,
                     modifier = Modifier.size(24.dp)
                 )
             }
