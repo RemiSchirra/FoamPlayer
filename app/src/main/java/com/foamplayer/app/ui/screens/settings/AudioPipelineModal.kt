@@ -4,8 +4,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,6 +22,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -91,8 +96,9 @@ private fun PipelineStageRow(
         PipelineStageStatus.BYPASSED -> FoamTheme.colors.textSecondary
         PipelineStageStatus.WARN -> FoamTheme.colors.bitPerfectInactive
     }
+    val lineColor = FoamTheme.colors.borderOverlay
 
-    Row {
+    Row(modifier = Modifier.height(IntrinsicSize.Min)) {
         // Status dot + connector line.
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
@@ -106,8 +112,15 @@ private fun PipelineStageRow(
                 Box(
                     modifier = Modifier
                         .width(2.dp)
-                        .height(38.dp)
-                        .background(FoamTheme.colors.borderOverlay)
+                        .fillMaxHeight()
+                        .background(lineColor)
+                        .drawBehind {
+                            drawRect(
+                                color = lineColor,
+                                topLeft = Offset(0f, size.height),
+                                size = Size(size.width, 5.dp.toPx())
+                            )
+                        }
                 )
             }
         }
