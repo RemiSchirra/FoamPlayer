@@ -254,42 +254,72 @@ private fun FidelityScoreCard(
     score: FidelityScore?,
     hasTrack: Boolean
 ) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
             .background(FoamTheme.colors.surface)
-            .padding(FoamDimens.paddingMedium)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { expanded = !expanded }
+            )
     ) {
         Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                FidelityRing(score = score)
-
-                Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    BasicText(
-                        text = score?.label
-                            ?: if (hasTrack) "Measuring…" else stringResource(R.string.fidelity_no_playback),
-                        style = FoamTheme.typography.titleMedium.copy(
-                            color = scoreColor(score),
-                            fontWeight = FontWeight.Bold
-                        )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = { expanded = !expanded }
                     )
-                    Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
-                    BasicText(
-                        text = stringResource(R.string.audio_fidelity_desc),
-                        style = FoamTheme.typography.caption
+                    .padding(FoamDimens.paddingMedium)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FidelityRing(score = score)
+
+                    Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        BasicText(
+                            text = score?.label
+                                ?: if (hasTrack) "Measuring…" else stringResource(R.string.fidelity_no_playback),
+                            style = FoamTheme.typography.titleMedium.copy(
+                                color = scoreColor(score),
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
+                        BasicText(
+                            text = stringResource(R.string.audio_fidelity_desc),
+                            style = FoamTheme.typography.caption
+                        )
+                    }
+                    Icon(
+                        imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        contentDescription = null,
+                        tint = FoamTheme.colors.textSecondary
                     )
                 }
             }
 
             // Itemized breakdown.
-            if (score != null) {
-                Spacer(modifier = Modifier.height(FoamDimens.paddingMedium))
-                score.items.forEachIndexed { index, item ->
-                    if (index > 0) SectionDivider()
-                    FidelityItemRow(item)
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = FoamDimens.paddingMedium)
+                        .padding(bottom = FoamDimens.paddingMedium)
+                ) {
+                    if (score != null) {
+                        score.items.forEachIndexed { index, item ->
+                            if (index > 0) SectionDivider()
+                            FidelityItemRow(item)
+                        }
+                    }
                 }
             }
         }
@@ -461,55 +491,70 @@ private fun DeviceConfigCard(
             .background(FoamTheme.colors.surface)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = FoamTheme.colors.textPrimary),
+                indication = null,
                 onClick = { expanded = !expanded }
             )
-            .padding(FoamDimens.paddingMedium)
     ) {
         Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isActive) FoamTheme.colors.bitPerfectActive
-                            else FoamTheme.colors.borderOverlay
-                        )
-                )
-                Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
-                Column(modifier = Modifier.weight(1f)) {
-                    BasicText(
-                        text = device.name,
-                        style = FoamTheme.typography.titleMedium.copy(
-                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-                        )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = { expanded = !expanded }
                     )
-                    BasicText(
-                        text = "${device.typeLabel} · up to ${formatRate(device.maxSupportedSampleRate)}" +
-                                if (device.supportsDirectPlayback) " · direct" else "",
-                        style = FoamTheme.typography.caption
-                    )
-                }
-                if (isActive) {
-                    BasicText(
-                        text = stringResource(R.string.device_active),
-                        style = FoamTheme.typography.caption.copy(
-                            color = FoamTheme.colors.bitPerfectActive,
-                            fontWeight = FontWeight.Bold
-                        )
+                    .padding(FoamDimens.paddingMedium)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isActive) FoamTheme.colors.bitPerfectActive
+                                else FoamTheme.colors.borderOverlay
+                            )
                     )
                     Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
+                    Column(modifier = Modifier.weight(1f)) {
+                        BasicText(
+                            text = device.name,
+                            style = FoamTheme.typography.titleMedium.copy(
+                                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+                            )
+                        )
+                        BasicText(
+                            text = "${device.typeLabel} · up to ${formatRate(device.maxSupportedSampleRate)}" +
+                                    if (device.supportsDirectPlayback) " · direct" else "",
+                            style = FoamTheme.typography.caption
+                        )
+                    }
+                    if (isActive) {
+                        BasicText(
+                            text = stringResource(R.string.device_active),
+                            style = FoamTheme.typography.caption.copy(
+                                color = FoamTheme.colors.bitPerfectActive,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
+                    }
+                    Icon(
+                        imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        contentDescription = null,
+                        tint = FoamTheme.colors.textSecondary
+                    )
                 }
-                Icon(
-                    imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                    contentDescription = null,
-                    tint = FoamTheme.colors.textSecondary
-                )
             }
 
             AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.padding(top = FoamDimens.paddingMedium)) {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = FoamDimens.paddingMedium)
+                        .padding(bottom = FoamDimens.paddingMedium)
+                ) {
                     BasicText(
                         text = stringResource(R.string.device_bit_perfect_mode),
                         style = FoamTheme.typography.caption.copy(fontWeight = FontWeight.Bold)
