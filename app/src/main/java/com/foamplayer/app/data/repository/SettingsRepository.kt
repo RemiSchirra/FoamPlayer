@@ -8,6 +8,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.foamplayer.app.audio.device.DeviceAudioConfig
+import com.foamplayer.app.audio.device.DeviceBitPerfectMode
+import com.foamplayer.app.audio.dsp.DspPersistence
+import com.foamplayer.app.audio.dsp.DspPreset
+import com.foamplayer.app.audio.dsp.DspState
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.CollectionLayoutAlbumKey
@@ -204,6 +209,21 @@ class SettingsRepository @Inject constructor(
         it.copy(discordOnlineArt = enabled)
     }
 
+    /** Persists the whole DSP chain state (EQ, tone, balance, volume). */
+    suspend fun setDspState(state: DspState) = update {
+        it.copy(dspStateSerialized = DspPersistence.serialize(state))
+    }
+
+    /** Persists the user-saved EQ presets. */
+    suspend fun setDspUserPresets(presets: List<DspPreset>) = update {
+        it.copy(dspUserPresets = DspPersistence.serializePresets(presets))
+    }
+
+    /** Persists one output device's audio configuration. */
+    suspend fun setDeviceAudioConfig(deviceId: String, config: DeviceAudioConfig) = update {
+        it.copy(deviceAudioConfigs = it.deviceAudioConfigs + (deviceId to config))
+    }
+
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
         listenedThresholdPercent = this[Keys.LISTENED_THRESHOLD_PERCENT]
@@ -277,7 +297,10 @@ class SettingsRepository @Inject constructor(
             ?: AppSettings().collectionLayoutPlaylist,
         onboardingCompleted = this[Keys.ONBOARDING_COMPLETED] ?: AppSettings().onboardingCompleted,
         discordPresenceEnabled = this[Keys.DISCORD_PRESENCE_ENABLED] ?: AppSettings().discordPresenceEnabled,
-        discordOnlineArt = this[Keys.DISCORD_ONLINE_ART] ?: AppSettings().discordOnlineArt
+        discordOnlineArt = this[Keys.DISCORD_ONLINE_ART] ?: AppSettings().discordOnlineArt,
+        dspStateSerialized = this[Keys.DSP_STATE].orEmpty(),
+        dspUserPresets = this[Keys.DSP_USER_PRESETS].orEmpty(),
+        deviceAudioConfigs = deserializeDeviceAudioConfigs(this[Keys.DEVICE_AUDIO_CONFIGS])
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -328,6 +351,9 @@ class SettingsRepository @Inject constructor(
         this[Keys.ONBOARDING_COMPLETED] = settings.onboardingCompleted
         this[Keys.DISCORD_PRESENCE_ENABLED] = settings.discordPresenceEnabled
         this[Keys.DISCORD_ONLINE_ART] = settings.discordOnlineArt
+        this[Keys.DSP_STATE] = settings.dspStateSerialized
+        this[Keys.DSP_USER_PRESETS] = settings.dspUserPresets
+        this[Keys.DEVICE_AUDIO_CONFIGS] = serializeDeviceAudioConfigs(settings.deviceAudioConfigs)
     }
 
     private object Keys {
@@ -381,8 +407,36 @@ class SettingsRepository @Inject constructor(
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
         val DISCORD_ONLINE_ART = booleanPreferencesKey("discord_online_art")
+        val DSP_STATE = stringPreferencesKey("dsp_state")
+        val DSP_USER_PRESETS = stringPreferencesKey("dsp_user_presets")
+        val DEVICE_AUDIO_CONFIGS = stringPreferencesKey("device_audio_configs")
     }
 }
+
+/**
+ * "id=mode:rate;id=mode:rate" — unknown ids/modes are dropped so removed devices and
+ * renamed enum members clean themselves out on the next write.
+ */
+private fun deserializeDeviceAudioConfigs(stored: String?): Map<String, DeviceAudioConfig> =
+    stored?.split(";")?.mapNotNull { entry ->
+        val parts = entry.split("=", limit = 2)
+        if (parts.size != 2) return@mapNotNull null
+        val id = parts[0].trim().ifEmpty { return@mapNotNull null }
+        val configParts = parts[1].split(":", limit = 2)
+        if (configParts.size != 2) return@mapNotNull null
+        val mode = DeviceBitPerfectMode.entries.firstOrNull { it.name == configParts[0] }
+            ?: return@mapNotNull null
+        val rate = configParts[1].toIntOrNull() ?: 0
+        id to DeviceAudioConfig(
+            bitPerfectMode = mode,
+            sampleRateOverrideHz = rate
+        )
+    }?.toMap() ?: emptyMap()
+
+private fun serializeDeviceAudioConfigs(configs: Map<String, DeviceAudioConfig>): String =
+    configs.entries.joinToString(";") { (id, config) ->
+        "${id.trim()}=${config.bitPerfectMode.name}:${config.sampleRateOverrideHz}"
+    }
 
 /** "VIEW=DENSITY;VIEW=DENSITY" — unknown views/densities are dropped, so new entries default cleanly. */
 private fun deserializeMediaDensities(stored: String?): Map<MediaListView, MediaDensity> =

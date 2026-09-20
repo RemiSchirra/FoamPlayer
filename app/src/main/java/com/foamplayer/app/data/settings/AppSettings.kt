@@ -1,6 +1,8 @@
 package com.foamplayer.app.data.settings
 
 import androidx.compose.runtime.Immutable
+import com.foamplayer.app.audio.device.DeviceAudioConfig
+import com.foamplayer.app.audio.dsp.DspPersistence
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.CollectionSortMode
@@ -90,7 +92,13 @@ data class AppSettings(
     /** Publishes the currently playing track as Discord Rich Presence via the user's Discord account. */
     val discordPresenceEnabled: Boolean = false,
     /** Looks tracks up online (Spotify, then YouTube) and uses the album cover as the Discord image. */
-    val discordOnlineArt: Boolean = true
+    val discordOnlineArt: Boolean = true,
+    /** Complete DSP chain state (EQ, tone, balance, volume), serialized by [DspPersistence]. */
+    val dspStateSerialized: String = "",
+    /** User-saved EQ presets, serialized by [DspPersistence]. */
+    val dspUserPresets: String = "",
+    /** Per-output-device audio configuration, keyed by device id. */
+    val deviceAudioConfigs: Map<String, DeviceAudioConfig> = emptyMap()
 ) {
     /**
      * Items of the main bar, in the user's configured order. Includes the [NavBarItem.MORE]
@@ -104,6 +112,10 @@ data class AppSettings(
 
     /** The [MediaDensity] remembered by [view]; every view starts as the classic row. */
     fun mediaDensity(view: MediaListView): MediaDensity = mediaDensities[view] ?: MediaDensity.ROW_NORMAL
+
+    /** The [DeviceAudioConfig] remembered by [deviceId]; unknown devices start at defaults. */
+    fun deviceAudioConfig(deviceId: String?): DeviceAudioConfig =
+        if (deviceId == null) DeviceAudioConfig() else deviceAudioConfigs[deviceId] ?: DeviceAudioConfig()
 
     /** The [CollectionSortMode] remembered by [view]; every view starts at its [defaultSortMode]. */
     fun mediaSortMode(view: MediaListView): CollectionSortMode =

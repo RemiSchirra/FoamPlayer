@@ -4,13 +4,20 @@ import android.content.Context
 import android.view.Choreographer
 import androidx.annotation.OptIn
 import androidx.core.net.toUri
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import com.foamplayer.app.audio.bitperfect.BitPerfectDetector
-import com.foamplayer.app.audio.equalizer.EqualizerManager
+import com.foamplayer.app.audio.device.OutputDeviceManager
+import com.foamplayer.app.audio.dsp.DspEngine
+import com.foamplayer.app.audio.dsp.DspState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
@@ -40,11 +47,38 @@ import kotlin.random.Random
 class AudioEngine @Inject constructor(
     @ApplicationContext private val context: Context,
     private val bitPerfectDetector: BitPerfectDetector,
-    private val equalizerManager: EqualizerManager,
+    private val dspEngine: DspEngine,
+    private val outputDeviceManager: OutputDeviceManager,
     private val settingsRepository: SettingsRepository,
     private val trackRepository: TrackRepository
 ) {
-    val player: ExoPlayer = ExoPlayer.Builder(context).build()
+    /**
+     * ExoPlayer built with a custom audio sink that carries the [DspEngine]'s
+     * processor: every decoded PCM buffer flows through the float DSP chain before
+     * reaching the AudioTrack. When the DSP state is neutral the processor is a
+     * byte-for-byte passthrough, which is what keeps the output bit-perfect.
+     */
+    @OptIn(UnstableApi::class)
+    val player: ExoPlayer = buildPlayer()
+
+    @OptIn(UnstableApi::class)
+    private fun buildPlayer(): ExoPlayer {
+        val renderersFactory = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): AudioSink? =
+                DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf(dspEngine.processor))
+                    // Float-capable AudioTrack for float-decoded sources; the DSP
+                    // processor itself always emits the stream's original encoding.
+                    .setEnableFloatOutput(true)
+                    .build()
+        }
+        return ExoPlayer.Builder(context, renderersFactory).build()
+    }
+
     private val scope = CoroutineScope(Dispatchers.Main + Job())
 
     private val _playbackState = MutableStateFlow(PlaybackState())
@@ -110,6 +144,13 @@ class AudioEngine @Inject constructor(
     @Volatile
     private var listenedThresholdPercent: Int = AppSettings.DEFAULT_LISTENED_THRESHOLD_PERCENT
 
+    // Latest settings snapshot, read when evaluating the audio output path.
+    @Volatile
+    private var latestSettings: AppSettings = AppSettings()
+
+    // Last published AudioOutputInfo; used to avoid re-emitting identical values.
+    private var lastAudioOutputInfo: com.foamplayer.app.audio.bitperfect.AudioOutputInfo? = null
+
     companion object {
         // Tracks kept loaded on each side of the current track.
         private const val WINDOW_RADIUS = 15
@@ -130,6 +171,7 @@ class AudioEngine @Inject constructor(
         startProgressTracker()
         observeLibraryForAuxiliaryRefill()
         observeListenedThreshold()
+        startAudioPathObservers()
     }
 
     /** Suspends until the next frame is rendered (uses Choreographer directly,
@@ -205,6 +247,10 @@ class AudioEngine @Inject constructor(
                     )
                     _positionMs.value = 0L
 
+                    // The new track's format may hit the output path differently
+                    // (rate/depth support, direct capability): re-evaluate.
+                    recomputeAudioOutputInfo()
+
                     if (pendingWindowResync) {
                         pendingWindowResync = false
                         loadWindowAndPlay(currentQueue, index)
@@ -217,11 +263,84 @@ class AudioEngine @Inject constructor(
                     }
                 }
             }
-
-            override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                equalizerManager.attachToAudioSession(audioSessionId)
-            }
         })
+    }
+
+    /**
+     * Re-evaluates the whole audio output path (bit-perfect verdict, fidelity score,
+     * pipeline snapshot) from the current track, device, settings and DSP state, and
+     * publishes it into [PlaybackState.audioOutputInfo] when anything changed.
+     */
+    private fun recomputeAudioOutputInfo() {
+        val track = _playbackState.value.currentTrack
+        if (track == null) {
+            if (lastAudioOutputInfo != null) {
+                lastAudioOutputInfo = null
+                _playbackState.value = _playbackState.value.copy(audioOutputInfo = null)
+            }
+            return
+        }
+        val info = bitPerfectDetector.evaluate(
+            BitPerfectDetector.Input(
+                sourceSampleRate = track.sampleRate,
+                sourceBitDepth = track.bitDepth,
+                sourceFormat = track.format,
+                sourceChannels = track.channels,
+                sourceBitrateKbps = track.bitrate,
+                dspState = dspEngine.state.value,
+                masterBitPerfectEnabled = latestSettings.bitPerfectEnabled,
+                deviceConfig = latestSettings.deviceAudioConfig(outputDeviceManager.activeDevice.value?.id)
+            )
+        )
+        if (info != lastAudioOutputInfo) {
+            lastAudioOutputInfo = info
+            _playbackState.value = _playbackState.value.copy(audioOutputInfo = info)
+        }
+    }
+
+    /**
+     * Keeps every input of the audio-path evaluation observed: the DSP state (also
+     * drives the direct-volume behavior), the active output device, and the user
+     * settings (bit-perfect switch, per-device configs). Any change re-evaluates
+     * [PlaybackState.audioOutputInfo].
+     */
+    private fun startAudioPathObservers() {
+        outputDeviceManager.start()
+
+        // Media attributes: proper routing for the sink (media usage, music content)
+        // and focus handling, which the default player construction left unset.
+        player.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .build(),
+            /* handleAudioFocus = */ true
+        )
+
+        scope.launch {
+            dspEngine.state.collect { state ->
+                applyVolumePath(state)
+                recomputeAudioOutputInfo()
+            }
+        }
+        scope.launch {
+            outputDeviceManager.activeDevice.collect {
+                recomputeAudioOutputInfo()
+            }
+        }
+    }
+
+    /**
+     * Direct volume control (Poweramp-style): gain is applied inside the float DSP
+     * chain and the AudioTrack stays at full scale — no AudioFlinger re-quantization.
+     * When disabled, the DSP gain is bypassed and the platform mixer does the scaling.
+     */
+    private fun applyVolumePath(state: DspState) {
+        player.volume = if (state.directVolumeControl) {
+            1f
+        } else {
+            state.volumePercent / 100f
+        }
     }
 
     /**
@@ -259,6 +378,11 @@ class AudioEngine @Inject constructor(
         scope.launch {
             settingsRepository.settings.collect { settings ->
                 listenedThresholdPercent = settings.listenedThresholdPercent
+                // Bit-perfect switch / per-device configs feed the path evaluation.
+                val configChanged = latestSettings.bitPerfectEnabled != settings.bitPerfectEnabled ||
+                        latestSettings.deviceAudioConfigs != settings.deviceAudioConfigs
+                latestSettings = settings
+                if (configChanged) recomputeAudioOutputInfo()
             }
         }
     }
@@ -301,6 +425,7 @@ class AudioEngine @Inject constructor(
                 queueSourceId = null,
                 queueSourceFlags = emptyList()
             )
+            recomputeAudioOutputInfo()
             return
         }
 
@@ -906,6 +1031,8 @@ class AudioEngine @Inject constructor(
             auxiliaryFlags = normalizeAuxiliaryFlags(newFlags, newQueue.size),
             queueSourceFlags = normalizeQueueSourceFlags(newSourceFlags, newQueue.size)
         )
+
+        if (newQueue.isEmpty()) recomputeAudioOutputInfo()
 
         if (removedIsAuxiliary) {
             scheduleAuxiliaryRefill()
