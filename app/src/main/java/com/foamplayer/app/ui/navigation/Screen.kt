@@ -23,6 +23,7 @@ sealed class Screen(val route: String, val title: String) {
         Screen("settings/lyrics/manager/results?trackId={trackId}", "Lyrics Search Results") {
         fun createRoute(trackId: Long) = "settings/lyrics/manager/results?trackId=$trackId"
     }
+    object SettingsMisc : Screen("settings/misc", "Misc Settings")
     object SettingsTest : Screen("settings/test", "Component Test")
 
     object ArtistDetail : Screen("artist/{artistName}", "Artist") {

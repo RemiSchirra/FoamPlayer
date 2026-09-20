@@ -124,6 +124,7 @@ import com.foamplayer.app.ui.screens.settings.CollectionsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.LyricsSettingsScreen
+import com.foamplayer.app.ui.screens.settings.MiscSettingsScreen
 import com.foamplayer.app.ui.screens.settings.NavBarSettingsScreen
 import com.foamplayer.app.ui.screens.settings.PlayerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.SettingsScreen
@@ -1340,6 +1341,7 @@ fun FoamNavHost(
                                             onNavigateToUI = { navController.navigate(Screen.SettingsUI.route) },
                                             onNavigateToLibrary = { navController.navigate(Screen.SettingsLibrary.route) },
                                             onNavigateToLyrics = { navController.navigate(Screen.SettingsLyrics.route) },
+                                            onNavigateToMisc = { navController.navigate(Screen.SettingsMisc.route) },
                                             onNavigateToTest = { navController.navigate(Screen.SettingsTest.route) }
                                         )
                                     }
@@ -1399,6 +1401,9 @@ fun FoamNavHost(
                                                 navController.navigate(Screen.SettingsLyricsManager.route)
                                             }
                                         )
+                                    }
+                                    composable(Screen.SettingsMisc.route) {
+                                        MiscSettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     composable(Screen.SettingsTest.route) {
                                         TestSettingsScreen(onBack = { navController.popBackStack() })

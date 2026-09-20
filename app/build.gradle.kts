@@ -119,6 +119,7 @@ dependencies {
     testImplementation("org.mockito:mockito-core:5.14.2")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 
+    implementation(project(":discord"))
     implementation(project(":canvas:apple"))
     implementation(project(":canvas:echomusic"))
     implementation(project(":canvas:tidal"))

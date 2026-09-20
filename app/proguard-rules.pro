@@ -19,3 +19,14 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# kotlinx.serialization: Discord module models
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keep,includedescriptorclasses class com.foamplayer.discord.**$$serializer { *; }
+-keepclassmembers class com.foamplayer.discord.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.foamplayer.discord.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}

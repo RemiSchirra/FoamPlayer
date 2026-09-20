@@ -86,7 +86,11 @@ data class AppSettings(
     val collectionLayoutAlbum: CollectionHeroLayout = CollectionHeroLayout.Compact,
     val collectionLayoutPlaylist: CollectionHeroLayout = CollectionHeroLayout.Compact,
     /** False until the first-run onboarding flow (welcome / permissions / library) is finished. */
-    val onboardingCompleted: Boolean = false
+    val onboardingCompleted: Boolean = false,
+    /** Publishes the currently playing track as Discord Rich Presence via the user's Discord account. */
+    val discordPresenceEnabled: Boolean = false,
+    /** Looks tracks up online (Spotify, then YouTube) and uses the album cover as the Discord image. */
+    val discordOnlineArt: Boolean = true
 ) {
     /**
      * Items of the main bar, in the user's configured order. Includes the [NavBarItem.MORE]

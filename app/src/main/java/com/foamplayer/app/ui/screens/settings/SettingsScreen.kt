@@ -40,6 +40,7 @@ fun SettingsScreen(
     onNavigateToUI: () -> Unit,
     onNavigateToLibrary: () -> Unit,
     onNavigateToLyrics: () -> Unit,
+    onNavigateToMisc: () -> Unit,
     onNavigateToTest: () -> Unit
 ) {
     Column(
@@ -94,6 +95,16 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.lyrics_settings_subtitle),
                     icon = FoamTheme.icons.current.lyrics,
                     onClick = onNavigateToLyrics
+                )
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+            }
+
+            item {
+                SettingsCategoryItem(
+                    title = stringResource(R.string.settings_misc),
+                    subtitle = stringResource(R.string.misc_settings_subtitle),
+                    icon = FoamTheme.icons.current.misc,
+                    onClick = onNavigateToMisc
                 )
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
             }

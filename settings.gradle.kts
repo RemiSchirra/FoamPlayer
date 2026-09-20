@@ -24,6 +24,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "FoamPlayer"
 include(":app")
+include(":discord")
 include(":canvas:core")
 include(":canvas:apple")
 include(":canvas:echomusic")

@@ -15,6 +15,7 @@ import com.foamplayer.app.MainActivity
 import com.foamplayer.app.R
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.RepeatMode
+import com.foamplayer.app.discord.DiscordPresenceController
 import com.google.common.util.concurrent.Futures
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -26,6 +27,9 @@ class PlaybackService : MediaSessionService() {
     @Inject
     lateinit var audioEngine: AudioEngine
 
+    @Inject
+    lateinit var discordPresenceController: DiscordPresenceController
+
     private var mediaSession: MediaSession? = null
 
     private val shuffleCommand = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)
@@ -33,6 +37,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        discordPresenceController.start()
         val callback = object : MediaSession.Callback {
             override fun onConnect(
                 session: MediaSession,
@@ -108,6 +113,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        discordPresenceController.stop()
         mediaSession?.run {
             player.release()
             release()

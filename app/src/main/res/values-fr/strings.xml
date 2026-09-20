@@ -222,4 +222,20 @@
     <string name="onboarding_library_title">Bibliothèque</string>
     <string name="onboarding_library_subtitle">Choisissez où se trouve votre musique, puis lancez la première analyse.</string>
     <string name="onboarding_get_started">Commencer</string>
+
+    <!-- Divers / Discord -->
+    <string name="settings_misc">Divers</string>
+    <string name="misc_settings_subtitle">Intégrations et autres options</string>
+    <string name="discord_section">Discord</string>
+    <string name="discord_presence">Discord Rich Presence</string>
+    <string name="discord_presence_desc">Affiche ce que vous écoutez sur votre profil Discord</string>
+    <string name="discord_log_in">Se connecter avec Discord</string>
+    <string name="discord_log_out">Se déconnecter</string>
+    <string name="discord_logged_in_as">Connecté en tant que %1$s</string>
+    <string name="discord_not_connected">Non connecté à Discord</string>
+    <string name="discord_waiting_authorization">En attente de l\'autorisation Discord…</string>
+    <string name="discord_connected">Connecté à Discord</string>
+    <string name="discord_authorization_failed">Échec de l\'autorisation Discord</string>
+    <string name="discord_online_art">Récupérer les pochettes en ligne</string>
+    <string name="discord_online_art_desc">Recherche chaque titre sur Spotify (par titre et artiste) et utilise sa pochette d\'album sur Discord, avec repli sur les miniatures YouTube. Les titres et noms d\'artiste sont envoyés à ces services.</string>
 </resources>

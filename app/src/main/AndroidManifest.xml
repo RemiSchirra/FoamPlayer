@@ -35,6 +35,21 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".discord.DiscordOAuthCallbackActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.FoamPlayer">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="foamplayer-discord" android:host="authorize" android:path="/callback" />
+                <data android:scheme="foamplayer-discord" android:path="/authorize/callback" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".audio.service.PlaybackService"
             android:foregroundServiceType="mediaPlayback"

@@ -20,9 +20,13 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
@@ -51,6 +55,16 @@ class AudioEngine @Inject constructor(
     // directly where live position is needed (seek bar, lyrics sync).
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs
+
+    // Emitted on explicit seeks (scrub bar / jump), NOT on frame ticks. Lets
+    // observers react to position jumps without subscribing to positionMs,
+    // whose subscription would keep the progress tracker in its per-frame
+    // polling mode even in background.
+    private val _seekEvents = MutableSharedFlow<Long>(
+        extraBufferCapacity = 4,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val seekEvents: SharedFlow<Long> = _seekEvents.asSharedFlow()
 
     private var progressJob: Job? = null
 
@@ -725,6 +739,7 @@ class AudioEngine @Inject constructor(
         // recomposing every collector of playbackState (FoamApp, FoamNavHost,
         // MiniPlayer, FullPlayerScreen) on each move; nothing reads it from there.
         _positionMs.value = positionMs
+        _seekEvents.tryEmit(positionMs)
     }
 
     /**

@@ -196,6 +196,14 @@ class SettingsRepository @Inject constructor(
         it.copy(onboardingCompleted = completed)
     }
 
+    suspend fun setDiscordPresenceEnabled(enabled: Boolean) = update {
+        it.copy(discordPresenceEnabled = enabled)
+    }
+
+    suspend fun setDiscordOnlineArt(enabled: Boolean) = update {
+        it.copy(discordOnlineArt = enabled)
+    }
+
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
         listenedThresholdPercent = this[Keys.LISTENED_THRESHOLD_PERCENT]
@@ -267,7 +275,9 @@ class SettingsRepository @Inject constructor(
             ?: AppSettings().collectionLayoutAlbum,
         collectionLayoutPlaylist = CollectionHeroLayout.fromName(this[Keys.COLLECTION_LAYOUT_PLAYLIST])
             ?: AppSettings().collectionLayoutPlaylist,
-        onboardingCompleted = this[Keys.ONBOARDING_COMPLETED] ?: AppSettings().onboardingCompleted
+        onboardingCompleted = this[Keys.ONBOARDING_COMPLETED] ?: AppSettings().onboardingCompleted,
+        discordPresenceEnabled = this[Keys.DISCORD_PRESENCE_ENABLED] ?: AppSettings().discordPresenceEnabled,
+        discordOnlineArt = this[Keys.DISCORD_ONLINE_ART] ?: AppSettings().discordOnlineArt
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -316,6 +326,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.COLLECTION_LAYOUT_ALBUM] = settings.collectionLayoutAlbum.name
         this[Keys.COLLECTION_LAYOUT_PLAYLIST] = settings.collectionLayoutPlaylist.name
         this[Keys.ONBOARDING_COMPLETED] = settings.onboardingCompleted
+        this[Keys.DISCORD_PRESENCE_ENABLED] = settings.discordPresenceEnabled
+        this[Keys.DISCORD_ONLINE_ART] = settings.discordOnlineArt
     }
 
     private object Keys {
@@ -367,6 +379,8 @@ class SettingsRepository @Inject constructor(
         val COLLECTION_LAYOUT_ALBUM = CollectionLayoutAlbumKey
         val COLLECTION_LAYOUT_PLAYLIST = CollectionLayoutPlaylistKey
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
+        val DISCORD_ONLINE_ART = booleanPreferencesKey("discord_online_art")
     }
 }
 
