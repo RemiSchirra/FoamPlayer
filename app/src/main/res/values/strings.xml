@@ -44,6 +44,7 @@
     <string name="start_scan">START SCAN</string>
     <string name="scanning_caps">SCANNING</string>
     <string name="scanning_status">Scanning: %1$s (%2$d%%)</string>
+    <string name="scan_finishing">Finishing the scan…</string>
     <string name="scan_finished">Scan finished: %1$d tracks found</string>
 
     <string name="no_audio_detected">No audio files detected.\nGo to Settings to add folders and scan your library.</string>

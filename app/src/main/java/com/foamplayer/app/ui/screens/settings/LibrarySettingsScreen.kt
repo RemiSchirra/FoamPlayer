@@ -233,7 +233,11 @@ fun LibrarySettingsScreen(
                                 when (val status = scanStatus) {
                                     is ScanStatus.Scanning -> {
                                         BasicText(
-                                            text = stringResource(R.string.scanning_status, status.currentFile, (status.progress * 100).toInt()),
+                                            // Extraction is done at 100%, but art probing and
+                                            // the DB write still run for a while: show a
+                                            // "finishing" label instead of the last file.
+                                            text = if (status.progress >= 1f) stringResource(R.string.scan_finishing)
+                                            else stringResource(R.string.scanning_status, status.currentFile, (status.progress * 100).toInt()),
                                             style = FoamTheme.typography.caption
                                         )
                                     }
