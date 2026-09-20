@@ -111,7 +111,8 @@ fun rememberTrackFoamModalState(): TrackFoamModalState = remember { TrackFoamMod
  * - The details page: the one-line technical spec summary plus the full track
  *   metadata (tags, file info), reached from the Details button with a
  *   push-style slide — the header never leaves the composition, so the
- *   transition reads as one continuous sheet; a Back button returns to the
+ *   transition reads as one continuous sheet; a Lyrics row opens the lyrics
+ *   details sheet on top of the track sheet, and a Back button returns to the
  *   actions.
  *
  * Every queue/navigation action dismisses the sheet before invoking its
@@ -126,6 +127,7 @@ fun TrackFoamModal(
     onAddToPlaylist: (TrackEntity) -> Unit = {},
     onSeeArtist: (TrackEntity) -> Unit = {},
     onSeeAlbum: (TrackEntity) -> Unit = {},
+    onOpenLyrics: (TrackEntity) -> Unit = {},
     onResetPlayStats: (TrackEntity) -> Unit = {},
     onSetInstrumental: (TrackEntity, Boolean) -> Unit = { _, _ -> },
     scoreOverrides: Map<Long, Int> = emptyMap(),
@@ -229,6 +231,18 @@ fun TrackFoamModal(
                                 onResetPlayStats = { onResetPlayStats(displayTrack) },
                                 onSetInstrumental = { onSetInstrumental(displayTrack, it) }
                             )
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                                    .background(FoamTheme.colors.surfaceVariant)
+                            ) {
+                                ModalRowButton(
+                                    label = "Lyrics",
+                                    onClick = { onOpenLyrics(displayTrack) }
+                                )
+                            }
 
                             Column(
                                 modifier = Modifier

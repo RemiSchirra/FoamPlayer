@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -127,8 +128,10 @@ import com.foamplayer.app.ui.screens.settings.PlayerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.SettingsScreen
 import com.foamplayer.app.ui.screens.settings.TestSettingsScreen
 import com.foamplayer.app.ui.screens.settings.UISettingsScreen
+import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsDetailsViewModel
 import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsManagerScreen
 import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsSearchResultsScreen
+import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsTrackDetailsModal
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.components.TrackCenterRequest
 import kotlinx.coroutines.Job
@@ -268,6 +271,22 @@ fun FoamNavHost(
     // opens the picker, which holds the pending track until a playlist is picked.
     val trackModalState = rememberTrackFoamModalState()
     var playlistPickerTrack by remember { mutableStateOf<TrackEntity?>(null) }
+
+    // Lyrics details sheet, opened from the track modal's details page. It is a
+    // separate Dialog window stacked on top of the open track sheet, so
+    // dismissing it returns to the details page beneath.
+    var lyricsModalTrack by remember { mutableStateOf<TrackEntity?>(null) }
+    // Keep the last shown track through the sheet's exit animation (same
+    // pattern as the other modals), so it slides away with content instead of
+    // collapsing to empty.
+    var lastLyricsModalTrack by remember { mutableStateOf<TrackEntity?>(null) }
+    SideEffect {
+        if (lyricsModalTrack != null) lastLyricsModalTrack = lyricsModalTrack
+    }
+    val lyricsDisplayTrack = lyricsModalTrack ?: lastLyricsModalTrack
+    val lyricsDetailsViewModel: LyricsDetailsViewModel = hiltViewModel()
+    val lyricsTrackDetails by lyricsDetailsViewModel.trackDetails.collectAsState()
+    val isLyricsDetailsLoading by lyricsDetailsViewModel.isDetailsLoading.collectAsState()
 
     // Playlists that already contain the track being picked for: drives the
     // picker's checkbox states, live from Room, so each toggle is reflected as
@@ -1697,6 +1716,10 @@ fun FoamNavHost(
                         Screen.AlbumDetail.createRoute(track.album, track.albumArtPath, track.artist)
                     )
                 },
+                onOpenLyrics = { track ->
+                    lyricsModalTrack = track
+                    lyricsDetailsViewModel.loadTrackDetails(track)
+                },
                 onResetPlayStats = { track ->
                     playerViewModel.resetPlayStats(track.id)
                     // Reflect the reset in the open sheet immediately.
@@ -1726,6 +1749,25 @@ fun FoamNavHost(
                     }
                 },
                 onDismiss = { playlistPickerTrack = null }
+            )
+
+            LyricsTrackDetailsModal(
+                visible = lyricsModalTrack != null,
+                track = lyricsDisplayTrack,
+                details = lyricsTrackDetails?.takeIf { it.track.id == lyricsDisplayTrack?.id },
+                isLoading = isLyricsDetailsLoading,
+                onDismiss = { lyricsModalTrack = null },
+                onDelete = { lyricsModalTrack?.let { lyricsDetailsViewModel.deleteLyrics(it) } },
+                onSearch = {
+                    // Jumping to the lyrics search results replaces this flow
+                    // entirely, so neither sheet may stay up behind it.
+                    val trackId = lyricsModalTrack?.id
+                    lyricsModalTrack = null
+                    trackModalState.dismiss()
+                    trackId?.let {
+                        navController.navigate(Screen.SettingsLyricsManagerResults.createRoute(it))
+                    }
+                }
             )
 
             // Long-press collection actions. The modal resolves which artist
