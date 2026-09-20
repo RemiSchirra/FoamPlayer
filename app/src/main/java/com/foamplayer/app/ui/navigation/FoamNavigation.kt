@@ -1722,16 +1722,35 @@ fun FoamNavHost(
             // Long-press track actions. The modal and its playlist picker are
             // plain Dialogs, so their placement in the tree doesn't matter.
             // Details is an internal page of the same sheet, sharing its header.
+
+            // "See Artist"/"See Album" can fire while the full player is up (queue
+            // long-press). Starting the close flight in the same frame as the
+            // navigation swap makes the two fight over the same frames and flicker.
+            // Stage it instead: navigate first -- the swap composes behind the
+            // still-open player where it can't be seen -- then precompose the
+            // closed-side UI (the same preload-then-flight pattern the dismiss
+            // gesture uses) and only then fly the player down onto the settled page.
+            fun navigateClosingPlayer(route: String) {
+                if (!playerTransitionState.targetState) {
+                    navController.navigate(route)
+                    return
+                }
+                scope.launch {
+                    navController.navigate(route)
+                    animatePlayerTransition(open = false, precompose = true)
+                }
+            }
+
             TrackFoamModal(
                 state = trackModalState,
                 onPlayNext = playerViewModel::playNext,
                 onAddToQueue = playerViewModel::addToQueue,
                 onAddToPlaylist = { track -> playlistPickerTrack = track },
                 onSeeArtist = { track ->
-                    navController.navigate(Screen.ArtistDetail.createRoute(track.artist))
+                    navigateClosingPlayer(Screen.ArtistDetail.createRoute(track.artist))
                 },
                 onSeeAlbum = { track ->
-                    navController.navigate(
+                    navigateClosingPlayer(
                         Screen.AlbumDetail.createRoute(track.album, track.albumArtPath, track.artist)
                     )
                 },
