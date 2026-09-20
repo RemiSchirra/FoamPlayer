@@ -89,6 +89,20 @@
     <string name="bit_perfect_output">Bit-Perfect Output</string>
     <string name="bit_perfect_desc">Bypass system resampler for high-res audio on compatible USB DACs</string>
 
+    <!-- Audio settings: fidelity, devices, pipeline -->
+    <string name="audio_fidelity_score">Audio Fidelity Score</string>
+    <string name="audio_fidelity_desc">Live quality verdict of the current playback path</string>
+    <string name="fidelity_no_playback">Start playback to measure</string>
+    <string name="direct_volume_control">Direct Volume Control</string>
+    <string name="direct_volume_control_desc">Apply volume in the 32-bit float DSP chain, keeping the output path full scale</string>
+    <string name="output_devices">Output Devices</string>
+    <string name="no_output_devices">No output device detected</string>
+    <string name="device_active">ACTIVE</string>
+    <string name="device_bit_perfect_mode">Bit-Perfect Mode</string>
+    <string name="device_sample_rate_override">Sample Rate Override</string>
+    <string name="audio_pipeline">Audio Pipeline</string>
+    <string name="audio_pipeline_desc">Visualize the live audio rendering path</string>
+
     <string name="lyrics_providers">Providers</string>
     <string name="lyrics_not_found">Lyrics not found</string>
     <string name="resume_auto_scroll">Resume auto-scroll</string>
