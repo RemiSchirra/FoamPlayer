@@ -206,4 +206,20 @@
     <string name="lyrics_results_collapse">Réduire</string>
     <string name="lyrics_view_readable">Lisible</string>
     <string name="lyrics_view_raw">Brut</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_welcome_title">Bienvenue sur FoamPlayer</string>
+    <string name="onboarding_welcome_subtitle">Un lecteur musical plat et bit-perfect centré sur votre bibliothèque. Configurons-le en trois étapes rapides.</string>
+    <string name="onboarding_permissions_title">Permissions</string>
+    <string name="onboarding_permissions_subtitle">FoamPlayer a besoin de deux permissions pour lire votre musique et afficher les contrôles de lecture.</string>
+    <string name="onboarding_permission_audio_title">Accès audio</string>
+    <string name="onboarding_permission_audio_desc">Lire les fichiers musicaux stockés sur votre appareil</string>
+    <string name="onboarding_permission_notifications_title">Notifications</string>
+    <string name="onboarding_permission_notifications_desc">Afficher les contrôles de lecture et la pochette dans le volet des notifications</string>
+    <string name="onboarding_grant">Accorder</string>
+    <string name="onboarding_granted">Accordée</string>
+    <string name="onboarding_skip_hint">Vous pouvez modifier ces éléments à tout moment dans les paramètres.</string>
+    <string name="onboarding_library_title">Bibliothèque</string>
+    <string name="onboarding_library_subtitle">Choisissez où se trouve votre musique, puis lancez la première analyse.</string>
+    <string name="onboarding_get_started">Commencer</string>
 </resources>

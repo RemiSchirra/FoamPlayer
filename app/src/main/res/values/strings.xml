@@ -206,4 +206,20 @@
     <string name="off">OFF</string>
 
     <string name="language">Language</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_welcome_title">Welcome to FoamPlayer</string>
+    <string name="onboarding_welcome_subtitle">A flat, bit-perfect music player built around your library. Let\'s set it up in three quick steps.</string>
+    <string name="onboarding_permissions_title">Permissions</string>
+    <string name="onboarding_permissions_subtitle">FoamPlayer needs two permissions to read your music and show playback controls.</string>
+    <string name="onboarding_permission_audio_title">Audio access</string>
+    <string name="onboarding_permission_audio_desc">Read the music files stored on your device</string>
+    <string name="onboarding_permission_notifications_title">Notifications</string>
+    <string name="onboarding_permission_notifications_desc">Show playback controls and cover art in the notification shade</string>
+    <string name="onboarding_grant">Grant</string>
+    <string name="onboarding_granted">Granted</string>
+    <string name="onboarding_skip_hint">You can change these anytime in Settings.</string>
+    <string name="onboarding_library_title">Library</string>
+    <string name="onboarding_library_subtitle">Pick where your music lives, then run the first scan.</string>
+    <string name="onboarding_get_started">Get Started</string>
 </resources>

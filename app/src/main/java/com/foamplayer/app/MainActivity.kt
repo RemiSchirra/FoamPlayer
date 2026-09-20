@@ -14,6 +14,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -26,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import com.foamplayer.app.audio.service.PlaybackService
 import com.foamplayer.app.constants.CollectionHeroTarget
@@ -37,6 +40,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -59,8 +63,14 @@ class MainActivity : AppCompatActivity() {
         // the insets as padding (statusBarsPadding / navigationBarsPadding) where
         // interactive elements need them, so their effective padding is unchanged.
         enableEdgeToEdge()
-        checkAndRequestPermissions()
         handleIntent(intent)
+        // First-run users are asked on the onboarding permissions page instead; the
+        // auto request (and playback service start) only runs once onboarding is done.
+        lifecycleScope.launch {
+            settingsViewModel.onboardingCompleted.collect { completed ->
+                if (completed == true) checkAndRequestPermissions()
+            }
+        }
 
         setContent {
             val settings by settingsViewModel.settings.collectAsState()
@@ -122,6 +132,7 @@ private fun FoamApp(
     playerViewModel: PlayerViewModel
 ) {
     val settings by settingsViewModel.settings.collectAsState()
+    val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsState()
 
     val albumArtPath by playerViewModel.currentAlbumArtPath.collectAsState()
     val dynamicAccentColor by playerViewModel.dynamicAccentColor.collectAsState()
@@ -143,10 +154,17 @@ private fun FoamApp(
             fullPlayerRounding = settings.fullPlayerRounding / 100f,
             accentColor = accentColor
         ) {
-            FoamNavHost(
-                modifier = Modifier.fillMaxSize(),
-                playerViewModel = playerViewModel
-            )
+            if (onboardingCompleted == null) {
+                // Settings still loading: hold a blank themed frame rather than risk
+                // flashing the onboarding over an existing user's library.
+                Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
+            } else {
+                FoamNavHost(
+                    modifier = Modifier.fillMaxSize(),
+                    startOnOnboarding = onboardingCompleted == false,
+                    playerViewModel = playerViewModel
+                )
+            }
         }
     }
 }

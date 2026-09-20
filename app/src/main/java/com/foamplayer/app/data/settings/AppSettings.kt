@@ -84,7 +84,9 @@ data class AppSettings(
     val collectionLayoutDefault: CollectionHeroLayout = CollectionHeroLayout.Compact,
     val collectionLayoutArtist: CollectionHeroLayout = CollectionHeroLayout.Compact,
     val collectionLayoutAlbum: CollectionHeroLayout = CollectionHeroLayout.Compact,
-    val collectionLayoutPlaylist: CollectionHeroLayout = CollectionHeroLayout.Compact
+    val collectionLayoutPlaylist: CollectionHeroLayout = CollectionHeroLayout.Compact,
+    /** False until the first-run onboarding flow (welcome / permissions / library) is finished. */
+    val onboardingCompleted: Boolean = false
 ) {
     /**
      * Items of the main bar, in the user's configured order. Includes the [NavBarItem.MORE]

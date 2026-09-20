@@ -17,6 +17,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -36,6 +37,15 @@ class SettingsViewModel @Inject constructor(
         // values arrive.
         initialValue = AppSettings()
     )
+
+    /**
+     * Raw onboarding flag, null until DataStore's first emission. The null state lets
+     * the app root hold a blank frame instead of flashing the onboarding for existing
+     * users while the stored value loads.
+     */
+    val onboardingCompleted: StateFlow<Boolean?> = settingsRepository.settings
+        .map { it.onboardingCompleted }
+        .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = null)
 
     val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus
 
@@ -83,6 +93,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setCollectionLayoutPlaylist(layout: CollectionHeroLayout) = launch {
         settingsRepository.setCollectionLayoutPlaylist(layout)
+    }
+
+    fun setOnboardingCompleted(completed: Boolean) = launch {
+        settingsRepository.setOnboardingCompleted(completed)
     }
 
     fun startScan() = launch { trackRepository.rescanLibrary() }

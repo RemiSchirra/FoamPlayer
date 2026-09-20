@@ -100,6 +100,7 @@ import com.foamplayer.app.ui.screens.home.OldFavoritesSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecentTracksSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecommendedAlbumsSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecommendedPlaylistsSeeAllScreen
+import com.foamplayer.app.ui.screens.onboarding.OnboardingScreen
 import com.foamplayer.app.ui.screens.library.AlbumDetailScreen
 import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
 import com.foamplayer.app.ui.screens.library.ArtistSongsScreen
@@ -256,6 +257,7 @@ private fun rememberAnimatedBackground(
 @Composable
 fun FoamNavHost(
     modifier: Modifier = Modifier,
+    startOnOnboarding: Boolean = false,
     playerViewModel: PlayerViewModel = hiltViewModel()
 ) {
     val navController = rememberNavController()
@@ -839,7 +841,11 @@ fun FoamNavHost(
                                 NavHost(
                                     modifier = Modifier.fillMaxSize(),
                                     navController = navController,
-                                    startDestination = Screen.Home.route,
+                                    startDestination = if (startOnOnboarding) {
+                                        Screen.Onboarding.route
+                                    } else {
+                                        Screen.Home.route
+                                    },
                                     enterTransition = {
                                         when {
                                             playerTransitionState.currentState -> EnterTransition.None
@@ -900,6 +906,16 @@ fun FoamNavHost(
                                     },
                                     sizeTransform = { SizeTransform(clip = false) }
                                 ) {
+                                    composable(Screen.Onboarding.route) {
+                                        OnboardingScreen(
+                                            onFinish = {
+                                                navController.navigate(Screen.Home.route) {
+                                                    // Onboarding must not come back with system back.
+                                                    popUpTo(Screen.Onboarding.route) { inclusive = true }
+                                                }
+                                            }
+                                        )
+                                    }
                                     composable(Screen.Home.route) {
                                         HomeScreen(
                                             viewModel = homeViewModel,
@@ -1536,12 +1552,14 @@ fun FoamNavHost(
 
                 // The nav bar floats over the edge-to-edge content as an overlay at
                 // the screen's bottom; the mini player card is layered above it.
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .onSizeChanged { navZoneHeightPx = it.height }
-                ) {
+                // Hidden on the onboarding flow, which owns the whole screen.
+                if (currentRoute != Screen.Onboarding.route) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .onSizeChanged { navZoneHeightPx = it.height }
+                    ) {
                     when (navigationBarMode) {
                             NavigationBarMode.DOCKED -> Box(
                                 modifier = Modifier.fillMaxWidth().navigationBarsPadding()
@@ -1597,12 +1615,13 @@ fun FoamNavHost(
                                     miniPlayerTopPx = { miniPlayerTopPx.takeUnless { it.isNaN() } },
                                     playerClosedFraction = playerClosedFraction,
                                     navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
-                                    expandFraction = navBarExpandFraction,
-                                     onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }
-                                 )
-                             }
-                         }
-                     }
+                                     expandFraction = navBarExpandFraction,
+                                      onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }
+                                  )
+                              }
+                          }
+                      }
+                 }
 
                  // Mini player placement derives from NavBarDimens
                 val miniPlayerBottomPadding = NavBarDimens.miniPlayerBottomPadding(
@@ -1637,8 +1656,8 @@ fun FoamNavHost(
                         },
                         exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
                     ) {
-                        val miniPlayerVisibilityScope = this
-                        if (hasCurrentTrack) {
+                         val miniPlayerVisibilityScope = this
+                         if (hasCurrentTrack && currentRoute != Screen.Onboarding.route) {
                             // MiniPlayer collects playbackState internally; the lambdas below
                             // read the flow's current value at invocation time (event
                             // handlers, not composition), so this scope stays unsubscribed

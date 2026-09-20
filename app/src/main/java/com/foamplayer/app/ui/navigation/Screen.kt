@@ -3,6 +3,7 @@ package com.foamplayer.app.ui.navigation
 import android.net.Uri
 
 sealed class Screen(val route: String, val title: String) {
+    object Onboarding : Screen("onboarding", "Onboarding")
     object Home : Screen("home", "Home")
     object Playlists : Screen("playlists", "Playlists")
     object Search : Screen("search", "Search")

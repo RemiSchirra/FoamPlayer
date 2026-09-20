@@ -192,6 +192,10 @@ class SettingsRepository @Inject constructor(
         it.copy(collectionLayoutPlaylist = layout)
     }
 
+    suspend fun setOnboardingCompleted(completed: Boolean) = update {
+        it.copy(onboardingCompleted = completed)
+    }
+
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
         listenedThresholdPercent = this[Keys.LISTENED_THRESHOLD_PERCENT]
@@ -262,7 +266,8 @@ class SettingsRepository @Inject constructor(
         collectionLayoutAlbum = CollectionHeroLayout.fromName(this[Keys.COLLECTION_LAYOUT_ALBUM])
             ?: AppSettings().collectionLayoutAlbum,
         collectionLayoutPlaylist = CollectionHeroLayout.fromName(this[Keys.COLLECTION_LAYOUT_PLAYLIST])
-            ?: AppSettings().collectionLayoutPlaylist
+            ?: AppSettings().collectionLayoutPlaylist,
+        onboardingCompleted = this[Keys.ONBOARDING_COMPLETED] ?: AppSettings().onboardingCompleted
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -310,6 +315,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.COLLECTION_LAYOUT_ARTIST] = settings.collectionLayoutArtist.name
         this[Keys.COLLECTION_LAYOUT_ALBUM] = settings.collectionLayoutAlbum.name
         this[Keys.COLLECTION_LAYOUT_PLAYLIST] = settings.collectionLayoutPlaylist.name
+        this[Keys.ONBOARDING_COMPLETED] = settings.onboardingCompleted
     }
 
     private object Keys {
@@ -360,6 +366,7 @@ class SettingsRepository @Inject constructor(
         val COLLECTION_LAYOUT_ARTIST = CollectionLayoutArtistKey
         val COLLECTION_LAYOUT_ALBUM = CollectionLayoutAlbumKey
         val COLLECTION_LAYOUT_PLAYLIST = CollectionLayoutPlaylistKey
+        val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
 }
 

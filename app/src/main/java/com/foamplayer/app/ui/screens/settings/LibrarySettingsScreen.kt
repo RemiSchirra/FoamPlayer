@@ -301,7 +301,7 @@ fun LibrarySettingsScreen(
  * Returns the decoded path after the volume prefix (e.g. "Music/Jazz"),
  * falling back to the raw URI when the format is unexpected.
  */
-private fun folderDisplayName(folderUri: String): String {
+internal fun folderDisplayName(folderUri: String): String {
     val segments = try {
         Uri.parse(folderUri).pathSegments
     } catch (_: Exception) {
