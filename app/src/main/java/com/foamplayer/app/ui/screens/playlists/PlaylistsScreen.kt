@@ -4,17 +4,18 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,12 +40,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.OpenWith
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -119,8 +122,8 @@ fun PlaylistsScreen(
 
     var showCreateModal by remember { mutableStateOf(false) }
     var showMoreModal by remember { mutableStateOf(false) }
-    // Edition mode: toggled by the pencil — playlists wiggle and can be dragged
-    // around to reorder them.
+    // Edition mode: toggled by the pencil — a 2D drag handle appears on every
+    // playlist and they can be dragged around to reorder them.
     var isEditMode by remember { mutableStateOf(false) }
 
     // The playlist list has its own user-defined order (drag & drop writes
@@ -179,8 +182,6 @@ fun PlaylistsScreen(
         canMove = { _, to -> to < displayedPlaylists.size },
         onMove = dragDropOnMove
     )
-
-    val wiggleModifier = rememberWiggleModifier(enabled = isEditMode)
 
     // Persists the completed drag: the display list already holds the final
     // order, so writing it back as the new sortOrder assignment is enough.
@@ -308,6 +309,7 @@ fun PlaylistsScreen(
                         onLongClick = { playlistModalState.show(playlist) },
                         active = CollectionId.playlist(playlist.playlistId) == activeCollectionId,
                         lifted = isDragging && !dragReleased,
+                        showDragHandle = isEditMode,
                         density = density,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
@@ -330,7 +332,6 @@ fun PlaylistsScreen(
                                 scaleX = liftScale
                                 scaleY = liftScale
                             }
-                            .then(if (!isDragging) wiggleModifier else Modifier)
                             .then(
                                 if (isEditMode) {
                                     Modifier.playlistEditDrag(
@@ -389,6 +390,7 @@ fun PlaylistsScreen(
                         onLongClick = { playlistModalState.show(playlist) },
                         active = CollectionId.playlist(playlist.playlistId) == activeCollectionId,
                         lifted = isDragging && !dragReleased,
+                        showDragHandle = isEditMode,
                         density = density,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
@@ -410,7 +412,6 @@ fun PlaylistsScreen(
                                 scaleX = liftScale
                                 scaleY = liftScale
                             }
-                            .then(if (!isDragging) wiggleModifier else Modifier)
                             .then(
                                 if (isEditMode) {
                                     Modifier.playlistEditDrag(
@@ -582,7 +583,8 @@ private fun PlaylistActionButton(
  * opens the playlist actions modal. When opened, the artwork and title animate
  * into the playlist detail header through the shared-element keys
  * "playlist-art-*" / "playlist-title-*". [active] draws the "now playing"
- * highlight when the queue was started from this playlist.
+ * highlight when the queue was started from this playlist. [showDragHandle]
+ * shows the edit-mode 2D drag handle (four direction arrows).
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -593,6 +595,7 @@ private fun PlaylistItemRow(
     onLongClick: () -> Unit,
     active: Boolean = false,
     lifted: Boolean = false,
+    showDragHandle: Boolean = false,
     density: MediaDensity,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -662,6 +665,30 @@ private fun PlaylistItemRow(
                 .clip(AlbumArtShape())
                 .background(FoamTheme.colors.surfaceVariant),
             artworkContent = { PlaylistArtwork() },
+            artworkOverlay = {
+                AnimatedVisibility(
+                    visible = showDragHandle,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                    enter = DragHandleEnter,
+                    exit = DragHandleExit
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .padding(6.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.OpenWith,
+                            contentDescription = null,
+                            tint = FoamTheme.colors.textPrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            },
             title = playlist.name,
             subtitle = "$trackCount tracks",
             highlightBackground = highlightBackground,
@@ -682,7 +709,23 @@ private fun PlaylistItemRow(
             subtitle = "$trackCount tracks",
             density = density,
             highlightBackground = highlightBackground,
-            titleModifier = Modifier.sharedTitle()
+            titleModifier = Modifier.sharedTitle(),
+            trailingContent = {
+                AnimatedVisibility(
+                    visible = showDragHandle,
+                    enter = DragHandleEnter,
+                    exit = DragHandleExit
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.OpenWith,
+                        contentDescription = null,
+                        tint = FoamTheme.colors.textSecondary,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .size(20.dp)
+                    )
+                }
+            }
         )
     }
 }
@@ -693,28 +736,15 @@ private const val DragLiftScale = 1.05f
 /** Shadow elevation given to a dragged playlist's cover while it is lifted. */
 private val DragArtworkElevation: Dp = 8.dp
 
-/**
- * iOS-style wiggle for edit mode: a small infinite rotation around the item's
- * center, shared by every visible playlist so they jitter in sync. Returns an
- * empty modifier while edit mode is off.
- */
-@Composable
-private fun rememberWiggleModifier(enabled: Boolean): Modifier {
-    if (!enabled) return Modifier
+/** Fade + scale-in of the edit-mode drag handle when entering edit mode. */
+private val DragHandleEnter =
+    fadeIn(animationSpec = tween(durationMillis = 200)) +
+        scaleIn(initialScale = 0.6f, animationSpec = tween(durationMillis = 200))
 
-    val wiggleTransition = rememberInfiniteTransition(label = "playlistWiggle")
-    val rotation by wiggleTransition.animateFloat(
-        initialValue = -1.6f,
-        targetValue = 1.6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 130, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "playlistWiggleRotation"
-    )
-
-    return Modifier.graphicsLayer { rotationZ = rotation }
-}
+/** Fade + scale-out of the edit-mode drag handle when leaving edit mode. */
+private val DragHandleExit =
+    fadeOut(animationSpec = tween(durationMillis = 200)) +
+        scaleOut(targetScale = 0.6f, animationSpec = tween(durationMillis = 200))
 
 /** Whole-row drag gesture driving edit-mode reordering (swaps come from the drag-drop states). */
 private fun Modifier.playlistEditDrag(
