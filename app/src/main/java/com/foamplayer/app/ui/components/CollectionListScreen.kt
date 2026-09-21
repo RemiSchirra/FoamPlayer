@@ -41,7 +41,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -154,7 +153,7 @@ fun CollectionListScreen(
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
-    // Measured by the header spacer's layout pass (see [CollectionHeroImmersiveSpacer]);
+    // Measured by the header item's layout pass (see [CollectionHeroImmersiveHeader]);
     // read untracked inside the offset lambda, so it is always the settled value.
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
@@ -175,6 +174,10 @@ fun CollectionListScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         if (heroLayout.isImmersive) {
+            // Artwork layer only: bleeds under the status bar behind the list.
+            // The text block is the list's own [CollectionHeroImmersiveHeader]
+            // item (no play pill on a "list of lists" page) and fades with
+            // this screen's transitions like the compact/normal heroes.
             CollectionHero(
                 layout = heroLayout,
                 title = title,
@@ -339,9 +342,9 @@ fun CollectionListScreen(
 
 /**
  * The list's leading item: the hero (no play button — a "list of lists" page
- * has nothing to play) for compact/normal layouts, a spacer measured against
- * the immersive hero's real overlay block otherwise (its
- * [CollectionHeroImmersiveSpacer.onVisibleHeightPx] keeps the hero's
+ * has nothing to play) for compact/normal layouts, [CollectionHeroImmersiveHeader]
+ * for the immersive ones — the overlaid text block as real list content (its
+ * [CollectionHeroImmersiveHeader.onVisibleHeightPx] keeps the hero artwork's
  * scroll-away constant in sync).
  */
 @Composable
@@ -355,7 +358,7 @@ private fun CollectionListHero(
     onVisibleHeightPx: (Int) -> Unit
 ) {
     if (heroLayout.isImmersive) {
-        CollectionHeroImmersiveSpacer(
+        CollectionHeroImmersiveHeader(
             layout = heroLayout,
             title = title,
             subtitle = subtitle,
@@ -387,6 +390,14 @@ private fun CollectionListHero(
  * [active] draws the "now playing" highlight: set it only when the queue was
  * actually started from this collection (PlaybackState.queueSourceId), never
  * merely because a track inside it happens to be playing.
+ *
+ * [immersiveFlightHero] styles the artwork as the DRAWN side of a close flight
+ * from an immersive collection detail hero: during the flight the shared
+ * element's overlay renders only this row's own content and overlay clip, so
+ * the row must itself morph from the hero's square, faded rest look to its own
+ * rounded, unfaded one (see [collectionRowFlightArtwork]). The hosts resolve
+ * the flag from the destination hero's layout via
+ * [LocalCollectionHeroLayoutLookup].
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -402,7 +413,8 @@ fun CollectionListItem(
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
-    sharedElementKey: String? = null
+    sharedElementKey: String? = null,
+    immersiveFlightHero: Boolean = false
 ) {
     // Long-press opens the collection actions modal when FoamNavHost provides
     // one at the root; an explicit [onLongClick] always wins over that default.
@@ -433,15 +445,14 @@ fun CollectionListItem(
     val highlightBackground = activeRowHighlight(active, imageUrl)
 
     val sharedArtModifier = Modifier
-        .rowSharedArtwork(
+        .collectionRowFlightArtwork(
             key = "album-art-$elementKey",
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             enabled = elementKey != null,
-            overlayClip = artShape,
-            boundsTransform = AlbumArtBoundsTransform
+            restShape = artShape,
+            immersiveFlightHero = immersiveFlightHero
         )
-        .clip(artShape)
         .background(FoamTheme.colors.surfaceVariant)
 
     val sharedTitleModifier = Modifier.rowSharedText(

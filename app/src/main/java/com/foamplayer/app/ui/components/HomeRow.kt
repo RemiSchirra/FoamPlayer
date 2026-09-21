@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import coil.request.ImageRequest
 import androidx.core.net.toUri
 import com.foamplayer.app.R
+import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -156,7 +157,11 @@ fun <T> HomeRow(
  * open/close flight (like [TrackListItem]: default bounds transform, no
  * overlay clip), false styles them for a destination navigation (like
  * [CollectionListItem]: [AlbumArtBoundsTransform] + the artwork shape as
- * overlay clip).
+ * overlay clip). With [flightHeroTarget] set AND the target collection's hero
+ * resolving to an immersive layout, the artwork additionally carries the
+ * mirrored collection flight morph (see [collectionRowFlightArtwork]): on
+ * closing flights the shared-element overlay renders only this card's own
+ * content, which must then depart from the hero's square, faded look.
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -174,21 +179,36 @@ fun HomeRowCard(
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedArtKey: String? = null,
     sharedTitleKey: String? = null,
-    sharedInPlayerTransition: Boolean = false
+    sharedInPlayerTransition: Boolean = false,
+    flightHeroTarget: CollectionHeroTarget? = null
 ) {
     val context = LocalContext.current
     val artShape = if (round) CircleShape else AlbumArtShape()
     // Gentle radius on the press-highlight container: a large one would clip
     // the title into the card's bottom rounded corners.
     val cellShape = RoundedCornerShape(FoamTheme.shapes.cardRounding)
-    val sharedArtModifier = Modifier.rowSharedArtwork(
-        key = sharedArtKey.orEmpty(),
-        sharedTransitionScope = sharedTransitionScope,
-        animatedVisibilityScope = animatedVisibilityScope,
-        enabled = sharedArtKey != null,
-        overlayClip = if (sharedInPlayerTransition) null else artShape,
-        boundsTransform = if (sharedInPlayerTransition) null else AlbumArtBoundsTransform
-    )
+    val immersiveFlightHero = !sharedInPlayerTransition &&
+            flightHeroTarget != null &&
+            LocalCollectionHeroLayoutLookup.current(flightHeroTarget).isImmersive
+    val sharedArtModifier = if (immersiveFlightHero) {
+        Modifier.collectionRowFlightArtwork(
+            key = sharedArtKey.orEmpty(),
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            enabled = sharedArtKey != null,
+            restShape = artShape,
+            immersiveFlightHero = true
+        )
+    } else {
+        Modifier.rowSharedArtwork(
+            key = sharedArtKey.orEmpty(),
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            enabled = sharedArtKey != null,
+            overlayClip = if (sharedInPlayerTransition) null else artShape,
+            boundsTransform = if (sharedInPlayerTransition) null else AlbumArtBoundsTransform
+        )
+    }
     val sharedTitleModifier = Modifier.rowSharedText(
         key = sharedTitleKey.orEmpty(),
         sharedTransitionScope = sharedTransitionScope,
@@ -214,7 +234,9 @@ fun HomeRowCard(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .then(sharedArtModifier)
-                .clip(artShape)
+                // The flight variant carries its own graphicsLayer shape (the
+                // morph) -- a static clip here would re-round every flight frame.
+                .let { if (immersiveFlightHero) it else it.clip(artShape) }
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {

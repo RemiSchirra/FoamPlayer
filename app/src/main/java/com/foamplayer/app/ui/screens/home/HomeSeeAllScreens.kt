@@ -24,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
+import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.TrackSortOptions
@@ -39,6 +40,7 @@ import com.foamplayer.app.ui.components.CollectionKind
 import com.foamplayer.app.ui.components.CollectionListItem
 import com.foamplayer.app.ui.components.CollectionListScreen
 import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
+import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.MediaGridCell
 import com.foamplayer.app.ui.components.MediaListRow
 import com.foamplayer.app.ui.components.TrackListScreen
@@ -179,7 +181,10 @@ fun RecommendedAlbumsSeeAllScreen(
                     },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
-                    sharedElementKey = album.album
+                    sharedElementKey = album.album,
+                    immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                        .current(CollectionHeroTarget.Album)
+                        .isImmersive
                 )
             }
         }

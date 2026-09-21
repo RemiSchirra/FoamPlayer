@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
+import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.db.dao.AlbumRecommendation
 import com.foamplayer.app.data.db.dao.PlaylistRecommendation
 import com.foamplayer.app.data.db.entities.PlaylistEntity
@@ -207,7 +208,8 @@ fun HomeScreen(
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedArtKey = "playlist-art-${playlist.playlistId}",
-                    sharedTitleKey = "playlist-title-${playlist.playlistId}"
+                    sharedTitleKey = "playlist-title-${playlist.playlistId}",
+                    flightHeroTarget = CollectionHeroTarget.Playlist
                 )
             }
         }
@@ -239,7 +241,8 @@ fun HomeScreen(
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedArtKey = "album-art-${album.album}",
-                    sharedTitleKey = "album-title-${album.album}"
+                    sharedTitleKey = "album-title-${album.album}",
+                    flightHeroTarget = CollectionHeroTarget.Album
                 )
             }
         }

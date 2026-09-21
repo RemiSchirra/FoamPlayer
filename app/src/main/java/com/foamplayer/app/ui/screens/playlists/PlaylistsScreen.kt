@@ -75,6 +75,7 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.request.ImageRequest
 import com.foamplayer.app.R
+import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.entities.PlaylistEntity
@@ -85,9 +86,11 @@ import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
 import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.DensityOrganisationModal
+import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.MediaGridCell
 import com.foamplayer.app.ui.components.MediaListRow
 import com.foamplayer.app.ui.components.activeRowHighlight
+import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.components.rememberDragDropGridState
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
 import com.foamplayer.app.ui.components.rememberSortedList
@@ -613,15 +616,44 @@ private fun PlaylistItemRow(
     )
 
     @Composable
-    fun Modifier.sharedArtwork(): Modifier = with(sharedTransitionScope) {
-        sharedElement(
-            rememberSharedContentState(key = "playlist-art-${playlist.playlistId}"),
-            animatedVisibilityScope = animatedVisibilityScope,
-            clipInOverlayDuringTransition = OverlayClip(AlbumArtShape()),
-            boundsTransform = AlbumArtBoundsTransform
-        )
+    fun Modifier.sharedArtworkModifier(): Modifier {
+        // When the playlist detail hero uses an immersive layout, this row is
+        // the DRAWN side of the closing flight (the shared-element overlay
+        // renders only the becoming-visible side) -- so it must carry the
+        // mirrored morph itself: square + faded at the hero's rest look,
+        // landing on its own rounded, unfaded look. On that path the static
+        // clip is dropped: the flight's graphicsLayer shape (which the drawn
+        // overlay layer inherits) must be free to follow the flight instead of
+        // re-rounding every frame.
+        val flight = LocalCollectionHeroLayoutLookup
+            .current(CollectionHeroTarget.Playlist)
+            .isImmersive
+        return (if (flight) {
+            Modifier.collectionRowFlightArtwork(
+                key = "playlist-art-${playlist.playlistId}",
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                enabled = true,
+                restShape = AlbumArtShape(),
+                immersiveFlightHero = true
+            )
+        } else {
+            with(sharedTransitionScope) {
+                this@sharedArtworkModifier.sharedElement(
+                    rememberSharedContentState(key = "playlist-art-${playlist.playlistId}"),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    clipInOverlayDuringTransition = OverlayClip(AlbumArtShape()),
+                    boundsTransform = AlbumArtBoundsTransform
+                )
+            }
+        })
+            // The flight variant carries its own graphicsLayer shape -- a static
+            // clip here would re-round every flight frame. The drag-lift shadow
+            // stays outside: it is at zero elevation during a nav flight.
+            .shadow(elevation = artworkElevation, shape = AlbumArtShape())
+            .let { if (flight) it else it.clip(AlbumArtShape()) }
+            .background(FoamTheme.colors.surfaceVariant)
     }
-
     @Composable
     fun Modifier.sharedTitle(): Modifier = with(sharedTransitionScope) {
         sharedBounds(
@@ -660,10 +692,7 @@ private fun PlaylistItemRow(
             onClick = onClick,
             onLongClick = onLongClick,
             artworkModifier = Modifier
-                .sharedArtwork()
-                .shadow(elevation = artworkElevation, shape = AlbumArtShape())
-                .clip(AlbumArtShape())
-                .background(FoamTheme.colors.surfaceVariant),
+                .sharedArtworkModifier(),
             artworkContent = { PlaylistArtwork() },
             artworkOverlay = {
                 AnimatedVisibility(
@@ -700,10 +729,7 @@ private fun PlaylistItemRow(
             onClick = onClick,
             onLongClick = onLongClick,
             artworkModifier = Modifier
-                .sharedArtwork()
-                .shadow(elevation = artworkElevation, shape = AlbumArtShape())
-                .clip(AlbumArtShape())
-                .background(FoamTheme.colors.surfaceVariant),
+                .sharedArtworkModifier(),
             artworkContent = { PlaylistArtwork() },
             title = playlist.name,
             subtitle = "$trackCount tracks",

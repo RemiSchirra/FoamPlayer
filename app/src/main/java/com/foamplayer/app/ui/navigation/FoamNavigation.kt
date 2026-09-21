@@ -76,6 +76,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.CollectionFoamModal
 import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
+import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.MiniPlayer
 import com.foamplayer.app.ui.components.PlaylistPickerModal
@@ -634,7 +635,8 @@ fun FoamNavHost(
         CompositionLocalProvider(
             LocalTrackFoamModalState provides trackModalState,
             LocalCollectionFoamModalState provides collectionModalState,
-            LocalBottomBarClearance provides bottomBarClearance
+            LocalBottomBarClearance provides bottomBarClearance,
+            LocalCollectionHeroLayoutLookup provides heroLayoutFor
         ) {
             Box(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
 
@@ -1440,6 +1442,7 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             activeCollectionId = activeCollectionId,
                                             activeTrackId = activeTrackId,
                                             onListBackdropArt = onListBackdropArt,

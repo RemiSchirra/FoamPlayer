@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.constants.CollectionHeroLayout
+import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -49,10 +50,11 @@ import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
 import com.foamplayer.app.ui.components.CollectionHero
-import com.foamplayer.app.ui.components.CollectionHeroImmersiveSpacer
+import com.foamplayer.app.ui.components.CollectionHeroImmersiveHeader
 import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.CollectionListItem
 import com.foamplayer.app.ui.components.CollectionScrollTopBar
+import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.collectionHeroOverlayLayer
 import com.foamplayer.app.ui.components.rememberCollectionHeroFlightFraction
@@ -80,6 +82,7 @@ fun ArtistDetailScreen(
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
+    playerTransitionVisibilityScope: AnimatedVisibilityScope,
     activeCollectionId: String? = null,
     activeTrackId: Long? = null,
     onListBackdropArt: (String?, Boolean) -> Unit = { _, _ -> },
@@ -112,13 +115,21 @@ fun ArtistDetailScreen(
 
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(gridState)
-    // Flight fraction of this screen's nav transition: the back row is lifted
-    // into the shared-element overlay while a transition is active (see
-    // collectionHeroOverlayLayer), and the overlay escapes the hierarchy's own
-    // fade — so the row fades with the flight explicitly.
-    val flightFraction =
+    // Flight fractions of this screen's two transitions: the nav flight
+    // (open/close of the artist page itself) and the player-container flight
+    // (full player expanding over / collapsing back onto this page). The hero
+    // chrome and the back row are lifted into the shared-element overlay while
+    // any transition is active (collectionHeroOverlayLayer), and the overlay
+    // escapes the host hierarchy's own fades — so their alpha must multiply
+    // both fractions explicitly or they would pop at flight ends.
+    val navFlightFraction =
         rememberCollectionHeroFlightFraction(sharedTransitionScope, animatedVisibilityScope)
-    // Measured by the header spacer's layout pass (see [CollectionHeroImmersiveSpacer]);
+    val containerFlightFraction =
+        rememberCollectionHeroFlightFraction(sharedTransitionScope, playerTransitionVisibilityScope)
+    val transitionAlpha: () -> Float = {
+        (1f - navFlightFraction.value) * (1f - containerFlightFraction.value)
+    }
+    // Measured by the header item's layout pass (see [CollectionHeroImmersiveHeader]);
     // read untracked inside the offset lambda, so it is always the settled value.
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
@@ -131,16 +142,23 @@ fun ArtistDetailScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (heroLayout.isImmersive) {
+            // Artwork layer only: bleeds under the status bar behind the grid.
+            // The overlay block (title/play pill) is the grid's own
+            // [CollectionHeroImmersiveHeader] item, so it fades with this
+            // screen's transitions exactly like the compact/normal heroes and
+            // takes taps directly.
             CollectionHero(
                 layout = heroLayout,
                 title = artistName,
                 subtitle = null,
                 statsText = "${tracks.size} Tracks",
                 imageUrl = headerArtPath,
-                onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+                onPlayAllClick = null,
                 accentColor = accentColor,
-                overlayTextAlpha = { 1f - topBarFraction() },
+                transitionAlpha = transitionAlpha,
                 scrollOffsetPx = heroScrollOffsetPx,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
                 modifier = Modifier.align(Alignment.TopStart)
             )
         }
@@ -191,7 +209,11 @@ fun ArtistDetailScreen(
                         trackCount = tracks.size,
                         accentColor = accentColor,
                         onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
-                        onVisibleHeightPx = { heroVisibleHeightPx.intValue = it }
+                        onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                        overlayTextAlpha = { 1f - topBarFraction() },
+                        transitionAlpha = transitionAlpha,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
                     )
                 }
 
@@ -241,7 +263,10 @@ fun ArtistDetailScreen(
                         density = MediaDensity.GRID_NORMAL,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
-                        sharedElementKey = album.album
+                        sharedElementKey = album.album,
+                        immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                            .current(CollectionHeroTarget.Album)
+                            .isImmersive
                     )
                 }
             }
@@ -263,13 +288,13 @@ fun ArtistDetailScreen(
 
             // Lifted into the shared-element overlay during transitions so the
             // flying artwork passes beneath the back button; the alpha mirrors
-            // the host hierarchy's fade.
+            // the host hierarchy's fades (see transitionAlpha above).
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
                     .collectionHeroOverlayLayer(sharedTransitionScope)
-                    .graphicsLayer { alpha = 1f - flightFraction.value }
+                    .graphicsLayer { alpha = transitionAlpha() }
             ) {
                 Row(
                     modifier = Modifier
@@ -293,10 +318,11 @@ fun ArtistDetailScreen(
 }
 
 /**
- * The artist page's leading grid item: the hero for compact/normal layouts, a
- * spacer measured against the immersive hero's real overlay block otherwise
- * (its [CollectionHeroImmersiveSpacer.onVisibleHeightPx] keeps the hero's
- * scroll-away constant in sync).
+ * The artist page's leading grid item: the full hero (artwork, title and
+ * play-all pill) for compact/normal layouts, [CollectionHeroImmersiveHeader]
+ * for the immersive ones — the overlaid text block and play pill as real
+ * interactive grid content (its [CollectionHeroImmersiveHeader.onVisibleHeightPx]
+ * keeps the hero artwork's scroll-away constant in sync).
  */
 @Composable
 private fun ArtistHero(
@@ -306,17 +332,25 @@ private fun ArtistHero(
     trackCount: Int,
     accentColor: Color,
     onPlayAllClick: () -> Unit,
-    onVisibleHeightPx: (Int) -> Unit
+    onVisibleHeightPx: (Int) -> Unit,
+    overlayTextAlpha: () -> Float,
+    transitionAlpha: () -> Float,
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope?
 ) {
     if (heroLayout.isImmersive) {
-        CollectionHeroImmersiveSpacer(
+        CollectionHeroImmersiveHeader(
             layout = heroLayout,
             title = title,
             subtitle = null,
             statsText = "$trackCount Tracks",
             accentColor = accentColor,
             onPlayAllClick = onPlayAllClick,
-            onVisibleHeightPx = onVisibleHeightPx
+            onVisibleHeightPx = onVisibleHeightPx,
+            overlayTextAlpha = overlayTextAlpha,
+            transitionAlpha = transitionAlpha,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
         return
     }

@@ -5,6 +5,7 @@ import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -29,48 +30,39 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.SubcomposeLayout
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import coil.request.ImageRequest
 import com.foamplayer.app.constants.CollectionHeroLayout
+import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.ui.navigation.SharedElementEasing
+import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /** Height of the immersive hero image, as a fraction of the full screen height. */
@@ -134,31 +126,35 @@ private fun collectionHeroOverlayFraction(layout: CollectionHeroLayout): Float =
 }
 
 /**
- * The immersive layouts' leading list item: an invisible spacer reserving the
- * hero's room. Instead of estimating the overlay block's height, it
- * subcomposes the block's real content (the same [CollectionHeroOverlayContent]
- * the hero overlays, minus the shared-element wiring, which has no effect on
- * layout) and measures it — so the list's first row clears the play pill by
- * [CollectionHeroImmersiveListTopPadding] with no dead space below the artwork,
- * whatever the title/subtitle/button add up to.
+ * The immersive layouts' leading list item: the hero's overlay block itself —
+ * title/subtitle/stats and the optional play pill — hanging at the artwork's
+ * overlay position, with the hero artwork's room reserved around it.
  *
- * The measured copy is also placed at the overlay's exact position, invisible
- * (ghost content, semantics cleared) but hit-testable: the hero draws the visible
- * block from BEHIND the list, and a full-screen scrollable shields the
- * siblings behind it from hit-testing (its pointer-input chain does not share
- * input with siblings), so taps over the hero's play pill would never reach
- * it. This invisible twin lives inside the list's own subtree, where taps do
- * land, and forwards [onPlayAllClick] — the visible pill stays purely visual.
- * The twin's copy is ghost-rendered rather than alpha-0 so the play pill's
- * ripple (drawn by the twin, the real hit target) is visible over the hero.
+ * The block is real, interactive content composed inside the list's own
+ * subtree: the play pill receives taps directly (there is no invisible
+ * hit-target twin behind the list) and the whole block scrolls away 1:1 with
+ * the list exactly like a compact/normal header item, fading with the host
+ * hierarchy's own transitions the same way. The item's height is not
+ * estimated — it measures its own content — so the list's first row clears
+ * the play pill by [CollectionHeroImmersiveListTopPadding] with no dead space
+ * below the artwork, whatever the title/subtitle/button add up to.
  *
- * [onVisibleHeightPx] reports the measured total (px) once the spacer is laid
- * out, so the host screen can hand the hero's 1:1 scroll-away over to the same
- * constant when the spacer is scrolled past (see [CollectionHero]'s
+ * [overlayTextAlpha] crossfades the block with the scroll top bar's title.
+ * [transitionAlpha] — the host's combined flight alpha (see
+ * [rememberCollectionHeroFlightFraction]) — fades the block with the
+ * shared-element flight: the block is lifted into the transition overlay
+ * ([collectionHeroOverlayLayer]) so it draws above the flying artwork instead
+ * of being covered by it, and a lifted layer escapes the host hierarchy's own
+ * fades unless its alpha compensates for both.
+ *
+ * [onVisibleHeightPx] reports the measured total (px) once the item is laid
+ * out, so the host screen can hand the hero artwork's 1:1 scroll-away over to
+ * the same constant when the item is scrolled past (see [CollectionHero]'s
  * [CollectionHero.scrollOffsetPx]).
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun CollectionHeroImmersiveSpacer(
+fun CollectionHeroImmersiveHeader(
     layout: CollectionHeroLayout,
     title: String,
     subtitle: String?,
@@ -166,7 +162,13 @@ fun CollectionHeroImmersiveSpacer(
     onVisibleHeightPx: (Int) -> Unit,
     modifier: Modifier = Modifier,
     accentColor: Color = FoamTheme.accentColor,
-    onPlayAllClick: (() -> Unit)? = null
+    onPlayAllClick: (() -> Unit)? = null,
+    overlayTextAlpha: (() -> Float)? = null,
+    transitionAlpha: (() -> Float)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    sharedElementKey: String? = null,
+    sharedElementPrefix: String = "album"
 ) {
     val density = LocalDensity.current
     val statusBarHeightPx = WindowInsets.statusBars.getTop(density)
@@ -176,16 +178,30 @@ fun CollectionHeroImmersiveSpacer(
         (heroHeight * collectionHeroOverlayFraction(layout)).roundToPx() - statusBarHeightPx
     }
     val listTopPaddingPx = with(density) { CollectionHeroImmersiveListTopPadding.roundToPx() }
-    // The overlay hangs off a full-width Box with 16dp side padding; measuring
-    // at the same width keeps line wraps identical to the real block.
+    // The overlay block hangs off a full-width hero Box with 16dp side
+    // padding; measuring at the same width keeps line wraps identical.
     val overlayMaxWidthPx = with(density) {
         LocalConfiguration.current.screenWidthDp.dp.roundToPx()
     }
+    // Chrome flight fade: while a shared transition is active the block is
+    // lifted above the flying artwork and escapes the host hierarchy's fades,
+    // so its alpha rides the flight explicitly (same fraction as the hero).
+    val flightFraction = rememberCollectionHeroFlightFraction(
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope
+    )
 
     SubcomposeLayout(modifier.fillMaxWidth()) { constraints ->
-        val overlayContent = subcompose(Unit) {
+        val block = subcompose(Unit) {
             Box(
-                modifier = Modifier.clearAndSetSemantics { }
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .collectionHeroOverlayLayer(sharedTransitionScope)
+                    .graphicsLayer {
+                        alpha = (overlayTextAlpha?.invoke() ?: 1f) *
+                                (1f - flightFraction.value) *
+                                (transitionAlpha?.invoke() ?: 1f)
+                    }
             ) {
                 CollectionHeroOverlayContent(
                     title = title,
@@ -194,17 +210,20 @@ fun CollectionHeroImmersiveSpacer(
                     accentColor = accentColor,
                     centered = layout == CollectionHeroLayout.Immersive,
                     onPlayAllClick = onPlayAllClick,
-                    ghost = true
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    sharedElementKey = sharedElementKey,
+                    sharedElementPrefix = sharedElementPrefix
                 )
             }
         }.first().measure(Constraints(maxWidth = overlayMaxWidthPx))
         val visibleHeightPx = maxOf(
             heroVisiblePx,
-            overlayTopPx + overlayContent.height + listTopPaddingPx
+            overlayTopPx + block.height + listTopPaddingPx
         )
         onVisibleHeightPx(visibleHeightPx)
         layout(constraints.maxWidth, visibleHeightPx) {
-            overlayContent.placeRelative(0, overlayTopPx)
+            block.placeRelative(0, overlayTopPx)
         }
     }
 }
@@ -217,19 +236,33 @@ fun CollectionHeroImmersiveSpacer(
  * artwork with centered text below, and the immersive variants bleed the
  * artwork under the status bar with the text block overlaid on it.
  *
- * For the immersive layouts the composable is a screen-level layer: place it
- * from a screen-level [Box] (it offsets itself up behind the status bar) and
- * make the list's leading item a [CollectionHeroImmersiveSpacer].
- * [listScrollOffsetPx] — the list's
- * current scroll in px — makes the hero scroll away 1:1 with the list, exactly
- * like a header item would. [overlayTextAlpha] lets the screen crossfade the
- * overlaid text out while the scroll top bar's title fades in.
+ * Compact/Normal render the whole header (texts and play pill included) and
+ * are composed as the list's leading item. The immersive variants render ONLY
+ * the artwork layer: place this composable from a screen-level [Box] behind
+ * the list (it offsets itself up behind the status bar), and make the list's
+ * leading item a [CollectionHeroImmersiveHeader], which carries the overlaid
+ * text block and play pill as real, interactive list content. Because the
+ * artwork layer holds no interactive content, the play pill lives where taps
+ * land and fades with the host hierarchy exactly like the compact/normal
+ * heroes' — no behind-the-list hit-target copy is needed.
+ * [transitionAlpha] (the host's combined flight alpha, see
+ * [rememberCollectionHeroFlightFraction]) fades the status-bar scrim with the
+ * shared-element flight, and [scrollOffsetPx] — the list's current scroll in
+ * px — makes the artwork scroll away 1:1 with the list, exactly like a header
+ * item would.
  *
  * When a shared-element context is provided AND the layout is immersive, the
  * artwork's corner radius (theme percentage -> 0) and bottom fade (none ->
  * faded) animate across the shared-element transition, so the flight departs
  * from the source row's rounded, unfaded look and lands on the square, faded
  * hero. Compact and Normal keep the static theme shape and no fade.
+ *
+ * NOTE on flight rendering: the shared-element overlay draws only the
+ * becoming-visible side's own content and clip. On open that is this hero, so
+ * the morph below (animated overlay clip + fade) is what renders. On close the
+ * DRAWN side is the source row instead — which is why the row side carries its
+ * own mirrored morph (see [collectionFlightArtwork]) rather than relying on
+ * this hero's.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -244,7 +277,6 @@ fun CollectionHero(
     imageIsEmbeddedArt: Boolean = true,
     icon: ImageVector? = null,
     accentColor: Color = FoamTheme.accentColor,
-    overlayTextAlpha: (() -> Float)? = null,
     transitionAlpha: (() -> Float)? = null,
     scrollOffsetPx: (() -> Int)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -283,25 +315,22 @@ fun CollectionHero(
             sharedElementPrefix = sharedElementPrefix,
             modifier = modifier
         )
-        CollectionHeroLayout.Immersive, CollectionHeroLayout.CompactImmersive -> CollectionHeroImmersive(
-            layout = layout,
-            title = title,
-            subtitle = subtitle,
-            statsText = statsText,
-            imageUrl = imageUrl,
-            imageIsEmbeddedArt = imageIsEmbeddedArt,
-            icon = icon,
-            onPlayAllClick = onPlayAllClick,
-            accentColor = accentColor,
-            overlayTextAlpha = overlayTextAlpha,
-            transitionAlpha = transitionAlpha,
-            scrollOffsetPx = scrollOffsetPx,
-            sharedTransitionScope = sharedTransitionScope,
-            animatedVisibilityScope = animatedVisibilityScope,
-            sharedElementKey = sharedElementKey,
-            sharedElementPrefix = sharedElementPrefix,
-            modifier = modifier
-        )
+        CollectionHeroLayout.Immersive, CollectionHeroLayout.CompactImmersive ->
+            CollectionHeroImmersiveArtwork(
+                layout = layout,
+                title = title,
+                imageUrl = imageUrl,
+                imageIsEmbeddedArt = imageIsEmbeddedArt,
+                icon = icon,
+                accentColor = accentColor,
+                transitionAlpha = transitionAlpha,
+                scrollOffsetPx = scrollOffsetPx,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                sharedElementKey = sharedElementKey,
+                sharedElementPrefix = sharedElementPrefix,
+                modifier = modifier
+            )
     }
 }
 
@@ -446,17 +475,13 @@ private fun CollectionHeroNormal(
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun CollectionHeroImmersive(
+private fun CollectionHeroImmersiveArtwork(
     layout: CollectionHeroLayout,
     title: String,
-    subtitle: String?,
-    statsText: String,
     imageUrl: String?,
     imageIsEmbeddedArt: Boolean,
     icon: ImageVector?,
-    onPlayAllClick: (() -> Unit)?,
     accentColor: Color,
-    overlayTextAlpha: (() -> Float)?,
     transitionAlpha: (() -> Float)?,
     scrollOffsetPx: (() -> Int)?,
     sharedTransitionScope: SharedTransitionScope?,
@@ -473,28 +498,19 @@ private fun CollectionHeroImmersive(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
     )
-    // The overlay block hangs off the hero at [collectionHeroOverlayFraction]
-    // and is taller than the room left inside the hero image, so it extends
-    // below the Box's bottom edge. Drawing is never clipped, but hit-testing
-    // is gated by every ancestor's layout bounds — so the root Box must grow
-    // to cover the overlay or the play pill, however far it hangs, would be
-    // visible yet untappable.
-    var overlayHeightPx by remember { mutableIntStateOf(0) }
-    val heroHeightPx = with(density) { heroHeight.roundToPx() }
-    val overlayTopPx = with(density) {
-        (heroHeight * collectionHeroOverlayFraction(layout)).roundToPx()
-    }
-    val rootHeight = with(density) {
-        maxOf(heroHeightPx, overlayTopPx + overlayHeightPx).toDp()
-    }
+    // Read in composition: FoamTheme.shapes is @Composable, so it cannot be
+    // touched inside the draw-phase graphicsLayer block below.
+    val flightRounding = FoamTheme.shapes.miniPlayerRounding
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(rootHeight)
+            .height(heroHeight)
             .offset {
                 // Bleed behind the status bar at rest, then ride the list's
-                // scroll 1:1 so the hero scrolls away like a header item.
+                // scroll 1:1 so the hero scrolls away like a header item. The
+                // overlay block (title/play pill) lives in the list's own
+                // [CollectionHeroImmersiveHeader] item and scrolls with it.
                 IntOffset(0, -statusBarHeightPx - (scrollOffsetPx?.invoke() ?: 0))
             }
     ) {
@@ -509,7 +525,17 @@ private fun CollectionHeroImmersive(
                     sharedElementPrefix = sharedElementPrefix,
                     flightFraction = flightFraction
                 )
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .graphicsLayer {
+                    compositingStrategy = CompositingStrategy.Offscreen
+                    // In-flight in-place look: the shared-element overlay only
+                    // takes over once the match's bounds are configured, and
+                    // screens opened without a fade render in place from frame
+                    // one. The artwork must therefore carry the departing row's
+                    // rounded corners ITSELF on every frame it renders in place,
+                    // instead of flashing the settled square hero (radius 0).
+                    shape = AlbumArtFlightShape(flightRounding) { flightFraction.value }
+                    clip = true
+                }
                 .drawWithContent {
                     drawContent()
                     val fadeStrength = 1f - flightFraction.value
@@ -549,50 +575,13 @@ private fun CollectionHeroImmersive(
                     )
                 )
         )
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .fillMaxWidth()
-                .offset(y = heroHeight * collectionHeroOverlayFraction(layout))
-                .onSizeChanged { overlayHeightPx = it.height }
-                .collectionHeroOverlayLayer(sharedTransitionScope)
-                .graphicsLayer {
-                    alpha = (overlayTextAlpha?.invoke() ?: 1f) *
-                            (1f - flightFraction.value) * (transitionAlpha?.invoke() ?: 1f)
-                },
-            horizontalAlignment = if (layout == CollectionHeroLayout.Immersive) {
-                Alignment.CenterHorizontally
-            } else {
-                Alignment.Start
-            }
-        ) {
-            CollectionHeroOverlayContent(
-                title = title,
-                subtitle = subtitle,
-                statsText = statsText,
-                accentColor = accentColor,
-                centered = layout == CollectionHeroLayout.Immersive,
-                onPlayAllClick = onPlayAllClick,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                sharedElementKey = sharedElementKey,
-                sharedElementPrefix = sharedElementPrefix
-            )
-        }
     }
 }
 
 /**
  * The immersive overlay block's content: title/subtitle/stats and the optional
- * play pill, inset 16dp like the rest of the hero. Shared by the hero's real
- * overlay and [CollectionHeroImmersiveSpacer]'s measuring copy, so the two can
- * never drift apart.
- *
- * [ghost] renders everything invisible for that measuring copy — texts and
- * pill visuals at alpha 0 — while keeping the pill hit-testable with a live
- * ripple, which is drawn by the clickable's indication layer and therefore
- * unaffected by the ghosting.
+ * play pill, inset 16dp like the rest of the hero. Composed by
+ * [CollectionHeroImmersiveHeader] as the list's real interactive header item.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -603,7 +592,6 @@ private fun CollectionHeroOverlayContent(
     accentColor: Color,
     centered: Boolean,
     onPlayAllClick: (() -> Unit)?,
-    ghost: Boolean = false,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedElementKey: String? = null,
@@ -621,7 +609,6 @@ private fun CollectionHeroOverlayContent(
             statsText = statsText,
             accentColor = accentColor,
             centered = centered,
-            ghost = ghost,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             sharedElementKey = sharedElementKey,
@@ -632,8 +619,7 @@ private fun CollectionHeroOverlayContent(
             Spacer(modifier = Modifier.height(8.dp))
             CollectionHeroPlayButton(
                 onClick = onPlayAllClick,
-                accentColor = accentColor,
-                ghost = ghost
+                accentColor = accentColor
             )
         }
     }
@@ -690,7 +676,6 @@ private fun CollectionHeroTexts(
     statsText: String,
     accentColor: Color,
     centered: Boolean,
-    ghost: Boolean = false,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
@@ -708,9 +693,7 @@ private fun CollectionHeroTexts(
     val textWidth = if (centered) Modifier.fillMaxWidth() else Modifier
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .graphicsLayer { alpha = if (ghost) 0f else 1f },
+        modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start
     ) {
         BasicText(
@@ -748,23 +731,17 @@ private fun CollectionHeroTexts(
     }
 }
 
-/**
- * The accent play pill. [ghost] hides the pill's own visuals (background,
- * icon, label) while keeping it hit-testable with a live ripple — used by
- * [CollectionHeroImmersiveSpacer]'s twin, whose ripple must stay visible over
- * the hero even though the twin renders no content of its own.
- */
+/** The accent play pill. */
 @Composable
 private fun CollectionHeroPlayButton(
     onClick: () -> Unit,
-    accentColor: Color,
-    ghost: Boolean = false
+    accentColor: Color
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .clip(CircleShape)
-            .background(if (ghost) Color.Transparent else accentColor)
+            .background(accentColor)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = FoamTheme.colors.textPrimary)
@@ -773,7 +750,6 @@ private fun CollectionHeroPlayButton(
         contentAlignment = Alignment.Center
     ) {
         Row(
-            modifier = Modifier.graphicsLayer { alpha = if (ghost) 0f else 1f },
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -798,9 +774,15 @@ private fun CollectionHeroPlayButton(
  * flight is draw-only. Returns a constant 0f when either scope is missing
  * (no shared-element context, e.g. heroes rendered without transition wiring).
  *
- * Used both by the hero itself (artwork corner/fade morph, chrome fades) and by
- * host screens fading their top-bar chrome in sync with the flight (see
- * [collectionHeroOverlayLayer]).
+ * The fraction animates with the SAME duration/easing as the NavHost's screen
+ * fade and [AlbumArtBoundsTransform] (SharedElementTransitionDurationMs/
+ * SharedElementEasing), so the chrome fading with the flight lands on the
+ * same frame as the screen fade and the flying artwork instead of trailing
+ * them on a spring — which read as a pop at flight ends.
+ *
+ * Used both by the hero itself (artwork corner/fade morph, chrome fades), by
+ * [CollectionHeroImmersiveHeader]'s overlay block and by host screens fading
+ * their top-bar chrome in sync with the flight (see [collectionHeroOverlayLayer]).
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -812,7 +794,15 @@ fun rememberCollectionHeroFlightFraction(
     if (sharedTransitionScope == null || animatedVisibilityScope == null) {
         return noFlight
     }
-    return animatedVisibilityScope.transition.animateFloat(label = "collectionHeroFlight") { state ->
+    return animatedVisibilityScope.transition.animateFloat(
+        transitionSpec = {
+            tween(
+                durationMillis = SharedElementTransitionDurationMs,
+                easing = SharedElementEasing
+            )
+        },
+        label = "collectionHeroFlight"
+    ) { state ->
         if (state == EnterExitState.Visible) 0f else 1f
     }
 }
@@ -842,33 +832,6 @@ fun Modifier.collectionHeroOverlayLayer(
     }
 }
 
-/**
- * Animated variant of [AlbumArtShape]: the theme's percentage corner radius
- * scaled by [fraction] (1f = fully rounded row look, 0f = square). Used as the
- * shared element's OverlayClip so the flight's rendered artwork keeps its
- * corners riding the transition instead of snapping between the two rest
- * looks. The fraction is read per outline creation (the overlay redraws every
- * flight frame), so no recomposition is involved.
- */
-private class HeroFlightCornerShape(
-    private val rounding: Float,
-    private val fraction: () -> Float
-) : Shape {
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        val percent = (rounding * 50f * fraction().coerceIn(0f, 1f)).coerceIn(0f, 50f)
-        val radius = CornerRadius(size.width * percent / 100f, size.height * percent / 100f)
-        return Outline.Rounded(
-            RoundRect(
-                rect = size.toRect(),
-                topLeft = radius,
-                topRight = radius,
-                bottomRight = radius,
-                bottomLeft = radius
-            )
-        )
-    }
-}
-
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun Modifier.collectionHeroSharedArtwork(
@@ -882,7 +845,7 @@ private fun Modifier.collectionHeroSharedArtwork(
         return this
     }
     val overlayShape = if (flightFraction != null) {
-        HeroFlightCornerShape(FoamTheme.shapes.miniPlayerRounding) { flightFraction.value }
+        AlbumArtFlightShape(FoamTheme.shapes.miniPlayerRounding) { flightFraction.value }
     } else {
         AlbumArtShape()
     }
@@ -922,6 +885,17 @@ private fun Modifier.collectionHeroSharedText(
         )
     }
 }
+
+/**
+ * Resolves a collection's hero layout from the app settings. Provided at the
+ * nav root (FoamNavigation) so any screen hosting rows that fly into a
+ * collection detail hero can know, without new parameter threading, whether
+ * that hero uses an immersive layout (square + faded at rest) and therefore
+ * whether its rows must carry the mirrored flight look (see
+ * [collectionFlightArtwork]). The default resolves every target to Compact.
+ */
+val LocalCollectionHeroLayoutLookup: ProvidableCompositionLocal<(CollectionHeroTarget) -> CollectionHeroLayout> =
+    compositionLocalOf { { CollectionHeroLayout.Compact } }
 
 /**
  * The scroll-triggered top bar: a black vertical gradient from the very top of

@@ -87,12 +87,15 @@ import com.foamplayer.app.ui.components.CollectionKind
 import com.foamplayer.app.ui.components.ListRowArtSize
 import com.foamplayer.app.ui.components.ListRowHighlightPadding
 import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
+import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.albumArtCornerRadius
+import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import androidx.core.net.toUri
+import com.foamplayer.app.constants.CollectionHeroTarget
 import kotlin.math.abs
 import kotlin.math.max
 import kotlinx.coroutines.Job
@@ -716,18 +719,23 @@ fun AlbumSearchResultItem(
             modifier = Modifier
                 .size(ListRowArtSize)
                 .let { base ->
+                    // With an immersive album-detail hero this row is the DRAWN
+                    // side of the closing flight (the shared-element overlay
+                    // renders only the becoming-visible side), so it carries the
+                    // mirrored morph itself instead of the static rest clip.
                     if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                        with(sharedTransitionScope) {
-                            base.sharedElement(
-                                rememberSharedContentState(key = "album-art-${album.album}"),
-                                animatedVisibilityScope = animatedVisibilityScope,
-                                clipInOverlayDuringTransition = OverlayClip(AlbumArtShape()),
-                                boundsTransform = AlbumArtBoundsTransform
-                            )
-                        }
-                    } else base
+                        base.collectionRowFlightArtwork(
+                            key = "album-art-${album.album}",
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            enabled = true,
+                            restShape = AlbumArtShape(),
+                            immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                                .current(CollectionHeroTarget.Album)
+                                .isImmersive
+                        )
+                    } else base.clip(AlbumArtShape())
                 }
-                .clip(AlbumArtShape())
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {

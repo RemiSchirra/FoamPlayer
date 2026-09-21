@@ -207,7 +207,7 @@ fun TrackListScreen(
     val transitionAlpha: () -> Float = {
         (1f - navFlightFraction.value) * (1f - containerFlightFraction.value)
     }
-    // Measured by the header spacer's layout pass (see [CollectionHeroImmersiveSpacer]);
+    // Measured by the header item's layout pass (see [CollectionHeroImmersiveHeader]);
     // read untracked inside the offset lambda, so it is always the settled value.
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
@@ -335,6 +335,11 @@ fun TrackListScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         if (heroLayout.isImmersive) {
+            // Artwork layer only: bleeds under the status bar behind the list.
+            // The overlay block (title/play pill) is the list's own
+            // [CollectionHeroImmersiveHeader] item, so it fades with this
+            // screen's transitions exactly like the compact/normal heroes and
+            // takes taps directly.
             CollectionHero(
                 layout = heroLayout,
                 title = title,
@@ -342,9 +347,8 @@ fun TrackListScreen(
                 statsText = "$trackCount Tracks • $durationText",
                 imageUrl = imageUrl,
                 imageIsEmbeddedArt = imageIsEmbeddedArt,
-                onPlayAllClick = onPlayAllClick,
+                onPlayAllClick = null,
                 accentColor = heroAccentColor,
-                overlayTextAlpha = { 1f - topBarFraction() },
                 transitionAlpha = transitionAlpha,
                 scrollOffsetPx = heroScrollOffsetPx,
                 sharedTransitionScope = sharedTransitionScope,
@@ -402,6 +406,8 @@ fun TrackListScreen(
                             onPlayAllClick = onPlayAllClick,
                             accentColor = heroAccentColor,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                            overlayTextAlpha = { 1f - topBarFraction() },
+                            transitionAlpha = transitionAlpha,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
                             sharedElementKey = sharedElementKey,
@@ -536,6 +542,8 @@ fun TrackListScreen(
                             onPlayAllClick = onPlayAllClick,
                             accentColor = heroAccentColor,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                            overlayTextAlpha = { 1f - topBarFraction() },
+                            transitionAlpha = transitionAlpha,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
                             sharedElementKey = sharedElementKey,
@@ -692,10 +700,11 @@ fun TrackListScreen(
 }
 
 /**
- * The list's leading item: the hero for compact/normal layouts, a spacer
- * measured against the immersive hero's real overlay block otherwise (its
- * [CollectionHeroImmersiveSpacer.onVisibleHeightPx] keeps the hero's
- * scroll-away constant in sync).
+ * The list's leading item: the full hero (artwork, texts and play pill) for
+ * compact/normal layouts, [CollectionHeroImmersiveHeader] for the immersive
+ * ones — the overlaid text block and play pill as real interactive list
+ * content (its [CollectionHeroImmersiveHeader.onVisibleHeightPx] keeps the
+ * hero artwork's scroll-away constant in sync).
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -709,20 +718,28 @@ private fun TrackListHero(
     onPlayAllClick: () -> Unit,
     accentColor: Color,
     onVisibleHeightPx: (Int) -> Unit,
+    overlayTextAlpha: () -> Float,
+    transitionAlpha: () -> Float,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
     sharedElementPrefix: String
 ) {
     if (heroLayout.isImmersive) {
-        CollectionHeroImmersiveSpacer(
+        CollectionHeroImmersiveHeader(
             layout = heroLayout,
             title = title,
             subtitle = artistName,
             statsText = statsText,
             accentColor = accentColor,
             onPlayAllClick = onPlayAllClick,
-            onVisibleHeightPx = onVisibleHeightPx
+            onVisibleHeightPx = onVisibleHeightPx,
+            overlayTextAlpha = overlayTextAlpha,
+            transitionAlpha = transitionAlpha,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            sharedElementKey = sharedElementKey,
+            sharedElementPrefix = sharedElementPrefix
         )
         return
     }

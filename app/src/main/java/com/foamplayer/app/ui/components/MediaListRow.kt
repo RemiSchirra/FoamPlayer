@@ -28,21 +28,34 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.toRect
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
-import coil.size.Size
+import coil.size.Size as CoilSize
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
@@ -81,7 +94,7 @@ fun AlbumArtShape(): Shape = RoundedCornerShape(
  * an instant cache hit instead of a fresh decode (which otherwise shows
  * briefly as a blank/transparent frame mid-transition).
  */
-val AlbumArtRequestSize = Size(480, 480)
+val AlbumArtRequestSize = CoilSize(480, 480)
 
 /**
  * Drives the size/position animation for every shared element in the app's
@@ -94,6 +107,170 @@ val AlbumArtRequestSize = Size(480, 480)
 @OptIn(ExperimentalSharedTransitionApi::class)
 val AlbumArtBoundsTransform = BoundsTransform { _, _ ->
     tween(durationMillis = SharedElementTransitionDurationMs, easing = SharedElementEasing)
+}
+
+/**
+ * Animated variant of [AlbumArtShape]: the theme's percentage corner radius
+ * scaled by [fraction] (1f = the row's fully rounded rest look, 0f = the
+ * immersive hero's square look). Used both as a collection flight's
+ * [androidx.compose.animation.SharedTransitionScope.OverlayClip] and as the
+ * in-place graphicsLayer shape, so the drawn side of a collection
+ * shared-element flight keeps its corners riding the transition instead of
+ * snapping between the two rest looks. The fraction is read per outline
+ * creation (the overlay redraws every flight frame), so no recomposition is
+ * involved.
+ */
+internal class AlbumArtFlightShape(
+    private val rounding: Float,
+    private val fraction: () -> Float
+) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val percent = (rounding * 50f * fraction().coerceIn(0f, 1f)).coerceIn(0f, 50f)
+        val radius = CornerRadius(size.width * percent / 100f, size.height * percent / 100f)
+        return Outline.Rounded(
+            RoundRect(
+                rect = size.toRect(),
+                topLeft = radius,
+                topRight = radius,
+                bottomRight = radius,
+                bottomLeft = radius
+            )
+        )
+    }
+}
+
+/**
+ * Flight progress of a collection row that is the drawn side of a shared
+ * artwork flight with an immersive collection hero: 0f while the flight
+ * departs (the hero's square, faded look), 1f once landed at the row's rest
+ * look (Visible). Rides [animatedVisibilityScope]'s own enter/exit transition
+ * with the same duration/easing as [AlbumArtBoundsTransform], so the morph
+ * lands with the flying bounds; every read is draw-phase only.
+ *
+ * Gated on the shared transition actually being active: without a matching
+ * shared element in flight (plain screen fades, rest) the progress pins to 1f
+ * so the row always rests on its exact static look.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun rememberCollectionFlightProgress(
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope
+): State<Float> {
+    val flight = animatedVisibilityScope.transition.animateFloat(
+        transitionSpec = {
+            tween(
+                durationMillis = SharedElementTransitionDurationMs,
+                easing = SharedElementEasing
+            )
+        },
+        label = "collectionRowFlight"
+    ) { state ->
+        if (state == EnterExitState.Visible) 1f else 0f
+    }
+    return remember(sharedTransitionScope, flight) {
+        derivedStateOf {
+            if (sharedTransitionScope.isTransitionActive) flight.value else 1f
+        }
+    }
+}
+
+/**
+ * The flight-time look of a collection row that is the DRAWN side of a
+ * shared-element flight with an immersive collection hero (i.e. the row the
+ * hero morphs into when the detail screen closes). During the transition the
+ * shared-element overlay renders ONLY the becoming-visible side's own content
+ * and overlay clip -- so this side must carry the whole morph itself, exactly
+ * like [playerFlightArtwork] does for the player's dismiss flight:
+ *
+ * - the corner radius rides the flight from the hero's square rest look to the
+ *   row's own percentage radius (the same convention as [AlbumArtShape], so it
+ *   lands exactly on the row's rest look),
+ * - a bottom fade mirrors the hero's (see CollectionHero's immersive artwork)
+ *   at full strength at flight start and eases out as the art lands.
+ *
+ * At rest the progress reads 1f: the shape is the row's own static rounding
+ * and the fade strength is zero -- the rest look is byte-for-byte the
+ * un-flight one, which is why the static [clip] is dropped on this path.
+ *
+ * Every frame is draw-only (graphicsLayer + drawWithContent reads).
+ */
+@Composable
+internal fun Modifier.collectionFlightArtwork(progress: State<Float>): Modifier {
+    val rounding = FoamTheme.shapes.miniPlayerRounding
+    return this
+        .graphicsLayer {
+            val p = progress.value
+            shape = AlbumArtFlightShape(rounding) { p }
+            clip = true
+            // The bottom fade blends with DstIn; isolate it to this layer so
+            // it never erases what sits behind the artwork.
+            compositingStrategy = if (p < 1f) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+        }
+        .drawWithContent {
+            drawContent()
+            val fadeStrength = 1f - progress.value
+            if (fadeStrength > 0f) {
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        0f to Color.Black,
+                        CollectionHeroImmersiveFadeStartFraction to Color.Black,
+                        1f to Color.Black.copy(alpha = 1f - fadeStrength)
+                    ),
+                    blendMode = BlendMode.DstIn
+                )
+            }
+        }
+}
+
+/**
+ * Shared artwork modifier of a collection row: the static rest path
+ * ([rowSharedArtwork] + [restShape] clip) or, when [immersiveFlightHero] is
+ * on (the destination detail screen uses an immersive hero), the flight
+ * variant whose clip and fade ride the transition (see
+ * [collectionFlightArtwork]) -- so a closing flight departs from the hero's
+ * square, faded look and lands on the row's rounded, unfaded one instead of
+ * popping straight to the row look on the first frame.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun Modifier.collectionRowFlightArtwork(
+    key: String,
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope?,
+    enabled: Boolean,
+    restShape: Shape,
+    immersiveFlightHero: Boolean
+): Modifier {
+    if (!enabled || sharedTransitionScope == null || animatedVisibilityScope == null) {
+        return this.clip(restShape)
+    }
+    if (!immersiveFlightHero) {
+        return this
+            .rowSharedArtwork(
+                key = key,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                enabled = true,
+                overlayClip = restShape,
+                boundsTransform = AlbumArtBoundsTransform
+            )
+            .clip(restShape)
+    }
+    val flightProgress = rememberCollectionFlightProgress(
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope
+    )
+    return this
+        .rowSharedArtwork(
+            key = key,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            enabled = true,
+            overlayClip = AlbumArtFlightShape(FoamTheme.shapes.miniPlayerRounding) { flightProgress.value },
+            boundsTransform = AlbumArtBoundsTransform
+        )
+        .collectionFlightArtwork(flightProgress)
 }
 
 /** Size of the artwork thumbnail at the leading edge of a list row. */
