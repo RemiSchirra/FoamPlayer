@@ -96,6 +96,7 @@
     <string name="direct_volume_control">Direct Volume Control</string>
     <string name="direct_volume_control_desc">Apply volume in the 32-bit float DSP chain, keeping the output path full scale</string>
     <string name="output_devices">Output Devices</string>
+    <string name="audio_devices_desc">Per-device bit-perfect mode and sample rate</string>
     <string name="no_output_devices">No output device detected</string>
     <string name="device_active">ACTIVE</string>
     <string name="device_bit_perfect_mode">Bit-Perfect Mode</string>
