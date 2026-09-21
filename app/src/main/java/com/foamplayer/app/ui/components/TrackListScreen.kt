@@ -3,6 +3,9 @@ package com.foamplayer.app.ui.components
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -52,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -250,6 +254,21 @@ fun TrackListScreen(
             }
         }
     )
+    // Grid counterpart for GRID_* densities in edit mode: the same whole-cell
+    // drag & drop as the playlists screen. The hero header (index 0) and the
+    // bottom spacer never take part in a swap.
+    val gridDragState = rememberDragDropGridState(
+        gridState = gridState,
+        canMove = { from, to -> from > 0 && to in 1..displayedTracks.size },
+        onMove = { from, to ->
+            displayedTracks = displayedTracks.toMutableList().apply {
+                add(to - 1, removeAt(from - 1))
+            }
+        }
+    )
+    // True once the finger lifts: the item keeps flying to its slot (settle
+    // animation) but the lift scale already animates back down in parallel.
+    var dragReleased by remember { mutableStateOf(false) }
     // Fresh reads for the drag callbacks: pointerInput is keyed on the item's
     // track id, so a gesture handler can outlive the state it was created with.
     val latestDisplayedTracks by rememberUpdatedState(displayedTracks)
@@ -391,22 +410,107 @@ fun TrackListScreen(
                     }
 
                     itemsIndexed(shownTracks, key = { _, track -> track.id }) { index, track ->
-                        TrackListItem(
-                            track = track,
-                            onClick = { onTrackClick(tracks, index) },
-                            active = track.id == activeTrackId,
-                            trackNumberText = if (showTrackNumbers) {
-                                track.trackNumber?.toString() ?: (index + 1).toString()
-                            } else {
-                                null
-                            },
-                            density = density,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
-                            flightPausedArtScale = { flightPausedArtScale.value },
-                            immersiveArt = immersiveMode,
-                            isSharedTransitionSource = rowSharedTagActive(track.id)
+                        // +1: the hero header sits at grid item 0; the drag-drop
+                        // state works in raw LazyGrid indices.
+                        val gridItemIndex = index + 1
+                        // derivedStateOf: draggedIndex is shared by every cell, so
+                        // reading it directly in each cell's scope would recompose
+                        // the whole viewport on every swap; the derived boolean only
+                        // invalidates the cells whose dragging state actually flips.
+                        val isDragging by remember(gridItemIndex) {
+                            derivedStateOf { gridDragState.isItemDragging(gridItemIndex) }
+                        }
+                        val currentIndex = rememberUpdatedState(index)
+                        val liftScale by animateFloatAsState(
+                            targetValue = if (isDragging && !dragReleased) GridDragLiftScale else 1f,
+                            animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+                            label = "trackGridDragLift"
                         )
+
+                        Box(
+                            modifier = Modifier
+                                .let { if (isDragging) it else it.animateItem() }
+                                .zIndex(if (isDragging) 1f else 0f)
+                                .graphicsLayer {
+                                    val itemInfo = gridState.layoutInfo.visibleItemsInfo
+                                        .firstOrNull { it.index == gridItemIndex }
+                                    translationX = if (isDragging && itemInfo != null) {
+                                        (gridDragState.draggingItemOffset.x - itemInfo.offset.x).toFloat()
+                                    } else {
+                                        0f
+                                    }
+                                    translationY = if (isDragging && itemInfo != null) {
+                                        (gridDragState.draggingItemOffset.y - itemInfo.offset.y).toFloat()
+                                    } else {
+                                        0f
+                                    }
+                                    scaleX = liftScale
+                                    scaleY = liftScale
+                                }
+                                .then(
+                                    if (editMode) {
+                                        Modifier.trackGridEditDrag(
+                                            trackId = track.id,
+                                            onDragStart = {
+                                                dragOriginIndex = currentIndex.value + 1
+                                                dragReleased = false
+                                                gridDragState.onDragStart(currentIndex.value + 1)
+                                            },
+                                            onDrag = gridDragState::onDrag,
+                                            onDragEnd = {
+                                                val from = dragOriginIndex
+                                                val to = gridDragState.draggedIndex
+                                                // Scale-down starts with the release; the
+                                                // settle animation flies the item to its slot.
+                                                dragReleased = true
+                                                gridDragState.onDragEnd()
+                                                dragOriginIndex = null
+                                                if (from != null && to != null && from != to) {
+                                                    latestOnPersistTrackOrder
+                                                        ?.invoke(latestDisplayedTracks.map { it.id })
+                                                }
+                                            },
+                                            onDragCancel = {
+                                                dragReleased = true
+                                                gridDragState.onDragCancel()
+                                                dragOriginIndex = null
+                                                displayedTracks = latestTracks
+                                            }
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        ) {
+                            TrackListItem(
+                                track = track,
+                                onClick = if (editMode) {
+                                    // Taps must not start playback while editing.
+                                    ({ })
+                                } else {
+                                    { onTrackClick(tracks, index) }
+                                },
+                                onLongClick = if (editMode) {
+                                    // The track actions modal stays closed while editing.
+                                    ({ })
+                                } else {
+                                    null
+                                },
+                                active = track.id == activeTrackId,
+                                trackNumberText = if (showTrackNumbers) {
+                                    track.trackNumber?.toString() ?: (index + 1).toString()
+                                } else {
+                                    null
+                                },
+                                density = density,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
+                                flightPausedArtScale = { flightPausedArtScale.value },
+                                immersiveArt = immersiveMode,
+                                showDragHandle = editMode,
+                                isSharedTransitionSource = rowSharedTagActive(track.id) && !editMode
+                            )
+                        }
                     }
 
                     item(
@@ -706,4 +810,26 @@ private fun TrackListTopBarRow(
             )
         }
     }
+}
+
+/** Scale-up applied to a track's grid cell while it is being dragged, for a "lifted" feel. */
+private const val GridDragLiftScale = 1.05f
+
+/** Whole-cell drag gesture driving edit-mode grid reordering (swaps come from [DragDropGridState]). */
+private fun Modifier.trackGridEditDrag(
+    trackId: Long,
+    onDragStart: () -> Unit,
+    onDrag: (Offset) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit
+): Modifier = pointerInput(trackId) {
+    detectDragGestures(
+        onDragStart = { onDragStart() },
+        onDrag = { change, dragAmount ->
+            change.consume()
+            onDrag(dragAmount)
+        },
+        onDragEnd = onDragEnd,
+        onDragCancel = onDragCancel
+    )
 }

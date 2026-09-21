@@ -12,6 +12,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -28,6 +30,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.OpenWith
 import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -103,7 +107,9 @@ private const val SwipeReturnDurationMs = 200
  * album" (RowBig grows the art to 72dp and adds a "duration • format" third
  * line) — with the active-track highlight, swipe-to-dismiss and drag-handle
  * behaviors layered on top. At the GRID_* densities it renders a square-art
- * [MediaGridCell] with the score icon overlaid on a corner of the artwork.
+ * [MediaGridCell] with the score icon overlaid on a corner of the artwork;
+ * in edit mode the same cell carries the four-direction drag chip on its
+ * artwork.
  *
  * Shared-element keys ("album_art_*", "track_title_*", "track_artist_*")
  * match the mini/full player's artwork and text so the row animates into the
@@ -160,8 +166,9 @@ fun TrackListItem(
     }
 
     // GRID_* densities: square artwork cell, score overlaid on the art corner.
-    // Swipe-to-dismiss / drag handles are row-only affordances (the queue, the
-    // only screen using them, does not support densities).
+    // In edit mode the artwork also carries the four-direction drag chip; the
+    // drag gesture itself lives on the whole cell (hosted by TrackListScreen).
+    // Swipe-to-dismiss remains a row-only affordance.
     if (density.isGrid) {
         val sharedArtworkBase: Modifier = Modifier.rowSharedArtwork(
             key = "album_art_${track.id}",
@@ -227,6 +234,21 @@ fun TrackListItem(
                         GridOverlayChip(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)) {
                             Icon(
                                 imageVector = scoreIcon,
+                                contentDescription = null,
+                                tint = FoamTheme.colors.textPrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                    AnimatedVisibility(
+                        visible = showDragHandle,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+                        enter = GridDragHandleEnter,
+                        exit = GridDragHandleExit
+                    ) {
+                        GridOverlayChip {
+                            Icon(
+                                imageVector = Icons.Rounded.OpenWith,
                                 contentDescription = null,
                                 tint = FoamTheme.colors.textPrimary,
                                 modifier = Modifier.size(14.dp)
@@ -502,3 +524,13 @@ private fun GridOverlayChip(
         content()
     }
 }
+
+/** Fade + scale-in of the edit-mode grid drag chip when entering edit mode. */
+private val GridDragHandleEnter =
+    fadeIn(animationSpec = tween(durationMillis = 200)) +
+        scaleIn(initialScale = 0.6f, animationSpec = tween(durationMillis = 200))
+
+/** Fade + scale-out of the edit-mode grid drag chip when leaving edit mode. */
+private val GridDragHandleExit =
+    fadeOut(animationSpec = tween(durationMillis = 200)) +
+        scaleOut(targetScale = 0.6f, animationSpec = tween(durationMillis = 200))

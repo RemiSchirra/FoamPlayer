@@ -87,8 +87,8 @@ fun PlaylistDetailScreen(
     // display (edit mode is custom-only, so the drag list never diverges).
     val sortedTracks = rememberSortedTracks(tracks, sortMode, sortInverted)
 
-    // Edit mode always renders as rows: swipe-to-remove and the drag handle are
-    // row-only affordances, so grid densities temporarily fall back to ROW_NORMAL.
+    // Edit mode keeps the view's own organisation: row densities reorder through
+    // the row drag handle, grid densities through the playlists-style cell drag.
     TrackListScreen(
         title = playlist?.name ?: initialName.ifEmpty { "Playlist" },
         tracks = sortedTracks,
@@ -108,7 +108,7 @@ fun PlaylistDetailScreen(
         sharedTrackId = sharedTrackId,
         activeTrackId = activeTrackId,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
-        density = if (editMode) MediaDensity.ROW_NORMAL else density,
+        density = density,
         onDensityChange = onDensityChange,
         sortOptions = listOf(CollectionSortMode.CUSTOM) + TrackSortOptions,
         currentSort = sortMode,
