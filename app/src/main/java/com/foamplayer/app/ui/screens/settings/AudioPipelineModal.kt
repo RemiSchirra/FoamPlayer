@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.audio.bitperfect.AudioOutputInfo
 import com.foamplayer.app.audio.pipeline.PipelineStageStatus
+import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.FoamBottomModal
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -49,40 +50,53 @@ fun AudioPipelineModal(
     viewModel: AudioSettingsViewModel = hiltViewModel()
 ) {
     val playbackState by viewModel.playbackState.collectAsState()
-    val info = outputInfo ?: playbackState.audioOutputInfo
 
     FoamBottomModal(
         visible = visible,
         onDismissRequest = onDismiss
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        AudioPipelineContent(
+            outputInfo = outputInfo ?: playbackState.audioOutputInfo,
+            currentTrack = playbackState.currentTrack
+        )
+    }
+}
+
+/**
+ * Modal-body of the pipeline visualization, reusable on its own (the player's
+ * audio-info modal embeds it below the fidelity card).
+ */
+@Composable
+fun AudioPipelineContent(
+    outputInfo: AudioOutputInfo?,
+    currentTrack: TrackEntity?
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        BasicText(
+            text = "Audio Pipeline",
+            style = FoamTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+        )
+
+        BasicText(
+            text = currentTrack?.let { "${it.title} · ${it.format}" } ?: "Nothing playing",
+            style = FoamTheme.typography.caption
+        )
+
+        Spacer(modifier = Modifier.height(FoamDimens.paddingMedium))
+
+        val stages = outputInfo?.pipeline?.stages
+        if (stages.isNullOrEmpty()) {
             BasicText(
-                text = "Audio Pipeline",
-                style = FoamTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                text = "Start playback to inspect the live audio path.",
+                style = FoamTheme.typography.body
             )
-
-            val track = playbackState.currentTrack
-            BasicText(
-                text = track?.let { "${it.title} · ${it.format}" } ?: "Nothing playing",
-                style = FoamTheme.typography.caption
-            )
-
-            Spacer(modifier = Modifier.height(FoamDimens.paddingMedium))
-
-            val stages = info?.pipeline?.stages
-            if (stages.isNullOrEmpty()) {
-                BasicText(
-                    text = "Start playback to inspect the live audio path.",
-                    style = FoamTheme.typography.body
-                )
-            } else {
-                stages.forEachIndexed { index, stage ->
-                    PipelineStageRow(stage = stage, isLast = index == stages.lastIndex)
-                }
+        } else {
+            stages.forEachIndexed { index, stage ->
+                PipelineStageRow(stage = stage, isLast = index == stages.lastIndex)
             }
-
-            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
         }
+
+        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
     }
 }
 

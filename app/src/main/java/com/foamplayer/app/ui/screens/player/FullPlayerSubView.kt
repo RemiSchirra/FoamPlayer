@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -144,17 +145,81 @@ internal fun SubViewSelectorRow(
     subViewMode: SubViewMode,
     progress: () -> Float,
     onSelect: (SubViewMode) -> Unit,
+    audioInfoText: String?,
+    onAudioInfoClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(modifier = modifier, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
-        SubViewMode.entries.forEach { mode ->
-            SubViewSelectorItem(
-                mode = mode,
-                isSelected = mode == subViewMode,
-                progress = progress,
-                onSelect = onSelect
-            )
+    Box(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            SubViewMode.entries.forEach { mode ->
+                SubViewSelectorItem(
+                    mode = mode,
+                    isSelected = mode == subViewMode,
+                    progress = progress,
+                    onSelect = onSelect
+                )
+            }
         }
+
+        AudioInfoChip(
+            text = audioInfoText,
+            progress = progress,
+            onClick = onAudioInfoClick,
+            modifier = Modifier.align(Alignment.Center)
+        )
+    }
+}
+
+/**
+ * Pill between the lyrics and queue selector icons showing the playing track's
+ * audio format and bitrate; opens the audio-info modal. Deferred-`progress`
+ * pattern like the transport buttons: the subview transition fraction is read
+ * inside graphicsLayer (redraw-only) and the clickable is gated through a
+ * derivedStateOf, so drag frames don't recompose the chip. The alpha runs
+ * INVERSE to that of the transport cluster, which fades into this chip's exact
+ * spot when the subview opens -- the two must never be visible together.
+ */
+@Composable
+private fun AudioInfoChip(
+    text: String?,
+    progress: () -> Float,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (text == null) return
+
+    val isEnabled by remember(progress) {
+        derivedStateOf { progress() < 1f - PlayerDimens.visibilityEpsilon }
+    }
+    val chipInteractions = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = modifier
+            .graphicsLayer { alpha = (1f - progress()).coerceIn(0f, 1f) }
+            .pressShrink(chipInteractions)
+            .clickable(
+                interactionSource = chipInteractions,
+                indication = null,
+                enabled = isEnabled,
+                onClick = onClick
+            )
+            // Transparent touch expansion around the (unchanged) visual pill:
+            // the tappable area wraps the pill and clears the 48dp minimum,
+            // same trick as SubViewSelectorItem's touchPadding.
+            .padding(horizontal = 8.dp, vertical = 12.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.2f))
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        BasicText(
+            text = text,
+            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textPrimary),
+            maxLines = 1
+        )
     }
 }
 

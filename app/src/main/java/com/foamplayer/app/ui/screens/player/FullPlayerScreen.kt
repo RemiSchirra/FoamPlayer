@@ -123,11 +123,21 @@ fun FullPlayerScreen(
     val queueIndex by remember { derivedStateOf { state.queueIndex } }
     val queueEntryIds by remember { derivedStateOf { state.queueEntryIds } }
     val durationMs by remember { derivedStateOf { state.durationMs } }
+    val audioOutputInfo by remember { derivedStateOf { state.audioOutputInfo } }
     val isPlayingProvider = { state.isPlaying }
     val track = currentTrack ?: return
     val queueSize = queue.size
 
     var subViewMode by remember { mutableStateOf(SubViewMode.LYRICS) }
+    var showAudioInfoModal by remember { mutableStateOf(false) }
+
+    // Chip label between the lyrics/queue selector icons: live audio format +
+    // bitrate from the engine's output info, falling back to the track's tags.
+    val audioInfoText = run {
+        val format = audioOutputInfo?.sourceFormat?.takeIf { it.isNotBlank() } ?: track.format
+        val bitrateKbps = audioOutputInfo?.sourceBitrateKbps?.takeIf { it > 0 } ?: track.bitrate
+        if (bitrateKbps > 0) "$format · $bitrateKbps kbps" else format
+    }
 
     val upTransitionState = remember { SeekableTransitionState(false) }
     val upTransition = rememberTransition(upTransitionState, label = "UpTransition")
@@ -655,6 +665,8 @@ fun FullPlayerScreen(
                                 gestureController.expandToSubView()
                             }
                         },
+                        audioInfoText = audioInfoText,
+                        onAudioInfoClick = { showAudioInfoModal = true },
                         modifier = selectorRowModifier
                     )
 
@@ -731,6 +743,13 @@ fun FullPlayerScreen(
             }
         }
     }
+
+    PlayerAudioInfoModal(
+        visible = showAudioInfoModal,
+        onDismiss = { showAudioInfoModal = false },
+        outputInfo = audioOutputInfo,
+        track = track
+    )
 }
 
 @Composable
