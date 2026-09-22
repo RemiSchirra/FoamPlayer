@@ -5,7 +5,6 @@ import com.foamplayer.discord.DiscordAssetRegistrar
 import com.foamplayer.discord.DiscordLogger
 import com.foamplayer.discord.DiscordOAuth
 import com.foamplayer.discord.DiscordPresenceClient
-import com.foamplayer.discord.SpotifyArtResolver
 import com.foamplayer.discord.YouTubeThumbnailResolver
 import dagger.Module
 import dagger.Provides
@@ -41,9 +40,4 @@ object DiscordModule {
     @Singleton
     fun provideYouTubeThumbnailResolver(logger: DiscordLogger): YouTubeThumbnailResolver =
         YouTubeThumbnailResolver(logger = logger)
-
-    @Provides
-    @Singleton
-    fun provideSpotifyArtResolver(logger: DiscordLogger): SpotifyArtResolver =
-        SpotifyArtResolver(logger = logger)
 }

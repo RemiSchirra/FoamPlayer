@@ -13,8 +13,8 @@ import com.foamplayer.discord.DiscordPresenceActivity
 import com.foamplayer.discord.DiscordPresenceAssets
 import com.foamplayer.discord.DiscordPresenceClient
 import com.foamplayer.discord.DiscordPresenceTimestamps
-import com.foamplayer.discord.SpotifyArtResolver
 import com.foamplayer.discord.YouTubeThumbnailResolver
+import com.foamplayer.spotify.SpotifyAlbumArtResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
@@ -45,7 +45,7 @@ class DiscordPresenceController @Inject constructor(
     private val presenceClient: DiscordPresenceClient,
     private val assetRegistrar: DiscordAssetRegistrar,
     private val albumArtStore: DiscordAlbumArtStore,
-    private val spotifyArtResolver: SpotifyArtResolver,
+    private val spotifyArtResolver: SpotifyAlbumArtResolver,
     private val youtubeArtResolver: YouTubeThumbnailResolver
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -329,7 +329,7 @@ class DiscordPresenceController @Inject constructor(
                         return@withLock it
                     }
 
-                    val url = spotifyArtResolver.resolveThumbnail(
+                    val url = spotifyArtResolver.resolveAlbumArt(
                         artist = track.artist,
                         title = track.title,
                         album = track.album
@@ -365,7 +365,7 @@ class DiscordPresenceController @Inject constructor(
                 if (!canAttemptArt(artKey)) return@withLock
                 if (albumArtStore.cachedUrl(artKey, DiscordAlbumArtStore.ONLINE_TTL_MS) != null) return@withLock
 
-                val url = spotifyArtResolver.resolveThumbnail(
+                val url = spotifyArtResolver.resolveAlbumArt(
                     artist = track.artist,
                     title = track.title,
                     album = track.album
