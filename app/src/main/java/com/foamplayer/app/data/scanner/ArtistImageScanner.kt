@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Live progress of the artist image scan shown in Settings > Library. */
 data class ArtistImageScanState(
@@ -110,6 +112,14 @@ class ArtistImageScanner @Inject constructor(
         scanJob = scope.launch { scan() }
     }
 
+    /** Cancels the running scan mid-artist; the counts settle from the store. */
+    fun stopScan() {
+        val job = scanJob ?: return
+        job.cancel()
+        scanJob = null
+        scope.launch { refreshCounts() }
+    }
+
     /** Deletes every cached artist image file and the stored URL mapping. */
     fun clearCache() {
         scope.launch {
@@ -124,35 +134,43 @@ class ArtistImageScanner @Inject constructor(
             _state.value = ArtistImageScanState()
             return
         }
-        var found = artists.count { artistImageStore.hasEntry(ArtistImageStore.key(it)) }
-        _state.value = ArtistImageScanState(running = true, found = found, total = artists.size)
+        try {
+            var found = artists.count { artistImageStore.hasEntry(ArtistImageStore.key(it)) }
+            _state.value = ArtistImageScanState(running = true, found = found, total = artists.size)
 
-        // Only the gaps: artists with a resolved image are skipped outright,
-        // so a re-scan costs nothing for them.
-        val pending = artists.filter { !artistImageStore.hasEntry(ArtistImageStore.key(it)) }
-        for (artist in pending) {
-            val key = ArtistImageStore.key(artist)
-            if (artistImageStore.hasEntry(key)) continue
-            val url = artistImageResolver.resolveArtistImage(artist)
-            if (url != null) {
-                artistImageStore.remember(key, url)
-                found++
+            // Only the gaps: artists with a resolved image are skipped outright,
+            // so a re-scan costs nothing for them.
+            val pending = artists.filter { !artistImageStore.hasEntry(ArtistImageStore.key(it)) }
+            for (artist in pending) {
+                val key = ArtistImageStore.key(artist)
+                if (artistImageStore.hasEntry(key)) continue
+                val url = artistImageResolver.resolveArtistImage(artist)
+                if (url != null) {
+                    artistImageStore.remember(key, url)
+                    found++
+                }
+                _state.value = ArtistImageScanState(
+                    running = true,
+                    found = found,
+                    total = artists.size,
+                    cachedCount = artistImageStore.cachedFileCount()
+                )
+                delay(REQUEST_SPACING_MS)
             }
-            _state.value = ArtistImageScanState(
-                running = true,
-                found = found,
-                total = artists.size,
-                cachedCount = artistImageStore.cachedFileCount()
-            )
-            delay(REQUEST_SPACING_MS)
+        } finally {
+            // Terminal state on completion AND when the scan is stopped
+            // mid-artist: NonCancellable so the cancellation path still
+            // publishes settled counts instead of leaving a stale "running".
+            withContext(NonCancellable) {
+                val artistsLeft = libraryArtists()
+                _state.value = ArtistImageScanState(
+                    running = false,
+                    found = artistsLeft.count { artistImageStore.hasEntry(ArtistImageStore.key(it)) },
+                    total = artistsLeft.size,
+                    cachedCount = artistImageStore.cachedFileCount()
+                )
+            }
         }
-
-        _state.value = ArtistImageScanState(
-            running = false,
-            found = found,
-            total = artists.size,
-            cachedCount = artistImageStore.cachedFileCount()
-        )
     }
 
     /** Every distinct individual artist of the library (splits multi-artist tags). */

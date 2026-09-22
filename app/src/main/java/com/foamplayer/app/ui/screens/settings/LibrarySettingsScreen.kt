@@ -4,8 +4,20 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +38,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.Icon
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -298,23 +311,46 @@ fun LibrarySettingsScreen(
             item {
                 BasicText(text = stringResource(R.string.artist_images), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                // The switch's ripple is drawn at card level: it expands from
+                // the press point across the whole card, reaching the top AND
+                // bottom borders (clipped by the rounded corners).
+                val switchInteraction = remember { MutableInteractionSource() }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
                         .background(FoamTheme.colors.surface)
+                        .indication(
+                            interactionSource = switchInteraction,
+                            indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary)
+                        )
                 ) {
-                    Column(Modifier.fillMaxWidth().padding(vertical = FoamDimens.spacingTiny)) {
+                    // No vertical padding: the switch row spans the full card
+                    // height when collapsed, so its ripple reaches the card's
+                    // borders (same as the audio settings cards).
+                    Column(Modifier.fillMaxWidth()) {
                         FoamSwitchItem(
                             title = stringResource(R.string.artist_images_resolve),
                             description = stringResource(R.string.artist_images_resolve_desc),
                             checked = settings.artistImageResolveEnabled,
-                            onCheckedChange = { viewModel.setArtistImageResolveEnabled(it) }
+                            onCheckedChange = { viewModel.setArtistImageResolveEnabled(it) },
+                            interactionSource = switchInteraction
                         )
 
-                        if (settings.artistImageResolveEnabled) {
-                            Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
-                            Column(Modifier.fillMaxWidth().padding(horizontal = FoamDimens.paddingMedium)) {
+                        // Expandable body (same pattern as the audio devices
+                        // cards): the switch reveals the scan controls with an
+                        // animated expand/collapse.
+                        AnimatedVisibility(
+                            visible = settings.artistImageResolveEnabled,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut()
+                        ) {
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = FoamDimens.paddingMedium)
+                                    .padding(bottom = FoamDimens.spacingMedium)
+                            ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     BasicText(
                                         text = if (artistImageScan.running) {
@@ -334,30 +370,52 @@ fun LibrarySettingsScreen(
                                         modifier = Modifier.weight(1f)
                                     )
                                     Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
+                                    // START SCAN <-> STOP: the pill animates its
+                                    // background, size and label between the two
+                                    // states; the ripple stays bounded inside it.
+                                    val scanRunning = artistImageScan.running
+                                    val scanButtonBackground by animateColorAsState(
+                                        targetValue = if (scanRunning) FoamTheme.colors.surfaceVariant
+                                        else FoamTheme.accentColor,
+                                        animationSpec = tween(durationMillis = 200),
+                                        label = "artistScanButtonBackground"
+                                    )
                                     Box(
                                         modifier = Modifier
+                                            .animateContentSize(animationSpec = tween(durationMillis = 200))
                                             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                            .background(
-                                                if (artistImageScan.running) FoamTheme.colors.surfaceVariant
-                                                else FoamTheme.accentColor
+                                            .background(scanButtonBackground)
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
+                                                onClick = {
+                                                    if (scanRunning) viewModel.stopArtistImageScan()
+                                                    else viewModel.startArtistImageScan()
+                                                }
                                             )
-                                            .clickable(enabled = !artistImageScan.running) {
-                                                viewModel.startArtistImageScan()
-                                            }
                                             .padding(
                                                 horizontal = FoamDimens.spacingStandard,
                                                 vertical = FoamDimens.spacingSmall
                                             )
                                     ) {
-                                        BasicText(
-                                            text = if (artistImageScan.running) stringResource(R.string.scanning_caps)
-                                            else stringResource(R.string.start_scan),
-                                            style = FoamTheme.typography.caption.copy(
-                                                color = if (artistImageScan.running) FoamTheme.colors.textSecondary
-                                                else FoamTheme.colors.background,
-                                                fontWeight = FontWeight.Bold
+                                        AnimatedContent(
+                                            targetState = scanRunning,
+                                            transitionSpec = {
+                                                fadeIn(animationSpec = tween(durationMillis = 120)) togetherWith
+                                                        fadeOut(animationSpec = tween(durationMillis = 120))
+                                            },
+                                            label = "artistScanButtonLabel"
+                                        ) { running ->
+                                            BasicText(
+                                                text = if (running) stringResource(R.string.artist_images_stop)
+                                                else stringResource(R.string.start_scan),
+                                                style = FoamTheme.typography.caption.copy(
+                                                    color = if (running) FoamTheme.colors.textPrimary
+                                                    else FoamTheme.colors.background,
+                                                    fontWeight = FontWeight.Bold
+                                                )
                                             )
-                                        )
+                                        }
                                     }
                                 }
 
@@ -396,7 +454,11 @@ fun LibrarySettingsScreen(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
                                             .background(FoamTheme.colors.surfaceVariant)
-                                            .clickable { viewModel.clearArtistImageCache() }
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
+                                                onClick = { viewModel.clearArtistImageCache() }
+                                            )
                                             .padding(
                                                 horizontal = FoamDimens.spacingStandard,
                                                 vertical = FoamDimens.spacingSmall

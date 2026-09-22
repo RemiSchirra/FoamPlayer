@@ -21,6 +21,12 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamTheme
 
+/**
+ * Toggle row with a bounded ripple. When the caller supplies an
+ * [interactionSource] it also owns the ripple (typically drawn at card level
+ * with [Modifier.indication] so it reaches the card's borders) and the row
+ * itself draws none.
+ */
 @Composable
 fun FoamSwitchItem(
     title: String,
@@ -28,16 +34,22 @@ fun FoamSwitchItem(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     description: String? = null,
+    interactionSource: MutableInteractionSource? = null
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
+    val rowInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
+    val rowIndication = if (interactionSource != null) {
+        null
+    } else {
+        ripple(color = FoamTheme.colors.textPrimary)
+    }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .toggleable(
                 value = checked,
-                interactionSource = interactionSource,
-                indication = ripple(color = FoamTheme.colors.textPrimary),
+                interactionSource = rowInteractionSource,
+                indication = rowIndication,
                 role = Role.Switch,
                 onValueChange = onCheckedChange
             )

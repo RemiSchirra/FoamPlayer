@@ -52,6 +52,7 @@
     <string name="artist_images_resolve_desc">Recherche chaque artiste de votre bibliothèque sur Spotify et conserve son image. Les noms d\'artiste sont envoyés à Spotify.</string>
     <string name="artist_images_found">%1$d images d\'artiste trouvées sur %2$d</string>
     <string name="artist_images_scanning">Résolution des images : %1$d / %2$d</string>
+    <string name="artist_images_stop">ARRÊTER</string>
     <string name="artist_images_cache_count">%1$d images en cache</string>
     <string name="artist_images_clear_cache">VIDER LE CACHE</string>
 

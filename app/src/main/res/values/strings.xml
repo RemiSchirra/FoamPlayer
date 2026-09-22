@@ -52,6 +52,7 @@
     <string name="artist_images_resolve_desc">Look every artist in your library up on Spotify and keep its picture. Artist names are sent to Spotify.</string>
     <string name="artist_images_found">%1$d of %2$d artist images found</string>
     <string name="artist_images_scanning">Resolving artist images: %1$d / %2$d</string>
+    <string name="artist_images_stop">STOP</string>
     <string name="artist_images_cache_count">%1$d images in cache</string>
     <string name="artist_images_clear_cache">CLEAR CACHE</string>
 

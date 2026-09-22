@@ -113,6 +113,8 @@ class SettingsViewModel @Inject constructor(
 
     fun startArtistImageScan() = artistImageScanner.startScan()
 
+    fun stopArtistImageScan() = artistImageScanner.stopScan()
+
     fun clearArtistImageCache() = artistImageScanner.clearCache()
 
     fun setLyricsProviderOrder(order: List<PreferredLyricsProvider>) = launch {
