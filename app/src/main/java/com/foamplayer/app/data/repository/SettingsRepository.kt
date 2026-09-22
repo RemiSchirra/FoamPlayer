@@ -209,6 +209,10 @@ class SettingsRepository @Inject constructor(
         it.copy(discordOnlineArt = enabled)
     }
 
+    suspend fun setArtistImageResolveEnabled(enabled: Boolean) = update {
+        it.copy(artistImageResolveEnabled = enabled)
+    }
+
     /** Persists the whole DSP chain state (EQ, tone, balance, volume). */
     suspend fun setDspState(state: DspState) = update {
         it.copy(dspStateSerialized = DspPersistence.serialize(state))
@@ -299,6 +303,7 @@ class SettingsRepository @Inject constructor(
         onboardingCompleted = this[Keys.ONBOARDING_COMPLETED] ?: AppSettings().onboardingCompleted,
         discordPresenceEnabled = this[Keys.DISCORD_PRESENCE_ENABLED] ?: AppSettings().discordPresenceEnabled,
         discordOnlineArt = this[Keys.DISCORD_ONLINE_ART] ?: AppSettings().discordOnlineArt,
+        artistImageResolveEnabled = this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] ?: AppSettings().artistImageResolveEnabled,
         dspStateSerialized = this[Keys.DSP_STATE].orEmpty(),
         dspUserPresets = this[Keys.DSP_USER_PRESETS].orEmpty(),
         deviceAudioConfigs = deserializeDeviceAudioConfigs(this[Keys.DEVICE_AUDIO_CONFIGS])
@@ -352,6 +357,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.ONBOARDING_COMPLETED] = settings.onboardingCompleted
         this[Keys.DISCORD_PRESENCE_ENABLED] = settings.discordPresenceEnabled
         this[Keys.DISCORD_ONLINE_ART] = settings.discordOnlineArt
+        this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] = settings.artistImageResolveEnabled
         this[Keys.DSP_STATE] = settings.dspStateSerialized
         this[Keys.DSP_USER_PRESETS] = settings.dspUserPresets
         this[Keys.DEVICE_AUDIO_CONFIGS] = serializeDeviceAudioConfigs(settings.deviceAudioConfigs)
@@ -408,6 +414,7 @@ class SettingsRepository @Inject constructor(
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
         val DISCORD_ONLINE_ART = booleanPreferencesKey("discord_online_art")
+        val ARTIST_IMAGE_RESOLVE_ENABLED = booleanPreferencesKey("artist_image_resolve_enabled")
         val DSP_STATE = stringPreferencesKey("dsp_state")
         val DSP_USER_PRESETS = stringPreferencesKey("dsp_user_presets")
         val DEVICE_AUDIO_CONFIGS = stringPreferencesKey("device_audio_configs")

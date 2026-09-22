@@ -136,10 +136,13 @@ fun AlbumsBrowseScreen(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistsBrowseScreen(
-    onArtistClick: (String) -> Unit,
+    onArtistClick: (artist: String, imageUrl: String?) -> Unit,
     onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
@@ -150,6 +153,7 @@ fun ArtistsBrowseScreen(
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     val artists by viewModel.artists.collectAsState()
+    val artistImages by viewModel.artistImages.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
     val sortedArtists = rememberSortedList(artists, sortMode, sortInverted) {
@@ -173,7 +177,9 @@ fun ArtistsBrowseScreen(
                 CollectionListItem(
                     title = artist,
                     subtitle = null,
-                    onClick = { onArtistClick(artist) },
+                    imageUrl = artistImages[artist],
+                    imageIsEmbeddedArt = false,
+                    onClick = { onArtistClick(artist, artistImages[artist]) },
                     active = CollectionId.artist(artist) == activeCollectionId,
                     density = density,
                     onLongClick = {
@@ -186,7 +192,15 @@ fun ArtistsBrowseScreen(
                                 )
                             )
                         }
-                    }
+                    },
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    // Only the clicked row flies (see LocalActiveSharedCollection).
+                    sharedElementKey = artist.takeIf { isActiveSharedCollection("artist", artist) },
+                    sharedElementPrefix = "artist",
+                    immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                        .current(CollectionHeroTarget.Artist)
+                        .isImmersive
                 )
             }
         }
@@ -602,12 +616,15 @@ private suspend fun BrowseViewModel.tracksForSource(kind: String, key: String): 
  * opened from the collection modal's "See Artist" row when the collection
  * spans several artists. Tapping a row opens the artist's album list.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CollectionArtistsScreen(
     kind: String,
     key: String,
-    onArtistClick: (String) -> Unit,
+    onArtistClick: (artist: String, imageUrl: String?) -> Unit,
     onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
@@ -618,6 +635,7 @@ fun CollectionArtistsScreen(
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
     var artistRows by remember { mutableStateOf<List<CollectionArtistRow>>(emptyList()) }
+    val artistImages by viewModel.artistImages.collectAsState()
 
     LaunchedEffect(kind, key) {
         artistRows = withContext(Dispatchers.Default) {
@@ -647,9 +665,20 @@ fun CollectionArtistsScreen(
                 CollectionListItem(
                     title = row.name,
                     subtitle = if (row.albumCount == 1) "1 album" else "${row.albumCount} albums",
-                    onClick = { onArtistClick(row.name) },
+                    imageUrl = artistImages[row.name],
+                    imageIsEmbeddedArt = false,
+                    onClick = { onArtistClick(row.name, artistImages[row.name]) },
                     active = CollectionId.artist(row.name) == activeCollectionId,
-                    density = density
+                    density = density,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    // Only the clicked row flies (see LocalActiveSharedCollection).
+                    sharedElementKey = row.name
+                        .takeIf { isActiveSharedCollection("artist", row.name) },
+                    sharedElementPrefix = "artist",
+                    immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                        .current(CollectionHeroTarget.Artist)
+                        .isImmersive
                 )
             }
         }

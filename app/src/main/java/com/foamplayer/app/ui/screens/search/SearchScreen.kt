@@ -189,7 +189,7 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
-    onArtistClick: (String) -> Unit,
+    onArtistClick: (artist: String, imageUrl: String?) -> Unit,
     onAlbumClick: (AlbumSearchResult) -> Unit,
     onBrowseAllTracks: () -> Unit,
     onBrowseAlbums: () -> Unit,
@@ -207,6 +207,7 @@ fun SearchScreen(
 ) {
     val query by searchViewModel.query.collectAsState()
     val uiState by searchViewModel.uiState.collectAsState()
+    val artistImages by searchViewModel.artistImages.collectAsState()
     var searchActive by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -397,11 +398,14 @@ fun SearchScreen(
                         items(uiState.artists, key = { "artist_$it" }) { artist ->
                             ArtistSearchResultItem(
                                 artist = artist,
+                                imageUrl = artistImages[artist],
                                 onClick = {
                                     searchViewModel.addToHistory(artist)
-                                    onArtistClick(artist)
+                                    onArtistClick(artist, artistImages[artist])
                                 },
-                                onLongClick = { showArtistModal(artist) }
+                                onLongClick = { showArtistModal(artist) },
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
                             )
                         }
                     }
@@ -544,11 +548,14 @@ fun SearchScreen(
                                 ) {
                                     ArtistSearchResultItem(
                                         artist = entry.name,
+                                        imageUrl = artistImages[entry.name],
                                         onClick = {
                                             searchViewModel.addToHistory(entry.name)
-                                            onArtistClick(entry.name)
+                                            onArtistClick(entry.name, artistImages[entry.name])
                                         },
-                                        onLongClick = { showArtistModal(entry.name) }
+                                        onLongClick = { showArtistModal(entry.name) },
+                                        sharedTransitionScope = sharedTransitionScope,
+                                        animatedVisibilityScope = animatedVisibilityScope
                                     )
                                 }
                             }
@@ -646,12 +653,16 @@ private fun SearchFilterChip(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistSearchResultItem(
     artist: String,
+    imageUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val highlightShape = RoundedCornerShape(albumArtCornerRadius(ListRowArtSize) + ListRowHighlightPadding)
@@ -671,14 +682,48 @@ fun ArtistSearchResultItem(
         Box(
             modifier = Modifier
                 .size(ListRowArtSize)
-                .clip(CircleShape)
+                .let { base ->
+                    // Only the clicked row joins a shared-element flight (see
+                    // LocalActiveSharedCollection); other rows keep their static
+                    // rest clip, even when they exist on the destination too.
+                    if (sharedTransitionScope != null &&
+                        animatedVisibilityScope != null &&
+                        isActiveSharedCollection("artist", artist)
+                    ) {
+                        base.collectionRowFlightArtwork(
+                            key = "artist-art-$artist",
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            enabled = true,
+                            restShape = CircleShape,
+                            immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                                .current(CollectionHeroTarget.Artist)
+                                .isImmersive
+                        )
+                    } else base.clip(CircleShape)
+                }
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            BasicText(
-                text = artist.take(1).uppercase(),
-                style = FoamTheme.typography.titleMedium
-            )
+            if (imageUrl != null) {
+                val context = LocalContext.current
+                val artRequest = remember(imageUrl) {
+                    ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        .size(AlbumArtRequestSize)
+                        .build()
+                }
+                AlbumArtImage(
+                    model = artRequest,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                BasicText(
+                    text = artist.take(1).uppercase(),
+                    style = FoamTheme.typography.caption
+                )
+            }
         }
         Spacer(modifier = Modifier.width(12.dp))
         BasicText(
@@ -686,7 +731,22 @@ fun ArtistSearchResultItem(
             style = FoamTheme.typography.titleMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
+                .let { base ->
+                    if (sharedTransitionScope != null &&
+                        animatedVisibilityScope != null &&
+                        isActiveSharedCollection("artist", artist)
+                    ) {
+                        with(sharedTransitionScope) {
+                            base.sharedBounds(
+                                rememberSharedContentState(key = "artist-title-$artist"),
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                boundsTransform = AlbumArtBoundsTransform
+                            )
+                        }
+                    } else base
+                }
         )
     }
 }

@@ -87,7 +87,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onPlaylistClick: (PlaylistRecommendation) -> Unit,
     onAlbumClick: (AlbumRecommendation) -> Unit,
-    onArtistClick: (String) -> Unit,
+    onArtistClick: (artist: String, imageUrl: String?) -> Unit,
     onTrackClick: (TrackEntity) -> Unit,
     onSeeAllAlbums: () -> Unit,
     onSeeAllRecent: () -> Unit,
@@ -104,6 +104,7 @@ fun HomeScreen(
     val recentTracks by viewModel.recentTracks.collectAsState()
     val oldFavorites by viewModel.oldFavoriteTracks.collectAsState()
     val artists by viewModel.favoriteArtists.collectAsState()
+    val artistImages by viewModel.artistImages.collectAsState()
     val allPlaylists by viewModel.playlists.collectAsState()
 
     val trackModalState = LocalTrackFoamModalState.current
@@ -308,10 +309,11 @@ fun HomeScreen(
             ) { artist ->
                 HomeRowCard(
                     title = artist.name,
-                    imageUrl = null,
+                    imageUrl = artistImages[artist.name],
+                    imageIsEmbeddedArt = false,
                     width = HomeRowCardSmallWidth,
                     round = true,
-                    onClick = { onArtistClick(artist.name) },
+                    onClick = { onArtistClick(artist.name, artistImages[artist.name]) },
                     onLongClick = {
                         longPressScope.launch {
                             collectionModalState?.show(
@@ -328,7 +330,8 @@ fun HomeScreen(
                     sharedArtKey = "artist-art-${artist.name}"
                         .takeIf { isActiveSharedCollection("artist", artist.name) },
                     sharedTitleKey = "artist-title-${artist.name}"
-                        .takeIf { isActiveSharedCollection("artist", artist.name) }
+                        .takeIf { isActiveSharedCollection("artist", artist.name) },
+                    flightHeroTarget = CollectionHeroTarget.Artist
                 )
             }
         }

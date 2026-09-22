@@ -409,11 +409,15 @@ fun CollectionListItem(
     onLongClick: (() -> Unit)? = null,
     active: Boolean = false,
     imageUrl: String? = null,
+    imageIsEmbeddedArt: Boolean = true,
     icon: ImageVector? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedElementKey: String? = null,
+    // Flight key namespace: album rows fly to/from album heroes, artist rows
+    // (images resolved from Spotify) to/from the artist page's hero.
+    sharedElementPrefix: String = "album",
     immersiveFlightHero: Boolean = false
 ) {
     // Long-press opens the collection actions modal when FoamNavHost provides
@@ -427,7 +431,9 @@ fun CollectionListItem(
                     CollectionInfo(
                         title = title,
                         subtitle = subtitle,
-                        imageUrl = imageUrl,
+                        // The modal's image is embedded-art oriented; plain files
+                        // (artist cache images) are left out on purpose.
+                        imageUrl = imageUrl.takeIf { imageIsEmbeddedArt },
                         icon = icon
                     )
                 )
@@ -446,7 +452,7 @@ fun CollectionListItem(
 
     val sharedArtModifier = Modifier
         .collectionRowFlightArtwork(
-            key = "album-art-$elementKey",
+            key = "$sharedElementPrefix-art-$elementKey",
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             enabled = elementKey != null,
@@ -456,7 +462,7 @@ fun CollectionListItem(
         .background(FoamTheme.colors.surfaceVariant)
 
     val sharedTitleModifier = Modifier.rowSharedText(
-        key = "album-title-$elementKey",
+        key = "$sharedElementPrefix-title-$elementKey",
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         enabled = elementKey != null,
@@ -465,7 +471,7 @@ fun CollectionListItem(
 
     val sharedSubtitleModifier = if (subtitle != null) {
         Modifier.rowSharedText(
-            key = "album-artist-$elementKey",
+            key = "$sharedElementPrefix-artist-$elementKey",
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             enabled = elementKey != null,
@@ -481,7 +487,15 @@ fun CollectionListItem(
             onClick = onClick,
             onLongClick = resolvedOnLongClick,
             artworkModifier = sharedArtModifier,
-            artworkContent = { CollectionArtwork(title, imageUrl, icon, placeholderSize = 32.dp) },
+            artworkContent = {
+                CollectionArtwork(
+                    title,
+                    imageUrl,
+                    imageIsEmbeddedArt,
+                    icon,
+                    placeholderSize = 32.dp
+                )
+            },
             title = title,
             subtitle = subtitle,
             highlightBackground = highlightBackground,
@@ -496,7 +510,15 @@ fun CollectionListItem(
         onClick = onClick,
         onLongClick = resolvedOnLongClick,
         artworkModifier = sharedArtModifier,
-        artworkContent = { CollectionArtwork(title, imageUrl, icon, placeholderSize = 20.dp) },
+        artworkContent = {
+            CollectionArtwork(
+                title,
+                imageUrl,
+                imageIsEmbeddedArt,
+                icon,
+                placeholderSize = 20.dp
+            )
+        },
         title = title,
         subtitle = subtitle,
         density = density,
@@ -511,14 +533,19 @@ fun CollectionListItem(
 private fun CollectionArtwork(
     title: String,
     imageUrl: String?,
+    imageIsEmbeddedArt: Boolean,
     icon: ImageVector?,
     placeholderSize: Dp
 ) {
     val context = LocalContext.current
     if (imageUrl != null) {
-        val albumArtRequest = remember(imageUrl) {
+        val albumArtRequest = remember(imageUrl, imageIsEmbeddedArt) {
             ImageRequest.Builder(context)
-                .data(EmbeddedAlbumArt(imageUrl.toUri()))
+                .data(
+                    // Embedded art: the model is an audio file whose picture is
+                    // extracted. Otherwise the model is a plain image (cache file).
+                    if (imageIsEmbeddedArt) EmbeddedAlbumArt(imageUrl.toUri()) else imageUrl
+                )
                 .size(AlbumArtRequestSize)
                 .build()
         }

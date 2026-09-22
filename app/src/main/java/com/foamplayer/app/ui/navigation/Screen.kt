@@ -33,8 +33,14 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsMisc : Screen("settings/misc", "Misc Settings")
     object SettingsTest : Screen("settings/test", "Component Test")
 
-    object ArtistDetail : Screen("artist/{artistName}", "Artist") {
-        fun createRoute(artistName: String) = "artist/${Uri.encode(artistName)}"
+    object ArtistDetail : Screen("artist/{artistName}?image={image}", "Artist") {
+        /**
+         * [image] seeds the hero on its very first frame (before the cache lookup
+         * completes) so the shared-element transition from the artist lists never
+         * flashes the letter fallback — the same mechanism as [PlaylistDetail].
+         */
+        fun createRoute(artistName: String, image: String? = null): String =
+            "artist/${Uri.encode(artistName)}?image=${Uri.encode(image.orEmpty())}"
     }
     object ArtistSongs : Screen("artist/{artistName}/songs", "Artist Songs") {
         fun createRoute(artistName: String) = "artist/${Uri.encode(artistName)}/songs"

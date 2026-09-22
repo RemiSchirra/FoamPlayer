@@ -95,6 +95,8 @@ data class AppSettings(
     val discordPresenceEnabled: Boolean = false,
     /** Looks tracks up online (Spotify, then YouTube) and uses the album cover as the Discord image. */
     val discordOnlineArt: Boolean = true,
+    /** Resolves a picture for the library's artists from Spotify (Settings > Library scan). */
+    val artistImageResolveEnabled: Boolean = false,
     /** Complete DSP chain state (EQ, tone, balance, volume), serialized by [DspPersistence]. */
     val dspStateSerialized: String = "",
     /** User-saved EQ presets, serialized by [DspPersistence]. */

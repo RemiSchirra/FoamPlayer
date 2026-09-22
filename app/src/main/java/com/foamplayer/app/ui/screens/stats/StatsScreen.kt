@@ -95,7 +95,7 @@ private const val TopListDisplaySize = 10
  */
 @Composable
 fun StatsScreen(
-    onArtistClick: (String) -> Unit,
+    onArtistClick: (artist: String, imageUrl: String?) -> Unit,
     onAlbumClick: (album: String, artUrl: String?, artist: String?) -> Unit,
     onSeeAll: (kind: StatsTopKind, period: StatsPeriod) -> Unit,
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
@@ -103,6 +103,7 @@ fun StatsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val selectedPeriod by viewModel.period.collectAsState()
+    val artistImages by viewModel.artistImages.collectAsState()
     val trackModalState = LocalTrackFoamModalState.current
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
@@ -316,7 +317,8 @@ fun StatsScreen(
                 ) { _, artist ->
                     TopArtistRow(
                         artist = artist,
-                        onOpen = { onArtistClick(artist.name) },
+                        imageUrl = artistImages[artist.name],
+                        onOpen = { onArtistClick(artist.name, artistImages[artist.name]) },
                         onLongClick = {
                             longPressScope.launch {
                                 collectionModalState?.show(
@@ -588,10 +590,11 @@ internal fun TopTrackRow(
     )
 }
 
-/** Ranked artist row: monogram disc, name, listening time. Opens the artist page. */
+/** Ranked artist row: picture (or monogram disc), name, listening time. Opens the artist page. */
 @Composable
 internal fun TopArtistRow(
     artist: ArtistStat,
+    imageUrl: String?,
     onOpen: () -> Unit,
     onLongClick: (() -> Unit)? = null
 ) {
@@ -602,10 +605,26 @@ internal fun TopArtistRow(
             .clip(CircleShape)
             .background(FoamTheme.colors.surfaceVariant),
         artworkContent = {
-            BasicText(
-                text = artist.name.take(1).uppercase(),
-                style = FoamTheme.typography.titleMedium
-            )
+            if (imageUrl != null) {
+                val context = LocalContext.current
+                val artRequest = remember(imageUrl) {
+                    ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        .size(AlbumArtRequestSize)
+                        .build()
+                }
+                AlbumArtImage(
+                    model = artRequest,
+                    contentDescription = artist.name,
+                    modifier = Modifier.fillMaxSize(),
+                    placeholderSize = 20.dp
+                )
+            } else {
+                BasicText(
+                    text = artist.name.take(1).uppercase(),
+                    style = FoamTheme.typography.titleMedium
+                )
+            }
         },
         title = artist.name,
         subtitle = formatListeningTime(artist.totalDurationMs),

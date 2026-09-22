@@ -8,6 +8,7 @@ import com.foamplayer.app.data.db.dao.GenrePlayRow
 import com.foamplayer.app.data.db.dao.HourBucket
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.TrackRepository
+import com.foamplayer.app.data.scanner.ArtistImageScanner
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.DayOfWeek
 import java.time.Instant
@@ -34,7 +35,8 @@ import kotlinx.coroutines.withContext
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class StatsViewModel @Inject constructor(
-    private val trackRepository: TrackRepository
+    private val trackRepository: TrackRepository,
+    artistImageScanner: ArtistImageScanner
 ) : ViewModel() {
 
     private val _period = MutableStateFlow(StatsPeriod.WEEK)
@@ -43,6 +45,11 @@ class StatsViewModel @Inject constructor(
     val state: StateFlow<StatsUiState> = _period
         .flatMapLatest { period -> buildStats(period) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StatsUiState())
+
+    /** Cached Spotify pictures per artist name for the top-artist rows. */
+    val artistImages: StateFlow<Map<String, String>> =
+        artistImageScanner.imagesFlow(trackRepository.getAllArtists())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     fun setPeriod(period: StatsPeriod) {
         _period.value = period

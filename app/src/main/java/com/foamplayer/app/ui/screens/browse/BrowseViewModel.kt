@@ -8,6 +8,7 @@ import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
+import com.foamplayer.app.data.scanner.ArtistImageScanner
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,7 +39,8 @@ data class FolderContent(
 @HiltViewModel
 class BrowseViewModel @Inject constructor(
     private val trackRepository: TrackRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    artistImageScanner: ArtistImageScanner
 ) : ViewModel() {
 
     val albums: StateFlow<List<AlbumSearchResult>> = trackRepository.getAllAlbums()
@@ -49,6 +51,15 @@ class BrowseViewModel @Inject constructor(
 
     val artists: StateFlow<List<String>> = trackRepository.getAllArtists()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * Cached Spotify pictures per artist name (local cache file URIs), shown
+     * in the artist lists. Rebuilt whenever the scan lands new files, so rows
+     * fill in live while the scan runs.
+     */
+    val artistImages: StateFlow<Map<String, String>> =
+        artistImageScanner.imagesFlow(artists)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     val genres: StateFlow<List<String>> = trackRepository.getAllGenres()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

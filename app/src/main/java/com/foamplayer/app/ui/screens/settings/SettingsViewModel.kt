@@ -9,6 +9,8 @@ import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
+import com.foamplayer.app.data.scanner.ArtistImageScanState
+import com.foamplayer.app.data.scanner.ArtistImageScanner
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.FoamIconStyle
@@ -24,7 +26,8 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val trackRepository: TrackRepository
+    private val trackRepository: TrackRepository,
+    private val artistImageScanner: ArtistImageScanner
 ) : ViewModel() {
 
     /** One observable state for every settings screen and the application theme. */
@@ -48,6 +51,9 @@ class SettingsViewModel @Inject constructor(
         .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = null)
 
     val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus
+
+    /** Live progress of the artist image scan (found / total artists). */
+    val artistImageScan: StateFlow<ArtistImageScanState> = artistImageScanner.state
 
     fun setBitPerfectEnabled(enabled: Boolean) = launch { settingsRepository.setBitPerfectEnabled(enabled) }
     fun setListenedThresholdPercent(percent: Int) = launch {
@@ -100,6 +106,14 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun startScan() = launch { trackRepository.rescanLibrary() }
+
+    fun setArtistImageResolveEnabled(enabled: Boolean) = launch {
+        settingsRepository.setArtistImageResolveEnabled(enabled)
+    }
+
+    fun startArtistImageScan() = artistImageScanner.startScan()
+
+    fun clearArtistImageCache() = artistImageScanner.clearCache()
 
     fun setLyricsProviderOrder(order: List<PreferredLyricsProvider>) = launch {
         settingsRepository.setLyricsProviderOrder(order)

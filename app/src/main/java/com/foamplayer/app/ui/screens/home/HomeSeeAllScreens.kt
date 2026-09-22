@@ -291,10 +291,13 @@ fun OldFavoritesSeeAllScreen(
  * "See all" page behind the Home "Favorite artists" row: up to 50 artists by
  * their songs' total plays, mirroring the artists browse screen.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun FavoriteArtistsSeeAllScreen(
-    onArtistClick: (String) -> Unit,
+    onArtistClick: (artist: String, imageUrl: String?) -> Unit,
     onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
@@ -305,6 +308,7 @@ fun FavoriteArtistsSeeAllScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val artists by viewModel.favoriteArtists.collectAsState()
+    val artistImages by viewModel.artistImages.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
     val sortedArtists = rememberSortedList(artists, sortMode, sortInverted) {
@@ -328,7 +332,9 @@ fun FavoriteArtistsSeeAllScreen(
                 CollectionListItem(
                     title = artist.name,
                     subtitle = null,
-                    onClick = { onArtistClick(artist.name) },
+                    imageUrl = artistImages[artist.name],
+                    imageIsEmbeddedArt = false,
+                    onClick = { onArtistClick(artist.name, artistImages[artist.name]) },
                     active = CollectionId.artist(artist.name) == activeCollectionId,
                     density = density,
                     onLongClick = {
@@ -341,7 +347,15 @@ fun FavoriteArtistsSeeAllScreen(
                                 )
                             )
                         }
-                    }
+                    },
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    sharedElementKey = artist.name
+                        .takeIf { isActiveSharedCollection("artist", artist.name) },
+                    sharedElementPrefix = "artist",
+                    immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                        .current(CollectionHeroTarget.Artist)
+                        .isImmersive
                 )
             }
         }

@@ -985,9 +985,9 @@ fun FoamNavHost(
                                                     )
                                                 )
                                             },
-                                            onArtistClick = { artist ->
+                                            onArtistClick = { artist, image ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artist)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artist, image))
                                             },
                                             onTrackClick = { track -> playTrackFromList(listOf(track), 0) },
                                             onSeeAllAlbums = { navController.navigate(Screen.HomeSeeAllAlbums.route) },
@@ -1089,11 +1089,13 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.HomeSeeAllArtists.route) {
                                         FavoriteArtistsSeeAllScreen(
-                                            onArtistClick = { artist ->
+                                            onArtistClick = { artist, image ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artist)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artist, image))
                                             },
                                             onBack = { navController.popBackStack() },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this,
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.HOME_SEE_ALL_ARTISTS),
                                             onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_ARTISTS, it) },
@@ -1129,9 +1131,9 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.Search.route) {
                                         SearchScreen(
-                                            onArtistClick = { artist ->
+                                            onArtistClick = { artist, image ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artist)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artist, image))
                                             },
                                             onAlbumClick = { albumResult ->
                                                 activeSharedCollection = sharedCollectionTag("album", albumResult.album)
@@ -1202,11 +1204,13 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.BrowseArtists.route) {
                                         ArtistsBrowseScreen(
-                                            onArtistClick = { artist ->
+                                            onArtistClick = { artist, image ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artist)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artist, image))
                                             },
                                             onBack = { navController.popBackStack() },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this,
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_ARTISTS),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_ARTISTS, it) },
@@ -1310,11 +1314,13 @@ fun FoamNavHost(
                                         CollectionArtistsScreen(
                                             kind = backStackEntry.arguments?.getString("kind").orEmpty(),
                                             key = backStackEntry.arguments?.getString("key").orEmpty(),
-                                            onArtistClick = { artist ->
+                                            onArtistClick = { artist, image ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artist)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artist))
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artist, image))
                                             },
                                             onBack = { navController.popBackStack() },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this,
                                             activeCollectionId = activeCollectionId,
                                             density = densityFor(MediaListView.BROWSE_ARTISTS_IN),
                                             onDensityChange = { setDensity(MediaListView.BROWSE_ARTISTS_IN, it) },
@@ -1383,8 +1389,9 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.Stats.route) {
                                         StatsScreen(
-                                            onArtistClick = { artistName ->
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artistName))
+                                            onArtistClick = { artistName, image ->
+                                                activeSharedCollection = sharedCollectionTag("artist", artistName)
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artistName, image))
                                             },
                                             onAlbumClick = { album, artUrl, artist ->
                                                 activeSharedCollection = sharedCollectionTag("album", album)
@@ -1413,9 +1420,9 @@ fun FoamNavHost(
                                         }
                                         StatsSeeAllScreen(
                                             onBack = { navController.popBackStack() },
-                                            onArtistClick = { artistName ->
+                                            onArtistClick = { artistName, image ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artistName)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artistName))
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artistName, image))
                                             },
                                             onAlbumClick = { album, artUrl, artist ->
                                                 activeSharedCollection = sharedCollectionTag("album", album)
@@ -1522,11 +1529,17 @@ fun FoamNavHost(
                                     }
                                     composable(
                                         Screen.ArtistDetail.route,
-                                        arguments = listOf(navArgument("artistName") { type = NavType.StringType })
+                                        arguments = listOf(
+                                            navArgument("artistName") { type = NavType.StringType },
+                                            navArgument("image") { type = NavType.StringType; defaultValue = "" }
+                                        )
                                     ) { backStackEntry ->
                                         val artistName = backStackEntry.arguments?.getString("artistName") ?: ""
+                                        val seedImageUrl = backStackEntry.arguments?.getString("image")
+                                            ?.takeIf { it.isNotBlank() }
                                         ArtistDetailScreen(
                                             artistName = artistName,
+                                            seedImageUrl = seedImageUrl,
                                             onAlbumClick = { album ->
                                                 activeSharedCollection = sharedCollectionTag("album", album.album)
                                                 navController.navigate(

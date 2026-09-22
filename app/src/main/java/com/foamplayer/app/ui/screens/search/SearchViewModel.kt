@@ -7,6 +7,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.LyricsRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
+import com.foamplayer.app.data.scanner.ArtistImageScanner
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.identityKey
@@ -70,11 +71,20 @@ private data class LyricsSearchState(
 class SearchViewModel @Inject constructor(
     private val repository: TrackRepository,
     private val settingsRepository: SettingsRepository,
-    private val lyricsRepository: LyricsRepository
+    private val lyricsRepository: LyricsRepository,
+    artistImageScanner: ArtistImageScanner
 ) : ViewModel() {
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
+
+    /**
+     * Cached Spotify pictures per artist name (local cache file URIs) for the
+     * artist result rows; rebuilt live as the Settings scan resolves more.
+     */
+    val artistImages: StateFlow<Map<String, String>> =
+        artistImageScanner.imagesFlow(repository.getAllArtists())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     /**
      * In-memory mirror of the scope filters: toggles land here first so results

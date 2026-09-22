@@ -7,6 +7,7 @@ import com.foamplayer.app.data.db.dao.TopAlbumStat
 import com.foamplayer.app.data.db.dao.TopTrackStat
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.TrackRepository
+import com.foamplayer.app.data.scanner.ArtistImageScanner
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,7 @@ import javax.inject.Inject
 @HiltViewModel
 class StatsSeeAllViewModel @Inject constructor(
     private val trackRepository: TrackRepository,
+    artistImageScanner: ArtistImageScanner,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -65,6 +67,11 @@ class StatsSeeAllViewModel @Inject constructor(
         } else {
             emptyStateFlow()
         }
+
+    /** Cached Spotify pictures per artist name for the top-artist rows. */
+    val artistImages: StateFlow<Map<String, String>> =
+        artistImageScanner.imagesFlow(trackRepository.getAllArtists())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     // Long-press collection actions, mirroring the browse screens: resolve the
     // tracks behind a collection at action time.

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.repository.ArtistImageStore
 import com.foamplayer.app.data.repository.TrackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,7 +14,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ArtistDetailViewModel @Inject constructor(
-    private val repository: TrackRepository
+    private val repository: TrackRepository,
+    private val artistImageStore: ArtistImageStore
 ) : ViewModel() {
 
     private val _albums = MutableStateFlow<List<AlbumSearchResult>>(emptyList())
@@ -30,6 +32,10 @@ class ArtistDetailViewModel @Inject constructor(
     private val _topTracks = MutableStateFlow<List<TrackEntity>>(emptyList())
     val topTracks: StateFlow<List<TrackEntity>> = _topTracks
 
+    /** Cached artist picture (Spotify, downloaded to the app cache). */
+    private val _artistImage = MutableStateFlow<String?>(null)
+    val artistImage: StateFlow<String?> = _artistImage
+
     fun loadArtistAlbums(artistName: String) {
         viewModelScope.launch {
             repository.getAlbumsByArtist(artistName).collect { list ->
@@ -44,6 +50,14 @@ class ArtistDetailViewModel @Inject constructor(
                 _tracks.value = list
                 _topTracks.value = computeTopTracks(list)
             }
+        }
+    }
+
+    fun loadArtistImage(artistName: String) {
+        viewModelScope.launch {
+            // Local cache file (re-downloaded from the stored CDN URL if the
+            // cache was cleared/evicted); null when the artist was never resolved.
+            _artistImage.value = artistImageStore.imagePath(ArtistImageStore.key(artistName))
         }
     }
 

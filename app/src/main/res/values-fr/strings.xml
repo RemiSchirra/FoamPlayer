@@ -47,6 +47,14 @@
     <string name="scan_finishing">Finalisation de l\'analyse…</string>
     <string name="scan_finished">Analyse terminée : %1$d pistes trouvées</string>
 
+    <string name="artist_images">Images d\'artistes</string>
+    <string name="artist_images_resolve">Résoudre les images d\'artistes</string>
+    <string name="artist_images_resolve_desc">Recherche chaque artiste de votre bibliothèque sur Spotify et conserve son image. Les noms d\'artiste sont envoyés à Spotify.</string>
+    <string name="artist_images_found">%1$d images d\'artiste trouvées sur %2$d</string>
+    <string name="artist_images_scanning">Résolution des images : %1$d / %2$d</string>
+    <string name="artist_images_cache_count">%1$d images en cache</string>
+    <string name="artist_images_clear_cache">VIDER LE CACHE</string>
+
     <string name="no_audio_detected">Aucun fichier audio détecté.\nAllez dans les Paramètres pour ajouter des dossiers et analyser votre bibliothèque.</string>
     <string name="search_library">Rechercher dans la bibliothèque</string>
     <string name="search_hint">Rechercher des pistes, artistes, albums...</string>

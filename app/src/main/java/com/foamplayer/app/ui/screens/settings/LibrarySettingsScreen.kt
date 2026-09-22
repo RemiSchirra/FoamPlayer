@@ -44,6 +44,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.components.FoamSliderStateItem
+import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -57,6 +58,7 @@ fun LibrarySettingsScreen(
     val settings by viewModel.settings.collectAsState()
     val selectedFolders = settings.libraryFolders
     val scanStatus by viewModel.scanStatus.collectAsState()
+    val artistImageScan by viewModel.artistImageScan.collectAsState()
     val artistSeparators = settings.artistSeparators
     val genreSeparators = settings.genreSeparators
     val context = LocalContext.current
@@ -285,6 +287,130 @@ fun LibrarySettingsScreen(
                                         .height(FoamDimens.spacingTiny)
                                         .background(FoamTheme.accentColor)
                                 )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
+            }
+
+            // --- Artist Images ---
+            item {
+                BasicText(text = stringResource(R.string.artist_images), style = FoamTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(vertical = FoamDimens.spacingTiny)) {
+                        FoamSwitchItem(
+                            title = stringResource(R.string.artist_images_resolve),
+                            description = stringResource(R.string.artist_images_resolve_desc),
+                            checked = settings.artistImageResolveEnabled,
+                            onCheckedChange = { viewModel.setArtistImageResolveEnabled(it) }
+                        )
+
+                        if (settings.artistImageResolveEnabled) {
+                            Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
+                            Column(Modifier.fillMaxWidth().padding(horizontal = FoamDimens.paddingMedium)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    BasicText(
+                                        text = if (artistImageScan.running) {
+                                            stringResource(
+                                                R.string.artist_images_scanning,
+                                                artistImageScan.found,
+                                                artistImageScan.total
+                                            )
+                                        } else {
+                                            stringResource(
+                                                R.string.artist_images_found,
+                                                artistImageScan.found,
+                                                artistImageScan.total
+                                            )
+                                        },
+                                        style = FoamTheme.typography.caption,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                                            .background(
+                                                if (artistImageScan.running) FoamTheme.colors.surfaceVariant
+                                                else FoamTheme.accentColor
+                                            )
+                                            .clickable(enabled = !artistImageScan.running) {
+                                                viewModel.startArtistImageScan()
+                                            }
+                                            .padding(
+                                                horizontal = FoamDimens.spacingStandard,
+                                                vertical = FoamDimens.spacingSmall
+                                            )
+                                    ) {
+                                        BasicText(
+                                            text = if (artistImageScan.running) stringResource(R.string.scanning_caps)
+                                            else stringResource(R.string.start_scan),
+                                            style = FoamTheme.typography.caption.copy(
+                                                color = if (artistImageScan.running) FoamTheme.colors.textSecondary
+                                                else FoamTheme.colors.background,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        )
+                                    }
+                                }
+
+                                if (artistImageScan.running && artistImageScan.total > 0) {
+                                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(FoamDimens.spacingTiny)
+                                            .clip(RoundedCornerShape(FoamDimens.spacingTiny / 2))
+                                            .background(FoamTheme.colors.surfaceVariant)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth(
+                                                    artistImageScan.found.toFloat() / artistImageScan.total
+                                                )
+                                                .height(FoamDimens.spacingTiny)
+                                                .background(FoamTheme.accentColor)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    BasicText(
+                                        text = stringResource(
+                                            R.string.artist_images_cache_count,
+                                            artistImageScan.cachedCount
+                                        ),
+                                        style = FoamTheme.typography.caption,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                                            .background(FoamTheme.colors.surfaceVariant)
+                                            .clickable { viewModel.clearArtistImageCache() }
+                                            .padding(
+                                                horizontal = FoamDimens.spacingStandard,
+                                                vertical = FoamDimens.spacingSmall
+                                            )
+                                    ) {
+                                        BasicText(
+                                            text = stringResource(R.string.artist_images_clear_cache),
+                                            style = FoamTheme.typography.caption.copy(
+                                                color = FoamTheme.colors.textPrimary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

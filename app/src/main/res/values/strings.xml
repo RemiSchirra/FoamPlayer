@@ -47,6 +47,14 @@
     <string name="scan_finishing">Finishing the scan…</string>
     <string name="scan_finished">Scan finished: %1$d tracks found</string>
 
+    <string name="artist_images">Artist Images</string>
+    <string name="artist_images_resolve">Resolve artist images</string>
+    <string name="artist_images_resolve_desc">Look every artist in your library up on Spotify and keep its picture. Artist names are sent to Spotify.</string>
+    <string name="artist_images_found">%1$d of %2$d artist images found</string>
+    <string name="artist_images_scanning">Resolving artist images: %1$d / %2$d</string>
+    <string name="artist_images_cache_count">%1$d images in cache</string>
+    <string name="artist_images_clear_cache">CLEAR CACHE</string>
+
     <string name="no_audio_detected">No audio files detected.\nGo to Settings to add folders and scan your library.</string>
     <string name="search_library">Search Library</string>
     <string name="search_hint">Search tracks, artists, albums...</string>

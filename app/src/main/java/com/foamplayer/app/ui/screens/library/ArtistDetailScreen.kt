@@ -77,6 +77,7 @@ private const val ArtistAlbumGridColumns = 3
 @Composable
 fun ArtistDetailScreen(
     artistName: String,
+    seedImageUrl: String? = null,
     onAlbumClick: (AlbumSearchResult) -> Unit,
     onAllSongsClick: () -> Unit,
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
@@ -97,21 +98,34 @@ fun ArtistDetailScreen(
     LaunchedEffect(artistName) {
         viewModel.loadArtistAlbums(artistName)
         viewModel.loadArtistTracks(artistName)
+        viewModel.loadArtistImage(artistName)
     }
 
-    // The first track in alphabetical order provides the collection's artwork
-    // (header image, backdrop and accent color).
+    // The first track in alphabetical order is the fallback artwork source.
     val headerArtPath = tracks.firstOrNull()?.albumArtPath
 
-    LaunchedEffect(headerArtPath) {
-        onListBackdropArt(headerArtPath, true)
+    // Spotify-resolved artist picture: seeded through the route by the source
+    // screen (available on the very first frame so the shared-element flight
+    // never flashes the letter fallback), then confirmed from the cache.
+    val cachedArtistImage by viewModel.artistImage.collectAsState()
+    val artistImage = cachedArtistImage ?: seedImageUrl?.takeIf { it.isNotBlank() }
+
+    // The hero art (artist picture, else the first track's album art) drives
+    // the hero image, the screen's backdrop and the accent color.
+    val heroImageUrl = artistImage ?: headerArtPath
+    // The Spotify picture is a plain cache file; the fallback is a track file
+    // whose artwork must be extracted from the audio container.
+    val heroImageIsEmbeddedArt = artistImage == null
+
+    LaunchedEffect(heroImageUrl, heroImageIsEmbeddedArt) {
+        onListBackdropArt(heroImageUrl, heroImageIsEmbeddedArt)
     }
 
     val context = LocalContext.current
-    LaunchedEffect(headerArtPath) {
-        AlbumArtPaletteCache.ensure(this, context, headerArtPath)
+    LaunchedEffect(heroImageUrl, heroImageIsEmbeddedArt) {
+        AlbumArtPaletteCache.ensure(this, context, heroImageUrl, heroImageIsEmbeddedArt)
     }
-    val accentColor = headerArtPath?.let { AlbumArtPaletteCache.colors[it] }
+    val accentColor = heroImageUrl?.let { AlbumArtPaletteCache.colors[it] }
         ?: FoamTheme.accentColor
 
     val gridState = rememberLazyGridState()
@@ -153,7 +167,8 @@ fun ArtistDetailScreen(
                 title = artistName,
                 subtitle = null,
                 statsText = "${tracks.size} Tracks",
-                imageUrl = headerArtPath,
+                imageUrl = heroImageUrl,
+                imageIsEmbeddedArt = heroImageIsEmbeddedArt,
                 onPlayAllClick = null,
                 accentColor = accentColor,
                 transitionAlpha = transitionAlpha,
@@ -208,7 +223,8 @@ fun ArtistDetailScreen(
                     ArtistHero(
                         heroLayout = heroLayout,
                         title = artistName,
-                        imageUrl = headerArtPath,
+                        imageUrl = heroImageUrl,
+                        imageIsEmbeddedArt = heroImageIsEmbeddedArt,
                         trackCount = tracks.size,
                         accentColor = accentColor,
                         onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
@@ -342,6 +358,7 @@ private fun ArtistHero(
     heroLayout: CollectionHeroLayout,
     title: String,
     imageUrl: String?,
+    imageIsEmbeddedArt: Boolean,
     trackCount: Int,
     accentColor: Color,
     onPlayAllClick: () -> Unit,
@@ -377,6 +394,7 @@ private fun ArtistHero(
         subtitle = null,
         statsText = "$trackCount Tracks",
         imageUrl = imageUrl,
+        imageIsEmbeddedArt = imageIsEmbeddedArt,
         onPlayAllClick = onPlayAllClick,
         accentColor = accentColor,
         sharedTransitionScope = sharedTransitionScope,
