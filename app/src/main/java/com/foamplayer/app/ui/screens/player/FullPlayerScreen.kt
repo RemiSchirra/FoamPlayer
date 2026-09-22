@@ -402,7 +402,12 @@ fun FullPlayerScreen(
                     settledPage != latestQueueIndex.value
                 ) {
                     seekBarProgress.onTrackChangeApplied()
-                    viewModel.skipToIndex(settledPage)
+                    // Keep the swipe direction: a swipe back must not land on a
+                    // track that failed to load (it walks further back instead).
+                    viewModel.skipToIndex(
+                        settledPage,
+                        forward = settledPage > latestQueueIndex.value
+                    )
                 }
             }
     }

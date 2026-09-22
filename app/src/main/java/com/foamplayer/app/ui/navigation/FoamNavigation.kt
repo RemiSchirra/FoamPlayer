@@ -1701,8 +1701,8 @@ fun FoamNavHost(
                                         (progress * playerViewModel.playbackState.value.durationMs).toLong()
                                     )
                                 },
-                                onSkipToTrack = { index ->
-                                    playerViewModel.skipToIndex(index)
+                                onSkipToTrack = { index, forward ->
+                                    playerViewModel.skipToIndex(index, forward)
                                 },
                                 onColorChange = { color ->
                                     playerViewModel.setDynamicAccentColor(color)

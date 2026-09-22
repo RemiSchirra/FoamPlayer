@@ -193,7 +193,7 @@ fun MiniPlayer(
     positionMsFlow: StateFlow<Long>,
     onPlayPauseClick: () -> Unit,
     onSeek: (Float) -> Unit,
-    onSkipToTrack: (Int) -> Unit,
+    onSkipToTrack: (index: Int, forward: Boolean) -> Unit,
     onColorChange: (Color?) -> Unit,
     onBackgroundTransition: (frontArtPath: String?, backArtPath: String?, fraction: Float) -> Unit,
     onClick: () -> Unit,
@@ -428,7 +428,12 @@ fun MiniPlayer(
             pagerState.settledPage in latestQueue.indices
         ) {
             seekBarProgress.onTrackChangeApplied()
-            onSkipToTrack(pagerState.settledPage)
+            // Keep the swipe direction (same rule as the full player's pager):
+            // a swipe back must walk further back past tracks that failed to load.
+            onSkipToTrack(
+                pagerState.settledPage,
+                pagerState.settledPage > latestCurrentIndex
+            )
         }
     }
 

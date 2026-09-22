@@ -1,6 +1,7 @@
 package com.foamplayer.app.audio.engine
 
 import android.content.Context
+import android.util.Log
 import android.view.Choreographer
 import androidx.annotation.OptIn
 import androidx.core.net.toUri
@@ -8,6 +9,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -151,6 +153,16 @@ class AudioEngine @Inject constructor(
     // Last published AudioOutputInfo; used to avoid re-emitting identical values.
     private var lastAudioOutputInfo: com.foamplayer.app.audio.bitperfect.AudioOutputInfo? = null
 
+    // Consecutive tracks that failed to load (missing/corrupt file). Reset as soon
+    // as a track prepares successfully; past the cap, playback stops instead of
+    // spinning through a whole dead queue.
+    private var consecutiveLoadErrors: Int = 0
+
+    // Track ids that failed to load, remembered so navigation skips over them in
+    // both directions (previous must not land back on a broken track either).
+    // Cleared whenever a fresh queue is set.
+    private val failedTrackIds = mutableSetOf<Long>()
+
     companion object {
         // Tracks kept loaded on each side of the current track.
         private const val WINDOW_RADIUS = 15
@@ -164,6 +176,8 @@ class AudioEngine @Inject constructor(
         private const val POSITION_POLL_SLOW_INTERVAL_MS = 250L
         // Position poll rate while paused.
         private const val PAUSED_POLL_INTERVAL_MS = 200L
+        // Max unreadable tracks skipped in a row before playback gives up.
+        private const val MAX_CONSECUTIVE_LOAD_ERRORS = 10
     }
 
     init {
@@ -199,6 +213,64 @@ class AudioEngine @Inject constructor(
     @OptIn(UnstableApi::class)
     private fun setupPlayerListeners() {
         player.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                // A track prepared successfully: clear the consecutive-failure cap
+                // so later isolated errors can skip again.
+                if (playbackState == Player.STATE_READY) {
+                    consecutiveLoadErrors = 0
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                // The current track is missing, unreadable or undecodable: ExoPlayer
+                // halted on it, so skip forward automatically instead of stalling.
+                val trackId = player.currentMediaItem?.mediaId?.toLongOrNull()
+                val failedTrack = trackId?.let { id ->
+                    _playbackState.value.queue.firstOrNull { it.id == id }
+                }
+                Log.w(
+                    "AudioEngine",
+                    "Playback error (${error.errorCodeName}) on '${failedTrack?.path ?: "unknown"}'; skipping"
+                )
+
+                // Keep the cursor in sync with the player's actual item: the
+                // transition callback may not have run for the failed track.
+                if (trackId != null) {
+                    resolveExactQueueIndex(trackId)?.let { index ->
+                        val queue = _playbackState.value.queue
+                        _playbackState.value = _playbackState.value.copy(
+                            currentTrack = queue.getOrNull(index),
+                            queueIndex = index
+                        )
+                    }
+                }
+
+                consecutiveLoadErrors++
+                if (consecutiveLoadErrors > MAX_CONSECUTIVE_LOAD_ERRORS) {
+                    // Too many dead tracks in a row (e.g. a deleted folder):
+                    // stop rather than race through the rest of the queue.
+                    Log.w("AudioEngine", "Too many consecutive load errors; stopping playback")
+                    consecutiveLoadErrors = 0
+                    player.pause()
+                    return
+                }
+                trackId?.let { failedTrackIds.add(it) }
+
+                val queue = _playbackState.value.queue
+                val canAdvance = player.hasNextMediaItem() ||
+                        _playbackState.value.queueIndex + 1 in queue.indices
+                if (!canAdvance) return
+
+                // Move to the next item. After an error the player sits in
+                // STATE_IDLE: a seek alone doesn't resume, the new item must be
+                // prepared (and playback re-requested) explicitly.
+                next()
+                if (player.playbackState == Player.STATE_IDLE) {
+                    player.prepare()
+                    player.play()
+                }
+            }
+
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _playbackState.value = _playbackState.value.copy(isPlaying = isPlaying)
                 if (isPlaying) {
@@ -412,6 +484,7 @@ class AudioEngine @Inject constructor(
 
     fun setQueue(tracks: List<TrackEntity>, startIndex: Int = 0, sourceCollectionId: String? = null) {
         windowJumpJob?.cancel()
+        failedTrackIds.clear()
 
         if (tracks.isEmpty()) {
             loadedRange = IntRange.EMPTY
@@ -780,7 +853,14 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    fun play() = player.play()
+    fun play() {
+        // After a playback error the player stays in STATE_IDLE: playWhenReady
+        // alone does nothing there, the timeline must be prepared again.
+        if (player.playbackState == Player.STATE_IDLE) {
+            player.prepare()
+        }
+        player.play()
+    }
     fun pause() = player.pause()
 
     fun next() {
@@ -802,35 +882,59 @@ class AudioEngine @Inject constructor(
             // TODO: Make this an app parameter.
             if (player.contentPosition <= 5000L) {
                 player.seekToPreviousMediaItem()
+                skipBackwardOverFailedTracks()
             } else {
                 seekTo(0)
             }
         } else if (loadedRange.first > 0) {
             val queue = _playbackState.value.queue
-            val previousIndex = loadedRange.first - 1
-            if (previousIndex in queue.indices) {
+            var previousIndex = loadedRange.first - 1
+            // Never land back on a track that already failed to load.
+            while (previousIndex >= 0 && queue[previousIndex].id in failedTrackIds) {
+                previousIndex--
+            }
+            if (previousIndex >= 0) {
                 loadWindowAndPlay(queue, previousIndex)
             }
         }
     }
 
-    fun skipToIndex(index: Int) {
+    /** After a backward seek, keeps moving back past tracks that failed to load. */
+    private fun skipBackwardOverFailedTracks() {
+        var guard = 0
+        while (guard++ < MAX_CONSECUTIVE_LOAD_ERRORS) {
+            val trackId = player.currentMediaItem?.mediaId?.toLongOrNull() ?: return
+            if (trackId !in failedTrackIds) return
+            if (!player.hasPreviousMediaItem()) return
+            player.seekToPreviousMediaItem()
+        }
+    }
+
+    fun skipToIndex(index: Int, forward: Boolean = true) {
         val queue = _playbackState.value.queue
         if (index !in queue.indices) return
 
+        // Never land on a track known to have failed to load: walk in the skip
+        // direction to the nearest playable one. If that direction is exhausted,
+        // fall back to the original index (the error handler will skip onward).
+        var target = index
+        while (target in queue.indices && queue[target].id in failedTrackIds) {
+            target += if (forward) 1 else -1
+        }
+        if (target !in queue.indices) target = index
 
         // Force a window jump
         if (pendingWindowResync) {
-            jumpWindowTo(index)
+            jumpWindowTo(target)
             return
         }
 
-        if (index in loadedRange) {
-            player.seekTo(index - loadedRange.first, 0L)
+        if (target in loadedRange) {
+            player.seekTo(target - loadedRange.first, 0L)
             return
         }
 
-        jumpWindowTo(index)
+        jumpWindowTo(target)
     }
 
     /**

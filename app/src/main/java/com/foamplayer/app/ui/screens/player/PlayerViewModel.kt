@@ -142,7 +142,7 @@ class PlayerViewModel @Inject constructor(
     fun pause() = audioEngine.pause()
     fun next() = audioEngine.next()
     fun previous() = audioEngine.previous()
-    fun skipToIndex(index: Int) = audioEngine.skipToIndex(index)
+    fun skipToIndex(index: Int, forward: Boolean = true) = audioEngine.skipToIndex(index, forward)
 
     // Queue mutations are occurrence-addressed (entry ids), resolved inside the engine
     // against current state — never by indices captured in a possibly-stale UI snapshot.
