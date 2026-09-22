@@ -374,6 +374,12 @@ fun FoamNavHost(
     var trackListTransitionTrackId by remember { mutableStateOf<Long?>(null) }
     var skipMiniPlayerTrackAnimation by remember { mutableStateOf(false) }
 
+    // Identity of the collection row that was clicked to start the current
+    // navigation (see [LocalActiveSharedCollection]): set right before
+    // navigating to a detail screen, overwritten by every later collection
+    // click so only the clicked element ever pairs with its destination hero.
+    var activeSharedCollection by remember { mutableStateOf<String?>(null) }
+
     // Dismiss-to-origin-collection session: when a swipe-down on the full player starts
     // over the playing track's origin collection page, that page's playing row becomes
     // the shared-element endpoint of the artwork flight (trackListTransitionTrackId --
@@ -636,7 +642,8 @@ fun FoamNavHost(
             LocalTrackFoamModalState provides trackModalState,
             LocalCollectionFoamModalState provides collectionModalState,
             LocalBottomBarClearance provides bottomBarClearance,
-            LocalCollectionHeroLayoutLookup provides heroLayoutFor
+            LocalCollectionHeroLayoutLookup provides heroLayoutFor,
+            LocalActiveSharedCollection provides activeSharedCollection
         ) {
             Box(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
 
@@ -936,6 +943,7 @@ fun FoamNavHost(
                                         HomeScreen(
                                             viewModel = homeViewModel,
                                             onPlaylistClick = { playlist ->
+                                                activeSharedCollection = sharedCollectionTag("playlist", "${playlist.playlistId}")
                                                 navController.navigate(
                                                     Screen.PlaylistDetail.createRoute(
                                                         playlist.playlistId,
@@ -945,6 +953,7 @@ fun FoamNavHost(
                                                 )
                                             },
                                             onAlbumClick = { album ->
+                                                activeSharedCollection = sharedCollectionTag("album", album.album)
                                                 navController.navigate(
                                                     Screen.AlbumDetail.createRoute(
                                                         album.album,
@@ -954,6 +963,7 @@ fun FoamNavHost(
                                                 )
                                             },
                                             onArtistClick = { artist ->
+                                                activeSharedCollection = sharedCollectionTag("artist", artist)
                                                 navController.navigate(Screen.ArtistDetail.createRoute(artist))
                                             },
                                             onTrackClick = { track -> playTrackFromList(listOf(track), 0) },
@@ -970,6 +980,7 @@ fun FoamNavHost(
                                     composable(Screen.HomeSeeAllPlaylists.route) {
                                         RecommendedPlaylistsSeeAllScreen(
                                             onPlaylistClick = { playlist ->
+                                                activeSharedCollection = sharedCollectionTag("playlist", "${playlist.playlistId}")
                                                 navController.navigate(
                                                     Screen.PlaylistDetail.createRoute(
                                                         playlist.playlistId,
@@ -991,6 +1002,7 @@ fun FoamNavHost(
                                     composable(Screen.HomeSeeAllAlbums.route) {
                                         RecommendedAlbumsSeeAllScreen(
                                             onAlbumClick = { album ->
+                                                activeSharedCollection = sharedCollectionTag("album", album.album)
                                                 navController.navigate(
                                                     Screen.AlbumDetail.createRoute(
                                                         album.album,
@@ -1055,6 +1067,7 @@ fun FoamNavHost(
                                     composable(Screen.HomeSeeAllArtists.route) {
                                         FavoriteArtistsSeeAllScreen(
                                             onArtistClick = { artist ->
+                                                activeSharedCollection = sharedCollectionTag("artist", artist)
                                                 navController.navigate(Screen.ArtistDetail.createRoute(artist))
                                             },
                                             onBack = { navController.popBackStack() },
@@ -1071,6 +1084,7 @@ fun FoamNavHost(
                                     composable(Screen.Playlists.route) {
                                         PlaylistsScreen(
                                             onPlaylistClick = { playlist ->
+                                                activeSharedCollection = sharedCollectionTag("playlist", "${playlist.playlistId}")
                                                 navController.navigate(
                                                     Screen.PlaylistDetail.createRoute(
                                                         playlist.playlistId,
@@ -1093,9 +1107,11 @@ fun FoamNavHost(
                                     composable(Screen.Search.route) {
                                         SearchScreen(
                                             onArtistClick = { artist ->
+                                                activeSharedCollection = sharedCollectionTag("artist", artist)
                                                 navController.navigate(Screen.ArtistDetail.createRoute(artist))
                                             },
                                             onAlbumClick = { albumResult ->
+                                                activeSharedCollection = sharedCollectionTag("album", albumResult.album)
                                                 navController.navigate(
                                                     Screen.AlbumDetail.createRoute(
                                                         albumResult.album,
@@ -1121,6 +1137,7 @@ fun FoamNavHost(
                                     composable(Screen.BrowseAlbums.route) {
                                         AlbumsBrowseScreen(
                                             onAlbumClick = { album ->
+                                                activeSharedCollection = sharedCollectionTag("album", album.album)
                                                 navController.navigate(
                                                     Screen.AlbumDetail.createRoute(
                                                         album.album,
@@ -1163,6 +1180,7 @@ fun FoamNavHost(
                                     composable(Screen.BrowseArtists.route) {
                                         ArtistsBrowseScreen(
                                             onArtistClick = { artist ->
+                                                activeSharedCollection = sharedCollectionTag("artist", artist)
                                                 navController.navigate(Screen.ArtistDetail.createRoute(artist))
                                             },
                                             onBack = { navController.popBackStack() },
@@ -1270,6 +1288,7 @@ fun FoamNavHost(
                                             kind = backStackEntry.arguments?.getString("kind").orEmpty(),
                                             key = backStackEntry.arguments?.getString("key").orEmpty(),
                                             onArtistClick = { artist ->
+                                                activeSharedCollection = sharedCollectionTag("artist", artist)
                                                 navController.navigate(Screen.ArtistDetail.createRoute(artist))
                                             },
                                             onBack = { navController.popBackStack() },
@@ -1293,6 +1312,7 @@ fun FoamNavHost(
                                             kind = backStackEntry.arguments?.getString("kind").orEmpty(),
                                             key = backStackEntry.arguments?.getString("key").orEmpty(),
                                             onAlbumClick = { entry ->
+                                                activeSharedCollection = sharedCollectionTag("album", entry.album)
                                                 navController.navigate(
                                                     Screen.AlbumDetail.createRoute(
                                                         entry.album,
@@ -1425,6 +1445,7 @@ fun FoamNavHost(
                                         ArtistDetailScreen(
                                             artistName = artistName,
                                             onAlbumClick = { album ->
+                                                activeSharedCollection = sharedCollectionTag("album", album.album)
                                                 navController.navigate(
                                                     Screen.AlbumDetail.createRoute(
                                                         album.album,
@@ -1775,9 +1796,11 @@ fun FoamNavHost(
                 onAddToQueue = playerViewModel::addToQueue,
                 onAddToPlaylist = { track -> playlistPickerTrack = track },
                 onSeeArtist = { track ->
+                    activeSharedCollection = sharedCollectionTag("artist", track.artist)
                     navigateClosingPlayer(Screen.ArtistDetail.createRoute(track.artist))
                 },
                 onSeeAlbum = { track ->
+                    activeSharedCollection = sharedCollectionTag("album", track.album)
                     navigateClosingPlayer(
                         Screen.AlbumDetail.createRoute(track.album, track.albumArtPath, track.artist)
                     )
@@ -1844,9 +1867,11 @@ fun FoamNavHost(
                 onPlayNext = { collection -> playerViewModel.playNext(collection.tracks) },
                 onAddToQueue = { collection -> playerViewModel.addToQueue(collection.tracks) },
                 onSeeArtist = { artist ->
+                    activeSharedCollection = sharedCollectionTag("artist", artist)
                     navController.navigate(Screen.ArtistDetail.createRoute(artist))
                 },
                 onSeeAlbum = { album, albumArtPath, artist ->
+                    activeSharedCollection = sharedCollectionTag("album", album)
                     navController.navigate(Screen.AlbumDetail.createRoute(album, albumArtPath, artist))
                 },
                 onSeeArtistList = { sourceKind, sourceKey ->

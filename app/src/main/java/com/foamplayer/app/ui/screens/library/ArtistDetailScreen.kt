@@ -61,6 +61,7 @@ import com.foamplayer.app.ui.components.rememberCollectionHeroFlightFraction
 import com.foamplayer.app.ui.components.rememberCollectionScrollFraction
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
+import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 
 /** Number of columns of the artist's album grid. */
@@ -159,6 +160,8 @@ fun ArtistDetailScreen(
                 scrollOffsetPx = heroScrollOffsetPx,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
+                sharedElementKey = artistName,
+                sharedElementPrefix = "artist",
                 modifier = Modifier.align(Alignment.TopStart)
             )
         }
@@ -213,7 +216,8 @@ fun ArtistDetailScreen(
                         overlayTextAlpha = { 1f - topBarFraction() },
                         transitionAlpha = transitionAlpha,
                         sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        sharedElementKey = artistName
                     )
                 }
 
@@ -263,7 +267,12 @@ fun ArtistDetailScreen(
                         density = MediaDensity.GRID_NORMAL,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
-                        sharedElementKey = album.album,
+                        // Only an album the user taps flies (into the album
+                        // detail hero): gating on the nav root's tag keeps the
+                        // albums from pairing with their twins on the source
+                        // screen while THIS page opens.
+                        sharedElementKey = album.album
+                            .takeIf { isActiveSharedCollection("album", album.album) },
                         immersiveFlightHero = LocalCollectionHeroLayoutLookup
                             .current(CollectionHeroTarget.Album)
                             .isImmersive
@@ -323,6 +332,10 @@ fun ArtistDetailScreen(
  * for the immersive ones — the overlaid text block and play pill as real
  * interactive grid content (its [CollectionHeroImmersiveHeader.onVisibleHeightPx]
  * keeps the hero artwork's scroll-away constant in sync).
+ *
+ * The artwork and title are the shared-element landing points of the clicked
+ * artist card's flight ("artist-art-*" / "artist-title-*", see HomeScreen):
+ * heroes always register their keys, the source tags only the clicked card.
  */
 @Composable
 private fun ArtistHero(
@@ -336,7 +349,8 @@ private fun ArtistHero(
     overlayTextAlpha: () -> Float,
     transitionAlpha: () -> Float,
     sharedTransitionScope: SharedTransitionScope?,
-    animatedVisibilityScope: AnimatedVisibilityScope?
+    animatedVisibilityScope: AnimatedVisibilityScope?,
+    sharedElementKey: String?
 ) {
     if (heroLayout.isImmersive) {
         CollectionHeroImmersiveHeader(
@@ -350,7 +364,9 @@ private fun ArtistHero(
             overlayTextAlpha = overlayTextAlpha,
             transitionAlpha = transitionAlpha,
             sharedTransitionScope = sharedTransitionScope,
-            animatedVisibilityScope = animatedVisibilityScope
+            animatedVisibilityScope = animatedVisibilityScope,
+            sharedElementKey = sharedElementKey,
+            sharedElementPrefix = "artist"
         )
         return
     }
@@ -362,7 +378,11 @@ private fun ArtistHero(
         statsText = "$trackCount Tracks",
         imageUrl = imageUrl,
         onPlayAllClick = onPlayAllClick,
-        accentColor = accentColor
+        accentColor = accentColor,
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope,
+        sharedElementKey = sharedElementKey,
+        sharedElementPrefix = "artist"
     )
 }
 

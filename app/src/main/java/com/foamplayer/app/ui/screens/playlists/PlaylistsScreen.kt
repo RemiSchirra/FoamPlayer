@@ -97,6 +97,7 @@ import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
+import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
 
 // The playlist row shares the app-wide list row geometry through MediaListRow /
@@ -622,6 +623,14 @@ private fun PlaylistItemRow(
 
     @Composable
     fun Modifier.sharedArtworkModifier(): Modifier {
+        // Only the clicked playlist flies (see LocalActiveSharedCollection).
+        val isActive = isActiveSharedCollection("playlist", "${playlist.playlistId}")
+        if (!isActive) {
+            return Modifier
+                .shadow(elevation = artworkElevation, shape = AlbumArtShape())
+                .clip(AlbumArtShape())
+                .background(FoamTheme.colors.surfaceVariant)
+        }
         // When the playlist detail hero uses an immersive layout, this row is
         // the DRAWN side of the closing flight (the shared-element overlay
         // renders only the becoming-visible side) -- so it must carry the
@@ -660,13 +669,18 @@ private fun PlaylistItemRow(
             .background(FoamTheme.colors.surfaceVariant)
     }
     @Composable
-    fun Modifier.sharedTitle(): Modifier = with(sharedTransitionScope) {
-        sharedBounds(
-            rememberSharedContentState(key = "playlist-title-${playlist.playlistId}"),
-            animatedVisibilityScope = animatedVisibilityScope,
-            boundsTransform = AlbumArtBoundsTransform
-        )
-    }
+    fun Modifier.sharedTitle(): Modifier =
+        if (!isActiveSharedCollection("playlist", "${playlist.playlistId}")) {
+            Modifier
+        } else {
+            with(sharedTransitionScope) {
+                sharedBounds(
+                    rememberSharedContentState(key = "playlist-title-${playlist.playlistId}"),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    boundsTransform = AlbumArtBoundsTransform
+                )
+            }
+        }
 
     @Composable
     fun PlaylistArtwork() {

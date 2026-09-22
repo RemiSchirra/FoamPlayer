@@ -45,6 +45,7 @@ import com.foamplayer.app.ui.components.CollectionKind
 import com.foamplayer.app.ui.components.HomeRow
 import com.foamplayer.app.ui.components.HomeRowCard
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
+import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.components.HomeRowCardSmallWidth
 import com.foamplayer.app.ui.components.HomeRowSpacing
 import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
@@ -207,8 +208,13 @@ fun HomeScreen(
                     },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
-                    sharedArtKey = "playlist-art-${playlist.playlistId}",
-                    sharedTitleKey = "playlist-title-${playlist.playlistId}",
+                    // Only the clicked card flies: shared keys are gated on the
+                    // nav root's active-collection tag so albums/playlists that
+                    // merely share the screen with the tapped card stay put.
+                    sharedArtKey = "playlist-art-${playlist.playlistId}"
+                        .takeIf { isActiveSharedCollection("playlist", "${playlist.playlistId}") },
+                    sharedTitleKey = "playlist-title-${playlist.playlistId}"
+                        .takeIf { isActiveSharedCollection("playlist", "${playlist.playlistId}") },
                     flightHeroTarget = CollectionHeroTarget.Playlist
                 )
             }
@@ -240,8 +246,10 @@ fun HomeScreen(
                     },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
-                    sharedArtKey = "album-art-${album.album}",
-                    sharedTitleKey = "album-title-${album.album}",
+                    sharedArtKey = "album-art-${album.album}"
+                        .takeIf { isActiveSharedCollection("album", album.album) },
+                    sharedTitleKey = "album-title-${album.album}"
+                        .takeIf { isActiveSharedCollection("album", album.album) },
                     flightHeroTarget = CollectionHeroTarget.Album
                 )
             }
@@ -314,7 +322,13 @@ fun HomeScreen(
                                 )
                             )
                         }
-                    }
+                    },
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    sharedArtKey = "artist-art-${artist.name}"
+                        .takeIf { isActiveSharedCollection("artist", artist.name) },
+                    sharedTitleKey = "artist-title-${artist.name}"
+                        .takeIf { isActiveSharedCollection("artist", artist.name) }
                 )
             }
         }

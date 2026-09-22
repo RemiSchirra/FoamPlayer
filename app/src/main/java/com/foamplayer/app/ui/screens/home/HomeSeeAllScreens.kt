@@ -47,6 +47,7 @@ import com.foamplayer.app.ui.components.TrackListScreen
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.components.rememberSortedTracks
+import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
 
@@ -181,7 +182,9 @@ fun RecommendedAlbumsSeeAllScreen(
                     },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
-                    sharedElementKey = album.album,
+                    // Only the clicked row flies (see LocalActiveSharedCollection).
+                    sharedElementKey = album.album
+                        .takeIf { isActiveSharedCollection("album", album.album) },
                     immersiveFlightHero = LocalCollectionHeroLayoutLookup
                         .current(CollectionHeroTarget.Album)
                         .isImmersive

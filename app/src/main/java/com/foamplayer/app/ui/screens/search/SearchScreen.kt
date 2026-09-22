@@ -93,6 +93,7 @@ import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.albumArtCornerRadius
 import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
+import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
 import androidx.core.net.toUri
 import com.foamplayer.app.constants.CollectionHeroTarget
@@ -719,11 +720,13 @@ fun AlbumSearchResultItem(
             modifier = Modifier
                 .size(ListRowArtSize)
                 .let { base ->
-                    // With an immersive album-detail hero this row is the DRAWN
-                    // side of the closing flight (the shared-element overlay
-                    // renders only the becoming-visible side), so it carries the
-                    // mirrored morph itself instead of the static rest clip.
-                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    // Only the clicked row joins a shared-element flight (see
+                    // LocalActiveSharedCollection); other rows keep their static
+                    // rest clip, even when they exist on the destination too.
+                    if (sharedTransitionScope != null &&
+                        animatedVisibilityScope != null &&
+                        isActiveSharedCollection("album", album.album)
+                    ) {
                         base.collectionRowFlightArtwork(
                             key = "album-art-${album.album}",
                             sharedTransitionScope = sharedTransitionScope,
@@ -767,7 +770,10 @@ fun AlbumSearchResultItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.let { base ->
-                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    if (sharedTransitionScope != null &&
+                        animatedVisibilityScope != null &&
+                        isActiveSharedCollection("album", album.album)
+                    ) {
                         with(sharedTransitionScope) {
                             base.sharedBounds(
                                 rememberSharedContentState(key = "album-title-${album.album}"),
@@ -784,7 +790,10 @@ fun AlbumSearchResultItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.let { base ->
-                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    if (sharedTransitionScope != null &&
+                        animatedVisibilityScope != null &&
+                        isActiveSharedCollection("album", album.album)
+                    ) {
                         with(sharedTransitionScope) {
                             base.sharedBounds(
                                 rememberSharedContentState(key = "album-artist-${album.album}"),

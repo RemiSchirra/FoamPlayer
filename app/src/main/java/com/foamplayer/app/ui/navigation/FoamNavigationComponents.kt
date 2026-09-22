@@ -80,6 +80,33 @@ private val NavBarSlotFadeAnimation = tween<Float>(durationMillis = NavBarSlotAn
 val LocalBottomBarClearance = compositionLocalOf { 0.dp }
 
 /**
+ * Identity of the collection item that was clicked to start the current
+ * navigation, as "<kind>:<key>" (e.g. "album:Abbey Road", "playlist:12",
+ * "artist:Radiohead"), or null when the last navigation did not start from a
+ * collection row.
+ *
+ * Shared-element rows register their keys ONLY while they match this tag, so a
+ * screen transition pairs exactly one source row with its destination hero --
+ * other rows that happen to also exist on the destination (e.g. the artist's
+ * albums already visible on the home page) never join the flight. The tag is
+ * overwritten by every collection click, which also drops stale tags from
+ * earlier flights.
+ */
+val LocalActiveSharedCollection = compositionLocalOf { null as String? }
+
+/** Canonical tag of a clickable collection row for [LocalActiveSharedCollection]. */
+fun sharedCollectionTag(kind: String, key: String): String = "$kind:$key"
+
+/**
+ * True when this row is the element that was clicked to start the current
+ * transition (and therefore the only source that should register its
+ * shared-element keys).
+ */
+@Composable
+fun isActiveSharedCollection(kind: String, key: String): Boolean =
+    LocalActiveSharedCollection.current == sharedCollectionTag(kind, key)
+
+/**
  * Single source of truth for nav-bar / mini-player geometry.
  */
 object NavBarDimens {
