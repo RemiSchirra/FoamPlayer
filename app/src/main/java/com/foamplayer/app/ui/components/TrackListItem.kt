@@ -166,8 +166,9 @@ fun TrackListItem(
     }
 
     // GRID_* densities: square artwork cell, score overlaid on the art corner.
-    // In edit mode the artwork also carries the four-direction drag chip; the
-    // drag gesture itself lives on the whole cell (hosted by TrackListScreen).
+    // In edit mode the artwork also carries the four-direction drag chip and the
+    // drag gesture lives on that chip alone ([dragHandleModifier], hosted by
+    // TrackListScreen) — the rest of the cell stays scrollable/tappable.
     // Swipe-to-dismiss remains a row-only affordance.
     if (density.isGrid) {
         val sharedArtworkBase: Modifier = Modifier.rowSharedArtwork(
@@ -246,12 +247,22 @@ fun TrackListItem(
                         enter = GridDragHandleEnter,
                         exit = GridDragHandleExit
                     ) {
-                        GridOverlayChip {
+                        // Reordering starts only from this chip: the drag gesture
+                        // arrives via dragHandleModifier; the no-op clickable
+                        // swallows taps so the cell beneath doesn't ripple.
+                        val dragHandleInteractionSource = remember { MutableInteractionSource() }
+                        GridOverlayChip(
+                            modifier = dragHandleModifier.clickable(
+                                interactionSource = dragHandleInteractionSource,
+                                indication = null
+                            ) {/* Consume the click */},
+                            contentPadding = 6.dp
+                        ) {
                             Icon(
                                 imageVector = Icons.Rounded.OpenWith,
                                 contentDescription = null,
                                 tint = FoamTheme.colors.textPrimary,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
@@ -508,17 +519,18 @@ private fun TrackGridArtwork(track: TrackEntity) {
     }
 }
 
-/** Small rounded translucent chip overlaid on a grid cell's artwork corner (score badge, track number). */
+/** Small rounded translucent chip overlaid on a grid cell's artwork corner (score badge, track number, drag handle). */
 @Composable
 private fun GridOverlayChip(
     modifier: Modifier = Modifier,
+    contentPadding: Dp = 4.dp,
     content: @Composable () -> Unit
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(Color.Black.copy(alpha = 0.55f))
-            .padding(4.dp),
+            .padding(contentPadding),
         contentAlignment = Alignment.Center
     ) {
         content()

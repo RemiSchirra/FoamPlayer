@@ -313,6 +313,40 @@ fun PlaylistsScreen(
                         active = CollectionId.playlist(playlist.playlistId) == activeCollectionId,
                         lifted = isDragging && !dragReleased,
                         showDragHandle = isEditMode,
+                        dragHandleModifier = if (isEditMode) {
+                            // Reordering starts only from the drag chip; the
+                            // cell itself stays scroll/tap-through.
+                            Modifier.pointerInput(playlist.playlistId) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        dragOriginIndex = currentIndex
+                                        dragReleased = false
+                                        gridDragState.onDragStart(currentIndex)
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        gridDragState.onDrag(dragAmount)
+                                    },
+                                    onDragEnd = {
+                                        val to = gridDragState.draggedIndex
+                                        // Scale-down starts with the release; the
+                                        // settle animation flies the item to its slot.
+                                        dragReleased = true
+                                        gridDragState.onDragEnd()
+                                        persistReorder(to, dragOriginIndex)
+                                        dragOriginIndex = null
+                                    },
+                                    onDragCancel = {
+                                        dragReleased = true
+                                        gridDragState.onDragCancel()
+                                        dragOriginIndex = null
+                                        displayedPlaylists = sortedPlaylists
+                                    }
+                                )
+                            }
+                        } else {
+                            Modifier
+                        },
                         density = density,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
@@ -335,36 +369,6 @@ fun PlaylistsScreen(
                                 scaleX = liftScale
                                 scaleY = liftScale
                             }
-                            .then(
-                                if (isEditMode) {
-                                    Modifier.playlistEditDrag(
-                                        playlistId = playlist.playlistId,
-                                        onDragStart = {
-                                            dragOriginIndex = currentIndex
-                                            dragReleased = false
-                                            gridDragState.onDragStart(currentIndex)
-                                        },
-                                        onDrag = gridDragState::onDrag,
-                                        onDragEnd = {
-                                            val to = gridDragState.draggedIndex
-                                            // Scale-down starts with the release; the
-                                            // settle animation flies the item to its slot.
-                                            dragReleased = true
-                                            gridDragState.onDragEnd()
-                                            persistReorder(to, dragOriginIndex)
-                                            dragOriginIndex = null
-                                        },
-                                        onDragCancel = {
-                                            dragReleased = true
-                                            gridDragState.onDragCancel()
-                                            dragOriginIndex = null
-                                            displayedPlaylists = sortedPlaylists
-                                        }
-                                    )
-                                } else {
-                                    Modifier
-                                }
-                            )
                     )
                 }
 
@@ -599,6 +603,7 @@ private fun PlaylistItemRow(
     active: Boolean = false,
     lifted: Boolean = false,
     showDragHandle: Boolean = false,
+    dragHandleModifier: Modifier = Modifier,
     density: MediaDensity,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -701,19 +706,27 @@ private fun PlaylistItemRow(
                     enter = DragHandleEnter,
                     exit = DragHandleExit
                 ) {
+                    // Reordering starts only from this chip: the drag gesture
+                    // arrives via dragHandleModifier; the no-op clickable
+                    // swallows taps so the cell beneath doesn't ripple.
+                    val dragHandleInteractionSource = remember { MutableInteractionSource() }
                     Box(
-                        modifier = Modifier
+                        modifier = dragHandleModifier
+                            .clickable(
+                                interactionSource = dragHandleInteractionSource,
+                                indication = null
+                            ) {/* Consume the click */}
                             .padding(6.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(Color.Black.copy(alpha = 0.55f))
-                            .padding(4.dp),
+                            .padding(6.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.OpenWith,
                             contentDescription = null,
                             tint = FoamTheme.colors.textPrimary,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }

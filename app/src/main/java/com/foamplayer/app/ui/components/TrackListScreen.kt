@@ -55,7 +55,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -254,7 +253,7 @@ fun TrackListScreen(
             }
         }
     )
-    // Grid counterpart for GRID_* densities in edit mode: the same whole-cell
+    // Grid counterpart for GRID_* densities in edit mode: the same handle-only
     // drag & drop as the playlists screen. The hero header (index 0) and the
     // bottom spacer never take part in a swap.
     val gridDragState = rememberDragDropGridState(
@@ -453,40 +452,6 @@ fun TrackListScreen(
                                     scaleX = liftScale
                                     scaleY = liftScale
                                 }
-                                .then(
-                                    if (editMode) {
-                                        Modifier.trackGridEditDrag(
-                                            trackId = track.id,
-                                            onDragStart = {
-                                                dragOriginIndex = currentIndex.value + 1
-                                                dragReleased = false
-                                                gridDragState.onDragStart(currentIndex.value + 1)
-                                            },
-                                            onDrag = gridDragState::onDrag,
-                                            onDragEnd = {
-                                                val from = dragOriginIndex
-                                                val to = gridDragState.draggedIndex
-                                                // Scale-down starts with the release; the
-                                                // settle animation flies the item to its slot.
-                                                dragReleased = true
-                                                gridDragState.onDragEnd()
-                                                dragOriginIndex = null
-                                                if (from != null && to != null && from != to) {
-                                                    latestOnPersistTrackOrder
-                                                        ?.invoke(latestDisplayedTracks.map { it.id })
-                                                }
-                                            },
-                                            onDragCancel = {
-                                                dragReleased = true
-                                                gridDragState.onDragCancel()
-                                                dragOriginIndex = null
-                                                displayedTracks = latestTracks
-                                            }
-                                        )
-                                    } else {
-                                        Modifier
-                                    }
-                                )
                         ) {
                             TrackListItem(
                                 track = track,
@@ -514,6 +479,44 @@ fun TrackListScreen(
                                 flightPausedArtScale = { flightPausedArtScale.value },
                                 immersiveArt = immersiveMode,
                                 showDragHandle = editMode,
+                                dragHandleModifier = if (editMode) {
+                                    // Reordering starts only from the drag chip;
+                                    // the cell itself stays scroll/tap-through.
+                                    Modifier.pointerInput(track.id) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                dragOriginIndex = currentIndex.value + 1
+                                                dragReleased = false
+                                                gridDragState.onDragStart(currentIndex.value + 1)
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                gridDragState.onDrag(dragAmount)
+                                            },
+                                            onDragEnd = {
+                                                val from = dragOriginIndex
+                                                val to = gridDragState.draggedIndex
+                                                // Scale-down starts with the release; the
+                                                // settle animation flies the item to its slot.
+                                                dragReleased = true
+                                                gridDragState.onDragEnd()
+                                                dragOriginIndex = null
+                                                if (from != null && to != null && from != to) {
+                                                    latestOnPersistTrackOrder
+                                                        ?.invoke(latestDisplayedTracks.map { it.id })
+                                                }
+                                            },
+                                            onDragCancel = {
+                                                dragReleased = true
+                                                gridDragState.onDragCancel()
+                                                dragOriginIndex = null
+                                                displayedTracks = latestTracks
+                                            }
+                                        )
+                                    }
+                                } else {
+                                    Modifier
+                                },
                                 isSharedTransitionSource = rowSharedTagActive(track.id) && !editMode
                             )
                         }
@@ -831,22 +834,3 @@ private fun TrackListTopBarRow(
 
 /** Scale-up applied to a track's grid cell while it is being dragged, for a "lifted" feel. */
 private const val GridDragLiftScale = 1.05f
-
-/** Whole-cell drag gesture driving edit-mode grid reordering (swaps come from [DragDropGridState]). */
-private fun Modifier.trackGridEditDrag(
-    trackId: Long,
-    onDragStart: () -> Unit,
-    onDrag: (Offset) -> Unit,
-    onDragEnd: () -> Unit,
-    onDragCancel: () -> Unit
-): Modifier = pointerInput(trackId) {
-    detectDragGestures(
-        onDragStart = { onDragStart() },
-        onDrag = { change, dragAmount ->
-            change.consume()
-            onDrag(dragAmount)
-        },
-        onDragEnd = onDragEnd,
-        onDragCancel = onDragCancel
-    )
-}
