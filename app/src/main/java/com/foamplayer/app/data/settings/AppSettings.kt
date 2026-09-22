@@ -8,8 +8,10 @@ import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
+import com.foamplayer.app.constants.AllNavBarScreenItems
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
 import com.foamplayer.app.constants.DefaultNavBarScreenItems
+import com.foamplayer.app.constants.DefaultNavBarSecondaryOrder
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavBarItem
@@ -74,8 +76,8 @@ data class AppSettings(
     val navBarTransparentWhenPlayerOpen: Boolean = false,
     val navBarPrimaryOrder: List<NavBarItem> = DefaultNavBarPrimaryOrder,
     val navBarPrimaryEnabled: Set<NavBarItem> = DefaultNavBarScreenItems.toSet(),
-    val navBarSecondaryOrder: List<NavBarItem> = DefaultNavBarScreenItems,
-    val navBarSecondaryEnabled: Set<NavBarItem> = emptySet(),
+    val navBarSecondaryOrder: List<NavBarItem> = DefaultNavBarSecondaryOrder,
+    val navBarSecondaryEnabled: Set<NavBarItem> = setOf(NavBarItem.STATS),
     /** Per-view media list density; views missing from the map fall back to [MediaDensity.ROW_NORMAL]. */
     val mediaDensities: Map<MediaListView, MediaDensity> = emptyMap(),
     /** Per-view media list sort (organisation modal); views missing from the map use [defaultSortMode]. */
@@ -141,8 +143,8 @@ data class AppSettings(
     fun sanitized(): AppSettings {
         // The "more" toggle is never a switchable item; its visibility is derived
         // from the second bar's content.
-        val primaryEnabled = navBarPrimaryEnabled.filter { it in DefaultNavBarScreenItems }.toSet()
-        val secondaryEnabled = navBarSecondaryEnabled.filter { it in DefaultNavBarScreenItems }.toSet()
+        val primaryEnabled = navBarPrimaryEnabled.filter { it in AllNavBarScreenItems }.toSet()
+        val secondaryEnabled = navBarSecondaryEnabled.filter { it in AllNavBarScreenItems }.toSet()
 
         // The settings entry must exist in at least one of the two bars.
         val finalPrimaryEnabled =
@@ -173,7 +175,7 @@ data class AppSettings(
             genreSeparators = genreSeparators.normalizedSeparators(),
             navBarPrimaryOrder = normalizedNavBarOrder(navBarPrimaryOrder, DefaultNavBarPrimaryOrder),
             navBarPrimaryEnabled = finalPrimaryEnabled,
-            navBarSecondaryOrder = normalizedNavBarOrder(navBarSecondaryOrder, DefaultNavBarScreenItems),
+            navBarSecondaryOrder = normalizedNavBarOrder(navBarSecondaryOrder, DefaultNavBarSecondaryOrder),
             navBarSecondaryEnabled = secondaryEnabled
         )
     }

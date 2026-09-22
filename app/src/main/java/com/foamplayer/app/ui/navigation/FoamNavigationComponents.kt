@@ -375,6 +375,7 @@ private fun NavBarItem.targetScreen(): Screen = when (this) {
     NavBarItem.HOME -> Screen.Home
     NavBarItem.PLAYLISTS -> Screen.Playlists
     NavBarItem.SEARCH -> Screen.Search
+    NavBarItem.STATS -> Screen.Stats
     NavBarItem.EQUALIZER -> Screen.Equalizer
     NavBarItem.SETTINGS -> Screen.Settings
     // Unreachable: MORE is rendered as the expand toggle and never navigates.
@@ -386,6 +387,7 @@ private fun NavBarItem.icon(): ImageVector = when (this) {
     NavBarItem.HOME -> FoamTheme.icons.current.home
     NavBarItem.PLAYLISTS -> FoamTheme.icons.current.playlists
     NavBarItem.SEARCH -> FoamTheme.icons.current.search
+    NavBarItem.STATS -> FoamTheme.icons.current.stats
     NavBarItem.EQUALIZER -> FoamTheme.icons.current.equalizer
     NavBarItem.SETTINGS -> FoamTheme.icons.current.settings
     NavBarItem.MORE -> FoamTheme.icons.current.more

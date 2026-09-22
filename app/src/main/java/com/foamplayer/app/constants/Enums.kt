@@ -149,6 +149,9 @@ enum class MediaListView {
     HOME_SEE_ALL_RECENT_TRACKS,
     HOME_SEE_ALL_FAVORITE_TRACKS,
     HOME_SEE_ALL_ARTISTS,
+    STATS_SEE_ALL_TRACKS,
+    STATS_SEE_ALL_ARTISTS,
+    STATS_SEE_ALL_ALBUMS,
 }
 
 /**
@@ -199,7 +202,8 @@ fun MediaListView.defaultSortMode(): CollectionSortMode = when (this) {
     MediaListView.PLAYLIST_DETAIL -> CollectionSortMode.CUSTOM
     MediaListView.BROWSE_YEAR_TRACKS -> CollectionSortMode.ALBUM
     MediaListView.HOME_SEE_ALL_RECENT_TRACKS -> CollectionSortMode.LISTEN_DATE
-    MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS -> CollectionSortMode.LISTEN_COUNT
+    MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS,
+    MediaListView.STATS_SEE_ALL_TRACKS -> CollectionSortMode.LISTEN_COUNT
     else -> CollectionSortMode.NAME
 }
 
@@ -516,6 +520,7 @@ enum class NavBarItem {
     PLAYLISTS,
     SEARCH,
     EQUALIZER,
+    STATS,
     SETTINGS,
     MORE,
 }
@@ -529,6 +534,12 @@ val DefaultNavBarScreenItems =
         NavBarItem.EQUALIZER,
         NavBarItem.SETTINGS,
     )
+
+/** Every switchable nav item (main bar + second bar). */
+val AllNavBarScreenItems = DefaultNavBarScreenItems + NavBarItem.STATS
+
+/** Default layout of the second bar: the screen items, with Stats last. */
+val DefaultNavBarSecondaryOrder = DefaultNavBarScreenItems + NavBarItem.STATS
 
 /** Default layout of the main bar: the screen items, with the "more" toggle last. */
 val DefaultNavBarPrimaryOrder = DefaultNavBarScreenItems + NavBarItem.MORE

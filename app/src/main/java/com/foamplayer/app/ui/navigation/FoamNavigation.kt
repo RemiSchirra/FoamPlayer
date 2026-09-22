@@ -118,6 +118,9 @@ import com.foamplayer.app.ui.screens.player.progress
 import com.foamplayer.app.ui.screens.playlists.PlaylistDetailScreen
 import com.foamplayer.app.ui.screens.playlists.PlaylistsScreen
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
+import com.foamplayer.app.ui.screens.stats.StatsScreen
+import com.foamplayer.app.ui.screens.stats.StatsSeeAllScreen
+import com.foamplayer.app.ui.screens.stats.StatsTopKind
 import com.foamplayer.app.ui.screens.search.SearchScreen
 import com.foamplayer.app.ui.screens.settings.AudioSettingsScreen
 import com.foamplayer.app.ui.screens.settings.AudioDevicesSettingsScreen
@@ -182,6 +185,14 @@ private fun isSharedElementRoute(route: String?): Boolean {
 private fun isSettingsRoute(route: String?): Boolean {
     return route != null && (route == Screen.Settings.route || route.startsWith("settings/"))
 }
+
+/**
+ * Stats overview and its "see all" sub-pages slide like the settings stack:
+ * the sub-page slides in from the right when pushed and back out to the right
+ * when popped, while the overview parries by a fraction of its width.
+ */
+private fun isStatsRoute(route: String?): Boolean =
+    route != null && (route == Screen.Stats.route || route.startsWith("stats/"))
 
 /**
  * Browse list pages (opened from the search section's browse cards, plus their
@@ -875,6 +886,9 @@ fun FoamNavHost(
                                             isSettingsRoute(initialState.destination.route) &&
                                                     isSettingsRoute(targetState.destination.route) ->
                                                 slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
+                                            isStatsRoute(initialState.destination.route) &&
+                                                    isStatsRoute(targetState.destination.route) ->
+                                                slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                                             isBrowseRoute(targetState.destination.route) ->
                                                 slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                                             isSharedElementRoute(initialState.destination.route) ||
@@ -888,6 +902,9 @@ fun FoamNavHost(
                                             playerTransitionState.currentState -> ExitTransition.None
                                             isSettingsRoute(initialState.destination.route) &&
                                                     isSettingsRoute(targetState.destination.route) ->
+                                                slideOutHorizontally(targetOffsetX = { -it / SubScreenSlideDivisor }, animationSpec = tween()) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
+                                            isStatsRoute(initialState.destination.route) &&
+                                                    isStatsRoute(targetState.destination.route) ->
                                                 slideOutHorizontally(targetOffsetX = { -it / SubScreenSlideDivisor }, animationSpec = tween()) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
                                             isBrowseRoute(initialState.destination.route) &&
                                                     isBrowseRoute(targetState.destination.route) ->
@@ -904,6 +921,9 @@ fun FoamNavHost(
                                             isSettingsRoute(initialState.destination.route) &&
                                                     isSettingsRoute(targetState.destination.route) ->
                                                 slideInHorizontally(initialOffsetX = { -it / SubScreenSlideDivisor }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
+                                            isStatsRoute(initialState.destination.route) &&
+                                                    isStatsRoute(targetState.destination.route) ->
+                                                slideInHorizontally(initialOffsetX = { -it / SubScreenSlideDivisor }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                                             isBrowseRoute(initialState.destination.route) &&
                                                     isBrowseRoute(targetState.destination.route) ->
                                                 slideInHorizontally(initialOffsetX = { -it / SubScreenSlideDivisor }, animationSpec = tween()) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
@@ -918,6 +938,9 @@ fun FoamNavHost(
                                             playerTransitionState.currentState -> ExitTransition.None
                                             isSettingsRoute(initialState.destination.route) &&
                                                     isSettingsRoute(targetState.destination.route) ->
+                                                slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
+                                            isStatsRoute(initialState.destination.route) &&
+                                                    isStatsRoute(targetState.destination.route) ->
                                                 slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
                                             isBrowseRoute(initialState.destination.route) ->
                                                 slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
@@ -1357,6 +1380,66 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.Equalizer.route) {
                                         EqualizerScreen()
+                                    }
+                                    composable(Screen.Stats.route) {
+                                        StatsScreen(
+                                            onArtistClick = { artistName ->
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artistName))
+                                            },
+                                            onAlbumClick = { album, artUrl, artist ->
+                                                activeSharedCollection = sharedCollectionTag("album", album)
+                                                navController.navigate(
+                                                    Screen.AlbumDetail.createRoute(album, artUrl, artist)
+                                                )
+                                            },
+                                            onSeeAll = { kind, period ->
+                                                navController.navigate(
+                                                    Screen.StatsSeeAll.createRoute(kind.name, period.name)
+                                                )
+                                            },
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index)
+                                            }
+                                        )
+                                    }
+                                    composable(Screen.StatsSeeAll.route) { backStackEntry ->
+                                        val kind = backStackEntry.arguments?.getString("kind")
+                                            ?.let { name -> StatsTopKind.entries.find { it.name == name } }
+                                            ?: StatsTopKind.TRACKS
+                                        val view = when (kind) {
+                                            StatsTopKind.TRACKS -> MediaListView.STATS_SEE_ALL_TRACKS
+                                            StatsTopKind.ARTISTS -> MediaListView.STATS_SEE_ALL_ARTISTS
+                                            StatsTopKind.ALBUMS -> MediaListView.STATS_SEE_ALL_ALBUMS
+                                        }
+                                        StatsSeeAllScreen(
+                                            onBack = { navController.popBackStack() },
+                                            onArtistClick = { artistName ->
+                                                activeSharedCollection = sharedCollectionTag("artist", artistName)
+                                                navController.navigate(Screen.ArtistDetail.createRoute(artistName))
+                                            },
+                                            onAlbumClick = { album, artUrl, artist ->
+                                                activeSharedCollection = sharedCollectionTag("album", album)
+                                                navController.navigate(
+                                                    Screen.AlbumDetail.createRoute(album, artUrl, artist)
+                                                )
+                                            },
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index)
+                                            },
+                                            activeTrackId = activeTrackId,
+                                            activeCollectionId = activeCollectionId,
+                                            density = densityFor(view),
+                                            onDensityChange = { setDensity(view, it) },
+                                            sortMode = sortModeFor(view),
+                                            onSortChange = { setSortMode(view, it) },
+                                            sortInverted = sortInvertedFor(view),
+                                            onSortInvertedChange = { setSortInverted(view, it) },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Default)
+                                        )
                                     }
                                     composable(Screen.Settings.route) {
                                         SettingsScreen(

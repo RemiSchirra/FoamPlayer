@@ -5,11 +5,13 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.foamplayer.app.data.db.dao.CachedLyricsDao
+import com.foamplayer.app.data.db.dao.ListenHistoryDao
 import com.foamplayer.app.data.db.dao.PlaylistDao
 import com.foamplayer.app.data.db.dao.QueueDao
 import com.foamplayer.app.data.db.dao.TrackDao
 import com.foamplayer.app.data.db.entities.CachedLyricsEntity
 import com.foamplayer.app.data.db.entities.FolderEntity
+import com.foamplayer.app.data.db.entities.ListenHistoryEntity
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.PlaylistTrackCrossRef
 import com.foamplayer.app.data.db.entities.QueueItemEntity
@@ -22,9 +24,10 @@ import com.foamplayer.app.data.db.entities.TrackEntity
         PlaylistTrackCrossRef::class,
         QueueItemEntity::class,
         FolderEntity::class,
-        CachedLyricsEntity::class
+        CachedLyricsEntity::class,
+        ListenHistoryEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,6 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
     abstract fun queueDao(): QueueDao
     abstract fun cachedLyricsDao(): CachedLyricsDao
+    abstract fun listenHistoryDao(): ListenHistoryDao
 
     companion object {
         /** Adds the composer column to the tracks table (track details modal). */
@@ -105,6 +109,29 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_playlist_track_cross_ref_playlistId_orderIndex " +
                             "ON playlist_track_cross_ref (playlistId, orderIndex)"
+                )
+            }
+        }
+
+        /**
+         * Adds the listen_history table (one row per counted listen) for the
+         * stats screen's period analysis. Seeded with each track's last listen
+         * so all-time stats immediately reflect the pre-existing playCount data
+         * (earlier listens have no recorded timestamp and are not reconstructed).
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS listen_history (" +
+                            "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "trackId INTEGER NOT NULL, " +
+                            "listenedAt INTEGER NOT NULL)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_listen_history_listenedAt ON listen_history (listenedAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_listen_history_trackId ON listen_history (trackId)")
+                db.execSQL(
+                    "INSERT INTO listen_history (trackId, listenedAt) " +
+                            "SELECT id, lastPlayedAt FROM tracks WHERE lastPlayedAt IS NOT NULL"
                 )
             }
         }

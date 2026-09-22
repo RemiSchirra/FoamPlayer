@@ -7,6 +7,12 @@ sealed class Screen(val route: String, val title: String) {
     object Home : Screen("home", "Home")
     object Playlists : Screen("playlists", "Playlists")
     object Search : Screen("search", "Search")
+    object Stats : Screen("stats", "Statistics")
+    object StatsSeeAll : Screen("stats/see-all/{kind}?period={period}", "Statistics") {
+        /** [kind] is a [StatsTopKind] name, [period] a [StatsPeriod] name. */
+        fun createRoute(kind: String, period: String): String =
+            "stats/see-all/$kind?period=$period"
+    }
     object Equalizer : Screen("equalizer", "Equalizer")
     object Settings : Screen("settings", "Settings")
     object SettingsAudio : Screen("settings/audio", "Audio Settings")

@@ -85,6 +85,38 @@
     <string name="navbar_second_bar_desc">Shown above the main bar when you tap More</string>
     <string name="navbar_item_more">More</string>
 
+    <!-- Stats screen -->
+    <string name="stats_loading">Loading your listening stats…</string>
+    <string name="stats_empty_title">Nothing here yet</string>
+    <string name="stats_empty_body">Play some music and your listening stats will appear here.</string>
+    <string name="stats_period_week">1 week</string>
+    <string name="stats_period_month">1 month</string>
+    <string name="stats_period_three_months">3 months</string>
+    <string name="stats_period_six_months">6 months</string>
+    <string name="stats_period_year">1 year</string>
+    <string name="stats_period_all">All time</string>
+    <string name="stats_subtitle_week">Listening over the last 7 days</string>
+    <string name="stats_subtitle_month">Listening over the last 30 days</string>
+    <string name="stats_subtitle_three_months">Listening over the last 3 months</string>
+    <string name="stats_subtitle_six_months">Listening over the last 6 months</string>
+    <string name="stats_subtitle_year">Listening over the last 12 months</string>
+    <string name="stats_subtitle_all">All-time listening</string>
+    <string name="stats_listening_time">Listening time</string>
+    <string name="stats_plays">Plays</string>
+    <string name="stats_unique_tracks">Unique tracks</string>
+    <string name="stats_unique_artists">Artists</string>
+    <string name="stats_avg_per_day">avg %1$s / day</string>
+    <string name="stats_active_days">across %1$d days</string>
+    <string name="stats_activity">Listening activity</string>
+    <string name="stats_artists_share">Artists\' share</string>
+    <string name="stats_others">Others</string>
+    <string name="stats_listening_clock">Listening clock</string>
+    <string name="stats_peak_hour">Peak at %1$s</string>
+    <string name="stats_top_tracks">Top tracks</string>
+    <string name="stats_top_artists">Top artists</string>
+    <string name="stats_top_albums">Top albums</string>
+    <string name="stats_top_genres">Top genres</string>
+
     <string name="engine_settings">Engine Settings</string>
     <string name="bit_perfect_output">Bit-Perfect Output</string>
     <string name="bit_perfect_desc">Bypass system resampler for high-res audio on compatible USB DACs</string>

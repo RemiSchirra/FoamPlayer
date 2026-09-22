@@ -23,7 +23,7 @@ import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
-import com.foamplayer.app.constants.DefaultNavBarScreenItems
+import com.foamplayer.app.constants.DefaultNavBarSecondaryOrder
 import com.foamplayer.app.constants.LyricsLineBlurKey
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
@@ -278,10 +278,11 @@ class SettingsRepository @Inject constructor(
         navBarPrimaryEnabled = this[Keys.NAVBAR_PRIMARY_ENABLED]
             ?.mapNotNull { name -> NavBarItem.entries.find { it.name == name } }
             ?.toSet() ?: AppSettings().navBarPrimaryEnabled,
-        navBarSecondaryOrder = deserializeNavBarItemOrder(this[Keys.NAVBAR_SECONDARY_ORDER], DefaultNavBarScreenItems),
-        navBarSecondaryEnabled = this[Keys.NAVBAR_SECONDARY_ENABLED]
-            ?.mapNotNull { name -> NavBarItem.entries.find { it.name == name } }
-            ?.toSet() ?: AppSettings().navBarSecondaryEnabled,
+        navBarSecondaryOrder = deserializeNavBarItemOrder(this[Keys.NAVBAR_SECONDARY_ORDER], DefaultNavBarSecondaryOrder),
+        navBarSecondaryEnabled = statsAwareSecondaryEnabled(
+            storedOrder = this[Keys.NAVBAR_SECONDARY_ORDER],
+            storedEnabled = this[Keys.NAVBAR_SECONDARY_ENABLED]
+        ),
         mediaDensities = deserializeMediaDensities(this[Keys.MEDIA_DENSITIES]),
         mediaSortModes = deserializeMediaSortModes(this[Keys.MEDIA_SORT_MODES]),
         mediaSortInverted = this[Keys.MEDIA_SORT_INVERTED]
@@ -493,3 +494,22 @@ private fun serializeSearchHistory(history: List<SearchHistoryEntry>): String =
             is SearchHistoryEntry.Artist -> "R:${entry.name}"
         }
     }
+
+/**
+ * Preference-level migration for the Stats nav item: preference files written
+ * before the item existed carry neither "STATS" in the second-bar order nor in
+ * the enabled set, so its default placement (second bar, enabled) is applied to
+ * them. Once "STATS" appears in the stored order, the user has configured the
+ * bars with the item present and their stored enabled state is respected.
+ */
+private fun statsAwareSecondaryEnabled(storedOrder: String?, storedEnabled: Set<String>?): Set<NavBarItem> {
+    val enabled = storedEnabled
+        ?.mapNotNull { name -> NavBarItem.entries.find { it.name == name } }
+        ?.toSet()
+        ?: AppSettings().navBarSecondaryEnabled
+    return if (storedOrder?.contains("STATS") == true) {
+        enabled
+    } else {
+        enabled + NavBarItem.STATS
+    }
+}

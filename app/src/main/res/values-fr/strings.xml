@@ -85,6 +85,38 @@
     <string name="navbar_second_bar_desc">Affichée au-dessus de la barre principale quand vous touchez Plus</string>
     <string name="navbar_item_more">Plus</string>
 
+    <!-- Écran des statistiques -->
+    <string name="stats_loading">Chargement de vos statistiques d\'écoute…</string>
+    <string name="stats_empty_title">Rien pour le moment</string>
+    <string name="stats_empty_body">Écoutez de la musique et vos statistiques d\'écoute apparaîtront ici.</string>
+    <string name="stats_period_week">1 semaine</string>
+    <string name="stats_period_month">1 mois</string>
+    <string name="stats_period_three_months">3 mois</string>
+    <string name="stats_period_six_months">6 mois</string>
+    <string name="stats_period_year">1 an</string>
+    <string name="stats_period_all">Tout</string>
+    <string name="stats_subtitle_week">Écoutes des 7 derniers jours</string>
+    <string name="stats_subtitle_month">Écoutes des 30 derniers jours</string>
+    <string name="stats_subtitle_three_months">Écoutes des 3 derniers mois</string>
+    <string name="stats_subtitle_six_months">Écoutes des 6 derniers mois</string>
+    <string name="stats_subtitle_year">Écoutes des 12 derniers mois</string>
+    <string name="stats_subtitle_all">Écoutes depuis toujours</string>
+    <string name="stats_listening_time">Temps d\'écoute</string>
+    <string name="stats_plays">Écoutes</string>
+    <string name="stats_unique_tracks">Titres uniques</string>
+    <string name="stats_unique_artists">Artistes</string>
+    <string name="stats_avg_per_day">%1$s / jour en moy.</string>
+    <string name="stats_active_days">sur %1$d jours</string>
+    <string name="stats_activity">Activité d\'écoute</string>
+    <string name="stats_artists_share">Part des artistes</string>
+    <string name="stats_others">Autres</string>
+    <string name="stats_listening_clock">Horloge d\'écoute</string>
+    <string name="stats_peak_hour">Pic à %1$s</string>
+    <string name="stats_top_tracks">Top titres</string>
+    <string name="stats_top_artists">Top artistes</string>
+    <string name="stats_top_albums">Top albums</string>
+    <string name="stats_top_genres">Top genres</string>
+
     <string name="engine_settings">Paramètres du moteur</string>
     <string name="bit_perfect_output">Sortie Bit-Perfect</string>
     <string name="bit_perfect_desc">Contourner le rééchantillonneur système pour l\'audio haute résolution sur les DAC USB compatibles</string>

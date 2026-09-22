@@ -65,13 +65,13 @@ private enum class NavBarSection { PRIMARY, SECONDARY }
  *   2      – "Main bar" section header
  *   3..8   – main bar items (5 screen items + the MORE toggle marker)
  *   9      – "Second bar" section header
- *   10..14 – second bar items (5)
- *   15     – bottom spacer
+ *   10..15 – second bar items (6: the screen items + Stats)
+ *   16     – bottom spacer
  */
 private const val PRIMARY_SECTION_START = 3
 private const val SECONDARY_SECTION_START = 10
 private val PRIMARY_SECTION_RANGE = PRIMARY_SECTION_START until SECONDARY_SECTION_START - 1
-private val SECONDARY_SECTION_RANGE = SECONDARY_SECTION_START until SECONDARY_SECTION_START + 5
+private val SECONDARY_SECTION_RANGE = SECONDARY_SECTION_START until SECONDARY_SECTION_START + 6
 
 @Composable
 fun NavBarSettingsScreen(
@@ -392,15 +392,16 @@ private fun NavBarSettingsItem(
                 tint = if (isEnabled) FoamTheme.colors.textSecondary else FoamTheme.colors.textSecondary.copy(alpha = 0.6f)
             )
             Spacer(modifier = Modifier.width(12.dp))
-            Icon(
-                imageVector = when (item) {
-                    NavBarItem.HOME -> FoamTheme.icons.current.home
-                    NavBarItem.PLAYLISTS -> FoamTheme.icons.current.playlists
-                    NavBarItem.SEARCH -> FoamTheme.icons.current.search
-                    NavBarItem.EQUALIZER -> FoamTheme.icons.current.equalizer
-                    NavBarItem.SETTINGS -> FoamTheme.icons.current.settings
-                    NavBarItem.MORE -> FoamTheme.icons.current.more
-                },
+                Icon(
+                    imageVector = when (item) {
+                        NavBarItem.HOME -> FoamTheme.icons.current.home
+                        NavBarItem.PLAYLISTS -> FoamTheme.icons.current.playlists
+                        NavBarItem.SEARCH -> FoamTheme.icons.current.search
+                        NavBarItem.STATS -> FoamTheme.icons.current.stats
+                        NavBarItem.EQUALIZER -> FoamTheme.icons.current.equalizer
+                        NavBarItem.SETTINGS -> FoamTheme.icons.current.settings
+                        NavBarItem.MORE -> FoamTheme.icons.current.more
+                    },
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
                 tint = if (isEnabled) FoamTheme.accentColor else FoamTheme.colors.textSecondary.copy(alpha = 0.6f)
@@ -437,6 +438,7 @@ private fun navBarItemLabel(item: NavBarItem): String = when (item) {
     NavBarItem.HOME -> stringResource(R.string.home)
     NavBarItem.PLAYLISTS -> stringResource(R.string.playlists)
     NavBarItem.SEARCH -> stringResource(R.string.search)
+    NavBarItem.STATS -> stringResource(R.string.statistics)
     NavBarItem.EQUALIZER -> stringResource(R.string.equalizer_dsp)
     NavBarItem.SETTINGS -> stringResource(R.string.settings)
     NavBarItem.MORE -> stringResource(R.string.navbar_item_more)

@@ -3,7 +3,16 @@ package com.foamplayer.app.data.repository
 import com.foamplayer.app.data.db.dao.AlbumRecommendation
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.dao.CachedLyricsDao
+import com.foamplayer.app.data.db.dao.DailyPlayBucket
+import com.foamplayer.app.data.db.dao.GenrePlayRow
+import com.foamplayer.app.data.db.dao.HourBucket
+import com.foamplayer.app.data.db.dao.ListenHistoryDao
+import com.foamplayer.app.data.db.dao.ListenOverview
+import com.foamplayer.app.data.db.dao.TopAlbumStat
+import com.foamplayer.app.data.db.dao.TopTrackStat
 import com.foamplayer.app.data.db.dao.TrackDao
+import com.foamplayer.app.data.db.dao.ArtistPlayRow
+import com.foamplayer.app.data.db.entities.ListenHistoryEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.scanner.LocalAudioScanner
 import com.foamplayer.app.data.scanner.ScanStatus
@@ -21,7 +30,8 @@ class TrackRepository @Inject constructor(
     private val trackDao: TrackDao,
     private val scanner: LocalAudioScanner,
     private val settingsRepository: SettingsRepository,
-    private val cachedLyricsDao: CachedLyricsDao
+    private val cachedLyricsDao: CachedLyricsDao,
+    private val listenHistoryDao: ListenHistoryDao
 ) {
     private val _scanStatus = MutableStateFlow<ScanStatus>(ScanStatus.Idle)
     val scanStatus: StateFlow<ScanStatus> = _scanStatus.asStateFlow()
@@ -173,12 +183,21 @@ class TrackRepository @Inject constructor(
         _scanStatus.value = ScanStatus.Finished(mergedTracks.size)
     }
 
-    /** Marks [trackId] as listened once at [timestamp] (the threshold-crossing moment). */
-    suspend fun incrementPlayCount(trackId: Long, timestamp: Long) =
+    /**
+     * Marks [trackId] as listened once at [timestamp] (the threshold-crossing
+     * moment): the tracks-table counters plus one listen_history row, which the
+     * stats screen's period analysis aggregates over.
+     */
+    suspend fun incrementPlayCount(trackId: Long, timestamp: Long) {
         trackDao.incrementPlayCount(trackId, timestamp)
+        listenHistoryDao.insertListen(ListenHistoryEntity(trackId = trackId, listenedAt = timestamp))
+    }
 
-    /** Resets the listen counter to 0 and clears the last-listen date. */
-    suspend fun resetPlayStats(trackId: Long) = trackDao.resetPlayStats(trackId)
+    /** Resets the listen counter to 0 and clears the last-listen date and history rows. */
+    suspend fun resetPlayStats(trackId: Long) {
+        trackDao.resetPlayStats(trackId)
+        listenHistoryDao.deleteByTrackId(trackId)
+    }
 
     /** Stores the user score (-1 dislike / 0 not noted / 1 like / 2 super like). */
     suspend fun setScore(trackId: Long, score: Int) = trackDao.setScore(trackId, score)
@@ -189,6 +208,36 @@ class TrackRepository @Inject constructor(
 
     /** Emits the user-set instrumental flag for [trackId], updating whenever it changes. */
     fun observeInstrumental(trackId: Long): Flow<Boolean> = trackDao.observeInstrumental(trackId)
+
+    // ---- Listening stats (stats screen) ---------------------------------------
+    // Thin listen_history pass-throughs; [since] = period start (epoch ms) or
+    // NULL for all-time. Aggregation/splitting of the "; " multi-artist and
+    // multi-genre conventions happens in the stats ViewModel.
+
+    fun observeListenOverview(since: Long?): Flow<ListenOverview> =
+        listenHistoryDao.observeOverview(since)
+
+    fun observeListenedArtists(since: Long?): Flow<List<String>> =
+        listenHistoryDao.observeDistinctArtists(since)
+
+    /** Uncapped: every track listened to in the period, most-played first. */
+    fun observeTopListenedTracks(since: Long?): Flow<List<TopTrackStat>> =
+        listenHistoryDao.observeTopTracks(since)
+
+    fun observeListenedArtistRows(since: Long?): Flow<List<ArtistPlayRow>> =
+        listenHistoryDao.observeArtistPlayRows(since)
+
+    fun observeTopListenedAlbums(since: Long?, limit: Int): Flow<List<TopAlbumStat>> =
+        listenHistoryDao.observeTopAlbums(since, limit)
+
+    fun observeDailyListenBuckets(since: Long?, tzOffsetMs: Long): Flow<List<DailyPlayBucket>> =
+        listenHistoryDao.observeDailyPlays(since, tzOffsetMs)
+
+    fun observeListenHourHistogram(since: Long?, tzOffsetMs: Long): Flow<List<HourBucket>> =
+        listenHistoryDao.observeHourHistogram(since, tzOffsetMs)
+
+    fun observeListenedGenreRows(since: Long?): Flow<List<GenrePlayRow>> =
+        listenHistoryDao.observeGenrePlayRows(since)
 
     private companion object {
         /** Bound below SQLite's 999 host-variable limit (API 29) per statement. */
