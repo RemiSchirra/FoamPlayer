@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -276,10 +277,14 @@ fun HomeRowCard(
 
         BasicText(
             text = title,
-            style = FoamTheme.typography.body,
+            style = FoamTheme.typography.titleMedium.copy(
+                fontSize = 15.sp,
+                textAlign = TextAlign.Center
+            ),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
+                .fillMaxWidth()
                 .padding(top = HomeRowCardPadding)
                 .then(sharedTitleModifier)
         )
