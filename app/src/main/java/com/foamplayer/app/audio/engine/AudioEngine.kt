@@ -75,7 +75,7 @@ class AudioEngine @Inject constructor(
                     .setAudioProcessors(arrayOf(dspEngine.processor))
                     // Float-capable AudioTrack for float-decoded sources; the DSP
                     // processor itself always emits the stream's original encoding.
-                    .setEnableFloatOutput(true)
+                    .setEnableFloatOutput(enableFloatOutput)
                     .build()
         }
         return ExoPlayer.Builder(context, renderersFactory).build()
