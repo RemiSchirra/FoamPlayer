@@ -213,24 +213,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
     val miniRadius = (miniImageSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
 
-    fun animatedCornerRadiusPx(): Float = with(density) {
-        val rawOuter = playerTransitionState.progress().coerceIn(0f, 1f)
-        val outerFraction = if (playerTransitionState.targetState) {
-            EaseOutCubic.transform(rawOuter)
-        } else {
-            EaseInCubic.transform(rawOuter)
-        }
-        val outerRadius = lerp(start = miniRadius, stop = fullRadius, fraction = outerFraction)
-        val rawHeader = upTransitionState.progress().coerceIn(0f, 1f)
-        val headerFraction = if (upTransitionState.targetState) {
-            EaseOutCubic.transform(rawHeader)
-        } else {
-            EaseInCubic.transform(rawHeader)
-        }
-        val headerRadius = lerp(start = fullRadius, stop = miniRadius, fraction = headerFraction)
-        min(outerRadius, headerRadius).toPx()
-    }
-
     Box(modifier = Modifier.fillMaxWidth()) {
         HorizontalPager(
             state = pagerState,
@@ -263,11 +245,31 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             .fillMaxWidth()
                             .aspectRatio(1f)
                             .graphicsLayer {
+                                // The pager page art casts the full player's drop shadow
+                                // while it is the visually-responsible image -- i.e. whenever
+                                // it is NOT the anchor page. The anchor's art is always
+                                // either exactly covered by the hero overlay (which casts
+                                // the shadow in its place, from identical bounds) or fully
+                                // off-viewport, so it never needs one of its own. Gating on
+                                // !isAnchorPage -- rather than tying the elevation to the
+                                // page's content alpha -- is what keeps the shadow
+                                // continuous across a swipe: the incoming image slides in
+                                // with its shadow already behind it (its alpha is 1 there),
+                                // and at the settle commit the hero reappears over it
+                                // casting the identical shadow. Every layer that casts here
+                                // runs at alpha 1, so nothing depends on how a layer's own
+                                // alpha composites with its RenderNode shadow.
                                 alpha = anchorPageAlpha()
                                 scaleX = pausedArtScale
                                 scaleY = pausedArtScale
+                                shape = RoundedCornerShape(with(density) { fullRadius.toPx() })
+                                clip = true
+                                shadowElevation = if (!immersive && !isAnchorPage) {
+                                    with(density) { PlayerDimens.fullPlayerArtElevation.toPx() }
+                                } else {
+                                    0f
+                                }
                             }
-                            .clip(RoundedCornerShape(fullRadius))
                             .background(placeholderColor),
                         contentAlignment = Alignment.Center
                     ) {
@@ -376,10 +378,57 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             animatedVisibilityScope = headerVisibilityScope
                         )
                         .graphicsLayer {
-                            shape = RoundedCornerShape(animatedCornerRadiusPx())
+                            // Eased fractions of the two flights the hero takes: outer --
+                            // the player open/close flight (1 = fully open); header -- the
+                            // up-transition to the subview header (0 = main player). Both
+                            // are read per-frame inside this draw scope, so transitions
+                            // only redraw this layer instead of recomposing anything. The
+                            // radius must chase the flight (it lives in the shared-element
+                            // overlay's interpolated bounds each frame) -- the same reason
+                            // the subview header's art radius is computed per frame.
+                            val rawOuter = playerTransitionState.progress().coerceIn(0f, 1f)
+                            val outerFraction = if (playerTransitionState.targetState) {
+                                EaseOutCubic.transform(rawOuter)
+                            } else {
+                                EaseInCubic.transform(rawOuter)
+                            }
+                            val rawHeader = upTransitionState.progress().coerceIn(0f, 1f)
+                            val headerFraction = if (upTransitionState.targetState) {
+                                EaseOutCubic.transform(rawHeader)
+                            } else {
+                                EaseInCubic.transform(rawHeader)
+                            }
+
+                            shape = RoundedCornerShape(
+                                with(density) {
+                                    min(
+                                        lerp(start = miniRadius, stop = fullRadius, fraction = outerFraction),
+                                        lerp(start = fullRadius, stop = miniRadius, fraction = headerFraction)
+                                    ).toPx()
+                                }
+                            )
                             clip = true
                             scaleX = pausedArtScale
                             scaleY = pausedArtScale
+                            // The hero casts the full player's drop shadow while it rests
+                            // over the anchor page -- the anchor page itself casts none
+                            // (see the pager page art), so this is the shadow visible
+                            // behind the resting image. It fades out over both flights
+                            // because neither destination -- the mini player's art nor the
+                            // subview header's art -- carries its own shadow; a constant
+                            // one would pop off the frame the hero leaves composition.
+                            // During pager swipes both fractions rest at (1, 0), so the
+                            // shadow rides the hero at full strength and hands off to the
+                            // incoming page's own shadow without an intensity jump. The
+                            // hero's alpha is 1 in the classic player, so the shadow never
+                            // depends on layer-alpha/shadow compositing semantics.
+                            shadowElevation = if (!immersive) {
+                                with(density) {
+                                    PlayerDimens.fullPlayerArtElevation.toPx()
+                                } * outerFraction * (1f - headerFraction)
+                            } else {
+                                0f
+                            }
                             alpha = if (immersive) {
                                 val openFade = 1f - EaseOutCubic.transform(
                                     (playerTransitionState.progress() / immersiveArtFadeSpan)

@@ -1728,6 +1728,7 @@ fun FoamNavHost(
                                         1f
                                     }
                                 },
+                                isImmersiveEnabled = playerSettings.immersiveModeEnabled,
                                 isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                                 marqueeMode = playerSettings.marqueeMode,
                                 skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,

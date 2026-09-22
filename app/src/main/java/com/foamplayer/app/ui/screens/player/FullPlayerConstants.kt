@@ -8,6 +8,9 @@ internal object PlayerDimens {
     val horizontalPagePadding = 24.dp
     val pageSpacing = 24.dp
 
+    /** Drop shadow elevation behind the full player's art while immersive mode is off. */
+    val fullPlayerArtElevation = 8.dp
+
     // Bottom control cluster in the subview (selector row + mini play button + seek bar).
     val selectorRowRise = 36.dp
     val playButtonRise = 28.dp

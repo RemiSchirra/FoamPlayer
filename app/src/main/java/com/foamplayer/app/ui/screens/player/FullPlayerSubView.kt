@@ -233,6 +233,7 @@ internal fun SharedTransitionScope.SubViewContent(
     // Deferred: consumed only by the paused-art scale inside MiniPlayerHeader, so a
     // play/pause flip doesn't recompose this subtree (including LyricsScreen/QueueScreen).
     isPlaying: () -> Boolean,
+    isImmersiveEnabled: Boolean,
     headerVisibilityScope: AnimatedVisibilityScope,
     headerArtAlpha: () -> Float,
     modifier: Modifier,
@@ -244,6 +245,7 @@ internal fun SharedTransitionScope.SubViewContent(
             MiniPlayerHeader(
                 track = track,
                 isPlaying = isPlaying,
+                isImmersiveEnabled = isImmersiveEnabled,
                 headerVisibilityScope = headerVisibilityScope,
                 headerArtAlpha = headerArtAlpha,
                 onBack = onCollapse,
@@ -279,6 +281,7 @@ internal fun SharedTransitionScope.SubViewContent(
 private fun SharedTransitionScope.MiniPlayerHeader(
     track: TrackEntity,
     isPlaying: () -> Boolean,
+    isImmersiveEnabled: Boolean,
     headerVisibilityScope: AnimatedVisibilityScope,
     headerArtAlpha: () -> Float,
     onBack: () -> Unit,
@@ -319,6 +322,27 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                 stop = miniRadiusPx,
                 fraction = fraction
             )
+        }
+    }
+    // Shadow elevation for the art during the up-morph. While the bounds animation is
+    // active, the shared-element overlay renders ONLY the target entry's content
+    // (SharedElementEntry.shouldRenderAtAll) -- on the open swipe that is THIS header's
+    // art, not the hero's -- so the full player's shadow has to live here too, or it
+    // drops the frame the morph takes over. The elevation starts at the hero's full
+    // value (the interpolated bounds begin at the hero's full-size art) and fades to
+    // zero as the art settles into this shadowless 48dp slot, so the up/down swipe
+    // fades the shadow progressively. Same easing as the radius above so both chase
+    // the flight in lockstep.
+    val fullArtElevationPx = with(density) { PlayerDimens.fullPlayerArtElevation.toPx() }
+    val imageShadowElevationPx = remember(fullArtElevationPx, upTransitionState) {
+        {
+            val raw = upTransitionState.progress().coerceIn(0f, 1f)
+            val fraction = if (upTransitionState.targetState) {
+                EaseOutCubic.transform(raw)
+            } else {
+                EaseInCubic.transform(raw)
+            }
+            fullArtElevationPx * (1f - fraction)
         }
     }
     // The container is not a shared element (it only slides/fades with the header), so its
@@ -363,6 +387,14 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                             alpha = headerArtAlpha()
                             scaleX = pausedArtScale
                             scaleY = pausedArtScale
+                            // Classic player only: in immersive the headerArtAlpha above
+                            // fades this art, and a layer's own alpha does not fade its
+                            // RenderNode shadow, so the shadow is kept out of that path.
+                            shadowElevation = if (!isImmersiveEnabled) {
+                                imageShadowElevationPx()
+                            } else {
+                                0f
+                            }
                         }
                         .background(FoamTheme.colors.surfaceVariant)
                 ) {

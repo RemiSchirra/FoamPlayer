@@ -630,6 +630,7 @@ fun FullPlayerScreen(
                             subViewMode = subViewMode,
                             viewModel = viewModel,
                             isPlaying = isPlayingProvider,
+                            isImmersiveEnabled = isImmersiveEnabled,
                             headerVisibilityScope = this@AnimatedVisibility,
                             headerArtAlpha = { if (isImmersiveEnabled) upTransitionState.progress() else 1f },
                             modifier = playerDrag,

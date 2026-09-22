@@ -6,6 +6,7 @@ import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -52,6 +53,7 @@ import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.navigation.NavBarDimens
+import com.foamplayer.app.ui.screens.player.PlayerDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
@@ -201,6 +203,7 @@ fun MiniPlayer(
     animatedVisibilityScope: AnimatedVisibilityScope,
     useSharedElements: Boolean = true,
     sharedArtFlightAlpha: () -> Float = { 1f },
+    isImmersiveEnabled: Boolean = false,
     isAnimateSeekBarEnabled: Boolean = false,
     marqueeMode: MarqueeMode = MarqueeMode.PING_PONG,
     skipTrackChangeAnimation: Boolean = false,
@@ -455,6 +458,17 @@ fun MiniPlayer(
         }
     }
 
+    // Same driver (and default spring) as the corner radius above: 1 whenever this art
+    // is flying, 0 once it rests. When the full player closes, THIS art is the morph's
+    // target and is what the shared-element overlay renders -- so the full player's
+    // drop shadow has to live here too, starting at the hero's full elevation while
+    // the interpolated bounds are still full-size and fading to zero as the art lands
+    // in the shadowless mini slot. Without it, the resting hero's shadow vanishes the
+    // frame the close flight takes over.
+    val animatedArtElevationFraction by animatedVisibilityScope.transition.animateFloat(label = "miniArtElevation") { enterExitState ->
+        if (enterExitState == EnterExitState.Visible) 0f else 1f
+    }
+
     val containerPadding = NavBarDimens.MiniPlayerContainerPadding
     val containerRadius = miniImageRadius + containerPadding
 
@@ -552,6 +566,14 @@ fun MiniPlayer(
                         clip = true
                         scaleX = pausedArtScale
                         scaleY = pausedArtScale
+                        // Only while this art is the shared-element morph's renderer;
+                        // gated off in immersive so the fading sharedArtFlightAlpha above
+                        // never coexists with a shadow a layer's own alpha cannot fade.
+                        shadowElevation = if (!isImmersiveEnabled && useSharedElements && isSettledCurrentTrackPage) {
+                            PlayerDimens.fullPlayerArtElevation.toPx() * animatedArtElevationFraction
+                        } else {
+                            0f
+                        }
                     }
                     .background(FoamTheme.colors.surface),
                                 contentAlignment = Alignment.Center
