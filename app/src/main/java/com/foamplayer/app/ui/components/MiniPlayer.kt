@@ -9,6 +9,7 @@ import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -116,7 +117,11 @@ private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
             )
             .clip(RoundedCornerShape(18.dp))
             .background(FoamTheme.accentColor)
-            .clickable(onClick = onPlayPauseClick),
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onPlayPauseClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -541,7 +546,10 @@ fun MiniPlayer(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onClick() }
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { onClick() }
                         ) {
                             Box(
                                 modifier = Modifier
