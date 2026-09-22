@@ -18,8 +18,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -36,7 +38,8 @@ val MediaGridCellPadding = 6.dp
  * [artworkModifier] is applied to the square artwork box right after its
  * aspect ratio (shared-element modifier, clip, background) and
  * [artworkContent] fills it; [artworkOverlay] draws above the artwork,
- * aligned within it (score badges, track numbers, ...).
+ * aligned within it (score badges, track numbers, ...). The artwork casts a
+ * rest drop shadow at [artworkElevation] (see [MediaItemArtElevation]).
  * [highlightBackground] is drawn behind the cell's content, clipped to the
  * exact same rounded shape as the press ripple (used for the active-track
  * highlight).
@@ -53,6 +56,7 @@ internal fun MediaGridCell(
     modifier: Modifier = Modifier,
     titleModifier: Modifier = Modifier,
     subtitleModifier: Modifier = Modifier,
+    artworkElevation: Dp = MediaItemArtElevation,
     highlightBackground: Color = Color.Transparent,
     artworkOverlay: @Composable BoxScope.() -> Unit = {}
 ) {
@@ -75,6 +79,7 @@ internal fun MediaGridCell(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
+                .shadow(elevation = artworkElevation, shape = AlbumArtShape())
                 .then(artworkModifier),
             contentAlignment = Alignment.Center
         ) {

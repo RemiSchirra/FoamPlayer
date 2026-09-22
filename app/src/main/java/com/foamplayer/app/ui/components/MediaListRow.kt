@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
@@ -277,6 +278,14 @@ internal fun Modifier.collectionRowFlightArtwork(
 val ListRowArtSize = 48.dp
 
 /**
+ * Drop shadow elevation behind every media item's artwork thumbnail at rest,
+ * matching the player art's shadow style. Applied by the shared scaffolds
+ * ([MediaListRow], [MediaGridCell]) with the percentage-based [AlbumArtShape];
+ * pass 0.dp for artwork that uses a different shape or has no surface.
+ */
+val MediaItemArtElevation = 4.dp
+
+/**
  * Animated background of a list row's active highlight (the currently playing
  * track, or the collection the queue was started from), fading in/out over
  * 200ms like every other row state change. Always drawn at 40% alpha.
@@ -369,7 +378,9 @@ internal fun listRowArtCornerRadius(density: MediaDensity = MediaDensity.ROW_NOR
  *
  * [artworkModifier] is applied to the artwork box right after its size (e.g.
  * the shared-element modifier, clip and background) and [artworkContent]
- * fills it. [rowModifier] is applied to the row before the highlight clip
+ * fills it. The artwork casts a rest drop shadow at [artworkElevation]
+ * (0.dp opts out for non-album shapes or art-less rows). [rowModifier] is
+ * applied to the row before the highlight clip
  * (e.g. swipe-to-dismiss translation and width measurement).
  * [highlightBackground] is drawn behind the row's content, clipped to the
  * exact same rounded shape as the press ripple (used for the active-track
@@ -390,6 +401,7 @@ internal fun MediaListRow(
     subtitleModifier: Modifier = Modifier,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     tertiaryText: String? = null,
+    artworkElevation: Dp = MediaItemArtElevation,
     highlightBackground: Color = Color.Transparent,
     trailingContent: @Composable RowScope.() -> Unit = {}
 ) {
@@ -417,6 +429,7 @@ internal fun MediaListRow(
             Box(
                 modifier = Modifier
                     .size(artSize)
+                    .shadow(elevation = artworkElevation, shape = AlbumArtShape())
                     .then(artworkModifier),
                 contentAlignment = Alignment.Center
             ) {

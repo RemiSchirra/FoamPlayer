@@ -417,6 +417,8 @@ fun TrackListItem(
             } else {
                 null
             },
+            // Number-only rows have no artwork surface to cast from.
+            artworkElevation = if (trackNumberText == null) MediaItemArtElevation else 0.dp,
             highlightBackground = animatedBackgroundColor,
             rowModifier = Modifier
                 .onSizeChanged { itemWidthPx = it.width.toFloat() }

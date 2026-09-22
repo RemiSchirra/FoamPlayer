@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -237,6 +238,12 @@ fun HomeRowCard(
                 .then(sharedArtModifier)
                 // The flight variant carries its own graphicsLayer shape (the
                 // morph) -- a static clip here would re-round every flight frame.
+                // The rest shadow sits with the static look: zero during a nav
+                // flight, like every other artwork shadow.
+                .let {
+                    if (immersiveFlightHero) it
+                    else it.shadow(elevation = MediaItemArtElevation, shape = artShape)
+                }
                 .let { if (immersiveFlightHero) it else it.clip(artShape) }
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center

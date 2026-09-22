@@ -609,6 +609,9 @@ internal fun TopArtistRow(
         },
         title = artist.name,
         subtitle = formatListeningTime(artist.totalDurationMs),
+        // The monogram disc is circular: the scaffolds' rounded-square
+        // album shadow would peek out behind its corners.
+        artworkElevation = 0.dp,
         trailingContent = { RankedPlayBadge(artist.playCount) }
     )
 }
