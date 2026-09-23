@@ -1,6 +1,7 @@
 package com.foamplayer.app.ui.screens.equalizer
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.VolumeUp
@@ -43,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -52,8 +56,10 @@ import com.foamplayer.app.audio.dsp.DspPreset
 import com.foamplayer.app.audio.dsp.DspState
 import com.foamplayer.app.audio.dsp.FilterType
 import com.foamplayer.app.audio.dsp.GraphicEqSettings
+import com.foamplayer.app.audio.dsp.NodeColorPalette
 import com.foamplayer.app.audio.dsp.ParametricEqSettings
 import com.foamplayer.app.audio.dsp.ParametricNode
+import com.foamplayer.app.audio.dsp.PresetKind
 import com.foamplayer.app.audio.dsp.ToneSettings
 import com.foamplayer.app.ui.components.FoamBottomModal
 import com.foamplayer.app.ui.components.FoamGlassCard
@@ -69,15 +75,20 @@ import kotlin.math.roundToInt
 
 /**
  * Poweramp-style Equalizer & DSP screen:
- *  - power toggle + combined-response mini map,
- *  - preset chips (built-ins + user-saved),
- *  - Graphic (10-band draggable handles) / Parametric (draggable nodes) sections,
+ *  - power toggle + combined-response mini map with a translucent white viewport
+ *    overlay that scrolls the graphic EQ (and per-node colored curves in
+ *    parametric mode),
+ *  - a presets entry card opening a FoamModal with response previews for every
+ *    preset, plus create/delete of user presets,
+ *  - Graphic (21 horizontally scrollable band faders) / Parametric (draggable
+ *    colored nodes) sections — mutually exclusive: enabling one disables the other,
  *  - rotary tone knobs (pre-amp, bass, mid, treble) and control knobs (balance,
  *    stereo width) with a limiter switch,
  *  - direct volume control slider with dB readout.
  *
  * All controls commit on release so a drag never floods the DSP engine with state
- * emissions; the graphs render from local working copies in the meantime.
+ * emissions; the graphs and the mini map render from local working copies in the
+ * meantime, so they follow the finger while the engine sees one update.
  */
 @Composable
 fun EqualizerScreen(
@@ -88,10 +99,47 @@ fun EqualizerScreen(
 
     var selectedSection by remember { mutableStateOf(DspMath.Section.GRAPHIC) }
     var selectedNodeId by remember { mutableStateOf<Long?>(null) }
+    var showPresetsModal by remember { mutableStateOf(false) }
     var showSavePresetModal by remember { mutableStateOf(false) }
 
-    // Live combined curve for the mini map (and everything that reads it).
-    val combinedCurve = remember(state) { DspMath.combinedResponse(state) }
+    // The displayed EQ section is defined by the preset/state, not by tabs:
+    // applying a parametric preset switches to the parametric editor, applying
+    // a graphic preset switches back. With both sections off, the last shown
+    // section stays.
+    LaunchedEffect(state.graphicEq.enabled, state.parametricEq.enabled) {
+        when {
+            state.parametricEq.enabled -> selectedSection = DspMath.Section.PARAMETRIC
+            state.graphicEq.enabled -> selectedSection = DspMath.Section.GRAPHIC
+        }
+    }
+
+    // Scroll state of the graphic strip, shared with the mini map's viewport overlay.
+    val stripScrollState = rememberScrollState()
+    var stripViewportWidthPx by remember { mutableIntStateOf(0) }
+
+    // Working copies of the sections being edited: the graphs and the mini map
+    // render from these so a drag is visible immediately; the engine is updated
+    // once per commit.
+    var workingGains by remember { mutableStateOf(state.graphicEq.gainsDb) }
+    var workingNodes by remember { mutableStateOf(state.parametricEq.nodes) }
+    // Re-sync when the engine state changes externally (preset applied, node
+    // added/removed, section toggled). Rare, so a mid-drag override is acceptable.
+    LaunchedEffect(state.graphicEq.gainsDb) { workingGains = state.graphicEq.gainsDb }
+    LaunchedEffect(state.parametricEq.nodes) { workingNodes = state.parametricEq.nodes }
+
+    // Live curve of the ACTIVE section only for the mini map (never both at once).
+    val miniMapCurve = remember(selectedSection, state, workingGains, workingNodes) {
+        when (selectedSection) {
+            DspMath.Section.GRAPHIC -> DspMath.graphicResponse(workingGains)
+            DspMath.Section.PARAMETRIC -> DspMath.sectionResponse(
+                state.copy(parametricEq = state.parametricEq.copy(nodes = workingNodes)),
+                DspMath.Section.PARAMETRIC
+            )
+        }
+    }
+
+    val allPresets = remember(userPresets) { DspPreset.BUILT_INS + userPresets }
+    val currentPreset = remember(allPresets, state) { allPresets.matching(state) }
 
     Column(
         modifier = Modifier
@@ -142,9 +190,13 @@ fun EqualizerScreen(
                         )
                     )
                     Spacer(modifier = Modifier.height(6.dp))
-                    ResponseMiniMap(
-                        curve = combinedCurve,
+                    EqMiniMap(
+                        combinedCurve = miniMapCurve,
+                        nodes = if (selectedSection == DspMath.Section.PARAMETRIC) workingNodes else emptyList(),
                         active = state.enabled,
+                        showViewport = selectedSection == DspMath.Section.GRAPHIC,
+                        scrollState = stripScrollState,
+                        stripViewportWidthPx = stripViewportWidthPx,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp)
@@ -164,52 +216,70 @@ fun EqualizerScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // ----------------------------------------------------------- presets
-        PresetsRow(
-            state = state,
-            userPresets = userPresets,
-            onPresetSelected = { viewModel.applyPreset(it) },
-            onSaveRequested = { showSavePresetModal = true }
+        PresetsEntryCard(
+            currentPresetName = currentPreset?.name,
+            onClick = { showPresetsModal = true }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ------------------------------------------------------- mode tabs
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SectionTab(
-                label = "GRAPHIC",
-                active = selectedSection == DspMath.Section.GRAPHIC,
-                sectionEnabled = state.graphicEq.enabled,
-                onClick = { selectedSection = DspMath.Section.GRAPHIC },
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            SectionTab(
-                label = "PARAMETRIC",
-                active = selectedSection == DspMath.Section.PARAMETRIC,
-                sectionEnabled = state.parametricEq.enabled,
-                onClick = { selectedSection = DspMath.Section.PARAMETRIC },
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
+        // ------------------------------------------- active EQ section header
+        // (defined by the applied preset's kind — graphic or parametric, never both)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             BasicText(
                 text = when (selectedSection) {
-                    DspMath.Section.GRAPHIC -> "10-band graphic equalizer"
+                    DspMath.Section.GRAPHIC -> "21-band graphic equalizer"
                     DspMath.Section.PARAMETRIC ->
-                        "Parametric equalizer · ${state.parametricEq.nodes.size}/${ParametricEqSettings.MAX_NODES} nodes"
+                        "Parametric equalizer · ${workingNodes.size}/${ParametricEqSettings.MAX_NODES} nodes"
                 },
                 style = FoamTheme.typography.caption,
                 modifier = Modifier.weight(1f)
             )
+
+            // Quick add-node action, only in parametric mode.
+            if (selectedSection == DspMath.Section.PARAMETRIC) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (workingNodes.size < ParametricEqSettings.MAX_NODES) {
+                                FoamTheme.colors.surfaceVariant
+                            } else {
+                                FoamTheme.colors.surfaceVariant.copy(alpha = 0.4f)
+                            }
+                        )
+                        .clickable(
+                            enabled = workingNodes.size < ParametricEqSettings.MAX_NODES
+                        ) {
+                            val id = viewModel.addParametricNode()
+                            selectedNodeId = id
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = null,
+                            tint = FoamTheme.accentColor,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        BasicText(
+                            text = "NODE",
+                            style = FoamTheme.typography.caption.copy(
+                                color = FoamTheme.accentColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+
             SectionPowerToggle(
                 enabled = when (selectedSection) {
                     DspMath.Section.GRAPHIC -> state.graphicEq.enabled
@@ -226,7 +296,7 @@ fun EqualizerScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // --------------------------- preamp fader + main graph (Poweramp layout)
+        // --------------------------- preamp fader + section graph (Poweramp layout)
         Row(modifier = Modifier.fillMaxWidth()) {
             VerticalSlider(
                 value = state.preampDb,
@@ -239,21 +309,38 @@ fun EqualizerScreen(
                     .height(230.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
-            EqualizerGraph(
-                state = state,
-                section = selectedSection,
-                selectedNodeId = selectedNodeId,
-                onNodeSelect = { selectedNodeId = it },
-                onGraphicGainsCommit = { gains -> viewModel.setGraphicGains(gains) },
-                onNodeCommit = { node -> viewModel.updateParametricNode(node) },
-                modifier = Modifier.weight(1f)
-            )
+
+            when (selectedSection) {
+                DspMath.Section.GRAPHIC -> GraphicEqStrip(
+                    gains = workingGains,
+                    enabled = state.graphicEq.enabled,
+                    scrollState = stripScrollState,
+                    onPreview = { index, gain ->
+                        workingGains = workingGains
+                            .toMutableList()
+                            .also { it[index] = gain }
+                    },
+                    onCommit = { viewModel.setGraphicGains(workingGains) },
+                    onViewportWidthChanged = { stripViewportWidthPx = it },
+                    modifier = Modifier.weight(1f)
+                )
+                DspMath.Section.PARAMETRIC -> EqualizerGraph(
+                    state = state,
+                    nodes = workingNodes,
+                    enabled = state.parametricEq.enabled,
+                    selectedNodeId = selectedNodeId,
+                    onNodeSelect = { selectedNodeId = it },
+                    onNodesChange = { workingNodes = it },
+                    onNodeCommit = { node -> viewModel.updateParametricNode(node) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
 
         // ------------------------------------------- parametric node editor
         if (selectedSection == DspMath.Section.PARAMETRIC) {
             Spacer(modifier = Modifier.height(8.dp))
-            val selectedNode = state.parametricEq.nodes.firstOrNull { it.id == selectedNodeId }
+            val selectedNode = workingNodes.firstOrNull { it.id == selectedNodeId }
             if (selectedNode != null) {
                 ParametricNodeEditor(
                     node = selectedNode,
@@ -265,7 +352,7 @@ fun EqualizerScreen(
                 )
             } else {
                 AddNodeRow(
-                    canAdd = state.parametricEq.nodes.size < ParametricEqSettings.MAX_NODES,
+                    canAdd = workingNodes.size < ParametricEqSettings.MAX_NODES,
                     onAdd = {
                         val id = viewModel.addParametricNode()
                         selectedNodeId = id
@@ -286,6 +373,23 @@ fun EqualizerScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
     }
+
+    // -------------------------------------------------------- presets modal
+    PresetsModal(
+        visible = showPresetsModal,
+        presets = allPresets,
+        state = state,
+        onApply = { preset ->
+            viewModel.applyPreset(preset)
+            showPresetsModal = false
+        },
+        onDelete = { preset -> viewModel.deleteUserPreset(preset.name) },
+        onSaveAsNew = {
+            showPresetsModal = false
+            showSavePresetModal = true
+        },
+        onDismiss = { showPresetsModal = false }
+    )
 
     // ---------------------------------------------------- save preset modal
     SavePresetModal(
@@ -346,127 +450,203 @@ private fun MiniMapValue(label: String, value: String) {
 
 // ------------------------------------------------------------------ presets
 
-@Composable
-private fun PresetsRow(
-    state: DspState,
-    userPresets: List<DspPreset>,
-    onPresetSelected: (DspPreset) -> Unit,
-    onSaveRequested: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        DspPreset.BUILT_INS.forEach { preset ->
-            PresetChip(
-                label = preset.name,
-                selected = state.graphicEq.gainsDb == preset.graphicGainsDb && preset.fullState == null,
-                onClick = { onPresetSelected(preset) }
-            )
-        }
-        userPresets.forEach { preset ->
-            PresetChip(
-                label = preset.name,
-                selected = preset.fullState?.copy(volumePercent = state.volumePercent) == state,
-                onClick = { onPresetSelected(preset) }
-            )
-        }
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(FoamTheme.colors.surface)
-                .clickable(onClick = onSaveRequested)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.BookmarkAdd,
-                    contentDescription = "Save preset",
-                    tint = FoamTheme.accentColor,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                BasicText(
-                    text = "Save",
-                    style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor)
-                )
-            }
-        }
+/** The DspPreset currently reflected by [state], if any. */
+private fun List<DspPreset>.matching(state: DspState): DspPreset? = firstOrNull { preset ->
+    when {
+        preset.fullState != null ->
+            preset.fullState.copy(volumePercent = state.volumePercent) == state
+        preset.kind == PresetKind.GRAPHIC ->
+            state.graphicEq.enabled && state.graphicEq.gainsDb == preset.graphicGainsDb
+        else -> false
     }
 }
 
 @Composable
-private fun PresetChip(
-    label: String,
-    selected: Boolean,
+private fun PresetsEntryCard(
+    currentPresetName: String?,
     onClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        BasicText(
-            text = label,
-            style = FoamTheme.typography.caption.copy(
-                color = if (selected) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+    FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Equalizer,
+                contentDescription = null,
+                tint = FoamTheme.accentColor,
+                modifier = Modifier.size(20.dp)
             )
-        )
-    }
-}
-
-// --------------------------------------------------------------- mode tabs
-
-@Composable
-private fun SectionTab(
-    label: String,
-    active: Boolean,
-    sectionEnabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                when {
-                    active && sectionEnabled -> FoamTheme.accentColor
-                    active -> FoamTheme.accentColor.copy(alpha = 0.45f)
-                    else -> FoamTheme.colors.surfaceVariant
-                }
-            )
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(
-                        if (sectionEnabled) FoamTheme.colors.background
-                        else FoamTheme.colors.textSecondary
-                    )
-            )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                BasicText(text = "Presets", style = FoamTheme.typography.titleMedium)
+                BasicText(
+                    text = currentPresetName ?: "Custom · tap to browse & save",
+                    style = FoamTheme.typography.caption
+                )
+            }
             BasicText(
-                text = label,
-                style = FoamTheme.typography.titleMedium.copy(
-                    color = if (active) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+                text = "VIEW ALL",
+                style = FoamTheme.typography.caption.copy(
+                    color = FoamTheme.accentColor,
                     fontWeight = FontWeight.Bold
                 )
             )
         }
     }
 }
+
+/**
+ * Preset browser in a bottom sheet: every preset gets a live response preview
+ * (combined curve in accent, per-node curves in their colors). Built-ins can
+ * only be applied; user presets can also be deleted.
+ */
+@Composable
+private fun PresetsModal(
+    visible: Boolean,
+    presets: List<DspPreset>,
+    state: DspState,
+    onApply: (DspPreset) -> Unit,
+    onDelete: (DspPreset) -> Unit,
+    onSaveAsNew: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    FoamBottomModal(
+        visible = visible,
+        onDismissRequest = onDismiss
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            BasicText(text = "Presets", style = FoamTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            BasicText(
+                text = "A preset drives either the graphic or the parametric EQ",
+                style = FoamTheme.typography.caption
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            presets.forEach { preset ->
+                PresetRow(
+                    preset = preset,
+                    selected = presets.matching(state) == preset,
+                    onApply = { onApply(preset) },
+                    onDelete = { onDelete(preset) }
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Save the current chain as a new user preset.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(FoamTheme.colors.surfaceVariant)
+                    .clickable(onClick = onSaveAsNew)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.BookmarkAdd,
+                        contentDescription = null,
+                        tint = FoamTheme.accentColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    BasicText(
+                        text = "Save current as new preset",
+                        style = FoamTheme.typography.caption.copy(
+                            color = FoamTheme.accentColor,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun PresetRow(
+    preset: DspPreset,
+    selected: Boolean,
+    onApply: () -> Unit,
+    onDelete: () -> Unit
+) {
+    // One combined-response sample per preset, computed once per modal content.
+    val previewState = remember(preset) { preset.previewState() }
+    val previewCurve = remember(previewState) { DspMath.combinedResponse(previewState) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) FoamTheme.accentColor.copy(alpha = 0.16f) else FoamTheme.colors.surfaceVariant)
+            .clickable(onClick = onApply)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        EqMiniMap(
+            combinedCurve = previewCurve,
+            nodes = previewState.parametricEq.nodes,
+            active = true,
+            modifier = Modifier
+                .width(72.dp)
+                .height(36.dp)
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            BasicText(
+                text = preset.name,
+                style = FoamTheme.typography.body.copy(
+                    color = FoamTheme.colors.textPrimary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            )
+            BasicText(
+                text = if (preset.isBuiltIn) {
+                    "${if (preset.kind == PresetKind.PARAMETRIC) "PARAMETRIC" else "GRAPHIC"} · built-in"
+                } else {
+                    "${if (preset.kind == PresetKind.PARAMETRIC) "PARAMETRIC" else "GRAPHIC"} · user"
+                },
+                style = FoamTheme.typography.caption.copy(
+                    color = if (preset.kind == PresetKind.PARAMETRIC) {
+                        FoamTheme.accentColor
+                    } else {
+                        FoamTheme.colors.textSecondary
+                    },
+                    fontWeight = FontWeight.Bold
+                )
+            )
+        }
+
+        if (!preset.isBuiltIn) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onDelete),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.DeleteOutline,
+                    contentDescription = "Delete preset ${preset.name}",
+                    tint = FoamTheme.colors.textSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+// --------------------------------------------------------------- mode tabs
 
 @Composable
 private fun SectionPowerToggle(
@@ -509,6 +689,13 @@ private fun ParametricNodeEditor(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(Color(node.colorArgb))
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 BasicText(
                     text = "NODE ${node.id}",
                     style = FoamTheme.typography.caption.copy(
@@ -535,6 +722,10 @@ private fun ParametricNodeEditor(
             }
 
             Spacer(modifier = Modifier.height(10.dp))
+
+            NodeColorPicker(node = node, onUpdate = onUpdate)
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Filter type selector.
             Row(
@@ -603,6 +794,44 @@ private fun ParametricNodeEditor(
                         )
                     )
                 }
+            )
+        }
+    }
+}
+
+@Composable
+private fun NodeColorPicker(
+    node: ParametricNode,
+    onUpdate: (ParametricNode) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BasicText(
+            text = "COLOR",
+            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
+        )
+        NodeColorPalette.forEach { colorArgb ->
+            val selected = node.colorArgb == colorArgb
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(Color(colorArgb))
+                    .border(
+                        width = if (selected) 2.dp else 1.dp,
+                        color = if (selected) {
+                            FoamTheme.colors.textPrimary
+                        } else {
+                            FoamTheme.colors.borderOverlay
+                        },
+                        shape = CircleShape
+                    )
+                    .clickable { onUpdate(node.copy(colorArgb = colorArgb)) }
             )
         }
     }

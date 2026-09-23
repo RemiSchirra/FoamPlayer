@@ -547,13 +547,15 @@ private fun CollectionArtwork(
                     if (imageIsEmbeddedArt) EmbeddedAlbumArt(imageUrl.toUri()) else imageUrl
                 )
                 .size(AlbumArtRequestSize)
+                .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
                 .build()
         }
         AlbumArtImage(
             model = albumArtRequest,
             contentDescription = "Album Art",
             modifier = Modifier.fillMaxSize(),
-            placeholderSize = placeholderSize
+            placeholderSize = placeholderSize,
+            memoryCacheKey = albumArtMemoryCacheKey(imageUrl)
         )
     } else if (icon != null) {
         Icon(

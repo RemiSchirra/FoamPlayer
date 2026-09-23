@@ -98,6 +98,20 @@ fun AlbumArtShape(): Shape = RoundedCornerShape(
 val AlbumArtRequestSize = CoilSize(480, 480)
 
 /**
+ * Deterministic Coil memory-cache key for the app's shared album art. Every
+ * art surface decodes at [AlbumArtRequestSize], so one key serves them all.
+ * Setting it explicitly on an art request also lets [AlbumArtImage] resolve
+ * the cached bitmap synchronously: Coil's AsyncImagePainter delivers its
+ * Success state only asynchronously -- even on a memory-cache hit (its KDoc
+ * says so explicitly) -- so a freshly composed AsyncImage draws its loading
+ * look for a frame or two before the cached bitmap arrives. For the drawn
+ * side of a shared-element flight (a collection card landing a closing hero)
+ * those frames are the visible flight: the flying cover popped away
+ * mid-animation.
+ */
+fun albumArtMemoryCacheKey(path: String): String = "album-art:$path"
+
+/**
  * Drives the size/position animation for every shared element in the app's
  * transitions. Uses the SAME duration/easing as the NavHost's screen-level
  * fade (SharedElementTransitionDurationMs/SharedElementEasing) so the

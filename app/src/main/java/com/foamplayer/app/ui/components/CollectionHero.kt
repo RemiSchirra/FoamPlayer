@@ -644,6 +644,7 @@ private fun CollectionHeroArtworkContent(
             ImageRequest.Builder(context)
                 .data(data)
                 .size(AlbumArtRequestSize)
+                .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
                 .crossfade(false)
                 .build()
         }
@@ -651,7 +652,8 @@ private fun CollectionHeroArtworkContent(
             model = heroArtRequest,
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
-            placeholderSize = 40.dp
+            placeholderSize = 40.dp,
+            memoryCacheKey = albumArtMemoryCacheKey(imageUrl)
         )
     } else if (icon != null) {
         Icon(

@@ -211,19 +211,63 @@ object DspMath {
                 val parametric = state.parametricEq
                 if (parametric.enabled) {
                     parametric.nodes.forEach { node ->
-                        filters += when (node.type) {
-                            FilterType.PEAKING -> BiquadDesigner.peaking(
-                                fs, node.frequencyHz.toDouble(), node.gainDb.toDouble(), node.q.toDouble()
-                            )
-                            FilterType.LOW_SHELF -> BiquadDesigner.lowShelf(fs, node.frequencyHz.toDouble(), node.gainDb.toDouble())
-                            FilterType.HIGH_SHELF -> BiquadDesigner.highShelf(fs, node.frequencyHz.toDouble(), node.gainDb.toDouble())
-                            FilterType.LOW_PASS -> BiquadDesigner.lowPass(fs, node.frequencyHz.toDouble(), node.q.toDouble())
-                            FilterType.HIGH_PASS -> BiquadDesigner.highPass(fs, node.frequencyHz.toDouble(), node.q.toDouble())
-                        }
+                        filters += nodeFilter(fs, node)
                     }
                 }
             }
         }
+        return evaluateResponse(filters, sampleRateHz, pointCount)
+    }
+
+    /**
+     * Response of the 21-band graphic EQ alone for [gainsDb] — the curve the
+     * fader strip draws behind its sliders, where it must match them 1:1
+     * (tone/pre-amp contributions excluded on purpose).
+     */
+    fun graphicResponse(
+        gainsDb: List<Float>,
+        sampleRateHz: Int = 48_000,
+        pointCount: Int = DEFAULT_RESPONSE_POINTS
+    ): List<Float> {
+        val fs = sampleRateHz.coerceAtLeast(1).toDouble()
+        val filters = ArrayList<BiquadCoefficients>(GraphicEqSettings.BAND_COUNT)
+        GraphicEqSettings.BAND_FREQUENCIES.forEachIndexed { index, freq ->
+            val gain = gainsDb.getOrNull(index) ?: 0f
+            if (gain != 0f) {
+                filters += BiquadDesigner.peaking(fs, freq.toDouble(), gain.toDouble(), GraphicEqSettings.BAND_Q)
+            }
+        }
+        return evaluateResponse(filters, sampleRateHz, pointCount)
+    }
+
+    /** Response of a single parametric node, for the per-node colored mini map curves. */
+    fun nodeResponse(
+        node: ParametricNode,
+        sampleRateHz: Int = 48_000,
+        pointCount: Int = DEFAULT_RESPONSE_POINTS
+    ): List<Float> =
+        evaluateResponse(
+            listOf(nodeFilter(sampleRateHz.coerceAtLeast(1).toDouble(), node)),
+            sampleRateHz,
+            pointCount
+        )
+
+    private fun nodeFilter(fs: Double, node: ParametricNode): BiquadCoefficients = when (node.type) {
+        FilterType.PEAKING -> BiquadDesigner.peaking(
+            fs, node.frequencyHz.toDouble(), node.gainDb.toDouble(), node.q.toDouble()
+        )
+        FilterType.LOW_SHELF -> BiquadDesigner.lowShelf(fs, node.frequencyHz.toDouble(), node.gainDb.toDouble())
+        FilterType.HIGH_SHELF -> BiquadDesigner.highShelf(fs, node.frequencyHz.toDouble(), node.gainDb.toDouble())
+        FilterType.LOW_PASS -> BiquadDesigner.lowPass(fs, node.frequencyHz.toDouble(), node.q.toDouble())
+        FilterType.HIGH_PASS -> BiquadDesigner.highPass(fs, node.frequencyHz.toDouble(), node.q.toDouble())
+    }
+
+    private fun evaluateResponse(
+        filters: List<BiquadCoefficients>,
+        sampleRateHz: Int,
+        pointCount: Int
+    ): List<Float> {
+        val fs = sampleRateHz.coerceAtLeast(1).toDouble()
         return (0 until pointCount).map { point ->
             val freq = responseFrequencyAt(point, pointCount)
             val w = 2.0 * PI * freq / fs

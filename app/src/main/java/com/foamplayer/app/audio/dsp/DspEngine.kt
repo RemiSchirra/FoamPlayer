@@ -59,8 +59,9 @@ class DspEngine @Inject constructor(
     }
 
     private fun applySeed(state: DspState) {
-        _state.value = state
-        processor.setState(state)
+        val seededState = enforceExclusivity(state)
+        _state.value = seededState
+        processor.setState(seededState)
     }
 
     // ------------------------------------------------------------------ setters
@@ -83,11 +84,18 @@ class DspEngine @Inject constructor(
         it.copy(tone = it.tone.copy(trebleDb = db.coerceIn(ToneSettings.MIN_DB, ToneSettings.MAX_DB)))
     }
 
+    /**
+     * Graphic and parametric EQ are mutually exclusive: enabling one section
+     * always disables the other, so the DSP chain never runs both at once.
+     */
     fun setGraphicEnabled(enabled: Boolean) = update {
-        it.copy(graphicEq = it.graphicEq.copy(enabled = enabled))
+        it.copy(
+            graphicEq = it.graphicEq.copy(enabled = enabled),
+            parametricEq = it.parametricEq.copy(enabled = if (enabled) false else it.parametricEq.enabled)
+        )
     }
 
-    /** Single-band commit (tap on a band handle). */
+    /** Single-band commit (tap on a band fader). Enables graphic, disables parametric. */
     fun setGraphicGain(index: Int, gainDb: Float) = update {
         if (index !in it.graphicEq.gainsDb.indices) it else it.copy(
             graphicEq = it.graphicEq.copy(
@@ -95,7 +103,8 @@ class DspEngine @Inject constructor(
                 gainsDb = it.graphicEq.gainsDb.toMutableList().also { gains ->
                     gains[index] = gainDb.coerceIn(GraphicEqSettings.MIN_GAIN_DB, GraphicEqSettings.MAX_GAIN_DB)
                 }
-            )
+            ),
+            parametricEq = it.parametricEq.copy(enabled = false)
         )
     }
 
@@ -109,15 +118,19 @@ class DspEngine @Inject constructor(
                         GraphicEqSettings.MIN_GAIN_DB, GraphicEqSettings.MAX_GAIN_DB
                     )
                 }
-            )
+            ),
+            parametricEq = it.parametricEq.copy(enabled = false)
         )
     }
 
     fun setParametricEnabled(enabled: Boolean) = update {
-        it.copy(parametricEq = it.parametricEq.copy(enabled = enabled))
+        it.copy(
+            parametricEq = it.parametricEq.copy(enabled = enabled),
+            graphicEq = it.graphicEq.copy(enabled = if (enabled) false else it.graphicEq.enabled)
+        )
     }
 
-    /** Adds a node at [frequencyHz] and returns its id. */
+    /** Adds a node at [frequencyHz] and returns its id. Enables parametric, disables graphic. */
     fun addParametricNode(frequencyHz: Float = 1000f): Long {
         val id = nextNodeId++
         update {
@@ -128,9 +141,11 @@ class DspEngine @Inject constructor(
                         id = id,
                         frequencyHz = frequencyHz.coerceIn(
                             ParametricNode.MIN_FREQ_HZ, ParametricNode.MAX_FREQ_HZ
-                        )
+                        ),
+                        colorArgb = NodeColorPalette[it.parametricEq.nodes.size % NodeColorPalette.size]
                     )
-                )
+                ),
+                graphicEq = it.graphicEq.copy(enabled = false)
             )
         }
         return id
@@ -187,19 +202,33 @@ class DspEngine @Inject constructor(
     // ----------------------------------------------------------------- presets
 
     /**
-     * Applies a preset. Built-in presets adjust the graphic EQ + tone (Poweramp
-     * preset behavior); user presets restore their saved full state, keeping the
-     * current volume.
+     * Applies a preset. User presets (fullState set) restore their saved whole
+     * state, keeping the current volume; built-ins adjust only their own EQ
+     * section — graphic or parametric — and disable the opposite section.
      */
     fun applyPreset(preset: DspPreset) {
         if (preset.fullState != null) {
             update { preset.fullState.copy(volumePercent = it.volumePercent) }
-        } else {
-            update {
+            return
+        }
+        when (preset.kind) {
+            PresetKind.GRAPHIC -> update {
                 it.copy(
                     enabled = true,
                     tone = preset.tone,
-                    graphicEq = GraphicEqSettings(enabled = true, gainsDb = preset.graphicGainsDb)
+                    graphicEq = GraphicEqSettings(enabled = true, gainsDb = preset.graphicGainsDb),
+                    parametricEq = it.parametricEq.copy(enabled = false)
+                )
+            }
+            PresetKind.PARAMETRIC -> update {
+                it.copy(
+                    enabled = true,
+                    tone = preset.tone,
+                    parametricEq = ParametricEqSettings(
+                        enabled = true,
+                        nodes = preset.parametricNodes.map { node -> node.copy(id = nextNodeId++) }
+                    ),
+                    graphicEq = it.graphicEq.copy(enabled = false)
                 )
             }
         }
@@ -208,10 +237,13 @@ class DspEngine @Inject constructor(
     fun saveUserPreset(name: String): Boolean {
         val sanitized = DspPersistence.sanitizeName(name)
         if (sanitized.isEmpty()) return false
+        val state = _state.value
         val preset = DspPreset(
             name = sanitized,
-            graphicGainsDb = _state.value.graphicEq.gainsDb,
-            fullState = _state.value,
+            kind = if (state.parametricEq.enabled) PresetKind.PARAMETRIC else PresetKind.GRAPHIC,
+            graphicGainsDb = state.graphicEq.gainsDb,
+            parametricNodes = state.parametricEq.nodes,
+            fullState = state,
             isBuiltIn = false
         )
         val updated = _userPresets.value.filterNot { it.name == sanitized } + preset
@@ -231,11 +263,23 @@ class DspEngine @Inject constructor(
     private var nextNodeId = 1L
 
     private fun update(transform: (DspState) -> DspState) {
-        val newState = transform(_state.value)
+        val newState = enforceExclusivity(transform(_state.value))
         _state.value = newState
         processor.setState(newState)
         persistState(newState)
     }
+
+    /**
+     * Single source of truth for section exclusivity: the graphic and parametric
+     * EQ can never both be enabled, no matter which setter (or legacy persisted
+     * state) says otherwise. The graphic section wins the coin flip.
+     */
+    private fun enforceExclusivity(state: DspState): DspState =
+        if (state.graphicEq.enabled && state.parametricEq.enabled) {
+            state.copy(parametricEq = state.parametricEq.copy(enabled = false))
+        } else {
+            state
+        }
 
     private fun persistState(state: DspState) {
         if (!seeded) return // don't write back defaults before the seed landed

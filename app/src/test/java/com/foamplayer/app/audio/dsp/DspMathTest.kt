@@ -20,7 +20,7 @@ class DspMathTest {
     fun `enabled EQ with boost builds a chain with filters`() {
         val state = defaultState().copy(
             enabled = true,
-            graphicEq = GraphicEqSettings(enabled = true, gainsDb = listOf(6f) + List(9) { 0f })
+            graphicEq = GraphicEqSettings(enabled = true, gainsDb = listOf(6f) + List(GraphicEqSettings.BAND_COUNT - 1) { 0f })
         )
         val chain = DspMath.buildChain(state, 48_000)
         assertNotNull(chain)
@@ -43,7 +43,7 @@ class DspMathTest {
     fun `non neutral state is flagged as such`() {
         val boosted = defaultState().copy(
             enabled = true,
-            graphicEq = GraphicEqSettings(enabled = true, gainsDb = List(10) { 3f })
+            graphicEq = GraphicEqSettings(enabled = true, gainsDb = List(GraphicEqSettings.BAND_COUNT) { 3f })
         )
         assertTrue(!boosted.isNeutral)
     }
@@ -67,7 +67,7 @@ class DspMathTest {
     fun `response at extremes stays within a sane range`() {
         val state = defaultState().copy(
             enabled = true,
-            graphicEq = GraphicEqSettings(enabled = true, gainsDb = List(10) { 12f })
+            graphicEq = GraphicEqSettings(enabled = true, gainsDb = List(GraphicEqSettings.BAND_COUNT) { 12f })
         )
         val response = DspMath.combinedResponse(state, sampleRateHz = 48_000)
         assertTrue(response.all { it < 60f && it > -120f })
@@ -101,7 +101,7 @@ class DspMathTest {
         val boosted = DspState(
             enabled = true,
             autoHeadroom = true,
-            graphicEq = GraphicEqSettings(enabled = true, gainsDb = listOf(6f) + List(9) { 0f })
+            graphicEq = GraphicEqSettings(enabled = true, gainsDb = listOf(6f) + List(GraphicEqSettings.BAND_COUNT - 1) { 0f })
         )
         val headroom = DspMath.headroomDb(boosted)
         assertTrue("headroom=$headroom", headroom < 0f)
@@ -113,7 +113,7 @@ class DspMathTest {
     fun `headroom is off by default so boosts are heard as boosts`() {
         val boosted = DspState(
             enabled = true,
-            graphicEq = GraphicEqSettings(enabled = true, gainsDb = listOf(6f) + List(9) { 0f })
+            graphicEq = GraphicEqSettings(enabled = true, gainsDb = listOf(6f) + List(GraphicEqSettings.BAND_COUNT - 1) { 0f })
         )
         assertTrue(DspMath.headroomDb(boosted) == 0f)
         val chain = DspMath.buildChain(boosted, 48_000)
@@ -128,7 +128,7 @@ class DspMathTest {
         val cutOnly = DspState(
             enabled = true,
             autoHeadroom = true,
-            graphicEq = GraphicEqSettings(enabled = true, gainsDb = listOf(-6f) + List(9) { 0f })
+            graphicEq = GraphicEqSettings(enabled = true, gainsDb = listOf(-6f) + List(GraphicEqSettings.BAND_COUNT - 1) { 0f })
         )
         assertTrue(DspMath.headroomDb(cutOnly) == 0f)
     }
@@ -139,7 +139,7 @@ class DspMathTest {
             enabled = true,
             preampDb = 0f,
             autoHeadroom = true,
-            graphicEq = GraphicEqSettings(enabled = true, gainsDb = listOf(6f) + List(9) { 0f })
+            graphicEq = GraphicEqSettings(enabled = true, gainsDb = listOf(6f) + List(GraphicEqSettings.BAND_COUNT - 1) { 0f })
         )
         val chain = DspMath.buildChain(boosted, 48_000)
         assertNotNull(chain)
@@ -193,3 +193,4 @@ class DspMathTest {
 
     private fun abs(value: Float): Float = kotlin.math.abs(value)
 }
+

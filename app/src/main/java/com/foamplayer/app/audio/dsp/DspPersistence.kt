@@ -6,15 +6,17 @@ import com.foamplayer.app.audio.dsp.FilterType
  * Compact string serialization of [DspState] and user [DspPreset]s for DataStore
  * storage. Fields separated by ';', format version prefixed first:
  *
- * v2: `2;enabled;preamp;bass;mid;treble;gEnabled;g1,g2,..,g10;pEnabled;id:type:freq:gain:q/..;balance;width;limiter;autoHeadroom;dvc;volume`
+ * v3: `3;enabled;preamp;bass;mid;treble;gEnabled;g1,..,g21;pEnabled;id:type:freq:gain:q:color/..;balance;width;limiter;autoHeadroom;dvc;volume`
+ * v2: same without the node color field (nodes read with the palette default).
  * v1: same without the autoHeadroom field (legacy payloads read with it = false).
  *
  * Parsing is defensive: any malformed field falls back to the default value, so a
- * bad or older payload can never crash the audio path.
+ * bad or older payload can never crash the audio path. Gains lists of any legacy
+ * length are trimmed/padded to the current band count.
  */
 object DspPersistence {
 
-    private const val FORMAT_VERSION = 2
+    private const val FORMAT_VERSION = 3
 
     fun serialize(state: DspState): String = buildString {
         append(FORMAT_VERSION)
@@ -33,7 +35,8 @@ object DspPersistence {
                     node.type.name,
                     trim(node.frequencyHz),
                     trim(node.gainDb),
-                    trim(node.q)
+                    trim(node.q),
+                    node.colorArgb.toString(16)
                 ).joinToString(FIELD)
             }
         )
@@ -119,12 +122,15 @@ object DspPersistence {
         val freq = fields[2].toFloatOrNull() ?: return null
         val gain = fields[3].toFloatOrNull() ?: 0f
         val q = fields[4].toFloatOrNull() ?: 1.2f
+        val color = fields.getOrNull(5)?.toLongOrNull(16)
+            ?: NodeColorPalette[(id % NodeColorPalette.size).toInt()]
         return ParametricNode(
             id = id,
             type = type,
             frequencyHz = freq.coerceIn(ParametricNode.MIN_FREQ_HZ, ParametricNode.MAX_FREQ_HZ),
             gainDb = gain.coerceIn(ParametricNode.MIN_GAIN_DB, ParametricNode.MAX_GAIN_DB),
-            q = q.coerceIn(ParametricNode.MIN_Q, ParametricNode.MAX_Q)
+            q = q.coerceIn(ParametricNode.MIN_Q, ParametricNode.MAX_Q),
+            colorArgb = color
         )
     }
 
@@ -142,21 +148,31 @@ object DspPersistence {
                 val parts = entry.split(FIELD, limit = 2)
                 if (parts.size != 2) return@mapNotNull null
                 val name = parts[0].trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                val state = deserialize(parts[1])
                 DspPreset(
                     name = name,
-                    graphicGainsDb = deserialize(parts[1]).graphicEq.gainsDb,
-                    fullState = deserialize(parts[1]),
+                    kind = if (state.parametricEq.enabled) PresetKind.PARAMETRIC else PresetKind.GRAPHIC,
+                    graphicGainsDb = state.graphicEq.gainsDb,
+                    parametricNodes = state.parametricEq.nodes,
+                    fullState = state,
                     isBuiltIn = false
                 )
             }
             .orEmpty()
 
     private fun presetState(preset: DspPreset): DspState =
-        preset.fullState ?: DspState(
-            enabled = true,
-            graphicEq = GraphicEqSettings(enabled = true, gainsDb = preset.graphicGainsDb),
-            tone = preset.tone
-        )
+        preset.fullState ?: when (preset.kind) {
+            PresetKind.GRAPHIC -> DspState(
+                enabled = true,
+                graphicEq = GraphicEqSettings(enabled = true, gainsDb = preset.graphicGainsDb),
+                tone = preset.tone
+            )
+            PresetKind.PARAMETRIC -> DspState(
+                enabled = true,
+                parametricEq = ParametricEqSettings(enabled = true, nodes = preset.parametricNodes),
+                tone = preset.tone
+            )
+        }
 
     fun sanitizeName(name: String): String = name.trim().replace(SEP, " ").replace(FIELD, " ").take(40)
 

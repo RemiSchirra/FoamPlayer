@@ -1,5 +1,7 @@
 package com.foamplayer.app.audio.dsp
 
+import kotlin.math.pow
+
 /** Tone section (Poweramp-style fixed tone controls), all values in dB. */
 data class ToneSettings(
     val bassDb: Float = 0f,
@@ -19,7 +21,12 @@ data class ToneSettings(
     }
 }
 
-/** 10-band 1-octave graphic EQ. Gains in dB per band, -12..+12. */
+/**
+ * 21-band graphic EQ. Gains in dB per band, -12..+12. The 21 centers form a
+ * geometric series from exactly 20 Hz to exactly 20 kHz (~half-octave spacing),
+ * so on the log-frequency response axis every band sits at index/20 — the same
+ * layout the fader strip and the mini map's viewport overlay assume.
+ */
 data class GraphicEqSettings(
     val enabled: Boolean = false,
     val gainsDb: List<Float> = List(BAND_COUNT) { 0f }
@@ -27,15 +34,15 @@ data class GraphicEqSettings(
     val isNeutral: Boolean get() = !enabled || gainsDb.all { it == 0f }
 
     companion object {
-        const val BAND_COUNT = 10
+        const val BAND_COUNT = 21
         const val MIN_GAIN_DB = -12f
         const val MAX_GAIN_DB = 12f
 
-        // 1-octave ISO centers.
-        val BAND_FREQUENCIES = listOf(31f, 62f, 125f, 250f, 500f, 1000f, 2000f, 4000f, 8000f, 16000f)
+        // 20 Hz * 10^(0.15 * i): i = 0 -> 20 Hz, i = 20 -> 20 kHz.
+        val BAND_FREQUENCIES: List<Float> = List(BAND_COUNT) { i -> 20f * 10f.pow(0.15f * i) }
 
-        // Overlapping 1-octave peaking sections need roughly Butterworth Q to sum
-        // into a smooth response without ripple valleys between band centers.
+        // Overlapping peaking sections need roughly Butterworth Q to sum into a
+        // smooth response without ripple valleys between band centers.
         const val BAND_Q = 1.41
     }
 }
@@ -46,7 +53,9 @@ data class ParametricNode(
     val type: FilterType = FilterType.PEAKING,
     val frequencyHz: Float = 1000f,
     val gainDb: Float = 0f,
-    val q: Float = 1.2f
+    val q: Float = 1.2f,
+    /** ARGB color identifying this node across the graphs and the mini map. */
+    val colorArgb: Long = NodeColorPalette.first()
 ) {
     companion object {
         const val MIN_FREQ_HZ = 20f
@@ -57,6 +66,18 @@ data class ParametricNode(
         const val MAX_Q = 8f
     }
 }
+
+/** Colors a parametric node can take; new nodes cycle through the palette. */
+val NodeColorPalette: List<Long> = listOf(
+    0xFF4FC3F7L, // light blue
+    0xFF81C784L, // green
+    0xFFFFB74DL, // orange
+    0xFFE57373L, // red
+    0xFFBA68C8L, // purple
+    0xFFFFD54FL, // amber
+    0xFF4DB6ACL, // teal
+    0xFFF06292L  // pink
+)
 
 /** Parametric EQ: up to [MAX_NODES] freely-placed filters. */
 data class ParametricEqSettings(
@@ -120,25 +141,46 @@ data class DspState(
     }
 }
 
+/** Which (mutually exclusive) EQ section a preset drives. */
+enum class PresetKind { GRAPHIC, PARAMETRIC }
+
 /**
- * A named DSP snapshot. Built-in presets seed the graphic EQ + tone; user presets
- * capture the whole [DspState] (minus volume) and are persisted by the settings layer.
+ * A named EQ snapshot. Built-in presets seed either the graphic EQ + tone or a
+ * fixed parametric node layout; user presets capture the whole [DspState]
+ * (minus volume) and are persisted by the settings layer. A preset is either
+ * graphic or parametric — the two EQ sections are mutually exclusive.
  */
 data class DspPreset(
     val name: String,
-    val graphicGainsDb: List<Float>,
+    val kind: PresetKind = PresetKind.GRAPHIC,
+    val graphicGainsDb: List<Float> = emptyList(),
+    val parametricNodes: List<ParametricNode> = emptyList(),
     val tone: ToneSettings = ToneSettings(),
-    /** When set, applying the preset restores this full state instead of only the EQ bands. */
+    /** When set, applying the preset restores this full state instead of only the EQ section. */
     val fullState: DspState? = null,
     val isBuiltIn: Boolean = false
 ) {
+    /** The [DspState] this preset represents, used for response previews and legacy applies. */
+    fun previewState(): DspState = fullState ?: when (kind) {
+        PresetKind.GRAPHIC -> DspState(
+            enabled = true,
+            tone = tone,
+            graphicEq = GraphicEqSettings(enabled = true, gainsDb = graphicGainsDb)
+        )
+        PresetKind.PARAMETRIC -> DspState(
+            enabled = true,
+            tone = tone,
+            parametricEq = ParametricEqSettings(enabled = true, nodes = parametricNodes)
+        )
+    }
+
     companion object {
         val BUILT_INS: List<DspPreset> = buildList {
-            add(DspPreset("Flat", List(GraphicEqSettings.BAND_COUNT) { 0f }, isBuiltIn = true))
+            add(DspPreset("Flat", graphicGainsDb = List(GraphicEqSettings.BAND_COUNT) { 0f }, isBuiltIn = true))
             add(
                 DspPreset(
                     "Bass Boost",
-                    listOf(6f, 5f, 3f, 1f, 0f, 0f, 0f, 0f, 0f, 0f),
+                    graphicGainsDb = listOf(6f, 5f, 4f, 3f, 1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f),
                     tone = ToneSettings(bassDb = 4f),
                     isBuiltIn = true
                 )
@@ -146,7 +188,7 @@ data class DspPreset(
             add(
                 DspPreset(
                     "Treble Boost",
-                    listOf(0f, 0f, 0f, 0f, 0f, 0f, 1f, 3f, 5f, 6f),
+                    graphicGainsDb = listOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 2f, 4f, 5f, 6f),
                     tone = ToneSettings(trebleDb = 3f),
                     isBuiltIn = true
                 )
@@ -154,49 +196,102 @@ data class DspPreset(
             add(
                 DspPreset(
                     "V-Shaped",
-                    listOf(5f, 4f, 2f, 0f, -1f, -1f, 0f, 2f, 4f, 5f),
+                    graphicGainsDb = listOf(5f, 4f, 3f, 1f, 0f, -1f, -1f, -1f, 0f, 1f, 2f, 2f, 3f, 3f, 3f, 3f, 4f, 4f, 5f, 5f, 5f),
                     isBuiltIn = true
                 )
             )
             add(
                 DspPreset(
                     "Rock",
-                    listOf(5f, 4f, 2f, -1f, -2f, -1f, 1f, 3f, 4f, 4f),
+                    graphicGainsDb = listOf(5f, 4f, 3f, 1f, -1f, -2f, -2f, -1f, 0f, 1f, 1f, 2f, 3f, 3f, 3f, 3f, 4f, 4f, 4f, 4f, 4f),
                     isBuiltIn = true
                 )
             )
             add(
                 DspPreset(
                     "Pop",
-                    listOf(-1f, 1f, 3f, 4f, 3f, 0f, -1f, -1f, 1f, 2f),
+                    graphicGainsDb = listOf(-1f, 0f, 1f, 3f, 4f, 3f, 1f, 0f, -1f, -1f, -1f, -1f, 0f, 0f, 0f, 1f, 1f, 2f, 2f, 2f, 2f),
                     isBuiltIn = true
                 )
             )
             add(
                 DspPreset(
                     "Jazz",
-                    listOf(3f, 2f, 1f, 2f, -1f, -1f, 0f, 1f, 2f, 3f),
+                    graphicGainsDb = listOf(3f, 3f, 2f, 1f, 1f, -1f, -1f, -1f, 0f, 0f, 1f, 1f, 1f, 1f, 2f, 2f, 2f, 3f, 3f, 3f, 3f),
                     isBuiltIn = true
                 )
             )
             add(
                 DspPreset(
                     "Classical",
-                    listOf(4f, 3f, 2f, 0f, -1f, -1f, 0f, 2f, 3f, 4f),
+                    graphicGainsDb = listOf(4f, 3f, 2f, 1f, 0f, -1f, -1f, -1f, 0f, 0f, 0f, 1f, 2f, 2f, 3f, 3f, 3f, 3f, 4f, 4f, 4f),
                     isBuiltIn = true
                 )
             )
             add(
                 DspPreset(
                     "Vocal",
-                    listOf(-3f, -2f, 0f, 3f, 4f, 4f, 3f, 1f, 0f, -1f),
+                    graphicGainsDb = listOf(-3f, -3f, -2f, -1f, 0f, 1f, 3f, 4f, 4f, 4f, 3f, 3f, 2f, 1f, 1f, 0f, 0f, -1f, -1f, -1f, -1f),
                     isBuiltIn = true
                 )
             )
             add(
                 DspPreset(
                     "Electronic",
-                    listOf(5f, 4f, 1f, 0f, -2f, 1f, 1f, 3f, 4f, 5f),
+                    graphicGainsDb = listOf(5f, 5f, 4f, 3f, 1f, 0f, -2f, -1f, 0f, 1f, 1f, 1f, 2f, 2f, 3f, 3f, 4f, 4f, 5f, 5f, 5f),
+                    isBuiltIn = true
+                )
+            )
+            // Built-in parametric presets: fixed node layouts with palette colors.
+            add(
+                DspPreset(
+                    name = "Low Cut",
+                    kind = PresetKind.PARAMETRIC,
+                    parametricNodes = listOf(
+                        ParametricNode(
+                            id = 1, type = FilterType.HIGH_PASS,
+                            frequencyHz = 35f, q = 0.71f,
+                            colorArgb = NodeColorPalette[2]
+                        )
+                    ),
+                    isBuiltIn = true
+                )
+            )
+            add(
+                DspPreset(
+                    name = "De-Mud",
+                    kind = PresetKind.PARAMETRIC,
+                    parametricNodes = listOf(
+                        ParametricNode(
+                            id = 1, type = FilterType.LOW_SHELF,
+                            frequencyHz = 120f, gainDb = -3f, q = 0.8f,
+                            colorArgb = NodeColorPalette[3]
+                        ),
+                        ParametricNode(
+                            id = 2, type = FilterType.PEAKING,
+                            frequencyHz = 320f, gainDb = -3.5f, q = 1.1f,
+                            colorArgb = NodeColorPalette[1]
+                        )
+                    ),
+                    isBuiltIn = true
+                )
+            )
+            add(
+                DspPreset(
+                    name = "Presence",
+                    kind = PresetKind.PARAMETRIC,
+                    parametricNodes = listOf(
+                        ParametricNode(
+                            id = 1, type = FilterType.PEAKING,
+                            frequencyHz = 3000f, gainDb = 3.5f, q = 1.2f,
+                            colorArgb = NodeColorPalette[0]
+                        ),
+                        ParametricNode(
+                            id = 2, type = FilterType.PEAKING,
+                            frequencyHz = 8000f, gainDb = 2f, q = 1.5f,
+                            colorArgb = NodeColorPalette[6]
+                        )
+                    ),
                     isBuiltIn = true
                 )
             )
