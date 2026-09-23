@@ -554,8 +554,7 @@ private fun CollectionArtwork(
             model = albumArtRequest,
             contentDescription = "Album Art",
             modifier = Modifier.fillMaxSize(),
-            placeholderSize = placeholderSize,
-            memoryCacheKey = albumArtMemoryCacheKey(imageUrl)
+            placeholderSize = placeholderSize
         )
     } else if (icon != null) {
         Icon(

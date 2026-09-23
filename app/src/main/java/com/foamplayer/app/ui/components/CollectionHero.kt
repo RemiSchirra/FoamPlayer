@@ -653,7 +653,6 @@ private fun CollectionHeroArtworkContent(
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             placeholderSize = 40.dp,
-            memoryCacheKey = albumArtMemoryCacheKey(imageUrl)
         )
     } else if (icon != null) {
         Icon(
