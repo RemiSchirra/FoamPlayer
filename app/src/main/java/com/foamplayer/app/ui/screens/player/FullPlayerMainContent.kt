@@ -114,7 +114,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
         modifier = Modifier.fillMaxSize().padding(top = PlayerDimens.screenPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(PlayerDimens.screenPadding))
+        Spacer(modifier = Modifier.height(16.dp))
 
         TrackHeroPager(
             track = track,
@@ -300,7 +300,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = anchorPageAlpha() }
@@ -483,7 +483,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     }
                 }
                 if (!immersive) {
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier
