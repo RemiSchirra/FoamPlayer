@@ -314,9 +314,17 @@ class LocalAudioScanner @Inject constructor(
                 readFlacVorbisComments(uri)?.let { comments ->
                     year = comments["DATE"]?.yearPart()
                         ?: comments["YEAR"]?.yearPart()
-                        ?: comments["ORIGINALDATE"]?.yearPart()
-                        ?: comments["ORIGINALYEAR"]?.yearPart()
+                                ?: comments["ORIGINALDATE"]?.yearPart()
+                                ?: comments["ORIGINALYEAR"]?.yearPart()
                 }
+            }
+
+            // MediaMetadataRetriever frequently leaves both YEAR and DATE null for
+            // M4A/M4B (MP4) files even when the ©day atom is present: read it
+            // straight from the container as a last resort, same idea as the FLAC
+            // fallback above.
+            if (year == null && fileName.lowercase().let { it.endsWith(".m4a") || it.endsWith(".m4b") }) {
+                year = readMp4Year(uri)
             }
 
             // Tag values can be "3" or "3/12" — keep only the number before the slash.
@@ -465,6 +473,68 @@ class LocalAudioScanner @Inject constructor(
         return comments
     }
 
+    /**
+     * Reads an M4A/M4B file's `moov/udta/meta/ilst/©day/data` atom directly.
+     * MediaMetadataRetriever often reports no YEAR or DATE for MP4 containers
+     * even when the ©day atom is populated, so this walks the box structure
+     * by hand. Returns null when the atom is absent or the stream isn't a
+     * well-formed MP4; never throws.
+     */
+    private fun readMp4Year(uri: Uri): Int? = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val data = findMp4Atom(input, MP4_YEAR_ATOM_PATH, Long.MAX_VALUE) ?: return@use null
+            // 'data' box payload: 4-byte type indicator + 4-byte locale, then the text.
+            if (data.size <= 8) return@use null
+            String(data, 8, data.size - 8, Charsets.UTF_8).yearPart()
+        }
+    }.getOrNull()
+
+    /**
+     * Walks nested MP4 boxes following [path] (e.g. moov -> udta -> meta ->
+     * ilst -> ©day -> data), skipping every box not on that path without
+     * buffering its contents. Returns the raw bytes of the final box in
+     * [path] once reached, or null if any step is missing/malformed.
+     */
+    private fun findMp4Atom(input: InputStream, path: List<String>, bytesAvailable: Long): ByteArray? {
+        var remaining = bytesAvailable
+        val header = ByteArray(8)
+        while (remaining >= 8 && readFully(input, header)) {
+            val size32 = ((header[0].toLong() and 0xFF) shl 24) or
+                    ((header[1].toLong() and 0xFF) shl 16) or
+                    ((header[2].toLong() and 0xFF) shl 8) or
+                    (header[3].toLong() and 0xFF)
+            val type = String(header, 4, 4, Charsets.ISO_8859_1)
+
+            var headerSize = 8L
+            var boxSize = size32
+            if (size32 == 1L) {
+                // 64-bit extended size follows the header for boxes bigger than 4GB.
+                val ext = ByteArray(8)
+                if (!readFully(input, ext)) return null
+                boxSize = ext.fold(0L) { acc, b -> (acc shl 8) or (b.toLong() and 0xFF) }
+                headerSize = 16L
+            }
+            if (boxSize < headerSize) return null // malformed box
+
+            val contentSize = boxSize - headerSize
+            if (type == path.first()) {
+                if (path.size == 1) {
+                    if (contentSize <= 0 || contentSize > MAX_MP4_ATOM_BYTES) return null
+                    val content = ByteArray(contentSize.toInt())
+                    return if (readFully(input, content)) content else null
+                }
+                // 'meta' is a full box: a 4-byte version/flags precedes its children.
+                val skip = if (type == "meta") 4L else 0L
+                if (skip > 0 && !skipFully(input, skip)) return null
+                return findMp4Atom(input, path.drop(1), contentSize - skip)
+            } else {
+                if (!skipFully(input, contentSize)) return null
+            }
+            remaining -= boxSize
+        }
+        return null
+    }
+
     private fun readFully(input: InputStream, buffer: ByteArray): Boolean {
         var read = 0
         while (read < buffer.size) {
@@ -492,6 +562,12 @@ class LocalAudioScanner @Inject constructor(
 
 /** Concurrent per-file metadata extractions; MediaMetadataRetriever is a native object, keep it modest. */
 private const val SCAN_PARALLELISM = 8
+
+/** Box path to the MP4 "date recorded" tag: moov/udta/meta/ilst/©day/data. */
+private val MP4_YEAR_ATOM_PATH = listOf("moov", "udta", "meta", "ilst", "\u00A9day", "data")
+
+/** The ©day/data atom is a short text tag; refuse anything implausibly large. */
+private const val MAX_MP4_ATOM_BYTES = 1 shl 16 // 64 KB
 
 /** First 4-digit group not glued to other digits: "2021" or "2021-03-04" -> 2021. */
 private val YearRegex = Regex("""(?<!\d)\d{4}(?!\d)""")
