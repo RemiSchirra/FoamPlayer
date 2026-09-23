@@ -9,14 +9,19 @@ import coil.ImageLoaderFactory
 import coil.key.Keyer
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.media.EmbeddedAlbumArtFetcher
+import com.foamplayer.app.notification.ScanProgressNotifier
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 
 @HiltAndroidApp
 class FoamApplication : Application(), ImageLoaderFactory {
 
+    @Inject lateinit var scanProgressNotifier: ScanProgressNotifier
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        scanProgressNotifier.start()
     }
 
     // Registers EmbeddedAlbumArtFetcher so any AsyncImage(model = EmbeddedAlbumArt(...))

@@ -46,6 +46,11 @@
     <string name="scanning_status">Analyse en cours : %1$s (%2$d%%)</string>
     <string name="scan_finishing">Finalisation de l\'analyse…</string>
     <string name="scan_finished">Analyse terminée : %1$d pistes trouvées</string>
+    <string name="scan_notification_channel_name">Analyses de la bibliothèque et des artistes</string>
+    <string name="scan_notification_channel_desc">Progression de l\'analyse de la bibliothèque et de la résolution des images d\'artistes</string>
+    <string name="notif_scan_library_title">Analyse de la bibliothèque</string>
+    <string name="notif_scan_finished_title">Analyse terminée</string>
+    <string name="notif_resolve_artists_title">Résolution des images d\'artistes</string>
 
     <string name="artist_images">Images d\'artistes</string>
     <string name="artist_images_resolve">Résoudre les images d\'artistes</string>

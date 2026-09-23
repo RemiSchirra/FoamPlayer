@@ -46,6 +46,11 @@
     <string name="scanning_status">Scanning: %1$s (%2$d%%)</string>
     <string name="scan_finishing">Finishing the scan…</string>
     <string name="scan_finished">Scan finished: %1$d tracks found</string>
+    <string name="scan_notification_channel_name">Library and artist scans</string>
+    <string name="scan_notification_channel_desc">Progress of the music library scan and artist image resolution</string>
+    <string name="notif_scan_library_title">Scanning library</string>
+    <string name="notif_scan_finished_title">Scan finished</string>
+    <string name="notif_resolve_artists_title">Resolving artist images</string>
 
     <string name="artist_images">Artist Images</string>
     <string name="artist_images_resolve">Resolve artist images</string>
