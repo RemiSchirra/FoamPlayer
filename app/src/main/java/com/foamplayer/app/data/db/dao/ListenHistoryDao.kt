@@ -66,6 +66,12 @@ interface ListenHistoryDao {
     @Insert
     suspend fun insertListen(listen: ListenHistoryEntity)
 
+    @Insert
+    suspend fun insertListens(listens: List<ListenHistoryEntity>)
+
+    @Query("SELECT * FROM listen_history")
+    suspend fun getAllListens(): List<ListenHistoryEntity>
+
     /** Removes every listen row of one track (per-track stats reset). */
     @Query("DELETE FROM listen_history WHERE trackId = :trackId")
     suspend fun deleteByTrackId(trackId: Long)

@@ -7,6 +7,9 @@ import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.PreferredLyricsProvider
+import com.foamplayer.app.data.backup.BackupFeature
+import com.foamplayer.app.data.backup.BackupResult
+import com.foamplayer.app.data.backup.SettingsBackupManager
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ArtistImageScanState
@@ -17,8 +20,11 @@ import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.MarqueeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -27,7 +33,8 @@ import kotlinx.coroutines.launch
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val trackRepository: TrackRepository,
-    private val artistImageScanner: ArtistImageScanner
+    private val artistImageScanner: ArtistImageScanner,
+    private val settingsBackupManager: SettingsBackupManager
 ) : ViewModel() {
 
     /** One observable state for every settings screen and the application theme. */
@@ -175,6 +182,46 @@ class SettingsViewModel @Inject constructor(
         if (item == NavBarItem.SETTINGS && !enabled && item !in current.navBarPrimaryEnabled) return@launch
         val newEnabled = if (enabled) current.navBarSecondaryEnabled + item else current.navBarSecondaryEnabled - item
         settingsRepository.setNavBarSecondaryEnabled(newEnabled)
+    }
+
+    // --------------------------------------------------------------- backups
+
+    /** Reachable for the import sheet's feature probe. */
+    val backupManager: SettingsBackupManager = settingsBackupManager
+
+    /** Live result of the last export/import; consumed by the settings sheet. */
+    private val _backupResult = MutableStateFlow<BackupResult?>(null)
+    val backupResult: StateFlow<BackupResult?> = _backupResult.asStateFlow()
+
+    /** True while an import is running; shows the loading modal. */
+    private val _importRunning = MutableStateFlow(false)
+    val importRunning: StateFlow<Boolean> = _importRunning.asStateFlow()
+
+    private var backupJob: Job? = null
+
+    val backupRunning: Boolean get() = backupJob?.isActive == true
+
+    fun exportSettings(folderUri: String, features: Set<BackupFeature>) {
+        if (backupRunning) return
+        backupJob = viewModelScope.launch {
+            _backupResult.value = backupManager.export(folderUri, features)
+        }
+    }
+
+    fun importSettings(fileUris: List<String>, features: Set<BackupFeature>) {
+        if (backupRunning) return
+        backupJob = viewModelScope.launch {
+            _importRunning.value = true
+            try {
+                _backupResult.value = backupManager.importFeatures(fileUris, features)
+            } finally {
+                _importRunning.value = false
+            }
+        }
+    }
+
+    fun consumeBackupResult() {
+        _backupResult.value = null
     }
 
     private fun launch(block: suspend () -> Unit) {

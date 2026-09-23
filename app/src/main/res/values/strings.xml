@@ -299,4 +299,25 @@
     <string name="discord_authorization_failed">Discord authorization failed</string>
     <string name="discord_online_art">Fetch cover art online</string>
     <string name="discord_online_art_desc">Look each track up on Spotify (by title and artist) and use its album cover on Discord, falling back to YouTube thumbnails. Track titles and artist names are sent to those services.</string>
+
+    <!-- Settings import / export -->
+    <string name="settings_export">Export</string>
+    <string name="settings_export_subtitle">Save settings and data to JSON files</string>
+    <string name="settings_import">Import</string>
+    <string name="settings_import_subtitle">Restore settings and data from JSON files</string>
+    <string name="settings_export_folder">Export folder</string>
+    <string name="settings_export_folder_hint">Choose where the JSON files are written</string>
+    <string name="settings_export_features">Features to export</string>
+    <string name="settings_import_files">JSON files</string>
+    <string name="settings_import_files_hint">Choose one or more backup files</string>
+    <string name="settings_import_features">Features to import</string>
+    <string name="settings_backup_feature_app">App settings</string>
+    <string name="settings_backup_feature_folders">Music folders</string>
+    <string name="settings_backup_feature_eq">Equalizer presets</string>
+    <string name="settings_backup_feature_playlists">Playlists</string>
+    <string name="settings_backup_feature_stats">Per-song statistics</string>
+    <string name="settings_backup_feature_search">Search history</string>
+    <string name="settings_backup_done">Backup complete</string>
+    <string name="settings_backup_failed">Backup failed</string>
+    <string name="settings_backup_importing">Importing backup…</string>
 </resources>

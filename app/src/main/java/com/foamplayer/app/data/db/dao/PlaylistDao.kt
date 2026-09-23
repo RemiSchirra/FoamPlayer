@@ -113,6 +113,17 @@ interface PlaylistDao {
 
     @Query("DELETE FROM playlists WHERE playlistId = :playlistId")
     suspend fun deletePlaylist(playlistId: Long)
+
+    /** Ids of one playlist's tracks in play order, for backup export. */
+    @Query("""
+        SELECT trackId FROM playlist_track_cross_ref 
+        WHERE playlistId = :playlistId 
+        ORDER BY orderIndex ASC
+    """)
+    suspend fun getTrackIdsForPlaylistOnce(playlistId: Long): List<Long>
+
+    @Query("DELETE FROM playlist_track_cross_ref WHERE playlistId = :playlistId")
+    suspend fun clearPlaylistTracks(playlistId: Long)
 }
 
 /** One row of [PlaylistDao.getRecommendedPlaylists]: a playlist plus its aggregate listen/like score. */

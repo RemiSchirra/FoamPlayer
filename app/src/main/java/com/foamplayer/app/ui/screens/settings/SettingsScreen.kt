@@ -20,16 +20,24 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
+import com.foamplayer.app.data.backup.BackupFeature
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -41,8 +49,15 @@ fun SettingsScreen(
     onNavigateToLibrary: () -> Unit,
     onNavigateToLyrics: () -> Unit,
     onNavigateToMisc: () -> Unit,
-    onNavigateToTest: () -> Unit
+    onNavigateToTest: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel()
 ) {
+    var openBackupModal by remember { mutableStateOf(BackupModalType.NONE) }
+    val backupResult by viewModel.backupResult.collectAsState()
+    val importRunning by viewModel.importRunning.collectAsState()
+    val backupRunning = viewModel.backupRunning
+    val backupManager = viewModel.backupManager
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -116,10 +131,62 @@ fun SettingsScreen(
                     icon = Icons.Default.BugReport,
                     onClick = onNavigateToTest
                 )
-                Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+
+            item {
+                BackupLinkRow(
+                    icon = Icons.Outlined.FileUpload,
+                    label = stringResource(R.string.settings_export),
+                    onClick = { openBackupModal = BackupModalType.EXPORT }
+                )
+            }
+
+            item {
+                BackupLinkRow(
+                    icon = Icons.Outlined.FileDownload,
+                    label = stringResource(R.string.settings_import),
+                    onClick = { openBackupModal = BackupModalType.IMPORT }
+                )
             }
         }
     }
+
+    ExportSettingsModal(
+        visible = openBackupModal == BackupModalType.EXPORT,
+        onDismiss = { openBackupModal = BackupModalType.NONE },
+        onExport = { folderUri, features ->
+            openBackupModal = BackupModalType.NONE
+            viewModel.exportSettings(folderUri, features)
+        },
+        isRunning = backupRunning
+    )
+
+    ImportSettingsModal(
+        visible = openBackupModal == BackupModalType.IMPORT,
+        onDismiss = { openBackupModal = BackupModalType.NONE },
+        onImport = { fileUris, features ->
+            openBackupModal = BackupModalType.NONE
+            viewModel.importSettings(fileUris, features)
+        },
+        isRunning = backupRunning,
+        probeFeatures = { uris ->
+            val union = mutableSetOf<BackupFeature>()
+            uris.forEach { uri ->
+                union += backupManager.detectFeatures(uri).orEmpty()
+            }
+            union
+        }
+    )
+
+    BackupLoadingModal(
+        visible = importRunning && openBackupModal == BackupModalType.NONE
+    )
+
+    BackupResultModal(
+        result = backupResult,
+        onDismiss = viewModel::consumeBackupResult
+    )
 }
 
 @Composable
@@ -195,5 +262,38 @@ fun SettingsHeader(
         if (trailing != null) {
             trailing()
         }
+    }
+}
+
+/** Plain icon + text link (no card) used for the export / import entries. */
+@Composable
+private fun BackupLinkRow(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onClick
+            )
+            .padding(
+                horizontal = FoamDimens.paddingMedium,
+                vertical = FoamDimens.spacingStandard
+            ),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(FoamDimens.iconMedium),
+            tint = FoamTheme.colors.textPrimary
+        )
+        Spacer(modifier = Modifier.width(FoamDimens.spacingStandard))
+        BasicText(text = label, style = FoamTheme.typography.titleMedium)
     }
 }

@@ -170,6 +170,15 @@ interface TrackDao {
     @Query("SELECT path, playCount, lastPlayedAt, score, instrumental FROM tracks")
     suspend fun getPlayStats(): List<TrackPlayStatsRow>
 
+    @Query("""
+        UPDATE tracks 
+        SET playCount = :playCount, 
+            lastPlayedAt = :lastPlayedAt, 
+            score = :score 
+        WHERE id = :trackId
+    """)
+    suspend fun importPlayStats(trackId: Long, playCount: Int, lastPlayedAt: Long?, score: Int)
+
     @Query("SELECT path FROM tracks")
     suspend fun getAllTrackPaths(): List<String>
 
