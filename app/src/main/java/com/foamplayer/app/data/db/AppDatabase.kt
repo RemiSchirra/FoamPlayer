@@ -2,8 +2,6 @@ package com.foamplayer.app.data.db
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 import com.foamplayer.app.data.db.dao.CachedLyricsDao
 import com.foamplayer.app.data.db.dao.ListenHistoryDao
 import com.foamplayer.app.data.db.dao.PlaylistDao
@@ -36,104 +34,4 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun queueDao(): QueueDao
     abstract fun cachedLyricsDao(): CachedLyricsDao
     abstract fun listenHistoryDao(): ListenHistoryDao
-
-    companion object {
-        /** Adds the composer column to the tracks table (track details modal). */
-        val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE tracks ADD COLUMN composer TEXT")
-            }
-        }
-
-        /** Adds the listen counter and last-listen timestamp to the tracks table. */
-        val MIGRATION_2_3 = object : Migration(2, 3) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE tracks ADD COLUMN playCount INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE tracks ADD COLUMN lastPlayedAt INTEGER")
-            }
-        }
-
-        /** Adds the user score (-1 dislike / 0 not noted / 1 like / 2 super like) to the tracks table. */
-        val MIGRATION_3_4 = object : Migration(3, 4) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE tracks ADD COLUMN score INTEGER NOT NULL DEFAULT 0")
-            }
-        }
-
-        /** Adds the user-chosen cover image to the playlists table. */
-        val MIGRATION_4_5 = object : Migration(4, 5) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE playlists ADD COLUMN imageUrl TEXT")
-            }
-        }
-
-        /** Adds the manual ordering rank to the playlists table (edit-mode reordering). */
-        val MIGRATION_5_6 = object : Migration(5, 6) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE playlists ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0")
-            }
-        }
-
-        /** Adds the user-set instrumental flag to the tracks table (lyrics view override). */
-        val MIGRATION_6_7 = object : Migration(6, 7) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE tracks ADD COLUMN instrumental INTEGER NOT NULL DEFAULT 0")
-            }
-        }
-
-        /** Adds the cached-lyrics table (online-fetched lyrics persisted per track). */
-        val MIGRATION_7_8 = object : Migration(7, 8) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS cached_lyrics (" +
-                            "trackId INTEGER NOT NULL PRIMARY KEY, " +
-                            "lyrics TEXT NOT NULL, " +
-                            "provider TEXT, " +
-                            "fetchedAtMs INTEGER NOT NULL)"
-                )
-            }
-        }
-
-        /**
-         * Adds the indices for the hot filter/sort columns. Without them every
-         * genre/year/recently-played/playlist query runs a full table scan plus a
-         * temp B-tree sort, re-executed on each tracks-table invalidation. Index
-         * names must match Room's generated ones for schema validation.
-         */
-        val MIGRATION_8_9 = object : Migration(8, 9) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_albumArtist ON tracks (albumArtist)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_genre ON tracks (genre)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_year ON tracks (year)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_lastPlayedAt ON tracks (lastPlayedAt)")
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_playlist_track_cross_ref_playlistId_orderIndex " +
-                            "ON playlist_track_cross_ref (playlistId, orderIndex)"
-                )
-            }
-        }
-
-        /**
-         * Adds the listen_history table (one row per counted listen) for the
-         * stats screen's period analysis. Seeded with each track's last listen
-         * so all-time stats immediately reflect the pre-existing playCount data
-         * (earlier listens have no recorded timestamp and are not reconstructed).
-         */
-        val MIGRATION_9_10 = object : Migration(9, 10) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS listen_history (" +
-                            "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
-                            "trackId INTEGER NOT NULL, " +
-                            "listenedAt INTEGER NOT NULL)"
-                )
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_listen_history_listenedAt ON listen_history (listenedAt)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_listen_history_trackId ON listen_history (trackId)")
-                db.execSQL(
-                    "INSERT INTO listen_history (trackId, listenedAt) " +
-                            "SELECT id, lastPlayedAt FROM tracks WHERE lastPlayedAt IS NOT NULL"
-                )
-            }
-        }
-    }
 }
