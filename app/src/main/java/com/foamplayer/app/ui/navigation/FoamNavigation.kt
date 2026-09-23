@@ -60,6 +60,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -641,6 +642,13 @@ fun FoamNavHost(
         )
     }
 
+    // The collection screen last opened from the player: its full route (with
+    // args) and destination pattern. A follow-up player navigation replaces
+    // that screen instead of stacking beneath it, so back never replays
+    // earlier player-opened screens one by one.
+    var playerOpenedRoute by remember { mutableStateOf<String?>(null) }
+    var playerOpenedPattern by remember { mutableStateOf<String?>(null) }
+
     // "See Artist"/"See Album" can fire while the full player is up (queue
     // long-press). Starting the close flight in the same frame as the
     // navigation swap makes the two fight over the same frames and flicker.
@@ -648,13 +656,31 @@ fun FoamNavHost(
     // still-open player where it can't be seen -- then precompose the
     // closed-side UI (the same preload-then-flight pattern the dismiss
     // gesture uses) and only then fly the player down onto the settled page.
-    fun navigateClosingPlayer(route: String) {
+    fun navigateClosingPlayer(route: String, pattern: String) {
+        val topId = navController.currentDestination?.id
+        val topPattern = navController.currentDestination?.route
+        // Replace only when the previous player-opened screen is still the
+        // current top (user hasn't navigated deeper from it or backed out of
+        // it); identical routes keep reusing the top entry via launchSingleTop.
+        val replacesPrevious = playerOpenedPattern != null &&
+                topPattern == playerOpenedPattern &&
+                route != playerOpenedRoute
+        fun navOptions(): NavOptionsBuilder.() -> Unit = {
+            launchSingleTop = true
+            if (replacesPrevious && topId != null) {
+                popUpTo(topId) { inclusive = true }
+            }
+        }
         if (!playerTransitionState.targetState) {
-            navController.navigate(route)
+            navController.navigate(route, navOptions())
+            playerOpenedRoute = route
+            playerOpenedPattern = pattern
             return
         }
         scope.launch {
-            navController.navigate(route)
+            navController.navigate(route, navOptions())
+            playerOpenedRoute = route
+            playerOpenedPattern = pattern
             animatePlayerTransition(open = false, precompose = true)
         }
     }
@@ -1710,12 +1736,16 @@ fun FoamNavHost(
                                 onOpenAlbum = { track ->
                                     activeSharedCollection = sharedCollectionTag("album", track.album)
                                     navigateClosingPlayer(
-                                        Screen.AlbumDetail.createRoute(track.album, track.albumArtPath, track.artist)
+                                        Screen.AlbumDetail.createRoute(track.album, track.albumArtPath, track.artist),
+                                        Screen.AlbumDetail.route
                                     )
                                 },
                                 onOpenArtist = { track ->
                                     activeSharedCollection = sharedCollectionTag("artist", track.artist)
-                                    navigateClosingPlayer(Screen.ArtistDetail.createRoute(track.artist))
+                                    navigateClosingPlayer(
+                                        Screen.ArtistDetail.createRoute(track.artist),
+                                        Screen.ArtistDetail.route
+                                    )
                                 }
                             )
                         }
@@ -1903,12 +1933,16 @@ fun FoamNavHost(
                 onAddToPlaylist = { track -> playlistPickerTrack = track },
                 onSeeArtist = { track ->
                     activeSharedCollection = sharedCollectionTag("artist", track.artist)
-                    navigateClosingPlayer(Screen.ArtistDetail.createRoute(track.artist))
+                    navigateClosingPlayer(
+                        Screen.ArtistDetail.createRoute(track.artist),
+                        Screen.ArtistDetail.route
+                    )
                 },
                 onSeeAlbum = { track ->
                     activeSharedCollection = sharedCollectionTag("album", track.album)
                     navigateClosingPlayer(
-                        Screen.AlbumDetail.createRoute(track.album, track.albumArtPath, track.artist)
+                        Screen.AlbumDetail.createRoute(track.album, track.albumArtPath, track.artist),
+                        Screen.AlbumDetail.route
                     )
                 },
                 onOpenLyrics = { track ->
