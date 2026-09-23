@@ -9,16 +9,11 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -32,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroTarget
@@ -50,6 +44,7 @@ import com.foamplayer.app.ui.components.HomeRowCardSmallWidth
 import com.foamplayer.app.ui.components.HomeRowSpacing
 import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.LocalTrackFoamModalState
+import com.foamplayer.app.ui.components.ScreenTitle
 import com.foamplayer.app.ui.screens.playlists.DeletePlaylistConfirmModal
 import com.foamplayer.app.ui.screens.playlists.PlaylistFoamModal
 import com.foamplayer.app.ui.screens.playlists.PlaylistModalStats
@@ -164,27 +159,13 @@ fun HomeScreen(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(HomeRowSpacing),
-        contentPadding = PaddingValues(top = 8.dp, bottom = LocalBottomBarClearance.current)
+        contentPadding = PaddingValues(top = 16.dp, start = 8.dp, end = 8.dp, bottom = LocalBottomBarClearance.current)
     ) {
         item(key = "home_header") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = FoamTheme.icons.current.home,
-                    contentDescription = null,
-                    tint = FoamTheme.accentColor,
-                    modifier = Modifier.size(34.dp)
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-                BasicText(
-                    text = stringResource(R.string.home),
-                    style = FoamTheme.typography.titleLarge.copy(fontSize = 30.sp)
-                )
-            }
+            ScreenTitle(
+                icon = FoamTheme.icons.current.home,
+                title = stringResource(R.string.home)
+            )
         }
 
         item(key = "home_row_playlists") {

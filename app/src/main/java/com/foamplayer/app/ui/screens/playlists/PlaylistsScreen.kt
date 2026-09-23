@@ -39,7 +39,6 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
@@ -48,7 +47,6 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.OpenWith
-import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -64,13 +62,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.request.ImageRequest
@@ -89,13 +85,14 @@ import com.foamplayer.app.ui.components.DensityOrganisationModal
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.MediaGridCell
 import com.foamplayer.app.ui.components.MediaListRow
+import com.foamplayer.app.ui.components.ScreenTitle
+import com.foamplayer.app.ui.components.ScreenTitleActionButton
 import com.foamplayer.app.ui.components.activeRowHighlight
 import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.components.rememberDragDropGridState
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
-import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -232,32 +229,15 @@ fun PlaylistsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(8.dp)
+            .padding(top = 16.dp, start = 8.dp, end = 8.dp)
     ) {
         // Thin header: playlist icon inline with the big title, actions on the right.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = FoamDimens.spacingMedium),
-            verticalAlignment = Alignment.CenterVertically
+        ScreenTitle(
+            icon = FoamTheme.icons.current.playlists,
+            title = stringResource(R.string.playlists)
         ) {
-            Icon(
-                imageVector = FoamTheme.icons.current.playlists,
-                contentDescription = null,
-                tint = FoamTheme.accentColor,
-                modifier = Modifier.size(34.dp)
-            )
-
-            Spacer(modifier = Modifier.width(FoamDimens.spacingMedium))
-
-            BasicText(
-                text = stringResource(R.string.playlists),
-                style = FoamTheme.typography.titleLarge.copy(fontSize = 30.sp),
-                modifier = Modifier.weight(1f)
-            )
-
             if (sortMode == CollectionSortMode.CUSTOM) {
-                PlaylistActionButton(
+                ScreenTitleActionButton(
                     icon = Icons.Rounded.Edit,
                     contentDescription = stringResource(R.string.edit),
                     tint = if (isEditMode) FoamTheme.accentColor else FoamTheme.colors.textPrimary
@@ -265,13 +245,13 @@ fun PlaylistsScreen(
                     isEditMode = !isEditMode
                 }
             }
-            PlaylistActionButton(
+            ScreenTitleActionButton(
                 icon = Icons.Rounded.Add,
                 contentDescription = stringResource(R.string.add)
             ) {
                 showCreateModal = true
             }
-            PlaylistActionButton(
+            ScreenTitleActionButton(
                 icon = Icons.Rounded.MoreVert,
                 contentDescription = stringResource(R.string.navbar_item_more)
             ) {
@@ -552,34 +532,6 @@ fun PlaylistsScreen(
             onKeep = { viewModel.dismissMissingSongs() },
             onCancel = { viewModel.cancelMissingSongs() },
             onImportFolder = { viewModel.importMissingFolderAndCreate() }
-        )
-    }
-}
-
-/** One icon button on the playlists action bar, styled like the player's icon rows. */
-@Composable
-private fun PlaylistActionButton(
-    icon: ImageVector,
-    contentDescription: String,
-    tint: Color = FoamTheme.colors.textPrimary,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(CircleShape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                onClick = onClick
-            )
-            .padding(FoamDimens.paddingSmall),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = tint,
-            modifier = Modifier.size(FoamDimens.iconMedium)
         )
     }
 }

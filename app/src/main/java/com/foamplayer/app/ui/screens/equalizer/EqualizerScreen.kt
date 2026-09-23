@@ -65,6 +65,7 @@ import com.foamplayer.app.ui.components.FoamBottomModal
 import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.components.KnobControl
+import com.foamplayer.app.ui.components.ScreenTitle
 import com.foamplayer.app.ui.components.VerticalSlider
 import com.foamplayer.app.ui.components.onSeekBarReleased
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
@@ -145,16 +146,14 @@ fun EqualizerScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .padding(top = 16.dp, start = 8.dp, end = 8.dp)
             .padding(bottom = LocalBottomBarClearance.current)
     ) {
         // ------------------------------------------------------------ header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                BasicText(text = "Equalizer & DSP", style = FoamTheme.typography.titleLarge)
+        ScreenTitle(
+            icon = Icons.Rounded.Equalizer,
+            title = "Equalizer & DSP",
+            subtitle = {
                 BasicText(
                     text = when {
                         state.isNeutral -> "Bit-perfect passthrough"
@@ -168,13 +167,14 @@ fun EqualizerScreen(
                         }
                     )
                 )
+            },
+            actions = {
+                PowerButton(
+                    enabled = state.enabled,
+                    onToggle = { viewModel.setEnabled(!state.enabled) }
+                )
             }
-
-            PowerButton(
-                enabled = state.enabled,
-                onToggle = { viewModel.setEnabled(!state.enabled) }
-            )
-        }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
