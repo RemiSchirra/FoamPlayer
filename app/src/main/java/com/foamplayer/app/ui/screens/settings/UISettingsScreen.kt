@@ -2,10 +2,10 @@ package com.foamplayer.app.ui.screens.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,11 +18,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.material.DropdownMenu
-import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,11 +31,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.FoamIconStyle
+import com.foamplayer.app.ui.components.FoamBottomModal
 import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
@@ -75,7 +77,7 @@ fun UISettingsScreen(
                 Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
                     BasicText(text = stringResource(R.string.appearance), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                    
+
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -208,7 +210,7 @@ private fun LanguageSelector(
     currentLanguage: String,
     onLanguageSelected: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var showModal by remember { mutableStateOf(false) }
     val languages = listOf(
         "auto" to "Automatic",
         "en" to "English",
@@ -221,7 +223,7 @@ private fun LanguageSelector(
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
             .background(FoamTheme.colors.surface)
-            .clickable { expanded = true }
+            .clickable { showModal = true }
             .padding(FoamDimens.paddingMedium)
     ) {
         Row(
@@ -236,23 +238,47 @@ private fun LanguageSelector(
                 tint = FoamTheme.colors.textSecondary
             )
         }
+    }
 
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier
-                .background(FoamTheme.colors.surface)
-                .width(IntrinsicSize.Max)
-        ) {
+    FoamBottomModal(
+        visible = showModal,
+        onDismissRequest = { showModal = false }
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            BasicText(
+                text = stringResource(R.string.language),
+                style = FoamTheme.typography.titleMedium.copy(textAlign = TextAlign.Center),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
             languages.forEach { (code, label) ->
-                DropdownMenuItem(onClick = {
-                    onLanguageSelected(code)
-                    expanded = false
-                }) {
+                val isSelected = code == currentLanguage
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        // Highlight for the current selection, drawn under the ripple.
+                        .background(
+                            if (isSelected) Color.White.copy(alpha = 0.12f)
+                            else Color.Transparent
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(color = FoamTheme.colors.textPrimary),
+                            onClick = {
+                                onLanguageSelected(code)
+                                showModal = false
+                            }
+                        )
+                        .padding(vertical = FoamDimens.paddingMedium),
+                    contentAlignment = Alignment.Center
+                ) {
                     BasicText(
                         text = label,
                         style = FoamTheme.typography.body.copy(
-                            color = if (code == currentLanguage) FoamTheme.accentColor else FoamTheme.colors.textPrimary
+                            color = FoamTheme.colors.textPrimary,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            textAlign = TextAlign.Center
                         )
                     )
                 }
