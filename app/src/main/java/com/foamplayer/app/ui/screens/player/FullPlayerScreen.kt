@@ -63,6 +63,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
+import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.rememberSeekBarProgressState
@@ -89,6 +90,10 @@ fun FullPlayerScreen(
     playerTransitionState: SeekableTransitionState<Boolean>,
     backdropState: FullPlayerBackdropState,
     isAnimateSeekBarEnabled: Boolean = false,
+    // Title/artist box gestures: tap opens the album view, long-press opens the
+    // artist view (both staged through the nav root, closing the player).
+    onOpenAlbum: (TrackEntity) -> Unit = {},
+    onOpenArtist: (TrackEntity) -> Unit = {},
     // Dismiss-to-origin-collection coordination (see PlayerGestureController): the
     // nav root preloads the row flight on finger-down (compose the page invisibly,
     // scroll the row into view -- no pairing), TAGS the row on the first drag delta
@@ -611,6 +616,8 @@ fun FullPlayerScreen(
                             marqueeMode = marqueeMode,
                             scoreOverrides = scoreOverrides,
                             onSetScore = viewModel::setTrackScore,
+                            onOpenAlbum = onOpenAlbum,
+                            onOpenArtist = onOpenArtist,
                             flightGeometry = flightGeometry
                         )
                     }

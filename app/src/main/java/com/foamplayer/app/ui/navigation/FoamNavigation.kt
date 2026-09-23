@@ -641,6 +641,24 @@ fun FoamNavHost(
         )
     }
 
+    // "See Artist"/"See Album" can fire while the full player is up (queue
+    // long-press). Starting the close flight in the same frame as the
+    // navigation swap makes the two fight over the same frames and flicker.
+    // Stage it instead: navigate first -- the swap composes behind the
+    // still-open player where it can't be seen -- then precompose the
+    // closed-side UI (the same preload-then-flight pattern the dismiss
+    // gesture uses) and only then fly the player down onto the settled page.
+    fun navigateClosingPlayer(route: String) {
+        if (!playerTransitionState.targetState) {
+            navController.navigate(route)
+            return
+        }
+        scope.launch {
+            navController.navigate(route)
+            animatePlayerTransition(open = false, precompose = true)
+        }
+    }
+
     SharedTransitionLayout {
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")
 
@@ -1688,7 +1706,17 @@ fun FoamNavHost(
                                 animatedVisibilityScope = this@AnimatedVisibility,
                                 playerTransitionState = playerTransitionState,
                                 backdropState = fullPlayerBackdropState,
-                                isAnimateSeekBarEnabled = isAnimateSeekBarEnabled
+                                isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                                onOpenAlbum = { track ->
+                                    activeSharedCollection = sharedCollectionTag("album", track.album)
+                                    navigateClosingPlayer(
+                                        Screen.AlbumDetail.createRoute(track.album, track.albumArtPath, track.artist)
+                                    )
+                                },
+                                onOpenArtist = { track ->
+                                    activeSharedCollection = sharedCollectionTag("artist", track.artist)
+                                    navigateClosingPlayer(Screen.ArtistDetail.createRoute(track.artist))
+                                }
                             )
                         }
                     }
@@ -1867,24 +1895,6 @@ fun FoamNavHost(
             // Long-press track actions. The modal and its playlist picker are
             // plain Dialogs, so their placement in the tree doesn't matter.
             // Details is an internal page of the same sheet, sharing its header.
-
-            // "See Artist"/"See Album" can fire while the full player is up (queue
-            // long-press). Starting the close flight in the same frame as the
-            // navigation swap makes the two fight over the same frames and flicker.
-            // Stage it instead: navigate first -- the swap composes behind the
-            // still-open player where it can't be seen -- then precompose the
-            // closed-side UI (the same preload-then-flight pattern the dismiss
-            // gesture uses) and only then fly the player down onto the settled page.
-            fun navigateClosingPlayer(route: String) {
-                if (!playerTransitionState.targetState) {
-                    navController.navigate(route)
-                    return
-                }
-                scope.launch {
-                    navController.navigate(route)
-                    animatePlayerTransition(open = false, precompose = true)
-                }
-            }
 
             TrackFoamModal(
                 state = trackModalState,

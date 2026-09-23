@@ -8,6 +8,7 @@ import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -67,6 +69,7 @@ import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.TrackScoreHeart
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.components.onSeekBarReleased
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 import com.foamplayer.app.ui.utils.pressShrink
@@ -103,6 +106,8 @@ internal fun SharedTransitionScope.MainPlayerContent(
     marqueeMode: MarqueeMode,
     scoreOverrides: Map<Long, Int>,
     onSetScore: (Long, Int) -> Unit,
+    onOpenAlbum: (TrackEntity) -> Unit,
+    onOpenArtist: (TrackEntity) -> Unit,
     flightGeometry: PlayerFlightGeometryState? = null
 ) {
     Column(
@@ -128,6 +133,8 @@ internal fun SharedTransitionScope.MainPlayerContent(
             upTransitionState = upTransitionState,
             scoreOverrides = scoreOverrides,
             onSetScore = onSetScore,
+            onOpenAlbum = onOpenAlbum,
+            onOpenArtist = onOpenArtist,
             marqueeMode = marqueeMode,
             flightGeometry = flightGeometry
         )
@@ -189,6 +196,8 @@ internal fun SharedTransitionScope.TrackHeroPager(
     upTransitionState: SeekableTransitionState<Boolean>,
     scoreOverrides: Map<Long, Int>,
     onSetScore: (Long, Int) -> Unit,
+    onOpenAlbum: (TrackEntity) -> Unit,
+    onOpenArtist: (TrackEntity) -> Unit,
     marqueeMode: MarqueeMode,
     flightGeometry: PlayerFlightGeometryState? = null
 ) {
@@ -296,7 +305,18 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = anchorPageAlpha() }
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                            .combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = ripple(color = FoamTheme.colors.textPrimary),
+                                onClick = { onOpenAlbum(pageTrack) },
+                                onLongClick = { onOpenArtist(pageTrack) }
+                            )
+                            .padding(horizontal = 8.dp, vertical = 8.dp)
+                    ) {
                         MarqueeText(
                             text = pageTrack.title,
                             style = FoamTheme.typography.titleLarge,
@@ -465,7 +485,18 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 if (!immersive) {
                     Spacer(modifier = Modifier.height(24.dp))
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                                .combinedClickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = ripple(color = FoamTheme.colors.textPrimary),
+                                    onClick = { onOpenAlbum(track) },
+                                    onLongClick = { onOpenArtist(track) }
+                                )
+                                .padding(horizontal = 8.dp, vertical = 8.dp)
+                        ) {
                             MarqueeText(
                                 text = track.title,
                                 style = FoamTheme.typography.titleLarge,
