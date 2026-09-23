@@ -45,7 +45,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.times
 import androidx.compose.ui.util.lerp as lerpFloat
@@ -54,6 +53,8 @@ import coil.compose.AsyncImage
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -234,6 +235,7 @@ internal fun SharedTransitionScope.SubViewContent(
     // play/pause flip doesn't recompose this subtree (including LyricsScreen/QueueScreen).
     isPlaying: () -> Boolean,
     isImmersiveEnabled: Boolean,
+    marqueeMode: MarqueeMode,
     headerVisibilityScope: AnimatedVisibilityScope,
     headerArtAlpha: () -> Float,
     modifier: Modifier,
@@ -246,6 +248,7 @@ internal fun SharedTransitionScope.SubViewContent(
                 track = track,
                 isPlaying = isPlaying,
                 isImmersiveEnabled = isImmersiveEnabled,
+                marqueeMode = marqueeMode,
                 headerVisibilityScope = headerVisibilityScope,
                 headerArtAlpha = headerArtAlpha,
                 onBack = onCollapse,
@@ -282,6 +285,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     track: TrackEntity,
     isPlaying: () -> Boolean,
     isImmersiveEnabled: Boolean,
+    marqueeMode: MarqueeMode,
     headerVisibilityScope: AnimatedVisibilityScope,
     headerArtAlpha: () -> Float,
     onBack: () -> Unit,
@@ -405,18 +409,16 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    BasicText(
+                    MarqueeText(
                         text = headerTrack.title,
                         style = FoamTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        mode = marqueeMode,
                         modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_title_header_${headerTrack.id}"), animatedVisibilityScope = headerVisibilityScope)
                     )
-                    BasicText(
+                    MarqueeText(
                         text = headerTrack.artist,
                         style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        mode = marqueeMode,
                         modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_artist_header_${headerTrack.id}"), animatedVisibilityScope = headerVisibilityScope)
                     )
                 }
