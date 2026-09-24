@@ -48,6 +48,8 @@ class EqualizerViewModel @Inject constructor(
 
     fun setGraphicEnabled(enabled: Boolean) = dspEngine.setGraphicEnabled(enabled)
 
+    fun setGraphicBandCount(count: Int) = dspEngine.setGraphicBandCount(count)
+
     fun setGraphicGains(gainsDb: List<Float>) = dspEngine.setGraphicGains(gainsDb)
 
     fun setParametricEnabled(enabled: Boolean) = dspEngine.setParametricEnabled(enabled)

@@ -14,8 +14,8 @@ class DspPersistenceTest {
             tone = ToneSettings(bassDb = 4f, midDb = -1.5f, trebleDb = 2.5f),
             graphicEq = GraphicEqSettings(
                 enabled = true,
-                gainsDb = listOf(6f, 5f, 3f, 1f, 0f, -1f, 0f, 2f, 4f, 5.5f) +
-                        List(GraphicEqSettings.BAND_COUNT - 10) { 0f }
+                count = 10,
+                gainsDb = listOf(6f, 5f, 3f, 1f, 0f, -1f, 0f, 2f, 4f, 5.5f)
             ),
             parametricEq = ParametricEqSettings(
                 enabled = true,
@@ -46,9 +46,37 @@ class DspPersistenceTest {
     }
 
     @Test
+    fun `v4 payload stores and reads the band count`() {
+        val serialized = DspPersistence.serialize(
+            DspState(graphicEq = GraphicEqSettings(enabled = true, count = 31))
+        )
+        assertTrue(serialized.startsWith("4;"))
+        val restored = DspPersistence.deserialize(serialized)
+        assertEquals(31, restored.graphicEq.count)
+        assertEquals(31, restored.graphicEq.gainsDb.size)
+    }
+
+    @Test
+    fun `v3 payloads read as 21-band layouts with default slope`() {
+        // A v3 payload: 21 gains (first is 6), one node without slope/color fields.
+        val gains = List(21) { if (it == 0) "6" else "0" }.joinToString(",")
+        val v3 = "3;1;0;0;0;0;1;$gains;1;1:PEAKING:120:3:0.7;-0.5;1;1;1;0;1;80"
+        val restored = DspPersistence.deserialize(v3)
+
+        assertTrue(restored.graphicEq.enabled)
+        assertEquals(21, restored.graphicEq.count)
+        assertEquals(6f, restored.graphicEq.gainsDb.first())
+        assertTrue(restored.parametricEq.enabled)
+        val node = restored.parametricEq.nodes.single()
+        assertEquals(120f, node.frequencyHz)
+        assertEquals(0.9f, node.slope)
+        assertTrue(node.colorArgb in NodeColorPalette)
+    }
+
+    @Test
     fun `v2 payloads without node colors parse with palette defaults`() {
-        // A v2 payload (node format lacks the color field): one node at 120 Hz.
-        val v2 = "2;1;0;0;0;0;0;0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;1;1:PEAKING:120:3:0.7;-0.5;1;1;1;0;1;80"
+        // A v2 payload (node format lacks the color and slope fields): one node at 120 Hz.
+        val v2 = "2;1;0;0;0;0;0;0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;1;1:PEAKING:120:3:0.7;-0.5;1;1;1;0;1;80"
         val restored = DspPersistence.deserialize(v2)
 
         assertTrue(restored.parametricEq.enabled)
@@ -56,19 +84,6 @@ class DspPersistenceTest {
         assertEquals(120f, node.frequencyHz)
         assertEquals(3f, node.gainDb)
         assertTrue(node.colorArgb in NodeColorPalette)
-    }
-
-    @Test
-    fun `21 band centers span exactly 20 Hz to 20 kHz on the log axis`() {
-        val frequencies = GraphicEqSettings.BAND_FREQUENCIES
-        assertEquals(21, frequencies.size)
-        assertEquals(20f, frequencies.first(), 0.01f)
-        assertEquals(20_000f, frequencies.last(), 0.01f)
-        // Even spacing on the log10 axis: each step is 0.15 decades.
-        for (i in 1 until frequencies.size) {
-            val step = kotlin.math.log10(frequencies[i] / frequencies[i - 1])
-            assertEquals(0.15f, step, 0.001f)
-        }
     }
 
     @Test
@@ -80,6 +95,7 @@ class DspPersistenceTest {
 
         assertTrue(restored.enabled)
         assertTrue(restored.graphicEq.enabled)
+        assertEquals(21, restored.graphicEq.count)
         assertEquals(-0.5f, restored.balance)
         assertTrue(restored.limiterEnabled)
         assertTrue(!restored.autoHeadroom)
@@ -110,19 +126,29 @@ class DspPersistenceTest {
     }
 
     @Test
+    fun `band count out of range is clamped`() {
+        val restored = DspPersistence.deserialize(
+            DspPersistence.serialize(DspState(graphicEq = GraphicEqSettings(count = 999)))
+        )
+        // 999 clamps to MAX_BAND_COUNT (31); gains pad to 31 zeros.
+        assertEquals(GraphicEqSettings.MAX_BAND_COUNT, restored.graphicEq.count)
+        assertEquals(GraphicEqSettings.MAX_BAND_COUNT, restored.graphicEq.gainsDb.size)
+    }
+
+    @Test
     fun `user presets round trip with kind derivation`() {
         val presets = listOf(
             DspPreset(
                 name = "My V",
                 kind = PresetKind.GRAPHIC,
-                graphicGainsDb = List(GraphicEqSettings.BAND_COUNT) { 0f },
+                graphicGainsDb = List(GraphicEqSettings.DEFAULT_BAND_COUNT) { 0f },
                 fullState = DspState(enabled = true, balance = 0.5f),
                 isBuiltIn = false
             ),
             DspPreset(
                 name = "Late Night",
                 kind = PresetKind.GRAPHIC,
-                graphicGainsDb = List(GraphicEqSettings.BAND_COUNT) { 0f },
+                graphicGainsDb = List(GraphicEqSettings.DEFAULT_BAND_COUNT) { 0f },
                 fullState = DspState(
                     enabled = true,
                     tone = ToneSettings(bassDb = 2f, trebleDb = -1f),
@@ -165,7 +191,7 @@ class DspPersistenceTest {
         DspPreset.BUILT_INS.forEach { preset ->
             when (preset.kind) {
                 PresetKind.GRAPHIC ->
-                    assertEquals(GraphicEqSettings.BAND_COUNT, preset.graphicGainsDb.size)
+                    assertEquals(31, preset.graphicGainsDb.size)
                 PresetKind.PARAMETRIC -> {
                     assertTrue(preset.parametricNodes.isNotEmpty())
                     preset.parametricNodes.forEach { node ->

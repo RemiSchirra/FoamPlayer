@@ -66,7 +66,7 @@ import kotlin.math.sqrt
 private const val GAIN_RANGE_DB = 15f
 private const val NODE_HIT_RADIUS_PX = 44f
 
-/** Width of one graphic EQ fader column; the strip content spans [BAND_COUNT] of these. */
+/** Width of one graphic EQ fader column; the strip content spans the current band count of these. */
 internal val BAND_SPACING = 44.dp
 
 /** Max distance from a band's dot that still starts a gain drag (vs sliding the strip). */
@@ -344,7 +344,7 @@ fun GraphicEqStrip(
         gains
     }
 
-    val contentWidth = BAND_SPACING * GraphicEqSettings.BAND_COUNT
+    val contentWidth = BAND_SPACING * gains.size.coerceAtLeast(1)
 
     Box(
         modifier = modifier
@@ -507,7 +507,7 @@ fun GraphicEqStrip(
                     .fillMaxWidth()
                     .height(20.dp)
             ) {
-                GraphicEqSettings.BAND_FREQUENCIES.forEach { freq ->
+                List(displayGains.size) { index ->
                     Box(
                         modifier = Modifier
                             .width(BAND_SPACING)
@@ -515,7 +515,9 @@ fun GraphicEqStrip(
                         contentAlignment = Alignment.Center
                     ) {
                         androidx.compose.foundation.text.BasicText(
-                            text = frequencyLabel(freq.roundToInt()),
+                            text = frequencyLabel(
+                                GraphicEqSettings.bandFrequency(index, displayGains.size).roundToInt()
+                            ),
                             style = labelStyle
                         )
                     }
@@ -544,12 +546,14 @@ fun EqMiniMap(
     modifier: Modifier = Modifier,
     showViewport: Boolean = false,
     scrollState: ScrollState? = null,
-    stripViewportWidthPx: Int = 0
+    stripViewportWidthPx: Int = 0,
+    combinedCurveBandCount: Int = GraphicEqSettings.DEFAULT_BAND_COUNT
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val latestScroll by rememberUpdatedState(scrollState)
     val latestViewportWidth by rememberUpdatedState(stripViewportWidthPx)
+    val latestBandCount by rememberUpdatedState(combinedCurveBandCount)
 
     val interactive = showViewport && scrollState != null
     val accent = FoamTheme.accentColor
@@ -565,7 +569,7 @@ fun EqMiniMap(
                             detectTapGestures(
                                 onTap = { position ->
                                     val scroll = latestScroll ?: return@detectTapGestures
-                                    val span = viewportSpanPx(density)
+                                    val span = viewportSpanPx(density, latestBandCount)
                                     if (span <= 0f) return@detectTapGestures
                                     val spacingPx = with(density) { BAND_SPACING.toPx() }
                                     val target = (position.x / size.width) * span -
@@ -581,7 +585,7 @@ fun EqMiniMap(
                                 onHorizontalDrag = { change, dragAmount ->
                                     change.consume()
                                     val scroll = latestScroll ?: return@detectHorizontalDragGestures
-                                    val span = viewportSpanPx(density)
+                                    val span = viewportSpanPx(density, latestBandCount)
                                     if (span <= 0f) return@detectHorizontalDragGestures
                                     val delta = dragAmount * span / size.width
                                     scope.launch { scroll.scrollBy(delta) }
@@ -628,7 +632,7 @@ fun EqMiniMap(
         if (interactive && viewportWidth > 0) {
             val scroll = latestScroll ?: return@Canvas
             val spacingPx = with(density) { BAND_SPACING.toPx() }
-            val span = spacingPx * (GraphicEqSettings.BAND_COUNT - 1)
+            val span = spacingPx * (combinedCurveBandCount - 1)
             if (span <= 0f) return@Canvas
 
             val rawLeft = (scroll.value + spacingPx / 2f) / span * w
@@ -655,8 +659,8 @@ fun EqMiniMap(
 }
 
 /** Visible response span of the strip in px: (bandCount - 1) fader gaps. */
-private fun viewportSpanPx(density: androidx.compose.ui.unit.Density): Float =
-    with(density) { BAND_SPACING.toPx() } * (GraphicEqSettings.BAND_COUNT - 1)
+private fun viewportSpanPx(density: androidx.compose.ui.unit.Density, bandCount: Int): Float =
+    with(density) { BAND_SPACING.toPx() } * (bandCount - 1).coerceAtLeast(1)
 
 // ------------------------------------------------------------------- mapping
 

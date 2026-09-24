@@ -359,7 +359,7 @@ class BitPerfectDetector @Inject constructor(
             status = if (graphicActive) PipelineStageStatus.ACTIVE else PipelineStageStatus.BYPASSED,
             headline = if (graphicActive) "${GraphicEqHelper.activeBandCount(dsp)} active bands" else "Bypassed",
             details = if (graphicActive) {
-                listOf("10-band 1-octave peaking sections")
+                listOf("${dsp.graphicEq.gainsDb.size} log-spaced peaking sections (20 Hz–20 kHz)")
             } else {
                 listOf(if (dsp.graphicEq.enabled) "All bands flat" else "Disabled")
             }

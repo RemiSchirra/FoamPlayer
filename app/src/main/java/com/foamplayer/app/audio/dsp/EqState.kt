@@ -2,7 +2,11 @@ package com.foamplayer.app.audio.dsp
 
 import kotlin.math.pow
 
-/** Tone section (Poweramp-style fixed tone controls), all values in dB. */
+/**
+ * Fixed tone controls (Poweramp-style), all values in dB. Bass and treble are
+ * shelves, mid is a peaking section; the corner/center frequencies are fixed
+ * by the design and only the gains move.
+ */
 data class ToneSettings(
     val bassDb: Float = 0f,
     val midDb: Float = 0f,
@@ -22,28 +26,55 @@ data class ToneSettings(
 }
 
 /**
- * 21-band graphic EQ. Gains in dB per band, -12..+12. The 21 centers form a
- * geometric series from exactly 20 Hz to exactly 20 kHz (~half-octave spacing),
- * so on the log-frequency response axis every band sits at index/20 — the same
- * layout the fader strip and the mini map's viewport overlay assume.
+ * Graphic EQ with a MUTABLE band layout. [count] can be any value in
+ * [MIN_BAND_COUNT]..[MAX_BAND_COUNT] (the UI offers 6/10/15/21/31); the band
+ * centers always form a geometric series spanning exactly 20 Hz..20 kHz, so on
+ * the log-frequency axis band i sits at index i/(count-1) — the layout the
+ * fader strip and mini map viewport both assume. Gains are -12..+12 dB.
  */
 data class GraphicEqSettings(
     val enabled: Boolean = false,
-    val gainsDb: List<Float> = List(BAND_COUNT) { 0f }
+    val count: Int = DEFAULT_BAND_COUNT,
+    val gainsDb: List<Float> = List(count) { 0f }
 ) {
     val isNeutral: Boolean get() = !enabled || gainsDb.all { it == 0f }
 
+    /** Band center for band [index], mapped over the full log axis 20 Hz..20 kHz. */
+    fun bandFrequency(index: Int): Float = bandFrequency(index, count)
+
+    /** Trims or pads [gainsDb] to exactly [count] entries. */
+    fun normalizedGains(): List<Float> = List(count) { gainsDb.getOrElse(it) { 0f } }
+
     companion object {
-        const val BAND_COUNT = 21
+        const val DEFAULT_BAND_COUNT = 21
+        const val MIN_BAND_COUNT = 2
+        const val MAX_BAND_COUNT = 31
+        val UI_BAND_COUNTS = listOf(6, 10, 15, 21, 31)
         const val MIN_GAIN_DB = -12f
         const val MAX_GAIN_DB = 12f
 
-        // 20 Hz * 10^(0.15 * i): i = 0 -> 20 Hz, i = 20 -> 20 kHz.
-        val BAND_FREQUENCIES: List<Float> = List(BAND_COUNT) { i -> 20f * 10f.pow(0.15f * i) }
+        /**
+         * Band center for band [index] of [bands]: a geometric series from
+         * exactly 20 Hz to exactly 20 kHz, so on the log-frequency axis every
+         * band sits at index/(bands-1) — the same layout the fader strip and
+         * the mini map's viewport overlay assume.
+         */
+        fun bandFrequency(index: Int, bands: Int): Float {
+            if (bands <= 1) return 1000f
+            val t = index.toFloat().coerceIn(0f, (bands - 1).toFloat()) / (bands - 1)
+            return 20f * 1000f.pow(t)
+        }
 
-        // Overlapping peaking sections need roughly Butterworth Q to sum into a
-        // smooth response without ripple valleys between band centers.
-        const val BAND_Q = 1.41
+        /**
+         * Overlapping peaking sections need roughly Butterworth Q to sum into a
+         * smooth response without ripple valleys between band centers. The
+         * exact value scales with spacing: denser bands want a slightly higher
+         * Q so neighboring sections don't flatten each other into mush.
+         */
+        fun bandQ(count: Int): Double {
+            val n = count.coerceIn(MIN_BAND_COUNT, MAX_BAND_COUNT)
+            return 1.41 * (DEFAULT_BAND_COUNT.toDouble() / n).pow(0.32)
+        }
     }
 }
 
@@ -54,6 +85,7 @@ data class ParametricNode(
     val frequencyHz: Float = 1000f,
     val gainDb: Float = 0f,
     val q: Float = 1.2f,
+    val slope: Float = 0.9f,
     /** ARGB color identifying this node across the graphs and the mini map. */
     val colorArgb: Long = NodeColorPalette.first()
 ) {
@@ -64,6 +96,8 @@ data class ParametricNode(
         const val MAX_GAIN_DB = 12f
         const val MIN_Q = 0.3f
         const val MAX_Q = 8f
+        const val MIN_SLOPE = 0.4f
+        const val MAX_SLOPE = 1.2f
     }
 }
 
@@ -90,7 +124,7 @@ data class ParametricEqSettings(
         get() = type == FilterType.LOW_PASS || type == FilterType.HIGH_PASS
 
     companion object {
-        const val MAX_NODES = 8
+        const val MAX_NODES = 12
     }
 }
 
@@ -175,12 +209,20 @@ data class DspPreset(
     }
 
     companion object {
+        /**
+         * Built-in presets, expressed as shapes on a 31-band grid. 31 points
+         * cover the whole 20 Hz..20 kHz axis at 1/3-octave density; shapes are
+         * listed at full width and [DspEngine.applyPreset] resamples them to
+         * whatever band count the user currently has selected.
+         */
+        private fun gains(vararg values: Float): List<Float> = values.toList()
+
         val BUILT_INS: List<DspPreset> = buildList {
-            add(DspPreset("Flat", graphicGainsDb = List(GraphicEqSettings.BAND_COUNT) { 0f }, isBuiltIn = true))
+            add(DspPreset("Flat", graphicGainsDb = gains(*FloatArray(31) { 0f }), isBuiltIn = true))
             add(
                 DspPreset(
                     "Bass Boost",
-                    graphicGainsDb = listOf(6f, 5f, 4f, 3f, 1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f),
+                    graphicGainsDb = gains(6f, 5.5f, 5f, 4.5f, 4f, 3.5f, 3f, 2.5f, 2f, 1.5f, 1f, 0.5f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f),
                     tone = ToneSettings(bassDb = 4f),
                     isBuiltIn = true
                 )
@@ -188,7 +230,7 @@ data class DspPreset(
             add(
                 DspPreset(
                     "Treble Boost",
-                    graphicGainsDb = listOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 2f, 4f, 5f, 6f),
+                    graphicGainsDb = gains(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.5f, 1f, 1.5f, 2f, 2.5f, 3f, 4f, 5f, 6f),
                     tone = ToneSettings(trebleDb = 3f),
                     isBuiltIn = true
                 )
@@ -196,49 +238,49 @@ data class DspPreset(
             add(
                 DspPreset(
                     "V-Shaped",
-                    graphicGainsDb = listOf(5f, 4f, 3f, 1f, 0f, -1f, -1f, -1f, 0f, 1f, 2f, 2f, 3f, 3f, 3f, 3f, 4f, 4f, 5f, 5f, 5f),
+                    graphicGainsDb = gains(5f, 4.5f, 4f, 3.5f, 3f, 2.5f, 2f, 1.5f, 1f, 0f, -1f, -1.5f, -2f, -1.5f, -1f, 0f, 1f, 2f, 2.5f, 3f, 3.5f, 4f, 4.5f, 5f, 5f, 5f, 5f, 5f, 5f, 5f, 5f),
                     isBuiltIn = true
                 )
             )
             add(
                 DspPreset(
                     "Rock",
-                    graphicGainsDb = listOf(5f, 4f, 3f, 1f, -1f, -2f, -2f, -1f, 0f, 1f, 1f, 2f, 3f, 3f, 3f, 3f, 4f, 4f, 4f, 4f, 4f),
+                    graphicGainsDb = gains(5f, 4.5f, 4f, 3.5f, 3f, 2f, 1f, 0f, -1f, -2f, -2f, -1.5f, -1f, -0.5f, 0f, 0.5f, 1f, 2f, 2.5f, 3f, 3f, 3.5f, 4f, 4f, 4f, 4f, 4f, 4f, 4f, 4f, 4f),
                     isBuiltIn = true
                 )
             )
             add(
                 DspPreset(
                     "Pop",
-                    graphicGainsDb = listOf(-1f, 0f, 1f, 3f, 4f, 3f, 1f, 0f, -1f, -1f, -1f, -1f, 0f, 0f, 0f, 1f, 1f, 2f, 2f, 2f, 2f),
+                    graphicGainsDb = gains(-1f, -0.5f, 0f, 0.5f, 1f, 2f, 3f, 4f, 4f, 3.5f, 3f, 2f, 1f, 0f, -1f, -1f, -1f, -1f, -1f, 0f, 0f, 0f, 0f, 0.5f, 1f, 1.5f, 2f, 2f, 2f, 2f, 2f),
                     isBuiltIn = true
                 )
             )
             add(
                 DspPreset(
                     "Jazz",
-                    graphicGainsDb = listOf(3f, 3f, 2f, 1f, 1f, -1f, -1f, -1f, 0f, 0f, 1f, 1f, 1f, 1f, 2f, 2f, 2f, 3f, 3f, 3f, 3f),
+                    graphicGainsDb = gains(3f, 3f, 2.5f, 2f, 2f, 1.5f, 1f, 1f, 0.5f, -0.5f, -1f, -1f, -1f, -0.5f, 0f, 0f, 0.5f, 1f, 1f, 1.5f, 2f, 2f, 2f, 2f, 2.5f, 2.5f, 3f, 3f, 3f, 3f, 3f),
                     isBuiltIn = true
                 )
             )
             add(
                 DspPreset(
                     "Classical",
-                    graphicGainsDb = listOf(4f, 3f, 2f, 1f, 0f, -1f, -1f, -1f, 0f, 0f, 0f, 1f, 2f, 2f, 3f, 3f, 3f, 3f, 4f, 4f, 4f),
+                    graphicGainsDb = gains(4f, 3.5f, 3f, 2.5f, 2f, 1.5f, 1f, 0.5f, 0f, -0.5f, -1f, -1f, -1f, -0.5f, 0f, 0f, 0.5f, 1f, 1.5f, 2f, 2f, 2.5f, 3f, 3f, 3f, 3.5f, 3.5f, 4f, 4f, 4f, 4f),
                     isBuiltIn = true
                 )
             )
             add(
                 DspPreset(
                     "Vocal",
-                    graphicGainsDb = listOf(-3f, -3f, -2f, -1f, 0f, 1f, 3f, 4f, 4f, 4f, 3f, 3f, 2f, 1f, 1f, 0f, 0f, -1f, -1f, -1f, -1f),
+                    graphicGainsDb = gains(-3f, -3f, -2.5f, -2f, -1.5f, -1f, 0f, 1f, 2f, 3f, 4f, 4.5f, 5f, 4.5f, 4f, 3.5f, 3f, 2.5f, 2f, 1.5f, 1f, 0.5f, 0f, 0f, -0.5f, -1f, -1f, -1f, -1f, -1f, -1f),
                     isBuiltIn = true
                 )
             )
             add(
                 DspPreset(
                     "Electronic",
-                    graphicGainsDb = listOf(5f, 5f, 4f, 3f, 1f, 0f, -2f, -1f, 0f, 1f, 1f, 1f, 2f, 2f, 3f, 3f, 4f, 4f, 5f, 5f, 5f),
+                    graphicGainsDb = gains(5f, 5f, 4.5f, 4f, 4f, 3.5f, 3f, 2.5f, 2f, 1f, 0f, -1f, -2f, -1f, 0f, 0.5f, 1f, 1f, 1.5f, 2f, 2.5f, 3f, 3f, 3.5f, 4f, 4f, 4.5f, 5f, 5f, 5f, 5f),
                     isBuiltIn = true
                 )
             )

@@ -3,7 +3,6 @@ package com.foamplayer.app.audio.dsp
 import kotlin.math.PI
 import kotlin.math.log10
 import kotlin.math.pow
-import kotlin.math.tanh
 
 /**
  * A ready-to-run snapshot of the whole DSP chain: everything the audio processor
@@ -15,7 +14,9 @@ import kotlin.math.tanh
  *     chain's spectral peak so EQ boosts can never push samples past full scale;
  *  2. the filters shape the signal;
  *  3. [outputGainLinear] (direct volume × pre-amp) applies the user gain AFTER the
- *     filters, so a reduced pre-amp can also hand the filters extra headroom.
+ *     filters, so a reduced pre-amp can also hand the filters extra headroom;
+ *  4. the look-ahead limiter ([limiterEnabled]) scales down only the peaks that
+ *     would otherwise exceed full scale.
  */
 data class DspChain(
     val sampleRate: Int,
@@ -66,14 +67,18 @@ object DspMath {
                 filters += BiquadDesigner.highShelf(fs, ToneSettings.TREBLE_SHELF_HZ.toDouble(), tone.trebleDb.toDouble())
             }
 
-            // Graphic EQ: one peaking section per band with a non-zero gain.
+            // Graphic EQ: one peaking section per band with a non-zero gain,
+            // computed at the band's actual center for the CURRENT band count.
             val graphic = state.graphicEq
             if (graphic.enabled) {
-                GraphicEqSettings.BAND_FREQUENCIES.forEachIndexed { index, freq ->
-                    val gain = graphic.gainsDb.getOrNull(index) ?: 0f
+                val bandCount = graphic.gainsDb.size
+                val q = GraphicEqSettings.bandQ(bandCount)
+                for (index in 0 until bandCount) {
+                    val gain = graphic.gainsDb[index]
                     if (gain != 0f) {
                         filters += BiquadDesigner.peaking(
-                            fs, freq.toDouble(), gain.toDouble(), GraphicEqSettings.BAND_Q
+                            fs, GraphicEqSettings.bandFrequency(index, bandCount).toDouble(),
+                            gain.toDouble(), q
                         )
                     }
                 }
@@ -83,20 +88,7 @@ object DspMath {
             val parametric = state.parametricEq
             if (parametric.enabled) {
                 parametric.nodes.forEach { node ->
-                    val coefficients = when (node.type) {
-                        FilterType.PEAKING -> BiquadDesigner.peaking(
-                            fs, node.frequencyHz.toDouble(), node.gainDb.toDouble(), node.q.toDouble()
-                        )
-                        FilterType.LOW_SHELF -> BiquadDesigner.lowShelf(
-                            fs, node.frequencyHz.toDouble(), node.gainDb.toDouble()
-                        )
-                        FilterType.HIGH_SHELF -> BiquadDesigner.highShelf(
-                            fs, node.frequencyHz.toDouble(), node.gainDb.toDouble()
-                        )
-                        FilterType.LOW_PASS -> BiquadDesigner.lowPass(fs, node.frequencyHz.toDouble(), node.q.toDouble())
-                        FilterType.HIGH_PASS -> BiquadDesigner.highPass(fs, node.frequencyHz.toDouble(), node.q.toDouble())
-                    }
-                    filters += coefficients
+                    filters += nodeFilter(fs, node)
                 }
             }
         }
@@ -199,10 +191,15 @@ object DspMath {
             Section.GRAPHIC -> {
                 val graphic = state.graphicEq
                 if (graphic.enabled) {
-                    GraphicEqSettings.BAND_FREQUENCIES.forEachIndexed { index, freq ->
-                        val gain = graphic.gainsDb.getOrNull(index) ?: 0f
+                    val bandCount = graphic.gainsDb.size
+                    val q = GraphicEqSettings.bandQ(bandCount)
+                    for (index in 0 until bandCount) {
+                        val gain = graphic.gainsDb[index]
                         if (gain != 0f) {
-                            filters += BiquadDesigner.peaking(fs, freq.toDouble(), gain.toDouble(), GraphicEqSettings.BAND_Q)
+                            filters += BiquadDesigner.peaking(
+                                fs, GraphicEqSettings.bandFrequency(index, bandCount).toDouble(),
+                                gain.toDouble(), q
+                            )
                         }
                     }
                 }
@@ -220,9 +217,9 @@ object DspMath {
     }
 
     /**
-     * Response of the 21-band graphic EQ alone for [gainsDb] — the curve the
-     * fader strip draws behind its sliders, where it must match them 1:1
-     * (tone/pre-amp contributions excluded on purpose).
+     * Response of the graphic EQ alone for [gainsDb] with centers derived from the
+     * list length — the curve the fader strip draws behind its sliders, where it
+     * must match them 1:1 (tone/pre-amp contributions excluded on purpose).
      */
     fun graphicResponse(
         gainsDb: List<Float>,
@@ -230,11 +227,16 @@ object DspMath {
         pointCount: Int = DEFAULT_RESPONSE_POINTS
     ): List<Float> {
         val fs = sampleRateHz.coerceAtLeast(1).toDouble()
-        val filters = ArrayList<BiquadCoefficients>(GraphicEqSettings.BAND_COUNT)
-        GraphicEqSettings.BAND_FREQUENCIES.forEachIndexed { index, freq ->
-            val gain = gainsDb.getOrNull(index) ?: 0f
+        val bandCount = gainsDb.size
+        val q = GraphicEqSettings.bandQ(bandCount)
+        val filters = ArrayList<BiquadCoefficients>(bandCount)
+        for (index in 0 until bandCount) {
+            val gain = gainsDb[index]
             if (gain != 0f) {
-                filters += BiquadDesigner.peaking(fs, freq.toDouble(), gain.toDouble(), GraphicEqSettings.BAND_Q)
+                filters += BiquadDesigner.peaking(
+                    fs, GraphicEqSettings.bandFrequency(index, bandCount).toDouble(),
+                    gain.toDouble(), q
+                )
             }
         }
         return evaluateResponse(filters, sampleRateHz, pointCount)
@@ -256,8 +258,12 @@ object DspMath {
         FilterType.PEAKING -> BiquadDesigner.peaking(
             fs, node.frequencyHz.toDouble(), node.gainDb.toDouble(), node.q.toDouble()
         )
-        FilterType.LOW_SHELF -> BiquadDesigner.lowShelf(fs, node.frequencyHz.toDouble(), node.gainDb.toDouble())
-        FilterType.HIGH_SHELF -> BiquadDesigner.highShelf(fs, node.frequencyHz.toDouble(), node.gainDb.toDouble())
+        FilterType.LOW_SHELF -> BiquadDesigner.lowShelf(
+            fs, node.frequencyHz.toDouble(), node.gainDb.toDouble(), node.slope.toDouble()
+        )
+        FilterType.HIGH_SHELF -> BiquadDesigner.highShelf(
+            fs, node.frequencyHz.toDouble(), node.gainDb.toDouble(), node.slope.toDouble()
+        )
         FilterType.LOW_PASS -> BiquadDesigner.lowPass(fs, node.frequencyHz.toDouble(), node.q.toDouble())
         FilterType.HIGH_PASS -> BiquadDesigner.highPass(fs, node.frequencyHz.toDouble(), node.q.toDouble())
     }
@@ -307,7 +313,7 @@ object DspMath {
         val abs = kotlin.math.abs(x)
         if (abs <= knee) return x
         val over = (abs - knee) / (1f - knee)
-        return kotlin.math.sign(x) * (knee + (1f - knee) * tanh(over))
+        return kotlin.math.sign(x) * (knee + (1f - knee) * kotlin.math.tanh(over))
     }
 
     /**
@@ -321,7 +327,7 @@ object DspMath {
         val abs = kotlin.math.abs(x)
         if (abs <= knee) return x
         val over = (abs - knee) / (1f - knee)
-        return kotlin.math.sign(x) * (knee + (1f - knee) * tanh(over))
+        return kotlin.math.sign(x) * (knee + (1f - knee) * kotlin.math.tanh(over))
     }
 
     private const val HEADROOM_SAMPLE_POINTS = 65

@@ -21,6 +21,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.Switch
 import androidx.compose.material.SwitchDefaults
@@ -139,6 +141,9 @@ fun EqualizerScreen(
         }
     }
 
+    // Band selector state: which count chip is active in the strip header.
+    var showBandPicker by remember { mutableStateOf(false) }
+
     val allPresets = remember(userPresets) { DspPreset.BUILT_INS + userPresets }
     val currentPreset = remember(allPresets, state) { allPresets.matching(state) }
 
@@ -197,6 +202,7 @@ fun EqualizerScreen(
                         showViewport = selectedSection == DspMath.Section.GRAPHIC,
                         scrollState = stripScrollState,
                         stripViewportWidthPx = stripViewportWidthPx,
+                        combinedCurveBandCount = workingGains.size,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp)
@@ -231,13 +237,62 @@ fun EqualizerScreen(
         ) {
             BasicText(
                 text = when (selectedSection) {
-                    DspMath.Section.GRAPHIC -> "21-band graphic equalizer"
+                    DspMath.Section.GRAPHIC -> "${state.graphicEq.count}-band graphic equalizer"
                     DspMath.Section.PARAMETRIC ->
                         "Parametric equalizer · ${workingNodes.size}/${ParametricEqSettings.MAX_NODES} nodes"
                 },
                 style = FoamTheme.typography.caption,
                 modifier = Modifier.weight(1f)
             )
+
+            // Band-count selector, only in graphic mode (Poweramp-style layouts).
+            if (selectedSection == DspMath.Section.GRAPHIC) {
+                Box {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(FoamTheme.colors.surfaceVariant)
+                            .clickable { showBandPicker = !showBandPicker }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            BasicText(
+                                text = "${state.graphicEq.count} BANDS",
+                                style = FoamTheme.typography.caption.copy(
+                                    color = FoamTheme.accentColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = showBandPicker,
+                        onDismissRequest = { showBandPicker = false }
+                    ) {
+                        GraphicEqSettings.UI_BAND_COUNTS.forEach { count ->
+                            DropdownMenuItem(
+                                onClick = {
+                                    viewModel.setGraphicBandCount(count)
+                                    showBandPicker = false
+                                }
+                            ) {
+                                BasicText(
+                                    text = "$count bands",
+                                    style = FoamTheme.typography.body.copy(
+                                        color = if (count == state.graphicEq.count) {
+                                            FoamTheme.accentColor
+                                        } else {
+                                            FoamTheme.colors.textPrimary
+                                        }
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+            }
 
             // Quick add-node action, only in parametric mode.
             if (selectedSection == DspMath.Section.PARAMETRIC) {

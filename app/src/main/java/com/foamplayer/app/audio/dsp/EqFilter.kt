@@ -2,26 +2,27 @@ package com.foamplayer.app.audio.dsp
 
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Filter shape of a single parametric/EQ band. Follows the RBJ audio-EQ-cookbook
- * section names so coefficient math and UI labels stay in sync.
+ * Filter shapes available to the parametric EQ. Names follow the RBJ audio
+ * EQ cookbook so the UI labels and the coefficient math stay in sync.
  */
-enum class FilterType(val label: String) {
-    PEAKING("Peak"),
-    LOW_SHELF("Low shelf"),
-    HIGH_SHELF("High shelf"),
-    LOW_PASS("Low pass"),
-    HIGH_PASS("High pass")
+enum class FilterType(val label: String, val gainAdjustable: Boolean) {
+    PEAKING("Peak", true),
+    LOW_SHELF("Low shelf", true),
+    HIGH_SHELF("High shelf", true),
+    LOW_PASS("Low pass", false),
+    HIGH_PASS("High pass", false)
 }
 
 /**
- * Time-invariant biquad coefficients (direct form I normalized by a0). Pure data:
- * building them from [DspState] is [DspMath]'s job, applying them to samples is the
- * audio processor's job, and evaluating their magnitude response is the UI's job.
+ * Time-invariant biquad coefficients in transposed direct form II layout.
+ * Pure data: [EqGraph] applies them to samples, [EqMath] evaluates the
+ * magnitude response for the UI.
  */
 data class BiquadCoefficients(
     val b0: Double,
@@ -30,23 +31,27 @@ data class BiquadCoefficients(
     val a1: Double,
     val a2: Double
 ) {
-    /** Magnitude of H(e^{jw}) in dB at normalized angular frequency [w] (0..pi). */
+    /**
+     * Magnitude of H(e^{jw}) in dB at normalized angular frequency [w] in
+     * 0..pi. Closed form, no state, safe to call from the UI thread.
+     */
     fun magnitudeDb(w: Double): Double {
         val cosW = cos(w)
         val sinW = sin(w)
         val cos2W = cos(2.0 * w)
+        val sin2W = sin(2.0 * w)
 
         val numRe = b0 + b1 * cosW + b2 * cos2W
-        val numIm = -(b1 * sinW + b2 * sin(2.0 * w))
+        val numIm = -(b1 * sinW + b2 * sin2W)
         val denRe = 1.0 + a1 * cosW + a2 * cos2W
-        val denIm = -(a1 * sinW + a2 * sin(2.0 * w))
+        val denIm = -(a1 * sinW + a2 * sin2W)
 
         val numMag = sqrt(numRe * numRe + numIm * numIm)
         val denMag = sqrt(denRe * denRe + denIm * denIm)
         if (denMag == 0.0 || numMag == 0.0) return -120.0
 
         val linear = numMag / denMag
-        return if (linear <= 1e-6) -120.0 else 20.0 * kotlin.math.log10(linear)
+        return if (linear <= 1e-6) -120.0 else 20.0 * log10(linear)
     }
 
     companion object {
@@ -55,18 +60,18 @@ data class BiquadCoefficients(
 }
 
 /**
- * Mutable per-channel state of one biquad (transposed direct form II), plus the
- * single-sample processing step. One instance lives per (filter, channel) pair in
- * the audio processor; the DSP graph itself is rebuilt wholesale when settings change.
+ * Per-channel runtime state of one biquad (transposed direct form II) with
+ * its single-sample processing step. Instantiated per (filter, channel) pair
+ * by [EqGraph]; rebuilt wholesale when settings change.
  */
-class BiquadState(private val coefficients: BiquadCoefficients) {
+class BiquadState(private val c: BiquadCoefficients) {
     private var z1 = 0.0
     private var z2 = 0.0
 
     fun process(x: Float): Float {
-        val y = coefficients.b0 * x + z1
-        z1 = coefficients.b1 * x - coefficients.a1 * y + z2
-        z2 = coefficients.b2 * x - coefficients.a2 * y
+        val y = c.b0 * x + z1
+        z1 = c.b1 * x - c.a1 * y + z2
+        z2 = c.b2 * x - c.a2 * y
         return y.toFloat()
     }
 
@@ -77,9 +82,10 @@ class BiquadState(private val coefficients: BiquadCoefficients) {
 }
 
 /**
- * RBJ-cookbook coefficient builders. All frequency-domain arguments are double
- * precision; the sample-rate (fs) must be > 0 and the corner frequency strictly
- * inside (0, fs/2) or the identity filter is returned instead of NaN coefficients.
+ * 64-bit RBJ audio-EQ-cookbook biquad designer. All frequency-domain math in
+ * double precision; an invalid sample rate, a frequency outside (0, fs/2), a
+ * non-positive Q or a zero gain yields [BiquadCoefficients.IDENTITY] instead
+ * of NaN coefficients, so a bad slider value can never poison the audio path.
  */
 object BiquadDesigner {
 
@@ -100,7 +106,7 @@ object BiquadDesigner {
         return normalize(b0, b1, b2, a0, a1, a2)
     }
 
-    /** Low shelf: boosts/cuts everything below [frequencyHz] by [gainDb]. */
+    /** Low shelf: raises/lowers everything below [frequencyHz] by [gainDb]. */
     fun lowShelf(sampleRate: Double, frequencyHz: Double, gainDb: Double, slope: Double = 0.9): BiquadCoefficients {
         if (!valid(sampleRate, frequencyHz) || gainDb == 0.0) return BiquadCoefficients.IDENTITY
         val a = 10.0.pow(gainDb / 40.0)
@@ -118,7 +124,7 @@ object BiquadDesigner {
         return normalize(b0, b1, b2, a0, a1, a2)
     }
 
-    /** High shelf: boosts/cuts everything above [frequencyHz] by [gainDb]. */
+    /** High shelf: raises/lowers everything above [frequencyHz] by [gainDb]. */
     fun highShelf(sampleRate: Double, frequencyHz: Double, gainDb: Double, slope: Double = 0.9): BiquadCoefficients {
         if (!valid(sampleRate, frequencyHz) || gainDb == 0.0) return BiquadCoefficients.IDENTITY
         val a = 10.0.pow(gainDb / 40.0)
@@ -166,6 +172,38 @@ object BiquadDesigner {
         val a1 = -2.0 * cosW0
         val a2 = 1.0 - alpha
         return normalize(b0, b1, b2, a0, a1, a2)
+    }
+
+    /** First-order low pass with the -3 dB point at [frequencyHz]. */
+    fun firstOrderLowPass(sampleRate: Double, frequencyHz: Double): BiquadCoefficients {
+        if (!valid(sampleRate, frequencyHz)) return BiquadCoefficients.IDENTITY
+        val w0 = 2.0 * PI * frequencyHz / sampleRate
+        val cosW0 = cos(w0)
+        val tanHalf = kotlin.math.tan(w0 / 2.0)
+        val denom = 1.0 + tanHalf
+
+        val b0 = tanHalf / denom
+        val b1 = tanHalf / denom
+        val b2 = 0.0
+        val a1 = (cosW0 - 1.0) / denom
+        val a2 = 0.0
+        return BiquadCoefficients(b0, b1, b2, a1, a2)
+    }
+
+    /** First-order high pass with the -3 dB point at [frequencyHz]. */
+    fun firstOrderHighPass(sampleRate: Double, frequencyHz: Double): BiquadCoefficients {
+        if (!valid(sampleRate, frequencyHz)) return BiquadCoefficients.IDENTITY
+        val w0 = 2.0 * PI * frequencyHz / sampleRate
+        val cosW0 = cos(w0)
+        val tanHalf = kotlin.math.tan(w0 / 2.0)
+        val denom = 1.0 + tanHalf
+
+        val b0 = 1.0 / denom
+        val b1 = -1.0 / denom
+        val b2 = 0.0
+        val a1 = (cosW0 - 1.0) / denom
+        val a2 = 0.0
+        return BiquadCoefficients(b0, b1, b2, a1, a2)
     }
 
     private fun valid(sampleRate: Double, frequencyHz: Double): Boolean =

@@ -1,22 +1,22 @@
 package com.foamplayer.app.audio.dsp
 
-import com.foamplayer.app.audio.dsp.FilterType
-
 /**
  * Compact string serialization of [DspState] and user [DspPreset]s for DataStore
  * storage. Fields separated by ';', format version prefixed first:
  *
- * v3: `3;enabled;preamp;bass;mid;treble;gEnabled;g1,..,g21;pEnabled;id:type:freq:gain:q:color/..;balance;width;limiter;autoHeadroom;dvc;volume`
+ * v4: `4;enabled;preamp;bass;mid;treble;gEnabled;gCount;g1,..,gN;pEnabled;id:type:freq:gain:q:slope:color/..;balance;width;limiter;autoHeadroom;dvc;volume`
+ * v3: same without the band count and node slope fields (bands read as 21, slope as 0.9).
  * v2: same without the node color field (nodes read with the palette default).
  * v1: same without the autoHeadroom field (legacy payloads read with it = false).
  *
  * Parsing is defensive: any malformed field falls back to the default value, so a
  * bad or older payload can never crash the audio path. Gains lists of any legacy
- * length are trimmed/padded to the current band count.
+ * length are trimmed/padded to their declared band count, and the count itself is
+ * clamped to the supported range.
  */
 object DspPersistence {
 
-    private const val FORMAT_VERSION = 3
+    private const val FORMAT_VERSION = 4
 
     fun serialize(state: DspState): String = buildString {
         append(FORMAT_VERSION)
@@ -26,7 +26,8 @@ object DspPersistence {
         append(SEP).append(state.tone.midDb)
         append(SEP).append(state.tone.trebleDb)
         append(SEP).append(if (state.graphicEq.enabled) "1" else "0")
-        append(SEP).append(state.graphicEq.gainsDb.joinToString(LIST) { trim(it) })
+        append(SEP).append(state.graphicEq.count)
+        append(SEP).append(state.graphicEq.normalizedGains().joinToString(LIST) { trim(it) })
         append(SEP).append(if (state.parametricEq.enabled) "1" else "0")
         append(SEP).append(
             state.parametricEq.nodes.joinToString(NODE) { node ->
@@ -36,6 +37,7 @@ object DspPersistence {
                     trim(node.frequencyHz),
                     trim(node.gainDb),
                     trim(node.q),
+                    trim(node.slope),
                     node.colorArgb.toString(16)
                 ).joinToString(FIELD)
             }
@@ -54,13 +56,24 @@ object DspPersistence {
             val parts = raw.split(SEP)
             val default = DspState()
 
-            // v1 payloads lack the autoHeadroom field: its slot holds DVC instead,
-            // so the tail fields are parsed on version-specific indices.
             val version = parts.firstOrNull()?.toIntOrNull() ?: 1
-            val isV2 = version >= FORMAT_VERSION
-            val autoHeadroomIndex = if (isV2) 13 else -1
-            val directVolumeIndex = if (isV2) 14 else 13
-            val volumeIndex = if (isV2) 15 else 14
+            val isV4 = version >= 4
+            val isV3 = version >= 3
+            val isV2 = version >= 2
+
+            // Tail field indices depend on the payload version: v4 adds the band
+            // count (index 8) and shifts everything after it; v1 lacks autoHeadroom.
+            val balanceIndex = if (isV4) 13 else 12
+            val widthIndex = balanceIndex + 1
+            val limiterIndex = balanceIndex + 2
+            val autoHeadroomIndex = if (isV2) balanceIndex + 3 else -1
+            val directVolumeIndex = if (isV2) balanceIndex + 4 else balanceIndex + 3
+            val volumeIndex = directVolumeIndex + 1
+
+            val graphicGains = parseGains(
+                parts.getOrNull(9),
+                if (isV4) parseCount(parts.getOrNull(8)) else GraphicEqSettings.DEFAULT_BAND_COUNT
+            )
 
             DspState(
                 enabled = parts.getOrNull(1)?.toIntOrNull() == 1,
@@ -80,26 +93,22 @@ object DspPersistence {
                 ),
                 graphicEq = GraphicEqSettings(
                     enabled = parts.getOrNull(6)?.toIntOrNull() == 1,
-                    gainsDb = parts.getOrNull(7)?.split(LIST)
-                        ?.mapNotNull { it.toFloatOrNull() }
-                        ?.take(GraphicEqSettings.BAND_COUNT)
-                        ?.plus(List(GraphicEqSettings.BAND_COUNT) { 0f })
-                        ?.take(GraphicEqSettings.BAND_COUNT)
-                        ?: default.graphicEq.gainsDb
+                    count = graphicGains.second,
+                    gainsDb = graphicGains.first
                 ),
                 parametricEq = ParametricEqSettings(
-                    enabled = parts.getOrNull(8)?.toIntOrNull() == 1,
-                    nodes = parts.getOrNull(9)?.split(NODE)
+                    enabled = parts.getOrNull(10)?.toIntOrNull() == 1,
+                    nodes = parts.getOrNull(11)?.split(NODE)
                         ?.mapNotNull(::parseNode)
                         .orEmpty()
                 ),
-                balance = parts.getOrNull(10)?.toFloatOrNull()?.coerceIn(
+                balance = parts.getOrNull(balanceIndex)?.toFloatOrNull()?.coerceIn(
                     -DspState.MAX_BALANCE, DspState.MAX_BALANCE
                 ) ?: default.balance,
-                stereoWidth = parts.getOrNull(11)?.toFloatOrNull()?.coerceIn(
+                stereoWidth = parts.getOrNull(widthIndex)?.toFloatOrNull()?.coerceIn(
                     0f, DspState.MAX_STEREO_WIDTH
                 ) ?: default.stereoWidth,
-                limiterEnabled = parts.getOrNull(12)?.toIntOrNull()?.let { it == 1 }
+                limiterEnabled = parts.getOrNull(limiterIndex)?.toIntOrNull()?.let { it == 1 }
                     ?: default.limiterEnabled,
                 autoHeadroom = parts.getOrNull(autoHeadroomIndex)?.toIntOrNull()?.let { it == 1 }
                     ?: default.autoHeadroom,
@@ -114,6 +123,19 @@ object DspPersistence {
         }
     }
 
+    /** Parses a gains list, trimmed/padded to [count] with the count clamped. */
+    private fun parseGains(raw: String?, count: Int): Pair<List<Float>, Int> {
+        val safeCount = count.coerceIn(GraphicEqSettings.MIN_BAND_COUNT, GraphicEqSettings.MAX_BAND_COUNT)
+        val values = raw?.split(LIST)
+            ?.mapNotNull { it.toFloatOrNull() }
+            ?.take(safeCount)
+            .orEmpty()
+        return Pair(List(safeCount) { values.getOrElse(it) { 0f }.coerceIn(GraphicEqSettings.MIN_GAIN_DB, GraphicEqSettings.MAX_GAIN_DB) }, safeCount)
+    }
+
+    private fun parseCount(raw: String?): Int =
+        raw?.toIntOrNull() ?: GraphicEqSettings.DEFAULT_BAND_COUNT
+
     private fun parseNode(raw: String): ParametricNode? {
         val fields = raw.split(FIELD)
         if (fields.size < 5) return null
@@ -122,7 +144,10 @@ object DspPersistence {
         val freq = fields[2].toFloatOrNull() ?: return null
         val gain = fields[3].toFloatOrNull() ?: 0f
         val q = fields[4].toFloatOrNull() ?: 1.2f
-        val color = fields.getOrNull(5)?.toLongOrNull(16)
+        // v3 payloads have no slope field; v2/v1 have no slope and no color.
+        val slope = fields.getOrNull(5)?.toFloatOrNull() ?: 0.9f
+        val color = fields.getOrNull(6)?.toLongOrNull(16)
+            ?: fields.getOrNull(5)?.toLongOrNull(16)
             ?: NodeColorPalette[(id % NodeColorPalette.size).toInt()]
         return ParametricNode(
             id = id,
@@ -130,6 +155,7 @@ object DspPersistence {
             frequencyHz = freq.coerceIn(ParametricNode.MIN_FREQ_HZ, ParametricNode.MAX_FREQ_HZ),
             gainDb = gain.coerceIn(ParametricNode.MIN_GAIN_DB, ParametricNode.MAX_GAIN_DB),
             q = q.coerceIn(ParametricNode.MIN_Q, ParametricNode.MAX_Q),
+            slope = slope.coerceIn(ParametricNode.MIN_SLOPE, ParametricNode.MAX_SLOPE),
             colorArgb = color
         )
     }
