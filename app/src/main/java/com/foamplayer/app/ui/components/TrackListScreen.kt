@@ -137,6 +137,8 @@ fun TrackListScreen(
     tracks: List<TrackEntity>,
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
     onPlayAllClick: () -> Unit,
+    /** Called with a shuffled copy of the displayed tracks to queue them in random order. */
+    onShuffleAllClick: ((List<TrackEntity>) -> Unit)? = null,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     imageUrl: String? = null,
@@ -416,6 +418,9 @@ fun TrackListScreen(
                             imageUrl = imageUrl,
                             imageIsEmbeddedArt = imageIsEmbeddedArt,
                             onPlayAllClick = onPlayAllClick,
+                            onShuffleAllClick = onShuffleAllClick?.let { callback ->
+                                { callback(shownTracks.shuffled()) }
+                            },
                             searchState = searchState,
                             accentColor = heroAccentColor,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
@@ -557,6 +562,9 @@ fun TrackListScreen(
                             imageUrl = imageUrl,
                             imageIsEmbeddedArt = imageIsEmbeddedArt,
                             onPlayAllClick = onPlayAllClick,
+                            onShuffleAllClick = onShuffleAllClick?.let { callback ->
+                                { callback(shownTracks.shuffled()) }
+                            },
                             searchState = searchState,
                             accentColor = heroAccentColor,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
@@ -734,6 +742,7 @@ private fun TrackListHero(
     imageUrl: String?,
     imageIsEmbeddedArt: Boolean,
     onPlayAllClick: () -> Unit,
+    onShuffleAllClick: (() -> Unit)?,
     searchState: CollectionSearchState?,
     accentColor: Color,
     onVisibleHeightPx: (Int) -> Unit,
@@ -752,6 +761,7 @@ private fun TrackListHero(
             statsText = statsText,
             accentColor = accentColor,
             onPlayAllClick = onPlayAllClick,
+            onShuffleAllClick = onShuffleAllClick,
             searchState = searchState,
             onVisibleHeightPx = onVisibleHeightPx,
             overlayTextAlpha = overlayTextAlpha,
@@ -772,6 +782,7 @@ private fun TrackListHero(
         imageUrl = imageUrl,
         imageIsEmbeddedArt = imageIsEmbeddedArt,
         onPlayAllClick = onPlayAllClick,
+        onShuffleAllClick = onShuffleAllClick,
         searchState = searchState,
         accentColor = accentColor,
         sharedTransitionScope = sharedTransitionScope,

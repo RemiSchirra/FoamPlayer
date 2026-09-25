@@ -381,6 +381,9 @@ fun AllTracksBrowseScreen(
         tracks = sortedTracks,
         onTrackClick = onTrackClick,
         onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
+        onShuffleAllClick = { shuffled ->
+            if (shuffled.isNotEmpty()) onTrackClick(shuffled, 0)
+        },
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,
@@ -432,6 +435,9 @@ fun GenreTracksScreen(
         tracks = sortedTracks,
         onTrackClick = onTrackClick,
         onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
+        onShuffleAllClick = { shuffled ->
+            if (shuffled.isNotEmpty()) onTrackClick(shuffled, 0)
+        },
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,
@@ -486,6 +492,9 @@ fun YearTracksScreen(
         tracks = sortedTracks,
         onTrackClick = onTrackClick,
         onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
+        onShuffleAllClick = { shuffled ->
+            if (shuffled.isNotEmpty()) onTrackClick(shuffled, 0)
+        },
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,

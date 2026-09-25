@@ -237,6 +237,9 @@ fun ArtistDetailScreen(
                         trackCount = tracks.size,
                         accentColor = accentColor,
                         onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+                        onShuffleAllClick = {
+                            if (tracks.isNotEmpty()) onTrackClick(tracks.shuffled(), 0)
+                        },
                         searchState = searchState,
                         onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
                         overlayTextAlpha = { 1f - topBarFraction() },
@@ -372,6 +375,7 @@ private fun ArtistHero(
     trackCount: Int,
     accentColor: Color,
     onPlayAllClick: () -> Unit,
+    onShuffleAllClick: (() -> Unit)?,
     searchState: CollectionSearchState?,
     onVisibleHeightPx: (Int) -> Unit,
     overlayTextAlpha: () -> Float,
@@ -388,6 +392,7 @@ private fun ArtistHero(
             statsText = "$trackCount Tracks",
             accentColor = accentColor,
             onPlayAllClick = onPlayAllClick,
+            onShuffleAllClick = onShuffleAllClick,
             searchState = searchState,
             onVisibleHeightPx = onVisibleHeightPx,
             overlayTextAlpha = overlayTextAlpha,
@@ -408,6 +413,7 @@ private fun ArtistHero(
         imageUrl = imageUrl,
         imageIsEmbeddedArt = imageIsEmbeddedArt,
         onPlayAllClick = onPlayAllClick,
+        onShuffleAllClick = onShuffleAllClick,
         searchState = searchState,
         accentColor = accentColor,
         sharedTransitionScope = sharedTransitionScope,

@@ -57,6 +57,11 @@ fun ArtistSongsScreen(
                 onTrackClick(tracks, 0)
             }
         },
+        onShuffleAllClick = { shuffled ->
+            if (shuffled.isNotEmpty()) {
+                onTrackClick(shuffled, 0)
+            }
+        },
         onBack = onBack,
         imageUrl = imageUrl,
         sharedTransitionScope = sharedTransitionScope,

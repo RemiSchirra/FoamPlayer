@@ -37,6 +37,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
 import androidx.compose.material.ripple
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ProvidableCompositionLocal
@@ -208,6 +210,7 @@ fun CollectionHeroImmersiveHeader(
     modifier: Modifier = Modifier,
     accentColor: Color = FoamTheme.accentColor,
     onPlayAllClick: (() -> Unit)? = null,
+    onShuffleAllClick: (() -> Unit)? = null,
     searchState: CollectionSearchState? = null,
     overlayTextAlpha: (() -> Float)? = null,
     transitionAlpha: (() -> Float)? = null,
@@ -256,6 +259,7 @@ fun CollectionHeroImmersiveHeader(
                     accentColor = accentColor,
                     centered = layout == CollectionHeroLayout.Immersive,
                     onPlayAllClick = onPlayAllClick,
+                    onShuffleAllClick = onShuffleAllClick,
                     searchState = searchState,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
@@ -324,6 +328,7 @@ fun CollectionHero(
     imageIsEmbeddedArt: Boolean = true,
     icon: ImageVector? = null,
     searchState: CollectionSearchState? = null,
+    onShuffleAllClick: (() -> Unit)? = null,
     accentColor: Color = FoamTheme.accentColor,
     transitionAlpha: (() -> Float)? = null,
     scrollOffsetPx: (() -> Int)? = null,
@@ -341,6 +346,7 @@ fun CollectionHero(
             imageIsEmbeddedArt = imageIsEmbeddedArt,
             icon = icon,
             onPlayAllClick = onPlayAllClick,
+            onShuffleAllClick = onShuffleAllClick,
             searchState = searchState,
             accentColor = accentColor,
             sharedTransitionScope = sharedTransitionScope,
@@ -357,6 +363,7 @@ fun CollectionHero(
             imageIsEmbeddedArt = imageIsEmbeddedArt,
             icon = icon,
             onPlayAllClick = onPlayAllClick,
+            onShuffleAllClick = onShuffleAllClick,
             searchState = searchState,
             accentColor = accentColor,
             sharedTransitionScope = sharedTransitionScope,
@@ -394,6 +401,7 @@ private fun CollectionHeroCompact(
     imageIsEmbeddedArt: Boolean,
     icon: ImageVector?,
     onPlayAllClick: (() -> Unit)?,
+    onShuffleAllClick: (() -> Unit)?,
     searchState: CollectionSearchState?,
     accentColor: Color,
     sharedTransitionScope: SharedTransitionScope?,
@@ -448,6 +456,10 @@ private fun CollectionHeroCompact(
             if (onPlayAllClick != null || searchState != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onShuffleAllClick != null && onPlayAllClick != null) {
+                        CollectionHeroShuffleButton(onShuffleAllClick = onShuffleAllClick)
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
                     if (onPlayAllClick != null) {
                         CollectionHeroPlayButton(onClick = onPlayAllClick, accentColor = accentColor)
                     }
@@ -474,6 +486,7 @@ private fun CollectionHeroNormal(
     imageIsEmbeddedArt: Boolean,
     icon: ImageVector?,
     onPlayAllClick: (() -> Unit)?,
+    onShuffleAllClick: (() -> Unit)?,
     searchState: CollectionSearchState?,
     accentColor: Color,
     sharedTransitionScope: SharedTransitionScope?,
@@ -529,6 +542,10 @@ private fun CollectionHeroNormal(
             if (onPlayAllClick != null || searchState != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onShuffleAllClick != null && onPlayAllClick != null) {
+                        CollectionHeroShuffleButton(onShuffleAllClick = onShuffleAllClick)
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
                     if (onPlayAllClick != null) {
                         CollectionHeroPlayButton(onClick = onPlayAllClick, accentColor = accentColor)
                     }
@@ -666,6 +683,7 @@ private fun CollectionHeroOverlayContent(
     accentColor: Color,
     centered: Boolean,
     onPlayAllClick: (() -> Unit)?,
+    onShuffleAllClick: (() -> Unit)? = null,
     searchState: CollectionSearchState? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -693,6 +711,10 @@ private fun CollectionHeroOverlayContent(
         if (onPlayAllClick != null || searchState != null) {
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (onShuffleAllClick != null && onPlayAllClick != null) {
+                    CollectionHeroShuffleButton(onShuffleAllClick = onShuffleAllClick)
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
                 if (onPlayAllClick != null) {
                     CollectionHeroPlayButton(
                         onClick = onPlayAllClick,
@@ -851,6 +873,35 @@ private fun CollectionHeroPlayButton(
                 style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.background)
             )
         }
+    }
+}
+
+/**
+ * The hero's shuffle toggle, rendered LEFT of the play pill: queues the
+ * collection's items in shuffled order (play behaviour, shuffled queue).
+ * Hidden when no [onShuffleAllClick] is provided.
+ */
+@Composable
+private fun CollectionHeroShuffleButton(
+    onShuffleAllClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary)
+            ) { onShuffleAllClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Shuffle,
+            contentDescription = "Shuffle",
+            tint = FoamTheme.colors.textPrimary,
+            modifier = Modifier.size(24.dp)
+        )
     }
 }
 

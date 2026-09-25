@@ -239,6 +239,9 @@ fun RecentTracksSeeAllScreen(
         tracks = sortedTracks,
         onTrackClick = onTrackClick,
         onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
+        onShuffleAllClick = { shuffled ->
+            if (shuffled.isNotEmpty()) onTrackClick(shuffled, 0)
+        },
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,
@@ -284,6 +287,9 @@ fun OldFavoritesSeeAllScreen(
         tracks = sortedTracks,
         onTrackClick = onTrackClick,
         onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
+        onShuffleAllClick = { shuffled ->
+            if (shuffled.isNotEmpty()) onTrackClick(shuffled, 0)
+        },
         onBack = onBack,
         activeTrackId = activeTrackId,
         density = density,
