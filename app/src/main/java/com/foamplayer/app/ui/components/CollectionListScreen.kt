@@ -145,6 +145,8 @@ fun CollectionListScreen(
     sortInverted: Boolean = false,
     /** When set, the "Inverse" checkbox is shown under the sort radio list. */
     onSortInvertedChange: ((Boolean) -> Unit)? = null,
+    /** When set, the hero gains a search toggle + filter bar filtering the content lambda's items. */
+    searchState: CollectionSearchState? = null,
     heroLayout: CollectionHeroLayout = LocalDefaultCollectionHeroLayout.current,
     content: MediaListContentScope.() -> Unit
 ) {
@@ -250,6 +252,7 @@ fun CollectionListScreen(
                             itemCount = itemCount,
                             imageUrl = headerImageUrl,
                             icon = headerIcon,
+                            searchState = searchState,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it }
                         )
                     }
@@ -274,6 +277,7 @@ fun CollectionListScreen(
                             itemCount = itemCount,
                             imageUrl = headerImageUrl,
                             icon = headerIcon,
+                            searchState = searchState,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it }
                         )
                     }
@@ -355,6 +359,7 @@ private fun CollectionListHero(
     itemCount: Int,
     imageUrl: String?,
     icon: ImageVector?,
+    searchState: CollectionSearchState?,
     onVisibleHeightPx: (Int) -> Unit
 ) {
     if (heroLayout.isImmersive) {
@@ -363,6 +368,7 @@ private fun CollectionListHero(
             title = title,
             subtitle = subtitle,
             statsText = "$itemCount items",
+            searchState = searchState,
             onVisibleHeightPx = onVisibleHeightPx
         )
         return
@@ -375,6 +381,7 @@ private fun CollectionListHero(
         statsText = "$itemCount items",
         imageUrl = imageUrl,
         icon = icon,
+        searchState = searchState,
         onPlayAllClick = null
     )
 }

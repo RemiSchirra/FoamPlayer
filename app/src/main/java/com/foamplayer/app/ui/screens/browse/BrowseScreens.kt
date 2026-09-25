@@ -44,6 +44,7 @@ import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.distinctCollectionAlbums
 import com.foamplayer.app.ui.components.distinctCollectionArtistNames
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
+import com.foamplayer.app.ui.components.rememberCollectionSearchState
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.components.rememberSortedTracks
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
@@ -75,7 +76,13 @@ fun AlbumsBrowseScreen(
     val albums by viewModel.albums.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
-    val sortedAlbums = rememberSortedList(albums, sortMode, sortInverted) { mode ->
+    // Hero search: filters the displayed albums while the bar is open.
+    val searchState = rememberCollectionSearchState()
+    val sortedAlbums = rememberSortedList(
+        albums.filter { searchState.matches(it.album, it.artist) },
+        sortMode,
+        sortInverted
+    ) { mode ->
         when (mode) {
             CollectionSortMode.ARTIST ->
                 caseInsensitiveComparator(AlbumSearchResult::artist)
@@ -98,7 +105,8 @@ fun AlbumsBrowseScreen(
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange
+        onSortInvertedChange = onSortInvertedChange,
+        searchState = searchState
     ) {
         items(sortedAlbums, key = { "browse_album_${it.album}" }) { album ->
             Box(modifier = Modifier.listRowInset(density)) {
@@ -156,7 +164,12 @@ fun ArtistsBrowseScreen(
     val artistImages by viewModel.artistImages.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
-    val sortedArtists = rememberSortedList(artists, sortMode, sortInverted) {
+    val searchState = rememberCollectionSearchState()
+    val sortedArtists = rememberSortedList(
+        artists.filter { searchState.matches(it) },
+        sortMode,
+        sortInverted
+    ) {
         caseInsensitiveComparator { it }
     }
 
@@ -170,7 +183,8 @@ fun ArtistsBrowseScreen(
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange
+        onSortInvertedChange = onSortInvertedChange,
+        searchState = searchState
     ) {
         items(sortedArtists, key = { "browse_artist_$it" }) { artist ->
             Box(modifier = Modifier.listRowInset(density)) {
@@ -223,7 +237,12 @@ fun GenresBrowseScreen(
     val genres by viewModel.genres.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
-    val sortedGenres = rememberSortedList(genres, sortMode, sortInverted) {
+    val searchState = rememberCollectionSearchState()
+    val sortedGenres = rememberSortedList(
+        genres.filter { searchState.matches(it) },
+        sortMode,
+        sortInverted
+    ) {
         caseInsensitiveComparator { it }
     }
 
@@ -238,7 +257,8 @@ fun GenresBrowseScreen(
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange
+        onSortInvertedChange = onSortInvertedChange,
+        searchState = searchState
     ) {
         items(sortedGenres, key = { "browse_genre_$it" }) { genre ->
             Box(modifier = Modifier.listRowInset(density)) {
@@ -285,7 +305,12 @@ fun YearsBrowseScreen(
     val longPressScope = rememberCoroutineScope()
     // NAME on a years list is the year's own ascending order (the DAO starts
     // newest-first; the sort modes give the user the reverse for free).
-    val sortedYears = rememberSortedList(years, sortMode, sortInverted) {
+    val searchState = rememberCollectionSearchState()
+    val sortedYears = rememberSortedList(
+        years.filter { searchState.matches(it.toString()) },
+        sortMode,
+        sortInverted
+    ) {
         compareBy { it }
     }
 
@@ -300,7 +325,8 @@ fun YearsBrowseScreen(
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange
+        onSortInvertedChange = onSortInvertedChange,
+        searchState = searchState
     ) {
         items(sortedYears, key = { "browse_year_$it" }) { year ->
             Box(modifier = Modifier.listRowInset(density)) {
@@ -509,14 +535,20 @@ fun FolderBrowseScreen(
         ?: "Folders"
 
     val folders = content?.folders.orEmpty()
-    val sortedFolders = rememberSortedList(folders, sortMode, sortInverted) {
+    val searchState = rememberCollectionSearchState()
+    val sortedFolders = rememberSortedList(
+        folders.filter { searchState.matches(it.name) },
+        sortMode,
+        sortInverted
+    ) {
         caseInsensitiveComparator { it.name }
     }
     val tracks = content?.tracks.orEmpty()
+    val shownTracks = tracks.filter { searchState.matches(it.title, it.artist) }
 
     CollectionListScreen(
         title = title,
-        itemCount = sortedFolders.size + tracks.size,
+        itemCount = sortedFolders.size + shownTracks.size,
         onBack = onBack,
         headerIcon = Icons.Rounded.Folder,
         density = density,
@@ -525,7 +557,8 @@ fun FolderBrowseScreen(
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange
+        onSortInvertedChange = onSortInvertedChange,
+        searchState = searchState
     ) {
         items(sortedFolders, key = { "browse_folder_${it.path}" }) { folder ->
             Box(modifier = Modifier.listRowInset(density)) {
@@ -554,18 +587,18 @@ fun FolderBrowseScreen(
             }
         }
 
-        itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+        itemsIndexed(shownTracks, key = { _, track -> track.id }) { index, track ->
             Box(modifier = Modifier.listRowInset(density)) {
                 TrackListItem(
                     track = track,
-                    onClick = { onTrackClick(tracks, index) },
+                    onClick = { onTrackClick(shownTracks, index) },
                     active = track.id == activeTrackId,
                     density = density
                 )
             }
         }
 
-        if (sortedFolders.isEmpty() && tracks.isEmpty()) {
+        if (sortedFolders.isEmpty() && shownTracks.isEmpty()) {
             item(key = "browse_folder_empty") {
                 Box(
                     modifier = Modifier
@@ -643,7 +676,12 @@ fun CollectionArtistsScreen(
         }
     }
 
-    val sortedRows = rememberSortedList(artistRows, sortMode, sortInverted) {
+    val searchState = rememberCollectionSearchState()
+    val sortedRows = rememberSortedList(
+        artistRows.filter { searchState.matches(it.name) },
+        sortMode,
+        sortInverted
+    ) {
         caseInsensitiveComparator { it.name }
     }
 
@@ -658,7 +696,8 @@ fun CollectionArtistsScreen(
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange
+        onSortInvertedChange = onSortInvertedChange,
+        searchState = searchState
     ) {
         items(sortedRows, key = { "artists_in_${kind}_${it.name}" }) { row ->
             Box(modifier = Modifier.listRowInset(density)) {
@@ -731,7 +770,12 @@ fun CollectionAlbumsScreen(
         }
     }
 
-    val sortedRows = rememberSortedList(albumRows, sortMode, sortInverted) { mode ->
+    val searchState = rememberCollectionSearchState()
+    val sortedRows = rememberSortedList(
+        albumRows.filter { searchState.matches(it.album, it.artist) },
+        sortMode,
+        sortInverted
+    ) { mode ->
         when (mode) {
             CollectionSortMode.ARTIST ->
                 caseInsensitiveComparator<CollectionAlbumEntry> { it.artist ?: "" }
@@ -755,7 +799,8 @@ fun CollectionAlbumsScreen(
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange
+        onSortInvertedChange = onSortInvertedChange,
+        searchState = searchState
     ) {
         items(sortedRows, key = { "albums_in_${kind}_${it.album}" }) { entry ->
             Box(modifier = Modifier.listRowInset(density)) {

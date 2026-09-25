@@ -1,11 +1,15 @@
 package com.foamplayer.app.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -29,28 +33,37 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -110,6 +123,36 @@ val CollectionHeroImmersiveListTopPadding = 16.dp
  */
 val LocalDefaultCollectionHeroLayout = compositionLocalOf { CollectionHeroLayout.Compact }
 
+/** State of a collection hero's in-page item search (see [CollectionHeroSearchBar]). */
+class CollectionSearchState {
+    var open by mutableStateOf(false)
+        private set
+    var query by mutableStateOf("")
+
+    /** Opens the search bar (the hero's search icon swaps to a close cross). */
+    fun open() {
+        open = true
+    }
+
+    /** Closes the search bar and clears the query, so reopening starts unfiltered. */
+    fun close() {
+        open = false
+        query = ""
+    }
+
+    /** Matches a case-insensitive substring anywhere in the given field. */
+    fun matches(vararg fields: String?): Boolean {
+        if (!open || query.isEmpty()) return true
+        val needle = query.trim()
+        if (needle.isEmpty()) return true
+        return fields.any { it?.contains(needle, ignoreCase = true) == true }
+    }
+}
+
+/** Remembered [CollectionSearchState] for a collection screen's hero search. */
+@Composable
+fun rememberCollectionSearchState(): CollectionSearchState = remember { CollectionSearchState() }
+
 /** Total height of an immersive hero image for [layout] (status-bar bleed included). */
 @Composable
 fun collectionHeroImmersiveHeight(layout: CollectionHeroLayout): Dp {
@@ -165,6 +208,7 @@ fun CollectionHeroImmersiveHeader(
     modifier: Modifier = Modifier,
     accentColor: Color = FoamTheme.accentColor,
     onPlayAllClick: (() -> Unit)? = null,
+    searchState: CollectionSearchState? = null,
     overlayTextAlpha: (() -> Float)? = null,
     transitionAlpha: (() -> Float)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -212,6 +256,7 @@ fun CollectionHeroImmersiveHeader(
                     accentColor = accentColor,
                     centered = layout == CollectionHeroLayout.Immersive,
                     onPlayAllClick = onPlayAllClick,
+                    searchState = searchState,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedElementKey = sharedElementKey,
@@ -278,6 +323,7 @@ fun CollectionHero(
     modifier: Modifier = Modifier,
     imageIsEmbeddedArt: Boolean = true,
     icon: ImageVector? = null,
+    searchState: CollectionSearchState? = null,
     accentColor: Color = FoamTheme.accentColor,
     transitionAlpha: (() -> Float)? = null,
     scrollOffsetPx: (() -> Int)? = null,
@@ -295,6 +341,7 @@ fun CollectionHero(
             imageIsEmbeddedArt = imageIsEmbeddedArt,
             icon = icon,
             onPlayAllClick = onPlayAllClick,
+            searchState = searchState,
             accentColor = accentColor,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
@@ -310,6 +357,7 @@ fun CollectionHero(
             imageIsEmbeddedArt = imageIsEmbeddedArt,
             icon = icon,
             onPlayAllClick = onPlayAllClick,
+            searchState = searchState,
             accentColor = accentColor,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
@@ -346,6 +394,7 @@ private fun CollectionHeroCompact(
     imageIsEmbeddedArt: Boolean,
     icon: ImageVector?,
     onPlayAllClick: (() -> Unit)?,
+    searchState: CollectionSearchState?,
     accentColor: Color,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
@@ -396,9 +445,20 @@ private fun CollectionHeroCompact(
                 sharedElementPrefix = sharedElementPrefix
             )
 
-            if (onPlayAllClick != null) {
+            if (onPlayAllClick != null || searchState != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                CollectionHeroPlayButton(onClick = onPlayAllClick, accentColor = accentColor)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onPlayAllClick != null) {
+                        CollectionHeroPlayButton(onClick = onPlayAllClick, accentColor = accentColor)
+                    }
+                    if (searchState != null) {
+                        if (onPlayAllClick != null) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
+                        CollectionHeroSearchButton(searchState = searchState)
+                    }
+                }
+                CollectionHeroSearchBar(searchState = searchState)
             }
         }
     }
@@ -414,6 +474,7 @@ private fun CollectionHeroNormal(
     imageIsEmbeddedArt: Boolean,
     icon: ImageVector?,
     onPlayAllClick: (() -> Unit)?,
+    searchState: CollectionSearchState?,
     accentColor: Color,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
@@ -465,9 +526,20 @@ private fun CollectionHeroNormal(
                 sharedElementPrefix = sharedElementPrefix
             )
 
-            if (onPlayAllClick != null) {
+            if (onPlayAllClick != null || searchState != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                CollectionHeroPlayButton(onClick = onPlayAllClick, accentColor = accentColor)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onPlayAllClick != null) {
+                        CollectionHeroPlayButton(onClick = onPlayAllClick, accentColor = accentColor)
+                    }
+                    if (searchState != null) {
+                        if (onPlayAllClick != null) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
+                        CollectionHeroSearchButton(searchState = searchState)
+                    }
+                }
+                CollectionHeroSearchBar(searchState = searchState)
             }
         }
 
@@ -594,6 +666,7 @@ private fun CollectionHeroOverlayContent(
     accentColor: Color,
     centered: Boolean,
     onPlayAllClick: (() -> Unit)?,
+    searchState: CollectionSearchState? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedElementKey: String? = null,
@@ -617,12 +690,23 @@ private fun CollectionHeroOverlayContent(
             sharedElementPrefix = sharedElementPrefix
         )
 
-        if (onPlayAllClick != null) {
+        if (onPlayAllClick != null || searchState != null) {
             Spacer(modifier = Modifier.height(8.dp))
-            CollectionHeroPlayButton(
-                onClick = onPlayAllClick,
-                accentColor = accentColor
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (onPlayAllClick != null) {
+                    CollectionHeroPlayButton(
+                        onClick = onPlayAllClick,
+                        accentColor = accentColor
+                    )
+                }
+                if (searchState != null) {
+                    if (onPlayAllClick != null) {
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
+                    CollectionHeroSearchButton(searchState = searchState)
+                }
+            }
+            CollectionHeroSearchBar(searchState = searchState)
         }
     }
 }
@@ -765,6 +849,85 @@ private fun CollectionHeroPlayButton(
             BasicText(
                 text = "Play All",
                 style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.background)
+            )
+        }
+    }
+}
+
+/**
+ * The hero's search toggle, rendered right of the play pill: the search icon at
+ * rest, a close cross while the search bar is open. Tapping opens the bar (the
+ * bar focuses its own field on entry); tapping the cross closes it and clears
+ * the query.
+ */
+@Composable
+private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary)
+            ) {
+                if (searchState.open) searchState.close() else searchState.open()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Crossfade(
+            targetState = searchState.open,
+            animationSpec = tween(durationMillis = 150),
+            label = "collectionSearchToggleIcon"
+        ) { open ->
+            Icon(
+                imageVector = if (open) {
+                    FoamTheme.icons.current.close
+                } else {
+                    FoamTheme.icons.current.search
+                },
+                contentDescription = if (open) "Close search" else "Search",
+                tint = FoamTheme.colors.textPrimary,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+/**
+ * The hero's inline search field, shown right under the play pill while
+ * [CollectionSearchState.open] is true: filters the collection's rows live
+ * (empty text shows everything; closing clears the query).
+ */
+@Composable
+private fun CollectionHeroSearchBar(searchState: CollectionSearchState?) {
+    if (searchState == null) return
+    AnimatedVisibility(
+        visible = searchState.open,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically()
+    ) {
+        val focusRequester = remember { FocusRequester() }
+        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .clip(CircleShape)
+                .background(FoamTheme.colors.surface.copy(alpha = 0.55f))
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BasicTextField(
+                value = searchState.query,
+                onValueChange = { searchState.query = it },
+                textStyle = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.textPrimary),
+                cursorBrush = SolidColor(FoamTheme.accentColor),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                singleLine = true,
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequester)
             )
         }
     }

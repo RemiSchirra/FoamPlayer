@@ -34,6 +34,7 @@ import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.TrackListScreen
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
+import com.foamplayer.app.ui.components.rememberCollectionSearchState
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.components.rememberSortedTracks
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
@@ -111,7 +112,12 @@ fun StatsSeeAllScreen(
 
         StatsTopKind.ARTISTS -> {
             val artistImages by viewModel.artistImages.collectAsState()
-            val sortedArtists = rememberSortedList(artists, sortMode, sortInverted) {
+            val searchState = rememberCollectionSearchState()
+            val sortedArtists = rememberSortedList(
+                artists.filter { searchState.matches(it.name) },
+                sortMode,
+                sortInverted
+            ) {
                 caseInsensitiveComparator { it.name }
             }
             CollectionListScreen(
@@ -126,7 +132,8 @@ fun StatsSeeAllScreen(
                 currentSort = sortMode,
                 onSortChange = onSortChange,
                 sortInverted = sortInverted,
-                onSortInvertedChange = onSortInvertedChange
+                onSortInvertedChange = onSortInvertedChange,
+                searchState = searchState
             ) {
                 items(sortedArtists, key = { "stats_artist_${it.name}" }) { artist ->
                     Box(modifier = Modifier.listRowInset(density)) {
@@ -171,7 +178,12 @@ fun StatsSeeAllScreen(
         }
 
         StatsTopKind.ALBUMS -> {
-            val sortedAlbums = rememberSortedList(albums, sortMode, sortInverted) { mode ->
+            val searchState = rememberCollectionSearchState()
+            val sortedAlbums = rememberSortedList(
+                albums.filter { searchState.matches(it.album, it.artist) },
+                sortMode,
+                sortInverted
+            ) { mode ->
                 when (mode) {
                     CollectionSortMode.ARTIST ->
                         compareBy(String.CASE_INSENSITIVE_ORDER, TopAlbumStat::artist)
@@ -195,7 +207,8 @@ fun StatsSeeAllScreen(
                 currentSort = sortMode,
                 onSortChange = onSortChange,
                 sortInverted = sortInverted,
-                onSortInvertedChange = onSortInvertedChange
+                onSortInvertedChange = onSortInvertedChange,
+                searchState = searchState
             ) {
                 items(sortedAlbums, key = { "stats_album_${it.album}" }) { album ->
                     Box(modifier = Modifier.listRowInset(density)) {

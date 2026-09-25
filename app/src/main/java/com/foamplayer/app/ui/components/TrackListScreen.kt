@@ -189,6 +189,10 @@ fun TrackListScreen(
     val context = LocalContext.current
     var showOrganisationModal by remember { mutableStateOf(false) }
 
+    // Hero search: typing in the opened bar filters the displayed rows live;
+    // matches against title and artist. Empty query (or closed bar) shows all.
+    val searchState = rememberCollectionSearchState()
+
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
@@ -275,6 +279,14 @@ fun TrackListScreen(
     val latestOnRemoveTrack by rememberUpdatedState(onRemoveTrack)
     val latestOnPersistTrackOrder by rememberUpdatedState(onPersistTrackOrder)
 
+    // The drag display list only diverges from the DB list mid-drag; the search
+    // filters whatever is currently displayed (never active in edit mode).
+    val shownTracks = if (editMode) {
+        displayedTracks
+    } else {
+        tracks.filter { searchState.matches(it.title, it.artist) }
+    }
+
     // Dismiss-to-origin-collection: bring the playing track's row to the vertical
     // middle of the screen (clamped to the list's bounds) BEFORE the row is allowed
     // to pair with the player's artwork -- see [TrackCenterRequest] for why the
@@ -289,7 +301,11 @@ fun TrackListScreen(
     LaunchedEffect(centerTrackRequest) {
         val request = centerTrackRequest ?: return@LaunchedEffect
         centeringSettled = false
-        val trackIndex = tracks.indexOfFirst { it.id == request.trackId }
+        // The centering scroll targets the row's position in the DISPLAYED list
+        // (the search filter may hide rows above it); falls back to the full
+        // list if the row is filtered out.
+        val trackIndex = shownTracks.indexOfFirst { it.id == request.trackId }
+            .takeIf { it >= 0 } ?: tracks.indexOfFirst { it.id == request.trackId }
         if (trackIndex >= 0) {
             val itemIndex = trackIndex + 1 // header item sits at index 0
             if (density.isGrid) {
@@ -381,9 +397,6 @@ fun TrackListScreen(
                 )
             }
 
-            // The drag display list only diverges from the DB list mid-drag.
-            val shownTracks = if (editMode) displayedTracks else tracks
-
             if (density.isGrid) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(density.gridColumns),
@@ -403,6 +416,7 @@ fun TrackListScreen(
                             imageUrl = imageUrl,
                             imageIsEmbeddedArt = imageIsEmbeddedArt,
                             onPlayAllClick = onPlayAllClick,
+                            searchState = searchState,
                             accentColor = heroAccentColor,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
                             overlayTextAlpha = { 1f - topBarFraction() },
@@ -459,7 +473,7 @@ fun TrackListScreen(
                                     // Taps must not start playback while editing.
                                     ({ })
                                 } else {
-                                    { onTrackClick(tracks, index) }
+                                    { onTrackClick(shownTracks, index) }
                                 },
                                 onLongClick = if (editMode) {
                                     // The track actions modal stays closed while editing.
@@ -543,6 +557,7 @@ fun TrackListScreen(
                             imageUrl = imageUrl,
                             imageIsEmbeddedArt = imageIsEmbeddedArt,
                             onPlayAllClick = onPlayAllClick,
+                            searchState = searchState,
                             accentColor = heroAccentColor,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
                             overlayTextAlpha = { 1f - topBarFraction() },
@@ -590,7 +605,7 @@ fun TrackListScreen(
                                     // Taps must not start playback while editing.
                                     ({ })
                                 } else {
-                                    { onTrackClick(tracks, index) }
+                                    { onTrackClick(shownTracks, index) }
                                 },
                                 onLongClick = if (editMode) {
                                     // The track actions modal stays closed while editing.
@@ -719,6 +734,7 @@ private fun TrackListHero(
     imageUrl: String?,
     imageIsEmbeddedArt: Boolean,
     onPlayAllClick: () -> Unit,
+    searchState: CollectionSearchState?,
     accentColor: Color,
     onVisibleHeightPx: (Int) -> Unit,
     overlayTextAlpha: () -> Float,
@@ -736,6 +752,7 @@ private fun TrackListHero(
             statsText = statsText,
             accentColor = accentColor,
             onPlayAllClick = onPlayAllClick,
+            searchState = searchState,
             onVisibleHeightPx = onVisibleHeightPx,
             overlayTextAlpha = overlayTextAlpha,
             transitionAlpha = transitionAlpha,
@@ -755,6 +772,7 @@ private fun TrackListHero(
         imageUrl = imageUrl,
         imageIsEmbeddedArt = imageIsEmbeddedArt,
         onPlayAllClick = onPlayAllClick,
+        searchState = searchState,
         accentColor = accentColor,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,

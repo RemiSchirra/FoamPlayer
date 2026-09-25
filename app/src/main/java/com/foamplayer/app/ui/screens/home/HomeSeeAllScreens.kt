@@ -45,6 +45,7 @@ import com.foamplayer.app.ui.components.MediaGridCell
 import com.foamplayer.app.ui.components.MediaListRow
 import com.foamplayer.app.ui.components.TrackListScreen
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
+import com.foamplayer.app.ui.components.rememberCollectionSearchState
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.components.rememberSortedTracks
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
@@ -74,7 +75,12 @@ fun RecommendedPlaylistsSeeAllScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val playlists by viewModel.recommendedPlaylists.collectAsState()
-    val sortedPlaylists = rememberSortedList(playlists, sortMode, sortInverted) {
+    val searchState = rememberCollectionSearchState()
+    val sortedPlaylists = rememberSortedList(
+        playlists.filter { searchState.matches(it.name) },
+        sortMode,
+        sortInverted
+    ) {
         caseInsensitiveComparator { it.name }
     }
 
@@ -89,7 +95,8 @@ fun RecommendedPlaylistsSeeAllScreen(
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange
+        onSortInvertedChange = onSortInvertedChange,
+        searchState = searchState
     ) {
         items(sortedPlaylists, key = { "home_playlist_${it.playlistId}" }) { playlist ->
             Box(modifier = Modifier.listRowInset(density)) {
@@ -133,7 +140,12 @@ fun RecommendedAlbumsSeeAllScreen(
     val albums by viewModel.recommendedAlbums.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
-    val sortedAlbums = rememberSortedList(albums, sortMode, sortInverted) { mode ->
+    val searchState = rememberCollectionSearchState()
+    val sortedAlbums = rememberSortedList(
+        albums.filter { searchState.matches(it.album, it.artist) },
+        sortMode,
+        sortInverted
+    ) { mode ->
         when (mode) {
             CollectionSortMode.ARTIST ->
                 compareBy(String.CASE_INSENSITIVE_ORDER, AlbumRecommendation::artist)
@@ -156,7 +168,8 @@ fun RecommendedAlbumsSeeAllScreen(
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange
+        onSortInvertedChange = onSortInvertedChange,
+        searchState = searchState
     ) {
         items(sortedAlbums, key = { "home_album_${it.album}" }) { album ->
             Box(modifier = Modifier.listRowInset(density)) {

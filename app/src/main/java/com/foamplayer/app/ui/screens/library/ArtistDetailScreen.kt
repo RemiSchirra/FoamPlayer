@@ -54,11 +54,13 @@ import com.foamplayer.app.ui.components.CollectionHeroImmersiveHeader
 import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.CollectionListItem
 import com.foamplayer.app.ui.components.CollectionScrollTopBar
+import com.foamplayer.app.ui.components.CollectionSearchState
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.collectionHeroOverlayLayer
 import com.foamplayer.app.ui.components.rememberCollectionHeroFlightFraction
 import com.foamplayer.app.ui.components.rememberCollectionScrollFraction
+import com.foamplayer.app.ui.components.rememberCollectionSearchState
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
@@ -100,6 +102,13 @@ fun ArtistDetailScreen(
         viewModel.loadArtistTracks(artistName)
         viewModel.loadArtistImage(artistName)
     }
+
+    // Hero search: while the bar is open, typing filters both the top-tracks
+    // section and the albums grid live (title/artist, album name respectively);
+    // an empty query shows everything.
+    val searchState = rememberCollectionSearchState()
+    val shownTopTracks = topTracks.filter { searchState.matches(it.title, it.artist) }
+    val shownAlbums = albums.filter { searchState.matches(it.album, it.artist) }
 
     // The first track in alphabetical order is the fallback artwork source.
     val headerArtPath = tracks.firstOrNull()?.albumArtPath
@@ -228,6 +237,7 @@ fun ArtistDetailScreen(
                         trackCount = tracks.size,
                         accentColor = accentColor,
                         onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+                        searchState = searchState,
                         onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
                         overlayTextAlpha = { 1f - topBarFraction() },
                         transitionAlpha = transitionAlpha,
@@ -237,7 +247,7 @@ fun ArtistDetailScreen(
                     )
                 }
 
-            if (topTracks.isNotEmpty()) {
+            if (shownTopTracks.isNotEmpty()) {
                 item(key = "artist_top_tracks_header", span = { GridItemSpan(maxLineSpan) }) {
                     ArtistSectionHeader(
                         title = "Top Tracks",
@@ -248,7 +258,7 @@ fun ArtistDetailScreen(
                 }
 
                 gridItems(
-                    topTracks,
+                    shownTopTracks,
                     key = { "artist_top_${it.id}" },
                     span = { GridItemSpan(maxLineSpan) }
                 ) { track ->
@@ -264,7 +274,7 @@ fun ArtistDetailScreen(
                 }
             }
 
-            if (albums.isNotEmpty()) {
+            if (shownAlbums.isNotEmpty()) {
                 item(key = "artist_albums_header", span = { GridItemSpan(maxLineSpan) }) {
                     ArtistSectionHeader(
                         title = "Albums",
@@ -273,7 +283,7 @@ fun ArtistDetailScreen(
                     )
                 }
 
-                gridItems(albums, key = { "artist_album_${it.album}" }) { album ->
+                gridItems(shownAlbums, key = { "artist_album_${it.album}" }) { album ->
                     CollectionListItem(
                         title = album.album,
                         subtitle = album.artist,
@@ -362,6 +372,7 @@ private fun ArtistHero(
     trackCount: Int,
     accentColor: Color,
     onPlayAllClick: () -> Unit,
+    searchState: CollectionSearchState?,
     onVisibleHeightPx: (Int) -> Unit,
     overlayTextAlpha: () -> Float,
     transitionAlpha: () -> Float,
@@ -377,6 +388,7 @@ private fun ArtistHero(
             statsText = "$trackCount Tracks",
             accentColor = accentColor,
             onPlayAllClick = onPlayAllClick,
+            searchState = searchState,
             onVisibleHeightPx = onVisibleHeightPx,
             overlayTextAlpha = overlayTextAlpha,
             transitionAlpha = transitionAlpha,
@@ -396,6 +408,7 @@ private fun ArtistHero(
         imageUrl = imageUrl,
         imageIsEmbeddedArt = imageIsEmbeddedArt,
         onPlayAllClick = onPlayAllClick,
+        searchState = searchState,
         accentColor = accentColor,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
