@@ -45,6 +45,7 @@ import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -186,7 +187,11 @@ private fun collectionHeroOverlayFraction(layout: CollectionHeroLayout): Float =
  * the play pill by [CollectionHeroImmersiveListTopPadding] with no dead space
  * below the artwork, whatever the title/subtitle/button add up to.
  *
- * [overlayTextAlpha] crossfades the block with the scroll top bar's title.
+ * [scrollOffsetPx] — the host list's current scroll in px — drives the block's
+ * scroll-out fade positionally: the block stays fully opaque until its top
+ * nears the screen top, then fades out across [CollectionScrollTopBarFadeDistance]
+ * so it is fully gone as the top reaches the status bar — instead of fading
+ * with a raw scroll fraction, which completes while the block is mid-screen.
  * [transitionAlpha] — the host's combined flight alpha (see
  * [rememberCollectionHeroFlightFraction]) — fades the block with the
  * shared-element flight: the block is lifted into the transition overlay
@@ -198,8 +203,7 @@ private fun collectionHeroOverlayFraction(layout: CollectionHeroLayout): Float =
  * out, so the host screen can hand the hero artwork's 1:1 scroll-away over to
  * the same constant when the item is scrolled past (see [CollectionHero]'s
  * [CollectionHero.scrollOffsetPx]).
- */
-@OptIn(ExperimentalSharedTransitionApi::class)
+ */@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CollectionHeroImmersiveHeader(
     layout: CollectionHeroLayout,
@@ -212,6 +216,7 @@ fun CollectionHeroImmersiveHeader(
     onPlayAllClick: (() -> Unit)? = null,
     onShuffleAllClick: (() -> Unit)? = null,
     searchState: CollectionSearchState? = null,
+    scrollOffsetPx: (() -> Int)? = null,
     overlayTextAlpha: (() -> Float)? = null,
     transitionAlpha: (() -> Float)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -239,6 +244,12 @@ fun CollectionHeroImmersiveHeader(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
     )
+    // Scroll-out fade distance in px: matches the scroll top bar's title fade
+    // so the two swap places over the same stretch of scrolling.
+    val fadeDistancePx = with(density) { CollectionScrollTopBarFadeDistance.toPx() }
+    // Set by the measure pass below: the overlay block's height, anchoring the
+    // draw-phase fade to the block's BOTTOM (the play pill). Read untracked.
+    val blockHeightPx = remember { mutableIntStateOf(0) }
 
     SubcomposeLayout(modifier.fillMaxWidth()) { constraints ->
         val block = subcompose(Unit) {
@@ -247,7 +258,25 @@ fun CollectionHeroImmersiveHeader(
                     .fillMaxWidth()
                     .collectionHeroOverlayLayer(sharedTransitionScope)
                     .graphicsLayer {
-                        alpha = (overlayTextAlpha?.invoke() ?: 1f) *
+                        // Positional fade anchored to the block's bottom (the
+                        // play pill): full alpha until the pill is within the
+                        // fade distance of the screen top, then fades out so it
+                        // is fully transparent as the pill reaches the top.
+                        // The window shrinks when the block starts closer to
+                        // the top than the distance (compact-immersive) so it
+                        // is always fully opaque at rest. Falls back to the raw
+                        // [overlayTextAlpha] when the host cannot report
+                        // scroll (scrollOffsetPx == null).
+                        val scroll = scrollOffsetPx?.invoke()
+                        val scrollAlpha = if (scroll != null && overlayTopPx > 0) {
+                            val bottomPx = overlayTopPx + blockHeightPx.intValue
+                            val windowPx = minOf(fadeDistancePx, bottomPx.toFloat())
+                            1f - ((scroll - (bottomPx - windowPx)) / windowPx)
+                                .coerceIn(0f, 1f)
+                        } else {
+                            overlayTextAlpha?.invoke() ?: 1f
+                        }
+                        alpha = scrollAlpha *
                                 (1f - flightFraction.value) *
                                 (transitionAlpha?.invoke() ?: 1f)
                     }
@@ -268,6 +297,7 @@ fun CollectionHeroImmersiveHeader(
                 )
             }
         }.first().measure(Constraints(maxWidth = overlayMaxWidthPx))
+        blockHeightPx.intValue = block.height
         val visibleHeightPx = maxOf(
             heroVisiblePx,
             overlayTopPx + block.height + listTopPaddingPx

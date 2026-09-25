@@ -253,7 +253,8 @@ fun CollectionListScreen(
                             imageUrl = headerImageUrl,
                             icon = headerIcon,
                             searchState = searchState,
-                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it }
+                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                            scrollOffsetPx = heroScrollOffsetPx
                         )
                     }
 
@@ -278,7 +279,8 @@ fun CollectionListScreen(
                             imageUrl = headerImageUrl,
                             icon = headerIcon,
                             searchState = searchState,
-                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it }
+                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                            scrollOffsetPx = heroScrollOffsetPx
                         )
                     }
 
@@ -360,7 +362,8 @@ private fun CollectionListHero(
     imageUrl: String?,
     icon: ImageVector?,
     searchState: CollectionSearchState?,
-    onVisibleHeightPx: (Int) -> Unit
+    onVisibleHeightPx: (Int) -> Unit,
+    scrollOffsetPx: () -> Int
 ) {
     if (heroLayout.isImmersive) {
         CollectionHeroImmersiveHeader(
@@ -369,7 +372,8 @@ private fun CollectionListHero(
             subtitle = subtitle,
             statsText = "$itemCount items",
             searchState = searchState,
-            onVisibleHeightPx = onVisibleHeightPx
+            onVisibleHeightPx = onVisibleHeightPx,
+            scrollOffsetPx = scrollOffsetPx
         )
         return
     }
