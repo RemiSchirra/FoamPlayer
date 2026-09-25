@@ -249,7 +249,14 @@ fun HomeRowCard(
             contentAlignment = Alignment.Center
         ) {
             if (imageUrl != null) {
-                val artRequest = remember(imageUrl, imageIsEmbeddedArt) {
+                // Collection cards decode under the destination hero's
+                // deterministic key (albumArtMemoryCacheKey, as read by
+                // CollectionListScreen/CollectionHero): with the auto key the
+                // hero misses the cache and the open flight's first frame
+                // shows the placeholder. Track cards keep the auto key -- the
+                // full player's art requests read it.
+                val heroKeyed = flightHeroTarget != null
+                val artRequest = remember(imageUrl, imageIsEmbeddedArt, heroKeyed) {
                     ImageRequest.Builder(context)
                         .data(
                             if (imageIsEmbeddedArt) {
@@ -259,6 +266,7 @@ fun HomeRowCard(
                             }
                         )
                         .size(AlbumArtRequestSize)
+                        .memoryCacheKey(if (heroKeyed) albumArtMemoryCacheKey(imageUrl) else null)
                         .build()
                 }
                 AlbumArtImage(
