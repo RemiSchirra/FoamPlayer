@@ -869,7 +869,7 @@ private fun CollectionHeroPlayButton(
             )
             Spacer(modifier = Modifier.width(8.dp))
             BasicText(
-                text = "Play All",
+                text = "Play",
                 style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.background)
             )
         }
