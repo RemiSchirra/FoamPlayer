@@ -38,6 +38,26 @@ class ArtistDetailViewModel @Inject constructor(
 
     fun loadArtistAlbums(artistName: String) {
         viewModelScope.launch {
+            // Seed from the process-wide snapshot so revisits render on the
+            // first frame; the live query then corrects/updates the list.
+            val credited = repository.allTracksSnapshot()
+                .filter { it.artist == artistName || it.albumArtist == artistName }
+            if (_albums.value.isEmpty()) {
+                _albums.value = credited
+                    .groupBy { it.album }
+                    .map { (album, tracks) ->
+                        AlbumSearchResult(
+                            album = album,
+                            artist = tracks.firstNotNullOfOrNull { it.albumArtist ?: it.artist } ?: artistName,
+                            albumArtPath = tracks.firstNotNullOf { it.albumArtPath }
+                        )
+                    }
+                    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.album })
+            }
+            if (_tracks.value.isEmpty()) {
+                _tracks.value = credited.sortedWith(compareBy { it.title })
+                _topTracks.value = computeTopTracks(_tracks.value)
+            }
             repository.getAlbumsByArtist(artistName).collect { list ->
                 _albums.value = list
             }

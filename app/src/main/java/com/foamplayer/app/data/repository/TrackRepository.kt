@@ -16,12 +16,19 @@ import com.foamplayer.app.data.db.entities.ListenHistoryEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.scanner.LocalAudioScanner
 import com.foamplayer.app.data.scanner.ScanStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,7 +43,109 @@ class TrackRepository @Inject constructor(
     private val _scanStatus = MutableStateFlow<ScanStatus>(ScanStatus.Idle)
     val scanStatus: StateFlow<ScanStatus> = _scanStatus.asStateFlow()
 
-    fun getAllTracks(): Flow<List<TrackEntity>> = trackDao.getAllTracks()
+    // ---- Hot library snapshots ------------------------------------------------
+    //
+    // The browse screens' ViewModels are per-navigation-destination, so their
+    // `stateIn` flows start at emptyList() and every screen open pays a cold
+    // Room round-trip before the first row can render — even though the same
+    // listing was on screen seconds earlier. These process-lifetime shared
+    // flows keep the last emitted listing replayed to each new subscriber
+    // (SharingStarted.Lazily: they stay warm once started), so a screen opens
+    // instantly with the previous snapshot and the live Room stream updates
+    // it from there. Aggregation/splitting runs off the main thread.
+
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** All tracks, kept warm process-wide and replayed to new subscribers. */
+    private val allTracksShared = trackDao.getAllTracks()
+        .flowOn(Dispatchers.Default)
+        .shareIn(
+            scope = repositoryScope,
+            started = SharingStarted.Lazily,
+            replay = 1
+        )
+
+    /** All albums, kept warm process-wide and replayed to new subscribers. */
+    private val allAlbumsShared = trackDao.getAllAlbums()
+        .flowOn(Dispatchers.Default)
+        .shareIn(
+            scope = repositoryScope,
+            started = SharingStarted.Lazily,
+            replay = 1
+        )
+
+    /** All credited artist names, kept warm process-wide and replayed to new subscribers. */
+    private val allArtistsShared = trackDao.getAllArtistNames().map { rawArtists ->
+        rawArtists.flatMap { it.split("; ") }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+        .flowOn(Dispatchers.Default)
+        .shareIn(
+            scope = repositoryScope,
+            started = SharingStarted.Lazily,
+            replay = 1
+        )
+
+    /** All credited genre names, kept warm process-wide and replayed to new subscribers. */
+    private val allGenresShared = trackDao.getAllGenres().map { rawGenres ->
+        rawGenres.flatMap { it.split("; ") }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+        .flowOn(Dispatchers.Default)
+        .shareIn(
+            scope = repositoryScope,
+            started = SharingStarted.Lazily,
+            replay = 1
+        )
+
+    /** All years, kept warm process-wide and replayed to new subscribers. */
+    private val allYearsShared = trackDao.getAllYears()
+        .flowOn(Dispatchers.Default)
+        .shareIn(
+            scope = repositoryScope,
+            started = SharingStarted.Lazily,
+            replay = 1
+        )
+
+    init {
+        // Pre-warm: with SharingStarted.Lazily the upstream starts on the first
+        // subscription, so subscribe once at construction (the repository is a
+        // process singleton) — the Room round-trips then happen at app start,
+        // off the main thread, instead of on the first navigation.
+        repositoryScope.launch { allTracksShared.collect { } }
+        repositoryScope.launch { allAlbumsShared.collect { } }
+        repositoryScope.launch { allArtistsShared.collect { } }
+        repositoryScope.launch { allGenresShared.collect { } }
+        repositoryScope.launch { allYearsShared.collect { } }
+    }
+
+    /** Latest all-tracks snapshot, suspending until Room's first emission lands. */
+    suspend fun allTracksSnapshot(): List<TrackEntity> = allTracksShared.first()
+
+    /** Latest all-albums snapshot, suspending until Room's first emission lands. */
+    suspend fun allAlbumsSnapshot(): List<AlbumSearchResult> = allAlbumsShared.first()
+
+    /** Latest credited-artist list snapshot, suspending until the first emission lands. */
+    suspend fun allArtistsSnapshot(): List<String> = allArtistsShared.first()
+
+    /**
+     * The all-tracks stream with the last snapshot replayed to every new
+     * subscriber, so browse screens start from the previous listing instead
+     * of an empty frame.
+     */
+    fun getAllTracks(): Flow<List<TrackEntity>> = allTracksShared
+
+    fun getAllAlbums(): Flow<List<AlbumSearchResult>> = allAlbumsShared
+
+    fun getAllArtists(): Flow<List<String>> = allArtistsShared
+
+    fun getAllGenres(): Flow<List<String>> = allGenresShared
+
+    fun getAllYears(): Flow<List<Int>> = allYearsShared
 
     suspend fun getAllTracksOnce(): List<TrackEntity> = trackDao.getAllTracksOnce()
 
@@ -50,6 +159,9 @@ class TrackRepository @Inject constructor(
             .distinct()
             .sorted()
     }
+        // Splitting/sorting the whole library's artist strings; keep it off the
+        // collecting (main) thread — screens subscribe via stateIn on Main.
+        .flowOn(Dispatchers.Default)
 
     fun searchAlbums(query: String): Flow<List<AlbumSearchResult>> = trackDao.searchAlbums(query)
 
@@ -60,25 +172,7 @@ class TrackRepository @Inject constructor(
     /** All tracks naming [artist] as artist or album artist, alphabetical by title. */
     fun getTracksByArtist(artist: String): Flow<List<TrackEntity>> = trackDao.getTracksByArtist(artist)
 
-    fun getAllAlbums(): Flow<List<AlbumSearchResult>> = trackDao.getAllAlbums()
-
-    fun getAllArtists(): Flow<List<String>> = trackDao.getAllArtistNames().map { rawArtists ->
-        rawArtists.flatMap { it.split("; ") }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .sortedWith(String.CASE_INSENSITIVE_ORDER)
-    }
-
-    fun getAllGenres(): Flow<List<String>> = trackDao.getAllGenres().map { rawGenres ->
-        rawGenres.flatMap { it.split("; ") }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .sortedWith(String.CASE_INSENSITIVE_ORDER)
-    }
-
     fun getTracksByGenre(genre: String): Flow<List<TrackEntity>> = trackDao.getTracksByGenre(genre)
-
-    fun getAllYears(): Flow<List<Int>> = trackDao.getAllYears()
 
     fun getTracksByYear(year: Int): Flow<List<TrackEntity>> = trackDao.getTracksByYear(year)
 

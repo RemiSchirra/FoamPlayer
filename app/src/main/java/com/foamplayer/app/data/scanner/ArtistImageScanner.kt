@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -95,6 +96,9 @@ class ArtistImageScanner @Inject constructor(
                 }
                 map
             }
+            // The per-artist cache lookups (IO hops) and map build run off the
+            // collecting context, so screens subscribe without main-thread churn.
+            .flowOn(Dispatchers.Default)
 
     /** Cached image for a (possibly multi-artist) display string, if any. */
     suspend fun imageFor(display: String): String? {

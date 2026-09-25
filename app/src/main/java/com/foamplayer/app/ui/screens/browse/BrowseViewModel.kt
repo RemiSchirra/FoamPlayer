@@ -82,6 +82,13 @@ class BrowseViewModel @Inject constructor(
     fun loadGenreTracks(genre: String) {
         genreTracksJob?.cancel()
         genreTracksJob = viewModelScope.launch {
+            // Seed from the process-wide snapshot so revisits render instantly;
+            // the live query then corrects/updates the list.
+            if (_genreTracks.value.isEmpty()) {
+                _genreTracks.value = trackRepository.allTracksSnapshot().filter { track ->
+                    track.genre?.split("; ")?.map { it.trim() }?.contains(genre) == true
+                }.sortedWith(compareBy { it.title })
+            }
             trackRepository.getTracksByGenre(genre).collect { _genreTracks.value = it }
         }
     }
@@ -89,17 +96,30 @@ class BrowseViewModel @Inject constructor(
     fun loadYearTracks(year: Int) {
         yearTracksJob?.cancel()
         yearTracksJob = viewModelScope.launch {
+            if (_yearTracks.value.isEmpty()) {
+                _yearTracks.value = trackRepository.allTracksSnapshot()
+                    .filter { it.year == year }
+                    .sortedWith(compareBy({ it.album }, { it.discNumber }, { it.trackNumber }, { it.title }))
+            }
             trackRepository.getTracksByYear(year).collect { _yearTracks.value = it }
         }
     }
 
     fun loadFolderContent(path: String?) {
         viewModelScope.launch {
-            val tracks = trackRepository.getAllTracks().first()
+            // Snapshot first (usually already warm): no cold round-trip before
+            // the folder listing can appear.
+            val tracks = trackRepository.allTracksSnapshot()
             val libraryFolders = settingsRepository.settings.first().libraryFolders
             // Folder grouping parses a URI per track; keep it off the main thread.
             _folderContent.value = withContext(Dispatchers.Default) {
                 buildFolderContent(path, tracks, libraryFolders)
+            }
+            // Then keep observing the live stream (re-group on library changes).
+            trackRepository.getAllTracks().collect { liveTracks ->
+                _folderContent.value = withContext(Dispatchers.Default) {
+                    buildFolderContent(path, liveTracks, libraryFolders)
+                }
             }
         }
     }

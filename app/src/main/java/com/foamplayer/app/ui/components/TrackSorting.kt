@@ -4,10 +4,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.data.db.entities.TrackEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 /**
@@ -105,6 +108,12 @@ fun rememberSortedTracks(
  * becomes random (selecting the mode re-shuffles exactly once; list emissions,
  * inverse toggles and recompositions keep the same shuffle) and applies
  * [comparatorFor]'s ordering, reversed when [inverted].
+ *
+ * Returns instantly with the previous (or incoming) list and computes the
+ * ordering on [Dispatchers.Default], so opening a screen never stalls the
+ * first frame on a full-library sort; the sorted result swaps in a frame or
+ * two later. Lists below [AsyncSortThreshold] sort inline — the dispatcher
+ * hop would cost more than the sort itself.
  */
 @Composable
 fun <T> rememberSortedList(
@@ -117,7 +126,33 @@ fun <T> rememberSortedList(
     LaunchedEffect(mode) {
         if (mode == CollectionSortMode.RANDOM) randomSeed = Random.nextLong()
     }
-    return remember(items, mode, inverted, randomSeed) {
-        items.sortedEntriesForDisplay(mode, inverted, randomSeed, comparatorFor)
+
+    val sortsInline = mode == CollectionSortMode.CUSTOM ||
+        items.size < AsyncSortThreshold ||
+        items.isEmpty()
+
+    // Big lists sort on [Dispatchers.Default]: the first composition returns
+    // the incoming (DAO-ordered) list immediately so the screen paints
+    // instantly, and the ordering replaces it from the sort coroutine a frame
+    // or two later. The state is NOT re-seeded when [items] changes, so Room
+    // re-emissions keep showing the last sorted list instead of flashing back
+    // to the raw order while the re-sort runs. Small lists (and CUSTOM, which
+    // is order-preserving anyway) sort inline exactly as before — a dispatcher
+    // hop would cost more than the sort itself.
+    if (sortsInline) {
+        return remember(items, mode, inverted, randomSeed) {
+            items.sortedEntriesForDisplay(mode, inverted, randomSeed, comparatorFor)
+        }
     }
+
+    var sortedList by remember { mutableStateOf(items) }
+    LaunchedEffect(items, mode, inverted, randomSeed, comparatorFor) {
+        sortedList = withContext(Dispatchers.Default) {
+            items.sortedEntriesForDisplay(mode, inverted, randomSeed, comparatorFor)
+        }
+    }
+    return sortedList
 }
+
+/** Sorts up to this many elements directly inside the sort effect (see [rememberSortedList]). */
+private const val AsyncSortThreshold = 200

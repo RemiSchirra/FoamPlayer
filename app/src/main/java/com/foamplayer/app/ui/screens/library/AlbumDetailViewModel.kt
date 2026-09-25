@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.TrackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -20,6 +21,12 @@ class AlbumDetailViewModel @Inject constructor(
 
     fun loadAlbumTracks(albumName: String) {
         viewModelScope.launch {
+            // Seed from the process-wide tracks snapshot so revisits render on
+            // the first frame; the live query then corrects/updates the list.
+            val seeded = repository.allTracksSnapshot()
+                .filter { it.album == albumName }
+                .sortedWith(compareBy({ it.discNumber }, { it.trackNumber }, { it.title }))
+            if (_tracks.value.isEmpty()) _tracks.value = seeded
             repository.getTracksByAlbum(albumName).collect { list ->
                 _tracks.value = list
             }

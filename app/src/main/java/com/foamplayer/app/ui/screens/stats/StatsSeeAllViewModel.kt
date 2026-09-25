@@ -12,6 +12,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -55,6 +56,8 @@ class StatsSeeAllViewModel @Inject constructor(
         if (kind == StatsTopKind.ARTISTS) {
             trackRepository.observeListenedArtistRows(since)
                 .map(::aggregateArtistRows)
+                // Crediting aggregation runs per emission; off the main thread.
+                .flowOn(Dispatchers.Default)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
         } else {
             emptyStateFlow()

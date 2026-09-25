@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
@@ -124,6 +125,9 @@ class StatsViewModel @Inject constructor(
                 topGenres = aggregateGenres(topStats.genreRows)
             )
         }.onStart { emit(StatsUiState(period = period, loading = true)) }
+            // Aggregations (artist/genre crediting, time buckets) run per
+            // emission; keep them off the collecting (main) thread.
+            .flowOn(Dispatchers.Default)
     }
 
     /** Overview counters + time-distribution source rows of one period. */
