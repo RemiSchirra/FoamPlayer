@@ -93,6 +93,7 @@ import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.albumArtCornerRadius
+import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.navigation.SharedElementEasing
@@ -718,10 +719,15 @@ fun ArtistSearchResultItem(
         ) {
             if (imageUrl != null) {
                 val context = LocalContext.current
+                // The destination hero reads this art under the shared
+                // albumArtMemoryCacheKey; caching under it here (as the
+                // library rows do) keeps the open flight's first frame on the
+                // image instead of the fallback note.
                 val artRequest = remember(imageUrl) {
                     ImageRequest.Builder(context)
                         .data(imageUrl)
                         .size(AlbumArtRequestSize)
+                        .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
                         .build()
                 }
                 AlbumArtImage(
@@ -817,10 +823,12 @@ fun AlbumSearchResultItem(
         ) {
             if (album.albumArtPath != null) {
                 val context = LocalContext.current
+                // Same shared hero cache key as ArtistSearchResultItem above.
                 val albumArtRequest = remember(album.albumArtPath) {
                     ImageRequest.Builder(context)
                         .data(EmbeddedAlbumArt(album.albumArtPath.toUri()))
                         .size(AlbumArtRequestSize)
+                        .memoryCacheKey(albumArtMemoryCacheKey(album.albumArtPath))
                         .build()
                 }
                 AlbumArtImage(
