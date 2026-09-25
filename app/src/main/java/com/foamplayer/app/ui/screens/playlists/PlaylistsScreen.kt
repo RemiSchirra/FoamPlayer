@@ -88,6 +88,7 @@ import com.foamplayer.app.ui.components.MediaListRow
 import com.foamplayer.app.ui.components.ScreenTitle
 import com.foamplayer.app.ui.components.ScreenTitleActionButton
 import com.foamplayer.app.ui.components.activeRowHighlight
+import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.components.rememberDragDropGridState
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
@@ -652,6 +653,11 @@ private fun PlaylistItemRow(
                 ImageRequest.Builder(context)
                     .data(playlist.imageUrl)
                     .size(AlbumArtRequestSize)
+                    // The playlist detail hero reads the cover under the shared
+                    // deterministic key (albumArtMemoryCacheKey); caching under
+                    // it here keeps a close flight's first frames on the image
+                    // instead of the placeholder note (see AlbumArtImage).
+                    .memoryCacheKey(albumArtMemoryCacheKey(playlist.imageUrl))
                     .build()
             }
             AlbumArtImage(
