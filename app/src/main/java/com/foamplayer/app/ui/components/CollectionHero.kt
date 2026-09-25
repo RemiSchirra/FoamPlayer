@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -875,10 +877,21 @@ private fun Modifier.collectionHeroSharedText(
     if (!enabled || sharedTransitionScope == null || animatedVisibilityScope == null) {
         return this
     }
+    // The fades ride the SAME duration/easing tween as the bounds flight
+    // (AlbumArtBoundsTransform) instead of sharedBounds' spring-based
+    // defaults: with the defaults both texts stayed opaque well into the
+    // flight and the departing one lingered past the landing — an instant
+    // scale pop plus a dirty overlapping crossfade.
+    val fadeSpec = tween<Float>(
+        durationMillis = SharedElementTransitionDurationMs,
+        easing = SharedElementEasing
+    )
     return with(sharedTransitionScope) {
         this@collectionHeroSharedText.sharedBounds(
             rememberSharedContentState(key = key),
             animatedVisibilityScope = animatedVisibilityScope,
+            enter = fadeIn(fadeSpec),
+            exit = fadeOut(fadeSpec),
             boundsTransform = AlbumArtBoundsTransform,
             // Above the flying artwork so the title never disappears behind it
             // mid-flight (the artwork is zIndexInOverlay 0f).

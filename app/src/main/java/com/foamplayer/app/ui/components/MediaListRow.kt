@@ -5,6 +5,8 @@ import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.EaseOutCubic
@@ -534,6 +536,14 @@ internal fun Modifier.rowSharedArtwork(
  * ([SharedTransitionScope.sharedBounds]). No-ops when not [enabled] or when
  * the transition scopes are missing.
  *
+ * The enter/exit fades ride the SAME duration/easing tween as the bounds
+ * flight ([AlbumArtBoundsTransform]) instead of sharedBounds' spring-based
+ * defaults: with the defaults, both texts stayed at full alpha well into the
+ * flight and the departing one lingered past the landing — reading as an
+ * instant scale pop plus a dirty overlapping crossfade. Tweening the fades in
+ * lock-step with the bounds makes the two sides swap cleanly at the flight's
+ * midpoint.
+ *
  * zIndexInOverlay 1f keeps the text above the flying artwork (0f) for both
  * flight directions — on close flights this side is the becoming-visible one,
  * so its config drives the overlay entry.
@@ -550,10 +560,16 @@ internal fun Modifier.rowSharedText(
     if (!enabled || sharedTransitionScope == null || animatedVisibilityScope == null) return this
     return with(sharedTransitionScope) {
         val state = rememberSharedContentState(key = key)
+        val fadeSpec = tween<Float>(
+            durationMillis = SharedElementTransitionDurationMs,
+            easing = SharedElementEasing
+        )
         if (boundsTransform != null) {
             sharedBounds(
                 state,
                 animatedVisibilityScope = animatedVisibilityScope,
+                enter = fadeIn(fadeSpec),
+                exit = fadeOut(fadeSpec),
                 boundsTransform = boundsTransform,
                 zIndexInOverlay = 1f
             )
@@ -561,6 +577,8 @@ internal fun Modifier.rowSharedText(
             sharedBounds(
                 state,
                 animatedVisibilityScope = animatedVisibilityScope,
+                enter = fadeIn(fadeSpec),
+                exit = fadeOut(fadeSpec),
                 zIndexInOverlay = 1f
             )
         }

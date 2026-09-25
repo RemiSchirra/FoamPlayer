@@ -94,11 +94,20 @@ import com.foamplayer.app.ui.components.caseInsensitiveComparator
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
+import com.foamplayer.app.ui.navigation.SharedElementEasing
+import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
 
 // The playlist row shares the app-wide list row geometry through MediaListRow /
 // MediaGridCell; artwork corners come from the shared percentage-based AlbumArtShape().
+
+// Shared-text flight fades ride the same tween as the bounds flight
+// (AlbumArtBoundsTransform) instead of sharedBounds' spring-based defaults.
+private val textFlightFadeSpec = tween<Float>(
+    durationMillis = SharedElementTransitionDurationMs,
+    easing = SharedElementEasing
+)
 
 private val ImageMimeTypes = arrayOf("image/*")
 
@@ -629,6 +638,8 @@ private fun PlaylistItemRow(
                 sharedBounds(
                     rememberSharedContentState(key = "playlist-title-${playlist.playlistId}"),
                     animatedVisibilityScope = animatedVisibilityScope,
+                    enter = fadeIn(textFlightFadeSpec),
+                    exit = fadeOut(textFlightFadeSpec),
                     boundsTransform = AlbumArtBoundsTransform
                 )
             }

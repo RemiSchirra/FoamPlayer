@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -93,6 +95,8 @@ import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.albumArtCornerRadius
 import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
+import com.foamplayer.app.ui.navigation.SharedElementEasing
+import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
 import androidx.core.net.toUri
@@ -123,6 +127,13 @@ private val SwipeDismissThreshold = 80.dp
 private const val SwipeMaxFade = 0.3f
 private const val SwipeDismissDurationMs = 150
 private const val SwipeReturnDurationMs = 200
+
+// Shared-text flight fades ride the same tween as the bounds flight
+// (AlbumArtBoundsTransform) instead of sharedBounds' spring-based defaults.
+private val textFlightFadeSpec = tween<Float>(
+    durationMillis = SharedElementTransitionDurationMs,
+    easing = SharedElementEasing
+)
 
 /** Blends the color toward white, keeping the same hue — used for the card icons. */
 private fun Color.lightened(factor: Float): Color =
@@ -742,6 +753,8 @@ fun ArtistSearchResultItem(
                             base.sharedBounds(
                                 rememberSharedContentState(key = "artist-title-$artist"),
                                 animatedVisibilityScope = animatedVisibilityScope,
+                                enter = fadeIn(textFlightFadeSpec),
+                                exit = fadeOut(textFlightFadeSpec),
                                 boundsTransform = AlbumArtBoundsTransform
                             )
                         }
@@ -838,6 +851,8 @@ fun AlbumSearchResultItem(
                             base.sharedBounds(
                                 rememberSharedContentState(key = "album-title-${album.album}"),
                                 animatedVisibilityScope = animatedVisibilityScope,
+                                enter = fadeIn(textFlightFadeSpec),
+                                exit = fadeOut(textFlightFadeSpec),
                                 boundsTransform = AlbumArtBoundsTransform
                             )
                         }
@@ -858,6 +873,8 @@ fun AlbumSearchResultItem(
                             base.sharedBounds(
                                 rememberSharedContentState(key = "album-artist-${album.album}"),
                                 animatedVisibilityScope = animatedVisibilityScope,
+                                enter = fadeIn(textFlightFadeSpec),
+                                exit = fadeOut(textFlightFadeSpec),
                                 boundsTransform = AlbumArtBoundsTransform
                             )
                         }
