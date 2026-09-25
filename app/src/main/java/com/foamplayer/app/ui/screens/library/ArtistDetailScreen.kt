@@ -103,12 +103,22 @@ fun ArtistDetailScreen(
         viewModel.loadArtistImage(artistName)
     }
 
-    // Hero search: while the bar is open, typing filters both the top-tracks
-    // section and the albums grid live (title/artist, album name respectively);
-    // an empty query shows everything.
+    // Hero search: one query filters BOTH sections together. A track matches
+    // when its title, artist or album name matches (typing an album name
+    // reveals its tracks); an album matches when its name/artist matches or
+    // any of its tracks matched (typing a track title reveals its album).
+    // An empty query shows everything. While searching, the tracks section
+    // expands beyond the 5 top tracks to EVERY matching artist track.
     val searchState = rememberCollectionSearchState()
-    val shownTopTracks = topTracks.filter { searchState.matches(it.title, it.artist) }
-    val shownAlbums = albums.filter { searchState.matches(it.album, it.artist) }
+    val searchActive = searchState.open && searchState.query.isNotBlank()
+    val searchSource = if (searchActive) tracks else topTracks
+    val shownTopTracks = searchSource.filter { searchState.matches(it.title, it.artist, it.album) }
+    val titleMatchedAlbumNames = tracks
+        .filter { searchState.matches(it.title, it.artist) }
+        .mapTo(mutableSetOf()) { it.album }
+    val shownAlbums = albums.filter {
+        searchState.matches(it.album, it.artist) || it.album in titleMatchedAlbumNames
+    }
 
     // The first track in alphabetical order is the fallback artwork source.
     val headerArtPath = tracks.firstOrNull()?.albumArtPath
@@ -253,10 +263,10 @@ fun ArtistDetailScreen(
             if (shownTopTracks.isNotEmpty()) {
                 item(key = "artist_top_tracks_header", span = { GridItemSpan(maxLineSpan) }) {
                     ArtistSectionHeader(
-                        title = "Top Tracks",
+                        title = if (searchActive) "Tracks" else "Top Tracks",
                         accentColor = accentColor,
-                        showArrow = true,
-                        onClick = onAllSongsClick
+                        showArrow = !searchActive,
+                        onClick = if (searchActive) null else onAllSongsClick
                     )
                 }
 
