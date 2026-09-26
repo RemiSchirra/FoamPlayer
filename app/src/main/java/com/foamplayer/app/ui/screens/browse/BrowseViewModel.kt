@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 /** A browsable folder: its storage path, display name and recursive track count. */
@@ -35,6 +36,62 @@ data class FolderContent(
     val folders: List<FolderEntry>,
     val tracks: List<TrackEntity>
 )
+
+/**
+ * Process-wide memo of each track path's document id: parsing a content URI
+ * per track was the dominant cost of every folder listing. A path is immutable
+ * for a given track row, so the parse happens once per path per process and
+ * folder grouping collapses to a cheap prefix pass.
+ */
+private object TrackDocumentIds {
+    private val cache = ConcurrentHashMap<String, String>()
+
+    fun of(path: String): String = cache.computeIfAbsent(path, ::parseDocumentId)
+
+    private fun parseDocumentId(trackPath: String): String = try {
+        val uri = Uri.parse(trackPath)
+        when (uri.scheme) {
+            "content" -> DocumentsContract.getDocumentId(uri)
+            "file" -> uri.path ?: trackPath
+            else -> trackPath
+        }
+    } catch (_: Exception) {
+        trackPath
+    }
+}
+
+/**
+ * Process-wide cache of built folder listings, shared by the per-destination
+ * BrowseViewModels: every folder screen is a new ViewModel, so without this
+ * each click rebuilt its listing from scratch. Entries are keyed by folder
+ * path and remember which tracks snapshot they were built from, so a hit is
+ * known to be current (the live Room stream still re-groups on real changes).
+ */
+private object FolderListingCache {
+    private class Entry(
+        val content: FolderContent,
+        val sourceTracks: List<TrackEntity>
+    )
+
+    private val entries = HashMap<String, Entry>()
+
+    /** Tracks of the most recent build — the warm source for click-time pre-caching. */
+    @Volatile
+    var latestTracks: List<TrackEntity>? = null
+        private set
+
+    @Synchronized
+    fun contentFor(path: String?): FolderContent? = entries[path.orEmpty()]?.content
+
+    @Synchronized
+    fun sourceTracksFor(path: String?): List<TrackEntity>? = entries[path.orEmpty()]?.sourceTracks
+
+    @Synchronized
+    fun put(path: String?, content: FolderContent, sourceTracks: List<TrackEntity>) {
+        entries[path.orEmpty()] = Entry(content, sourceTracks)
+        latestTracks = sourceTracks
+    }
+}
 
 @HiltViewModel
 class BrowseViewModel @Inject constructor(
@@ -78,6 +135,7 @@ class BrowseViewModel @Inject constructor(
 
     private var genreTracksJob: Job? = null
     private var yearTracksJob: Job? = null
+    private var folderContentJob: Job? = null
 
     fun loadGenreTracks(genre: String) {
         genreTracksJob?.cancel()
@@ -105,21 +163,51 @@ class BrowseViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Builds [folderPath]'s listing synchronously from the last warm snapshot
+     * so the destination screen has content on its very first frame. Called
+     * from the parent screen's row click, right before navigating; with no
+     * warm snapshot yet (cold start) it is a no-op and the destination falls
+     * back to its async load.
+     */
+    fun precacheFolder(folderPath: String) {
+        val tracks = FolderListingCache.latestTracks ?: return
+        FolderListingCache.put(folderPath, buildFolderContent(folderPath, tracks, emptySet()), tracks)
+    }
+
     fun loadFolderContent(path: String?) {
-        viewModelScope.launch {
-            // Snapshot first (usually already warm): no cold round-trip before
-            // the folder listing can appear.
+        folderContentJob?.cancel()
+        // Frame-1 fast path: publish any previously built listing for this
+        // exact folder before the first frame (filled by a previous visit or
+        // by [precacheFolder] at click time). The collection below then keeps
+        // it current; the document-id memo makes rebuilds near-free.
+        FolderListingCache.contentFor(path)?.let { _folderContent.value = it }
+        folderContentJob = viewModelScope.launch {
+            // Subfolder listings group by document-id prefix and never consult
+            // the library roots, so only the root screen pays the DataStore read.
+            val libraryFolders = if (path == null) {
+                settingsRepository.settings.first().libraryFolders
+            } else {
+                emptySet()
+            }
             val tracks = trackRepository.allTracksSnapshot()
-            val libraryFolders = settingsRepository.settings.first().libraryFolders
-            // Folder grouping parses a URI per track; keep it off the main thread.
-            _folderContent.value = withContext(Dispatchers.Default) {
-                buildFolderContent(path, tracks, libraryFolders)
+            if (FolderListingCache.sourceTracksFor(path) !== tracks) {
+                val built = withContext(Dispatchers.Default) {
+                    buildFolderContent(path, tracks, libraryFolders)
+                }
+                FolderListingCache.put(path, built, tracks)
+                _folderContent.value = built
             }
             // Then keep observing the live stream (re-group on library changes).
+            // Its first emission is the same list instance as the snapshot just
+            // used, so skip it rather than re-grouping the whole library.
             trackRepository.getAllTracks().collect { liveTracks ->
-                _folderContent.value = withContext(Dispatchers.Default) {
+                if (liveTracks === tracks) return@collect
+                val rebuilt = withContext(Dispatchers.Default) {
                     buildFolderContent(path, liveTracks, libraryFolders)
                 }
+                FolderListingCache.put(path, rebuilt, liveTracks)
+                _folderContent.value = rebuilt
             }
         }
     }
@@ -150,7 +238,7 @@ class BrowseViewModel @Inject constructor(
     /** Tracks stored under [folderPath] (document-id prefix match, same rule as [buildFolderContent]). */
     suspend fun tracksForFolder(folderPath: String): List<TrackEntity> = withContext(Dispatchers.Default) {
         trackRepository.getAllTracks().first()
-            .filter { documentIdOf(it.path).startsWith("$folderPath/") }
+            .filter { TrackDocumentIds.of(it.path).startsWith("$folderPath/") }
     }
 
     private fun buildFolderContent(
@@ -170,7 +258,7 @@ class BrowseViewModel @Inject constructor(
                     FolderEntry(
                         path = root,
                         name = folderDisplayName(root),
-                        trackCount = tracks.count { documentIdOf(it.path).startsWith("$root/") }
+                        trackCount = tracks.count { TrackDocumentIds.of(it.path).startsWith("$root/") }
                     )
                 }
                 .filter { it.trackCount > 0 }
@@ -183,7 +271,7 @@ class BrowseViewModel @Inject constructor(
         val subFolderCounts = mutableMapOf<String, Int>()
 
         tracks.forEach { track ->
-            val docId = documentIdOf(track.path)
+            val docId = TrackDocumentIds.of(track.path)
             if (!docId.startsWith(prefix)) return@forEach
             val remainder = docId.removePrefix(prefix)
             val slashIndex = remainder.indexOf('/')
@@ -202,21 +290,8 @@ class BrowseViewModel @Inject constructor(
         return FolderContent(path = path, folders = subFolders, tracks = directTracks)
     }
 
-    private fun documentIdOf(trackPath: String): String {
-        return try {
-            val uri = Uri.parse(trackPath)
-            when (uri.scheme) {
-                "content" -> DocumentsContract.getDocumentId(uri)
-                "file" -> uri.path ?: trackPath
-                else -> trackPath
-            }
-        } catch (_: Exception) {
-            trackPath
-        }
-    }
-
     private fun parentDocumentIdOf(trackPath: String): String =
-        documentIdOf(trackPath).substringBeforeLast('/', missingDelimiterValue = "")
+        TrackDocumentIds.of(trackPath).substringBeforeLast('/', missingDelimiterValue = "")
 
     private fun treeDocumentId(folderUri: String): String? {
         return try {

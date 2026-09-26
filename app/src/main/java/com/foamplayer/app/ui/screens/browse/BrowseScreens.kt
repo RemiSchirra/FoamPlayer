@@ -530,13 +530,15 @@ fun FolderBrowseScreen(
     onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
+    // Kicked during composition, not in a frame effect: a LaunchedEffect only
+    // runs after the first frame is committed, which is exactly the blank
+    // frame this screen used to flash. Any pre-built listing for this folder
+    // (a previous visit, or click-time pre-caching in the parent screen) is
+    // already in the StateFlow when this scope first reads it.
+    remember(path) { viewModel.loadFolderContent(path); viewModel }
     val content by viewModel.folderContent.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
-
-    LaunchedEffect(path) {
-        viewModel.loadFolderContent(path)
-    }
 
     val title = path
         ?.substringAfterLast('/')
@@ -575,7 +577,12 @@ fun FolderBrowseScreen(
                     title = folder.name,
                     subtitle = "${folder.trackCount} tracks",
                     icon = Icons.Rounded.Folder,
-                    onClick = { onFolderClick(folder.path) },
+                    onClick = {
+                        // Build the destination's listing from this screen's
+                        // warm snapshot now, so its first frame has content.
+                        viewModel.precacheFolder(folder.path)
+                        onFolderClick(folder.path)
+                    },
                     active = CollectionId.folder(folder.path) == activeCollectionId,
                     density = density,
                     onLongClick = {
@@ -607,7 +614,10 @@ fun FolderBrowseScreen(
             }
         }
 
-        if (sortedFolders.isEmpty() && shownTracks.isEmpty()) {
+        // "No tracks found" is only truthful once the folder content has loaded;
+        // the pre-load frame (content == null) must render blank instead of
+        // flashing the empty state before the listing arrives.
+        if (content != null && sortedFolders.isEmpty() && shownTracks.isEmpty()) {
             item(key = "browse_folder_empty") {
                 Box(
                     modifier = Modifier
