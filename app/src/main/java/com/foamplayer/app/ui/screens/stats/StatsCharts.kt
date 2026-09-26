@@ -66,6 +66,16 @@ fun StatsActivityChart(
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor, textAlign = TextAlign.Center)
 
+    // Text measurement is expensive; the labels are static across the growth
+    // animation, so measure once per (bucket, style, density) change OUTSIDE the
+    // draw block instead of re-measuring ~every frame of the 600ms tween.
+    val labelLayouts = remember(buckets, labelStyle, textMeasurer) {
+        val stride = ((buckets.size + MaxVisibleLabels - 1) / MaxVisibleLabels).coerceAtLeast(1)
+        buckets.indices
+            .filter { it % stride == 0 || it == buckets.lastIndex }
+            .associateWith { textMeasurer.measure(buckets[it].label, labelStyle) }
+    }
+
     Canvas(modifier.fillMaxWidth().height(160.dp)) {
         if (buckets.isEmpty()) return@Canvas
 
@@ -107,7 +117,7 @@ fun StatsActivityChart(
             }
 
             if (index % labelStride == 0 || index == buckets.lastIndex) {
-                val measured = textMeasurer.measure(bucket.label, labelStyle)
+                val measured = labelLayouts[index] ?: return@forEachIndexed
                 drawText(
                     textLayoutResult = measured,
                     topLeft = Offset(
@@ -183,6 +193,12 @@ fun StatsHourChart(
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor, textAlign = TextAlign.Center)
 
+    // Static hour labels measured once outside the draw block (see
+    // StatsActivityChart above) instead of on every animation frame.
+    val hourLabelLayouts = remember(labelStyle, textMeasurer) {
+        listOf(0, 6, 12, 18).associateWith { textMeasurer.measure("$it", labelStyle) }
+    }
+
     Canvas(modifier.fillMaxWidth().height(120.dp)) {
         if (hours.size != 24) return@Canvas
 
@@ -223,7 +239,7 @@ fun StatsHourChart(
         }
 
         listOf(0, 6, 12, 18).forEach { hour ->
-            val measured = textMeasurer.measure("$hour", labelStyle)
+            val measured = hourLabelLayouts[hour] ?: return@forEach
             drawText(
                 textLayoutResult = measured,
                 topLeft = Offset(
