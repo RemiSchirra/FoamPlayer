@@ -112,6 +112,20 @@ fun EqualizerGraph(
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 9.sp, color = labelColor)
 
+    // Static grid labels measured once outside the draw block: text measurement is
+    // expensive, and the graph redraws every frame of a node drag — re-measuring
+    // these in the Canvas each frame multiplied the drag cost for nothing.
+    val dbLabelLayouts = remember(labelStyle, textMeasurer) {
+        listOf(-12, -6, 0, 6, 12).associateWith { db ->
+            textMeasurer.measure(if (db > 0) "+${db}dB" else "${db}dB", labelStyle)
+        }
+    }
+    val freqLabelLayouts = remember(labelStyle, textMeasurer) {
+        GRID_FREQUENCIES.associateWith { freq ->
+            textMeasurer.measure(frequencyLabel(freq), labelStyle)
+        }
+    }
+
     Canvas(
         modifier = modifier
             .fillMaxWidth()
@@ -189,19 +203,19 @@ fun EqualizerGraph(
                 strokeWidth = if (db == 0) 1.5f else 1f
             )
             drawText(
-                textMeasurer = textMeasurer,
-                text = if (db > 0) "+${db}dB" else "${db}dB",
-                topLeft = Offset(4.dp.toPx(), (y - 6.dp.toPx()).coerceAtLeast(0f)),
-                style = labelStyle
+                textLayoutResult = dbLabelLayouts.getValue(db),
+                topLeft = Offset(4.dp.toPx(), (y - 6.dp.toPx()).coerceAtLeast(0f))
             )
         }
         GRID_FREQUENCIES.forEach { freq ->
             val x = xForFrequency(freq.toFloat(), w)
+            val measured = freqLabelLayouts.getValue(freq)
             drawText(
-                textMeasurer = textMeasurer,
-                text = frequencyLabel(freq),
-                topLeft = Offset((x - 8.dp.toPx()).coerceAtMost(w - 26.dp.toPx()), h - 12.dp.toPx()),
-                style = labelStyle
+                textLayoutResult = measured,
+                topLeft = Offset(
+                    (x - 8.dp.toPx()).coerceAtMost(w - measured.size.width.toFloat() - 2.dp.toPx()),
+                    h - 12.dp.toPx()
+                )
             )
         }
 
