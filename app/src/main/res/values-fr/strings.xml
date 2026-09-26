@@ -244,14 +244,21 @@
     <string name="lyrics_results_save_as_file">Enregistrer en fichier</string>
     <string name="lyrics_results_embed">Intégrer au fichier</string>
     <string name="lyrics_results_saved">Paroles enregistrées dans un fichier</string>
-    <string name="lyrics_results_embedded">Paroles intégrées au fichier</string>
-    <string name="lyrics_results_save_failed">Impossible d\'enregistrer : %1$s</string>
     <string name="lyrics_results_embed_failed">Impossible d\'intégrer : %1$s</string>
+    <string name="lyrics_results_save_failed">Impossible d\'enregistrer : %1$s</string>
+    <string name="lyrics_results_embedded">Paroles intégrées au fichier</string>
     <string name="lyrics_results_duration_match">Durée correspondante</string>
     <string name="lyrics_results_expand">Tout afficher</string>
     <string name="lyrics_results_collapse">Réduire</string>
     <string name="lyrics_view_readable">Lisible</string>
     <string name="lyrics_view_raw">Brut</string>
+
+    <!-- Fondus -->
+    <string name="fades">Fondus</string>
+    <string name="crossfade">Enchaînement fondu</string>
+    <string name="crossfade_desc">Fondu de fin de piste vers la suivante</string>
+    <string name="quick_fade">Fondu rapide</string>
+    <string name="quick_fade_desc">Courts fondus à la lecture, en pause, lors des déplacements et des sauts</string>
 
     <!-- Onboarding -->
     <string name="onboarding_welcome_title">Bienvenue sur FoamPlayer</string>

@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
+import kotlin.math.pow
 
 class DspMathTest {
 
@@ -93,7 +94,7 @@ class DspMathTest {
     @Test
     fun `graphic band count 21 reproduces the legacy 0 point15 decade grid`() {
         for (i in 0 until 21) {
-            val expected = 20f * 10.0.pow(0.15f * i)
+            val expected = 20f * 10.0.pow(0.15 * i).toFloat()
             assertEquals(
                 expected, GraphicEqSettings.bandFrequency(i, 21), expected * 0.001f
             )

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,7 +30,7 @@ class DspEngine @Inject constructor(
     private val settingsRepository: SettingsRepository
 ) {
 
-    /** The audio processor inserted into the player's audio sink. */
+    /** The audio processor inserted into the (original) player's audio sink. */
     val processor = DspAudioProcessor()
 
     private val _state = MutableStateFlow(DspState())
@@ -41,6 +42,15 @@ class DspEngine @Inject constructor(
     private val scope = CoroutineScope(Dispatchers.Default + Job())
     private var persistJob: Job? = null
     private var seeded = false
+
+    /**
+     * Extra processors installed into auxiliary players (crossfade secondaries).
+     * Each one receives the exact same state publications as [processor], so
+     * both overlapping streams are treated identically by the DSP chain. A
+     * processor promoted to primary keeps its registration; one destroyed with
+     * its player is removed via [removeMirrorProcessor].
+     */
+    private val mirrorProcessors = CopyOnWriteArrayList<DspAudioProcessor>()
 
     init {
         // Seed once from DataStore before the first user change; afterwards the
@@ -58,10 +68,26 @@ class DspEngine @Inject constructor(
         }
     }
 
+    /**
+     * Builds an extra [DspAudioProcessor] mirroring this chain's live state,
+     * for a crossfade's secondary player. Seeded with the current state and
+     * registered for future publications.
+     */
+    fun createMirrorProcessor(): DspAudioProcessor =
+        DspAudioProcessor().also { mirror ->
+            mirror.setState(_state.value)
+            mirrorProcessors.add(mirror)
+        }
+
+    /** Unregisters a mirror whose player was released (fade cancelled / aborted). */
+    fun removeMirrorProcessor(processor: DspAudioProcessor) {
+        mirrorProcessors.remove(processor)
+    }
+
     private fun applySeed(state: DspState) {
         val seededState = enforceExclusivity(state)
         _state.value = seededState
-        processor.setState(seededState)
+        publishState(seededState)
     }
 
     // ------------------------------------------------------------------ setters
@@ -305,8 +331,14 @@ class DspEngine @Inject constructor(
     private fun update(transform: (DspState) -> DspState) {
         val newState = enforceExclusivity(transform(_state.value))
         _state.value = newState
-        processor.setState(newState)
+        publishState(newState)
         persistState(newState)
+    }
+
+    /** Pushes a state publication into the main processor and every live mirror. */
+    private fun publishState(state: DspState) {
+        processor.setState(state)
+        for (mirror in mirrorProcessors) mirror.setState(state)
     }
 
     /**

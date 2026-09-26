@@ -41,6 +41,10 @@ data class AppSettings(
     val bitPerfectEnabled: Boolean = true,
     /** Fraction of a track's duration (in %) it must play to count as listened. */
     val listenedThresholdPercent: Int = DEFAULT_LISTENED_THRESHOLD_PERCENT,
+    /** Crossfade duration at natural track transitions, in seconds. 0 disables. */
+    val normalFadeSeconds: Float = DEFAULT_NORMAL_FADE_SECONDS,
+    /** Duration of quick fades on play/pause/seek/skip, in seconds. 0 disables. */
+    val quickFadeSeconds: Float = DEFAULT_QUICK_FADE_SECONDS,
     val libraryFolders: Set<String> = emptySet(),
     val iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
     val miniPlayerRounding: Int = 40,
@@ -162,6 +166,8 @@ data class AppSettings(
                 MIN_LISTENED_THRESHOLD_PERCENT,
                 MAX_LISTENED_THRESHOLD_PERCENT
             ),
+            normalFadeSeconds = normalFadeSeconds.coerceIn(MIN_NORMAL_FADE_SECONDS, MAX_NORMAL_FADE_SECONDS),
+            quickFadeSeconds = quickFadeSeconds.coerceIn(MIN_QUICK_FADE_SECONDS, MAX_QUICK_FADE_SECONDS),
             miniPlayerRounding = miniPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
             fullPlayerRounding = fullPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
             backgroundBlur = backgroundBlur.coerceIn(MIN_BACKGROUND_BLUR, MAX_BACKGROUND_BLUR),
@@ -197,6 +203,12 @@ data class AppSettings(
         const val MAX_DYNAMIC_BACKGROUND_INTENSITY = 100
         const val DEFAULT_APP_BACKGROUND_INTENSITY = 50
         const val DEFAULT_PLAYER_BACKGROUND_INTENSITY = 80
+        const val MIN_NORMAL_FADE_SECONDS = 0f
+        const val MAX_NORMAL_FADE_SECONDS = 15f
+        const val DEFAULT_NORMAL_FADE_SECONDS = 5f
+        const val MIN_QUICK_FADE_SECONDS = 0f
+        const val MAX_QUICK_FADE_SECONDS = 1f
+        const val DEFAULT_QUICK_FADE_SECONDS = 0.2f
         val DEFAULT_SEPARATORS = setOf(";", ",")
     }
 }

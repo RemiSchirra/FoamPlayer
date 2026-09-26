@@ -42,6 +42,8 @@ object BackupJson {
     fun appSettingsToJson(settings: AppSettings): JSONObject = JSONObject().apply {
         put("bitPerfectEnabled", settings.bitPerfectEnabled)
         put("listenedThresholdPercent", settings.listenedThresholdPercent)
+        put("normalFadeSeconds", settings.normalFadeSeconds.toDouble())
+        put("quickFadeSeconds", settings.quickFadeSeconds.toDouble())
         put("iconStyle", settings.iconStyle.name)
         put("miniPlayerRounding", settings.miniPlayerRounding)
         put("fullPlayerRounding", settings.fullPlayerRounding)
@@ -97,6 +99,14 @@ object BackupJson {
             "listenedThresholdPercent",
             AppSettings.DEFAULT_LISTENED_THRESHOLD_PERCENT
         ),
+        normalFadeSeconds = json.optDouble(
+            "normalFadeSeconds",
+            AppSettings.DEFAULT_NORMAL_FADE_SECONDS.toDouble()
+        ).toFloat(),
+        quickFadeSeconds = json.optDouble(
+            "quickFadeSeconds",
+            AppSettings.DEFAULT_QUICK_FADE_SECONDS.toDouble()
+        ).toFloat(),
         iconStyle = decodeEnum(json.optString("iconStyle"), FoamIconStyle.FLAT),
         miniPlayerRounding = json.optInt("miniPlayerRounding", 40),
         fullPlayerRounding = json.optInt("fullPlayerRounding", 40),

@@ -150,6 +150,13 @@
     <string name="audio_pipeline">Audio Pipeline</string>
     <string name="audio_pipeline_desc">Visualize the live audio rendering path</string>
 
+    <!-- Fades -->
+    <string name="fades">Fades</string>
+    <string name="crossfade">Crossfade</string>
+    <string name="crossfade_desc">Blend each track\'s ending into the next one</string>
+    <string name="quick_fade">Quick Fade</string>
+    <string name="quick_fade_desc">Short fades on play, pause, seek and skip</string>
+
     <string name="lyrics_providers">Providers</string>
     <string name="lyrics_not_found">Lyrics not found</string>
     <string name="resume_auto_scroll">Resume auto-scroll</string>

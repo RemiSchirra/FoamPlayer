@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -66,6 +67,12 @@ class SettingsRepository @Inject constructor(
     suspend fun setBitPerfectEnabled(enabled: Boolean) = update { it.copy(bitPerfectEnabled = enabled) }
     suspend fun setListenedThresholdPercent(percent: Int) = update {
         it.copy(listenedThresholdPercent = percent)
+    }
+    suspend fun setNormalFadeSeconds(seconds: Float) = update {
+        it.copy(normalFadeSeconds = seconds)
+    }
+    suspend fun setQuickFadeSeconds(seconds: Float) = update {
+        it.copy(quickFadeSeconds = seconds)
     }
     suspend fun setIconStyle(style: FoamIconStyle) = update { it.copy(iconStyle = style) }
     suspend fun setMiniPlayerRounding(rounding: Int) = update { it.copy(miniPlayerRounding = rounding) }
@@ -232,6 +239,8 @@ class SettingsRepository @Inject constructor(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
         listenedThresholdPercent = this[Keys.LISTENED_THRESHOLD_PERCENT]
             ?: AppSettings().listenedThresholdPercent,
+        normalFadeSeconds = this[Keys.NORMAL_FADE_SECONDS] ?: AppSettings().normalFadeSeconds,
+        quickFadeSeconds = this[Keys.QUICK_FADE_SECONDS] ?: AppSettings().quickFadeSeconds,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
         iconStyle = this[Keys.ICON_STYLE]
             ?.let { runCatching { FoamIconStyle.valueOf(it) }.getOrNull() }
@@ -312,6 +321,8 @@ class SettingsRepository @Inject constructor(
     private fun MutablePreferences.write(settings: AppSettings) {
         this[Keys.BIT_PERFECT_ENABLED] = settings.bitPerfectEnabled
         this[Keys.LISTENED_THRESHOLD_PERCENT] = settings.listenedThresholdPercent
+        this[Keys.NORMAL_FADE_SECONDS] = settings.normalFadeSeconds
+        this[Keys.QUICK_FADE_SECONDS] = settings.quickFadeSeconds
         this[Keys.SELECTED_FOLDERS] = settings.libraryFolders
         this[Keys.ICON_STYLE] = settings.iconStyle.name
         this[Keys.MINI_PLAYER_ROUNDING] = settings.miniPlayerRounding
@@ -366,6 +377,8 @@ class SettingsRepository @Inject constructor(
     private object Keys {
         val BIT_PERFECT_ENABLED = booleanPreferencesKey("bit_perfect_enabled")
         val LISTENED_THRESHOLD_PERCENT = intPreferencesKey("listened_threshold_percent")
+        val NORMAL_FADE_SECONDS = floatPreferencesKey("normal_fade_seconds")
+        val QUICK_FADE_SECONDS = floatPreferencesKey("quick_fade_seconds")
         val SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
         val ICON_STYLE = stringPreferencesKey("icon_style")
         val MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")

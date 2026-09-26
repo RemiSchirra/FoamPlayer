@@ -41,16 +41,19 @@ import com.foamplayer.app.R
 import com.foamplayer.app.audio.bitperfect.AudioOutputInfo
 import com.foamplayer.app.ui.components.FidelityScoreCard
 import com.foamplayer.app.ui.components.FoamNavigationButton
+import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlin.math.roundToInt
 
 /**
  * Audio settings (Poweramp-inspired):
  *  - live audio fidelity score with itemized breakdown,
  *  - engine switches (bit-perfect master, direct volume control) plus the current
  *    output summary,
+ *  - fade configuration (track crossfade + quick fades),
  *  - entry into the output-devices subscreen,
  *  - audio pipeline visualization modal.
  */
@@ -126,6 +129,46 @@ fun AudioSettingsScreen(
                         )
                         SectionDivider()
                         OutputSummaryRow(outputInfo = playbackState.audioOutputInfo)
+                    }
+                }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+
+            // -------------------------------------------------------- fades
+            item {
+                BasicText(
+                    text = stringResource(R.string.fades),
+                    style = FoamTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    Column {
+                        FoamSliderStateItem(
+                            title = stringResource(R.string.crossfade),
+                            description = stringResource(R.string.crossfade_desc),
+                            initialValue = settings.normalFadeSeconds,
+                            onValueChangeFinished = { viewModel.setNormalFadeSeconds(it) },
+                            steps = 14, // integer seconds 0..15
+                            valueRange = 0f..15f,
+                            formatValue = { "${it.roundToInt()} s" },
+                            minMaxDisplay = "0 s" to "15 s"
+                        )
+                        SectionDivider()
+                        FoamSliderStateItem(
+                            title = stringResource(R.string.quick_fade),
+                            description = stringResource(R.string.quick_fade_desc),
+                            initialValue = settings.quickFadeSeconds,
+                            onValueChangeFinished = { viewModel.setQuickFadeSeconds(it) },
+                            steps = 9, // 0.1 s increments 0..1
+                            valueRange = 0f..1f,
+                            formatValue = { String.format("%.1f s", it) },
+                            minMaxDisplay = "0 s" to "1 s"
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
@@ -261,4 +304,3 @@ private fun OutputSummaryRow(outputInfo: AudioOutputInfo?) {
 }
 
 // --------------------------------------------------------- device config
-

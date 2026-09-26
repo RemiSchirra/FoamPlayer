@@ -103,6 +103,15 @@ class PlaybackService : MediaSessionService() {
         )
         mediaSession = session
 
+        // A crossfade promotes its secondary player at the swap: re-bind the
+        // session (and refresh the notification) to the new active player so the
+        // session/notification/position keep tracking the audible stream.
+        audioEngine.setOnPlayerSwappedListener {
+            mediaSession?.setPlayer(audioEngine.player)
+            mediaSession?.let { refreshNotificationButtons(it) }
+            triggerNotificationUpdate()
+        }
+
         addSession(session)
         refreshNotificationButtons(session)
         triggerNotificationUpdate()
@@ -113,6 +122,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        audioEngine.setOnPlayerSwappedListener(null)
         discordPresenceController.stop()
         mediaSession?.run {
             player.release()
