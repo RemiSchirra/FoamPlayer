@@ -513,7 +513,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             )
                             MarqueeText(
                                 text = stringResource(R.string.artist_album_separator, track.artist, track.album),
-                                style = FoamTheme.typography.body,
+                                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
                                 mode = marqueeMode,
                                 modifier = Modifier
                                     .sharedBounds(
