@@ -468,6 +468,18 @@ class AudioEngine @Inject constructor(
     }
 
     /**
+     * True when a gesture skip should leave the player paused: there is a
+     * current track and playback was not requested. Skips (next/previous/
+     * pager swipe) prepare the new track but never auto-resume; manual picks
+     * start playback regardless (see the forcePlay flag on the jump/load
+     * helpers). With no current track (fresh queue start) playback begins
+     * normally. Uses playWhenReady rather than isPlaying, so a buffering
+     * player mid-transition still keeps going.
+     */
+    private fun switchStaysPaused(): Boolean =
+        _playbackState.value.currentTrack != null && !player.playWhenReady
+
+    /**
      * Shared bookkeeping for a track becoming current — used by the natural
      * [Player.Listener.onMediaItemTransition] and by the crossfade swap, so the
      * queue advance after a fade is identical to a natural transition
@@ -538,6 +550,10 @@ class AudioEngine @Inject constructor(
         failedTrackId: Long?,
         syncCursorToPlayer: Boolean
     ) {
+        // A dead track must not flip the user's pause intent: remember whether
+        // playback was requested before the advance, and only re-request it
+        // after when it was.
+        val resumeAfterError = player.playWhenReady
         val trackId = failedTrackId
             ?: player.currentMediaItem?.mediaId?.toLongOrNull()
         val failedTrack = trackId?.let { id ->
@@ -580,13 +596,14 @@ class AudioEngine @Inject constructor(
 
         // Move to the next item. After an error the player sits in
         // STATE_IDLE: a seek alone doesn't resume, the new item must be
-        // prepared (and playback re-requested) explicitly.
+        // prepared (and playback re-requested) explicitly — the re-request
+        // only when the track was actually playing before the error.
         // The error path never crossfades: the old player is idle/dead, and
         // fading into the same item would briefly double-play it.
         advanceToNext(useFade = false)
         if (player.playbackState == Player.STATE_IDLE) {
             player.prepare()
-            player.play()
+            if (resumeAfterError) player.play()
         }
     }
 
@@ -733,6 +750,11 @@ class AudioEngine @Inject constructor(
         }
     }
 
+    /**
+     * Starts a fresh queue at [startIndex] and plays it. Every caller is a manual
+     * pick (track tap, "play next"/"add to queue" onto an empty queue, list
+     * replacement), so playback begins even over a paused session.
+     */
     fun setQueue(tracks: List<TrackEntity>, startIndex: Int = 0, sourceCollectionId: String? = null) {
         // Queue reset invalidates any in-flight fade (and its secondary player).
         fadeEngine.cancel()
@@ -749,6 +771,7 @@ class AudioEngine @Inject constructor(
                 queueIndex = -1,
                 queueEntryIds = emptyList(),
                 auxiliaryFlags = emptyList(),
+                currentTrack = null,
                 queueSourceId = null,
                 queueSourceFlags = emptyList()
             )
@@ -774,7 +797,7 @@ class AudioEngine @Inject constructor(
                     List(AUXILIARY_QUEUE_LENGTH) { false }
         )
 
-        loadWindowAndPlay(newQueue, clampedStart)
+        loadWindowAndPlay(newQueue, clampedStart, forcePlay = true)
     }
 
     /**
@@ -843,6 +866,9 @@ class AudioEngine @Inject constructor(
      * [startIndex]. The auxiliary pool is left untouched, so no refill is needed.
      * [sourceCollectionId], when set, marks the queue as started from that
      * collection ([PlaybackState.queueSourceId]); a bare track list passes null.
+     *
+     * A manual pick: playback always starts (or keeps going), even over a
+     * previously paused session.
      */
     fun playListReplacingUpcoming(
         tracks: List<TrackEntity>,
@@ -887,7 +913,7 @@ class AudioEngine @Inject constructor(
                     List(current.queue.size - auxStart) { false }
         )
 
-        jumpWindowTo(keptCount + startIndex.coerceIn(0, tracks.lastIndex))
+        jumpWindowTo(keptCount + startIndex.coerceIn(0, tracks.lastIndex), forcePlay = true)
     }
 
     /**
@@ -1034,12 +1060,22 @@ class AudioEngine @Inject constructor(
     /**
      * Loads a window of tracks around [centerIndex] and starts playback.
      * The rest of the queue is loaded lazily by adjustWindow().
+     *
+     * [forcePlay] marks a manual pick (setQueue): playback always starts, even
+     * over a paused session. Without it (gesture skips, natural transitions)
+     * a paused session stays paused — see [switchStaysPaused].
      */
-    private fun loadWindowAndPlay(tracks: List<TrackEntity>, centerIndex: Int) {
+    private fun loadWindowAndPlay(
+        tracks: List<TrackEntity>,
+        centerIndex: Int,
+        forcePlay: Boolean = false
+    ) {
         windowJumpJob?.cancel()
         val jumpId = ++windowJumpId
         // This jump writes the fresh timeline, resolving any deferred resync.
         pendingWindowResync = false
+        // Captured at request time, before the async timeline write below.
+        val playAfterPrepare = forcePlay || !switchStaysPaused()
 
         val windowStart = (centerIndex - WINDOW_RADIUS).coerceAtLeast(0)
         val windowEnd = (centerIndex + WINDOW_RADIUS).coerceAtMost(tracks.lastIndex)
@@ -1053,7 +1089,9 @@ class AudioEngine @Inject constructor(
             if (jumpId != windowJumpId) return@launch
             player.setMediaItems(windowItems, centerIndex - windowStart, 0L)
             player.prepare()
-            player.play()
+            // Explicit play/pause, not just play(): prepare() resumes whatever
+            // playWhenReady was left over, so a paused session must re-assert.
+            if (playAfterPrepare) player.play() else player.pause()
             loadedRange = windowStart..windowEnd
         }
     }
@@ -1168,7 +1206,10 @@ class AudioEngine @Inject constructor(
                 // TODO: Make this an app parameter.
                 val targetQueueIndex = player.previousMediaItemIndex + loadedRange.first
                 val targetId = state.queue.getOrNull(targetQueueIndex)?.id
-                if (fadeEngine.quickFadeEnabled && targetId != null && targetId !in failedTrackIds &&
+                // A paused skip must not start playing: crossfades need an
+                // audible stream to fade from, so they only run while playing.
+                if (fadeEngine.quickFadeEnabled && player.isPlaying && targetId != null &&
+                    targetId !in failedTrackIds &&
                     fadeEngine.startCrossfade(
                         targetQueueIndex,
                         0L,
@@ -1181,7 +1222,7 @@ class AudioEngine @Inject constructor(
                 skipBackwardOverFailedTracks()
             } else {
                 // Rewind the current track: crossfade to its own start when possible.
-                if (fadeEngine.quickFadeEnabled &&
+                if (fadeEngine.quickFadeEnabled && player.isPlaying &&
                     fadeEngine.startCrossfade(
                         state.queueIndex,
                         0L,
@@ -1200,7 +1241,7 @@ class AudioEngine @Inject constructor(
                 previousIndex--
             }
             if (previousIndex >= 0) {
-                if (fadeEngine.quickFadeEnabled &&
+                if (fadeEngine.quickFadeEnabled && player.isPlaying &&
                     fadeEngine.startCrossfade(
                         previousIndex,
                         0L,
@@ -1225,6 +1266,12 @@ class AudioEngine @Inject constructor(
         }
     }
 
+    /**
+     * Gesture skip (next/previous buttons, player pager swipe): jumps to [index].
+     * Never un-pauses a paused session — the target track is loaded (or seeked
+     * to) prepared and waits for the next explicit play. Manual picks go through
+     * [playQueueEntry] / [playListReplacingUpcoming], which start playback.
+     */
     fun skipToIndex(index: Int, forward: Boolean = true) {
         val queue = _playbackState.value.queue
         if (index !in queue.indices) return
@@ -1247,8 +1294,10 @@ class AudioEngine @Inject constructor(
 
         // Manual skips always crossfade when quick fades are on — the fade
         // builds its own window, so the target needs no loaded timeline entry.
+        // Paused skips never start a fade: the target loads (or seeks) paused.
         val targetId = queue.getOrNull(target)?.id
-        if (fadeEngine.quickFadeEnabled && targetId != null && targetId !in failedTrackIds &&
+        if (fadeEngine.quickFadeEnabled && player.isPlaying && targetId != null &&
+            targetId !in failedTrackIds &&
             fadeEngine.startCrossfade(target, 0L, fadeEngine.quickFadeDurationMs)
         ) {
             return
@@ -1265,8 +1314,12 @@ class AudioEngine @Inject constructor(
     /**
      * Synchronously rebuilds the window around [centerIndex] from the current queue
      * and starts playing it. Override any in-flight jump and pending resync.
+     *
+     * [forcePlay] marks a manual pick (playListReplacingUpcoming): playback always
+     * starts, even over a paused session. Without it (gesture skips) a paused
+     * session stays paused — see [switchStaysPaused].
      */
-    private fun jumpWindowTo(centerIndex: Int) {
+    private fun jumpWindowTo(centerIndex: Int, forcePlay: Boolean = false) {
         val queue = _playbackState.value.queue
         if (centerIndex !in queue.indices) return
 
@@ -1283,7 +1336,7 @@ class AudioEngine @Inject constructor(
         loadedRange = windowStart..windowEnd
         player.setMediaItems(items, centerIndex - windowStart, 0L)
         player.prepare()
-        player.play()
+        if (forcePlay || !switchStaysPaused()) player.play() else player.pause()
     }
 
     fun seekTo(positionMs: Long) {
@@ -1327,7 +1380,10 @@ class AudioEngine @Inject constructor(
             if (useFade) {
                 val targetQueueIndex = player.nextMediaItemIndex + loadedRange.first
                 val targetId = state.queue.getOrNull(targetQueueIndex)?.id
-                if (fadeEngine.quickFadeEnabled && targetId != null && targetId !in failedTrackIds &&
+                // Crossfades need audible audio to fade from: a paused skip
+                // seeks instead and stays paused.
+                if (fadeEngine.quickFadeEnabled && player.isPlaying && targetId != null &&
+                    targetId !in failedTrackIds &&
                     fadeEngine.startCrossfade(targetQueueIndex, 0L, fadeEngine.quickFadeDurationMs)
                 ) {
                     return
@@ -1340,7 +1396,7 @@ class AudioEngine @Inject constructor(
             if (nextIndex in state.queue.indices) {
                 if (useFade) {
                     val targetId = state.queue[nextIndex].id
-                    if (fadeEngine.quickFadeEnabled && targetId !in failedTrackIds &&
+                    if (fadeEngine.quickFadeEnabled && player.isPlaying && targetId !in failedTrackIds &&
                         fadeEngine.startCrossfade(nextIndex, 0L, fadeEngine.quickFadeDurationMs)
                     ) {
                         return
@@ -1368,7 +1424,10 @@ class AudioEngine @Inject constructor(
             .map { (i, _) -> i }
 
     /**
-     * Moves the entry to be played next, jumps to it, and starts playback
+     * Manual pick from the queue screen: moves the entry to be played next,
+     * jumps to it and starts playback — even over a paused session. The raw
+     * [Player.play] (not [play]) keeps an already-running quick-fade crossfade
+     * alive, and only re-asserts playWhenReady on the freshly loaded target.
      */
     fun playQueueEntry(entryId: Long) {
         val fromIndex = entryIndexOf(entryId)
