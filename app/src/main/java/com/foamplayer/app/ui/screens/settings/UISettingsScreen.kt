@@ -223,7 +223,11 @@ private fun LanguageSelector(
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
             .background(FoamTheme.colors.surface)
-            .clickable { showModal = true }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = { showModal = true }
+            )
             .padding(FoamDimens.paddingMedium)
     ) {
         Row(
