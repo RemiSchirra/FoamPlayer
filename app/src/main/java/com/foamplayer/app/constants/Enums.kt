@@ -95,10 +95,8 @@ enum class GridItemSize {
 }
 
 /**
- * The six list/grid density modes of the app's media lists, from the most
- * compact to the most spacious. The ROW_* modes render the shared row scaffold
- * (with growing artwork and text lines); the GRID_* modes render square
- * artwork cells in a fixed number of columns.
+ * Density of the app's media lists, compact to spacious. ROW_* render the shared
+ * row scaffold; GRID_* render square artwork cells in a fixed column count.
  */
 enum class MediaDensity(val label: String) {
     ROW_SMALL("Row Small"),
@@ -126,10 +124,7 @@ enum class MediaDensity(val label: String) {
     }
 }
 
-/**
- * One app view holding a media list. Each remembers its own [MediaDensity],
- * so per-view keys must stay stable across releases (they are persisted).
- */
+/** A media list view; each persists its own [MediaDensity]. Keys are stable across releases. */
 enum class MediaListView {
     PLAYLISTS,
     PLAYLIST_DETAIL,
@@ -155,12 +150,8 @@ enum class MediaListView {
 }
 
 /**
- * Sorting of a media list's content, chosen per view from the 3-dots
- * organisation modal and persisted per view. [CUSTOM] is only offered where a
- * user-defined order exists (playlist tracks, the playlists list itself); the
- * other modes apply to whatever the view holds — for track lists every mode is
- * meaningful, for collection lists (albums, artists, genres...) only the ones
- * the entry data supports are offered.
+ * Per-view content sorting, chosen from the organisation modal and persisted.
+ * [CUSTOM] is only offered where a user-defined order exists.
  */
 enum class CollectionSortMode(val label: String) {
     CUSTOM("Custom order"),
@@ -176,7 +167,7 @@ enum class CollectionSortMode(val label: String) {
     RANDOM("By random"),
 }
 
-/** The sort modes offered for a list of tracks (everything but the playlist-only custom order). */
+/** Sort modes offered for a track list (everything but the playlist-only custom order). */
 val TrackSortOptions: List<CollectionSortMode> =
     listOf(
         CollectionSortMode.NAME,
@@ -192,10 +183,8 @@ val TrackSortOptions: List<CollectionSortMode> =
     )
 
 /**
- * The sort a view starts with. Views holding a user-defined order start in it
- * (their stored order IS the display order today); year tracks keep their
- * album-grouped query order; the home see-all pages keep the query orders
- * their rows are named for; everything else is alphabetical.
+ * A view's initial sort mode: user-ordered views start in [CollectionSortMode.CUSTOM],
+ * see-all pages in their query's order, everything else alphabetically.
  */
 fun MediaListView.defaultSortMode(): CollectionSortMode = when (this) {
     MediaListView.PLAYLISTS,
@@ -236,6 +225,7 @@ val DefaultLyricsProviderOrder =
         PreferredLyricsProvider.PAXSENIX_YOUTUBE,
     )
 
+/** Parses a comma-separated provider order, appending any missing defaults at the end. */
 fun deserializeLyricsProviderOrder(orderStr: String?): List<PreferredLyricsProvider> {
     if (orderStr.isNullOrBlank()) return DefaultLyricsProviderOrder
 
@@ -262,6 +252,7 @@ val DefaultLyricsSourceOrder =
         LyricsSource.EMBEDDED,
     )
 
+/** Parses a comma-separated source order, appending any missing defaults at the end. */
 fun deserializeLyricsSourceOrder(orderStr: String?): List<LyricsSource> {
     if (orderStr.isNullOrBlank()) return DefaultLyricsSourceOrder
 
@@ -317,7 +308,6 @@ val LyricsRomanizeHindiKey = booleanPreferencesKey("lyricsRomanizeHindi")
 val LyricsRomanizeOtherLanguagesKey = booleanPreferencesKey("lyricsRomanizeOtherLanguages")
 val TranslateLyricsKey = booleanPreferencesKey("translateLyrics")
 
-// Queue lyrics pre-load settings
 val PreloadQueueLyricsEnabledKey = booleanPreferencesKey("preload_queue_lyrics_enabled")
 val QueueLyricsPreloadCountKey = intPreferencesKey("queue_lyrics_preload_count")
 
@@ -463,13 +453,11 @@ val CountryCodeToName =
         "AE" to "United Arab Emirates",
     )
 
-// App rating / star prompt preferences
 val LaunchCountKey = intPreferencesKey("launch_count")
 val OnboardingCompletedKey = booleanPreferencesKey("onboarding_completed")
 val HasPressedStarKey = booleanPreferencesKey("has_pressed_star")
 val RemindAfterKey = intPreferencesKey("remind_after")
 
-// Update settings
 val EnableUpdateNotificationKey = booleanPreferencesKey("enableUpdateNotification")
 val UpdateChannelKey = stringPreferencesKey("updateChannel")
 val LastUpdateCheckKey = longPreferencesKey("lastUpdateCheck")
@@ -495,13 +483,7 @@ enum class UpdateChannel {
     DAILY_NIGHTLY,
 }
 
-/**
- * Layout for the app's bottom navigation bar.
- *
- *  DOCKED   – classic bar at the bottom of the screen
- *  UNDOCKED – floating bubble
- *  ATTACHED – bubble but connect to the mini player
- */
+/** Bottom navigation bar layout: docked bar, floating bubble or bubble attached to the mini player. */
 enum class NavigationBarMode {
     DOCKED,
     FLOATING,
@@ -509,11 +491,8 @@ enum class NavigationBarMode {
 }
 
 /**
- * An item that can be placed in one of the two navigation bars.
- *
- * [MORE] is a positional marker for the "more" toggle: it is only valid inside
- * the *primary* bar order and is rendered as the expand button (never navigates),
- * and only while the second bar is non-empty.
+ * An item placeable in a navigation bar. [MORE] only marks the primary bar's
+ * expand toggle; it never navigates and only applies while the second bar is non-empty.
  */
 enum class NavBarItem {
     HOME,
@@ -545,9 +524,8 @@ val DefaultNavBarSecondaryOrder = DefaultNavBarScreenItems + NavBarItem.STATS
 val DefaultNavBarPrimaryOrder = DefaultNavBarScreenItems + NavBarItem.MORE
 
 /**
- * Parses a stored, comma-separated [NavBarItem] order string. Unknown or missing
- * entries are appended in their default position so the list always contains
- * every [allowed] item exactly once.
+ * Parses a stored, comma-separated [NavBarItem] order string, appending unknown
+ * or missing entries in their default position so every [allowed] item appears exactly once.
  */
 fun deserializeNavBarItemOrder(orderStr: String?, allowed: List<NavBarItem>): List<NavBarItem> {
     if (orderStr.isNullOrBlank()) return allowed
@@ -562,10 +540,9 @@ fun deserializeNavBarItemOrder(orderStr: String?, allowed: List<NavBarItem>): Li
 }
 
 /**
- * Layout of a collection screen's hero (the artwork + title header above the
- * list). COMPACT is the classic image-left/title-right row; the IMMERSIVE
- * variants bleed the artwork under the status bar with the text block overlaid
- * on it; NORMAL shows a big rounded artwork with the text block underneath.
+ * Layout of a collection screen's hero. The IMMERSIVE variants bleed the artwork
+ * under the status bar with the text overlaid; Compact is image-left/title-right;
+ * Normal is a big rounded artwork with the text underneath.
  */
 enum class CollectionHeroLayout(val label: String) {
     Compact("Compact"),
@@ -583,11 +560,7 @@ enum class CollectionHeroLayout(val label: String) {
     }
 }
 
-/**
- * Which collection a hero layout applies to. Every collection that is not an
- * album, artist or playlist detail (genres, years, folders, all tracks and the
- * "list of lists" screens) resolves to [Default].
- */
+/** Which collection type a hero layout applies to; everything else resolves to [Default]. */
 enum class CollectionHeroTarget {
     Default,
     Artist,
