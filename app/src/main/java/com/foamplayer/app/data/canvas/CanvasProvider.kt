@@ -12,10 +12,15 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Resolves an animated canvas (looping video) for a track, trying the canvas
+ * sources in preference order. Respects the mobile-data restriction.
+ */
 @Singleton
 class CanvasProvider @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    /** Returns the first source offering an animation for the track, or null. */
     suspend fun getCanvas(
         song: String,
         artist: String,

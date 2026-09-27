@@ -10,21 +10,25 @@ import java.io.InputStreamReader
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** One file entry of an M3U playlist, with its preceding #EXTINF metadata. */
 data class M3uEntry(
     val path: String,
     val title: String? = null,
     val artist: String? = null
 )
 
+/** Parsed content of an M3U file. */
 data class M3uPlaylist(
     val name: String?,
     val entries: List<M3uEntry>
 )
 
+/** Reads and parses M3U/M3U8 playlists (#EXTINF metadata, #PLAYLIST name). */
 @Singleton
 class M3uParser @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    /** Reads the playlist text through SAF; strips a UTF-8 BOM. */
     suspend fun readText(uri: Uri): String? = withContext(Dispatchers.IO) {
         runCatching {
             context.contentResolver.openInputStream(uri)?.use { input ->
@@ -61,6 +65,7 @@ class M3uParser @Inject constructor(
                 }
                 line.startsWith("#") -> Unit
                 isRemoteStream(line) -> {
+                    // Remote streams are not library tracks; skip with no metadata.
                     title = null
                     artist = null
                 }

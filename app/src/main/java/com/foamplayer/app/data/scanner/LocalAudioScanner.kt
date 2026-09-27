@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** State of a library scan as observed by the progress UI. */
 sealed class ScanStatus {
     object Idle : ScanStatus()
     data class Scanning(val progress: Float, val currentFile: String) : ScanStatus()
@@ -29,6 +30,13 @@ sealed class ScanStatus {
 /** An audio file found during enumeration, with its size already resolved. */
 private data class FoundAudioFile(val uri: Uri, val name: String, val size: Long)
 
+/**
+ * Enumerates audio files under SAF tree URIs (or plain directories) and
+ * extracts their metadata with MediaMetadataRetriever. Extraction runs on a
+ * bounded parallel pool; unchanged files can be reused from a previous scan;
+ * container-level fallbacks read FLAC Vorbis comments and the MP4 ©day atom
+ * when the platform extractor hides them.
+ */
 @Singleton
 class LocalAudioScanner @Inject constructor(
     @ApplicationContext private val context: Context
@@ -38,12 +46,10 @@ class LocalAudioScanner @Inject constructor(
 
     /**
      * Scans [folderPaths] and extracts metadata for every audio file found.
-     * When [knownTracks] contains a track for a file's URI with an unchanged
-     * size, it is reused as-is instead of re-reading the file — pass the
-     * previous scan's entities to make rescans incremental, or an empty map to
-     * force a full extraction. NOTE: callers must not reuse entries produced
-     * with different [artistSeparators]/[genreSeparators], since those
-     * transform the extracted strings.
+     * [knownTracks] entries with an unchanged size are reused instead of
+     * re-reading the file; pass an empty map to force a full extraction.
+     * Callers must not reuse entries produced with different
+     * [artistSeparators]/[genreSeparators], since those transform the strings.
      */
     suspend fun scanFoldersSync(
         folderPaths: Set<String>,
@@ -60,9 +66,7 @@ class LocalAudioScanner @Inject constructor(
         val freshTrack = BooleanArray(total)
         val processed = AtomicInteger(0)
 
-        // Metadata extraction is I/O + header parsing bound: run it on a bounded
-        // worker pool instead of one file at a time. Each file gets its own
-        // MediaMetadataRetriever (not thread-safe, released right after use).
+        // Each file gets its own MediaMetadataRetriever (not thread-safe).
         coroutineScope {
             foundFiles.forEachIndexed { index, file ->
                 launch(scanDispatcher) {
@@ -90,9 +94,7 @@ class LocalAudioScanner @Inject constructor(
             }
         }
 
-        // Embedded art is effectively per album: probing retriever.embeddedPicture
-        // decodes the whole cover image, so probe one representative file per album
-        // of freshly extracted tracks and apply the verdict to all of its tracks.
+        // Embedded art is per album: probe one representative file per album.
         val artByAlbum = HashMap<String, Boolean>()
         val freshTracks = results.mapIndexedNotNull { index, track -> track?.takeIf { freshTrack[index] } }
         coroutineScope {
@@ -115,20 +117,19 @@ class LocalAudioScanner @Inject constructor(
         }.filterNotNull()
     }
 
-    /** Lists the audio files under the given folders (recursive) without reading any metadata. */
+    /** Lists the audio files under the given folders (recursive), without reading metadata. */
     suspend fun listAudioFiles(folderPaths: Set<String>): List<Pair<Uri, String>> = withContext(Dispatchers.IO) {
         collectAudioFiles(folderPaths) { _, _ -> }.map { it.uri to it.name }
     }
 
-    /** Reads only the title/album tags of the given audio files (no full scan), keyed by URI. */
+    /** Reads only the title/album tags of the given files, keyed by URI. */
     suspend fun readTitlesAlbums(uris: List<Uri>): Map<Uri, Pair<String, String>> = withContext(Dispatchers.IO) {
         if (uris.isEmpty()) return@withContext emptyMap()
         val result = ConcurrentHashMap<Uri, Pair<String, String>>()
         coroutineScope {
             uris.forEach { uri ->
                 launch(scanDispatcher) {
-                    // A fresh retriever per file: a failed setDataSource can leave the
-                    // instance in a bad state that would poison all subsequent files.
+                    // Fresh retriever per file: a failed setDataSource poisons the instance.
                     val retriever = MediaMetadataRetriever()
                     try {
                         retriever.setDataSource(context, uri)
@@ -171,8 +172,7 @@ class LocalAudioScanner @Inject constructor(
                 e.printStackTrace()
             }
         }
-        // Parallel traversal completes in nondeterministic order: sort by URI so
-        // repeated scans see a stable file order (stable progress, stable results).
+        // Sort by URI so repeated scans see a stable file order.
         foundFiles.sortBy { it.uri.toString() }
         foundFiles
     }
@@ -210,16 +210,14 @@ class LocalAudioScanner @Inject constructor(
                             subFolderIds += id
                         } else if (isAudioFile(name)) {
                             val docUri = DocumentsContract.buildDocumentUriUsingTree(rootUri, id)
-                            // Size comes straight from the directory listing so no extra
-                            // openAssetFileDescriptor round-trip is needed per file later.
+                            // Size comes from the listing; no per-file round-trip later.
                             val size = if (sizeIdx >= 0) cursor.getLong(sizeIdx) else 0L
                             synchronized(result) {
                                 result.add(FoundAudioFile(docUri, name, size))
                             }
                         }
                     }
-                    // Every subdirectory listing is a full IPC round trip: walk them
-                    // concurrently instead of one directory at a time.
+                    // Each subdirectory listing is a full IPC round trip: walk concurrently.
                     subFolderIds.forEach { id ->
                         launch(scanDispatcher) { collectUrisRecursive(rootUri, id, result, onProgress) }
                     }
@@ -268,7 +266,6 @@ class LocalAudioScanner @Inject constructor(
         var year: Int? = null
 
         try {
-            // Direct file paths skip the ContentResolver layer entirely.
             if (uri.scheme == "file") {
                 retriever.setDataSource(uri.path)
             } else {
@@ -287,8 +284,7 @@ class LocalAudioScanner @Inject constructor(
                 sampleRate = it
             }
 
-            // Real reported bit depth when the container provides one (FLAC, WAV...),
-            // falling back to the extension guess for lossy/unreported formats.
+            // Reported bit depth when the container provides one, extension guess otherwise.
             retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITS_PER_SAMPLE)
                 ?.toIntOrNull()?.takeIf { it > 0 }?.let { bitDepth = it }
                 ?: run {
@@ -299,17 +295,12 @@ class LocalAudioScanner @Inject constructor(
 
             composer = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER)
                 ?.trim()?.takeIf { it.isNotEmpty() }
-            // YEAR is not always populated: FLAC/ID3v2.4 files often only carry a
-            // DATE tag ("2021" or full "2021-03-04"), so fall back to it and pick
-            // the first 4-digit group.
+            // YEAR is often absent; DATE carries the value instead ("2021-03-04").
             year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)?.toIntOrNull()
                 ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE)
                     ?.yearPart()
 
-            // The platform FLAC extractor maps only a subset of the Vorbis comment
-            // fields, so DATE/YEAR may never surface through MediaMetadataRetriever
-            // at all. Read the VORBIS_COMMENT block straight from the file as a
-            // last resort.
+            // The FLAC extractor may never surface DATE/YEAR: read Vorbis comments.
             if (year == null && fileName.lowercase().endsWith(".flac")) {
                 readFlacVorbisComments(uri)?.let { comments ->
                     year = comments["DATE"]?.yearPart()
@@ -319,15 +310,12 @@ class LocalAudioScanner @Inject constructor(
                 }
             }
 
-            // MediaMetadataRetriever frequently leaves both YEAR and DATE null for
-            // M4A/M4B (MP4) files even when the ©day atom is present: read it
-            // straight from the container as a last resort, same idea as the FLAC
-            // fallback above.
+            // M4A/M4B files often hide ©day from the retriever too.
             if (year == null && fileName.lowercase().let { it.endsWith(".m4a") || it.endsWith(".m4b") }) {
                 year = readMp4Year(uri)
             }
 
-            // Tag values can be "3" or "3/12" — keep only the number before the slash.
+            // Tag values can be "3" or "3/12" — keep the number before the slash.
             trackNumber = retriever
                 .extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
                 ?.substringBefore('/')
@@ -382,6 +370,7 @@ class LocalAudioScanner @Inject constructor(
         }
     }
 
+    /** Splits on [separators] and joins with "; " (the app's multi-value convention). */
     private fun splitAndJoin(value: String, separators: Set<String>): String {
         if (separators.isEmpty()) return value
         var result = listOf(value)
@@ -415,11 +404,9 @@ class LocalAudioScanner @Inject constructor(
     }
 
     /**
-     * Reads a FLAC file's VORBIS_COMMENT metadata block directly. The platform
-     * extractor only surfaces a subset of the comment fields through
-     * MediaMetadataRetriever, so tags like DATE/YEAR/COMMENT may otherwise be
-     * invisible. Returns an empty map when the stream isn't a FLAC file or can't
-     * be parsed; never throws.
+     * Reads a FLAC file's VORBIS_COMMENT block directly; the platform extractor
+     * only surfaces a subset of the comment fields. Returns null for non-FLAC
+     * or unparseable streams; never throws.
      */
     private fun readFlacVorbisComments(uri: Uri): Map<String, String>? = runCatching {
         context.contentResolver.openInputStream(uri)?.use { input ->
@@ -474,11 +461,9 @@ class LocalAudioScanner @Inject constructor(
     }
 
     /**
-     * Reads an M4A/M4B file's `moov/udta/meta/ilst/©day/data` atom directly.
-     * MediaMetadataRetriever often reports no YEAR or DATE for MP4 containers
-     * even when the ©day atom is populated, so this walks the box structure
-     * by hand. Returns null when the atom is absent or the stream isn't a
-     * well-formed MP4; never throws.
+     * Reads an M4A/M4B file's `moov/udta/meta/ilst/©day/data` atom directly;
+     * MediaMetadataRetriever often reports no YEAR for MP4 containers. Returns
+     * null when the atom is absent or the stream is malformed; never throws.
      */
     private fun readMp4Year(uri: Uri): Int? = runCatching {
         context.contentResolver.openInputStream(uri)?.use { input ->
@@ -490,10 +475,8 @@ class LocalAudioScanner @Inject constructor(
     }.getOrNull()
 
     /**
-     * Walks nested MP4 boxes following [path] (e.g. moov -> udta -> meta ->
-     * ilst -> ©day -> data), skipping every box not on that path without
-     * buffering its contents. Returns the raw bytes of the final box in
-     * [path] once reached, or null if any step is missing/malformed.
+     * Walks nested MP4 boxes following [path], skipping boxes not on the path
+     * without buffering them. Returns the final box's raw bytes, or null.
      */
     private fun findMp4Atom(input: InputStream, path: List<String>, bytesAvailable: Long): ByteArray? {
         var remaining = bytesAvailable
@@ -557,6 +540,7 @@ class LocalAudioScanner @Inject constructor(
         return true
     }
 
+    /** Legacy no-op kept for compatibility with older callers. */
     suspend fun scanDeviceAudioFiles(): List<TrackEntity> = emptyList()
 }
 
@@ -569,7 +553,7 @@ private val MP4_YEAR_ATOM_PATH = listOf("moov", "udta", "meta", "ilst", "\u00A9d
 /** The ©day/data atom is a short text tag; refuse anything implausibly large. */
 private const val MAX_MP4_ATOM_BYTES = 1 shl 16 // 64 KB
 
-/** First 4-digit group not glued to other digits: "2021" or "2021-03-04" -> 2021. */
+/** First 4-digit group not glued to other digits: "2021-03-04" -> 2021. */
 private val YearRegex = Regex("""(?<!\d)\d{4}(?!\d)""")
 
 private fun String.yearPart(): Int? = YearRegex.find(this)?.value?.toIntOrNull()
