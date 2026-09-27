@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -22,13 +23,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -90,9 +94,10 @@ fun QueueScreen(
         modifier = modifier
             .fillMaxSize()
             .background(backgroundColor)
-            .padding(16.dp)
+            .padding(horizontal = 16.dp)
     ) {
         if (showTitle) {
+            Spacer(modifier = Modifier.height(16.dp))
             BasicText(
                 text = "Up Next (${displayedItems.size} tracks)",
                 style = FoamTheme.typography.titleLarge
@@ -100,9 +105,14 @@ fun QueueScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
+        val fadeHeight = 24.dp
+
         LazyColumn(
             state = lazyListState,
-            modifier = Modifier.fillMaxSize()
+            contentPadding = PaddingValues(vertical = fadeHeight),
+            modifier = Modifier
+                .weight(1f)
+                .fadingEdges(edgeHeight = fadeHeight)
         ) {
             itemsIndexed(
                 items = displayedItems,
@@ -170,5 +180,35 @@ fun QueueScreen(
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
+
+/**
+ * Fades the top and bottom [edgeHeight] of this composable's own content to transparent,
+ * instead of letting a scrolling container hard-clip it at the viewport edge.
+ *
+ * Uses an offscreen compositing layer (alpha < 1f forces one) so the gradient can be applied
+ * with [BlendMode.DstIn] against the content's actual alpha channel — this fades whatever is
+ * being drawn (list items, backgrounds, images, etc.) rather than painting a solid color on
+ * top, so it works correctly no matter what sits behind the container.
+ */
+private fun Modifier.fadingEdges(edgeHeight: Dp): Modifier = this
+    .graphicsLayer { alpha = 0.99f }
+    .drawWithContent {
+        drawContent()
+        val edgeHeightPx = edgeHeight.toPx()
+        if (edgeHeightPx <= 0f || size.height <= 0f) return@drawWithContent
+        val topFraction = (edgeHeightPx / size.height).coerceIn(0f, 0.5f)
+        val bottomFraction = (1f - edgeHeightPx / size.height).coerceIn(0.5f, 1f)
+        drawRect(
+            brush = Brush.verticalGradient(
+                0f to Color.Transparent,
+                topFraction to Color.Black,
+                bottomFraction to Color.Black,
+                1f to Color.Transparent
+            ),
+            blendMode = BlendMode.DstIn
+        )
+    }
