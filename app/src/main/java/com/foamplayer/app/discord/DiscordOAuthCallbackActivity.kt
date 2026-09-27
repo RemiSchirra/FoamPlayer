@@ -6,6 +6,7 @@ import android.os.Bundle
 import com.foamplayer.discord.DiscordApi
 import com.foamplayer.discord.DiscordAuthCoordinator
 
+/** Transparent activity receiving the Discord OAuth redirect and forwarding it to the coordinator. */
 class DiscordOAuthCallbackActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {

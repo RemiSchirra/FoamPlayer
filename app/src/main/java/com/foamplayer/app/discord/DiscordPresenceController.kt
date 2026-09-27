@@ -36,6 +36,14 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
+/**
+ * Publishes the currently playing track to Discord rich presence while a
+ * session is connected and the feature is enabled. Presence is cleared whenever
+ * playback pauses or the queue empties. Updates are debounced, seek events
+ * resync timestamps, and a drift watcher corrects the elapsed time.
+ * Cover art is resolved (Spotify → YouTube), cached, and registered as a
+ * Discord media-proxy asset before being sent.
+ */
 @Singleton
 class DiscordPresenceController @Inject constructor(
     private val audioEngine: AudioEngine,
@@ -55,17 +63,14 @@ class DiscordPresenceController @Inject constructor(
     private var syncJob: Job? = null
     private var lastSignature: PresenceSignature? = null
 
-    // Whether an activity is currently shown on Discord (false = cleared). The
-    // presence is intentionally hidden whenever playback is paused or empty.
+    // Whether an activity is currently shown on Discord (false = cleared).
     @Volatile private var presenceActive = false
     @Volatile private var lastSentStartMs = 0L
 
     @Volatile private var latestSettings: AppSettings = AppSettings()
     @Volatile private var activeToken: String? = null
 
-    // Albums whose art upload recently failed (or had no art) — retried after a
-    // cooldown instead of being dropped for the whole session, so transient
-    // host outages don't leave an album artless.
+    // Albums whose art upload recently failed — retried after a cooldown.
     @Volatile private var artRetryAt: Map<String, Long> = emptyMap()
 
     private data class PresenceSignature(
@@ -128,8 +133,7 @@ class DiscordPresenceController @Inject constructor(
             coroutineScope {
                 val stateJob = launch {
                     audioEngine.playbackState.collectLatest { state ->
-                        // Collapse rapid skip bursts into a single update for the
-                        // final track (Discord throttles presence updates).
+                        // Collapse rapid skip bursts into one update (Discord throttles).
                         delay(PRESENCE_DEBOUNCE_MS)
                         sendPresence(token, state)
                     }
@@ -195,19 +199,16 @@ class DiscordPresenceController @Inject constructor(
             return
         }
 
-        // Art is resolved/looked up BEFORE the dedupe check, then registered as
-        // a Discord media-proxy asset (raw URLs are ignored by user-token
-        // presence). hasImage therefore reflects an asset Discord can actually
-        // render: a failed registration yields hasImage=false and is retried
-        // by the next update instead of being swallowed.
+        // Art is resolved BEFORE the dedupe check, then registered as a Discord
+        // media-proxy asset. A failed registration yields hasImage=false and is
+        // retried by the next update.
         val artKey = DiscordAlbumArtStore.trackKey(track.artist, track.title)
         var largeImage = remoteArtUrl(track.albumArtPath)
         if (largeImage == null) {
             largeImage = albumArtStore.cachedUrl(artKey, DiscordAlbumArtStore.ONLINE_TTL_MS)
         }
 
-        // Resolve the cover inline (bounded) so the first presence update
-        // already carries the image, instead of racing a follow-up re-send.
+        // Bounded inline resolution so the first update carries the image.
         if (largeImage == null && allowResolve &&
             latestSettings.discordOnlineArt && canAttemptArt(artKey)
         ) {
@@ -288,17 +289,14 @@ class DiscordPresenceController @Inject constructor(
         }
 
         if (sent && largeImage != null && assetImage == null && allowRetry) {
-            // The update went out without the cover because registration
-            // failed (e.g. rate limited): retry after the registrar's failure
-            // cooldown so the next attempt can actually register.
+            // Registration failed (e.g. rate limited): retry past the registrar cooldown.
             scheduleRetry(token, delayMs = ART_REGISTRATION_RETRY_DELAY_MS)
         }
 
         if (sent && largeImage == null &&
             latestSettings.discordOnlineArt && canAttemptArt(artKey)
         ) {
-            // Inline resolution produced nothing (timeout/failure): keep trying
-            // in the background and push the cover as soon as it lands.
+            // Inline resolution produced nothing: keep trying in the background.
             requestArtResolve(track, artKey)
         }
     }
@@ -316,9 +314,8 @@ class DiscordPresenceController @Inject constructor(
     }
 
     /**
-     * Bounded inline resolution: resolves and caches the cover on the calling
-     * path so the presence can be sent with the image in a single update.
-     * Returns null on failure/timeout (the async fallback then takes over).
+     * Bounded inline cover resolution, cached on success; null on failure/timeout
+     * (the async fallback then takes over).
      */
     private suspend fun resolveArt(track: TrackEntity, artKey: String): String? =
         try {
@@ -359,6 +356,7 @@ class DiscordPresenceController @Inject constructor(
             null
         }
 
+    /** Background art resolution; pushes a presence update once the cover lands. */
     private fun requestArtResolve(track: TrackEntity, artKey: String) {
         scope.launch {
             artMutex.withLock {

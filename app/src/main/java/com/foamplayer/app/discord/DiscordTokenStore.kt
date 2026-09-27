@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
+/** Persists the Discord OAuth session (tokens + account) in the app DataStore. */
 @Singleton
 class DiscordTokenStore @Inject constructor(
     private val dataStore: DataStore<Preferences>
