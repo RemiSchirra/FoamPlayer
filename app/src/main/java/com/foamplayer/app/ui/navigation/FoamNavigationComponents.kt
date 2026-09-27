@@ -675,6 +675,15 @@ internal fun FloatingNavigationBar(
     connectToMiniPlayer: Boolean = false,
     miniPlayerTopPx: () -> Float? = { null },
     playerClosedFraction: () -> Float = { 0f },
+    /**
+     * 0..1 presence of the mini player card itself, independent of the player
+     * transition: pinned at 1 through every open/close flight (whose own
+     * enter/exit owns the motion), animating 0->1 on the very first play --
+     * which lands with the transition at rest, so the attached surface
+     * extension must grow out of the pill on its own instead of riding a
+     * close flight's [playerClosedFraction].
+     */
+    cardPresenceFraction: () -> Float = { 1f },
     transitionAnimated: Boolean = true,
     navBarTransparentWhenPlayerOpen: Boolean = false,
     expandFraction: Float = 0f,
@@ -720,6 +729,7 @@ internal fun FloatingNavigationBar(
                     } else 1f
 
                     val closed = playerClosedFraction()
+                    val presence = cardPresenceFraction()
                     val extensionPx = if (attachedToMiniPlayer && connectToMiniPlayer) {
                         val cardTopPx = miniPlayerTopPx()
                         if (cardTopPx != null && !pillTopPx.isNaN()) {
@@ -729,10 +739,10 @@ internal fun FloatingNavigationBar(
                             // the larger root-y of the two.
                             (pillTopPx - cardTopPx -
                                     NavBarDimens.MiniPlayerCardVerticalPadding.toPx())
-                                .coerceAtLeast(0f) * closed
+                                .coerceAtLeast(0f) * closed * presence
                         } else {
                             // Layout not measured yet: fall back to the derived geometry.
-                            NavBarDimens.attachedExtensionHeight(expandFraction).toPx() * closed
+                            NavBarDimens.attachedExtensionHeight(expandFraction).toPx() * closed * presence
                         }
                     } else 0f
 

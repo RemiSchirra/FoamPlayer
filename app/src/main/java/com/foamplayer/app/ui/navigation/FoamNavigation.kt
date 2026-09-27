@@ -330,7 +330,7 @@ fun FoamNavHost(
     // Narrow projections instead of the whole PlaybackState: collecting the full
     // state at the nav root re-ran this entire body (backdrop logic, every
     // composable() destination lambda, nav-bar branches) on every playback emission
-    // -- including play/pause toggles and queue refills that don't affect any of
+    // -- including play/pause or queue refills that don't affect any of
     // this scope's actual decisions.
     val activeCollectionId by playerViewModel.activeCollectionId.collectAsState()
     val hasCurrentTrack by playerViewModel.hasCurrentTrack.collectAsState()
@@ -690,10 +690,7 @@ fun FoamNavHost(
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")
 
         // Every TrackListItem / CollectionListItem in the graph opens its
-        // actions modal through these locals, so no screen has to thread the
-        // states down itself. [LocalBottomBarClearance] tells edge-to-edge
-        // screens how much trailing space keeps their last rows clear of the
-        // floating nav bar + mini player card.
+        // actions modal through these locals, provided at the nav root.
         CompositionLocalProvider(
             LocalTrackFoamModalState provides trackModalState,
             LocalCollectionFoamModalState provides collectionModalState,
@@ -874,6 +871,41 @@ fun FoamNavHost(
                 }
 
                 val isPlayerOpen = playerTransitionState.targetState
+
+                // ---- Mini player first-appearance animation ----------------------------------
+                // The card's AnimatedVisibility enter only fires when the player transition's
+                // target flips (a close flight). The very first play lands with the transition
+                // at rest on closed: hasCurrentTrack flips inside the card's if-gate, so the
+                // card pops in with no animation at all. This presence fraction animates that
+                // appearance instead -- a plain fade for the card in DOCKED/FLOATING (what a
+                // close flight's enter already does) and a growth of the attached bar's
+                // surface extension out of the pill in ATTACHED -- and is pinned to 1 while
+                // the player transition moves, whose own enter/exit owns the motion there.
+                // Initialized from the ViewModel's live value so recreating the activity
+                // with playback already running doesn't replay the fade.
+                val miniPlayerPresence = remember {
+                    Animatable(if (playerViewModel.hasCurrentTrack.value) 1f else 0f)
+                }
+                val isOnboardingRoute = currentRoute == Screen.Onboarding.route
+                LaunchedEffect(hasCurrentTrack, isOnboardingRoute) {
+                    when {
+                        isOnboardingRoute || !hasCurrentTrack -> miniPlayerPresence.snapTo(0f)
+                        playerTransitionState.targetState -> miniPlayerPresence.snapTo(1f)
+                        else -> miniPlayerPresence.animateTo(
+                            targetValue = 1f,
+                            animationSpec = tween(
+                                durationMillis = SharedElementTransitionDurationMs,
+                                easing = SharedElementEasing
+                            )
+                        )
+                    }
+                }
+                // Any player-transition flip (auto-open on the first play, any later
+                // open) hands the motion back to the flight's own enter/exit: snap
+                // fully present so the flight's fade is never compounded with this one.
+                LaunchedEffect(isPlayerOpen) {
+                    if (isPlayerOpen && hasCurrentTrack) miniPlayerPresence.snapTo(1f)
+                }
 
                 // ---- Expandable nav-bar second row ------------------------------------------
                 var isNavBarExpanded by remember { mutableStateOf(false) }
@@ -1866,6 +1898,7 @@ fun FoamNavHost(
                                     connectToMiniPlayer = hasCurrentTrack,
                                     miniPlayerTopPx = { miniPlayerTopPx.takeUnless { it.isNaN() } },
                                     playerClosedFraction = playerClosedFraction,
+                                    cardPresenceFraction = { miniPlayerPresence.value },
                                     navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
                                      expandFraction = navBarExpandFraction,
                                       onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }
@@ -1959,6 +1992,11 @@ fun FoamNavHost(
                                 skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,
                                 showContainer = navigationBarMode != NavigationBarMode.ATTACHED,
                                 modifier = Modifier
+                                    // First-play appearance: the card's AnimatedVisibility enter
+                                    // only runs on a close flight; this fades the freshly
+                                    // composed card in instead of popping it (pinned at 1 during
+                                    // every flight, which owns the motion).
+                                    .graphicsLayer { alpha = miniPlayerPresence.value }
                                     .onGloballyPositioned { miniPlayerTopPx = it.positionInRoot().y }
                                     .onSizeChanged { miniPlayerBoxHeightPx = it.height }
                                     .draggable(
