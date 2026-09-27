@@ -8,6 +8,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.EaseInOutCubic
@@ -716,21 +717,69 @@ fun FoamNavHost(
                     remember { { _: String?, _: String?, _: Float -> } }
                 }
 
-                // Full-bleed backdrop for the detail list screens (album/playlist). Drawn here
-                // at the root, so it covers the status bar and the nav zone by construction --
-                // no overflow tricks that transition layers could clip. Its alpha tween runs in
-                // lock-step with the NavHost's screen fade (shared-element routes fade in 350ms,
-                // plain routes in 400ms), so the background fades with the list opening/closing.
-                // [lastListBackdropArt] keeps the art alive while the alpha fades back out.
+                // Full-bleed backdrop for the detail list screens (album/playlist/artist).
+                // Drawn here at the root, so it covers the status bar and the nav zone by
+                // construction -- no overflow tricks that transition layers could clip. Its
+                // alpha tween runs in lock-step with the NavHost's screen fade (shared-element
+                // routes fade in 350ms, plain routes in 400ms), so the background fades with
+                // the list opening/closing. Between two detail routes (artist <-> album and
+                // back) the alpha never leaves 1f, so the art switch there is handled by a
+                // front/back crossfade instead -- the same manual scheme the player backdrop
+                // uses (Coil's built-in crossfade pops for memory-cache hits, and a swapped
+                // model clears the old art to nothing first). [lastListBackdropArt] keeps the
+                // art alive while the alpha fades back out.
                 var listBackdropArt by remember { mutableStateOf<ListBackdropArt?>(null) }
                 var lastListBackdropArt by remember { mutableStateOf<ListBackdropArt?>(null) }
                 LaunchedEffect(currentRoute) {
                     if (!isDetailListRoute(currentRoute)) listBackdropArt = null
                 }
-                val onListBackdropArt = { path: String?, isEmbeddedArt: Boolean ->
+                // Outgoing/incoming art layers of the crossfade above. The fraction itself is
+                // read inside the backdrop's draw-phase lambda, so the animation doesn't
+                // recompose this scope; the two paths flip only at the crossfade's endpoints.
+                // The generation guards the cleanup: a superseded crossfade's finally must
+                // not clear the crossfade that superseded it.
+                var listCrossfadeFrom by remember { mutableStateOf<ListBackdropArt?>(null) }
+                var listCrossfadeTo by remember { mutableStateOf<ListBackdropArt?>(null) }
+                val listCrossfade = remember { Animatable(1f) }
+                var listCrossfadeGeneration by remember { mutableStateOf(0) }
+                val onListBackdropArt: (String?, Boolean) -> Unit = { path: String?, isEmbeddedArt: Boolean ->
                     val art = path?.let { ListBackdropArt(it, isEmbeddedArt) }
                     if (art != null) lastListBackdropArt = art
+                    val previous = listBackdropArt
                     listBackdropArt = art
+                    if (art != null && previous != null && previous != art) {
+                        // Art switch while the backdrop is already visible (detail ->
+                        // detail navigation, e.g. artist -> album and back): hold the
+                        // old art on the front layer and fade the new one in on the
+                        // back layer, in lock-step with the screens' 350ms fade.
+                        val generation = ++listCrossfadeGeneration
+                        scope.launch {
+                            listCrossfadeFrom = previous
+                            listCrossfadeTo = art
+                            try {
+                                listCrossfade.snapTo(0f)
+                                listCrossfade.animateTo(
+                                    targetValue = 1f,
+                                    animationSpec = tween(
+                                        durationMillis = SharedElementTransitionDurationMs,
+                                        easing = SharedElementEasing
+                                    )
+                                )
+                            } finally {
+                                if (generation == listCrossfadeGeneration) {
+                                    listCrossfadeFrom = null
+                                    listCrossfadeTo = null
+                                }
+                            }
+                        }
+                    } else {
+                        // No switch to fade (first detail page after a non-detail
+                        // screen, or the same art reported again): drop any running
+                        // crossfade so its layers can't ghost over the new art.
+                        listCrossfadeGeneration++
+                        listCrossfadeFrom = null
+                        listCrossfadeTo = null
+                    }
                 }
                 val listBackdropAlpha by animateFloatAsState(
                     targetValue = if (listBackdropArt != null) 1f else 0f,
@@ -754,10 +803,11 @@ fun FoamNavHost(
                 }
                 if (showListBackdrop) {
                     DynamicAlbumArtBackground(
-                        frontArtPath = listBackdropDisplay?.path,
-                        frontArtIsEmbedded = listBackdropDisplay?.isEmbeddedArt ?: true,
-                        backArtPath = null,
-                        crossfadeFraction = { 0f },
+                        frontArtPath = (listCrossfadeFrom ?: listBackdropDisplay)?.path,
+                        frontArtIsEmbedded = (listCrossfadeFrom ?: listBackdropDisplay)?.isEmbeddedArt ?: true,
+                        backArtPath = listCrossfadeTo?.path,
+                        backArtIsEmbedded = listCrossfadeTo?.isEmbeddedArt ?: true,
+                        crossfadeFraction = { listCrossfade.value },
                         blur = playerSettings.backgroundBlur.dp,
                         intensity = playerSettings.appBackgroundIntensity / 100f,
                         modifier = Modifier
