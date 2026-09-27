@@ -104,10 +104,10 @@ const val CollectionHeroCompactImmersiveHeightFraction = 0.30f
 const val CollectionHeroImmersiveFadeStartFraction = 0.65f
 
 /** Vertical position of the immersive text/play block, as a fraction of the image height. */
-const val CollectionHeroImmersiveOverlayFraction = 0.75f
+const val CollectionHeroImmersiveOverlayFraction = 0.85f
 
 /** Vertical position of the compact-immersive text/play block, as a fraction of the image height. */
-const val CollectionHeroCompactImmersiveOverlayFraction = 0.6f
+const val CollectionHeroCompactImmersiveOverlayFraction = 0.72f
 
 /** Alpha of the subtle scrim over the immersive hero's status-bar zone (icon contrast). */
 const val CollectionHeroStatusBarScrimAlpha = 0.35f

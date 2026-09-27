@@ -36,6 +36,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.ui.components.CollectionHeroCompactImmersiveHeightFraction
+import com.foamplayer.app.ui.components.CollectionHeroCompactImmersiveOverlayFraction
 import com.foamplayer.app.ui.components.CollectionHeroImmersiveFadeStartFraction
 import com.foamplayer.app.ui.components.CollectionHeroImmersiveHeightFraction
 import com.foamplayer.app.ui.components.CollectionHeroImmersiveOverlayFraction
@@ -53,7 +54,7 @@ private val CollectionLayoutPreviewWidth = 96.dp
  * lay their content out proportionally (weights/fractions, not fixed offsets)
  * so this can be tuned freely without content overlapping or overflowing.
  */
-private val CollectionLayoutPreviewHeight = 128.dp
+private val CollectionLayoutPreviewHeight = 136.dp
 
 /** Corner rounding of the preview phone body. */
 private val CollectionLayoutPreviewRounding = 12.dp
@@ -184,9 +185,14 @@ private fun CollectionLayoutPreview(
     ) {
         when (layout) {
             CollectionHeroLayout.Compact -> CompactPreview()
-            CollectionHeroLayout.Immersive -> ImmersivePreview(CollectionHeroImmersiveHeightFraction, centered = true)
+            CollectionHeroLayout.Immersive -> ImmersivePreview(
+                imageHeightFraction = CollectionHeroImmersiveHeightFraction,
+                overlayFraction = CollectionHeroImmersiveOverlayFraction,
+                centered = true
+            )
             CollectionHeroLayout.CompactImmersive -> ImmersivePreview(
-                CollectionHeroCompactImmersiveHeightFraction,
+                imageHeightFraction = CollectionHeroCompactImmersiveHeightFraction,
+                overlayFraction = CollectionHeroCompactImmersiveOverlayFraction,
                 centered = false
             )
             CollectionHeroLayout.Normal -> NormalPreview()
@@ -294,6 +300,7 @@ private fun CompactPreview() {
 @Composable
 private fun ImmersivePreview(
     imageHeightFraction: Float,
+    overlayFraction: Float,
     centered: Boolean
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
@@ -315,12 +322,12 @@ private fun ImmersivePreview(
                 )
         )
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 5.dp)) {
-            // Same relative position within the image as before, but as a
-            // proportional spacer rather than an absolute y-offset, so the
+            // Same relative position within the image as the real heroes, but as
+            // a proportional spacer rather than an absolute y-offset, so the
             // text block below it is always placed, never overlapped.
             Spacer(
                 modifier = Modifier.fillMaxHeight(
-                    imageHeightFraction * CollectionHeroImmersiveOverlayFraction
+                    imageHeightFraction * overlayFraction
                 )
             )
             Column(
