@@ -31,12 +31,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -54,10 +58,13 @@ import com.foamplayer.app.ui.components.CollectionHeroImmersiveHeader
 import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.CollectionListItem
 import com.foamplayer.app.ui.components.CollectionScrollTopBar
+import com.foamplayer.app.ui.components.CollectionSearchScrollToBarEffect
+import com.foamplayer.app.ui.components.CollectionSearchImmersiveTopClearance
 import com.foamplayer.app.ui.components.CollectionSearchState
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.collectionHeroOverlayLayer
+import com.foamplayer.app.ui.components.collectionSearchOpenBottomPadding
 import com.foamplayer.app.ui.components.rememberCollectionHeroFlightFraction
 import com.foamplayer.app.ui.components.rememberCollectionScrollFraction
 import com.foamplayer.app.ui.components.rememberCollectionSearchState
@@ -66,7 +73,7 @@ import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 
-/** Number of columns of the artist's album grid. */
+/** Number of columns of the artist page's album grid. */
 private const val ArtistAlbumGridColumns = 3
 
 /**
@@ -105,10 +112,9 @@ fun ArtistDetailScreen(
 
     // Hero search: one query filters BOTH sections together. A track matches
     // when its title, artist or album name matches (typing an album name
-    // reveals its tracks); an album matches when its name/artist matches or
-    // any of its tracks matched (typing a track title reveals its album).
-    // An empty query shows everything. While searching, the tracks section
-    // expands beyond the 5 top tracks to EVERY matching artist track.
+    // reveals its tracks); an album matches while a search bar is open — the
+    // artist's own inner search scrolls the bar to the screen top (see
+    // [CollectionSearchScrollToBarEffect]).
     val searchState = rememberCollectionSearchState()
     val searchActive = searchState.open && searchState.query.isNotBlank()
     val searchSource = if (searchActive) tracks else topTracks
@@ -173,6 +179,29 @@ fun ArtistDetailScreen(
             heroVisibleHeightPx.intValue
         }
     }
+    // Root-space top y of the grid container, reported by the gridTopObserver
+    // below and consumed by the search-open scroll effect (see
+    // [CollectionSearchScrollToBarEffect]).
+    var gridTopYInRootPx by remember { mutableFloatStateOf(Float.NaN) }
+    val gridTopObserver = Modifier.onGloballyPositioned {
+        gridTopYInRootPx = it.positionInRoot().y
+    }
+    // Search-open scroll: when the search toggle opens the hero's search bar
+    // while the hero sits scrolled away (or hidden under the fixed chrome), the
+    // grid is brought up so the bar opens at the screen top — below the floating
+    // back row on the immersive layouts; the non-immersive grid starts below
+    // its fixed top-bar row, so no extra clearance is needed there. The open
+    // bottom padding keeps the bar reachable even when the artist has only a
+    // handful of rows (no scroll range otherwise) and the rows visible above
+    // the keyboard.
+    CollectionSearchScrollToBarEffect(
+        searchState = searchState,
+        listState = null,
+        gridState = gridState,
+        useGrid = true,
+        listTopYInRootPx = { gridTopYInRootPx },
+        topChromeHeight = if (heroLayout.isImmersive) CollectionSearchImmersiveTopClearance else 0.dp
+    )
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (heroLayout.isImmersive) {
@@ -234,9 +263,14 @@ fun ArtistDetailScreen(
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(ArtistAlbumGridColumns),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().then(gridTopObserver),
                 state = gridState,
-                contentPadding = PaddingValues(horizontal = 10.dp)
+                contentPadding = PaddingValues(
+                    start = 10.dp,
+                    top = 0.dp,
+                    end = 10.dp,
+                    bottom = collectionSearchOpenBottomPadding(searchState)
+                )
             ) {
                 item(key = "artist_header", span = { GridItemSpan(maxLineSpan) }) {
                     ArtistHero(

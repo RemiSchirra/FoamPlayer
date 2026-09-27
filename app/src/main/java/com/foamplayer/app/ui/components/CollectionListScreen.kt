@@ -18,9 +18,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.grid.items as gridItems
@@ -35,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +45,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -156,7 +161,8 @@ fun CollectionListScreen(
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
     // Measured by the header item's layout pass (see [CollectionHeroImmersiveHeader]);
-    // read untracked inside the offset lambda, so it is always the settled value.
+    // read untracked inside the offset lambda, and consumed by the search-open
+    // scroll effect (see [CollectionSearchScrollToBarEffect]).
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
         if (density.isGrid) {
@@ -173,6 +179,29 @@ fun CollectionListScreen(
             }
         }
     }
+    // Root-space top y of the active scroll container, reported by the
+    // listTopObserver below and consumed by the search-open scroll effect
+    // (see [CollectionSearchScrollToBarEffect]).
+    var listTopYInRootPx by remember { mutableFloatStateOf(Float.NaN) }
+    val listTopObserver = Modifier.onGloballyPositioned {
+        listTopYInRootPx = it.positionInRoot().y
+    }
+    // Search-open scroll: when the search toggle opens the hero's search bar
+    // while the hero sits scrolled away (or hidden under the fixed chrome), the
+    // list is brought up so the bar opens at the screen top — below the floating
+    // back row on the immersive layouts; the non-immersive lists start below
+    // their fixed top-bar row, so no extra clearance is needed there. The open
+    // bottom padding keeps the bar reachable even when the collection has only
+    // a handful of rows (no scroll range otherwise) and the rows visible above
+    // the keyboard.
+    CollectionSearchScrollToBarEffect(
+        searchState = searchState,
+        listState = listState,
+        gridState = gridState,
+        useGrid = density.isGrid,
+        listTopYInRootPx = { listTopYInRootPx },
+        topChromeHeight = if (heroLayout.isImmersive) CollectionSearchImmersiveTopClearance else 0.dp
+    )
 
     Box(modifier = modifier.fillMaxSize()) {
         if (heroLayout.isImmersive) {
@@ -236,9 +265,14 @@ fun CollectionListScreen(
             if (density.isGrid) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(density.gridColumns),
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().then(listTopObserver),
                     state = gridState,
-                    contentPadding = PaddingValues(horizontal = 10.dp)
+                    contentPadding = PaddingValues(
+                        start = 10.dp,
+                        top = 0.dp,
+                        end = 10.dp,
+                        bottom = collectionSearchOpenBottomPadding(searchState)
+                    )
                 ) {
                     val gridScope = this
                     item(
@@ -266,8 +300,11 @@ fun CollectionListScreen(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = listState
+                    modifier = Modifier.fillMaxSize().then(listTopObserver),
+                    state = listState,
+                    contentPadding = PaddingValues(
+                        bottom = collectionSearchOpenBottomPadding(searchState)
+                    )
                 ) {
                     val listScope = this
                     item(key = "collection_header") {

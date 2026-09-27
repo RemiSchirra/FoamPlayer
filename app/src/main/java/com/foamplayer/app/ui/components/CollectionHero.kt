@@ -10,10 +10,13 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,9 +24,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -45,6 +50,7 @@ import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +69,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -120,6 +128,26 @@ val CollectionScrollTopBarTitleHorizontalPadding = 56.dp
 val CollectionHeroImmersiveListTopPadding = 16.dp
 
 /**
+ * Where the hero's shuffle/play/search button row lands below the list's top
+ * when search opens on an immersive layout (see
+ * [CollectionSearchScrollToBarEffect]): the floating back row covers the list's
+ * first 48dp (the status-bar inset is consumed at the nav root), plus 8dp of
+ * breathing room, so the open search bar ends up right below the fixed chrome
+ * instead of colliding with the back button.
+ */
+val CollectionSearchImmersiveTopClearance = 56.dp
+
+/** Fraction of the screen height reserved below a list while its search bar is open. */
+private const val CollectionSearchOpenReserveScreenFraction = 0.6f
+
+/**
+ * Duration of the search-open bottom padding's grow/shrink: matched to the
+ * keyboard's dismiss animation and the search bar's own exit, so the list
+ * settles back in step with them instead of snapping when the bar closes.
+ */
+private const val CollectionSearchPaddingAnimationMs = 250
+
+/**
  * Hero layout of the "list of lists" screens (genres, years, folders and every
  * other collection that is not an album/artist/playlist detail), resolved from
  * the Default hero-layout setting at the app root.
@@ -132,9 +160,25 @@ class CollectionSearchState {
         private set
     var query by mutableStateOf("")
 
+    /** Increments on every [open]: hosts scroll the bar to the screen top (see [CollectionSearchScrollToBarEffect]). */
+    var openRequest by mutableIntStateOf(0)
+        private set
+
+    /**
+     * Root-space y of the hero's button row (shuffle/play/search toggles) top,
+     * reported by that row itself on every layout pass — the anchor of the
+     * search-open scroll (the bar hangs 8dp below the row, and the row's
+     * position is identical whether the bar is open or not, so the effect never
+     * has to wait for the bar's own entry animation). NaN while the hero is not
+     * laid out (e.g. scrolled off-screen — where search cannot be opened from).
+     */
+    var buttonRowTopYInRootPx by mutableFloatStateOf(Float.NaN)
+        internal set
+
     /** Opens the search bar (the hero's search icon swaps to a close cross). */
     fun open() {
         open = true
+        openRequest++
     }
 
     /** Closes the search bar and clears the query, so reopening starts unfiltered. */
@@ -155,6 +199,106 @@ class CollectionSearchState {
 /** Remembered [CollectionSearchState] for a collection screen's hero search. */
 @Composable
 fun rememberCollectionSearchState(): CollectionSearchState = remember { CollectionSearchState() }
+
+/** Duration of the search-open scroll itself. */
+private const val SearchOpenScrollDurationMs = 300
+
+/**
+ * Bottom content padding a host list gains while its hero's search bar is open
+ * (feed it into the lazy container's [androidx.compose.foundation.layout.PaddingValues]):
+ * the keyboard's own inset keeps the filtered rows visible above the open
+ * keyboard, and a screen-fraction reserve gives even a handful of rows enough
+ * scroll range for [CollectionSearchScrollToBarEffect] to bring the bar to the
+ * screen top — a short list otherwise has no scrollable range at all, so the
+ * open scroll would silently do nothing.
+ *
+ * The value ANIMATES on both edges: growing when the bar opens (the rows part
+ * smoothly instead of being pushed apart in one frame) and, just as
+ * importantly, shrinking progressively when it closes — without the animation
+ * the padding would teleport from keyboard+reserve to 0dp in a single layout
+ * pass and the whole list would visibly jump. The duration is matched to the
+ * keyboard's dismiss and the bar's own exit ([CollectionSearchPaddingAnimationMs]),
+ * and the lazy list clamps its scroll against the shrinking padding frame by
+ * frame, so the settle reads as a natural slide rather than a snap. 0dp while
+ * the bar is closed.
+ */
+@Composable
+fun collectionSearchOpenBottomPadding(searchState: CollectionSearchState?): Dp {
+    val target = if (searchState == null || !searchState.open) {
+        0.dp
+    } else {
+        val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+        // Fraction of the screen height: covers every hero layout's worst-case
+        // distance between the screen top and the bar (the Normal hero's full-width
+        // square artwork is the tallest) with room to spare, while scaling with the
+        // actual window (landscape, tablets, foldables).
+        val reserve = LocalConfiguration.current.screenHeightDp.dp *
+                CollectionSearchOpenReserveScreenFraction
+        imeBottom + reserve
+    }
+    return animateDpAsState(
+        targetValue = target,
+        animationSpec = tween(
+            durationMillis = CollectionSearchPaddingAnimationMs,
+            easing = FastOutSlowInEasing
+        ),
+        label = "collectionSearchOpenBottomPadding"
+    ).value
+}
+
+/**
+ * On every search-open request (see [CollectionSearchState.openRequest]) scrolls
+ * the host's list so the hero's shuffle/play/search button row — with the search
+ * bar hanging right under it — lands at the top of the screen instead of opening
+ * wherever the hero currently sits (also scrolling back a little when the bar
+ * opened partially hidden above the viewport).
+ *
+ * [listTopYInRootPx] supplies the lazy container's own root-space top y and
+ * [topChromeHeight] how much of the list's top is covered by floating chrome:
+ * on compact/normal layouts the list starts below its fixed top-bar row, so 0dp
+ * puts the row at the very top of the scrolling content; on the immersive ones
+ * the floating back row covers the list's first 48dp, so
+ * [CollectionSearchImmersiveTopClearance] keeps the bar clear of it. The anchor
+ * row reports itself through [CollectionSearchState.buttonRowTopYInRootPx]; the
+ * effect is a no-op when that report is missing (header scrolled off-screen).
+ *
+ * Hosts must pad their lists with [collectionSearchOpenBottomPadding] while the
+ * bar is open: without that reserve a list with only a few rows has no scroll
+ * range, and the scroll here would be clamped to nothing.
+ */
+@Composable
+fun CollectionSearchScrollToBarEffect(
+    searchState: CollectionSearchState?,
+    listState: LazyListState?,
+    gridState: LazyGridState?,
+    useGrid: Boolean,
+    listTopYInRootPx: () -> Float,
+    topChromeHeight: Dp = 0.dp
+) {
+    if (searchState == null) return
+    val chromePx = with(LocalDensity.current) { topChromeHeight.toPx() }
+    LaunchedEffect(searchState.openRequest) {
+        if (searchState.openRequest == 0) return@LaunchedEffect
+        val rowTopY = searchState.buttonRowTopYInRootPx
+        if (rowTopY.isNaN()) return@LaunchedEffect
+        val listTopY = listTopYInRootPx()
+        if (listTopY.isNaN()) return@LaunchedEffect
+        val delta = rowTopY - listTopY - chromePx
+        if (delta != 0f) {
+            if (useGrid && gridState != null) {
+                gridState.animateScrollBy(
+                    delta,
+                    tween(durationMillis = SearchOpenScrollDurationMs, easing = FastOutSlowInEasing)
+                )
+            } else if (listState != null) {
+                listState.animateScrollBy(
+                    delta,
+                    tween(durationMillis = SearchOpenScrollDurationMs, easing = FastOutSlowInEasing)
+                )
+            }
+        }
+    }
+}
 
 /** Total height of an immersive hero image for [layout] (status-bar bleed included). */
 @Composable
@@ -485,7 +629,10 @@ private fun CollectionHeroCompact(
 
             if (onPlayAllClick != null || searchState != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.reportHeroButtonRowTop(searchState),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     if (onShuffleAllClick != null && onPlayAllClick != null) {
                         CollectionHeroShuffleButton(onShuffleAllClick = onShuffleAllClick)
                         Spacer(modifier = Modifier.width(12.dp))
@@ -571,7 +718,10 @@ private fun CollectionHeroNormal(
 
             if (onPlayAllClick != null || searchState != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.reportHeroButtonRowTop(searchState),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     if (onShuffleAllClick != null && onPlayAllClick != null) {
                         CollectionHeroShuffleButton(onShuffleAllClick = onShuffleAllClick)
                         Spacer(modifier = Modifier.width(12.dp))
@@ -740,7 +890,10 @@ private fun CollectionHeroOverlayContent(
 
         if (onPlayAllClick != null || searchState != null) {
             Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.reportHeroButtonRowTop(searchState),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 if (onShuffleAllClick != null && onPlayAllClick != null) {
                     CollectionHeroShuffleButton(onShuffleAllClick = onShuffleAllClick)
                     Spacer(modifier = Modifier.width(12.dp))
@@ -762,6 +915,17 @@ private fun CollectionHeroOverlayContent(
         }
     }
 }
+
+/**
+ * Reports the hero's shuffle/play/search button row's root-space top y into
+ * [searchState] (see [CollectionSearchState.buttonRowTopYInRootPx]) — the anchor
+ * of the search-open scroll ([CollectionSearchScrollToBarEffect]). No-op when
+ * [searchState] is null (play-pill-only heroes don't need it).
+ */
+private fun Modifier.reportHeroButtonRowTop(searchState: CollectionSearchState?): Modifier =
+    onGloballyPositioned { info ->
+        searchState?.buttonRowTopYInRootPx = info.positionInRoot().y
+    }
 
 /** Artwork fill: embedded/plain image, collection icon, or the title's initial. */
 @Composable
@@ -938,8 +1102,9 @@ private fun CollectionHeroShuffleButton(
 /**
  * The hero's search toggle, rendered right of the play pill: the search icon at
  * rest, a close cross while the search bar is open. Tapping opens the bar (the
- * bar focuses its own field on entry); tapping the cross closes it and clears
- * the query.
+ * bar focuses its own field on entry, and the host scrolls it up to the screen
+ * top — see [CollectionSearchScrollToBarEffect]); tapping the cross closes it
+ * and clears the query.
  */
 @Composable
 private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
@@ -1021,7 +1186,7 @@ private fun CollectionHeroSearchBar(searchState: CollectionSearchState?) {
  * flight is draw-only. Returns a constant 0f when either scope is missing
  * (no shared-element context, e.g. heroes rendered without transition wiring).
  *
- * The fraction animates with the SAME duration/easing as the NavHost's screen
+ * The fraction animates with the SAME duration/easing tween as the NavHost's screen
  * fade and [AlbumArtBoundsTransform] (SharedElementTransitionDurationMs/
  * SharedElementEasing), so the chrome fading with the flight lands on the
  * same frame as the screen fade and the flying artwork instead of trailing

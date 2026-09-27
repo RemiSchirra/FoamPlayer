@@ -200,11 +200,11 @@ fun TrackListScreen(
     val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
     // Flight fractions of this screen's two transitions: the nav flight
     // (open/close of the collection itself) and the player-container flight
-    // (full player expanding over / collapsing back onto this screen). The
-    // hero chrome and the top bar are lifted into the shared-element overlay
-    // while any transition is active (collectionHeroOverlayLayer), and the
-    // overlay escapes the host hierarchy's own fades — so their alpha must
-    // multiply both fractions explicitly or they would pop at flight ends.
+    // (full player expanding over / collapsing back onto this screen). The hero
+    // chrome and the top bar are lifted into the shared-element overlay while
+    // any transition is active (collectionHeroOverlayLayer), and the overlay
+    // escapes the host hierarchy's own fades — so their alpha must multiply
+    // both fractions explicitly or they would pop at flight ends.
     val navFlightFraction =
         rememberCollectionHeroFlightFraction(sharedTransitionScope, animatedVisibilityScope)
     val containerFlightFraction =
@@ -232,6 +232,29 @@ fun TrackListScreen(
             }
         }
     }
+    // Root-space top y of the active scroll container, reported by the
+    // listTopObserver below and consumed by the search-open scroll effect
+    // (see [CollectionSearchScrollToBarEffect]).
+    var listTopYInRootPx by remember { mutableFloatStateOf(Float.NaN) }
+    val listTopObserver = Modifier.onGloballyPositioned {
+        listTopYInRootPx = it.positionInRoot().y
+    }
+    // Search-open scroll: when the search toggle opens the hero's search bar
+    // while the hero sits scrolled away (or hidden under the fixed chrome), the
+    // list is brought up so the bar opens at the screen top — below the floating
+    // back row on the immersive layouts; the non-immersive lists start below
+    // their fixed top-bar row, so no extra clearance is needed there. The open
+    // bottom padding keeps the bar reachable even when the collection has only
+    // a handful of rows (no scroll range otherwise) and the rows visible above
+    // the keyboard.
+    CollectionSearchScrollToBarEffect(
+        searchState = searchState,
+        listState = listState,
+        gridState = gridState,
+        useGrid = density.isGrid,
+        listTopYInRootPx = { listTopYInRootPx },
+        topChromeHeight = if (heroLayout.isImmersive) CollectionSearchImmersiveTopClearance else 0.dp
+    )
 
     // Only the row that can become the shared-element endpoint of the player-dismiss
     // flight needs the paused shrink; one animation is hoisted here and read by that
@@ -402,9 +425,14 @@ fun TrackListScreen(
             if (density.isGrid) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(density.gridColumns),
-                    modifier = Modifier.fillMaxSize().then(listRootObserver),
+                    modifier = Modifier.fillMaxSize().then(listTopObserver),
                     state = gridState,
-                    contentPadding = PaddingValues(horizontal = 10.dp)
+                    contentPadding = PaddingValues(
+                        start = 10.dp,
+                        top = 0.dp,
+                        end = 10.dp,
+                        bottom = collectionSearchOpenBottomPadding(searchState)
+                    )
                 ) {
                     item(
                         key = "grid_header",
@@ -550,8 +578,11 @@ fun TrackListScreen(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize().then(listRootObserver),
-                    state = listState
+                    modifier = Modifier.fillMaxSize().then(listTopObserver),
+                    state = listState,
+                    contentPadding = PaddingValues(
+                        bottom = collectionSearchOpenBottomPadding(searchState)
+                    )
                 ) {
                     item(key = "list_header") {
                         TrackListHero(
