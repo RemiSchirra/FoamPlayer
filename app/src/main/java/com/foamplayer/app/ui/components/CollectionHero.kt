@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
 import androidx.compose.material.ripple
@@ -74,6 +75,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -1104,7 +1106,8 @@ private fun CollectionHeroShuffleButton(
  * rest, a close cross while the search bar is open. Tapping opens the bar (the
  * bar focuses its own field on entry, and the host scrolls it up to the screen
  * top — see [CollectionSearchScrollToBarEffect]); tapping the cross closes it
- * and clears the query.
+ * and clears the query (the keyboard goes down with it — see
+ * [CollectionHeroSearchBar]).
  */
 @Composable
 private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
@@ -1144,10 +1147,47 @@ private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
  * The hero's inline search field, shown right under the play pill while
  * [CollectionSearchState.open] is true: filters the collection's rows live
  * (empty text shows everything; closing clears the query).
+ *
+ * Focus handling:
+ * - Closing the bar tears the field's focus down IMMEDIATELY (not when the
+ *   exiting content is removed at the end of the shrink animation), so the
+ *   keyboard starts hiding in the same frame the cross is tapped instead of
+ *   after a visible delay.
+ * - "Done" on the keyboard hides it (clearing focus closes the IME session).
+ * - When the keyboard is dismissed under an open bar (system back gesture),
+ *   the field's focus is dropped too, so the caret stops blinking — the bar
+ *   itself stays open and the field can be re-tapped to bring the keyboard
+ *   back. Guarded by [keyboardShownThisOpen] so the clear never races the
+ *   open flow's own focus request while the keyboard is still coming up.
  */
 @Composable
 private fun CollectionHeroSearchBar(searchState: CollectionSearchState?) {
     if (searchState == null) return
+    val focusManager = LocalFocusManager.current
+    val density = LocalDensity.current
+    val imeVisible = WindowInsets.ime.getBottom(density) > 0
+    // Whether the keyboard has been up during THIS open: guards the
+    // keyboard-closed focus drop below against the open flow's own focus
+    // request (the keyboard takes a few frames to come up; clearing focus
+    // in that window would kill the show-request before it lands).
+    var keyboardShownThisOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(searchState.openRequest) { keyboardShownThisOpen = false }
+    // Closing the bar: clear focus the moment [open] flips, so the IME
+    // session is torn down immediately (clearing focus closes the keyboard)
+    // instead of waiting for the AnimatedVisibility exit to remove the field.
+    LaunchedEffect(searchState.open) {
+        if (!searchState.open) focusManager.clearFocus(force = true)
+    }
+    // Keyboard dismissed under an open bar (back gesture / Done): drop focus
+    // so the caret stops blinking while the bar stays open.
+    LaunchedEffect(imeVisible) {
+        if (imeVisible) {
+            keyboardShownThisOpen = true
+        } else if (keyboardShownThisOpen) {
+            keyboardShownThisOpen = false
+            focusManager.clearFocus(force = true)
+        }
+    }
     AnimatedVisibility(
         visible = searchState.open,
         enter = fadeIn() + expandVertically(),
@@ -1170,6 +1210,7 @@ private fun CollectionHeroSearchBar(searchState: CollectionSearchState?) {
                 textStyle = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.textPrimary),
                 cursorBrush = SolidColor(FoamTheme.accentColor),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                 singleLine = true,
                 modifier = Modifier
                     .weight(1f)
