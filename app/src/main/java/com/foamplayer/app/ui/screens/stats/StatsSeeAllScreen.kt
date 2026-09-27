@@ -34,6 +34,7 @@ import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.TrackListScreen
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
 import com.foamplayer.app.ui.components.rememberCollectionSearchState
+import com.foamplayer.app.ui.components.rememberFilteredList
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.components.rememberSortedTracks
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
@@ -114,8 +115,15 @@ fun StatsSeeAllScreen(
         StatsTopKind.ARTISTS -> {
             val artistImages by viewModel.artistImages.collectAsState()
             val searchState = rememberCollectionSearchState()
+            // Search filtering keeps the incoming list identity while the bar
+            // is closed/blank (see rememberFilteredList): an unconditional
+            // .filter here re-allocated the ranked list on every recomposition
+            // and re-launched the async sort below each time.
+            val searchedArtists = rememberFilteredList(artists, searchState) {
+                searchState.matches(it.name)
+            }
             val sortedArtists = rememberSortedList(
-                artists.filter { searchState.matches(it.name) },
+                searchedArtists,
                 sortMode,
                 sortInverted
             ) {
@@ -188,8 +196,11 @@ fun StatsSeeAllScreen(
 
         StatsTopKind.ALBUMS -> {
             val searchState = rememberCollectionSearchState()
+            val searchedAlbums = rememberFilteredList(albums, searchState) {
+                searchState.matches(it.album, it.artist)
+            }
             val sortedAlbums = rememberSortedList(
-                albums.filter { searchState.matches(it.album, it.artist) },
+                searchedAlbums,
                 sortMode,
                 sortInverted
             ) { mode ->

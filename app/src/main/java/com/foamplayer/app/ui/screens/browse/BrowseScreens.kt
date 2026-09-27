@@ -45,6 +45,7 @@ import com.foamplayer.app.ui.components.distinctCollectionAlbums
 import com.foamplayer.app.ui.components.distinctCollectionArtistNames
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
 import com.foamplayer.app.ui.components.rememberCollectionSearchState
+import com.foamplayer.app.ui.components.rememberFilteredList
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.components.rememberSortedTracks
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
@@ -76,10 +77,18 @@ fun AlbumsBrowseScreen(
     val albums by viewModel.albums.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
-    // Hero search: filters the displayed albums while the bar is open.
+    // Hero search: filters the displayed albums while the bar is open. The
+    // raw filter used to run on EVERY recomposition of the screen (play/pause
+    // flips, active-track changes...), allocating a fresh multi-thousand-item
+    // list on the main thread and re-launching the async sort below each time.
+    // rememberFilteredList keeps the incoming list identity while the bar is
+    // closed/blank and moves big passes off the main thread.
     val searchState = rememberCollectionSearchState()
+    val searchedAlbums = rememberFilteredList(albums, searchState) {
+        searchState.matches(it.album, it.artist)
+    }
     val sortedAlbums = rememberSortedList(
-        albums.filter { searchState.matches(it.album, it.artist) },
+        searchedAlbums,
         sortMode,
         sortInverted
     ) { mode ->
@@ -165,8 +174,11 @@ fun ArtistsBrowseScreen(
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
     val searchState = rememberCollectionSearchState()
+    val searchedArtists = rememberFilteredList(artists, searchState) {
+        searchState.matches(it)
+    }
     val sortedArtists = rememberSortedList(
-        artists.filter { searchState.matches(it) },
+        searchedArtists,
         sortMode,
         sortInverted
     ) {
@@ -246,8 +258,11 @@ fun GenresBrowseScreen(
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
     val searchState = rememberCollectionSearchState()
+    val searchedGenres = rememberFilteredList(genres, searchState) {
+        searchState.matches(it)
+    }
     val sortedGenres = rememberSortedList(
-        genres.filter { searchState.matches(it) },
+        searchedGenres,
         sortMode,
         sortInverted
     ) {
@@ -314,8 +329,13 @@ fun YearsBrowseScreen(
     // NAME on a years list is the year's own ascending order (the DAO starts
     // newest-first; the sort modes give the user the reverse for free).
     val searchState = rememberCollectionSearchState()
+    // The year's text is built inside the matcher, so the closed-bar case
+    // (identity passthrough) no longer allocates a string per element.
+    val searchedYears = rememberFilteredList(years, searchState) {
+        searchState.matches(it.toString())
+    }
     val sortedYears = rememberSortedList(
-        years.filter { searchState.matches(it.toString()) },
+        searchedYears,
         sortMode,
         sortInverted
     ) {
@@ -551,15 +571,20 @@ fun FolderBrowseScreen(
 
     val folders = content?.folders.orEmpty()
     val searchState = rememberCollectionSearchState()
+    val searchedFolders = rememberFilteredList(folders, searchState) {
+        searchState.matches(it.name)
+    }
     val sortedFolders = rememberSortedList(
-        folders.filter { searchState.matches(it.name) },
+        searchedFolders,
         sortMode,
         sortInverted
     ) {
         caseInsensitiveComparator { it.name }
     }
     val tracks = content?.tracks.orEmpty()
-    val shownTracks = tracks.filter { searchState.matches(it.title, it.artist) }
+    val shownTracks = rememberFilteredList(tracks, searchState) {
+        searchState.matches(it.title, it.artist)
+    }
 
     CollectionListScreen(
         title = title,
@@ -700,8 +725,11 @@ fun CollectionArtistsScreen(
     }
 
     val searchState = rememberCollectionSearchState()
+    val searchedRows = rememberFilteredList(artistRows, searchState) {
+        searchState.matches(it.name)
+    }
     val sortedRows = rememberSortedList(
-        artistRows.filter { searchState.matches(it.name) },
+        searchedRows,
         sortMode,
         sortInverted
     ) {
@@ -796,8 +824,11 @@ fun CollectionAlbumsScreen(
     }
 
     val searchState = rememberCollectionSearchState()
+    val searchedRows = rememberFilteredList(albumRows, searchState) {
+        searchState.matches(it.album, it.artist)
+    }
     val sortedRows = rememberSortedList(
-        albumRows.filter { searchState.matches(it.album, it.artist) },
+        searchedRows,
         sortMode,
         sortInverted
     ) { mode ->

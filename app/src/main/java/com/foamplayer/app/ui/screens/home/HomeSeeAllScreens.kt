@@ -46,6 +46,7 @@ import com.foamplayer.app.ui.components.MediaListRow
 import com.foamplayer.app.ui.components.TrackListScreen
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
 import com.foamplayer.app.ui.components.rememberCollectionSearchState
+import com.foamplayer.app.ui.components.rememberFilteredList
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.components.rememberSortedTracks
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
@@ -76,8 +77,14 @@ fun RecommendedPlaylistsSeeAllScreen(
 ) {
     val playlists by viewModel.recommendedPlaylists.collectAsState()
     val searchState = rememberCollectionSearchState()
+    // rememberFilteredList keeps the incoming list identity while the hero's
+    // search bar is closed/blank (see rememberFilteredList): no fresh list
+    // instance per unrelated recomposition feeding rememberSortedList below.
+    val searchedPlaylists = rememberFilteredList(playlists, searchState) {
+        searchState.matches(it.name)
+    }
     val sortedPlaylists = rememberSortedList(
-        playlists.filter { searchState.matches(it.name) },
+        searchedPlaylists,
         sortMode,
         sortInverted
     ) {
@@ -141,8 +148,11 @@ fun RecommendedAlbumsSeeAllScreen(
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
     val searchState = rememberCollectionSearchState()
+    val searchedAlbums = rememberFilteredList(albums, searchState) {
+        searchState.matches(it.album, it.artist)
+    }
     val sortedAlbums = rememberSortedList(
-        albums.filter { searchState.matches(it.album, it.artist) },
+        searchedAlbums,
         sortMode,
         sortInverted
     ) { mode ->
