@@ -79,6 +79,7 @@ import kotlin.math.abs
 
 private const val OnboardingPageCount = 3
 
+/** First-run flow: welcome, permissions, then library folders + initial scan. */
 @Composable
 fun OnboardingScreen(
     onFinish: () -> Unit,
@@ -100,8 +101,7 @@ fun OnboardingScreen(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { refreshPermissions() }
 
-    // The system dialog's result also arrives here, but re-checking on every resume
-    // additionally covers grants made from the system settings page.
+    // Re-checking on resume also covers grants made from the system settings page.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -159,9 +159,7 @@ fun OnboardingScreen(
             }
         }
 
-        // Continuous pager position in page units (e.g. 1.5 = halfway between pages
-        // 1 and 2): the bottom bar reads it so its elements track the finger during
-        // manual swipes instead of snapping when the target page changes.
+        // Continuous pager position (page units): the bottom bar tracks the finger.
         val pagerScrollPosition = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
             .coerceIn(0f, (OnboardingPageCount - 1).toFloat())
 
@@ -175,8 +173,6 @@ fun OnboardingScreen(
                 if (pagerState.currentPage < OnboardingPageCount - 1) {
                     scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
                 } else {
-                    // Flipping the flag also lets MainActivity's auto-request pick up any
-                    // permission skipped here (and start the playback service when set).
                     viewModel.setOnboardingCompleted(true)
                     onFinish()
                 }
@@ -496,7 +492,6 @@ private fun LibraryPage(
                             }
                         }
 
-                        // Clickable text action: accent-colored, bounded ripple.
                         val isScanning = scanStatus is ScanStatus.Scanning
                         BasicText(
                             text = if (isScanning) stringResource(R.string.scanning_caps)
@@ -552,9 +547,8 @@ private fun LibraryPage(
 // ---- Bottom bar: previous / dots / next ---------------------------------------
 
 /**
- * Every element is driven by [scrollPosition] — the pager's continuous position in
- * page units — so the bar animates progressively under the finger during manual
- * swipes, and follows the tweened pager animation on button presses alike.
+ * Driven by [scrollPosition] (the pager's continuous position), so the bar
+ * animates progressively under the finger during manual swipes.
  */
 @Composable
 private fun OnboardingBottomBar(
@@ -563,9 +557,7 @@ private fun OnboardingBottomBar(
     onPrevious: () -> Unit,
     onNext: () -> Unit
 ) {
-    // "Previous" fades/slides in across the first page-width of scrolling.
     val backProgress = scrollPosition.coerceIn(0f, 1f)
-    // The forward text crossfades into "Get Started" while the last page approaches.
     val forwardProgress = (scrollPosition - (pageCount - 2)).coerceIn(0f, 1f)
     val slidePx = with(LocalDensity.current) { 16.dp.toPx() }
 
@@ -633,8 +625,7 @@ private fun ForwardText(text: String, alpha: Float) {
 private fun OnboardingDots(scrollPosition: Float, pageCount: Int) {
     Row(horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
         repeat(pageCount) { index ->
-            // 0 when the scroll position sits on this dot, 1 when fully passed:
-            // width and color morph continuously while the finger drags.
+            // 0 when the position sits on this dot, 1 when fully passed.
             val distance = abs(scrollPosition - index).coerceIn(0f, 1f)
             Box(
                 modifier = Modifier

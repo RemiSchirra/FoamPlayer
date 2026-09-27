@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
+/** Settings row navigating to a subscreen: title + description on the left, chevron on the right. */
 @Composable
 fun FoamNavigationButton(
     title: String,

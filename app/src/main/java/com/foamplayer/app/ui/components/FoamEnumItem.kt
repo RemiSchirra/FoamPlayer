@@ -28,6 +28,11 @@ import androidx.compose.ui.text.font.FontWeight
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
+/**
+ * Settings row exposing one enum's options as side-by-side selectable chips.
+ * The selected chip fills with the accent color; [getLabel]/[getIcon] render
+ * each option's appearance.
+ */
 @Composable
 fun <T : Enum<T>> FoamEnumItem(
     title: String,

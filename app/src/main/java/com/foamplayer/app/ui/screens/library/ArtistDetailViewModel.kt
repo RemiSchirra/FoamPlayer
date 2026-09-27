@@ -14,6 +14,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+/**
+ * Loads one artist's albums, tracks, top tracks (most-listened, padded with
+ * random picks) and cached Spotify image.
+ */
 @HiltViewModel
 class ArtistDetailViewModel @Inject constructor(
     private val repository: TrackRepository,
@@ -41,10 +45,7 @@ class ArtistDetailViewModel @Inject constructor(
     fun loadArtistAlbums(artistName: String) {
         viewModelScope.launch {
             // Seed from the process-wide snapshot so revisits render on the
-            // first frame; the live query then corrects/updates the list.
-            // Full-library grouping/sorting is a heavy O(n log n) pass that
-            // would otherwise run on the main dispatcher and stall the
-            // destination screen's first frame — run it off-main.
+            // first frame; the live Room query then takes over.
             val credited = repository.allTracksSnapshot()
                 .filter { it.artist == artistName || it.albumArtist == artistName }
             val seededAlbums = withContext(Dispatchers.Default) {
@@ -84,8 +85,6 @@ class ArtistDetailViewModel @Inject constructor(
 
     fun loadArtistImage(artistName: String) {
         viewModelScope.launch {
-            // Local cache file (re-downloaded from the stored CDN URL if the
-            // cache was cleared/evicted); null when the artist was never resolved.
             _artistImage.value = artistImageStore.imagePath(ArtistImageStore.key(artistName))
         }
     }

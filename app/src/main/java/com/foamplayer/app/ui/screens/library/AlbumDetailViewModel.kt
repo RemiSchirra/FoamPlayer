@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+/** Loads one album's tracks (disc/track order) with an instant snapshot seed. */
 @HiltViewModel
 class AlbumDetailViewModel @Inject constructor(
     private val repository: TrackRepository
@@ -22,14 +23,8 @@ class AlbumDetailViewModel @Inject constructor(
 
     fun loadAlbumTracks(albumName: String) {
         viewModelScope.launch {
-            // Seed from the process-wide tracks snapshot so revisits render on
-            // the first frame; the live query then corrects/updates the list.
-            // The seed filter+sort used to run on the main dispatcher (a fresh
-            // StateFlow forces the destination screen's first composition to
-            // wait on it), stalling the open frame on a full-library pass for
-            // large libraries. Off-main keeps the open frame free; the flow's
-            // first emission is the same list instance as the snapshot, so no
-            // extra pass is paid.
+            // Seed from the process-wide snapshot so revisits render on the
+            // first frame; the live Room query then takes over.
             val seeded = withContext(Dispatchers.Default) {
                 repository.allTracksSnapshot()
                     .filter { it.album == albumName }

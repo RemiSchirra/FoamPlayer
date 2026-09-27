@@ -17,6 +17,7 @@ import com.foamplayer.app.data.settings.FoamIconStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/** The app's color palette. */
 @Immutable
 data class FoamColors(
     val background: Color,
@@ -43,6 +44,7 @@ val DarkFoamColors = FoamColors(
 /** Default accent color, used until [FoamTheme] provides a live one (e.g. in previews). */
 val DefaultPrimaryAccent = Color(0xFFFF5252)
 
+/** The app's text styles. */
 @Immutable
 data class FoamTypography(
     val titleLarge: TextStyle,
@@ -56,19 +58,19 @@ val DefaultFoamTypography = FoamTypography(
     titleLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
-        fontSize = 24.sp, // Slightly larger for a professional flat look
+        fontSize = 24.sp,
         color = Color(0xFFE0E0E0)
     ),
     titleMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 18.sp, // Refined title size
+        fontSize = 18.sp,
         color = Color(0xFFE0E0E0)
     ),
     body = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
-        fontSize = 15.sp, // Standard flat body size
+        fontSize = 15.sp,
         color = Color(0xFF9E9E9E)
     ),
     caption = TextStyle(
@@ -85,11 +87,12 @@ val DefaultFoamTypography = FoamTypography(
     )
 )
 
+/** Corner rounding: the two player roundings are 0f..1f percentages of the art's half-size. */
 @Immutable
 data class FoamShapes(
-    val miniPlayerRounding: Float, // Percentage 0f..1f
-    val fullPlayerRounding: Float, // Percentage 0f..1f
-    val cardRounding: Dp = 8.dp // Flatter corners for professional look
+    val miniPlayerRounding: Float,
+    val fullPlayerRounding: Float,
+    val cardRounding: Dp = 8.dp
 )
 
 val DefaultFoamShapes = FoamShapes(
@@ -97,25 +100,22 @@ val DefaultFoamShapes = FoamShapes(
     fullPlayerRounding = 0.15f
 )
 
-// These three rarely (if ever) change after launch, so a staticCompositionLocalOf is
-// the right call: it skips the bookkeeping needed to track *who* reads which field,
-// and just fully recomposes its content on the rare occasions the value is replaced.
+// Rarely change after launch: static locals skip reader tracking and just
+// recompose their content wholesale on the rare value replacement.
 val LocalFoamColors = staticCompositionLocalOf { DarkFoamColors }
 val LocalFoamTypography = staticCompositionLocalOf { DefaultFoamTypography }
 val LocalFoamShapes = staticCompositionLocalOf { DefaultFoamShapes }
 
-// The accent color is the one theme value that changes at animation frequency --
-// continuously while swiping between tracks in the full player. It deliberately gets
-// its own *non*-static CompositionLocal so that only components reading 'accentColor'
-// (and not everything else using FoamTheme) are invalidated on each frame.
+// The accent color changes at animation frequency (per-frame while swiping
+// between tracks); a non-static local keeps its invalidation scoped to readers
+// of the accent alone.
 val LocalPrimaryAccentColor = compositionLocalOf { DefaultPrimaryAccent }
 
-// Whether the accent is derived from album art (Settings -> "Automatic Color").
-// List-row highlights read it to pick between each row's own extracted art color
-// (true) and the single app-defined accent (false). Non-static: toggling the
-// setting must immediately recolor every highlighted row.
+// Whether the accent derives from album art; row highlights read it to pick
+// between their own extracted art color and the single app accent.
 val LocalAutomaticColorEnabled = compositionLocalOf { true }
 
+/** Access point for the theme values provided by [FoamTheme]. */
 object FoamTheme {
     val colors: FoamColors
         @Composable @ReadOnlyComposable get() = LocalFoamColors.current
@@ -129,11 +129,12 @@ object FoamTheme {
     val shapes: FoamShapes
         @Composable get() = LocalFoamShapes.current
 
-    /** The live, possibly per-frame-animated accent color. Read this instead of colors.primaryAccent. */
+    /** The live, possibly per-frame-animated accent color. */
     val accentColor: Color
         @Composable get() = LocalPrimaryAccentColor.current
 }
 
+/** Provides the app's theme: colors, typography, icon style, shapes and accent. */
 @Composable
 fun FoamTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -143,10 +144,8 @@ fun FoamTheme(
     accentColor: Color? = null,
     content: @Composable () -> Unit
 ) {
-    // Only rebuilt when their own inputs change, so CompositionLocalProvider sees a
-    // structurally-equal value (and skips reinvalidating their -- static -- locals'
-    // consumers) on every recomposition this function goes through as accentColor
-    // changes each frame.
+    // Remembered per input so the static locals' consumers skip when only the
+    // accent (per-frame) changes.
     val icons = remember(iconStyle) { DefaultFoamIcons.copy(currentStyle = iconStyle) }
     val shapes = remember(miniPlayerRounding, fullPlayerRounding) {
         FoamShapes(

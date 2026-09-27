@@ -100,11 +100,6 @@ import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
 
-// The playlist row shares the app-wide list row geometry through MediaListRow /
-// MediaGridCell; artwork corners come from the shared percentage-based AlbumArtShape().
-
-// Shared-text flight fades ride the same tween as the bounds flight
-// (AlbumArtBoundsTransform) instead of sharedBounds' spring-based defaults.
 private val textFlightFadeSpec = tween<Float>(
     durationMillis = SharedElementTransitionDurationMs,
     easing = SharedElementEasing
@@ -112,6 +107,11 @@ private val textFlightFadeSpec = tween<Float>(
 
 private val ImageMimeTypes = arrayOf("image/*")
 
+/**
+ * The playlists screen: every user playlist as a row or grid cell (per view
+ * density), with edit-mode drag reordering (custom order only), create / rename /
+ * delete modals and M3U / folder import flows with the missing-songs report.
+ */
 @Composable
 fun PlaylistsScreen(
     onPlaylistClick: (PlaylistEntity) -> Unit,
@@ -133,13 +133,9 @@ fun PlaylistsScreen(
 
     var showCreateModal by remember { mutableStateOf(false) }
     var showMoreModal by remember { mutableStateOf(false) }
-    // Edition mode: toggled by the pencil — a 2D drag handle appears on every
-    // playlist and they can be dragged around to reorder them.
     var isEditMode by remember { mutableStateOf(false) }
 
-    // The playlist list has its own user-defined order (drag & drop writes
-    // sortOrder): reordering is only meaningful in CUSTOM, so any other sort
-    // exits edit mode and the pencil below is not rendered until then.
+    // Reordering is only meaningful in CUSTOM (the drag & drop order).
     LaunchedEffect(sortMode) {
         if (sortMode != CollectionSortMode.CUSTOM) {
             isEditMode = false
@@ -151,19 +147,15 @@ fun PlaylistsScreen(
         isEditMode = false
     }
 
-    // The user-defined order (or the modal's sort) the rows display.
     val sortedPlaylists = rememberSortedList(playlists, sortMode, sortInverted) {
         caseInsensitiveComparator { it.name }
     }
 
     // Edit-mode drag & drop: a local display list absorbs the swaps live; the
-    // DB (and the Room flow) is only written once the drag ends. While a drag
-    // is in flight, incoming playlist emissions are ignored so they can't
-    // fight the reorder.
+    // DB is written once the drag ends. Incoming emissions are ignored while
+    // a drag is in flight so they can't fight the reorder.
     var displayedPlaylists by remember { mutableStateOf(playlists) }
     var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
-    // True once the finger lifts: the item keeps flying to its slot (settle
-    // animation) but the lift scale already animates back down in parallel.
     var dragReleased by remember { mutableStateOf(false) }
     LaunchedEffect(sortedPlaylists) {
         if (dragOriginIndex == null) {
@@ -171,13 +163,11 @@ fun PlaylistsScreen(
         }
     }
 
-    // Plain (non-saveable) list states: the screen always opens at the top of
-    // the list instead of restoring a stale scroll position from the nav
-    // back stack (rememberLazyListState restores via rememberSaveable).
+    // Non-saveable list states: always open at the top instead of restoring
+    // a stale scroll position from the nav back stack.
     val lazyListState = remember { LazyListState() }
     val lazyGridState = remember { LazyGridState() }
 
-    // The trailing spacer item must never take part in a swap.
     val dragDropOnMove: (Int, Int) -> Unit = { from, to ->
         displayedPlaylists = displayedPlaylists.toMutableList().apply {
             add(to, removeAt(from))
@@ -194,24 +184,19 @@ fun PlaylistsScreen(
         onMove = dragDropOnMove
     )
 
-    // Persists the completed drag: the display list already holds the final
-    // order, so writing it back as the new sortOrder assignment is enough.
-    // When the custom order is displayed inverted, the canonical (stored)
-    // order is the displayed list's reverse.
+    // Persists the completed drag; an inverted display reverses to the canonical order.
     fun persistReorder(finalIndex: Int?, originIndex: Int?) {
         if (originIndex == null || finalIndex == null || originIndex == finalIndex) return
         val displayedOrder = displayedPlaylists.map { it.playlistId }
         viewModel.reorderPlaylists(if (sortInverted) displayedOrder.asReversed() else displayedOrder)
     }
 
-    // Long-press actions (edit image / rename / details / delete), hosted here
-    // like the other screens host their long-press modals.
     val playlistModalState = rememberPlaylistFoamModalState()
     var renameTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
     var deleteConfirmTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
 
-    // Cover image picker: armed by the header pencil, the result applies to the
-    // playlist it was opened for.
+    // Cover image picker: armed by the modal's pencil, the result applies to
+    // the playlist it was opened for.
     var imagePickerTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
     val context = LocalContext.current
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -241,7 +226,6 @@ fun PlaylistsScreen(
             .fillMaxSize()
             .padding(top = 16.dp, start = 8.dp, end = 8.dp)
     ) {
-        // Thin header: playlist icon inline with the big title, actions on the right.
         ScreenTitle(
             icon = FoamTheme.icons.current.playlists,
             title = stringResource(R.string.playlists)
@@ -305,8 +289,7 @@ fun PlaylistsScreen(
                         lifted = isDragging && !dragReleased,
                         showDragHandle = isEditMode,
                         dragHandleModifier = if (isEditMode) {
-                            // Reordering starts only from the drag chip; the
-                            // cell itself stays scroll/tap-through.
+                            // Reordering starts only from the drag chip.
                             Modifier.pointerInput(playlist.playlistId) {
                                 detectDragGestures(
                                     onDragStart = {
@@ -320,8 +303,6 @@ fun PlaylistsScreen(
                                     },
                                     onDragEnd = {
                                         val to = gridDragState.draggedIndex
-                                        // Scale-down starts with the release; the
-                                        // settle animation flies the item to its slot.
                                         dragReleased = true
                                         gridDragState.onDragEnd()
                                         persistReorder(to, dragOriginIndex)
@@ -422,8 +403,6 @@ fun PlaylistsScreen(
                                         onDrag = listDragState::onDrag,
                                         onDragEnd = {
                                             val to = listDragState.draggedIndex
-                                            // Scale-down starts with the release; the
-                                            // settle animation flies the item to its slot.
                                             dragReleased = true
                                             listDragState.onDragEnd()
                                             persistReorder(to, dragOriginIndex)
@@ -487,10 +466,8 @@ fun PlaylistsScreen(
         onDismiss = { deleteConfirmTarget = null }
     )
 
-    // More-options sheet behind the 3-dots button: holds the sort radio list
-    // (custom order first — the drag & drop order) with its Inverse toggle,
-    // and the Organisation row, which slides in the density radio list for the
-    // playlists view.
+    // More-options sheet: the sort radio list (custom order first) with its
+    // Inverse toggle, and the Organisation row for this view's density.
     DensityOrganisationModal(
         visible = showMoreModal,
         currentDensity = density,
@@ -547,14 +524,12 @@ fun PlaylistsScreen(
 }
 
 /**
- * TrackListItem equivalent for a playlist: cover (the user-chosen image, or
- * the name's initial as fallback), the name and its track count — rendered
- * through the shared row/grid scaffolds at the view's [density]. Long-press
- * opens the playlist actions modal. When opened, the artwork and title animate
- * into the playlist detail header through the shared-element keys
- * "playlist-art-*" / "playlist-title-*". [active] draws the "now playing"
- * highlight when the queue was started from this playlist. [showDragHandle]
- * shows the edit-mode 2D drag handle (four direction arrows).
+ * One playlist row/cell: cover (user image or name-initial fallback), name and
+ * track count through the shared row/grid scaffolds. Long-press opens the
+ * playlist actions modal; the artwork and title join the shared-element flight
+ * into the playlist detail header when clicked. [active] draws the "now
+ * playing" highlight when the queue was started from this playlist;
+ * [showDragHandle] shows the edit-mode 2D drag handle.
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -575,8 +550,7 @@ private fun PlaylistItemRow(
     val context = LocalContext.current
     val highlightBackground = activeRowHighlight(active, playlist.imageUrl, isEmbeddedArt = false)
 
-    // Elevation shadow under the cover while the row is lifted by a drag;
-    // animates in step with the lift scale.
+    // Elevation shadow under the cover while the row is lifted by a drag.
     val artworkElevation by animateDpAsState(
         targetValue = if (lifted) DragArtworkElevation else 0.dp,
         animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
@@ -593,14 +567,10 @@ private fun PlaylistItemRow(
                 .clip(AlbumArtShape())
                 .background(FoamTheme.colors.surfaceVariant)
         }
-        // When the playlist detail hero uses an immersive layout, this row is
-        // the DRAWN side of the closing flight (the shared-element overlay
-        // renders only the becoming-visible side) -- so it must carry the
-        // mirrored morph itself: square + faded at the hero's rest look,
-        // landing on its own rounded, unfaded look. On that path the static
-        // clip is dropped: the flight's graphicsLayer shape (which the drawn
-        // overlay layer inherits) must be free to follow the flight instead of
-        // re-rounding every frame.
+        // With an immersive destination hero this row is the DRAWN side of the
+        // closing flight and must carry the mirrored morph itself (square +
+        // faded -> its own rounded, unfaded look); the static clip is dropped
+        // there so the flight's shape can follow the transition.
         val flight = LocalCollectionHeroLayoutLookup
             .current(CollectionHeroTarget.Playlist)
             .isImmersive
@@ -623,9 +593,6 @@ private fun PlaylistItemRow(
                 )
             }
         })
-            // The flight variant carries its own graphicsLayer shape -- a static
-            // clip here would re-round every flight frame. The drag-lift shadow
-            // stays outside: it is at zero elevation during a nav flight.
             .shadow(elevation = artworkElevation, shape = AlbumArtShape())
             .let { if (flight) it else it.clip(AlbumArtShape()) }
             .background(FoamTheme.colors.surfaceVariant)
@@ -653,10 +620,9 @@ private fun PlaylistItemRow(
                 ImageRequest.Builder(context)
                     .data(playlist.imageUrl)
                     .size(AlbumArtRequestSize)
-                    // The playlist detail hero reads the cover under the shared
-                    // deterministic key (albumArtMemoryCacheKey); caching under
-                    // it here keeps a close flight's first frames on the image
-                    // instead of the placeholder note (see AlbumArtImage).
+                    // The destination hero reads the cover under this shared key;
+                    // caching under it here keeps a close flight's first frames
+                    // on the image instead of the placeholder note.
                     .memoryCacheKey(albumArtMemoryCacheKey(playlist.imageUrl))
                     .build()
             }
@@ -689,9 +655,6 @@ private fun PlaylistItemRow(
                     enter = DragHandleEnter,
                     exit = DragHandleExit
                 ) {
-                    // Reordering starts only from this chip: the drag gesture
-                    // arrives via dragHandleModifier; the no-op clickable
-                    // swallows taps so the cell beneath doesn't ripple.
                     val dragHandleInteractionSource = remember { MutableInteractionSource() }
                     Box(
                         modifier = dragHandleModifier

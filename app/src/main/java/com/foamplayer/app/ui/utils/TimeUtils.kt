@@ -4,7 +4,9 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
 
+/** Duration and date-time formatting for UI display. */
 object TimeUtils {
+    /** Spelled-out duration: "1h 02m 03s", "02m 03s" or "03s". */
     fun formatDurationLong(durationMs: Long): String {
         val totalSeconds = durationMs / 1000
         val hours = totalSeconds / 3600
@@ -34,13 +36,7 @@ object TimeUtils {
         }
     }
 
-    // getDateTimeInstance allocates a fresh formatter on every call, and this runs in
-    // composition (track details sheets) on every recomposition. Cached per locale so
-    // a locale change still produces a correct formatter (UI calls are main-thread,
-    // so no synchronization needed).
-    @Volatile
-    private var cachedFormatter: Pair<String, DateFormat>? = null
-
+    /** Medium date + short time for a timestamp, with a locale-cached formatter. */
     fun formatDateTime(timestampMs: Long): String {
         val locale = Locale.getDefault()
         val tag = locale.toLanguageTag()
@@ -51,4 +47,7 @@ object TimeUtils {
                 .also { cachedFormatter = tag to it }
         return formatter.format(Date(timestampMs))
     }
+
+    @Volatile
+    private var cachedFormatter: Pair<String, DateFormat>? = null
 }

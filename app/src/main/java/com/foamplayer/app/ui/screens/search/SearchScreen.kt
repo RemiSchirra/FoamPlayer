@@ -129,8 +129,6 @@ private const val SwipeMaxFade = 0.3f
 private const val SwipeDismissDurationMs = 150
 private const val SwipeReturnDurationMs = 200
 
-// Shared-text flight fades ride the same tween as the bounds flight
-// (AlbumArtBoundsTransform) instead of sharedBounds' spring-based defaults.
 private val textFlightFadeSpec = tween<Float>(
     durationMillis = SharedElementTransitionDurationMs,
     easing = SharedElementEasing
@@ -144,6 +142,7 @@ private fun Color.lightened(factor: Float): Color =
         blue = blue + (1f - blue) * factor
     )
 
+/** One colored entry card of the idle browse grid. */
 @Composable
 private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -198,6 +197,11 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
     }
 }
 
+/**
+ * The search screen: idle state shows browse cards, active search shows
+ * history, and a query shows live results across artists, albums, tracks and
+ * lyrics (the lyrics scan streams in from the background).
+ */
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
@@ -229,10 +233,8 @@ fun SearchScreen(
     val longPressScope = rememberCoroutineScope()
     val imeInsets = WindowInsets.ime
 
-    // Opening a modal while the keyboard is up makes its Dialog steal focus and the
-    // IME start closing; the sheet would ride the collapsing IME inset down and jump.
-    // Close the keyboard first and hold until the IME is fully gone, so the sheet
-    // opens straight at its resting position.
+    // A modal's Dialog steals focus while the keyboard is up; close the IME
+    // first so the sheet opens at its resting position.
     suspend fun awaitKeyboardClosed() {
         focusManager.clearFocus()
         snapshotFlow { imeInsets.getBottom(density) }.first { it == 0 }
@@ -264,9 +266,7 @@ fun SearchScreen(
             collectionModalState?.show(
                 CollectionInfo(
                     title = artist,
-                    // The Spotify artist picture is a plain cache file, not
-                    // embedded art: the header must load it directly instead of
-                    // extracting a picture from an audio container.
+                    // A Spotify cache file, not embedded art: load it directly.
                     imageUrl = artistImages[artist],
                     imageIsEmbeddedArt = false,
                     kind = CollectionKind.Artist,
@@ -275,21 +275,14 @@ fun SearchScreen(
             )
         }
     }
-    // Track where the keyboard is *going* rather than where it is: the IME animation
-    // target flips to 0 the moment the hide starts, while ime visibility only updates
-    // once the hide animation has fully completed. Clearing on the target keeps the
-    // caret from blinking over the idle browse cards during the keyboard animation.
+    // Track where the keyboard is *going* (target flips to 0 as soon as the hide
+    // starts) so the caret stops over the idle cards during the animation.
     val imeTargetBottom = WindowInsets.imeAnimationTarget.getBottom(density)
 
-    // Compose keeps the text field focused after the keyboard is dismissed, so drop
-    // focus explicitly to stop the caret from blinking over the idle browse cards.
     LaunchedEffect(imeTargetBottom) {
         if (imeTargetBottom == 0) focusManager.clearFocus()
     }
 
-    // Back leaves the history open while it dismisses the keyboard (the IME consumes
-    // that press before it reaches the app); only a back press with the keyboard
-    // already closed lands here and closes the history.
     BackHandler(enabled = searchActive && query.isEmpty()) {
         searchActive = false
         focusManager.clearFocus()
@@ -409,9 +402,7 @@ fun SearchScreen(
                         item(key = "artists_header") {
                             SectionHeader("Artists")
                         }
-                        // Keyed by content: results change identity on every keystroke, and
-                        // without keys rows are matched by position (everything recomposes,
-                        // item state resets, shared elements animate from the wrong row).
+                        // Content-keyed: results change identity on every keystroke.
                         items(uiState.artists, key = { "artist_$it" }) { artist ->
                             ArtistSearchResultItem(
                                 artist = artist,
@@ -467,9 +458,8 @@ fun SearchScreen(
                         }
                     }
 
-                    // Found in lyrics: the scan runs in the background across the whole
-                    // library (cached / sidecar / embedded lyrics only, never online),
-                    // so matches stream in here progressively until it completes.
+                    // Found in lyrics: the background scan streams matches in
+                    // progressively until it completes.
                     if (uiState.lyricsMatches.isNotEmpty() || uiState.lyricsSearchInProgress) {
                         item(key = "lyrics_header") {
                             SectionHeader(
@@ -625,6 +615,7 @@ fun SearchScreen(
     }
 }
 
+/** Accent-colored section title above a result group. */
 @Composable
 fun SectionHeader(title: String, modifier: Modifier = Modifier) {
     BasicText(
@@ -634,6 +625,7 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
     )
 }
 
+/** One scope filter chip; long-press solos that scope (All + one). */
 @Composable
 private fun SearchFilterChip(
     label: String,
@@ -670,6 +662,11 @@ private fun SearchFilterChip(
     }
 }
 
+/**
+ * One artist result row: circular portrait (image or initial) plus the name.
+ * When this row is the one clicked to start the current navigation, its art
+ * and title join the shared-element flight into the artist detail hero.
+ */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistSearchResultItem(
@@ -700,9 +697,6 @@ fun ArtistSearchResultItem(
             modifier = Modifier
                 .size(ListRowArtSize)
                 .let { base ->
-                    // Only the clicked row joins a shared-element flight (see
-                    // LocalActiveSharedCollection); other rows keep their static
-                    // rest clip, even when they exist on the destination too.
                     if (sharedTransitionScope != null &&
                         animatedVisibilityScope != null &&
                         isActiveSharedCollection("artist", artist)
@@ -716,8 +710,6 @@ fun ArtistSearchResultItem(
                             immersiveFlightHero = LocalCollectionHeroLayoutLookup
                                 .current(CollectionHeroTarget.Artist)
                                 .isImmersive,
-                            // The rest look is a full circle, so the flight morph
-                            // lands on the circle too instead of the album rounding.
                             fullyRounded = true
                         )
                     } else base.clip(CircleShape)
@@ -727,10 +719,6 @@ fun ArtistSearchResultItem(
         ) {
             if (imageUrl != null) {
                 val context = LocalContext.current
-                // The destination hero reads this art under the shared
-                // albumArtMemoryCacheKey; caching under it here (as the
-                // library rows do) keeps the open flight's first frame on the
-                // image instead of the fallback note.
                 val artRequest = remember(imageUrl) {
                     ImageRequest.Builder(context)
                         .data(imageUrl)
@@ -778,6 +766,10 @@ fun ArtistSearchResultItem(
     }
 }
 
+/**
+ * One album result row: square art (or initial) plus album and artist lines.
+ * Joins the shared-element flight into the album detail hero when clicked.
+ */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AlbumSearchResultItem(
@@ -807,9 +799,6 @@ fun AlbumSearchResultItem(
             modifier = Modifier
                 .size(ListRowArtSize)
                 .let { base ->
-                    // Only the clicked row joins a shared-element flight (see
-                    // LocalActiveSharedCollection); other rows keep their static
-                    // rest clip, even when they exist on the destination too.
                     if (sharedTransitionScope != null &&
                         animatedVisibilityScope != null &&
                         isActiveSharedCollection("album", album.album)
@@ -831,7 +820,6 @@ fun AlbumSearchResultItem(
         ) {
             if (album.albumArtPath != null) {
                 val context = LocalContext.current
-                // Same shared hero cache key as ArtistSearchResultItem above.
                 val albumArtRequest = remember(album.albumArtPath) {
                     ImageRequest.Builder(context)
                         .data(EmbeddedAlbumArt(album.albumArtPath.toUri()))
@@ -901,6 +889,7 @@ fun AlbumSearchResultItem(
     }
 }
 
+/** Swipe-to-dismiss container for removable rows (search history entries). */
 @Composable
 private fun SwipeDismissRow(
     onRemove: () -> Unit,

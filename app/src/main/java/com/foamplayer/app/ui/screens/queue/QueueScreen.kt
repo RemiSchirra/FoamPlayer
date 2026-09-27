@@ -33,6 +33,10 @@ import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
 
+/**
+ * The "Up Next" screen: upcoming tracks (current excluded) with drag-reorder,
+ * swipe-to-remove and tap-to-play. Mutations go through the engine by entry id.
+ */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun QueueScreen(
@@ -65,9 +69,6 @@ fun QueueScreen(
     var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
     var dragOriginEntryId by remember { mutableStateOf<Long?>(null) }
 
-    // Latest upcoming list for the drag callbacks: pointerInput is keyed on the item
-    // id, so a drag cancelled after a queue change (aux refill) would otherwise
-    // restore a stale snapshot captured when the gesture handler was created.
     val latestUpcomingItems by rememberUpdatedState(upcomingItems)
 
     LaunchedEffect(upcomingItems) {
@@ -107,10 +108,7 @@ fun QueueScreen(
                 items = displayedItems,
                 key = { _, item -> item.entryId }
             ) { index, item ->
-                // derivedStateOf: draggedIndex is shared by every row, so reading it
-                // directly in each row's scope would recompose the whole viewport on
-                // every swap; the derived boolean only invalidates the rows whose
-                // dragging state actually flips (the two rows involved in the swap).
+                // derivedStateOf: only the rows whose dragging state flips invalidate.
                 val isDragging by remember(index) {
                     derivedStateOf { dragDropListState.isItemDragging(index) }
                 }

@@ -31,8 +31,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** A search scope the user can toggle on/off (long-press solos it). */
 enum class SearchFilter { LYRICS, ALBUMS, ARTISTS, TRACKS }
 
+/** Which scopes are included in the search. */
 data class SearchFilters(
     val lyrics: Boolean = true,
     val albums: Boolean = true,
@@ -42,6 +44,7 @@ data class SearchFilters(
     val allEnabled: Boolean get() = lyrics && albums && artists && tracks
 }
 
+/** Everything the search screen renders. */
 data class SearchUiState(
     val tracks: List<TrackEntity> = emptyList(),
     val artists: List<String> = emptyList(),
@@ -67,6 +70,11 @@ private data class LyricsSearchState(
     val inProgress: Boolean = false
 )
 
+/**
+ * Search state: debounced metadata queries (tracks/artists/albums), a
+ * background lyrics text scan streaming matches in, persisted history
+ * resolution, and scope filters mirrored in memory for instant toggles.
+ */
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val repository: TrackRepository,
@@ -78,10 +86,7 @@ class SearchViewModel @Inject constructor(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
-    /**
-     * Cached Spotify pictures per artist name (local cache file URIs) for the
-     * artist result rows; rebuilt live as the Settings scan resolves more.
-     */
+    /** Cached Spotify pictures per artist name, for the artist result rows. */
     val artistImages: StateFlow<Map<String, String>> =
         artistImageScanner.imagesFlow(repository.getAllArtists())
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
@@ -125,11 +130,7 @@ class SearchViewModel @Inject constructor(
         resolveHistory(history, allTracks, allAlbums, allArtists)
     }
 
-    /**
-     * Resolves persisted history entries to displayable items in one pass;
-     * entries whose track/album/artist no longer exists are dropped until
-     * they age out of the stored list.
-     */
+    /** Resolves persisted history entries to displayable items; missing entries are dropped. */
     private fun resolveHistory(
         history: List<SearchHistoryEntry>,
         allTracks: List<TrackEntity>,
@@ -151,10 +152,8 @@ class SearchViewModel @Inject constructor(
     }
 
     /**
-     * Lyrics scan: after a short debounce the whole library is inspected in
-     * parallel on background threads; matches stream into the UI as they are
-     * found. Local sources only — nothing is fetched online. Switching to a
-     * new query cancels the previous scan.
+     * Lyrics scan: after a debounce the whole library is inspected in parallel;
+     * matches stream in as they are found (local sources only, never online).
      */
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     private val lyricsState: Flow<LyricsSearchState> = combine(
@@ -174,10 +173,8 @@ class SearchViewModel @Inject constructor(
                     var lastEmitNanos = System.nanoTime()
                     lyricsRepository.searchLyricsText(query, allTracks).collect { match ->
                         matches += match
-                        // Emission per match used to copy the whole list (O(n²)
-                        // cumulative) and rebuild the combined UI state once per
-                        // matched track; batching to a fixed cadence keeps the UI
-                        // streaming while bounding the recomposition rate.
+                        // Batched emissions keep the UI streaming while bounding
+                        // the recomposition rate.
                         val now = System.nanoTime()
                         if (now - lastEmitNanos >= LYRICS_MATCH_EMIT_INTERVAL_MS) {
                             lastEmitNanos = now
@@ -196,9 +193,8 @@ class SearchViewModel @Inject constructor(
             artists = if (filters.artists) metadata.artists else emptyList(),
             albums = if (filters.albums) metadata.albums else emptyList(),
             history = history,
-            // Gated on the in-memory flag (not the scan flow) so toggling off hides
-            // the section in this same emission, without waiting for the scan's
-            // cancellation to round-trip back as an empty result.
+            // Gated on the in-memory flag so toggling off hides the section in
+            // this same emission, without waiting for the scan's cancellation.
             lyricsMatches = if (filters.lyrics) lyrics.matches else emptyList(),
             lyricsSearchInProgress = if (filters.lyrics) lyrics.inProgress else false,
             filters = filters

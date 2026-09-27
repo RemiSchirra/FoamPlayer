@@ -21,9 +21,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// Immutable by construction; the List fields make it unstable to the compiler's
-// inference, which would force MissingSongsModal to recompose on every scan-progress
-// tick even when nothing visible changed.
+/** State machine of a playlist creation that may produce a missing-songs report. */
 @Immutable
 sealed interface CreatePlaylistState {
     data object Idle : CreatePlaylistState
@@ -52,6 +50,10 @@ sealed interface CreatePlaylistState {
     ) : CreatePlaylistState
 }
 
+/**
+ * Playlists CRUD plus M3U/folder import flows, including the missing-songs
+ * report state machine that lets the user import unmatched folders wholesale.
+ */
 @HiltViewModel
 class PlaylistsViewModel @Inject constructor(
     private val playlistRepository: PlaylistRepository,
@@ -86,6 +88,7 @@ class PlaylistsViewModel @Inject constructor(
         }
     }
 
+    /** Creates a playlist, optionally importing from an M3U file or folder first. */
     fun createPlaylistFromSource(name: String, m3uUri: String?, folderUri: String?, imageUri: String? = null) {
         viewModelScope.launch {
             val resolvedName = name.trim().ifEmpty { context.getString(R.string.new_playlist_fallback) }
@@ -128,7 +131,7 @@ class PlaylistsViewModel @Inject constructor(
         return tracks.size to tracks.sumOf { it.duration }
     }
 
-    /** Dismisses the missing-songs report; for a pending folder playlist, creates it with the songs found so far. */
+    /** Dismisses the missing-songs report; a pending folder playlist is created with the songs found so far. */
     fun dismissMissingSongs() {
         val state = _createState.value
         _createState.value = CreatePlaylistState.Idle
@@ -201,7 +204,7 @@ class PlaylistsViewModel @Inject constructor(
         }
     }
 
-    /** Live ids of the playlists that contain a track; drives the checkbox states in the playlist picker. */
+    /** Live ids of the playlists that contain a track; drives the playlist picker's checkboxes. */
     fun playlistIdsContainingTrack(trackId: Long?): Flow<Set<Long>> =
         if (trackId == null) flowOf(emptySet())
         else playlistRepository.playlistIdsContainingTrack(trackId)

@@ -26,6 +26,7 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.roundToInt
 
+/** Settings row with a title, live value readout and a Material slider (see [FoamSliderStateItem] for the hoisted variant). */
 @Composable
 fun FoamSliderItem(
     title: String,
@@ -99,9 +100,7 @@ fun FoamSliderItem(
 /**
  * Self-contained variant of [FoamSliderItem] for the commit-on-release settings
  * pattern: the drag value lives in this row's own composition scope, so dragging
- * recomposes only this row instead of the whole screen (hoisted local values read
- * for `valueDisplay` used to re-run every other row of the screen per pointer
- * frame). [onValueChangeFinished] receives the committed value on release.
+ * recomposes only this row instead of the whole screen.
  */
 @Composable
 fun FoamSliderStateItem(
