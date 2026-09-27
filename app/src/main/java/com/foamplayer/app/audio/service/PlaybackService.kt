@@ -20,6 +20,10 @@ import com.google.common.util.concurrent.Futures
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
+/**
+ * Foreground media session service. Binds the session to [AudioEngine]'s active
+ * player, publishes the custom shuffle/repeat commands and the notification.
+ */
 @UnstableApi
 @AndroidEntryPoint
 class PlaybackService : MediaSessionService() {
@@ -96,16 +100,14 @@ class PlaybackService : MediaSessionService() {
                 repeatCommand = repeatCommand,
                 playbackState = { audioEngine.playbackState.value }
             ).apply {
-                // Define the default icon used for the notification
-                // TODO : change this in the future to the app icon
+                // TODO: change this to the app icon
                 setSmallIcon(R.drawable.ic_music_note)
             }
         )
         mediaSession = session
 
         // A crossfade promotes its secondary player at the swap: re-bind the
-        // session (and refresh the notification) to the new active player so the
-        // session/notification/position keep tracking the audible stream.
+        // session to the new active player so everything keeps tracking it.
         audioEngine.setOnPlayerSwappedListener {
             mediaSession?.setPlayer(audioEngine.player)
             mediaSession?.let { refreshNotificationButtons(it) }

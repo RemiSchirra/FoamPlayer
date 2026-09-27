@@ -13,9 +13,7 @@ import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.audio.engine.RepeatMode
 import com.google.common.collect.ImmutableList
 
-/**
- * Keeps the notification action order stable: Shuffle, Previous, Play/Pause, Next, Repeat.
- */
+/** Builds the playback notification with a stable action order: Shuffle, Prev, Play, Next, Repeat. */
 @UnstableApi
 class FoamMediaNotificationProvider(
     context: Context,
