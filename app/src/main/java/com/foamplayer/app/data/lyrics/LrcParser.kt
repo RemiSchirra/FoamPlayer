@@ -1,13 +1,16 @@
 package com.foamplayer.app.data.lyrics
 
+/** One line of parsed LRC content: its timestamp and display text. */
 data class LrcLine(
     val timestampMs: Long,
     val text: String
 )
 
+/** Parses LRC lyrics ([mm:ss.xx] timestamps) into sorted, timestamped lines. */
 object LrcParser {
     private val regex = Regex("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})\\](.*)")
 
+    /** Timestamped lines sorted by time; untagged lines land at 0 ms. */
     fun parse(rawLrc: String?): List<LrcLine> {
         if (rawLrc.isNullOrBlank()) return emptyList()
 

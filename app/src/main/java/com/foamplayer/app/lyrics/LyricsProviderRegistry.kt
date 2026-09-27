@@ -13,6 +13,7 @@ import com.foamplayer.app.lyrics.providers.SimpMusicLyricsProvider
 import com.foamplayer.app.lyrics.providers.UnisonLyricsProvider
 import com.foamplayer.app.lyrics.providers.YouLyPlusLyricsProvider
 
+/** Maps each settings enum value to its provider implementation. */
 val PreferredLyricsProvider.lyricsProvider: LyricsProvider?
     get() = when (this) {
         PreferredLyricsProvider.BETTER_LYRICS -> BetterLyricsProvider
