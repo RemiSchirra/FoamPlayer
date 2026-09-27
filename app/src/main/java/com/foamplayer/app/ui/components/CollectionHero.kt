@@ -168,6 +168,18 @@ class CollectionSearchState {
         private set
 
     /**
+     * Whether the field has already been focused for the current open session.
+     * The hero header is a lazy-list item: scrolling it out of view DISPOSES
+     * the field and scrolling back recomposes it, and the field's own
+     * LaunchedEffect(Unit) would re-fire its focus request on every such
+     * recomposition — re-showing a keyboard the user had already dismissed.
+     * The bar therefore requests focus only while this flag is false and flips
+     * it on the first grant; [open] resets it for the next session.
+     */
+    var focusGranted by mutableStateOf(false)
+        internal set
+
+    /**
      * Root-space y of the hero's button row (shuffle/play/search toggles) top,
      * reported by that row itself on every layout pass — the anchor of the
      * search-open scroll (the bar hangs 8dp below the row, and the row's
@@ -182,17 +194,23 @@ class CollectionSearchState {
     fun open() {
         open = true
         openRequest++
+        // Fresh focus for the fresh session: the bar requests focus only while
+        // [focusGranted] is false (see above), so a reopen after a scroll-out
+        // re-focuses even though the flag survived the session before.
+        focusGranted = false
     }
 
     /**
      * Closes the search bar. The query is deliberately NOT cleared here: at
-     * this instant the field is still focused and composed, and mutating a
-     * focused editable's text restarts its IME connection, which briefly
-     * re-shows the keyboard a frame after the hide request went out (the
-     * hide -> show -> hide flicker). The query is cleared instead when the
-     * field leaves composition at the end of the bar's exit (see
+     * this instant the field is still composed (its exit animation is pending),
+     * and resetting it while it might still hold focus would restart its IME
+     * connection, briefly re-showing the keyboard a frame after the hide
+     * request went out (the hide -> show -> hide flicker). The query is cleared
+     * instead when the field leaves composition AFTER this close (see
      * [CollectionHeroSearchBar]); until then [matches] already ignores it via
-     * the closed-[open] short-circuit, so the rows restore immediately.
+     * the closed-[open] short-circuit, so the rows restore immediately. A
+     * disposal from the header scrolling out of the lazy viewport (bar still
+     * open) keeps the query, so the filter survives the scroll round-trip.
      */
     fun close() {
         open = false
@@ -1159,6 +1177,11 @@ private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
  * (the same color as its play pill) — not the global app accent.
  *
  * Focus handling:
+ * - Focus is granted ONCE per open session (see [CollectionSearchState.focusGranted]):
+ *   the hero header is a lazy-list item, so scrolling the bar out of view
+ *   disposes the field and scrolling back recomposes it — re-running the focus
+ *   request on every such recomposition would re-show a keyboard the user had
+ *   already dismissed.
  * - Closing the bar tears the field's focus down IMMEDIATELY (not when the
  *   exiting content is removed at the end of the shrink animation), so the
  *   keyboard starts hiding in the same frame the cross is tapped instead of
@@ -1169,11 +1192,13 @@ private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
  *   itself stays open and the field can be re-tapped to bring the keyboard
  *   back. Guarded by [keyboardShownThisOpen] so the clear never races the
  *   open flow's own focus request while the keyboard is still coming up.
- * - The QUERY is cleared only when the field leaves composition (exit done):
- *   [CollectionSearchState.close] deliberately leaves it — resetting a focused
- *   editable's text restarts its IME connection, which re-shows the keyboard
- *   for a frame right after the hide request went out (the hide -> show ->
- *   hide flicker on track taps).
+ * - The QUERY is cleared only when the field leaves composition AFTER a close
+ *   ([CollectionSearchState.close] deliberately leaves it — resetting a
+ *   focused editable's text restarts its IME connection, which re-shows the
+ *   keyboard for a frame right after the hide request went out; the
+ *   hide -> show -> hide flicker on track taps). A disposal from the header
+ *   scrolling out of the lazy viewport (bar still open) PRESERVES the query,
+ *   so the filter survives the scroll round-trip.
  */
 @Composable
 private fun CollectionHeroSearchBar(
@@ -1212,14 +1237,28 @@ private fun CollectionHeroSearchBar(
         exit = fadeOut() + shrinkVertically()
     ) {
         val focusRequester = remember { FocusRequester() }
-        // The query is cleared HERE — when the field is gone from composition —
-        // and not in close(): resetting a focused editable's text restarts its
-        // IME connection, which briefly re-shows the keyboard after the hide
-        // request (see the doc above).
+        // The query is cleared HERE — when the field is gone from composition
+        // after a close — and not in close(): resetting a focused editable's
+        // text restarts its IME connection, which briefly re-shows the keyboard
+        // after the hide request (see the doc above). Guarded on the bar being
+        // closed: the disposal from the header scrolling out of the lazy
+        // viewport (bar still open) must keep the query, so the filter survives
+        // the scroll round-trip.
         DisposableEffect(Unit) {
-            onDispose { searchState.query = "" }
+            onDispose {
+                if (!searchState.open) searchState.query = ""
+            }
         }
-        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+        // Focus is granted once per open session: the flag lives on the
+        // screen-level [CollectionSearchState], so it survives this field being
+        // disposed (scrolled out of the lazy list) and recomposed (scrolled
+        // back) — only [open] resets it, for the next session.
+        LaunchedEffect(Unit) {
+            if (!searchState.focusGranted) {
+                focusRequester.requestFocus()
+                searchState.focusGranted = true
+            }
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
