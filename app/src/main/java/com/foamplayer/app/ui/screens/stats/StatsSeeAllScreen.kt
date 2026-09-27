@@ -151,6 +151,12 @@ fun StatsSeeAllScreen(
                                     collectionModalState?.show(
                                         CollectionInfo(
                                             title = artist.name,
+                                            // The Spotify artist picture is a plain cache
+                                            // file, not embedded art: the header must load
+                                            // it directly instead of extracting a picture
+                                            // from an audio container.
+                                            imageUrl = artistImages[artist.name],
+                                            imageIsEmbeddedArt = false,
                                             kind = CollectionKind.Artist,
                                             tracks = viewModel.tracksForArtist(artist.name)
                                         )

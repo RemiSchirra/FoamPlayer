@@ -66,12 +66,17 @@ enum class CollectionKind(val displayName: String) {
  * (the row is hidden when null); [subtitle] is the fallback second line for
  * collections without an artist (e.g. "12 tracks" for folders). [location] is
  * the storage path shown on the details page when relevant (folders).
+ *
+ * [imageUrl] is a plain image URI for playlist covers and Spotify artist
+ * pictures ([imageIsEmbeddedArt] == false) and an audio file path whose
+ * embedded picture must be extracted for albums/tracks (true, the default).
  */
 data class CollectionInfo(
     val title: String,
     val artist: String? = null,
     val subtitle: String? = null,
     val imageUrl: String? = null,
+    val imageIsEmbeddedArt: Boolean = true,
     val icon: ImageVector? = null,
     val kind: CollectionKind? = null,
     val tracks: List<TrackEntity> = emptyList(),
@@ -147,9 +152,18 @@ fun CollectionFoamModal(
     // Accent for the shared header + details page: the collection's own album
     // art color when the automatic-color setting is on, else the app accent.
     val context = LocalContext.current
-    LaunchedEffect(useAlbumArtAccent, displayCollection?.imageUrl) {
+    LaunchedEffect(
+        useAlbumArtAccent,
+        displayCollection?.imageUrl,
+        displayCollection?.imageIsEmbeddedArt
+    ) {
         if (useAlbumArtAccent) {
-            AlbumArtPaletteCache.ensure(this, context, displayCollection?.imageUrl)
+            AlbumArtPaletteCache.ensure(
+                scope = this,
+                context = context,
+                path = displayCollection?.imageUrl,
+                isEmbeddedArt = displayCollection?.imageIsEmbeddedArt ?: true
+            )
         }
     }
     val artAccent = if (useAlbumArtAccent) {
@@ -340,9 +354,18 @@ fun CollectionDetailsModal(
     val displayCollection = collection ?: lastShownCollection
 
     val context = LocalContext.current
-    LaunchedEffect(useAlbumArtAccent, displayCollection?.imageUrl) {
+    LaunchedEffect(
+        useAlbumArtAccent,
+        displayCollection?.imageUrl,
+        displayCollection?.imageIsEmbeddedArt
+    ) {
         if (useAlbumArtAccent) {
-            AlbumArtPaletteCache.ensure(this, context, displayCollection?.imageUrl)
+            AlbumArtPaletteCache.ensure(
+                scope = this,
+                context = context,
+                path = displayCollection?.imageUrl,
+                isEmbeddedArt = displayCollection?.imageIsEmbeddedArt ?: true
+            )
         }
     }
     val artAccent = if (useAlbumArtAccent) {
@@ -407,10 +430,20 @@ private fun CollectionModalHeader(
         ) {
             if (collection.imageUrl != null) {
                 val context = LocalContext.current
-                val artRequest = remember(collection.imageUrl) {
+                val artRequest = remember(collection.imageUrl, collection.imageIsEmbeddedArt) {
                     ImageRequest.Builder(context)
-                        .data(EmbeddedAlbumArt(collection.imageUrl.toUri()))
+                        .data(
+                            // Embedded art: the model is an audio file whose picture
+                            // is extracted. Otherwise the model is a plain image
+                            // (playlist cover / Spotify artist cache file).
+                            if (collection.imageIsEmbeddedArt) {
+                                EmbeddedAlbumArt(collection.imageUrl.toUri())
+                            } else {
+                                collection.imageUrl
+                            }
+                        )
                         .size(AlbumArtRequestSize)
+                        .memoryCacheKey(albumArtMemoryCacheKey(collection.imageUrl))
                         .build()
                 }
                 AsyncImage(

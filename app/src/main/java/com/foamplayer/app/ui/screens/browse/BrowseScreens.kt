@@ -201,6 +201,12 @@ fun ArtistsBrowseScreen(
                             collectionModalState?.show(
                                 CollectionInfo(
                                     title = artist,
+                                    // The Spotify artist picture is a plain cache
+                                    // file, not embedded art: the header must load
+                                    // it directly instead of extracting a picture
+                                    // from an audio container.
+                                    imageUrl = artistImages[artist],
+                                    imageIsEmbeddedArt = false,
                                     kind = CollectionKind.Artist,
                                     tracks = viewModel.tracksForArtist(artist)
                                 )
@@ -452,8 +458,6 @@ fun GenreTracksScreen(
         sharedTransitionScope = sharedTransitionScope,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
         sharedTrackId = sharedTrackId,
-        centerTrackRequest = centerTrackRequest,
-        isPlaying = isPlaying,
         heroLayout = heroLayout,
         immersiveMode = immersiveMode
     )
@@ -509,8 +513,6 @@ fun YearTracksScreen(
         sharedTransitionScope = sharedTransitionScope,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
         sharedTrackId = sharedTrackId,
-        centerTrackRequest = centerTrackRequest,
-        isPlaying = isPlaying,
         heroLayout = heroLayout,
         immersiveMode = immersiveMode
     )

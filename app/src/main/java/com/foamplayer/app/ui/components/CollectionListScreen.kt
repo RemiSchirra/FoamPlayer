@@ -128,7 +128,7 @@ private class GridMediaContentScope(private val scope: LazyGridScope) : MediaLis
  * back arrow in a top bar, artwork + title header, then the rows supplied by [content].
  *
  * [density] switches the body between the row list and a square-art grid
- * (columns fixed by the GRID_* mode); [onDensityChange], when set, adds the
+ (columns fixed by the GRID_* mode); [onDensityChange], when set, adds the
  * 3-dots top-bar button that opens the organisation modal.
  */
 @Composable
@@ -488,9 +488,12 @@ fun CollectionListItem(
                     CollectionInfo(
                         title = title,
                         subtitle = subtitle,
-                        // The modal's image is embedded-art oriented; plain files
-                        // (artist cache images) are left out on purpose.
-                        imageUrl = imageUrl.takeIf { imageIsEmbeddedArt },
+                        // Plain image URIs (playlist covers, Spotify artist cache
+                        // files) ride through with [imageIsEmbeddedArt] == false so
+                        // the modal header loads them directly instead of trying to
+                        // extract a picture from them as audio containers.
+                        imageUrl = imageUrl,
+                        imageIsEmbeddedArt = imageIsEmbeddedArt,
                         icon = icon
                     )
                 )

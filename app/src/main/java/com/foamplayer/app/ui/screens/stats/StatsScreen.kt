@@ -324,6 +324,12 @@ fun StatsScreen(
                                 collectionModalState?.show(
                                     CollectionInfo(
                                         title = artist.name,
+                                        // The Spotify artist picture is a plain cache
+                                        // file, not embedded art: the header must load
+                                        // it directly instead of extracting a picture
+                                        // from an audio container.
+                                        imageUrl = artistImages[artist.name],
+                                        imageIsEmbeddedArt = false,
                                         kind = CollectionKind.Artist,
                                         tracks = viewModel.tracksForArtist(artist.name)
                                     )
@@ -454,7 +460,8 @@ private fun ChartTitle(text: String, modifier: Modifier = Modifier) {
  * "see all" arrow button (same affordance as the Home rows) opening the full
  * ranked list for the period. Rows are keyed on [itemKey]: when new listens
  * reshuffle the ranking, a row that changes slot glides from its old position
- * to the new one instead of jumping. [content] receives the row's index.
+ * to the new one instead of jumping. Layout is untouched — the motion is a pure
+ * graphicsLayer translation.
  */
 @Composable
 private fun <T> TopSection(
@@ -770,7 +777,7 @@ internal fun periodSubtitle(period: StatsPeriod): String = stringResource(
     when (period) {
         StatsPeriod.WEEK -> R.string.stats_subtitle_week
         StatsPeriod.MONTH -> R.string.stats_subtitle_month
-        StatsPeriod.THREE_MONTHS -> R.string.stats_subtitle_three_months
+        StatsPeriod.THREE_MONTHS -> R.string.stats_period_three_months
         StatsPeriod.SIX_MONTHS -> R.string.stats_subtitle_six_months
         StatsPeriod.YEAR -> R.string.stats_subtitle_year
         StatsPeriod.ALL_TIME -> R.string.stats_subtitle_all
