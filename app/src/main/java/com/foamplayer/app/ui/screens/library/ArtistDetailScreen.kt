@@ -112,9 +112,11 @@ fun ArtistDetailScreen(
 
     // Hero search: one query filters BOTH sections together. A track matches
     // when its title, artist or album name matches (typing an album name
-    // reveals its tracks); an album matches while a search bar is open — the
-    // artist's own inner search scrolls the bar to the screen top (see
-    // [CollectionSearchScrollToBarEffect]).
+    // reveals its tracks); an album matches when its name/artist matches or
+    // any of its tracks matched (typing a track title reveals its album).
+    // An empty query shows everything. While searching, the tracks section
+    // expands beyond the 5 top tracks to EVERY matching artist track. Clicking
+    // a track closes the search session (see the row's onClick below).
     val searchState = rememberCollectionSearchState()
     val searchActive = searchState.open && searchState.query.isNotBlank()
     val searchSource = if (searchActive) tracks else topTracks
@@ -312,6 +314,11 @@ fun ArtistDetailScreen(
                     TrackListItem(
                         track = track,
                         onClick = {
+                            // The clicked track settles the search session: the bar
+                            // closes (query cleared, keyboard hidden) as playback
+                            // starts, while the queue still hands over the search
+                            // context (the artist's full track list, indexed from it).
+                            searchState.close()
                             val index = tracks.indexOfFirst { it.id == track.id }
                             if (index >= 0) onTrackClick(tracks, index)
                         },

@@ -46,6 +46,7 @@ import androidx.compose.material.ripple
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.State
@@ -183,10 +184,18 @@ class CollectionSearchState {
         openRequest++
     }
 
-    /** Closes the search bar and clears the query, so reopening starts unfiltered. */
+    /**
+     * Closes the search bar. The query is deliberately NOT cleared here: at
+     * this instant the field is still focused and composed, and mutating a
+     * focused editable's text restarts its IME connection, which briefly
+     * re-shows the keyboard a frame after the hide request went out (the
+     * hide -> show -> hide flicker). The query is cleared instead when the
+     * field leaves composition at the end of the bar's exit (see
+     * [CollectionHeroSearchBar]); until then [matches] already ignores it via
+     * the closed-[open] short-circuit, so the rows restore immediately.
+     */
     fun close() {
         open = false
-        query = ""
     }
 
     /** Matches a case-insensitive substring anywhere in the given field. */
@@ -1106,8 +1115,7 @@ private fun CollectionHeroShuffleButton(
  * rest, a close cross while the search bar is open. Tapping opens the bar (the
  * bar focuses its own field on entry, and the host scrolls it up to the screen
  * top — see [CollectionSearchScrollToBarEffect]); tapping the cross closes it
- * and clears the query (the keyboard goes down with it — see
- * [CollectionHeroSearchBar]).
+ * (the query clears as the bar collapses — see [CollectionHeroSearchBar]).
  */
 @Composable
 private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
@@ -1159,6 +1167,11 @@ private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
  *   itself stays open and the field can be re-tapped to bring the keyboard
  *   back. Guarded by [keyboardShownThisOpen] so the clear never races the
  *   open flow's own focus request while the keyboard is still coming up.
+ * - The QUERY is cleared only when the field leaves composition (exit done):
+ *   [CollectionSearchState.close] deliberately leaves it — resetting a focused
+ *   editable's text restarts its IME connection, which re-shows the keyboard
+ *   for a frame right after the hide request went out (the hide -> show ->
+ *   hide flicker on track taps).
  */
 @Composable
 private fun CollectionHeroSearchBar(searchState: CollectionSearchState?) {
@@ -1194,6 +1207,13 @@ private fun CollectionHeroSearchBar(searchState: CollectionSearchState?) {
         exit = fadeOut() + shrinkVertically()
     ) {
         val focusRequester = remember { FocusRequester() }
+        // The query is cleared HERE — when the field is gone from composition —
+        // and not in close(): resetting a focused editable's text restarts its
+        // IME connection, which briefly re-shows the keyboard after the hide
+        // request (see the doc above).
+        DisposableEffect(Unit) {
+            onDispose { searchState.query = "" }
+        }
         LaunchedEffect(Unit) { focusRequester.requestFocus() }
         Row(
             modifier = Modifier

@@ -312,6 +312,20 @@ fun TrackListScreen(
         tracks.filter { searchState.matches(it.title, it.artist) }
     }
 
+    // Track taps: clicking a row settles the search session — the bar closes
+    // (query cleared, keyboard hidden) as playback starts. The click lambda
+    // captures the PRE-close [shownTracks] instance, so the queue handed to
+    // [onTrackClick] is exactly the filtered list the user saw on screen.
+    val onRowClick: (Int) -> Unit = if (editMode) {
+        // Taps must not start playback while editing.
+        { _ -> }
+    } else {
+        { index ->
+            searchState.close()
+            onTrackClick(shownTracks, index)
+        }
+    }
+
     // Dismiss-to-origin-collection: bring the playing track's row to the vertical
     // middle of the screen (clamped to the list's bounds) BEFORE the row is allowed
     // to pair with the player's artwork -- see [TrackCenterRequest] for why the
@@ -502,12 +516,7 @@ fun TrackListScreen(
                         ) {
                             TrackListItem(
                                 track = track,
-                                onClick = if (editMode) {
-                                    // Taps must not start playback while editing.
-                                    ({ })
-                                } else {
-                                    { onTrackClick(shownTracks, index) }
-                                },
+                                onClick = { onRowClick(index) },
                                 onLongClick = if (editMode) {
                                     // The track actions modal stays closed while editing.
                                     ({ })
@@ -640,12 +649,7 @@ fun TrackListScreen(
                         ) {
                             TrackListItem(
                                 track = track,
-                                onClick = if (editMode) {
-                                    // Taps must not start playback while editing.
-                                    ({ })
-                                } else {
-                                    { onTrackClick(shownTracks, index) }
-                                },
+                                onClick = { onRowClick(index) },
                                 onLongClick = if (editMode) {
                                     // The track actions modal stays closed while editing.
                                     ({ })
