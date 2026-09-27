@@ -10,6 +10,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
+/** Hilt bindings for the Spotify resolvers. */
 @Module
 @InstallIn(SingletonComponent::class)
 object SpotifyModule {

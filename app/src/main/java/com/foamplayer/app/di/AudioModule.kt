@@ -12,6 +12,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
+/** Hilt bindings for the audio system: manager, device tracking and bit-perfect evaluation. */
 @Module
 @InstallIn(SingletonComponent::class)
 object AudioModule {

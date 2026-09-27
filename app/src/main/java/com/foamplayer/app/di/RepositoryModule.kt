@@ -21,6 +21,7 @@ import javax.inject.Singleton
 
 private val Context.settingsDataStore by preferencesDataStore(name = "foam_settings")
 
+/** Provides repositories, the library scanner and the settings DataStore. */
 @Module
 @InstallIn(SingletonComponent::class)
 object RepositoryModule {
