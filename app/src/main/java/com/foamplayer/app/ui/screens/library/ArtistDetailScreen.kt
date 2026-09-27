@@ -121,12 +121,24 @@ fun ArtistDetailScreen(
     val searchState = rememberCollectionSearchState()
     val searchActive = searchState.open && searchState.query.isNotBlank()
     val searchSource = if (searchActive) tracks else topTracks
-    val shownTopTracks = searchSource.filter { searchState.matches(it.title, it.artist, it.album) }
-    val titleMatchedAlbumNames = tracks
-        .filter { searchState.matches(it.title, it.artist) }
-        .mapTo(mutableSetOf()) { it.album }
-    val shownAlbums = albums.filter {
-        searchState.matches(it.album, it.artist) || it.album in titleMatchedAlbumNames
+    // The hero accent is read from the palette's snapshot map below, so any
+    // palette write (any artwork color extracted anywhere in the app) used to
+    // invalidate THIS composition and re-run these filter/set passes over the
+    // full track list. Remembering each pass against its actual inputs confines
+    // the work to search keystrokes and data emissions instead of every
+    // unrelated recomposition of the screen.
+    val shownTopTracks = remember(searchSource, searchState.open, searchState.query) {
+        searchSource.filter { searchState.matches(it.title, it.artist, it.album) }
+    }
+    val titleMatchedAlbumNames = remember(tracks, searchState.open, searchState.query) {
+        tracks
+            .filter { searchState.matches(it.title, it.artist) }
+            .mapTo(mutableSetOf()) { it.album }
+    }
+    val shownAlbums = remember(albums, titleMatchedAlbumNames, searchState.open, searchState.query) {
+        albums.filter {
+            searchState.matches(it.album, it.artist) || it.album in titleMatchedAlbumNames
+        }
     }
 
     // The first track in alphabetical order is the fallback artwork source.

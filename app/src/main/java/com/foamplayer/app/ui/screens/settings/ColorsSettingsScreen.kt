@@ -19,8 +19,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,34 +36,56 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 
-@Composable
-fun ColorsSettingsScreen(
-    onBack: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel()
-) {
-    val settings by viewModel.settings.collectAsState()
-    val isAutomaticColorEnabled = settings.automaticColorEnabled
-    val accentColorInt = settings.accentColor
-    val accentColor = Color(accentColorInt)
-
-    val palette = listOf(
+/**
+ * The accent palette, constant for the lifetime of the process. Hoisted out of
+ * [ColorsSettingsScreen] so screen recompositions (toggle flips, parent
+ * recompositions) never rebuild the palette or re-run the row chunking -- the
+ * previous inline `listOf(...)` + `chunked(4)` allocated a fresh 16-element
+ * list plus 16 boxed [Color]s and a 4-element chunk list on every pass.
+ */
+private val AccentPalette: List<List<Color>> = listOf(
+    listOf(
         Color(0xFFFF5252), // Default Red
         Color(0xFFFF4081), // Pink
         Color(0xFFE040FB), // Purple
-        Color(0xFF7C4DFF), // Deep Purple
+        Color(0xFF7C4DFF)  // Deep Purple
+    ),
+    listOf(
         Color(0xFF536DFE), // Indigo
         Color(0xFF448AFF), // Blue
         Color(0xFF40C4FF), // Light Blue
-        Color(0xFF18FFFF), // Cyan
+        Color(0xFF18FFFF)  // Cyan
+    ),
+    listOf(
         Color(0xFF64FFDA), // Teal
         Color(0xFF69F0AE), // Green
         Color(0xFFB2FF59), // Light Green
-        Color(0xFFEEFF41), // Lime
+        Color(0xFFEEFF41)  // Lime
+    ),
+    listOf(
         Color(0xFFFFFF00), // Yellow
         Color(0xFFFFD740), // Amber
         Color(0xFFFFAB40), // Orange
         Color(0xFFFF6E40)  // Deep Orange
     )
+)
+
+@Composable
+fun ColorsSettingsScreen(
+    onBack: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel()
+) {
+    // Narrow projections: reading only the two settings values this screen
+    // renders through derivedStateOf keeps unrelated AppSettings emissions
+    // (language, nav-bar edits, marquee mode, ...) from recomposing this
+    // screen -- collectAsState of the whole settings object invalidated the
+    // entire body on every unrelated settings change.
+    val isAutomaticColorEnabled by remember {
+        derivedStateOf { viewModel.settings.value.automaticColorEnabled }
+    }
+    val accentColorInt by remember {
+        derivedStateOf { viewModel.settings.value.accentColor }
+    }
 
     Column(
         modifier = Modifier
@@ -112,37 +135,19 @@ fun ColorsSettingsScreen(
                             .background(FoamTheme.colors.surface)
                             .padding(FoamDimens.paddingMedium)
                     ) {
-                        val chunks = palette.chunked(4)
                         Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingStandard)) {
-                            chunks.forEach { rowColors ->
+                            AccentPalette.forEach { rowColors ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     rowColors.forEach { color ->
                                         val isSelected = color.toArgb() == accentColorInt
-                                        Box(
-                                            modifier = Modifier
-                                                .size(64.dp)
-                                                .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                                .background(color)
-                                                .border(
-                                                    width = if (isSelected) 3.dp else 0.dp,
-                                                    color = if (isSelected) Color.White else Color.Transparent,
-                                                    shape = RoundedCornerShape(FoamDimens.buttonRounding)
-                                                )
-                                                .clickable { viewModel.setAccentColor(color.toArgb()) },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (isSelected) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(FoamDimens.paddingSmall)
-                                                        .clip(CircleShape)
-                                                        .background(Color.White)
-                                                )
-                                            }
-                                        }
+                                        Swatch(
+                                            color = color,
+                                            isSelected = isSelected,
+                                            onSelect = { viewModel.setAccentColor(color.toArgb()) }
+                                        )
                                     }
                                     // Fill empty slots if row is not full
                                     if (rowColors.size < 4) {
@@ -157,6 +162,42 @@ fun ColorsSettingsScreen(
                     Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
                 }
             }
+        }
+    }
+}
+
+/**
+ * One selectable palette swatch, its own composable scope: a tap only
+ * recomposes the two swatches whose selection state actually flips (this one
+ * and the previously selected one), not the surrounding card / LazyColumn
+ * item or the remaining 14 swatches.
+ */
+@Composable
+private fun Swatch(
+    color: Color,
+    isSelected: Boolean,
+    onSelect: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(64.dp)
+            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+            .background(color)
+            .border(
+                width = if ( isSelected) 3.dp else 0.dp,
+                color = if (isSelected) Color.White else Color.Transparent,
+                shape = RoundedCornerShape(FoamDimens.buttonRounding)
+            )
+            .clickable(onClick = onSelect),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .size(FoamDimens.paddingSmall)
+                    .clip(CircleShape)
+                    .background(Color.White)
+            )
         }
     }
 }
