@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
@@ -49,7 +48,6 @@ private fun Modifier.listRowInset(density: MediaDensity): Modifier =
  * "See all" page behind one of the stats overview's ranked cards (top tracks /
  * artists / albums): the period's full ranked list on the app's standard media
  * scaffolds, so rows behave exactly like the browse and Home see-all pages —
- * tap plays the song / opens the album or artist, long-press opens the actions
  * tap plays the song / opens the album or artist, long-press opens the actions
  * modal, and density/sort/organisation work per view. The period is fixed by
  * the route; top tracks are uncapped.
@@ -167,7 +165,9 @@ fun StatsSeeAllScreen(
                             sharedElementPrefix = "artist",
                             immersiveFlightHero = LocalCollectionHeroLayoutLookup
                                 .current(CollectionHeroTarget.Artist)
-                                .isImmersive
+                                .isImmersive,
+                            // Artist rows render fully round on every screen.
+                            fullyRoundedArtwork = true
                         )
                     }
                 }

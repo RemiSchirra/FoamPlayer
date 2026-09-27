@@ -214,7 +214,9 @@ fun ArtistsBrowseScreen(
                     sharedElementPrefix = "artist",
                     immersiveFlightHero = LocalCollectionHeroLayoutLookup
                         .current(CollectionHeroTarget.Artist)
-                        .isImmersive
+                        .isImmersive,
+                    // Artist rows render fully round on every screen.
+                    fullyRoundedArtwork = true
                 )
             }
         }
@@ -736,7 +738,9 @@ fun CollectionArtistsScreen(
                     sharedElementPrefix = "artist",
                     immersiveFlightHero = LocalCollectionHeroLayoutLookup
                         .current(CollectionHeroTarget.Artist)
-                        .isImmersive
+                        .isImmersive,
+                    // Artist rows render fully round on every screen.
+                    fullyRoundedArtwork = true
                 )
             }
         }

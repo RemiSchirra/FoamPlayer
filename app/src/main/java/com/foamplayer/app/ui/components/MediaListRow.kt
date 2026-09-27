@@ -91,6 +91,14 @@ fun AlbumArtShape(): Shape = RoundedCornerShape(
 )
 
 /**
+ * Corner percentage (0f..50f) of an artwork's own size that a collection
+ * flight morphs from/to: the theme's album rounding, or 50f for artwork
+ * rendered fully round (artists), so the flight lands exactly on the row's
+ * own rest look.
+ */
+internal const val AlbumArtFlightFullyRoundedPercent = 50f
+
+/**
  * Fixed decode size (px) for album art shared across the app. Coil's
  * memory-cache key includes the requested size, so using the same value for
  * the small list image and the big header image makes switching between them
@@ -127,9 +135,11 @@ val AlbumArtBoundsTransform = BoundsTransform { _, _ ->
 }
 
 /**
- * Animated variant of [AlbumArtShape]: the theme's percentage corner radius
- * scaled by [fraction] (1f = the row's fully rounded rest look, 0f = the
- * immersive hero's square look). Used both as a collection flight's
+ * Animated flight variant of a percentage-based artwork shape: the corner
+ * radius is [restPercent] of the artwork's own size (the theme's album
+ * rounding, or 50f — a full circle — for fully round artwork like artist
+ * images), scaled by [fraction]: 1f = the source row's rounded rest look,
+ * 0f = the immersive hero's square look. Used both as a collection flight's
  * [androidx.compose.animation.SharedTransitionScope.OverlayClip] and as the
  * in-place graphicsLayer shape, so the drawn side of a collection
  * shared-element flight keeps its corners riding the transition instead of
@@ -138,11 +148,11 @@ val AlbumArtBoundsTransform = BoundsTransform { _, _ ->
  * involved.
  */
 internal class AlbumArtFlightShape(
-    private val rounding: Float,
+    private val restPercent: Float,
     private val fraction: () -> Float
 ) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        val percent = (rounding * 50f * fraction().coerceIn(0f, 1f)).coerceIn(0f, 50f)
+        val percent = (restPercent * fraction().coerceIn(0f, 1f)).coerceIn(0f, 50f)
         val radius = CornerRadius(size.width * percent / 100f, size.height * percent / 100f)
         return Outline.Rounded(
             RoundRect(
@@ -196,13 +206,15 @@ internal fun rememberCollectionFlightProgress(
  * The flight-time look of a collection row that is the DRAWN side of a
  * shared-element flight with an immersive collection hero (i.e. the row the
  * hero morphs into when the detail screen closes). During the transition the
- * shared-element overlay renders ONLY the becoming-visible side's own content
- * and overlay clip -- so this side must carry the whole morph itself, exactly
- * like [playerFlightArtwork] does for the player's dismiss flight:
+ * shared-element overlay renders ONLY this row's own content, which must then
+ * carry the whole morph itself, exactly like [playerFlightArtwork] does for
+ * the player's dismiss flight:
  *
- * - the corner radius rides the flight from the hero's square rest look to the
- *   row's own percentage radius (the same convention as [AlbumArtShape], so it
- *   lands exactly on the row's rest look),
+ * - the corner radius rides the flight from the hero's square rest look to
+ *   the row's own percentage radius ([fullyRounded] rows — artists — rest on
+ *   a full circle, the same convention as [AlbumArtFlightShape]'s
+ *   [AlbumArtFlightFullyRoundedPercent], so it lands exactly on the row's
+ *   rest look),
  * - a bottom fade mirrors the hero's (see CollectionHero's immersive artwork)
  *   at full strength at flight start and eases out as the art lands.
  *
@@ -213,12 +225,19 @@ internal fun rememberCollectionFlightProgress(
  * Every frame is draw-only (graphicsLayer + drawWithContent reads).
  */
 @Composable
-internal fun Modifier.collectionFlightArtwork(progress: State<Float>): Modifier {
-    val rounding = FoamTheme.shapes.miniPlayerRounding
+internal fun Modifier.collectionFlightArtwork(
+    progress: State<Float>,
+    fullyRounded: Boolean = false
+): Modifier {
+    val restPercent = if (fullyRounded) {
+        AlbumArtFlightFullyRoundedPercent
+    } else {
+        FoamTheme.shapes.miniPlayerRounding * 50f
+    }
     return this
         .graphicsLayer {
             val p = progress.value
-            shape = AlbumArtFlightShape(rounding) { p }
+            shape = AlbumArtFlightShape(restPercent) { p }
             clip = true
             // The bottom fade blends with DstIn; isolate it to this layer so
             // it never erases what sits behind the artwork.
@@ -248,6 +267,10 @@ internal fun Modifier.collectionFlightArtwork(progress: State<Float>): Modifier 
  * [collectionFlightArtwork]) -- so a closing flight departs from the hero's
  * square, faded look and lands on the row's rounded, unfaded one instead of
  * popping straight to the row look on the first frame.
+ *
+ * [fullyRounded] mirrors the row's fully round (circular) rest shape
+ * (artists) into the flight itself: without it the morph would land on the
+ * album's percentage rounding and pop to the circle at flight end.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -257,7 +280,8 @@ internal fun Modifier.collectionRowFlightArtwork(
     animatedVisibilityScope: AnimatedVisibilityScope?,
     enabled: Boolean,
     restShape: Shape,
-    immersiveFlightHero: Boolean
+    immersiveFlightHero: Boolean,
+    fullyRounded: Boolean = false
 ): Modifier {
     if (!enabled || sharedTransitionScope == null || animatedVisibilityScope == null) {
         return this.clip(restShape)
@@ -274,6 +298,11 @@ internal fun Modifier.collectionRowFlightArtwork(
             )
             .clip(restShape)
     }
+    val restPercent = if (fullyRounded) {
+        AlbumArtFlightFullyRoundedPercent
+    } else {
+        FoamTheme.shapes.miniPlayerRounding * 50f
+    }
     val flightProgress = rememberCollectionFlightProgress(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
@@ -284,10 +313,10 @@ internal fun Modifier.collectionRowFlightArtwork(
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             enabled = true,
-            overlayClip = AlbumArtFlightShape(FoamTheme.shapes.miniPlayerRounding) { flightProgress.value },
+            overlayClip = AlbumArtFlightShape(restPercent) { flightProgress.value },
             boundsTransform = AlbumArtBoundsTransform
         )
-        .collectionFlightArtwork(flightProgress)
+        .collectionFlightArtwork(flightProgress, fullyRounded)
 }
 
 /** Size of the artwork thumbnail at the leading edge of a list row. */
@@ -394,8 +423,10 @@ internal fun listRowArtCornerRadius(density: MediaDensity = MediaDensity.ROW_NOR
  *
  * [artworkModifier] is applied to the artwork box right after its size (e.g.
  * the shared-element modifier, clip and background) and [artworkContent]
- * fills it. The artwork casts a rest drop shadow at [artworkElevation]
- * (0.dp opts out for non-album shapes or art-less rows). [rowModifier] is
+ * fills it. The artwork casts a rest drop shadow at [artworkElevation] with
+ * [artworkShape] (circular for fully round artwork, so the shadow follows the
+ * rest look instead of peeking out behind its corners); 0.dp
+ * [artworkElevation] opts out of the shadow entirely. [rowModifier] is
  * applied to the row before the highlight clip
  * (e.g. swipe-to-dismiss translation and width measurement).
  * [highlightBackground] is drawn behind the row's content, clipped to the
@@ -418,6 +449,7 @@ internal fun MediaListRow(
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     tertiaryText: String? = null,
     artworkElevation: Dp = MediaItemArtElevation,
+    artworkShape: Shape = AlbumArtShape(),
     highlightBackground: Color = Color.Transparent,
     trailingContent: @Composable RowScope.() -> Unit = {}
 ) {
@@ -445,7 +477,7 @@ internal fun MediaListRow(
             Box(
                 modifier = Modifier
                     .size(artSize)
-                    .shadow(elevation = artworkElevation, shape = AlbumArtShape())
+                    .shadow(elevation = artworkElevation, shape = artworkShape)
                     .then(artworkModifier),
                 contentAlignment = Alignment.Center
             ) {

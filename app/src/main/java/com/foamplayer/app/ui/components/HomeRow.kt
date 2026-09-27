@@ -55,7 +55,7 @@ private val HomeRowEdgePadding = 16.dp
 /** Gap between two cards of a Home row's pager. */
 private val HomeRowCardSpacing = 8.dp
 
-/** Gap between a Home row and its neighbor sections. */
+/** Gap between a row and its neighbor sections. */
 val HomeRowSpacing = 40.dp
 
 /** Width of the large cards in a Home row's pager (albums, playlists). */
@@ -199,7 +199,11 @@ fun HomeRowCard(
             animatedVisibilityScope = animatedVisibilityScope,
             enabled = sharedArtKey != null,
             restShape = artShape,
-            immersiveFlightHero = true
+            immersiveFlightHero = true,
+            // Fully round cards (artists) land their flight morph on the circle
+            // too, so the radius never pops between the circle and the album
+            // rounding at flight end.
+            fullyRounded = round
         )
     } else {
         Modifier.rowSharedArtwork(

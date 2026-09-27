@@ -374,7 +374,9 @@ fun FavoriteArtistsSeeAllScreen(
                     sharedElementPrefix = "artist",
                     immersiveFlightHero = LocalCollectionHeroLayoutLookup
                         .current(CollectionHeroTarget.Artist)
-                        .isImmersive
+                        .isImmersive,
+                    // Artist rows render fully round on every screen.
+                    fullyRoundedArtwork = true
                 )
             }
         }

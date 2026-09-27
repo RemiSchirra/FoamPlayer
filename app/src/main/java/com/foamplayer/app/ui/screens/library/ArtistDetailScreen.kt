@@ -168,7 +168,10 @@ fun ArtistDetailScreen(
     val navFlightFraction =
         rememberCollectionHeroFlightFraction(sharedTransitionScope, animatedVisibilityScope)
     val containerFlightFraction =
-        rememberCollectionHeroFlightFraction(sharedTransitionScope, playerTransitionVisibilityScope)
+        rememberCollectionHeroFlightFraction(
+            sharedTransitionScope,
+            playerTransitionVisibilityScope
+        )
     val transitionAlpha: () -> Float = {
         (1f - navFlightFraction.value) * (1f - containerFlightFraction.value)
     }
@@ -235,7 +238,11 @@ fun ArtistDetailScreen(
                 animatedVisibilityScope = animatedVisibilityScope,
                 sharedElementKey = artistName,
                 sharedElementPrefix = "artist",
-                modifier = Modifier.align(Alignment.TopStart)
+                modifier = Modifier.align(Alignment.TopStart),
+                // The artist image is fully round at its sources; the immersive
+                // hero morphs that circle to its own square (radius 0) look
+                // during the flight.
+                fullyRoundedArtwork = true
             )
         }
 
@@ -424,6 +431,9 @@ fun ArtistDetailScreen(
  * The artwork and title are the shared-element landing points of the clicked
  * artist card's flight ("artist-art-*" / "artist-title-*", see HomeScreen):
  * heroes always register their keys, the source tags only the clicked card.
+ * The artwork renders fully round (matching the artist rows' circular rest
+ * look) on compact/normal layouts; the immersive layouts keep their square,
+ * faded hero and morph the circle into it during the flight.
  */
 @Composable
 private fun ArtistHero(
@@ -478,7 +488,10 @@ private fun ArtistHero(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         sharedElementKey = sharedElementKey,
-        sharedElementPrefix = "artist"
+        sharedElementPrefix = "artist",
+        // Non-immersive artist heroes rest on the same full circle as the
+        // source rows; the flight keeps circle -> circle (no radius pop).
+        fullyRoundedArtwork = true
     )
 }
 

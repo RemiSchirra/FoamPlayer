@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
@@ -44,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -446,6 +448,12 @@ private fun CollectionListHero(
  * rounded, unfaded one (see [collectionRowFlightArtwork]). The hosts resolve
  * the flag from the destination hero's layout via
  * [LocalCollectionHeroLayoutLookup].
+ *
+ * [fullyRoundedArtwork] renders the artwork as a FULL circle (artist rows)
+ * everywhere: the rest clip, the rest shadow shape and the flight morph's
+ * landing radius all follow the circle, so a round source row lands on a round
+ * hero (or morphs to the immersive hero's square with the radius riding the
+ * flight) instead of popping between a circle and the album rounding.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -466,7 +474,8 @@ fun CollectionListItem(
     // Flight key namespace: album rows fly to/from album heroes, artist rows
     // (images resolved from Spotify) to/from the artist page's hero.
     sharedElementPrefix: String = "album",
-    immersiveFlightHero: Boolean = false
+    immersiveFlightHero: Boolean = false,
+    fullyRoundedArtwork: Boolean = false
 ) {
     // Long-press opens the collection actions modal when FoamNavHost provides
     // one at the root; an explicit [onLongClick] always wins over that default.
@@ -493,9 +502,10 @@ fun CollectionListItem(
 
     // The percentage-based art shape equals the row radius at any artwork size
     // (half the size times the rounding percentage), so rows and grids — and
-    // both ends of a shared-element transition — round identically.
+    // both ends of a shared-element transition — round identically. Artists
+    // render fully round instead.
     val elementKey = sharedElementKey
-    val artShape = AlbumArtShape()
+    val artShape: Shape = if (fullyRoundedArtwork) CircleShape else AlbumArtShape()
     val highlightBackground = activeRowHighlight(active, imageUrl)
 
     val sharedArtModifier = Modifier
@@ -505,7 +515,8 @@ fun CollectionListItem(
             animatedVisibilityScope = animatedVisibilityScope,
             enabled = elementKey != null,
             restShape = artShape,
-            immersiveFlightHero = immersiveFlightHero
+            immersiveFlightHero = immersiveFlightHero,
+            fullyRounded = fullyRoundedArtwork
         )
         .background(FoamTheme.colors.surfaceVariant)
 
@@ -535,6 +546,7 @@ fun CollectionListItem(
             onClick = onClick,
             onLongClick = resolvedOnLongClick,
             artworkModifier = sharedArtModifier,
+            artworkShape = artShape,
             artworkContent = {
                 CollectionArtwork(
                     title,
@@ -558,6 +570,7 @@ fun CollectionListItem(
         onClick = onClick,
         onLongClick = resolvedOnLongClick,
         artworkModifier = sharedArtModifier,
+        artworkShape = artShape,
         artworkContent = {
             CollectionArtwork(
                 title,

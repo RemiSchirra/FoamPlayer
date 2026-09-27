@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -39,10 +40,12 @@ val MediaGridCellPadding = 6.dp
  * aspect ratio (shared-element modifier, clip, background) and
  * [artworkContent] fills it; [artworkOverlay] draws above the artwork,
  * aligned within it (score badges, track numbers, ...). The artwork casts a
- * rest drop shadow at [artworkElevation] (see [MediaItemArtElevation]).
- * [highlightBackground] is drawn behind the cell's content, clipped to the
- * exact same rounded shape as the press ripple (used for the active-track
- * highlight).
+ * rest drop shadow at [artworkElevation] with [artworkShape] (circular for
+ * fully round artwork, so the shadow follows the rest look instead of peeking
+ * out behind its corners); 0.dp [artworkElevation] opts out of the shadow
+ * entirely. [highlightBackground] is drawn behind the cell's content, clipped
+ * to the exact same rounded shape as the press ripple (used for the
+ * active-track highlight).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -57,6 +60,7 @@ internal fun MediaGridCell(
     titleModifier: Modifier = Modifier,
     subtitleModifier: Modifier = Modifier,
     artworkElevation: Dp = MediaItemArtElevation,
+    artworkShape: Shape = AlbumArtShape(),
     highlightBackground: Color = Color.Transparent,
     artworkOverlay: @Composable BoxScope.() -> Unit = {}
 ) {
@@ -79,7 +83,7 @@ internal fun MediaGridCell(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .shadow(elevation = artworkElevation, shape = AlbumArtShape())
+                .shadow(elevation = artworkElevation, shape = artworkShape)
                 .then(artworkModifier),
             contentAlignment = Alignment.Center
         ) {

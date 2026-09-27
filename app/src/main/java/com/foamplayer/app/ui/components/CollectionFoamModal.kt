@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
@@ -390,10 +391,17 @@ private fun CollectionModalHeader(
             .padding(FoamDimens.spacingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Artist images render fully round (matching every other artist
+        // surface); other collections keep the percentage-based album shape.
+        val headerArtShape = if (collection.kind == CollectionKind.Artist) {
+            CircleShape
+        } else {
+            RoundedCornerShape(albumArtCornerRadius(64.dp))
+        }
         Box(
             modifier = Modifier
                 .size(64.dp)
-                .clip(RoundedCornerShape(albumArtCornerRadius(64.dp)))
+                .clip(headerArtShape)
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {

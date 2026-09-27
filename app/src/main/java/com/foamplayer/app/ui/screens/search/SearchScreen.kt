@@ -490,7 +490,7 @@ fun SearchScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-            .padding(vertical = 8.dp),
+                                        .padding(vertical = 8.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     CircularProgressIndicator(
@@ -710,7 +710,10 @@ fun ArtistSearchResultItem(
                             restShape = CircleShape,
                             immersiveFlightHero = LocalCollectionHeroLayoutLookup
                                 .current(CollectionHeroTarget.Artist)
-                                .isImmersive
+                                .isImmersive,
+                            // The rest look is a full circle, so the flight morph
+                            // lands on the circle too instead of the album rounding.
+                            fullyRounded = true
                         )
                     } else base.clip(CircleShape)
                 }

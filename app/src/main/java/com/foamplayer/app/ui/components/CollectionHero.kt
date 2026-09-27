@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.SubcomposeLayout
@@ -509,7 +510,10 @@ fun CollectionHeroImmersiveHeader(
  * artwork's corner radius (theme percentage -> 0) and bottom fade (none ->
  * faded) animate across the shared-element transition, so the flight departs
  * from the source row's rounded, unfaded look and lands on the square, faded
- * hero. Compact and Normal keep the static theme shape and no fade.
+ * hero. [fullyRoundedArtwork] styles the source row's look as a full circle
+ * (artist images): compact/normal heroes then rest on that circle too, and the
+ * immersive flight morphs circle -> 0 radius instead of album rounding -> 0.
+ * Compact and Normal keep the static theme shape and no fade.
  *
  * NOTE on flight rendering: the shared-element overlay draws only the
  * becoming-visible side's own content and clip. On open that is this hero, so
@@ -529,6 +533,7 @@ fun CollectionHero(
     onPlayAllClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     imageIsEmbeddedArt: Boolean = true,
+    fullyRoundedArtwork: Boolean = false,
     icon: ImageVector? = null,
     searchState: CollectionSearchState? = null,
     onShuffleAllClick: (() -> Unit)? = null,
@@ -547,6 +552,7 @@ fun CollectionHero(
             statsText = statsText,
             imageUrl = imageUrl,
             imageIsEmbeddedArt = imageIsEmbeddedArt,
+            fullyRoundedArtwork = fullyRoundedArtwork,
             icon = icon,
             onPlayAllClick = onPlayAllClick,
             onShuffleAllClick = onShuffleAllClick,
@@ -564,6 +570,7 @@ fun CollectionHero(
             statsText = statsText,
             imageUrl = imageUrl,
             imageIsEmbeddedArt = imageIsEmbeddedArt,
+            fullyRoundedArtwork = fullyRoundedArtwork,
             icon = icon,
             onPlayAllClick = onPlayAllClick,
             onShuffleAllClick = onShuffleAllClick,
@@ -581,6 +588,7 @@ fun CollectionHero(
                 title = title,
                 imageUrl = imageUrl,
                 imageIsEmbeddedArt = imageIsEmbeddedArt,
+                fullyRoundedArtwork = fullyRoundedArtwork,
                 icon = icon,
                 accentColor = accentColor,
                 transitionAlpha = transitionAlpha,
@@ -602,6 +610,7 @@ private fun CollectionHeroCompact(
     statsText: String,
     imageUrl: String?,
     imageIsEmbeddedArt: Boolean,
+    fullyRoundedArtwork: Boolean,
     icon: ImageVector?,
     onPlayAllClick: (() -> Unit)?,
     onShuffleAllClick: (() -> Unit)?,
@@ -627,9 +636,10 @@ private fun CollectionHeroCompact(
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedElementKey = sharedElementKey,
                     sharedElementPrefix = sharedElementPrefix,
-                    flightFraction = null
+                    flightFraction = null,
+                    fullyRounded = fullyRoundedArtwork
                 )
-                .clip(AlbumArtShape())
+                .clip(heroArtworkShape(fullyRoundedArtwork))
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
@@ -690,6 +700,7 @@ private fun CollectionHeroNormal(
     statsText: String,
     imageUrl: String?,
     imageIsEmbeddedArt: Boolean,
+    fullyRoundedArtwork: Boolean,
     icon: ImageVector?,
     onPlayAllClick: (() -> Unit)?,
     onShuffleAllClick: (() -> Unit)?,
@@ -712,9 +723,10 @@ private fun CollectionHeroNormal(
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedElementKey = sharedElementKey,
                     sharedElementPrefix = sharedElementPrefix,
-                    flightFraction = null
+                    flightFraction = null,
+                    fullyRounded = fullyRoundedArtwork
                 )
-                .clip(AlbumArtShape())
+                .clip(heroArtworkShape(fullyRoundedArtwork))
                 .background(FoamTheme.colors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
@@ -780,6 +792,7 @@ private fun CollectionHeroImmersiveArtwork(
     title: String,
     imageUrl: String?,
     imageIsEmbeddedArt: Boolean,
+    fullyRoundedArtwork: Boolean,
     icon: ImageVector?,
     accentColor: Color,
     transitionAlpha: (() -> Float)?,
@@ -799,8 +812,14 @@ private fun CollectionHeroImmersiveArtwork(
         animatedVisibilityScope = animatedVisibilityScope
     )
     // Read in composition: FoamTheme.shapes is @Composable, so it cannot be
-    // touched inside the draw-phase graphicsLayer block below.
-    val flightRounding = FoamTheme.shapes.miniPlayerRounding
+    // touched inside the draw-phase graphicsLayer block below. Fully round
+    // artwork (artists) departs from a full circle instead of the album
+    // rounding, so the immersive flight morphs circle -> 0 (square hero).
+    val flightRestPercent = if (fullyRoundedArtwork) {
+        AlbumArtFlightFullyRoundedPercent
+    } else {
+        FoamTheme.shapes.miniPlayerRounding * 50f
+    }
 
     Box(
         modifier = modifier
@@ -823,7 +842,8 @@ private fun CollectionHeroImmersiveArtwork(
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedElementKey = sharedElementKey,
                     sharedElementPrefix = sharedElementPrefix,
-                    flightFraction = flightFraction
+                    flightFraction = flightFraction,
+                    fullyRounded = fullyRoundedArtwork
                 )
                 .graphicsLayer {
                     compositingStrategy = CompositingStrategy.Offscreen
@@ -833,7 +853,7 @@ private fun CollectionHeroImmersiveArtwork(
                     // one. The artwork must therefore carry the departing row's
                     // rounded corners ITSELF on every frame it renders in place,
                     // instead of flashing the settled square hero (radius 0).
-                    shape = AlbumArtFlightShape(flightRounding) { flightFraction.value }
+                    shape = AlbumArtFlightShape(flightRestPercent) { flightFraction.value }
                     clip = true
                 }
                 .drawWithContent {
@@ -877,6 +897,14 @@ private fun CollectionHeroImmersiveArtwork(
         )
     }
 }
+
+/**
+ * Static rest shape of a non-immersive hero's artwork: the theme's album
+ * rounding, or a full circle for fully round artwork (artists).
+ */
+@Composable
+private fun heroArtworkShape(fullyRounded: Boolean): Shape =
+    if (fullyRounded) CircleShape else AlbumArtShape()
 
 /**
  * The immersive overlay block's content: title/subtitle/stats and the optional
@@ -1356,15 +1384,22 @@ private fun Modifier.collectionHeroSharedArtwork(
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
     sharedElementPrefix: String,
-    flightFraction: State<Float>?
+    flightFraction: State<Float>?,
+    fullyRounded: Boolean = false
 ): Modifier {
     if (sharedTransitionScope == null || animatedVisibilityScope == null || sharedElementKey == null) {
         return this
     }
-    val overlayShape = if (flightFraction != null) {
-        AlbumArtFlightShape(FoamTheme.shapes.miniPlayerRounding) { flightFraction.value }
+    val restPercent = if (fullyRounded) {
+        AlbumArtFlightFullyRoundedPercent
     } else {
-        AlbumArtShape()
+        FoamTheme.shapes.miniPlayerRounding * 50f
+    }
+    val overlayShape = when {
+        flightFraction != null ->
+            AlbumArtFlightShape(restPercent) { flightFraction.value }
+        fullyRounded -> CircleShape
+        else -> AlbumArtShape()
     }
     return with(sharedTransitionScope) {
         this@collectionHeroSharedArtwork.sharedElement(
@@ -1465,7 +1500,7 @@ fun CollectionScrollTopBar(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
-                // The status-bar insets are already consumed by the nav root, so
+                // The status-bar insets are already consumed at the nav root, so
                 // a statusBarsPadding() here would be a no-op; pad by the raw
                 // measured inset instead so the title sits exactly on the same
                 // level as the screen's back/more buttons (16dp below it).
