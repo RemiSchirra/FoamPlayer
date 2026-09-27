@@ -306,10 +306,14 @@ fun TrackListScreen(
 
     // The drag display list only diverges from the DB list mid-drag; the search
     // filters whatever is currently displayed (never active in edit mode).
+    // rememberFilteredList keeps the incoming list identity while the hero's
+    // search bar is closed/blank — no O(n) filter pass (and no fresh list
+    // instance re-diffed into every visible row) on unrelated recompositions —
+    // and moves big lists' filtering off the main thread entirely.
     val shownTracks = if (editMode) {
         displayedTracks
     } else {
-        tracks.filter { searchState.matches(it.title, it.artist) }
+        rememberFilteredList(tracks, searchState) { searchState.matches(it.title, it.artist) }
     }
 
     // Track taps: clicking a row settles the search session — the bar closes

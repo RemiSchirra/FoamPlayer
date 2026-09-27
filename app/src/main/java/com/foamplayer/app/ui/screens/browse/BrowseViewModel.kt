@@ -141,11 +141,15 @@ class BrowseViewModel @Inject constructor(
         genreTracksJob?.cancel()
         genreTracksJob = viewModelScope.launch {
             // Seed from the process-wide snapshot so revisits render instantly;
-            // the live query then corrects/updates the list.
+            // the live query then corrects/updates the list. The snapshot
+            // filter+sort is an O(n) full-library pass — keep it off the main
+            // dispatcher or the destination screen's first frame waits on it.
             if (_genreTracks.value.isEmpty()) {
-                _genreTracks.value = trackRepository.allTracksSnapshot().filter { track ->
-                    track.genre?.split("; ")?.map { it.trim() }?.contains(genre) == true
-                }.sortedWith(compareBy { it.title })
+                _genreTracks.value = withContext(Dispatchers.Default) {
+                    trackRepository.allTracksSnapshot().filter { track ->
+                        track.genre?.split("; ")?.map { it.trim() }?.contains(genre) == true
+                    }.sortedWith(compareBy { it.title })
+                }
             }
             trackRepository.getTracksByGenre(genre).collect { _genreTracks.value = it }
         }
@@ -155,9 +159,18 @@ class BrowseViewModel @Inject constructor(
         yearTracksJob?.cancel()
         yearTracksJob = viewModelScope.launch {
             if (_yearTracks.value.isEmpty()) {
-                _yearTracks.value = trackRepository.allTracksSnapshot()
-                    .filter { it.year == year }
-                    .sortedWith(compareBy({ it.album }, { it.discNumber }, { it.trackNumber }, { it.title }))
+                _yearTracks.value = withContext(Dispatchers.Default) {
+                    trackRepository.allTracksSnapshot()
+                        .filter { it.year == year }
+                        .sortedWith(
+                            compareBy(
+                                { it.album },
+                                { it.discNumber },
+                                { it.trackNumber },
+                                { it.title }
+                            )
+                        )
+                }
             }
             trackRepository.getTracksByYear(year).collect { _yearTracks.value = it }
         }

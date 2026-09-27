@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -154,5 +155,48 @@ fun <T> rememberSortedList(
     return sortedList
 }
 
+/**
+ * The list's displayed rows under a collection hero's live item search (see
+ * [CollectionSearchState]): the incoming list unchanged while the bar is
+ * closed or the query is blank (stable identity — play/pause flips, drag
+ * swaps and active-track changes never re-run the O(n) filter), the
+ * query-matched subset while the search is actually narrowing the list.
+ *
+ * Big lists filter on [Dispatchers.Default], mirroring [rememberSortedList]:
+ * the first composition after an open/keystroke returns the previous result
+ * immediately — the frame that opens the screen or accepts a keystroke never
+ * waits on an O(n) pass — and the matched subset replaces it a frame or two
+ * later. Small lists filter inline inside remember, keeping a row tap's
+ * captured queue exactly equal to the rows the user sees.
+ */
+@Composable
+fun <T> rememberFilteredList(
+    items: List<T>,
+    searchState: CollectionSearchState,
+    matches: (T) -> Boolean
+): List<T> {
+    // Tracked snapshot reads: recompose when the bar opens/closes or the
+    // query text changes; the item pass itself runs inside remember/effect.
+    val active = searchState.open && searchState.query.isNotBlank()
+    if (!active) return items
+
+    val query = searchState.query
+    val latestMatches by rememberUpdatedState(matches)
+    if (items.size < AsyncFilterThreshold) {
+        return remember(items, query) { items.filter(latestMatches) }
+    }
+
+    var filteredList by remember { mutableStateOf(items) }
+    LaunchedEffect(items, query) {
+        filteredList = withContext(Dispatchers.Default) {
+            items.filter(latestMatches)
+        }
+    }
+    return filteredList
+}
+
 /** Sorts up to this many elements directly inside the sort effect (see [rememberSortedList]). */
 private const val AsyncSortThreshold = 200
+
+/** Filters up to this many elements inline inside remember (see [rememberFilteredList]). */
+private const val AsyncFilterThreshold = 200

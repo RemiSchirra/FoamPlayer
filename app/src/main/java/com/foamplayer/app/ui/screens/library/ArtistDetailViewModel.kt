@@ -7,9 +7,11 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.ArtistImageStore
 import com.foamplayer.app.data.repository.TrackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -40,10 +42,13 @@ class ArtistDetailViewModel @Inject constructor(
         viewModelScope.launch {
             // Seed from the process-wide snapshot so revisits render on the
             // first frame; the live query then corrects/updates the list.
+            // Full-library grouping/sorting is a heavy O(n log n) pass that
+            // would otherwise run on the main dispatcher and stall the
+            // destination screen's first frame — run it off-main.
             val credited = repository.allTracksSnapshot()
                 .filter { it.artist == artistName || it.albumArtist == artistName }
-            if (_albums.value.isEmpty()) {
-                _albums.value = credited
+            val seededAlbums = withContext(Dispatchers.Default) {
+                credited
                     .groupBy { it.album }
                     .map { (album, tracks) ->
                         AlbumSearchResult(
@@ -54,9 +59,13 @@ class ArtistDetailViewModel @Inject constructor(
                     }
                     .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.album })
             }
+            val seededTracks = withContext(Dispatchers.Default) {
+                credited.sortedWith(compareBy { it.title })
+            }
+            if (_albums.value.isEmpty()) _albums.value = seededAlbums
             if (_tracks.value.isEmpty()) {
-                _tracks.value = credited.sortedWith(compareBy { it.title })
-                _topTracks.value = computeTopTracks(_tracks.value)
+                _tracks.value = seededTracks
+                _topTracks.value = computeTopTracks(seededTracks)
             }
             repository.getAlbumsByArtist(artistName).collect { list ->
                 _albums.value = list

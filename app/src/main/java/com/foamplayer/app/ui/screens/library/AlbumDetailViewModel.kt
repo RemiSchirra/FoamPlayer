@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -23,9 +24,17 @@ class AlbumDetailViewModel @Inject constructor(
         viewModelScope.launch {
             // Seed from the process-wide tracks snapshot so revisits render on
             // the first frame; the live query then corrects/updates the list.
-            val seeded = repository.allTracksSnapshot()
-                .filter { it.album == albumName }
-                .sortedWith(compareBy({ it.discNumber }, { it.trackNumber }, { it.title }))
+            // The seed filter+sort used to run on the main dispatcher (a fresh
+            // StateFlow forces the destination screen's first composition to
+            // wait on it), stalling the open frame on a full-library pass for
+            // large libraries. Off-main keeps the open frame free; the flow's
+            // first emission is the same list instance as the snapshot, so no
+            // extra pass is paid.
+            val seeded = withContext(Dispatchers.Default) {
+                repository.allTracksSnapshot()
+                    .filter { it.album == albumName }
+                    .sortedWith(compareBy({ it.discNumber }, { it.trackNumber }, { it.title }))
+            }
             if (_tracks.value.isEmpty()) _tracks.value = seeded
             repository.getTracksByAlbum(albumName).collect { list ->
                 _tracks.value = list
