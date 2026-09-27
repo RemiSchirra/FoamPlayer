@@ -151,21 +151,16 @@ import kotlin.math.abs
 const val SharedElementTransitionDurationMs = 350
 val SharedElementEasing = FastOutSlowInEasing
 
-/** Longest a programmatic mini<->full player transition may take (scales with remaining distance). */
+/** Longest a programmatic mini<->full player transition may take. */
 private const val PlayerTransitionMaxDurationMs = 500
 
 /**
- * Duration budget for a PROGRAMMATIC close flight (nav-bar screen switch, back button,
- * navigate-while-open): no finger is on screen providing inertia, so the full-residue
- * flight needs more time than the gesture close to not read as an instant snap.
+ * Duration budget for a programmatic close flight (no finger on screen),
+ * longer than a gesture close so it never reads as an instant snap.
  */
 private const val AutoCloseFlightDurationMs = 700
 
-/**
- * Shortest a gesture-committed close flight may take when the commit was a flick:
- * the drag's rate cap keeps the in-gesture fraction low, but the flight must always
- * read as an animation instead of collapsing to an instant transition.
- */
+/** Shortest a flick-committed close flight may take. */
 private const val MinGestureCloseFlightMs = 240
 
 /** Fade duration for non-shared-element screen-to-screen navigation. */
@@ -188,20 +183,11 @@ private fun isSettingsRoute(route: String?): Boolean {
     return route != null && (route == Screen.Settings.route || route.startsWith("settings/"))
 }
 
-/**
- * Stats overview and its "see all" sub-pages slide like the settings stack:
- * the sub-page slides in from the right when pushed and back out to the right
- * when popped, while the overview parries by a fraction of its width.
- */
+/** Stats overview and its see-all pages slide like the settings stack. */
 private fun isStatsRoute(route: String?): Boolean =
     route != null && (route == Screen.Stats.route || route.startsWith("stats/"))
 
-/**
- * Browse list pages (opened from the search section's browse cards, plus their
- * sub-pages: genre/year tracks, folders, artists-in, albums-in). They slide over
- * the screen they leave: in from the right when pushed, back out to the right
- * when popped.
- */
+/** Browse list pages (plus their sub-pages) slide over the screen they leave. */
 private fun isBrowseRoute(route: String?): Boolean = route != null && route.startsWith("browse/")
 
 /** Detail screens whose list background is drawn full-bleed at the root. */
@@ -212,13 +198,9 @@ private fun isDetailListRoute(route: String?): Boolean =
             route == Screen.ArtistSongs.route
 
 /**
- * True when the page currently on top of the back stack IS the collection the queue
- * was started from ([activeCollectionId], the playing track's origin-collection tag)
- * AND that page's rows render an artwork the flight can morph into (playlist / genre
- * / year details -- all [com.foamplayer.app.ui.components.TrackListScreen]-based with
- * artwork rows). Album detail rows show a track NUMBER instead of artwork and folder
- * pages aren't built on the shared-element track list at all, so both keep the plain
- * mini-player dismissal.
+ * True when the page on top of the back stack IS the collection the queue was
+ * started from — the only case where a player dismiss can fly the artwork into
+ * that page's playing row instead of the mini player.
  */
 private fun isOriginCollectionPage(
     route: String?,
@@ -235,9 +217,13 @@ private fun isOriginCollectionPage(
     return routeCollectionId == activeCollectionId
 }
 
-/** Art feeding the detail-list backdrop: the path plus how Coil must load it (embedded audio art vs plain image). */
+/** Art feeding the detail-list backdrop: the path plus how Coil must load it. */
 private data class ListBackdropArt(val path: String, val isEmbeddedArt: Boolean)
 
+/**
+ * App-wide animated album-art backdrop. Returns a setter
+ * (front, back, fraction) whose frames draw without recomposing the caller.
+ */
 @Composable
 private fun rememberAnimatedBackground(
     enabled: Boolean,
@@ -246,14 +232,8 @@ private fun rememberAnimatedBackground(
     intensity: Float,
     modifier: Modifier = Modifier
 ): (frontArtPath: String?, backArtPath: String?, fraction: Float) -> Unit {
-    // The initial path is evaluated lazily (once, when the state is created) so the
-    // caller can hand over a playbackState read without subscribing this scope to the
-    // whole state flow.
     var frontArtPath by remember { mutableStateOf(initialFrontArtPath()) }
     var backArtPath by remember { mutableStateOf<String?>(null) }
-    // The crossfade fraction changes on every frame of a mini-player swipe; keeping it
-    // in a State that DynamicAlbumArtBackground reads inside its graphicsLayer makes
-    // those frames draw-only instead of recomposing the backdrop's composition.
     val crossfadeFraction = remember { mutableStateOf(0f) }
 
     if (enabled) {
@@ -276,6 +256,12 @@ private fun rememberAnimatedBackground(
     }
 }
 
+/**
+ * Root navigation host: every screen of the app, the mini/full player
+ * transition (a [SeekableTransitionState] driven by both taps and drags),
+ * shared-element artwork flights, the app-wide backdrop, the nav bar and the
+ * global action modals.
+ */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun FoamNavHost(
@@ -291,19 +277,11 @@ fun FoamNavHost(
     val playlistsViewModel: PlaylistsViewModel = hiltViewModel()
     val playlists by playlistsViewModel.playlists.collectAsState()
 
-    // Long-press track actions: the modal is hosted at the root and reached by
-    // every TrackListItem through LocalTrackFoamModalState. The playlist button
-    // opens the picker, which holds the pending track until a playlist is picked.
     val trackModalState = rememberTrackFoamModalState()
     var playlistPickerTrack by remember { mutableStateOf<TrackEntity?>(null) }
 
-    // Lyrics details sheet, opened from the track modal's details page. It is a
-    // separate Dialog window stacked on top of the open track sheet, so
-    // dismissing it returns to the details page beneath.
+    // Lyrics details sheet: a separate Dialog stacked on the open track sheet.
     var lyricsModalTrack by remember { mutableStateOf<TrackEntity?>(null) }
-    // Keep the last shown track through the sheet's exit animation (same
-    // pattern as the other modals), so it slides away with content instead of
-    // collapsing to empty.
     var lastLyricsModalTrack by remember { mutableStateOf<TrackEntity?>(null) }
     SideEffect {
         if (lyricsModalTrack != null) lastLyricsModalTrack = lyricsModalTrack
@@ -313,29 +291,17 @@ fun FoamNavHost(
     val lyricsTrackDetails by lyricsDetailsViewModel.trackDetails.collectAsState()
     val isLyricsDetailsLoading by lyricsDetailsViewModel.isDetailsLoading.collectAsState()
 
-    // Playlists that already contain the track being picked for: drives the
-    // picker's checkbox states, live from Room, so each toggle is reflected as
-    // soon as it persists. Keyed on the track modal's track too, so the query
-    // has already settled by the time the picker opens (the track modal
-    // dismisses and the picker opens in the same recomposition).
     val pickerTrackId = playlistPickerTrack?.id ?: trackModalState.track?.id
     val playlistIdsWithTrack by remember(pickerTrackId) {
         playlistsViewModel.playlistIdsContainingTrack(pickerTrackId)
     }.collectAsState(initial = emptySet())
 
-    // Long-press collection actions (albums/artists/genres/years/folders),
-    // reached by every CollectionListItem through LocalCollectionFoamModalState.
     val collectionModalState = rememberCollectionFoamModalState()
 
     // Narrow projections instead of the whole PlaybackState: collecting the full
-    // state at the nav root re-ran this entire body (backdrop logic, every
-    // composable() destination lambda, nav-bar branches) on every playback emission
-    // -- including play/pause or queue refills that don't affect any of
-    // this scope's actual decisions.
+    // state here would re-run this body on every playback emission.
     val activeCollectionId by playerViewModel.activeCollectionId.collectAsState()
     val hasCurrentTrack by playerViewModel.hasCurrentTrack.collectAsState()
-    // Highlighting "the playing row" only needs the id: screens recompose when the
-    // track actually changes, not on every unrelated playback emission.
     val activeTrackId by playerViewModel.activeTrackId.collectAsState()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
     val playerSettings by playerViewModel.settings.collectAsState()
@@ -344,16 +310,13 @@ fun FoamNavHost(
     val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
     val isDynamicBackgroundEnabled = playerSettings.dynamicBackgroundEnabled
     val navigationBarMode = playerSettings.navigationBarMode
-    // Still honored by FLOATING/ATTACHED; the docked bar ignores it (always solid).
     val navBarTransparentWhenPlayerOpen = playerSettings.navBarTransparentWhenPlayerOpen
 
-    // Per-view media list density (organisation modal). Every view remembers its own.
+    // Per-view list density / sort / inversion setters (organisation modal).
     val densityFor: (MediaListView) -> MediaDensity = { view -> playerSettings.mediaDensity(view) }
     val setDensity: (MediaListView, MediaDensity) -> Unit = { view, value ->
         playerViewModel.setMediaDensity(view, value)
     }
-
-    // Per-view media list sort (organisation modal): the mode and its "Inverse" toggle.
     val sortModeFor: (MediaListView) -> CollectionSortMode = { view -> playerSettings.mediaSortMode(view) }
     val setSortMode: (MediaListView, CollectionSortMode) -> Unit = { view, value ->
         playerViewModel.setMediaSortMode(view, value)
@@ -363,14 +326,11 @@ fun FoamNavHost(
         playerViewModel.setMediaSortInverted(view, value)
     }
 
-    // Per-collection hero layout. Playlists are identified by their detail route
-    // (CollectionKind has no Playlist member), albums/artists by their detail
-    // screens; every other collection resolves to the Default value.
     val heroLayoutFor: (CollectionHeroTarget) -> CollectionHeroLayout = { target ->
         playerSettings.collectionHeroLayout(target)
     }
 
-    // Initialize the transition state based on whether the player should be open immediately
+    // Player open/close state; open only on an explicit request (e.g. notification tap).
     val initialOpenRequested = remember { playerViewModel.openPlayerRequested.value }
     val playerTransitionState = remember { SeekableTransitionState(initialOpenRequested) }
 
@@ -387,47 +347,23 @@ fun FoamNavHost(
     var trackListTransitionTrackId by remember { mutableStateOf<Long?>(null) }
     var skipMiniPlayerTrackAnimation by remember { mutableStateOf(false) }
 
-    // Identity of the collection row that was clicked to start the current
-    // navigation (see [LocalActiveSharedCollection]): set right before
-    // navigating to a detail screen, overwritten by every later collection
-    // click so only the clicked element ever pairs with its destination hero.
+    // Collection row clicked to start the current navigation; drives shared-element pairing.
     var activeSharedCollection by remember { mutableStateOf<String?>(null) }
 
-    // Dismiss-to-origin-collection session: when a swipe-down on the full player starts
-    // over the playing track's origin collection page, that page's playing row becomes
-    // the shared-element endpoint of the artwork flight (trackListTransitionTrackId --
-    // which also keeps the mini player untagged for the whole transition), and the page
-    // is asked to scroll the row to the vertical middle of the screen before the first
-    // visible frame of the flight.
+    // Dismiss-to-origin-collection session: a swipe-down over the playing track's
+    // origin page flies the artwork into that page's playing row.
     var dismissToRowSessionActive by remember { mutableStateOf(false) }
     var centerTrackRequest by remember { mutableStateOf<TrackCenterRequest?>(null) }
     var centerRequestSeq by remember { mutableStateOf(0) }
 
-    // Measured top edge (root coordinates, px) of the mini player's box. The attached
-    // nav bar's surface extension is drawn to land exactly on the card's visible top
-    // edge computed from it, so the surface and the card can never drift apart --
-    // whatever the real layout does (font scale, text metrics, second-bar lift).
     var miniPlayerTopPx by remember { mutableStateOf(Float.NaN) }
-
-    // Measured height (px) of the mini player's box, outer padding included. Font
-    // scale can grow the card past its derived dp metrics, so the content clearance
-    // below prefers this measurement and only falls back to the derived height
-    // before the first layout has reported.
     var miniPlayerBoxHeightPx by remember { mutableStateOf(0) }
 
-    // ---- Bottom-bar zone geometry for content layering ---------------------------
-    // The nav bar and the floating mini player card are overlays: every screen
-    // scrolls BEHIND them (occluded, not clipped) and keeps its trailing rows
-    // reachable via [LocalBottomBarClearance] spacers.
-    //
-    // The card's height prefers the live measurement over the derived metrics.
+    // Bottom-bar zone geometry: content scrolls behind the bar and the card.
     val miniPlayerBoxHeight = with(density) {
         miniPlayerBoxHeightPx.takeIf { it > 0 }?.toDp()
             ?: (NavBarDimens.MiniPlayerCardHeight + NavBarDimens.MiniPlayerCardVerticalPadding * 2)
     }
-    // Trailing clearance for edge-to-edge lists: everything from the screen's
-    // bottom edge (system inset included) up past the floating card, or up past
-    // the bar while no track is loaded.
     val bottomBarClearance = with(density) {
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
                 (if (hasCurrentTrack) {
@@ -437,16 +373,13 @@ fun FoamNavHost(
                 }) +
                 16.dp
     }
-    // The full player keeps its classic footprint: it ends at the nav zone's top
-    // edge, whose black backdrop fade lands exactly on the bar (DOCKED).
     val playerBottomPadding = with(density) {
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
                 NavBarDimens.navBarZoneHeight(navigationBarMode)
     }
 
-    // Hero artwork center (root coordinates), reported by the full player's shared
-    // element, paired with the current dismiss target (mini player art or the origin
-    // collection's centered row) to size the swipe to the artwork's travel distance.
+    // Artwork center of the full player's hero, paired with the dismiss target
+    // (mini player art or origin row) to size the swipe distance.
     val flightGeometry = remember { PlayerFlightGeometryState() }
     val miniArtCenterOffsetPx = with(density) {
         (NavBarDimens.MiniPlayerCardVerticalPadding +
@@ -465,10 +398,9 @@ fun FoamNavHost(
         if (distance.isNaN()) screenHeightPx else distance.coerceAtLeast(1f)
     }
 
-    // Track whether the current or next transition should use animation.
-    // If we start opened, we disable animation for the initial frame.
     var isTransitionAnimated by remember { mutableStateOf(!initialOpenRequested) }
 
+    /** Duration scaled to the transition's remaining distance; flicks get a floor. */
     val getPlayerAnimationSpec: (Boolean, Float) -> androidx.compose.animation.core.TweenSpec<Float> = { targetIsFull, gestureVelocityPxPerSec ->
         val isOpenProgress = if (playerTransitionState.currentState == playerTransitionState.targetState) {
             if (playerTransitionState.currentState) 1f else 0f
@@ -489,7 +421,6 @@ fun FoamNavHost(
         val duration = if (!gestureVelocityPxPerSec.isNaN() &&
             gestureVelocityPxPerSec >= DownSwipeCommitVelocityPxPerSec
         ) {
-            // Flick commit: force a real tween so the close never reads as instant.
             dynamicDuration.coerceAtLeast(MinGestureCloseFlightMs)
         } else {
             dynamicDuration
@@ -503,6 +434,7 @@ fun FoamNavHost(
     }
     val transitionJobHolder = remember { TransitionJobHolder() }
 
+    /** Animates (or snaps) the player transition; superseding flights cancel prior ones. */
     fun animatePlayerTransition(
         open: Boolean,
         sourceTrackId: Long? = null,
@@ -515,10 +447,6 @@ fun FoamNavHost(
 
         if (open) {
             trackListTransitionTrackId = sourceTrackId
-            // A fresh open always supersedes any pending dismiss-to-row session; its
-            // own finally below re-clears the tag when the flight lands. Dropping the
-            // center request is what re-arms the row tag for open flights (a stale
-            // request would keep rows untagged on the freshly composed page).
             dismissToRowSessionActive = false
             centerTrackRequest = null
         }
@@ -541,9 +469,6 @@ fun FoamNavHost(
                         trackListTransitionTrackId = null
                         skipMiniPlayerTrackAnimation = false
                     } else {
-                        // Close flight finished: hand the shared-element key back to
-                        // the mini player. Only the dismiss-to-row session ever holds
-                        // the tag across a close, so this is a no-op otherwise.
                         trackListTransitionTrackId = null
                         dismissToRowSessionActive = false
                         centerTrackRequest = null
@@ -554,14 +479,9 @@ fun FoamNavHost(
     }
 
     /**
-     * PRESS PRELOAD (finger down on the full player): precomposes the returning page
-     * at zero visual progress (fraction 0 against targetState=false is visually
-     * identical to full rest) and asks it to scroll the playing row to the vertical
-     * middle of the screen, so everything is in place before the finger moves.
-     * Deliberately does NOT tag the row: a rest-state pairing would keep the shared
-     * element "active" while nothing moves, hijacking the hero artwork and breaking
-     * pager swipes. Returns without touching anything when the current page is not
-     * the origin collection.
+     * PRESS PRELOAD: precomposes the returning page and scrolls the playing row
+     * to the screen's middle before the finger moves. Deliberately does NOT tag
+     * the row (a rest-state pairing would hijack the hero artwork).
      */
     suspend fun prepareDismissToRow() {
         val trackId = activeTrackId ?: return
@@ -570,26 +490,17 @@ fun FoamNavHost(
         }
 
         val request = TrackCenterRequest(trackId, ++centerRequestSeq)
-        // The center request is written in the same snapshot batch as the seek, so
-        // the page's very first composition already sees it and can scroll while it
-        // lays out.
         centerTrackRequest = request
         playerTransitionState.seekTo(fraction = 0f, targetState = false)
 
-        // Deterministic hand-off: wait for the list to scroll the row into place, then
-        // give its layout a frame to settle. The timeout only guards a pathological
-        // unconsumed request -- an unbounded await here would brick the dismiss gesture.
         withTimeoutOrNull(250) { request.scrolledIntoPlace.await() }
         withFrameNanos { }
         withFrameNanos { }
     }
 
     /**
-     * DRAG ACTIVATION (first delta of a down-stroke): tags the playing row so the
-     * shared element pairs, then lets one recomposition + layout pass land before the
-     * drag moves, so the flight's first visible frame already has its target at its
-     * final position. Runs after the press preload (which it falls back to when the
-     * preload was skipped, e.g. the finger landed mid-flight).
+     * DRAG ACTIVATION: tags the playing row so the shared element pairs, letting
+     * a frame land before the drag moves so the flight's first frame is correct.
      */
     suspend fun activateDismissToRow() {
         val trackId = activeTrackId ?: return
@@ -599,28 +510,21 @@ fun FoamNavHost(
 
         val request = centerTrackRequest
         if (request == null || request.trackId != trackId) {
-            // No usable preload: compose and scroll now (the common path never lands
-            // here, the press preload already did the work).
             prepareDismissToRow()
         }
 
         dismissToRowSessionActive = true
         trackListTransitionTrackId = trackId
-        // One frame for the recomposition that attaches the row's shared-element tag,
-        // one for the match configuration that follows in that frame's layout pass.
         withFrameNanos { }
         withFrameNanos { }
     }
 
-    /** Swipe-down settled back without committing: drop the row tag (if we set it). */
+    /** Swipe-down settled without committing: drop the row tag. */
     fun clearDismissToRowSession() {
         if (dismissToRowSessionActive) {
             dismissToRowSessionActive = false
             trackListTransitionTrackId = null
         }
-        // The press preload creates the request without a session; clear it whenever
-        // a dismiss gesture ends without committing so it can never suppress a later
-        // open flight's row tag.
         centerTrackRequest = null
     }
 
@@ -643,26 +547,15 @@ fun FoamNavHost(
         )
     }
 
-    // The collection screen last opened from the player: its full route (with
-    // args) and destination pattern. A follow-up player navigation replaces
-    // that screen instead of stacking beneath it, so back never replays
-    // earlier player-opened screens one by one.
+    // The screen last opened from the player: a follow-up player navigation
+    // replaces it instead of stacking beneath it.
     var playerOpenedRoute by remember { mutableStateOf<String?>(null) }
     var playerOpenedPattern by remember { mutableStateOf<String?>(null) }
 
-    // "See Artist"/"See Album" can fire while the full player is up (queue
-    // long-press). Starting the close flight in the same frame as the
-    // navigation swap makes the two fight over the same frames and flicker.
-    // Stage it instead: navigate first -- the swap composes behind the
-    // still-open player where it can't be seen -- then precompose the
-    // closed-side UI (the same preload-then-flight pattern the dismiss
-    // gesture uses) and only then fly the player down onto the settled page.
+    /** Navigates while closing the player, staging the flight after the nav swap. */
     fun navigateClosingPlayer(route: String, pattern: String) {
         val topId = navController.currentDestination?.id
         val topPattern = navController.currentDestination?.route
-        // Replace only when the previous player-opened screen is still the
-        // current top (user hasn't navigated deeper from it or backed out of
-        // it); identical routes keep reusing the top entry via launchSingleTop.
         val replacesPrevious = playerOpenedPattern != null &&
                 topPattern == playerOpenedPattern &&
                 route != playerOpenedRoute
@@ -689,8 +582,6 @@ fun FoamNavHost(
     SharedTransitionLayout {
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")
 
-        // Every TrackListItem / CollectionListItem in the graph opens its
-        // actions modal through these locals, provided at the nav root.
         CompositionLocalProvider(
             LocalTrackFoamModalState provides trackModalState,
             LocalCollectionFoamModalState provides collectionModalState,
@@ -714,27 +605,16 @@ fun FoamNavHost(
                     remember { { _: String?, _: String?, _: Float -> } }
                 }
 
-                // Full-bleed backdrop for the detail list screens (album/playlist/artist).
-                // Drawn here at the root, so it covers the status bar and the nav zone by
-                // construction -- no overflow tricks that transition layers could clip. Its
-                // alpha tween runs in lock-step with the NavHost's screen fade (shared-element
-                // routes fade in 350ms, plain routes in 400ms), so the background fades with
-                // the list opening/closing. Between two detail routes (artist <-> album and
-                // back) the alpha never leaves 1f, so the art switch there is handled by a
-                // front/back crossfade instead -- the same manual scheme the player backdrop
-                // uses (Coil's built-in crossfade pops for memory-cache hits, and a swapped
-                // model clears the old art to nothing first). [lastListBackdropArt] keeps the
-                // art alive while the alpha fades back out.
+                // Full-bleed backdrop for the detail list screens (album/playlist/artist),
+                // drawn at the root so it covers the status bar and nav zone. Its alpha
+                // tween runs in lock-step with the screens' fade; between two detail
+                // routes the alpha never leaves 1f and the art switch is a front/back
+                // crossfade instead.
                 var listBackdropArt by remember { mutableStateOf<ListBackdropArt?>(null) }
                 var lastListBackdropArt by remember { mutableStateOf<ListBackdropArt?>(null) }
                 LaunchedEffect(currentRoute) {
                     if (!isDetailListRoute(currentRoute)) listBackdropArt = null
                 }
-                // Outgoing/incoming art layers of the crossfade above. The fraction itself is
-                // read inside the backdrop's draw-phase lambda, so the animation doesn't
-                // recompose this scope; the two paths flip only at the crossfade's endpoints.
-                // The generation guards the cleanup: a superseded crossfade's finally must
-                // not clear the crossfade that superseded it.
                 var listCrossfadeFrom by remember { mutableStateOf<ListBackdropArt?>(null) }
                 var listCrossfadeTo by remember { mutableStateOf<ListBackdropArt?>(null) }
                 val listCrossfade = remember { Animatable(1f) }
@@ -745,10 +625,7 @@ fun FoamNavHost(
                     val previous = listBackdropArt
                     listBackdropArt = art
                     if (art != null && previous != null && previous != art) {
-                        // Art switch while the backdrop is already visible (detail ->
-                        // detail navigation, e.g. artist -> album and back): hold the
-                        // old art on the front layer and fade the new one in on the
-                        // back layer, in lock-step with the screens' 350ms fade.
+                        // Detail -> detail navigation: fade the new art in on the back layer.
                         val generation = ++listCrossfadeGeneration
                         scope.launch {
                             listCrossfadeFrom = previous
@@ -770,9 +647,6 @@ fun FoamNavHost(
                             }
                         }
                     } else {
-                        // No switch to fade (first detail page after a non-detail
-                        // screen, or the same art reported again): drop any running
-                        // crossfade so its layers can't ghost over the new art.
                         listCrossfadeGeneration++
                         listCrossfadeFrom = null
                         listCrossfadeTo = null
@@ -790,9 +664,6 @@ fun FoamNavHost(
                     label = "listBackdropAlpha"
                 )
                 val listBackdropDisplay = listBackdropArt ?: lastListBackdropArt
-                // Boolean gate via derivedStateOf: reading the animated alpha directly in
-                // this if recomposed the whole nav root on every frame of the 350-400ms
-                // backdrop fade. The derived value only flips at the fade's endpoints.
                 val showListBackdrop by remember {
                     derivedStateOf {
                         (listBackdropArt ?: lastListBackdropArt) != null && listBackdropAlpha > 0f
@@ -814,10 +685,7 @@ fun FoamNavHost(
                 }
 
                 // ---- Full player backdrop (root-hosted) --------------------------------------
-                // Height of the nav-bar zone, measured from the bar container below. In DOCKED
-                // mode the solid bar is painted above the backdrop, so the backdrop's black
-                // fade must land exactly on the bar's top edge; in FLOATING/ATTACHED the
-                // backdrop stays visible down to the physical bottom, where the fade ends.
+                // In DOCKED mode the backdrop's black fade must land on the bar's top edge.
                 var navZoneHeightPx by remember { mutableStateOf(0) }
                 val playerBackdropFadeInset = if (navigationBarMode == NavigationBarMode.DOCKED) {
                     with(density) { navZoneHeightPx.toDp() }
@@ -825,13 +693,8 @@ fun FoamNavHost(
                     0.dp
                 }
 
-                // The full player's blurred backdrop is hosted here at the very root, inside
-                // the exact same fillMaxSize box as the app-wide backdrop above. Both crop the
-                // same artwork at the same size with the same blur and dim, so the open/close
-                // crossfade between them is seamless, and the blurred art + black fade reach
-                // the physical bottom of the screen by construction -- no overflow tricks an
-                // intermediate container can cut off. FullPlayerScreen feeds the pager-driven
-                // state through [fullPlayerBackdropState].
+                // Hosted at the very root, cropping the same art with the same blur and
+                // dim as the app-wide backdrop so the open/close crossfade is seamless.
                 val fullPlayerBackdropState = remember { FullPlayerBackdropState() }
                 val playerBackdropAlpha = {
                     EaseInOutCubic.transform(playerTransitionState.progress().coerceIn(0f, 1f))
@@ -857,7 +720,7 @@ fun FoamNavHost(
                             .graphicsLayer { alpha = playerBackdropAlpha() }
                     )
 
-                    // Subview scrim, formerly drawn by the player over its own backdrop.
+                    // Subview scrim, drawn by the player's container.
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -873,16 +736,9 @@ fun FoamNavHost(
                 val isPlayerOpen = playerTransitionState.targetState
 
                 // ---- Mini player first-appearance animation ----------------------------------
-                // The card's AnimatedVisibility enter only fires when the player transition's
-                // target flips (a close flight). The very first play lands with the transition
-                // at rest on closed: hasCurrentTrack flips inside the card's if-gate, so the
-                // card pops in with no animation at all. This presence fraction animates that
-                // appearance instead -- a plain fade for the card in DOCKED/FLOATING (what a
-                // close flight's enter already does) and a growth of the attached bar's
-                // surface extension out of the pill in ATTACHED -- and is pinned to 1 while
-                // the player transition moves, whose own enter/exit owns the motion there.
-                // Initialized from the ViewModel's live value so recreating the activity
-                // with playback already running doesn't replay the fade.
+                // The card's AnimatedVisibility enter only fires on a close flight; the
+                // very first play lands at rest, so this presence fraction fades it in
+                // (and grows the attached bar's surface extension) instead of popping.
                 val miniPlayerPresence = remember {
                     Animatable(if (playerViewModel.hasCurrentTrack.value) 1f else 0f)
                 }
@@ -900,9 +756,6 @@ fun FoamNavHost(
                         )
                     }
                 }
-                // Any player-transition flip (auto-open on the first play, any later
-                // open) hands the motion back to the flight's own enter/exit: snap
-                // fully present so the flight's fade is never compounded with this one.
                 LaunchedEffect(isPlayerOpen) {
                     if (isPlayerOpen && hasCurrentTrack) miniPlayerPresence.snapTo(1f)
                 }
@@ -914,31 +767,24 @@ fun FoamNavHost(
                     animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
                     label = "NavBarExpandFraction"
                 )
-                // The extra row is a browsing utility: fold it away whenever the full player opens.
                 LaunchedEffect(isPlayerOpen) {
                     if (isPlayerOpen) isNavBarExpanded = false
                 }
-                // The second bar disappeared (user disabled its last item): fold the row away
-                // and drop the "more" toggle, which is hidden while the second bar is empty.
                 LaunchedEffect(playerSettings.secondaryNavBarItems) {
                     if (playerSettings.secondaryNavBarItems.isEmpty()) isNavBarExpanded = false
                 }
-                // Back button folds the extra row away before leaving the app.
                 BackHandler(enabled = isNavBarExpanded) { isNavBarExpanded = false }
 
                 val playerClosedFraction = {
                     val progress = playerTransitionState.progress().coerceIn(0f, 1f)
                     if (playerTransitionState.targetState) {
-                        // Opening: retract/fade out as soon as the transition starts.
                         1f - EaseOutCubic.transform(progress)
                     } else {
-                        // Closing: back as soon as the transition starts.
                         1f - EaseInCubic.transform(progress)
                     }
                 }
 
                 val handleNavBarNavigation: (String) -> Unit = { route ->
-                    // Navigating from the bar always folds the extra row away.
                     isNavBarExpanded = false
                     if (playerTransitionState.currentState || playerTransitionState.targetState) {
                         animatePlayerTransition(open = false)
@@ -949,10 +795,7 @@ fun FoamNavHost(
                         if (!navController.popBackStack(route, inclusive = false)) {
                             navController.navigate(route) {
                                 popUpTo(navController.graph.startDestinationId) {
-                                    // Preserve the tab's back stack and UI state so
-                                    // switching tabs doesn't tear down and rebuild
-                                    // the destination (full re-composition, Coil
-                                    // re-requests, lazy list state reset).
+                                    // Preserve the tab's back stack and UI state.
                                     saveState = true
                                 }
                                 launchSingleTop = true
@@ -963,10 +806,6 @@ fun FoamNavHost(
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // [collectionId] marks the queue as started from a specific
-                    // collection (album/playlist/genre/year/folder screen) so
-                    // its row can be highlighted as the active one; bare track
-                    // lists (library, search) pass null and highlight nothing.
                     fun playTrackFromList(
                         tracks: List<com.foamplayer.app.data.db.entities.TrackEntity>,
                         index: Int,
@@ -993,10 +832,6 @@ fun FoamNavHost(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             val playerTransitionVisibilityScope = this
-                            // Screens keep their status-bar padding; the backdrop behind
-                            // them (drawn at the root now) extends up under the status
-                            // bar. They run edge-to-edge to the screen's bottom edge,
-                            // scrolling behind the nav bar and mini player card.
                             Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
                                 NavHost(
                                     modifier = Modifier.fillMaxSize(),
@@ -1082,7 +917,6 @@ fun FoamNavHost(
                                         OnboardingScreen(
                                             onFinish = {
                                                 navController.navigate(Screen.Home.route) {
-                                                    // Onboarding must not come back with system back.
                                                     popUpTo(Screen.Onboarding.route) { inclusive = true }
                                                 }
                                             }
@@ -1791,9 +1625,6 @@ fun FoamNavHost(
                             visible = { isFull -> isFull },
                             enter = EnterTransition.None,
                             exit = ExitTransition.None,
-                            // The player keeps its classic footprint: it ends at the
-                            // nav zone's top edge (the bar renders below it and the
-                            // backdrop's black fade lands on the bar, DOCKED).
                             modifier = Modifier.fillMaxSize().padding(bottom = playerBottomPadding)
                         ) {
                             BackHandler { animatePlayerTransition(open = false) }
@@ -1834,9 +1665,7 @@ fun FoamNavHost(
                     }
                 }
 
-                // The nav bar floats over the edge-to-edge content as an overlay at
-                // the screen's bottom; the mini player card is layered above it.
-                // Hidden on the onboarding flow, which owns the whole screen.
+                // Nav bar + mini player overlay, hidden on onboarding.
                 if (currentRoute != Screen.Onboarding.route) {
                     Box(
                         modifier = Modifier
@@ -1908,7 +1737,6 @@ fun FoamNavHost(
                       }
                  }
 
-                 // Mini player placement derives from NavBarDimens
                 val miniPlayerBottomPadding = NavBarDimens.miniPlayerBottomPadding(
                     mode = navigationBarMode,
                     expandFraction = navBarExpandFraction
@@ -1924,13 +1752,8 @@ fun FoamNavHost(
                         visible = { isFull -> !isFull },
                         enter = if (isTransitionAnimated) {
                             if (trackListTransitionTrackId != null) {
-                                // The full player's artwork is morphing into the origin
-                                // collection's row instead of the mini player: the mini
-                                // is untagged for that flight, so it announces itself
-                                // with a fade + slide up from the bottom edge instead
-                                // of merely fading in. Both are transition animations,
-                                // so they follow the seeked flight fraction exactly
-                                // (progressive under the finger, reversed on cancel).
+                                // The artwork is morphing into a collection row instead
+                                // of the mini player: fade + slide up from the bottom.
                                 fadeIn(tween(SharedElementTransitionDurationMs, easing = SharedElementEasing)) +
                                         slideInVertically(tween(SharedElementTransitionDurationMs, easing = SharedElementEasing)) { it / 2 }
                             } else {
@@ -1943,10 +1766,6 @@ fun FoamNavHost(
                     ) {
                          val miniPlayerVisibilityScope = this
                          if (hasCurrentTrack && currentRoute != Screen.Onboarding.route) {
-                            // MiniPlayer collects playbackState internally; the lambdas below
-                            // read the flow's current value at invocation time (event
-                            // handlers, not composition), so this scope stays unsubscribed
-                            // from the whole state.
                             MiniPlayer(
                                 playbackStateFlow = playerViewModel.playbackState,
                                 positionMsFlow = playerViewModel.positionMs,
@@ -1971,12 +1790,9 @@ fun FoamNavHost(
                                 },
                                 sharedTransitionScope = this@SharedTransitionLayout,
                                 animatedVisibilityScope = miniPlayerVisibilityScope,
-                                // Untagged while a row is the flight endpoint (dismiss
-                                // session) AND while a press preload is pending: the
-                                // preload's zero-fraction seek composes this branch, and
-                                // a rest-state pairing here would pin the player's art
-                                // and texts to the matched bounds -- breaking pager
-                                // swipes -- until the track (and key) changed.
+                                // Untagged while a row is the flight endpoint or a press
+                                // preload is pending (a rest-state pairing would pin the
+                                // shared elements and break pager swipes).
                                 useSharedElements = trackListTransitionTrackId == null &&
                                         centerTrackRequest == null,
                                 sharedArtFlightAlpha = {
@@ -1992,10 +1808,6 @@ fun FoamNavHost(
                                 skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,
                                 showContainer = navigationBarMode != NavigationBarMode.ATTACHED,
                                 modifier = Modifier
-                                    // First-play appearance: the card's AnimatedVisibility enter
-                                    // only runs on a close flight; this fades the freshly
-                                    // composed card in instead of popping it (pinned at 1 during
-                                    // every flight, which owns the motion).
                                     .graphicsLayer { alpha = miniPlayerPresence.value }
                                     .onGloballyPositioned { miniPlayerTopPx = it.positionInRoot().y }
                                     .onSizeChanged { miniPlayerBoxHeightPx = it.height }
@@ -2010,10 +1822,7 @@ fun FoamNavHost(
                 }
             }
 
-            // Long-press track actions. The modal and its playlist picker are
-            // plain Dialogs, so their placement in the tree doesn't matter.
-            // Details is an internal page of the same sheet, sharing its header.
-
+            // Long-press track actions (plain Dialogs hosted at the root).
             TrackFoamModal(
                 state = trackModalState,
                 onPlayNext = playerViewModel::playNext,
@@ -2039,12 +1848,10 @@ fun FoamNavHost(
                 },
                 onResetPlayStats = { track ->
                     playerViewModel.resetPlayStats(track.id)
-                    // Reflect the reset in the open sheet immediately.
                     trackModalState.updateCurrentTrack { it.copy(playCount = 0, lastPlayedAt = null) }
                 },
                 onSetInstrumental = { track, instrumental ->
                     playerViewModel.setTrackInstrumental(track.id, instrumental)
-                    // Reflect the toggle in the open sheet immediately.
                     trackModalState.updateCurrentTrack { it.copy(instrumental = instrumental) }
                 },
                 scoreOverrides = scoreOverrides,
@@ -2076,8 +1883,6 @@ fun FoamNavHost(
                 onDismiss = { lyricsModalTrack = null },
                 onDelete = { lyricsModalTrack?.let { lyricsDetailsViewModel.deleteLyrics(it) } },
                 onSearch = {
-                    // Jumping to the lyrics search results replaces this flow
-                    // entirely, so neither sheet may stay up behind it.
                     val trackId = lyricsModalTrack?.id
                     lyricsModalTrack = null
                     trackModalState.dismiss()
@@ -2087,9 +1892,8 @@ fun FoamNavHost(
                 }
             )
 
-            // Long-press collection actions. The modal resolves which artist
-            // name / album to navigate to; a folder, genre or year spanning
-            // several artists/albums opens the matching list screen instead.
+            // Long-press collection actions; a folder/genre/year spanning several
+            // artists/albums opens the matching list screen instead.
             CollectionFoamModal(
                 state = collectionModalState,
                 onPlayNext = { collection -> playerViewModel.playNext(collection.tracks) },
