@@ -13,6 +13,7 @@ import com.foamplayer.app.notification.ScanProgressNotifier
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
+/** Application entry point: Hilt, the playback notification channel and Coil setup. */
 @HiltAndroidApp
 class FoamApplication : Application(), ImageLoaderFactory {
 
@@ -24,8 +25,7 @@ class FoamApplication : Application(), ImageLoaderFactory {
         scanProgressNotifier.start()
     }
 
-    // Registers EmbeddedAlbumArtFetcher so any AsyncImage(model = EmbeddedAlbumArt(...))
-    // anywhere in the app reads cover art live from the audio file.
+    // Lets AsyncImage(model = EmbeddedAlbumArt(...)) load cover art from audio files.
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
             .components {

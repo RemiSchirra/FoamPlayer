@@ -42,6 +42,7 @@ import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
+/** Single activity hosting the whole Compose UI and the media playback session. */
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
@@ -58,14 +59,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Draw behind the system status bar and gesture/navigation bar so the
-        // album-art backdrop can cover the full screen. Compose content re-adds
-        // the insets as padding (statusBarsPadding / navigationBarsPadding) where
-        // interactive elements need them, so their effective padding is unchanged.
+        // Edge-to-edge so the backdrop can cover the whole screen; Compose re-adds
+        // insets where interactive elements need them.
         enableEdgeToEdge()
         handleIntent(intent)
-        // First-run users are asked on the onboarding permissions page instead; the
-        // auto request (and playback service start) only runs once onboarding is done.
+        // Permissions are requested on onboarding; afterwards they're auto-requested once.
         lifecycleScope.launch {
             settingsViewModel.onboardingCompleted.collect { completed ->
                 if (completed == true) checkAndRequestPermissions()
@@ -112,6 +110,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Media read permission for the running Android version, plus notifications on 13+. */
     private fun requiredPermissions(): List<String> = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> listOf(
             Manifest.permission.READ_MEDIA_AUDIO,
@@ -126,6 +125,7 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
+/** Root composable: applies theme, accent color and locale, then the nav host. */
 @Composable
 private fun FoamApp(
     settingsViewModel: SettingsViewModel = hiltViewModel(),
@@ -155,8 +155,8 @@ private fun FoamApp(
             accentColor = accentColor
         ) {
             if (onboardingCompleted == null) {
-                // Settings still loading: hold a blank themed frame rather than risk
-                // flashing the onboarding over an existing user's library.
+                // Hold a blank frame while settings load, never flash onboarding over
+                // an existing user's library.
                 Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
             } else {
                 FoamNavHost(
@@ -169,6 +169,10 @@ private fun FoamApp(
     }
 }
 
+/**
+ * Resolves the active accent color: the manual pick, or the palette color
+ * extracted from the current album art when automatic color is on.
+ */
 @Composable
 private fun rememberAccentColor(
     isAutomaticColor: Boolean,
