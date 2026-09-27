@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
@@ -53,7 +54,7 @@ fun FoamSwitchItem(
                 role = Role.Switch,
                 onValueChange = onCheckedChange
             )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {

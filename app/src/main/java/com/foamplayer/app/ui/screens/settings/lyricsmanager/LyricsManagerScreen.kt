@@ -163,7 +163,7 @@ fun LyricsManagerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = FoamDimens.paddingSmall)
+                .padding(horizontal = FoamDimens.paddingMedium)
         ) {
         SettingsHeader(
             title = stringResource(R.string.lyrics_manager),

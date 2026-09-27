@@ -44,6 +44,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.ui.components.FoamBottomModal
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
@@ -92,12 +93,12 @@ fun LyricsProvidersModal(
                 text = stringResource(R.string.lyrics_providers),
                 style = FoamTheme.typography.titleMedium
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
             BasicText(
                 text = stringResource(R.string.drag_to_reorder_desc),
                 style = FoamTheme.typography.body
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingStandard))
 
             // The sheet auto-fits its content, so the list grows with it: sized to
             // its natural height (row ~48dp + 4dp spacer per item), capped at the
@@ -196,13 +197,13 @@ private fun LyricsProviderItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(FoamDimens.itemRounding))
             .background(backgroundColor)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = FoamDimens.spacingMedium),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -211,7 +212,7 @@ private fun LyricsProviderItem(
                 modifier = dragHandleModifier.size(20.dp),
                 tint = if (isEnabled) FoamTheme.colors.textSecondary else FoamTheme.colors.textSecondary.copy(alpha = 0.6f)
             )
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(FoamDimens.spacingMedium))
             Column(modifier = Modifier.weight(1f)) {
                 BasicText(
                     text = provider.name.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() },

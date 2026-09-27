@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 @Composable
@@ -40,14 +41,16 @@ fun FoamNavigationButton(
                 role = Role.Button,
                 onClick = onClick,
             )
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+            // 16/12 matches FoamSwitchItem so all rows inside a grouped settings
+            // card share the same height rhythm.
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             BasicText(text = title, style = FoamTheme.typography.titleMedium)
             BasicText(text = description, style = FoamTheme.typography.body)
         }
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(FoamDimens.spacingStandard))
         Icon(
             imageVector = Icons.Default.ChevronRight,
             contentDescription = null,

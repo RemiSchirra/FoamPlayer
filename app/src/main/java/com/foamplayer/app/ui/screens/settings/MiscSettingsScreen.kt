@@ -253,7 +253,7 @@ private fun DiscordActionButton(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall / 2))
+            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
             .background(
                 if (enabled) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant
             )

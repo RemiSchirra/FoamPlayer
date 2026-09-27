@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.roundToInt
 
@@ -41,7 +42,7 @@ fun FoamSliderItem(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp, horizontal = 16.dp)
+            .padding(vertical = FoamDimens.spacingMedium, horizontal = FoamDimens.paddingMedium)
     ) {
         // Header : title, description, and current value
         Row(
@@ -61,7 +62,7 @@ fun FoamSliderItem(
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
         CompositionLocalProvider(LocalContentColor provides FoamTheme.colors.textPrimary) {
             Slider(
@@ -83,7 +84,7 @@ fun FoamSliderItem(
 
         // Min max footer
         minMaxDisplay?.let { (min, max) ->
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween

@@ -199,7 +199,7 @@ fun SettingsCategoryItem(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
+            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
             .background(FoamTheme.colors.surface)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -210,7 +210,7 @@ fun SettingsCategoryItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(FoamDimens.paddingMedium),
+                .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(

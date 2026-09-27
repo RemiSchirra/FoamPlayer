@@ -26,8 +26,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
@@ -68,7 +70,7 @@ fun ColorsSettingsScreen(
             .background(FoamTheme.colors.background)
     ) {
         SettingsHeader(
-            title = "Colors",
+            title = stringResource(R.string.colors),
             onBack = onBack,
             modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
         )
@@ -80,7 +82,7 @@ fun ColorsSettingsScreen(
             contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
         ) {
             item {
-                BasicText(text = "System Colors", style = FoamTheme.typography.titleMedium)
+                BasicText(text = stringResource(R.string.system_colors), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                 Box(
                     modifier = Modifier
@@ -89,7 +91,7 @@ fun ColorsSettingsScreen(
                         .background(FoamTheme.colors.surface)
                 ) {
                     FoamSwitchItem(
-                        title = "Automatic Color",
+                        title = stringResource(R.string.automatic_color),
                         description = "Extract accent color from album art",
                         checked = isAutomaticColorEnabled,
                         onCheckedChange = viewModel::setAutomaticColorEnabled
@@ -100,9 +102,9 @@ fun ColorsSettingsScreen(
 
             if (!isAutomaticColorEnabled) {
                 item {
-                    BasicText(text = "Accent Palette", style = FoamTheme.typography.titleMedium)
+                    BasicText(text = stringResource(R.string.accent_palette), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                    
+
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

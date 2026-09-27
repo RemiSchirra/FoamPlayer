@@ -65,7 +65,7 @@ fun LyricsSettingsScreen(
             .background(FoamTheme.colors.background)
     ) {
         SettingsHeader(
-            title = "Lyrics",
+            title = stringResource(R.string.lyrics),
             onBack = onBack,
             modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
         )
@@ -258,13 +258,13 @@ private fun LyricsSourceItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(FoamDimens.itemRounding))
             .background(backgroundColor)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = FoamDimens.spacingMedium),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -273,7 +273,7 @@ private fun LyricsSourceItem(
                 modifier = dragHandleModifier.size(20.dp),
                 tint = if (isEnabled) FoamTheme.colors.textSecondary else FoamTheme.colors.textSecondary.copy(alpha = 0.6f)
             )
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(FoamDimens.spacingMedium))
             BasicText(
                 text = source.label,
                 style = FoamTheme.typography.body.copy(

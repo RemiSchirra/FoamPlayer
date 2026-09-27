@@ -17,7 +17,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -38,11 +40,11 @@ fun BackgroundSettingsScreen(
             .background(FoamTheme.colors.background)
     ) {
         SettingsHeader(
-            title = "Background",
+            title = stringResource(R.string.background),
             onBack = onBack,
             modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
         )
-        
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -50,9 +52,9 @@ fun BackgroundSettingsScreen(
                 .padding(horizontal = FoamDimens.paddingMedium)
                 .padding(bottom = LocalBottomBarClearance.current),
         ) {
-            BasicText(text = "Dynamic Effects", style = FoamTheme.typography.titleMedium)
+            BasicText(text = stringResource(R.string.dynamic_effects), style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-            
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -60,7 +62,7 @@ fun BackgroundSettingsScreen(
                     .background(FoamTheme.colors.surface)
             ) {
                 FoamSwitchItem(
-                    title = "Dynamic Background",
+                    title = stringResource(R.string.dynamic_background),
                     description = "Extract colors from track art for background",
                     checked = settings.dynamicBackgroundEnabled,
                     onCheckedChange = viewModel::setDynamicBackgroundEnabled,
@@ -68,10 +70,10 @@ fun BackgroundSettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
-            
+
             BasicText(text = "Appearance", style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-            
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -80,7 +82,7 @@ fun BackgroundSettingsScreen(
             ) {
                 Column {
                     FoamSliderStateItem(
-                        title = "Background Blur",
+                        title = stringResource(R.string.background_blur),
                         initialValue = settings.backgroundBlur.toFloat(),
                         onValueChangeFinished = {
                             viewModel.setBackgroundBlur(it.roundToInt())
@@ -126,7 +128,7 @@ fun BackgroundSettingsScreen(
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
         }
     }

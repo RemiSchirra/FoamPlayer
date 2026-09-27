@@ -17,7 +17,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.components.FoamEnumItem
 import com.foamplayer.app.ui.components.FoamSliderStateItem
@@ -46,7 +48,7 @@ fun PlayerSettingsScreen(
             .background(FoamTheme.colors.background)
     ) {
         SettingsHeader(
-            title = "Player",
+            title = stringResource(R.string.player),
             onBack = onBack,
             modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
         )
@@ -59,7 +61,7 @@ fun PlayerSettingsScreen(
                 Column(
                     modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
                 ) {
-                    BasicText(text = "Behaviour", style = FoamTheme.typography.titleMedium)
+                    BasicText(text = stringResource(R.string.behaviour), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                     Box(
                         modifier = Modifier
@@ -68,7 +70,7 @@ fun PlayerSettingsScreen(
                             .background(FoamTheme.colors.surface)
                     ) {
                         FoamSwitchItem(
-                            title = "Auto Open Player",
+                            title = stringResource(R.string.auto_open_player),
                             description = "Open player screen when a track starts",
                             checked = isAutoOpenPlayerEnabled,
                             onCheckedChange = { viewModel.setAutoOpenPlayerEnabled(it) }
@@ -82,7 +84,7 @@ fun PlayerSettingsScreen(
                 Column(
                     modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
                 ) {
-                    BasicText(text = "Visuals", style = FoamTheme.typography.titleMedium)
+                    BasicText(text = stringResource(R.string.visuals), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                     Box(
                         modifier = Modifier
@@ -92,7 +94,7 @@ fun PlayerSettingsScreen(
                     ) {
                         Column {
                             FoamSwitchItem(
-                                title = "Immersive Mode",
+                                title = stringResource(R.string.immersive_mode),
                                 description = "Album art fills the entire screen",
                                 checked = isImmersiveEnabled,
                                 onCheckedChange = { viewModel.setImmersiveModeEnabled(it) }
@@ -104,7 +106,7 @@ fun PlayerSettingsScreen(
                                     .background(FoamTheme.colors.borderOverlay)
                             )
                             FoamSwitchItem(
-                                title = "Animate Seek Bar",
+                                title = stringResource(R.string.animate_seek_bar),
                                 description = "Smooth progress bar movement",
                                 checked = isAnimateSeekBarEnabled,
                                 onCheckedChange = { viewModel.setAnimateSeekBarEnabled(it) }
@@ -154,7 +156,7 @@ fun PlayerSettingsScreen(
                 Column(
                     modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
                 ) {
-                    BasicText(text = "Interface Rounding", style = FoamTheme.typography.titleMedium)
+                    BasicText(text = stringResource(R.string.interface_rounding), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                     Box(
                         modifier = Modifier
@@ -164,7 +166,7 @@ fun PlayerSettingsScreen(
                     ) {
                         Column {
                             FoamSliderStateItem(
-                                title = "Mini Player",
+                                title = stringResource(R.string.mini_player),
                                 initialValue = settings.miniPlayerRounding.toFloat(),
                                 onValueChangeFinished = {
                                     viewModel.setMiniPlayerRounding(it.roundToInt())
@@ -181,7 +183,7 @@ fun PlayerSettingsScreen(
                                     .background(FoamTheme.colors.borderOverlay)
                             )
                             FoamSliderStateItem(
-                                title = "Full Player",
+                                title = stringResource(R.string.full_player),
                                 initialValue = settings.fullPlayerRounding.toFloat(),
                                 onValueChangeFinished = {
                                     viewModel.setFullPlayerRounding(it.roundToInt())

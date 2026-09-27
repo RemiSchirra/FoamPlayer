@@ -264,7 +264,7 @@ fun NavBarSettingsScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
             }
         }
     }
@@ -281,13 +281,13 @@ private fun NavBarSectionHeader(
             text = title,
             style = FoamTheme.typography.titleMedium
         )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
         BasicText(
             text = description,
             style = FoamTheme.typography.body
         )
     }
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(FoamDimens.spacingStandard))
 }
 
 /**
@@ -353,7 +353,7 @@ private fun LazyItemScope.NavBarDraggableItem(
             isDragging = isDragging,
             dragHandleModifier = dragHandleModifier
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
     }
 }
 
@@ -373,7 +373,7 @@ private fun NavBarSettingsItem(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(FoamDimens.itemRounding))
             .background(backgroundColor)
     ) {
         Row(
@@ -382,7 +382,7 @@ private fun NavBarSettingsItem(
                 // Rows without a switch (MORE) otherwise collapse to the icon
                 // height; keep every row as tall as the switch's touch target.
                 .heightIn(min = 48.dp)
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = FoamDimens.spacingMedium),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -391,7 +391,7 @@ private fun NavBarSettingsItem(
                 modifier = dragHandleModifier.size(20.dp),
                 tint = if (isEnabled) FoamTheme.colors.textSecondary else FoamTheme.colors.textSecondary.copy(alpha = 0.6f)
             )
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(FoamDimens.spacingMedium))
                 Icon(
                     imageVector = when (item) {
                         NavBarItem.HOME -> FoamTheme.icons.current.home
@@ -406,7 +406,7 @@ private fun NavBarSettingsItem(
                 modifier = Modifier.size(20.dp),
                 tint = if (isEnabled) FoamTheme.accentColor else FoamTheme.colors.textSecondary.copy(alpha = 0.6f)
             )
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(FoamDimens.spacingMedium))
             BasicText(
                 text = navBarItemLabel(item),
                 style = FoamTheme.typography.body.copy(
