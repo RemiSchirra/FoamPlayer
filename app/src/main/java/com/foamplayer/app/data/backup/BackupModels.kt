@@ -1,10 +1,12 @@
 package com.foamplayer.app.data.backup
 
+/** Result of a backup export/import. */
 sealed interface BackupOutcome {
     data object Success : BackupOutcome
     data class Error(val message: String) : BackupOutcome
 }
 
+/** A selectable section of the backup file. */
 enum class BackupFeature(val key: String) {
     APP_SETTINGS("app_settings"),
     MUSIC_FOLDERS("music_folders"),
