@@ -48,6 +48,18 @@ private const val AlbumArtFadeInDurationMs = 200
  * cleanly over the artwork surface; on error the note stays visible. Every
  * state is keyed on the model so recycled lazy-list rows reset for their new
  * item instead of inheriting the previous item's fade state.
+ *
+ * Scroll-cost notes (this composable is on every media-list row):
+ *  - The Loading branch only writes state it is actually CHANGING. Coil fires
+ *    Loading for every cache hit too; a no-op write would still invalidate the
+ *    reading scopes, and a Success for a cache hit would write them right
+ *    back -- two recompositions per row per scroll entry for zero visual
+ *    difference. Guarding on the current values makes a cached hit write
+ *    nothing at all.
+ *  - The alpha `graphicsLayer` lambda is attached ONLY while a fade is running
+ *    (or parked at a non-1 alpha). The lambda variant unconditionally promotes
+ *    the image to its own render layer -- an extra offscreen buffer per row,
+ *    even at full alpha. At rest the modifier chain is layer-free.
  */
 @Composable
 fun AlbumArtImage(
@@ -57,9 +69,13 @@ fun AlbumArtImage(
     contentScale: ContentScale = ContentScale.Crop,
     placeholderSize: Dp = 20.dp
 ) {
+    // Parked at 1f; only a running fade writes frames into it.
     val alphaState = remember(model) { mutableFloatStateOf(1f) }
     var loading by remember(model) { mutableStateOf(false) }
     var showPlaceholder by remember(model) { mutableStateOf(false) }
+    // A fade is in flight: keep the alpha layer attached so its frames are
+    // draw-only, then drop the layer entirely once the art rests at full alpha.
+    var fadeActive by remember(model) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -71,27 +87,35 @@ fun AlbumArtImage(
                 modifier = Modifier.size(placeholderSize)
             )
         }
+        val imageModifier = if (fadeActive) {
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = alphaState.floatValue }
+        } else {
+            Modifier.fillMaxSize()
+        }
         AsyncImage(
             model = model,
             contentDescription = contentDescription,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = alphaState.floatValue },
+            modifier = imageModifier,
             contentScale = contentScale,
             onState = { state ->
                 when (state) {
                     is AsyncImagePainter.State.Loading -> {
                         // A request is in flight. Coil ALSO emits this for
-                        // memory-cache hits; the Success branch undoes these
-                        // changes synchronously (before the first frame) there.
-                        loading = true
-                        showPlaceholder = true
-                        alphaState.floatValue = 0f
+                        // memory-cache hits; the Success branch restores the
+                        // rest look there. Writing only real changes keeps a
+                        // cache hit from invalidating anything.
+                        if (!loading) loading = true
+                        if (!showPlaceholder) showPlaceholder = true
+                        if (alphaState.floatValue != 0f) alphaState.floatValue = 0f
                     }
                     is AsyncImagePainter.State.Success -> {
                         showPlaceholder = false
                         if (loading && state.result.dataSource != DataSource.MEMORY_CACHE) {
                             // Freshly decoded: fade in over the artwork surface.
+                            loading = false
+                            fadeActive = true
                             scope.launch {
                                 val fade = Animatable(initialValue = 0f)
                                 fade.animateTo(
@@ -103,11 +127,15 @@ fun AlbumArtImage(
                                 ) {
                                     alphaState.floatValue = value
                                 }
+                                fadeActive = false
+                                alphaState.floatValue = 1f
                             }
                         } else {
                             // Memory-cache hit: draw at full alpha immediately,
                             // so the image is on the very first drawn frame.
-                            alphaState.floatValue = 1f
+                            loading = false
+                            fadeActive = false
+                            if (alphaState.floatValue != 1f) alphaState.floatValue = 1f
                         }
                     }
                     else -> Unit

@@ -141,17 +141,23 @@ fun TrackListItem(
 ) {
     val animatedBackgroundColor = activeRowHighlight(active, track.albumArtPath)
 
-    val targetTrackNumberColor = if (active) {
-        FoamTheme.colors.textPrimary
+    // The track number's color only needs the animated highlight when a number
+    // is actually drawn; rows without one (the majority of every list) skip
+    // the whole animateColorAsState allocation.
+    val animatedTrackNumberColor: Color = if (trackNumberText != null) {
+        val targetTrackNumberColor = if (active) {
+            FoamTheme.colors.textPrimary
+        } else {
+            FoamTheme.colors.textSecondary
+        }
+        animateColorAsState(
+            targetValue = targetTrackNumberColor,
+            animationSpec = tween(durationMillis = 200, easing = EaseOut),
+            label = "activeTrackNumberFade"
+        ).value
     } else {
-        FoamTheme.colors.textSecondary
+        Color.Transparent
     }
-
-    val animatedTrackNumberColor by animateColorAsState(
-        targetValue = targetTrackNumberColor,
-        animationSpec = tween(durationMillis = 200, easing = EaseOut),
-        label = "activeTrackNumberFade"
-    )
 
     // Long-press opens the track actions modal when FoamNavHost provides one at
     // the root; an explicit [onLongClick] always wins over that default.
@@ -340,6 +346,29 @@ fun TrackListItem(
         Modifier
     }
 
+    // The swipe layer (translation + fade + width measurement) only exists in
+    // edit mode, where rows are actually swipeable. Attaching it unconditionally
+    // put a lambda graphicsLayer (its own render node) plus an onSizeChanged
+    // layout observer on EVERY resting row of every list — pure scroll-frame
+    // overhead for a zero transform. Off, translationX is 0 and alpha is 1 by
+    // definition (no gesture can ever move them), so dropping the layer is
+    // visually identical.
+    val swipeRowModifier = if (onRemove != null) {
+        Modifier
+            .onSizeChanged { itemWidthPx = it.width.toFloat() }
+            .graphicsLayer {
+                translationX = dismissOffsetValue
+                // Become slightly translucent while swiping: alpha eases
+                // from 1f down to (1 - SwipeMaxFade) at the threshold
+                val threshold = max(swipeThresholdPx(), 1f)
+                val progress = (abs(dismissOffsetValue) / threshold).coerceIn(0f, 1f)
+                alpha = 1f - progress * SwipeMaxFade
+            }
+            .then(swipeModifier)
+    } else {
+        Modifier
+    }
+
     // Rows showing a track number have no artwork box (and take no part in the
     // artwork shared-element transition).
     val artworkModifier = if (trackNumberText == null) {
@@ -420,17 +449,7 @@ fun TrackListItem(
             // Number-only rows have no artwork surface to cast from.
             artworkElevation = if (trackNumberText == null) MediaItemArtElevation else 0.dp,
             highlightBackground = animatedBackgroundColor,
-            rowModifier = Modifier
-                .onSizeChanged { itemWidthPx = it.width.toFloat() }
-                .graphicsLayer {
-                    translationX = dismissOffsetValue
-                    // Become slightly translucent while swiping: alpha eases
-                    // from 1f down to (1 - SwipeMaxFade) at the threshold
-                    val threshold = max(swipeThresholdPx(), 1f)
-                    val progress = (abs(dismissOffsetValue) / threshold).coerceIn(0f, 1f)
-                    alpha = 1f - progress * SwipeMaxFade
-                }
-                .then(swipeModifier),
+            rowModifier = swipeRowModifier,
             titleModifier = Modifier.rowSharedText(
                 key = "track_title_${track.id}",
                 sharedTransitionScope = sharedTransitionScope,

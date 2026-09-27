@@ -119,7 +119,7 @@ fun RecommendedPlaylistsSeeAllScreen(
 /**
  * "See all" page behind the Home "Recommended albums" row: up to 50 albums in
  * the row's aggregate play/like order, mirroring the albums browse screen
- * (long-press collection actions and shared elements included).
+ (long-press collection actions and shared elements included).
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable

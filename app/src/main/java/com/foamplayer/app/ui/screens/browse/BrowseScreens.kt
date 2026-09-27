@@ -618,7 +618,7 @@ fun FolderBrowseScreen(
             }
         }
 
-        // "No tracks found" is only truthful once the folder content has loaded;
+        // "No tracks found" is only truthful once the folder list has loaded;
         // the pre-load frame (content == null) must render blank instead of
         // flashing the empty state before the listing arrives.
         if (content != null && sortedFolders.isEmpty() && shownTracks.isEmpty()) {

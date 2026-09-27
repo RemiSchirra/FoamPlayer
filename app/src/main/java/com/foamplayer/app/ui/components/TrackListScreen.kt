@@ -497,22 +497,34 @@ fun TrackListScreen(
                             modifier = Modifier
                                 .let { if (isDragging) it else it.animateItem() }
                                 .zIndex(if (isDragging) 1f else 0f)
-                                .graphicsLayer {
-                                    val itemInfo = gridState.layoutInfo.visibleItemsInfo
-                                        .firstOrNull { it.index == gridItemIndex }
-                                    translationX = if (isDragging && itemInfo != null) {
-                                        (gridDragState.draggingItemOffset.x - itemInfo.offset.x).toFloat()
+                                // The drag layer only exists while a drag is live:
+                                // its lambda graphicsLayer is its own render node, and
+                                // at rest every value it produces is the identity
+                                // transform — one extra layer per resting cell, every
+                                // scroll frame, for nothing. zIndex already reads
+                                // isDragging, so the gate adds no new recompositions.
+                                .then(
+                                    if (isDragging) {
+                                        Modifier.graphicsLayer {
+                                            val itemInfo = gridState.layoutInfo.visibleItemsInfo
+                                                .firstOrNull { it.index == gridItemIndex }
+                                            translationX = if (itemInfo != null) {
+                                                (gridDragState.draggingItemOffset.x - itemInfo.offset.x).toFloat()
+                                            } else {
+                                                0f
+                                            }
+                                            translationY = if (itemInfo != null) {
+                                                (gridDragState.draggingItemOffset.y - itemInfo.offset.y).toFloat()
+                                            } else {
+                                                0f
+                                            }
+                                            scaleX = liftScale
+                                            scaleY = liftScale
+                                        }
                                     } else {
-                                        0f
+                                        Modifier
                                     }
-                                    translationY = if (isDragging && itemInfo != null) {
-                                        (gridDragState.draggingItemOffset.y - itemInfo.offset.y).toFloat()
-                                    } else {
-                                        0f
-                                    }
-                                    scaleX = liftScale
-                                    scaleY = liftScale
-                                }
+                                )
                         ) {
                             TrackListItem(
                                 track = track,
@@ -634,17 +646,25 @@ fun TrackListScreen(
                             modifier = Modifier
                                 .let { if (isDragging) it else it.animateItem() }
                                 .zIndex(if (isDragging) 1f else 0f)
-                                .graphicsLayer {
-                                    translationY = if (isDragging) {
-                                        val itemInfo = listState.layoutInfo.visibleItemsInfo
-                                            .firstOrNull { it.index == listItemIndex }
-                                        if (itemInfo != null) {
-                                            listDragState.draggingItemTop - itemInfo.offset
-                                        } else 0f
+                                // Same drag-only gate as the grid branch above: the
+                                // lambda graphicsLayer is a render node per row whose
+                                // resting transform is the identity, so it only earns
+                                // its place while a drag is actually in flight.
+                                .then(
+                                    if (isDragging) {
+                                        Modifier.graphicsLayer {
+                                            translationY = run {
+                                                val itemInfo = listState.layoutInfo.visibleItemsInfo
+                                                    .firstOrNull { it.index == listItemIndex }
+                                                if (itemInfo != null) {
+                                                    listDragState.draggingItemTop - itemInfo.offset
+                                                } else 0f
+                                            }
+                                        }
                                     } else {
-                                        0f
+                                        Modifier
                                     }
-                                }
+                                )
                                 .padding(horizontal = 16.dp)
                         ) {
                             TrackListItem(
