@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** The tracks matched in the library and the entries that were not found. */
 data class PlaylistMatchResult(
     val matched: List<TrackEntity>,
     val missing: List<String>
@@ -20,13 +21,14 @@ data class PlaylistMatchResult(
 /**
  * Matches external playlist sources (an .m3u file or a picked folder) against
  * the scanned library, producing the tracks to insert into a new playlist plus
- * the entries that were not found (shown in the "missing songs" report).
+ * the entries that were not found (the "missing songs" report).
  */
 @Singleton
 class PlaylistImporter @Inject constructor(
     private val scanner: LocalAudioScanner,
     private val m3uParser: M3uParser
 ) {
+    /** Matches an .m3u file: path, then filename, then title/artist metadata. */
     suspend fun importM3u(m3uUri: String, tracks: List<TrackEntity>): PlaylistMatchResult =
         withContext(Dispatchers.Default) {
             val text = m3uParser.readText(Uri.parse(m3uUri))
@@ -52,6 +54,7 @@ class PlaylistImporter @Inject constructor(
             PlaylistMatchResult(matched, missing)
         }
 
+    /** Matches a picked folder's audio files against the library. */
     suspend fun matchFolder(folderUri: String, tracks: List<TrackEntity>): PlaylistMatchResult =
         withContext(Dispatchers.IO) {
             val files = scanner.listAudioFiles(setOf(folderUri))
@@ -72,8 +75,7 @@ class PlaylistImporter @Inject constructor(
                 }
             }
 
-            // Files the library doesn't know by path or filename are matched
-            // through their own title/album tags instead.
+            // Files unknown by path/filename are matched through their own tags.
             if (pending.isNotEmpty()) {
                 val metadata = scanner.readTitlesAlbums(pending.map { it.first })
                 pending.forEach { (uri, fileName) ->
@@ -92,6 +94,7 @@ class PlaylistImporter @Inject constructor(
         }
 }
 
+/** In-memory lookup index over the library: by path, filename, title and title+album/artist. */
 private class TrackPathIndex(tracks: List<TrackEntity>) {
     private val paths = ArrayList<Pair<String, TrackEntity>>(tracks.size)
     private val byPath = HashMap<String, TrackEntity>(tracks.size)

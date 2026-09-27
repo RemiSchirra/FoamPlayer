@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Playlist CRUD and ordering, on top of [PlaylistDao]. */
 @Singleton
 class PlaylistRepository @Inject constructor(
     private val playlistDao: PlaylistDao
@@ -24,6 +25,7 @@ class PlaylistRepository @Inject constructor(
     fun playlistIdsContainingTrack(trackId: Long): Flow<Set<Long>> =
         playlistDao.playlistIdsContainingTrack(trackId).map { it.toSet() }
 
+    /** Creates a playlist and returns its id. */
     suspend fun createPlaylist(name: String, imageUrl: String? = null): Long =
         playlistDao.createPlaylist(
             PlaylistEntity(
@@ -55,7 +57,7 @@ class PlaylistRepository @Inject constructor(
     fun getRecommendedPlaylists(): Flow<List<PlaylistRecommendation>> =
         playlistDao.getRecommendedPlaylists()
 
-    fun getTracksForPlaylistOnce(playlistId: Long): Flow<List<TrackEntity>> =
+    suspend fun getTracksForPlaylistOnce(playlistId: Long): Flow<List<TrackEntity>> =
         playlistDao.getTracksForPlaylist(playlistId)
 
     suspend fun addTrackToPlaylist(playlistId: Long, trackId: Long, orderIndex: Int) {

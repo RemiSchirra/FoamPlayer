@@ -47,10 +47,16 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
+/**
+ * Single source of truth for app settings, backed by the preferences DataStore.
+ * Every write round-trips through [AppSettings.sanitized] so stored state can
+ * never drift into an invalid combination.
+ */
 @Singleton
 class SettingsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>
 ) {
+    /** Live settings stream; IO errors fall back to defaults. */
     val settings: Flow<AppSettings> = dataStore.data
         .catch { error ->
             if (error is IOException) emit(androidx.datastore.preferences.core.emptyPreferences())
@@ -58,6 +64,7 @@ class SettingsRepository @Inject constructor(
         }
         .map { preferences -> preferences.toAppSettings() }
 
+    /** Applies a transformation and persists the sanitized result atomically. */
     suspend fun update(transform: (AppSettings) -> AppSettings) {
         dataStore.edit { preferences ->
             preferences.write(transform(preferences.toAppSettings()).sanitized())
@@ -174,14 +181,17 @@ class SettingsRepository @Inject constructor(
         it.copy(navBarSecondaryEnabled = enabled)
     }
 
+    /** Sets the list density of one media view. */
     suspend fun setMediaDensity(view: MediaListView, density: MediaDensity) = update {
         it.copy(mediaDensities = it.mediaDensities + (view to density))
     }
 
+    /** Sets the sort mode of one media view. */
     suspend fun setMediaSortMode(view: MediaListView, mode: CollectionSortMode) = update {
         it.copy(mediaSortModes = it.mediaSortModes + (view to mode))
     }
 
+    /** Inverts the sort order of one media view. */
     suspend fun setMediaSortInverted(view: MediaListView, inverted: Boolean) = update {
         it.copy(
             mediaSortInverted = if (inverted) it.mediaSortInverted + view else it.mediaSortInverted - view
@@ -435,8 +445,8 @@ class SettingsRepository @Inject constructor(
 }
 
 /**
- * "id=mode:rate;id=mode:rate" — unknown ids/modes are dropped so removed devices and
- * renamed enum members clean themselves out on the next write.
+ * "id=mode:rate" entries joined with ';'. Unknown ids/modes are dropped so
+ * removed devices and renamed enum members clean themselves out on the next write.
  */
 private fun deserializeDeviceAudioConfigs(stored: String?): Map<String, DeviceAudioConfig> =
     stored?.split(";")?.mapNotNull { entry ->
@@ -459,7 +469,7 @@ private fun serializeDeviceAudioConfigs(configs: Map<String, DeviceAudioConfig>)
         "${id.trim()}=${config.bitPerfectMode.name}:${config.sampleRateOverrideHz}"
     }
 
-/** "VIEW=DENSITY;VIEW=DENSITY" — unknown views/densities are dropped, so new entries default cleanly. */
+/** "VIEW=DENSITY" entries joined with ';'; unknown views/densities are dropped. */
 private fun deserializeMediaDensities(stored: String?): Map<MediaListView, MediaDensity> =
     stored?.split(";")?.mapNotNull { entry ->
         val parts = entry.split("=", limit = 2)
@@ -472,7 +482,7 @@ private fun deserializeMediaDensities(stored: String?): Map<MediaListView, Media
 private fun serializeMediaDensities(densities: Map<MediaListView, MediaDensity>): String =
     densities.entries.joinToString(";") { "${it.key.name}=${it.value.name}" }
 
-/** "VIEW=MODE;VIEW=MODE" — unknown views/modes are dropped, so new entries default cleanly. */
+/** "VIEW=MODE" entries joined with ';'; unknown views/modes are dropped. */
 private fun deserializeMediaSortModes(stored: String?): Map<MediaListView, CollectionSortMode> =
     stored?.split(";")?.mapNotNull { entry ->
         val parts = entry.split("=", limit = 2)
@@ -516,11 +526,10 @@ private fun serializeSearchHistory(history: List<SearchHistoryEntry>): String =
     }
 
 /**
- * Preference-level migration for the Stats nav item: preference files written
- * before the item existed carry neither "STATS" in the second-bar order nor in
- * the enabled set, so its default placement (second bar, enabled) is applied to
- * them. Once "STATS" appears in the stored order, the user has configured the
- * bars with the item present and their stored enabled state is respected.
+ * Preference-level migration for the Stats nav item: files written before the
+ * item existed carry neither "STATS" in the second-bar order nor in the enabled
+ * set, so its default placement (second bar, enabled) is applied to them. Once
+ * "STATS" appears in the stored order, the user's stored enabled state wins.
  */
 private fun statsAwareSecondaryEnabled(storedOrder: String?, storedEnabled: Set<String>?): Set<NavBarItem> {
     val enabled = storedEnabled

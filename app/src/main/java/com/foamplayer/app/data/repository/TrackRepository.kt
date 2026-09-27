@@ -32,6 +32,12 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Library data layer: Room access, library scanning and listening-stats
+ * persistence. Keeps the main browse listings (tracks, albums, artists, genres,
+ * years) as process-warm shared flows so screens open instantly with the last
+ * snapshot instead of a cold Room round-trip.
+ */
 @Singleton
 class TrackRepository @Inject constructor(
     private val trackDao: TrackDao,
@@ -43,17 +49,9 @@ class TrackRepository @Inject constructor(
     private val _scanStatus = MutableStateFlow<ScanStatus>(ScanStatus.Idle)
     val scanStatus: StateFlow<ScanStatus> = _scanStatus.asStateFlow()
 
-    // ---- Hot library snapshots ------------------------------------------------
-    //
-    // The browse screens' ViewModels are per-navigation-destination, so their
-    // `stateIn` flows start at emptyList() and every screen open pays a cold
-    // Room round-trip before the first row can render — even though the same
-    // listing was on screen seconds earlier. These process-lifetime shared
-    // flows keep the last emitted listing replayed to each new subscriber
-    // (SharingStarted.Lazily: they stay warm once started), so a screen opens
-    // instantly with the previous snapshot and the live Room stream updates
-    // it from there. Aggregation/splitting runs off the main thread.
-
+    // Warm process-lifetime shared flows (replay 1): browse ViewModels are
+    // per-navigation-destination, so without these every screen open would pay
+    // a cold Room round-trip. Aggregation runs off the main thread.
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** All tracks, kept warm process-wide and replayed to new subscribers. */
@@ -112,10 +110,7 @@ class TrackRepository @Inject constructor(
         )
 
     init {
-        // Pre-warm: with SharingStarted.Lazily the upstream starts on the first
-        // subscription, so subscribe once at construction (the repository is a
-        // process singleton) — the Room round-trips then happen at app start,
-        // off the main thread, instead of on the first navigation.
+        // Pre-warm at app start, off the main thread, instead of on first navigation.
         repositoryScope.launch { allTracksShared.collect { } }
         repositoryScope.launch { allAlbumsShared.collect { } }
         repositoryScope.launch { allArtistsShared.collect { } }
@@ -132,11 +127,7 @@ class TrackRepository @Inject constructor(
     /** Latest credited-artist list snapshot, suspending until the first emission lands. */
     suspend fun allArtistsSnapshot(): List<String> = allArtistsShared.first()
 
-    /**
-     * The all-tracks stream with the last snapshot replayed to every new
-     * subscriber, so browse screens start from the previous listing instead
-     * of an empty frame.
-     */
+    /** The all-tracks stream with the last snapshot replayed to new subscribers. */
     fun getAllTracks(): Flow<List<TrackEntity>> = allTracksShared
 
     fun getAllAlbums(): Flow<List<AlbumSearchResult>> = allAlbumsShared
@@ -153,14 +144,13 @@ class TrackRepository @Inject constructor(
 
     fun searchTracks(query: String): Flow<List<TrackEntity>> = trackDao.searchTracks(query)
 
+    /** Searches credited artists (the "; " convention split apart), matching filtered. */
     fun searchArtists(query: String): Flow<List<String>> = trackDao.searchArtists(query).map { rawArtists ->
         rawArtists.flatMap { it.split("; ") }
             .filter { it.contains(query, ignoreCase = true) }
             .distinct()
             .sorted()
     }
-        // Splitting/sorting the whole library's artist strings; keep it off the
-        // collecting (main) thread — screens subscribe via stateIn on Main.
         .flowOn(Dispatchers.Default)
 
     fun searchAlbums(query: String): Flow<List<AlbumSearchResult>> = trackDao.searchAlbums(query)
@@ -185,6 +175,7 @@ class TrackRepository @Inject constructor(
     /** Albums ranked by the aggregate play count + likes of their tracks (Home row + see-all page). */
     fun getRecommendedAlbums(): Flow<List<AlbumRecommendation>> = trackDao.getRecommendedAlbums()
 
+    /** Rescans the configured library folders. */
     suspend fun rescanLibrary() {
         val folders = settingsRepository.settings.first().libraryFolders
         startScan(folders)
@@ -203,6 +194,7 @@ class TrackRepository @Inject constructor(
         return trackDao.getAllTracksOnce().associateBy { it.path }
     }
 
+    /** Scans [folders], replacing the library with the results (orphans removed). */
     suspend fun startScan(folders: Set<String>) {
         if (folders.isEmpty()) {
             _scanStatus.value = ScanStatus.Finished(0)
@@ -221,7 +213,7 @@ class TrackRepository @Inject constructor(
         settingsRepository.markScanSeparators(artistSeps, genreSeps)
 
         // insertTracks() replaces rows on conflict, which would wipe the listen
-        // stats and score: re-attach the existing ones to the freshly scanned entities.
+        // stats and score: re-attach the existing ones to the fresh entities.
         val existingStats = trackDao.getPlayStats().associateBy { it.path }
         val mergedTracks = scannedTracks.map { scanned ->
             existingStats[scanned.path]?.let {
@@ -230,10 +222,8 @@ class TrackRepository @Inject constructor(
         }
 
         trackDao.insertTracks(mergedTracks)
-        // Chunked orphan cleanup: binding the whole library as a single NOT IN (...)
-        // parameter list crashes on API 29 devices once the library exceeds SQLite's
-        // 999 host-variable limit. Computing the diff here keeps each statement's
-        // bind count bounded (and usually empty -- nothing stale to delete).
+        // Chunked orphan cleanup: a single NOT IN (...) crashes past SQLite's
+        // 999 host-variable limit on API 29.
         val scannedPathSet = mergedTracks.mapTo(HashSet()) { it.path }
         val stalePaths = trackDao.getAllTrackPaths().filterNot { it in scannedPathSet }
         stalePaths.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
@@ -249,11 +239,7 @@ class TrackRepository @Inject constructor(
         _scanStatus.value = ScanStatus.Finished(scannedTracks.size)
     }
 
-    /**
-     * Scans a single folder and merges the result into the library WITHOUT
-     * deleting tracks from other folders (unlike [startScan], which cleans up
-     * orphans across the whole library from the scanned set).
-     */
+    /** Scans one folder and merges the result without deleting tracks from other folders. */
     suspend fun scanFolderAndMerge(folder: String) {
         val settings = settingsRepository.settings.first()
         val artistSeps = settings.artistSeparators
@@ -278,16 +264,15 @@ class TrackRepository @Inject constructor(
     }
 
     /**
-     * Marks [trackId] as listened once at [timestamp] (the threshold-crossing
-     * moment): the tracks-table counters plus one listen_history row, which the
-     * stats screen's period analysis aggregates over.
+     * Marks [trackId] as listened at [timestamp]: the tracks-table counters plus
+     * one listen_history row for the stats screen's period analysis.
      */
     suspend fun incrementPlayCount(trackId: Long, timestamp: Long) {
         trackDao.incrementPlayCount(trackId, timestamp)
         listenHistoryDao.insertListen(ListenHistoryEntity(trackId = trackId, listenedAt = timestamp))
     }
 
-    /** Resets the listen counter to 0 and clears the last-listen date and history rows. */
+    /** Resets the listen counter and clears the last-listen date and history rows. */
     suspend fun resetPlayStats(trackId: Long) {
         trackDao.resetPlayStats(trackId)
         listenHistoryDao.deleteByTrackId(trackId)
@@ -296,17 +281,14 @@ class TrackRepository @Inject constructor(
     /** Stores the user score (-1 dislike / 0 not noted / 1 like / 2 super like). */
     suspend fun setScore(trackId: Long, score: Int) = trackDao.setScore(trackId, score)
 
-    /** Stores the user-set instrumental flag (lyrics view shows a music note instead of lyrics). */
+    /** Stores the user-set instrumental flag (lyrics view shows a music note instead). */
     suspend fun setInstrumental(trackId: Long, instrumental: Boolean) =
         trackDao.setInstrumental(trackId, instrumental)
 
     /** Emits the user-set instrumental flag for [trackId], updating whenever it changes. */
     fun observeInstrumental(trackId: Long): Flow<Boolean> = trackDao.observeInstrumental(trackId)
 
-    // ---- Listening stats (stats screen) ---------------------------------------
-    // Thin listen_history pass-throughs; [since] = period start (epoch ms) or
-    // NULL for all-time. Aggregation/splitting of the "; " multi-artist and
-    // multi-genre conventions happens in the stats ViewModel.
+    // ---- Listening stats: [since] = period start (epoch ms) or NULL for all time ----
 
     fun observeListenOverview(since: Long?): Flow<ListenOverview> =
         listenHistoryDao.observeOverview(since)

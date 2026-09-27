@@ -40,6 +40,11 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Lyrics data layer: resolves lyrics through the user's configured source order
+ * (online cache → sidecar file → embedded tag), manages the persisted online
+ * cache, and provides search/status/write/delete operations over all sources.
+ */
 @Singleton
 class LyricsRepository @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -50,20 +55,12 @@ class LyricsRepository @Inject constructor(
     private val lyricsFileWriter: LyricsFileWriter,
     private val statusScanner: LyricsStatusScanner
 ) {
-    /**
-     * Session memo of the searchable text of a track's sidecar + embedded lyrics,
-     * keyed by size. LRU-bounded: one entry per inspected track with lyric payloads
-     * reaching tens of KB would otherwise pin the whole library's text in memory
-     * over a long session. Evicted entries are simply re-read from disk on demand.
-     */
+    /** Session memo of searchable sidecar + embedded text, keyed by size. LRU-bounded. */
     private val searchTextCache = LruCache<Long, Pair<Long, String?>>(SEARCH_TEXT_CACHE_ENTRIES)
 
     suspend fun getLyrics(track: TrackEntity): String? = resolveLyrics(track)?.content
 
-    /**
-     * Resolves the lyrics through the user's configured source order, tagging
-     * the result with the source (and provider) that produced it.
-     */
+    /** Resolves lyrics through the configured source order, tagging the winning source. */
     suspend fun resolveLyrics(track: TrackEntity): ResolvedLyrics? = withContext(Dispatchers.IO) {
         val settings = settingsRepository.settings.first()
 
@@ -81,9 +78,8 @@ class LyricsRepository @Inject constructor(
     }
 
     /**
-     * Same as [resolveLyrics] but strictly local: the ONLINE source is served
-     * from the persisted cache only and never queries the network. Used by the
-     * lyrics manager's details modal, which must stay read-only.
+     * Same as [resolveLyrics] but strictly local: ONLINE is served from the
+     * persisted cache only. Used by the lyrics manager's read-only details modal.
      */
     suspend fun resolveLocalLyrics(track: TrackEntity): ResolvedLyrics? = withContext(Dispatchers.IO) {
         val settings = settingsRepository.settings.first()
@@ -112,9 +108,8 @@ class LyricsRepository @Inject constructor(
         embeddedLyricsProvider.getLyrics(track.path.toUri())
             ?.let { ResolvedLyrics(it, LyricsSource.EMBEDDED, null) }
 
+    /** Serves from the persisted cache, else queries providers in configured order. */
     private suspend fun resolveOnline(settings: AppSettings, track: TrackEntity): ResolvedLyrics? {
-        // Lyrics already fetched online previously: served from the local cache
-        // without re-querying the network.
         cachedLyricsDao.getByTrackId(track.id)
             ?.takeIf { it.lyrics.isNotBlank() }
             ?.let { cached ->
@@ -148,11 +143,7 @@ class LyricsRepository @Inject constructor(
     /** Track ids that have online-fetched lyrics persisted in the cache. */
     fun observeCachedTrackIds(): Flow<List<Long>> = cachedLyricsDao.observeCachedTrackIds()
 
-    /**
-     * Per-track overview of every lyrics source: the online cache, the sidecar
-     * file and the embedded tag. All three checks hit IO, so this must be
-     * called off the main thread.
-     */
+    /** Per-track availability of every source; all checks hit IO. */
     suspend fun getSourceStatus(track: TrackEntity): LyricsSourceStatus = withContext(Dispatchers.IO) {
         val hasCached = cachedLyricsDao.getByTrackId(track.id)?.lyrics?.isNotBlank() == true
         val hasFile = localLyricsProvider.getLyrics(track.path) != null
@@ -160,26 +151,16 @@ class LyricsRepository @Inject constructor(
         LyricsSourceStatus(hasCached = hasCached, hasFile = hasFile, hasEmbedded = hasEmbedded)
     }
 
-    /**
-     * Batched per-track lyrics source overview for the lyrics manager. Delegates
-     * to [LyricsStatusScanner], which groups work per folder and skips tracks
-     * whose inputs did not change since the previous scan. Results stream in
-     * through [onStatus]; must be called off the main thread.
-     */
+    /** Batched per-track status scan for the lyrics manager (see [LyricsStatusScanner]). */
     suspend fun scanSourceStatuses(
         tracks: List<TrackEntity>,
         onStatus: (Long, LyricsSourceStatus) -> Unit
     ) = statusScanner.scan(tracks, onStatus)
 
     /**
-     * Streams every track of [tracks] whose locally available lyrics contain
-     * [query]. Only the three local sources are inspected — the persisted
-     * online cache, the sidecar file and the embedded tag — never the network.
-     *
-     * Tracks are processed in parallel on Dispatchers.IO (bounded by a
-     * semaphore) and matches are emitted as soon as they are found, so the
-     * UI can fill in progressively while the scan runs. Cancelling the
-     * collector stops the scan.
+     * Streams every track of [tracks] whose local lyrics contain [query].
+     * Never touches the network; tracks are inspected in parallel (bounded) and
+     * matches stream as found. Cancelling the collector stops the scan.
      */
     fun searchLyricsText(query: String, tracks: List<TrackEntity>): Flow<TrackEntity> = channelFlow {
         val needle = query.trim()
@@ -204,11 +185,7 @@ class LyricsRepository @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    /**
-     * Joins the display text of every local lyrics source of [track]: the
-     * persisted online-fetched lyrics plus the sidecar/embedded text (the
-     * latter memoized in [searchTextCache] for the app session).
-     */
+    /** Joins the display text of every local lyrics source of [track]. */
     private suspend fun searchableLyricsText(track: TrackEntity, cached: String?): String? {
         val cachedText = cached
             ?.takeIf { it.isNotBlank() }
@@ -243,10 +220,9 @@ class LyricsRepository @Inject constructor(
     }
 
     /**
-     * Queries every enabled lyrics provider (in the user's configured order)
-     * concurrently for the track's metadata, classifies and ranks each result:
-     * metadata similarity first, then duration delta, then provider order.
-     * A provider that errors or times out is skipped without failing the search.
+     * Queries every enabled provider concurrently and ranks results: metadata
+     * similarity, then duration delta, then provider order. A provider that
+     * errors or times out is skipped without failing the search.
      */
     suspend fun searchAllProviders(track: TrackEntity): List<LyricsSearchResult> = withContext(Dispatchers.IO) {
         val settings = settingsRepository.settings.first()
@@ -291,15 +267,9 @@ class LyricsRepository @Inject constructor(
             }
     }
 
-    /**
-     * Removes every lyrics source from a track: the online cache, the sidecar
-     * files and the embedded tag (the latter only for containers whose tag can
-     * be rewritten; [LyricsDeleteResult.embeddedStillPresent] flags the cases
-     * where embedded lyrics survive the removal).
-     */
+    /** Removes every lyrics source from a track (cache, sidecars, embedded tag). */
     suspend fun deleteLyrics(track: TrackEntity): LyricsDeleteResult = withContext(Dispatchers.IO) {
-        // Force the next status scan to re-read the audio file instead of
-        // reusing the cached embedded-lyrics verdict.
+        // Force the next status scan to re-read the audio file.
         statusScanner.invalidate(track.id)
         invalidateSearchText(track.id)
 
@@ -379,7 +349,7 @@ class LyricsRepository @Inject constructor(
     }
 
     private companion object {
-        /** Network searches are individually capped so one slow provider cannot stall the whole screen. */
+        /** Per-provider cap so one slow provider cannot stall the whole search. */
         const val PROVIDER_SEARCH_TIMEOUT_MS = 20_000L
 
         /** Parallel track inspections during the local lyrics text search. */
