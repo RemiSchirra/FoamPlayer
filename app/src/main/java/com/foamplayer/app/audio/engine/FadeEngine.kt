@@ -26,36 +26,17 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Owns every audio ramp of the app: crossfades between tracks (a secondary
- * ExoPlayer fades in while the outgoing one fades out) and quick fades around
- * play/pause.
+ * Owns every audio ramp of the app: crossfades between tracks and quick fades
+ * around play/pause.
  *
- * Lifecycle of a crossfade:
- *  1. [startCrossfade] builds a secondary player (same renderers, its own DSP
- *     mirror processor so both streams get identical tone/volume treatment),
- *     loads a queue window around the target track and starts it at volume 0
- *     while the current player keeps playing.
- *  2. A ramp loop on the main thread steps both players' volume every
- *     [RAMP_STEP_MS]: outgoing * equal-power cos(t), incoming * equal-power
- *     sin(t). The base (non-fade) volume is re-read every step, so DSP volume
- *     changes during a fade are tracked.
- *  3. At the fade's switch point (t == 0 for a quick/manual fade, t == 0.5 for
- *     the automatic normal crossfade) [Host.onCrossfadeLogicalSwitch] fires:
- *     the UI-facing track/position switches to the incoming stream right then,
- *     while both players are still audible.
- *  4. At t == 1 the secondary is promoted to primary ([Host.replacePrimaryPlayer]
- *     re-binds the MediaSession and swaps AudioEngine's active player), the old
- *     player is released, and [Host.onCrossfadeSwapped] finalizes the player-level
- *     plumbing (the UI switch already happened in step 3).
- *
- * Every fade is cancellable: any queue mutation calls [cancel], which kills the
- * ramp, restores the old stream's volume, destroys the secondary (mirror
- * processor included) and lets the host resync its state — exactly one stream
- * keeps playing, no stuck secondary, no double audio.
- *
- * Durations come from the settings Flow. A duration change mid-fade never
- * corrupts an ongoing ramp: the ramp captures its duration at start and only
- * future fades see the new value.
+ * Crossfade lifecycle: [startCrossfade] builds a secondary player with its own
+ * DSP mirror processor and starts it at volume 0; a ramp loop steps both
+ * players' volume with equal-power curves (re-reading the base volume every
+ * step). At the switch point the UI switches to the incoming stream
+ * ([Host.onCrossfadeLogicalSwitch]); at t == 1 the secondary is promoted
+ * ([Host.replacePrimaryPlayer]) and the old player released. Any queue
+ * mutation calls [cancel], restoring the old stream and destroying the
+ * secondary — exactly one stream keeps playing.
  */
 @Singleton
 class FadeEngine @Inject constructor(
@@ -68,11 +49,7 @@ class FadeEngine @Inject constructor(
     interface Host {
         val primaryPlayer: ExoPlayer
 
-        /**
-         * Promotes [newPlayer] (carrying [newMirror], its DSP mirror processor
-         * which must STAY registered) to the active player and re-binds the
-         * MediaSession/notification to it.
-         */
+        /** Promotes [newPlayer] (its mirror processor must STAY registered) and re-binds the session. */
         fun replacePrimaryPlayer(newPlayer: ExoPlayer, newMirror: DspAudioProcessor?)
 
         /** Media items of a full window around [centerQueueIndex], plus the target's player index. */
@@ -89,33 +66,21 @@ class FadeEngine @Inject constructor(
         )
 
         /**
-         * The fade's "logical" switch point: the UI-facing track (title, artist,
-         * queue index, duration, seek bar position) should switch to
-         * [targetQueueIndex]/[targetTrackId] now, even though the incoming
-         * player is only promoted to primary later, at [onCrossfadeSwapped].
-         *
-         * Fires once per fade. For a quick/manual fade (play-pause resume,
-         * seek, skip) this is called synchronously at fade start, so the UI
-         * reacts to the tap instantly. For the automatic normal crossfade it
-         * is called mid-ramp, at the fade's switch point (see [startCrossfade]),
-         * matching how far the incoming stream has already played into itself.
+         * The fade's UI-facing switch point: track/position switch to the
+         * incoming stream now. Quick fades fire this synchronously at start;
+         * the automatic crossfade fires it at the ramp's midpoint.
          */
         fun onCrossfadeLogicalSwitch(targetQueueIndex: Int, targetTrackId: Long)
 
         /**
-         * Called once the ramp completes and the incoming player has been
-         * promoted to primary: finalize player-level plumbing (window/loadedRange,
-         * repeat/shuffle re-apply, listener re-attach). The UI-facing track switch
-         * already happened at [onCrossfadeLogicalSwitch].
+         * Ramp complete, incoming player promoted: finalize player-level
+         * plumbing. The UI switch already happened at [onCrossfadeLogicalSwitch].
          */
         fun onCrossfadeSwapped(targetQueueIndex: Int, targetPositionMs: Long)
 
         /**
-         * Called after an abort/cancel: the old stream is the only one left.
-         * [logicalSwitchHadFired] is true when [onCrossfadeLogicalSwitch] had
-         * already published the incoming track to the UI before the abort — the
-         * host must revert its UI-facing state back to the (still playing)
-         * outgoing track.
+         * Called after an abort/cancel. [logicalSwitchHadFired] is true when the
+         * UI had already switched and must revert to the outgoing track.
          */
         fun onCrossfadeAborted(logicalSwitchHadFired: Boolean)
 
@@ -147,9 +112,7 @@ class FadeEngine @Inject constructor(
     private var rampStartedAtNanos: Long = 0L
     private var activeFadeIsCrossfade: Boolean = false
 
-    // Ramp progress (0..1) at which the active crossfade's logical switch
-    // fires (see Host.onCrossfadeLogicalSwitch). 0 for quick/manual fades
-    // (instant); 0.5 for the automatic normal crossfade.
+    // Ramp progress at which the logical switch fires; 0 for quick fades, 0.5 for auto.
     private var switchAtT: Float = 0f
     private var logicalSwitchFired: Boolean = false
 
@@ -159,12 +122,8 @@ class FadeEngine @Inject constructor(
         private set
 
     /**
-     * The player whose position/track currently represents "now playing" for
-     * UI purposes. Null when nothing is fading, or when a crossfade's logical
-     * switch hasn't fired yet (the outgoing/primary player is still the one to
-     * show). Once the switch fires, this is the incoming stream — even though
-     * it is only promoted to primary at the end of the ramp. Callers fall back
-     * to the primary player when this is null.
+     * Player representing "now playing" for UI purposes: the incoming stream
+     * once its logical switch fired, null otherwise (callers fall back to primary).
      */
     val displayPlayer: ExoPlayer?
         get() = if (isFading && logicalSwitchFired) secondary else null
@@ -205,15 +164,12 @@ class FadeEngine @Inject constructor(
     // ------------------------------------------------------- fade operations
 
     /**
-     * Crossfade the current player into [targetQueueIndex] (position 0 unless
-     * [targetPositionMs] says otherwise — the same-track seek path). Returns
-     * false when a fade is already running or the target cannot be prepared.
+     * Crossfades the current player into [targetQueueIndex] at [targetPositionMs].
+     * Returns false when a fade is already running or the target can't be prepared.
      *
-     * [switchAtT] is the ramp progress (0..1) at which the UI-facing track
-     * switch fires (see [Host.onCrossfadeLogicalSwitch]). Defaults to 0: every
-     * user-initiated fade (skip, seek, resume) switches the UI instantly. The
-     * automatic normal crossfade passes 0.5 so the UI switches at the ramp's
-     * midpoint instead.
+     * [switchAtT] is the ramp progress (0..1) at which the UI switch fires:
+     * 0 (default) for instant response on user-initiated fades, 0.5 for the
+     * automatic normal crossfade.
      */
     fun startCrossfade(
         targetQueueIndex: Int,
@@ -249,8 +205,7 @@ class FadeEngine @Inject constructor(
 
         secondaryListener = object : Player.Listener {
             override fun onPlayerError(event: PlaybackException) {
-                // The incoming track failed mid-fade: hand over to the engine's
-                // error path (cancel + advance) instead of leaving a stuck ramp.
+                // Incoming track failed mid-fade: hand over to the engine's error path.
                 scope.launch { h.onFadeTargetError(targetTrackId) }
             }
         }
@@ -258,8 +213,7 @@ class FadeEngine @Inject constructor(
 
         oldPlayerListener = object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                // Timing jitter: the old stream advanced to its next item mid-fade.
-                // Stop it so only the incoming stream keeps playing.
+                // Old stream advanced mid-fade: stop it, only the incoming stream plays on.
                 old.stop()
             }
 
@@ -268,7 +222,7 @@ class FadeEngine @Inject constructor(
             }
 
             override fun onPlayerError(event: PlaybackException) {
-                // The outgoing track died mid-fade: finish the transition now.
+                // Outgoing track died mid-fade: finish the transition now.
                 scope.launch { finishCrossfadeNow(targetQueueIndex, targetTrackId, targetPositionMs) }
             }
         }
@@ -276,8 +230,6 @@ class FadeEngine @Inject constructor(
 
         h.onCrossfadeStarting(window.windowStart, window.windowEnd, targetQueueIndex, targetTrackId)
 
-        // Instant fades (switchAtT <= 0) publish the UI switch right away,
-        // before the ramp even starts stepping.
         if (this.switchAtT <= 0f) {
             logicalSwitchFired = true
             h.onCrossfadeLogicalSwitch(targetQueueIndex, targetTrackId)
@@ -311,10 +263,7 @@ class FadeEngine @Inject constructor(
         return true
     }
 
-    /**
-     * Quick fade: ramp the current player to silence, THEN pause. If cancelled
-     * mid-ramp (the user pressed play again), playback simply continues.
-     */
+    /** Quick fade: ramp to silence, then pause. Cancelled mid-ramp = playback continues. */
     fun fadeOutAndPause() {
         if (isFading) cancel()
         val h = host ?: return
@@ -349,10 +298,7 @@ class FadeEngine @Inject constructor(
         }
     }
 
-    /**
-     * Quick fade: ramp the current player from silence up to the base volume.
-     * The caller must already have muted the player and started playback.
-     */
+    /** Quick fade: ramp from silence up to base volume. Caller must have muted and started playback. */
     fun fadeIn() {
         if (isFading) cancel()
         val h = host ?: return
@@ -383,11 +329,9 @@ class FadeEngine @Inject constructor(
     }
 
     /**
-     * Cancels the active fade, whichever kind it is: restores the old stream's
-     * volume, destroys the secondary (crossfades) and re-syncs the host. Safe
-     * to call when nothing is fading (no-op) and from inside the ramp's own
-     * failure handler (cancelling the current job from within its catch block
-     * still lets the non-suspending cleanup below run).
+     * Cancels the active fade: restores the old stream's volume, destroys the
+     * secondary and re-syncs the host. No-op when nothing is fading; safe to
+     * call from the ramp's own failure handler.
      */
     fun cancel() {
         if (!isFading) return
@@ -395,8 +339,7 @@ class FadeEngine @Inject constructor(
             isFading = false
             return
         }
-        // Only a crossfade has a UI-facing logical switch to potentially revert;
-        // a plain quick fade (fade-out-to-pause/fade-in) never fires one.
+        // Only a crossfade has a UI-facing logical switch to potentially revert.
         val switchHadFired = activeFadeIsCrossfade && logicalSwitchFired
         isFading = false
         fadeJob?.cancel()
@@ -407,19 +350,16 @@ class FadeEngine @Inject constructor(
     // ----------------------------------------------------------------- swap
 
     /**
-     * Completes a crossfade: promotes the secondary, releases the old player
-     * and re-publishes state. Idempotent (guarded by [isFading]) so the ramp's
-     * natural completion and an old-player error cannot both swap.
+     * Completes a crossfade: promotes the secondary, releases the old player.
+     * Idempotent (guarded by [isFading]) so the ramp's completion and an
+     * old-player error cannot both swap.
      */
     private fun finishCrossfadeNow(targetQueueIndex: Int, targetTrackId: Long, targetPositionMs: Long) {
         if (!isFading) return
         val h = host ?: return
         val newPlayer = secondary ?: return
         if (!logicalSwitchFired) {
-            // The outgoing player died before the ramp reached its switch
-            // point (only possible for a mid-ramp switchAtT): catch the UI up
-            // now, immediately before promoting the incoming stream, so it
-            // never ends up representing a track the UI never switched to.
+            // Outgoing player died before the switch point: catch the UI up now.
             logicalSwitchFired = true
             h.onCrossfadeLogicalSwitch(targetQueueIndex, targetTrackId)
         }
@@ -432,10 +372,7 @@ class FadeEngine @Inject constructor(
         old.release()
         secondary = null
         activeFadeIsCrossfade = false
-        // The promoted player's mirror processor STAYS registered with the DSP
-        // engine — it is now the active player's chain. The retiring player's
-        // mirror (if the old primary was itself once a secondary) is dropped by
-        // the host in replacePrimaryPlayer.
+        // The promoted mirror stays registered — it's now the active player's chain.
         h.replacePrimaryPlayer(newPlayer, secondaryMirror)
         secondaryMirror = null
         logicalSwitchFired = false
@@ -475,10 +412,8 @@ class FadeEngine @Inject constructor(
     }
 
     /**
-     * Builds a secondary player identical to the primary (same renderers
-     * factory shape) but with its own DSP mirror processor. Audio focus is NOT
-     * handled here — the promoted player gains it at the swap, so both streams
-     * never fight over focus.
+     * Builds a secondary player with its own DSP mirror processor. No audio
+     * focus handling — the promoted player gains it at the swap.
      */
     @androidx.annotation.OptIn(UnstableApi::class)
     @OptIn(UnstableApi::class)
@@ -515,7 +450,7 @@ class FadeEngine @Inject constructor(
     private companion object {
         const val TAG = "FadeEngine"
 
-        /** Volume ramp resolution. 20 ms is smooth enough and cheap on the main thread. */
+        /** Volume ramp resolution; 20 ms is smooth and cheap on the main thread. */
         const val RAMP_STEP_MS = 20L
     }
 }
