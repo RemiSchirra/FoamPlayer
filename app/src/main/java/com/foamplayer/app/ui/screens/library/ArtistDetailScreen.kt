@@ -32,8 +32,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -173,12 +174,19 @@ fun ArtistDetailScreen(
     }
     // Measured by the header item's layout pass (see [CollectionHeroImmersiveHeader]);
     // read untracked inside the offset lambda, so it is always the settled value.
-    val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
+    // SAVEABLE: the header is a lazy grid item — when this page is restored
+    // scrolled PAST it (returning from a deeper page), the header is not
+    // composed, so nothing re-reports the height. A plain remember would start
+    // at 0 and the immersive artwork layer would render at offset 0 — the hero
+    // flashing over the list as if unscrolled — until the first scroll composes
+    // the header again and the offset jumps, vanishing the hero instantly. The
+    // saved height restores the correct scrolled-away offset on the first frame.
+    var heroVisibleHeightPx by rememberSaveable { mutableStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
         if (gridState.firstVisibleItemIndex == 0) {
             gridState.firstVisibleItemScrollOffset
         } else {
-            heroVisibleHeightPx.intValue
+            heroVisibleHeightPx
         }
     }
     // Root-space top y of the grid container, reported by the gridTopObserver
@@ -287,7 +295,7 @@ fun ArtistDetailScreen(
                             if (tracks.isNotEmpty()) onTrackClick(tracks.shuffled(), 0)
                         },
                         searchState = searchState,
-                        onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                        onVisibleHeightPx = { heroVisibleHeightPx = it },
                         scrollOffsetPx = heroScrollOffsetPx,
                         transitionAlpha = transitionAlpha,
                         sharedTransitionScope = sharedTransitionScope,
