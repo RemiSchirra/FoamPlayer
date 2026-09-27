@@ -49,7 +49,8 @@ import com.foamplayer.app.ui.theme.FoamTheme
 /**
  * Live audio fidelity verdict with the itemized breakdown, shared between the
  * audio settings screen and the player's audio-info modal. Tapping toggles the
- * itemized score breakdown.
+ * itemized score breakdown; while there is no playback the card is inert (the
+ * breakdown would be empty), so taps are ignored and the chevron is hidden.
  */
 @Composable
 fun FidelityScoreCard(
@@ -57,16 +58,23 @@ fun FidelityScoreCard(
     hasTrack: Boolean
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
+    val expandable = hasTrack
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
             .background(FoamTheme.colors.surface)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { expanded = !expanded }
+            .then(
+                if (expandable) {
+                    Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { expanded = !expanded }
+                    )
+                } else {
+                    Modifier
+                }
             )
     ) {
         Column {
@@ -74,10 +82,16 @@ fun FidelityScoreCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = ripple(color = FoamTheme.colors.textPrimary),
-                        onClick = { expanded = !expanded }
+                    .then(
+                        if (expandable) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = ripple(color = FoamTheme.colors.textPrimary),
+                                onClick = { expanded = !expanded }
+                            )
+                        } else {
+                            Modifier
+                        }
                     )
                     .padding(FoamDimens.paddingMedium)
             ) {
@@ -101,16 +115,18 @@ fun FidelityScoreCard(
                             style = FoamTheme.typography.caption
                         )
                     }
-                    Icon(
-                        imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                        contentDescription = null,
-                        tint = FoamTheme.colors.textSecondary
-                    )
+                    if (expandable) {
+                        Icon(
+                            imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                            contentDescription = null,
+                            tint = FoamTheme.colors.textSecondary
+                        )
+                    }
                 }
             }
 
             // Itemized breakdown.
-            AnimatedVisibility(visible = expanded) {
+            AnimatedVisibility(visible = expanded && expandable) {
                 Column(
                     modifier = Modifier
                         .padding(horizontal = FoamDimens.paddingMedium)
