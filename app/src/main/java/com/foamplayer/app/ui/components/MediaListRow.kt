@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +64,7 @@ import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.screens.player.immersiveArtFadeSpan
+import com.foamplayer.app.ui.screens.player.PlayerDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -70,7 +72,7 @@ import kotlin.math.roundToInt
 
 /**
  * Corner radius of an album-art surface of [artSize]: half the artwork's size
- * times the mini-player rounding percentage — the same convention as the mini
+ * times the mini-player rounding percentage -- the same convention as the mini
  * player and every list row. Use for artwork whose size is known statically;
  * for dynamic sizes (grid cells, animating shared elements) use [AlbumArtShape].
  */
@@ -137,7 +139,7 @@ val AlbumArtBoundsTransform = BoundsTransform { _, _ ->
 /**
  * Animated flight variant of a percentage-based artwork shape: the corner
  * radius is [restPercent] of the artwork's own size (the theme's album
- * rounding, or 50f — a full circle — for fully round artwork like artist
+ * rounding, or 50f -- a full circle -- for fully round artwork like artist
  * images), scaled by [fraction]: 1f = the source row's rounded rest look,
  * 0f = the immersive hero's square look. Used both as a collection flight's
  * [androidx.compose.animation.SharedTransitionScope.OverlayClip] and as the
@@ -211,7 +213,7 @@ internal fun rememberCollectionFlightProgress(
  * the player's dismiss flight:
  *
  * - the corner radius rides the flight from the hero's square rest look to
- *   the row's own percentage radius ([fullyRounded] rows — artists — rest on
+ *   the row's own percentage radius ([fullyRounded] rows -- artists -- rest on
  *   a full circle, the same convention as [AlbumArtFlightShape]'s
  *   [AlbumArtFlightFullyRoundedPercent], so it lands exactly on the row's
  *   rest look),
@@ -319,6 +321,158 @@ internal fun Modifier.collectionRowFlightArtwork(
         .collectionFlightArtwork(flightProgress, fullyRounded)
 }
 
+/**
+ * Whether a player-dismiss artwork flight is currently landing on this list's
+ * rows -- the artwork shrinking from the full player's hero onto the playing
+ * row, driven by the given player-container [animatedVisibilityScope].
+ *
+ * True from the first frame the dismiss gesture takes over (the press preload
+ * has already flipped the flight's target to the row) until the close flight
+ * settles at [EnterExitState.Visible]. Both endpoints are snapshot-read enum
+ * states, so the value flips exactly twice per flight with no spring overshoot
+ * to guard against, and no per-frame composition reads.
+ *
+ * Used to step the rows' static rest shadows aside for the flight's duration:
+ * during the flight the shared-element overlay renders ONLY the becoming
+ * visible side's content (the flying artwork, which casts the shadow itself --
+ * see [playerFlightArtwork]), while the row's own artwork slot is empty in
+ * place. The static shadow is drawn by MediaListRow/MediaGridCell OUTSIDE the
+ * sharedElement modifier, so it keeps rendering in place through the whole
+ * flight and would otherwise sit under that empty slot from the first gesture
+ * frame. The flight artwork lands at exactly the row's rest elevation, so when
+ * the flight settles the static shadow resumes on the same frame at an
+ * identical strength -- a seamless hand-off.
+ *
+ * Close flights only (the row side ENTERS while the player closes). Open
+ * flights (the player expanding over this page) deliberately do NOT count:
+ * there the hero's own elevation ramps up from zero over the departing row
+ * and the row's static shadow hands off through the page fade, which is the
+ * established open-flight look. Both reads are on the row-side scope's own
+ * EnterExitState transition, so they are true only for a close flight whose
+ * landing target is this list.
+ *
+ * When either scope is missing (hosts outside the shared-transition/player
+ * plumbing) the state rests at false, so the static shadows render unchanged.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun rememberPlayerDismissFlightActive(
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope?
+): State<Boolean> {
+    if (sharedTransitionScope == null || animatedVisibilityScope == null) {
+        val alwaysInactive = remember { mutableStateOf(false) }
+        return alwaysInactive
+    }
+    return remember(animatedVisibilityScope) {
+        derivedStateOf {
+            // Close-flight only: the row side ENTERS (targets Visible) while
+            // the player closes, and is still in flight until the row-side
+            // transition's current state reaches Visible (the transition
+            // settles). currentState != Visible is exactly the in-flight
+            // window; enum reads cannot overshoot the way a float would.
+            animatedVisibilityScope.transition.targetState == EnterExitState.Visible &&
+                    animatedVisibilityScope.transition.currentState != EnterExitState.Visible
+        }
+    }
+}
+
+/**
+ * Artwork surface for a list row that is the shared-element ENDPOINT of a player
+ * transition (i.e. the row the full player's artwork morphs into when the player is
+ * dismissed onto its origin collection). During such a flight the shared-element
+ * overlay renders the row's own content at the interpolated bounds -- only the
+ * becoming-visible side of a [SharedTransitionScope.sharedElement] pair is drawn --
+ * so the row's clipping must follow the flight instead of staying at its rest radius,
+ * or the art would show near-square corners while the bounds are still hero-sized.
+ *
+ * The corner radius is lerped from the full player hero's radius down to the row's own
+ * percentage radius (half the element's size times the mini-player rounding -- the
+ * same convention as [AlbumArtShape], so it lands exactly on the row's rest look for
+ * 48dp rows, 72dp rows and grid cells alike). The paused-art shrink is likewise
+ * mirrored for the first frames of the flight: the hero it departs from renders
+ * scaled while playback is paused (see rememberPausedArtScale -- every endpoint of an
+ * album-art shared-element pair must render at the same scale or the art pops the
+ * instant the gesture starts), easing back to the row's unscaled rest as it lands.
+ *
+ * The artwork also carries the full player's drop shadow ITSELF, riding the flight:
+ * the hero side of the pair is the becoming-invisible side and is not rendered
+ * mid-flight at all (only the becoming-visible side draws), so without this the
+ * resting hero's shadow vanishes the instant the gesture takes over. The elevation
+ * starts at the hero's full [PlayerDimens.fullPlayerArtElevation] while the
+ * interpolated bounds are still hero-sized and eases down to [restArtElevation] --
+ * the row's own rest shadow value -- as the art lands, so the static shadow
+ * suppressed for the flight's duration (see [rememberPlayerDismissFlightActive])
+ * resumes on the same frame at an identical strength.
+ *
+ * Immersive keeps 0f throughout: the immersive hero casts no shadow (see
+ * TrackHeroPager's hero shadowElevation gate) and the flight's artwork alpha fades
+ * mid-flight there -- a layer's own alpha cannot fade its RenderNode shadow (see
+ * MiniPlayer's flight-elevation note), so a partial-strength shadow is not
+ * expressible on this path.
+ *
+ * With [immersive] on, the overlay art also mirrors the hero's immersive fade
+ * (FullPlayerMainContent): the hero artwork is invisible at rest-open -- it lives in
+ * the backdrop -- and only fades in over the closing flight's last stretch, so the
+ * overlay must start fully transparent and follow the exact same curve instead of
+ * popping in at full alpha.
+ *
+ * Everything is driven by [animatedVisibilityScope]'s own enter/exit transition --
+ * which is seeked by the player's [androidx.compose.animation.core.SeekableTransitionState]
+ * -- so the radius, scale, elevation and fade track the finger during the interactive
+ * swipe and hand off continuously to the settle animation on release. All reads happen
+ * inside the graphicsLayer block, keeping every frame of the flight draw-only.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun Modifier.playerFlightArtwork(
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    fullArtRadius: Dp,
+    pausedArtScale: () -> Float,
+    immersive: Boolean = false,
+    restArtElevation: Dp = MediaItemArtElevation
+): Modifier {
+    val flightProgress by animatedVisibilityScope.transition.animateFloat(label = "rowArtFlight") { state ->
+        if (state == EnterExitState.Visible) 1f else 0f
+    }
+    val density = LocalDensity.current
+    val fullRadiusPx = remember(fullArtRadius, density) { with(density) { fullArtRadius.toPx() } }
+    val fullElevationPx =
+        remember(density) { with(density) { PlayerDimens.fullPlayerArtElevation.toPx() } }
+    val restElevationPx =
+        remember(restArtElevation, density) { with(density) { restArtElevation.toPx() } }
+    val rounding = FoamTheme.shapes.miniPlayerRounding
+    return this.graphicsLayer {
+        val progress = flightProgress
+        // Rest radius is percentage-based on the element's own (animated) size, so it
+        // scales along with the bounds throughout the flight.
+        val restRadiusPx = (size.minDimension / 2f) * rounding
+        shape = RoundedCornerShape(with(density) { lerp(fullRadiusPx, restRadiusPx, progress).toDp() })
+        clip = true
+        val paused = pausedArtScale()
+        val scale = paused + (1f - paused) * progress
+        scaleX = scale
+        scaleY = scale
+        // The flying artwork casts the hero's shadow itself for the whole flight:
+        // full elevation while the bounds are still hero-sized, easing down to the
+        // row's own rest elevation as it lands (the static shadow it hands off to --
+        // see rememberPlayerDismissFlightActive -- is exactly that value).
+        shadowElevation = if (!immersive) {
+            lerp(fullElevationPx, restElevationPx, progress)
+        } else {
+            0f
+        }
+        // flightProgress runs 0 (flight start, rest-open) -> 1 (landed, rest-closed),
+        // i.e. the inverse of the hero's open progress: replicate its immersive fade
+        // exactly so the overlay art is as (in)visible as the hero it replaces.
+        alpha = if (immersive) {
+            1f - EaseOutCubic.transform(((1f - progress) / immersiveArtFadeSpan).coerceIn(0f, 1f))
+        } else {
+            1f
+        }
+    }
+}
+
 /** Size of the artwork thumbnail at the leading edge of a list row. */
 val ListRowArtSize = 48.dp
 
@@ -337,7 +491,7 @@ val MediaItemArtElevation = 4.dp
  *
  * The color comes from the row's OWN image ([imagePath], extracted through
  * [AlbumArtPaletteCache]) so each highlighted row reflects its own artwork;
- * rows without an image — and the brief moment before a color is extracted —
+ * rows without an image -- and the brief moment before a color is extracted --
  * fall back to the app accent. With automatic (dynamic accent) color disabled
  * the extracted colors are ignored and the app-defined accent always wins.
  */
@@ -405,7 +559,9 @@ val RowSmallVerticalPadding = 2.dp
 internal fun rowVerticalPadding(density: MediaDensity): Dp =
     if (density == MediaDensity.ROW_SMALL) RowSmallVerticalPadding else ListRowHighlightPadding
 
-/** Corner radius of a list row's artwork at rest (rounded like the mini player). */
+/**
+ * Corner radius of a list row's artwork at rest (rounded like the mini player).
+ */
 @Composable
 internal fun listRowArtCornerRadius(density: MediaDensity = MediaDensity.ROW_NORMAL): Dp =
     albumArtCornerRadius(rowArtSize(density))
@@ -568,16 +724,16 @@ internal fun Modifier.rowSharedArtwork(
  * ([SharedTransitionScope.sharedBounds]). No-ops when not [enabled] or when
  * the transition scopes are missing.
  *
- * The enter/exit fades ride the SAME duration/easing tween as the bounds
- * flight ([AlbumArtBoundsTransform]) instead of sharedBounds' spring-based
+ * The enter/exit fades ride the SAME duration/easing tween as the bounds flight
+ * ([AlbumArtBoundsTransform]) instead of sharedBounds' spring-based
  * defaults: with the defaults, both texts stayed at full alpha well into the
- * flight and the departing one lingered past the landing — reading as an
+ * flight and the departing one lingered past the landing -- reading as an
  * instant scale pop plus a dirty overlapping crossfade. Tweening the fades in
  * lock-step with the bounds makes the two sides swap cleanly at the flight's
  * midpoint.
  *
  * zIndexInOverlay 1f keeps the text above the flying artwork (0f) for both
- * flight directions — on close flights this side is the becoming-visible one,
+ * flight directions -- on close flights this side is the becoming-visible one,
  * so its config drives the overlay entry.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -613,72 +769,6 @@ internal fun Modifier.rowSharedText(
                 exit = fadeOut(fadeSpec),
                 zIndexInOverlay = 1f
             )
-        }
-    }
-}
-
-/**
- * Artwork surface for a list row that is the shared-element ENDPOINT of a player
- * transition (i.e. the row the full player's artwork morphs into when the player is
- * dismissed onto its origin collection). During such a flight the shared-element
- * overlay renders the row's own content at the interpolated bounds -- only the
- * becoming-visible side of a [SharedTransitionScope.sharedElement] pair is drawn --
- * so the row's clipping must follow the flight instead of staying at its rest radius,
- * or the art would show near-square corners while the bounds are still hero-sized.
- *
- * The corner radius is lerped from the full player hero's radius down to the row's own
- * percentage radius (half the element's size times the mini-player rounding -- the
- * same convention as [AlbumArtShape], so it lands exactly on the row's rest look for
- * 48dp rows, 72dp rows and grid cells alike). The paused-art shrink is likewise
- * mirrored for the first frames of the flight: the hero it departs from renders
- * scaled while playback is paused (see rememberPausedArtScale -- every endpoint of an
- * album-art shared-element pair must render at the same scale or the art pops the
- * instant the gesture starts), easing back to the row's unscaled rest as it lands.
- *
- * With [immersive] on, the overlay art also mirrors the hero's immersive fade
- * (FullPlayerMainContent): the hero artwork is invisible at rest-open -- it lives in
- * the backdrop -- and only fades in over the closing flight's last stretch, so the
- * overlay must start fully transparent and follow the exact same curve instead of
- * popping in at full alpha.
- *
- * Everything is driven by [animatedVisibilityScope]'s own enter/exit transition --
- * which is seeked by the player's [androidx.compose.animation.core.SeekableTransitionState]
- * -- so the radius, scale and fade track the finger during the interactive swipe and
- * hand off continuously to the settle animation on release. All reads happen inside
- * the graphicsLayer block, keeping every frame of the flight draw-only.
- */
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-internal fun Modifier.playerFlightArtwork(
-    animatedVisibilityScope: AnimatedVisibilityScope,
-    fullArtRadius: Dp,
-    pausedArtScale: () -> Float,
-    immersive: Boolean = false
-): Modifier {
-    val flightProgress by animatedVisibilityScope.transition.animateFloat(label = "rowArtFlight") { state ->
-        if (state == EnterExitState.Visible) 1f else 0f
-    }
-    val density = LocalDensity.current
-    val fullRadiusPx = remember(fullArtRadius, density) { with(density) { fullArtRadius.toPx() } }
-    val rounding = FoamTheme.shapes.miniPlayerRounding
-    return this.graphicsLayer {
-        val progress = flightProgress
-        // Rest radius is percentage-based on the element's own (animated) size, so it
-        // scales along with the bounds throughout the flight.
-        val restRadiusPx = (size.minDimension / 2f) * rounding
-        shape = RoundedCornerShape(with(density) { lerp(fullRadiusPx, restRadiusPx, progress).toDp() })
-        clip = true
-        val paused = pausedArtScale()
-        val scale = paused + (1f - paused) * progress
-        scaleX = scale
-        scaleY = scale
-        // flightProgress runs 0 (flight start, rest-open) -> 1 (landed, rest-closed),
-        // i.e. the inverse of the hero's open progress: replicate its immersive fade
-        // exactly so the overlay art is as (in)visible as the hero it replaces.
-        alpha = if (immersive) {
-            1f - EaseOutCubic.transform(((1f - progress) / immersiveArtFadeSpan).coerceIn(0f, 1f))
-        } else {
-            1f
         }
     }
 }

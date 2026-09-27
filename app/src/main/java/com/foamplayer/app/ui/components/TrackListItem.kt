@@ -91,7 +91,7 @@ private val SwipeDismissThreshold = 80.dp
 
 /**
  * Extra translucency applied while swiping: the row's alpha eases from 1f
- * down to (1 - SwipeMaxFade) — i.e. 0.7f — as it reaches the threshold.
+ * down to (1 - SwipeMaxFade) -- i.e. 0.7f -- as it reaches the threshold.
  */
 private const val SwipeMaxFade = 0.3f
 
@@ -103,9 +103,9 @@ private const val SwipeReturnDurationMs = 200
 
 /**
  * One item of a track list. At the ROW_* densities it renders the shared
- * [MediaListRow] scaffold — artwork (or track number) + title + "artist •
+ * [MediaListRow] scaffold -- artwork (or track number) + title + "artist •
  * album" (RowBig grows the art to 72dp and adds a "duration • format" third
- * line) — with the active-track highlight, swipe-to-dismiss and drag-handle
+ * line) -- with the active-track highlight, swipe-to-dismiss and drag-handle
  * behaviors layered on top. At the GRID_* densities it renders a square-art
  * [MediaGridCell] with the score icon overlaid on a corner of the artwork;
  * in edit mode the same cell carries the four-direction drag chip on its
@@ -137,6 +137,15 @@ fun TrackListItem(
     flightPausedArtScale: (() -> Float)? = null,
     // Mirrors the hero's immersive fade for the flight overlay (see playerFlightArtwork).
     immersiveArt: Boolean = false,
+    // Whether a player-dismiss artwork flight is currently landing on this list's
+    // rows (hoisted by the hosting screen, see [rememberPlayerDismissFlightActive]).
+    // While this row is the flight's tagged target, the flying artwork casts the
+    // shadow itself and lands at exactly the row's rest elevation, so the row's
+    // static rest shadow steps aside for the flight instead of sitting under the
+    // empty art slot from the first gesture frame. Gated on this row being the
+    // flight's tagged target ([isSharedTransitionSource]), so untagged rows never
+    // read the lambda and never recompose.
+    isDismissFlightActive: () -> Boolean = { false },
     isSharedTransitionSource: Boolean = false
 ) {
     val animatedBackgroundColor = activeRowHighlight(active, track.albumArtPath)
@@ -171,10 +180,26 @@ fun TrackListItem(
         else -> null
     }
 
+    // Static rest elevation of the artwork's drop shadow. Dropped (0.dp) while
+    // this row is the TAGGED target of a live player-dismiss flight: the flight's
+    // overlay artwork casts the shadow itself for the whole flight (see
+    // [playerFlightArtwork]) and lands at exactly [MediaItemArtElevation], so the
+    // static shadow resumes seamlessly when the flight settles. Without the drop,
+    // the static shadow (drawn by the row scaffold OUTSIDE the sharedElement
+    // modifier) would sit under the still-empty art slot from the first gesture
+    // frame -- the "persistent shadow in the target position".
+    val artworkRestElevation =
+        if (trackNumberText == null) MediaItemArtElevation else 0.dp
+    val artworkElevation = if (isSharedTransitionSource && isDismissFlightActive()) {
+        0.dp
+    } else {
+        artworkRestElevation
+    }
+
     // GRID_* densities: square artwork cell, score overlaid on the art corner.
     // In edit mode the artwork also carries the four-direction drag chip and the
     // drag gesture lives on that chip alone ([dragHandleModifier], hosted by
-    // TrackListScreen) — the rest of the cell stays scrollable/tappable.
+    // TrackListScreen) -- the rest of the cell stays scrollable/tappable.
     // Swipe-to-dismiss remains a row-only affordance.
     if (density.isGrid) {
         val sharedArtworkBase: Modifier = Modifier.rowSharedArtwork(
@@ -192,7 +217,8 @@ fun TrackListItem(
                     animatedVisibilityScope = animatedVisibilityScope,
                     fullArtRadius = fullPlayerArtRadius(),
                     pausedArtScale = flightPausedArtScale,
-                    immersive = immersiveArt
+                    immersive = immersiveArt,
+                    restArtElevation = MediaItemArtElevation
                 )
                 .background(FoamTheme.colors.surfaceVariant)
         } else {
@@ -215,6 +241,7 @@ fun TrackListItem(
                 title = track.title,
                 subtitle = "${track.artist} • ${track.album}",
                 highlightBackground = animatedBackgroundColor,
+                artworkElevation = artworkElevation,
                 titleModifier = Modifier.rowSharedText(
                     key = "track_title_${track.id}",
                     sharedTransitionScope = sharedTransitionScope,
@@ -287,7 +314,7 @@ fun TrackListItem(
     // directly in the gesture callback (read back in the row's graphicsLayer, so
     // drags cost zero coroutines); the end-of-gesture animations run through an
     // Animatable that feeds this same float. The old backing was an Animatable
-    // snapTo'd from a fresh coroutine per drag delta — one Job allocation plus a
+    // snapTo'd from a fresh coroutine per drag delta -- one Job allocation plus a
     // mutex hop at pointer-event rate (~120/s on high-refresh panels) per row.
     var dismissOffsetValue by remember { mutableFloatStateOf(0f) }
     val gestureAnimJob = remember { mutableStateOf<Job?>(null) }
@@ -349,7 +376,7 @@ fun TrackListItem(
     // The swipe layer (translation + fade + width measurement) only exists in
     // edit mode, where rows are actually swipeable. Attaching it unconditionally
     // put a lambda graphicsLayer (its own render node) plus an onSizeChanged
-    // layout observer on EVERY resting row of every list — pure scroll-frame
+    // layout observer on EVERY resting row of every list -- pure scroll-frame
     // overhead for a zero transform. Off, translationX is 0 and alpha is 1 by
     // definition (no gesture can ever move them), so dropping the layer is
     // visually identical.
@@ -389,7 +416,8 @@ fun TrackListItem(
                     animatedVisibilityScope = animatedVisibilityScope,
                     fullArtRadius = fullPlayerArtRadius(),
                     pausedArtScale = flightPausedArtScale,
-                    immersive = immersiveArt
+                    immersive = immersiveArt,
+                    restArtElevation = MediaItemArtElevation
                 )
                 .background(FoamTheme.colors.surfaceVariant)
         } else {
@@ -447,7 +475,7 @@ fun TrackListItem(
                 null
             },
             // Number-only rows have no artwork surface to cast from.
-            artworkElevation = if (trackNumberText == null) MediaItemArtElevation else 0.dp,
+            artworkElevation = artworkElevation,
             highlightBackground = animatedBackgroundColor,
             rowModifier = swipeRowModifier,
             titleModifier = Modifier.rowSharedText(
@@ -464,7 +492,7 @@ fun TrackListItem(
             ),
             trailingContent = {
                 // Score indicator (like / super like / dislike): informational
-                // only, so it gets no click handling of its own — taps stay on
+                // only, so it gets no click handling of its own -- taps stay on
                 // the row. Muted (textSecondary) here, unlike the player/modal
                 // where it's white.
                 if (track.score != 0) {

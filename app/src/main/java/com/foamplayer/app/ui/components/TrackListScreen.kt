@@ -261,6 +261,18 @@ fun TrackListScreen(
     // row inside its graphicsLayer, so play/pause flips stay draw-only for the list.
     val flightPausedArtScale = rememberPausedArtScale(isPlaying)
 
+    // Whether a player-dismiss artwork flight is currently landing on this list's
+    // rows (see [rememberPlayerDismissFlightActive]): while the flight is live, the
+    // flying artwork casts the shadow itself and the target row's static rest shadow
+    // steps aside, so it doesn't sit under the empty art slot from the first gesture
+    // frame. Hoisted here -- one derived state for the whole list -- and consumed
+    // per row inside TrackListItem, gated on that row being the flight's tagged
+    // target, so untagged rows never read it and never recompose.
+    val dismissFlightActive = rememberPlayerDismissFlightActive(
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = playerTransitionVisibilityScope
+    )
+
     // Edit-mode drag & drop (playlist detail): a local display list absorbs the
     // swaps live; the DB is written once when the drag settles. While a drag is
     // in flight, incoming track emissions are ignored so they can't fight the
@@ -589,6 +601,7 @@ fun TrackListScreen(
                                 } else {
                                     Modifier
                                 },
+                                isDismissFlightActive = { dismissFlightActive.value },
                                 isSharedTransitionSource = rowSharedTagActive(track.id) && !editMode
                             )
                         }
@@ -728,6 +741,7 @@ fun TrackListScreen(
                                 } else {
                                     null
                                 },
+                                isDismissFlightActive = { dismissFlightActive.value },
                                 isSharedTransitionSource = rowSharedTagActive(track.id) && !editMode
                             )
                         }
