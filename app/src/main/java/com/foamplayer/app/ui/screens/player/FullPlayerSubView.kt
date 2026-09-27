@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -354,6 +355,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     // formula as the bottom mini player's container -- instead of chasing the animated
     // shared-element radius during the flight.
     val containerRadius = miniRadius + 8.dp
+    val headerInteractions = remember { MutableInteractionSource() }
 
     Row(
         modifier = Modifier
@@ -364,7 +366,11 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                 clip = true
             }
             .background(Color.Black.copy(alpha = 0.2f))
-            .clickable(onClick = onBack)
+            .clickable(
+                interactionSource = headerInteractions,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onBack
+            )
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
