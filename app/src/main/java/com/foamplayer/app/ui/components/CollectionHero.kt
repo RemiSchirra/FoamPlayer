@@ -658,7 +658,7 @@ private fun CollectionHeroCompact(
                         CollectionHeroSearchButton(searchState = searchState)
                     }
                 }
-                CollectionHeroSearchBar(searchState = searchState)
+                CollectionHeroSearchBar(searchState = searchState, accentColor = accentColor)
             }
         }
     }
@@ -747,7 +747,7 @@ private fun CollectionHeroNormal(
                         CollectionHeroSearchButton(searchState = searchState)
                     }
                 }
-                CollectionHeroSearchBar(searchState = searchState)
+                CollectionHeroSearchBar(searchState = searchState, accentColor = accentColor)
             }
         }
 
@@ -922,7 +922,7 @@ private fun CollectionHeroOverlayContent(
                     CollectionHeroSearchButton(searchState = searchState)
                 }
             }
-            CollectionHeroSearchBar(searchState = searchState)
+            CollectionHeroSearchBar(searchState = searchState, accentColor = accentColor)
         }
     }
 }
@@ -1154,7 +1154,9 @@ private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
 /**
  * The hero's inline search field, shown right under the play pill while
  * [CollectionSearchState.open] is true: filters the collection's rows live
- * (empty text shows everything; closing clears the query).
+ * (empty text shows everything; closing clears the query). The field's caret
+ * rides the hero's own [accentColor] — the collection's palette-derived accent
+ * (the same color as its play pill) — not the global app accent.
  *
  * Focus handling:
  * - Closing the bar tears the field's focus down IMMEDIATELY (not when the
@@ -1174,7 +1176,10 @@ private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
  *   hide flicker on track taps).
  */
 @Composable
-private fun CollectionHeroSearchBar(searchState: CollectionSearchState?) {
+private fun CollectionHeroSearchBar(
+    searchState: CollectionSearchState?,
+    accentColor: Color
+) {
     if (searchState == null) return
     val focusManager = LocalFocusManager.current
     val density = LocalDensity.current
@@ -1228,7 +1233,7 @@ private fun CollectionHeroSearchBar(searchState: CollectionSearchState?) {
                 value = searchState.query,
                 onValueChange = { searchState.query = it },
                 textStyle = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.textPrimary),
-                cursorBrush = SolidColor(FoamTheme.accentColor),
+                cursorBrush = SolidColor(accentColor),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                 singleLine = true,
