@@ -185,14 +185,31 @@ class CollectionSearchState {
         internal set
 
     /**
-     * Root-space y of the hero's button row (shuffle/play/search toggles) top,
-     * reported by that row itself on every layout pass — the anchor of the
-     * search-open scroll (the bar hangs 8dp below the row, and the row's
-     * position is identical whether the bar is open or not, so the effect never
-     * has to wait for the bar's own entry animation). NaN while the hero is not
-     * laid out (e.g. scrolled off-screen — where search cannot be opened from).
+     * Root-space y of the hero's shuffle/play/search button row top, reported
+     * by that row itself on every layout pass — the FALLBACK anchor of the
+     * search-open scroll (the bar hangs right under the row on the Normal and
+     * immersive heroes, and the row's position is identical whether the bar is
+     * open or not, so the effect never has to wait for the bar's own entry
+     * animation). The compact hero reports [searchBarTopYInRootPx] instead —
+     * there the bar spans the hero's full width BELOW the artwork + details
+     * row, not under this row — and the effect prefers that anchor when set.
+     * NaN while the hero is not laid out (e.g. scrolled off-screen — where
+     * search cannot be opened from).
      */
     var buttonRowTopYInRootPx by mutableFloatStateOf(Float.NaN)
+        internal set
+
+    /**
+     * Root-space y of the hero's search bar container top (the point the bar
+     * expands from), reported by an always-present wrapper around the bar so
+     * the value exists before the bar's own first layout. Set only by heroes
+     * whose bar does NOT hang right under the button row — the compact one,
+     * where the bar spans the hero's full width below the artwork + details
+     * row: anchoring on the button row there would land the bar roughly half
+     * an artwork height past the screen top. Preferred over
+     * [buttonRowTopYInRootPx] by [CollectionSearchScrollToBarEffect] when set.
+     */
+    var searchBarTopYInRootPx by mutableFloatStateOf(Float.NaN)
         internal set
 
     /** Opens the search bar (the hero's search icon swaps to a close cross). */
@@ -282,19 +299,24 @@ fun collectionSearchOpenBottomPadding(searchState: CollectionSearchState?): Dp {
 
 /**
  * On every search-open request (see [CollectionSearchState.openRequest]) scrolls
- * the host's list so the hero's shuffle/play/search button row — with the search
- * bar hanging right under it — lands at the top of the screen instead of opening
- * wherever the hero currently sits (also scrolling back a little when the bar
- * opened partially hidden above the viewport).
+ * the host's list so the hero's search bar — with its anchor — lands at the top
+ * of the screen instead of opening wherever the hero currently sits (also
+ * scrolling back a little when the bar opened partially hidden above the
+ * viewport).
+ *
+ * The anchor is the search bar's own container top when the hero reports one
+ * ([CollectionSearchState.searchBarTopYInRootPx] — the compact hero, whose bar
+ * spans the hero's full width below the artwork + details row), otherwise the
+ * shuffle/play/search button row ([CollectionSearchState.buttonRowTopYInRootPx]
+ * — Normal and the immersive heroes, whose bar hangs right under that row).
  *
  * [listTopYInRootPx] supplies the lazy container's own root-space top y and
  * [topChromeHeight] how much of the list's top is covered by floating chrome:
  * on compact/normal layouts the list starts below its fixed top-bar row, so 0dp
- * puts the row at the very top of the scrolling content; on the immersive ones
- * the floating back row covers the list's first 48dp, so
- * [CollectionSearchImmersiveTopClearance] keeps the bar clear of it. The anchor
- * row reports itself through [CollectionSearchState.buttonRowTopYInRootPx]; the
- * effect is a no-op when that report is missing (header scrolled off-screen).
+ * puts the anchor at the very top of the scrolling content; on the immersive
+ * ones the floating back row covers the list's first 48dp, so
+ * [CollectionSearchImmersiveTopClearance] keeps the bar clear of it. A missing
+ * anchor report (NaN, header scrolled off-screen) makes the effect a no-op.
  *
  * Hosts must pad their lists with [collectionSearchOpenBottomPadding] while the
  * bar is open: without that reserve a list with only a few rows has no scroll
@@ -313,11 +335,15 @@ fun CollectionSearchScrollToBarEffect(
     val chromePx = with(LocalDensity.current) { topChromeHeight.toPx() }
     LaunchedEffect(searchState.openRequest) {
         if (searchState.openRequest == 0) return@LaunchedEffect
-        val rowTopY = searchState.buttonRowTopYInRootPx
-        if (rowTopY.isNaN()) return@LaunchedEffect
+        // Preferred anchor: the search bar's own container top (the compact
+        // hero's bar hangs below the artwork + details row). Fallback: the
+        // button row (Normal + immersive heroes, bar right under it).
+        val barAnchorY = searchState.searchBarTopYInRootPx
+        val anchorY = if (barAnchorY.isNaN()) searchState.buttonRowTopYInRootPx else barAnchorY
+        if (anchorY.isNaN()) return@LaunchedEffect
         val listTopY = listTopYInRootPx()
         if (listTopY.isNaN()) return@LaunchedEffect
-        val delta = rowTopY - listTopY - chromePx
+        val delta = anchorY - listTopY - chromePx
         if (delta != 0f) {
             if (useGrid && gridState != null) {
                 gridState.animateScrollBy(
@@ -606,6 +632,15 @@ fun CollectionHero(
     }
 }
 
+/**
+ * The classic image-left/text-right hero. The artwork + details sit in one Row;
+ * the search bar hangs BELOW that Row at the hero's full width — under the
+ * artwork as well as the details column, not squeezed into the (narrow) text
+ * column. That full-width position also re-anchors the search-open scroll (see
+ * [CollectionSearchState.searchBarTopYInRootPx]): the bar's own container top
+ * is reported instead of the button row's, so opening search scrolls the bar
+ * — not the button row — to the top of the list.
+ */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun CollectionHeroCompact(
@@ -626,80 +661,93 @@ private fun CollectionHeroCompact(
     sharedElementPrefix: String,
     modifier: Modifier
 ) {
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(16.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .collectionHeroSharedArtwork(
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .collectionHeroSharedArtwork(
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        sharedElementKey = sharedElementKey,
+                        sharedElementPrefix = sharedElementPrefix,
+                        flightFraction = null,
+                        fullyRounded = fullyRoundedArtwork
+                    )
+                    .clip(heroArtworkShape(fullyRoundedArtwork))
+                    .background(FoamTheme.colors.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                CollectionHeroArtworkContent(
+                    title = title,
+                    imageUrl = imageUrl,
+                    imageIsEmbeddedArt = imageIsEmbeddedArt,
+                    icon = icon
+                )
+            }
+
+            Spacer(modifier = Modifier.width(20.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                CollectionHeroTexts(
+                    title = title,
+                    subtitle = subtitle,
+                    statsText = statsText,
+                    accentColor = accentColor,
+                    centered = false,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedElementKey = sharedElementKey,
-                    sharedElementPrefix = sharedElementPrefix,
-                    flightFraction = null,
-                    fullyRounded = fullyRoundedArtwork
+                    sharedElementPrefix = sharedElementPrefix
                 )
-                .clip(heroArtworkShape(fullyRoundedArtwork))
-                .background(FoamTheme.colors.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            CollectionHeroArtworkContent(
-                title = title,
-                imageUrl = imageUrl,
-                imageIsEmbeddedArt = imageIsEmbeddedArt,
-                icon = icon
-            )
-        }
 
-        Spacer(modifier = Modifier.width(20.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            CollectionHeroTexts(
-                title = title,
-                subtitle = subtitle,
-                statsText = statsText,
-                accentColor = accentColor,
-                centered = false,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                sharedElementKey = sharedElementKey,
-                sharedElementPrefix = sharedElementPrefix
-            )
-
-            if (onPlayAllClick != null || searchState != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.reportHeroButtonRowTop(searchState),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (onShuffleAllClick != null && onPlayAllClick != null) {
-                        CollectionHeroShuffleButton(onShuffleAllClick = onShuffleAllClick)
-                        Spacer(modifier = Modifier.width(12.dp))
-                    }
-                    if (onPlayAllClick != null) {
-                        // fill = false weight: the pill is the row's flexible
-                        // member. The fixed shuffle/search toggles are measured
-                        // before any weighted child, so a too-narrow text column
-                        // squeezes the PILL (which collapses to an icon-only
-                        // circle, see [CollectionHeroPlayButton]) instead of
-                        // starving the search toggle's 24dp icon.
-                        CollectionHeroPlayButton(
-                            onClick = onPlayAllClick,
-                            accentColor = accentColor,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                    }
-                    if (searchState != null) {
-                        if (onPlayAllClick != null) {
+                if (onPlayAllClick != null || searchState != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.reportHeroButtonRowTop(searchState),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (onShuffleAllClick != null && onPlayAllClick != null) {
+                            CollectionHeroShuffleButton(onShuffleAllClick = onShuffleAllClick)
                             Spacer(modifier = Modifier.width(12.dp))
                         }
-                        CollectionHeroSearchButton(searchState = searchState)
+                        if (onPlayAllClick != null) {
+                            // fill = false weight: the pill is the row's flexible
+                            // member. The fixed shuffle/search toggles are measured
+                            // before any weighted child, so a too-narrow text column
+                            // squeezes the PILL (which collapses to an icon-only
+                            // circle, see [CollectionHeroPlayButton]) instead of
+                            // starving the search toggle's 24dp icon.
+                            CollectionHeroPlayButton(
+                                onClick = onPlayAllClick,
+                                accentColor = accentColor,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                        }
+                        if (searchState != null) {
+                            if (onPlayAllClick != null) {
+                                Spacer(modifier = Modifier.width(12.dp))
+                            }
+                            CollectionHeroSearchButton(searchState = searchState)
+                        }
                     }
                 }
+            }
+        }
+
+        // Full-width search bar, under the artwork + details Row (NOT inside the
+        // details column, where it would be squeezed to the column's narrow
+        // width and sit beside the artwork). The always-present wrapper reports
+        // the bar's top as the search-open scroll anchor: with the bar hanging
+        // below the whole Row, the button-row anchor would land the bar roughly
+        // half an artwork height past the screen top (see
+        // [CollectionSearchState.searchBarTopYInRootPx]).
+        if (searchState != null) {
+            Box(modifier = Modifier.reportHeroSearchBarTop(searchState)) {
                 CollectionHeroSearchBar(searchState = searchState, accentColor = accentColor)
             }
         }
@@ -998,13 +1046,28 @@ private fun CollectionHeroOverlayContent(
 
 /**
  * Reports the hero's shuffle/play/search button row's root-space top y into
- * [searchState] (see [CollectionSearchState.buttonRowTopYInRootPx]) — the anchor
- * of the search-open scroll ([CollectionSearchScrollToBarEffect]). No-op when
- * [searchState] is null (play-pill-only heroes don't need it).
+ * [searchState] (see [CollectionSearchState.buttonRowTopYInRootPx]) — the
+ * fallback anchor of the search-open scroll
+ * ([CollectionSearchScrollToBarEffect]). No-op when [searchState] is null
+ * (play-pill-only heroes don't need it).
  */
 private fun Modifier.reportHeroButtonRowTop(searchState: CollectionSearchState?): Modifier =
     onGloballyPositioned { info ->
         searchState?.buttonRowTopYInRootPx = info.positionInRoot().y
+    }
+
+/**
+ * Reports the hero's search bar container's root-space top y into [searchState]
+ * (see [CollectionSearchState.searchBarTopYInRootPx]) — the preferred anchor of
+ * the search-open scroll ([CollectionSearchScrollToBarEffect]) on heroes whose
+ * bar does not hang right under the button row (the compact one). Reported by
+ * an always-present wrapper AROUND the bar, so the value exists before the
+ * entering bar's own first layout (the scroll effect reads it in the same
+ * frame [CollectionSearchState.open] flips). No-op when [searchState] is null.
+ */
+private fun Modifier.reportHeroSearchBarTop(searchState: CollectionSearchState?): Modifier =
+    onGloballyPositioned { info ->
+        searchState?.searchBarTopYInRootPx = info.positionInRoot().y
     }
 
 /** Artwork fill: embedded/plain image, collection icon, or the title's initial. */
@@ -1267,11 +1330,14 @@ private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
 }
 
 /**
- * The hero's inline search field, shown right under the play pill while
- * [CollectionSearchState.open] is true: filters the collection's rows live
- * (empty text shows everything; closing clears the query). The field's caret
- * rides the hero's own [accentColor] — the collection's palette-derived accent
- * (the same color as its play pill) — not the global app accent.
+ * The hero's inline search field, shown while [CollectionSearchState.open] is
+ * true: filters the collection's rows live (empty text shows everything;
+ * closing clears the query). The field's caret rides the hero's own
+ * [accentColor] — the collection's palette-derived accent (the same color as
+ * its play pill) — not the global app accent. Hosts place the bar wherever
+ * their layout wants it: right under the button row (Normal, immersive) or
+ * under the whole artwork + details row at full width (Compact, see
+ * [CollectionHeroCompact]).
  *
  * Focus handling:
  * - Focus is granted ONCE per open session (see [CollectionSearchState.focusGranted]):
