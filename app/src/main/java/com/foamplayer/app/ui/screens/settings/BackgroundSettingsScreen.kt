@@ -2,6 +2,14 @@ package com.foamplayer.app.ui.screens.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -69,6 +77,14 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
+private const val ModeAnimMillis = 300
+
+/** Shared transitions for every block that appears/disappears with the background mode. */
+private val ModeEnter = fadeIn(tween(ModeAnimMillis, delayMillis = 60)) +
+        expandVertically(tween(ModeAnimMillis), expandFrom = Alignment.Top)
+private val ModeExit = fadeOut(tween(200)) +
+        shrinkVertically(tween(ModeAnimMillis), shrinkTowards = Alignment.Top)
+
 @Composable
 fun BackgroundSettingsScreen(
     onBack: () -> Unit,
@@ -76,6 +92,14 @@ fun BackgroundSettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsState()
     val mode = settings.backgroundMode
+
+    // Transitions only play once the user has actually picked a mode. The
+    // settings flow can emit its real value a moment after the screen opens,
+    // and that first change must not animate: the screen should open already
+    // in its final state.
+    var animateModeChanges by remember { mutableStateOf(false) }
+    val modeEnter = if (animateModeChanges) ModeEnter else EnterTransition.None
+    val modeExit = if (animateModeChanges) ModeExit else ExitTransition.None
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.setCustomBackgroundUri(uri.toString())
@@ -125,14 +149,25 @@ fun BackgroundSettingsScreen(
                         ModeOptionRow(
                             mode = modeOption,
                             isSelected = modeOption == mode,
-                            onSelect = { viewModel.setBackgroundMode(modeOption) }
+                            onSelect = {
+                                animateModeChanges = true
+                                viewModel.setBackgroundMode(modeOption)
+                            }
                         )
                     }
                 }
             }
 
-            when (mode) {
-                BackgroundMode.CUSTOM -> {
+            // Each mode-specific block animates in/out on its own. When switching
+            // CUSTOM <-> GRADIENT one shrinks while the other expands, so the
+            // content below glides instead of jumping. The spacer lives inside
+            // the animated block so its height animates too.
+            AnimatedVisibility(
+                visible = mode == BackgroundMode.CUSTOM,
+                enter = modeEnter,
+                exit = modeExit
+            ) {
+                Column {
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                     CustomImageSection(
                         imageUri = settings.customBackgroundUri,
@@ -140,14 +175,19 @@ fun BackgroundSettingsScreen(
                         onClearImage = { viewModel.setCustomBackgroundUri(null) }
                     )
                 }
-                BackgroundMode.GRADIENT -> {
+            }
+            AnimatedVisibility(
+                visible = mode == BackgroundMode.GRADIENT,
+                enter = modeEnter,
+                exit = modeExit
+            ) {
+                Column {
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                     GradientEditor(
                         stops = settings.gradientStops,
                         onChange = viewModel::setGradientStops
                     )
                 }
-                BackgroundMode.DYNAMIC -> Unit
             }
 
             Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
@@ -167,24 +207,30 @@ fun BackgroundSettingsScreen(
                     .background(FoamTheme.colors.surface)
             ) {
                 Column {
-                    if (mode != BackgroundMode.GRADIENT) {
-                        FoamSliderStateItem(
-                            title = stringResource(R.string.background_blur),
-                            initialValue = settings.backgroundBlur.toFloat(),
-                            onValueChangeFinished = {
-                                viewModel.setBackgroundBlur(it.roundToInt())
-                            },
-                            steps = 9,
-                            valueRange = 0f..100f,
-                            formatValue = { "${it.roundToInt()}%" },
-                            minMaxDisplay = "None" to "Max",
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(FoamDimens.separatorHeight)
-                                .background(FoamTheme.colors.borderOverlay)
-                        )
+                    AnimatedVisibility(
+                        visible = mode != BackgroundMode.GRADIENT,
+                        enter = modeEnter,
+                        exit = modeExit
+                    ) {
+                        Column {
+                            FoamSliderStateItem(
+                                title = stringResource(R.string.background_blur),
+                                initialValue = settings.backgroundBlur.toFloat(),
+                                onValueChangeFinished = {
+                                    viewModel.setBackgroundBlur(it.roundToInt())
+                                },
+                                steps = 9,
+                                valueRange = 0f..100f,
+                                formatValue = { "${it.roundToInt()}%" },
+                                minMaxDisplay = "None" to "Max",
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(FoamDimens.separatorHeight)
+                                    .background(FoamTheme.colors.borderOverlay)
+                            )
+                        }
                     }
                     FoamSliderStateItem(
                         title = "App Color Intensity",
