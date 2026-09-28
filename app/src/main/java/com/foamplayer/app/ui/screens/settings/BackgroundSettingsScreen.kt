@@ -729,25 +729,31 @@ private fun StopRow(
                     .padding(horizontal = FoamDimens.paddingMedium)
                     .padding(bottom = FoamDimens.spacingMedium)
             ) {
-                // Default palette grid (rows of four, sized for the narrow column).
-                DefaultStopPalette.chunked(4).forEach { rowColors ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        rowColors.forEach { argb ->
-                            Box(
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                    .background(Color(argb))
-                                    .border(
-                                        width = if (argb == stop.argb) 2.dp else 0.dp,
-                                        color = FoamTheme.colors.textPrimary,
-                                        shape = RoundedCornerShape(FoamDimens.buttonRounding)
-                                    )
-                                    .clickable { onColorChange(argb) }
-                            )
+                // Default palette grid (rows of four, spaced apart vertically,
+                // sized for the narrow column).
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
+                ) {
+                    DefaultStopPalette.chunked(4).forEach { rowColors ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            rowColors.forEach { argb ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                                        .background(Color(argb))
+                                        .border(
+                                            width = if (argb == stop.argb) 2.dp else 0.dp,
+                                            color = FoamTheme.colors.textPrimary,
+                                            shape = RoundedCornerShape(FoamDimens.buttonRounding)
+                                        )
+                                        .clickable { onColorChange(argb) }
+                                )
+                            }
                         }
                     }
                 }
