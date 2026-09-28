@@ -19,6 +19,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -78,7 +79,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -677,7 +681,17 @@ private fun CollectionHeroCompact(
                         Spacer(modifier = Modifier.width(12.dp))
                     }
                     if (onPlayAllClick != null) {
-                        CollectionHeroPlayButton(onClick = onPlayAllClick, accentColor = accentColor)
+                        // fill = false weight: the pill is the row's flexible
+                        // member. The fixed shuffle/search toggles are measured
+                        // before any weighted child, so a too-narrow text column
+                        // squeezes the PILL (which collapses to an icon-only
+                        // circle, see [CollectionHeroPlayButton]) instead of
+                        // starving the search toggle's 24dp icon.
+                        CollectionHeroPlayButton(
+                            onClick = onPlayAllClick,
+                            accentColor = accentColor,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
                     }
                     if (searchState != null) {
                         if (onPlayAllClick != null) {
@@ -768,7 +782,13 @@ private fun CollectionHeroNormal(
                         Spacer(modifier = Modifier.width(12.dp))
                     }
                     if (onPlayAllClick != null) {
-                        CollectionHeroPlayButton(onClick = onPlayAllClick, accentColor = accentColor)
+                        CollectionHeroPlayButton(
+                            onClick = onPlayAllClick,
+                            accentColor = accentColor,
+                            // Flexible member: yields to the fixed toggles when
+                            // the row is narrow (see [CollectionHeroPlayButton]).
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
                     }
                     if (searchState != null) {
                         if (onPlayAllClick != null) {
@@ -958,7 +978,10 @@ private fun CollectionHeroOverlayContent(
                 if (onPlayAllClick != null) {
                     CollectionHeroPlayButton(
                         onClick = onPlayAllClick,
-                        accentColor = accentColor
+                        accentColor = accentColor,
+                        // Flexible member: yields to the fixed toggles when the
+                        // row is narrow (see [CollectionHeroPlayButton]).
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                 }
                 if (searchState != null) {
@@ -1091,38 +1114,84 @@ private fun CollectionHeroTexts(
     }
 }
 
-/** The accent play pill. */
+/**
+ * The accent play pill.
+ *
+ * The pill is the hero button row's only flexible member (hosts pass
+ * `Modifier.weight(1f, fill = false)`): the shuffle and search toggles are
+ * fixed 40dp circles measured BEFORE any weighted child, so when the row's
+ * width cannot fit the labelled pill — the compact hero's text column,
+ * squeezed between the 120dp artwork and the screen edge, is the case in
+ * point — the pill collapses to an icon-only 40dp circle (the toggles' exact
+ * footprint) instead of grabbing the width and starving the search toggle,
+ * whose 24dp icon used to shrink below the shuffle/play icons as the row's
+ * last-measured child.
+ *
+ * The labelled/icon-only switch compares the pill's incoming
+ * [BoxWithConstraints.maxWidth] against the exact labelled width (icon + gap
+ * + the label measured at the live typography, font scale included), so the
+ * label is either rendered in full and unwrapped or not at all — never
+ * ellipsized or broken mid-word.
+ */
 @Composable
 private fun CollectionHeroPlayButton(
     onClick: () -> Unit,
-    accentColor: Color
+    accentColor: Color,
+    modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    Box(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(accentColor)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = ripple(color = FoamTheme.colors.textPrimary)
-            ) { onClick() }
-            .padding(horizontal = 24.dp, vertical = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
+    BoxWithConstraints(modifier = modifier) {
+        // The pill's chrome around the label: 48dp horizontal padding + 20dp
+        // icon + 8dp gap.
+        val labelChromeWidth = 76.dp
+        val labelStyle = FoamTheme.typography.titleMedium
+        val density = LocalDensity.current
+        val textMeasurer = rememberTextMeasurer()
+        val labelWidth = remember(textMeasurer, labelStyle, density) {
+            with(density) { textMeasurer.measure("Play", labelStyle).size.width.toDp() }
+        }
+        val showLabel = maxWidth >= labelChromeWidth + labelWidth
+
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(accentColor)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(color = FoamTheme.colors.textPrimary)
+                ) { onClick() }
+                // The label supplied the pill's semantics; keep them when it
+                // collapses away.
+                .then(
+                    if (showLabel) {
+                        Modifier
+                    } else {
+                        Modifier.semantics { contentDescription = "Play" }
+                    }
+                )
+                .padding(
+                    horizontal = if (showLabel) 24.dp else 10.dp,
+                    vertical = 10.dp
+                ),
+            contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = FoamTheme.icons.current.play,
-                contentDescription = null,
-                tint = FoamTheme.colors.background,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            BasicText(
-                text = "Play",
-                style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.colors.background)
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = FoamTheme.icons.current.play,
+                    contentDescription = null,
+                    tint = FoamTheme.colors.background,
+                    modifier = Modifier.size(20.dp)
+                )
+                if (showLabel) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    BasicText(
+                        text = "Play",
+                        style = labelStyle.copy(color = FoamTheme.colors.background)
+                    )
+                }
+            }
         }
     }
 }
