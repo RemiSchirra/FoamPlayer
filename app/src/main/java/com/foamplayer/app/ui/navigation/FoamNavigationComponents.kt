@@ -38,10 +38,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -59,6 +61,19 @@ import com.foamplayer.app.ui.theme.FoamTheme
 
 /** Duration of every nav-bar slot animation */
 private const val NavBarSlotAnimMillis = 250
+
+/** Elevation shared by both bars' drop shadow. */
+private val NavBarShadowElevation = 6.dp
+
+/**
+ * Radius and peak strength of the drawn translucent-when-player-open shadow in
+ * [FloatingNavigationBar]: with that setting on, the RenderNode elevation shadow is
+ * replaced by a [dropShadow] while the player transitions, because elevation shadows
+ * only wrap the outline -- seen through the fading surface they read as a ring with
+ * a hole under the bar. The drawn shadow fills under the surface as well.
+ */
+private val NavBarShadowRadius = 6.dp
+private const val NavBarShadowStrength = 0.35f
 
 /**
  * Slide animation used when nav-bar items change slot (reorder / add / remove
@@ -720,7 +735,30 @@ internal fun FloatingNavigationBar(
                 // top edge is hidden behind the card-connected surface extension; the
                 // extension's own top edge gets its depth from the scrim drawn below.
                 // clip stays off so the extension drawing outside the bounds survives.
-                .shadow(elevation = 6.dp, shape = RoundedCornerShape(containerRadius), clip = false)
+                .graphicsLayer {
+                    shape = RoundedCornerShape(containerRadius)
+                    shadowElevation = if (navBarTransparentWhenPlayerOpen) {
+                        0f
+                    } else {
+                        NavBarShadowElevation.toPx()
+                    }
+                }
+                // With translucent-when-player-open the RenderNode shadow is replaced
+                // by a drawn [dropShadow] for the bar's whole lifecycle: elevation
+                // shadows only wrap the outline, so seen through the fading surface
+                // they read as a ring with a hole under the bar, while the drawn one
+                // fills under it too. Its alpha tracks the same closed fraction as the
+                // surface fade -- full behind the opaque resting surface, gone when the
+                // player rests open -- so there is no handover pop, and the block
+                // re-runs at draw phase as the fraction moves (drag-scrub included).
+                .then(
+                    if (navBarTransparentWhenPlayerOpen) {
+                        Modifier.dropShadow(shape = RoundedCornerShape(containerRadius)) {
+                            radius = NavBarShadowRadius.toPx()
+                            alpha = NavBarShadowStrength * playerClosedFraction()
+                        }
+                    } else Modifier
+                )
                 .onGloballyPositioned { pillTopPx = it.positionInRoot().y }
                 .drawBehind {
                     val radiusPx = containerRadius.toPx()
