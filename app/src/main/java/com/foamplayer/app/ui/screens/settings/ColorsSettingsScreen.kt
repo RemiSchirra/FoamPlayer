@@ -1,5 +1,12 @@
 package com.foamplayer.app.ui.screens.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -82,6 +89,8 @@ fun ColorsSettingsScreen(
     val accentColorInt = settings.accentColor
     val themeMode = settings.themeMode
 
+    var animatePalette by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -122,30 +131,39 @@ fun ColorsSettingsScreen(
                         title = stringResource(R.string.automatic_color),
                         description = "Extract accent color from album art",
                         checked = isAutomaticColorEnabled,
-                        onCheckedChange = viewModel::setAutomaticColorEnabled
+                        onCheckedChange = {
+                            animatePalette = true
+                            viewModel.setAutomaticColorEnabled(it)
+                        }
                     )
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
-            if (!isAutomaticColorEnabled) {
-                item {
-                    BasicText(text = stringResource(R.string.accent_palette), style = FoamTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+            item {
+                AnimatedVisibility(
+                    visible = !isAutomaticColorEnabled,
+                    enter = if (animatePalette) expandVertically() + fadeIn() else EnterTransition.None,
+                    exit = if (animatePalette) shrinkVertically() + fadeOut() else ExitTransition.None
+                ) {
+                    Column {
+                        BasicText(text = stringResource(R.string.accent_palette), style = FoamTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
-                            .padding(FoamDimens.paddingMedium)
-                    ) {
-                        AccentPickerSection(
-                            accentColorInt = accentColorInt,
-                            onAccentColorSelected = viewModel::setAccentColor
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                                .background(FoamTheme.colors.surface)
+                                .padding(FoamDimens.paddingMedium)
+                        ) {
+                            AccentPickerSection(
+                                accentColorInt = accentColorInt,
+                                onAccentColorSelected = viewModel::setAccentColor
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
                     }
-                    Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
                 }
             }
         }
