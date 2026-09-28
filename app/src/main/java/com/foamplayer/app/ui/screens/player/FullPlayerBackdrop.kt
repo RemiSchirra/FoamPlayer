@@ -134,6 +134,15 @@ private fun Modifier.performantBlur(radius: Dp): Modifier {
 }
 
 /**
+ * The scrim color drawn over blurred album-art backdrops: black in dark theme,
+ * the light background color in light theme so intensity lightens the art
+ * instead of dimming it.
+ */
+@Composable
+internal fun backdropScrimColor(): Color =
+    if (FoamTheme.isDark) Color.Black else FoamTheme.colors.background
+
+/**
  * A blurred, crossfading artwork layer for non-settings areas of the app.
  *
  * The art paths normally point at audio files whose embedded picture is read
@@ -192,7 +201,7 @@ internal fun DynamicAlbumArtBackground(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 1f - intensity.coerceIn(0f, 1f)))
+                .background(backdropScrimColor().copy(alpha = 1f - intensity.coerceIn(0f, 1f)))
         )
     }
 }
@@ -296,12 +305,10 @@ internal fun AlbumArtBackdrop(
                     )
                 }
             }
-            // Same dim layer DynamicAlbumArtBackground draws app-wide, so both backdrops
-            // render the artwork at identical brightness during the open/close crossfade.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 1f - intensity.coerceIn(0f, 1f)))
+                    .background(backdropScrimColor().copy(alpha = 1f - intensity.coerceIn(0f, 1f)))
             )
         }
         BackdropGradient(modifier = Modifier.padding(bottom = bottomFadeInset))
@@ -369,20 +376,29 @@ private fun ImmersiveAlbumArtBackdrop(
     }
 }
 
-// Constant: hoisted out of composition so every backdrop pass doesn't rebuild it.
-private val BackdropFadeBrush = Brush.verticalGradient(
-    0f to Color.Transparent,
-    0.5f to Color.Transparent,
-    0.75f to Color.Black.copy(alpha = 0.5f),
-    1f to Color.Black.copy(alpha = 1f)
-)
+// Fades to the active theme's background color (black in dark mode, pale in
+// light mode) so the art dissolves into the app behind the player controls.
+// Rebuilt on theme change only: a static CompositionLocal read keeps the
+// brush allocation out of every draw pass.
+@Composable
+private fun backdropFadeBrush(): Brush {
+    val fadeColor = backdropScrimColor()
+    return remember(fadeColor) {
+        Brush.verticalGradient(
+            0f to Color.Transparent,
+            0.5f to Color.Transparent,
+            0.75f to fadeColor.copy(alpha = 0.5f),
+            1f to fadeColor
+        )
+    }
+}
 
 @Composable
 private fun BackdropGradient(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(BackdropFadeBrush)
+            .background(backdropFadeBrush())
     )
 }
 

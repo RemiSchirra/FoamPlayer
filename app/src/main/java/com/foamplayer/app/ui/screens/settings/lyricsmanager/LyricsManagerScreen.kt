@@ -67,10 +67,9 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.lyrics.LyricsSourceStatus
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.screens.settings.SettingsHeader
-import com.foamplayer.app.ui.theme.DefaultPrimaryAccent
+import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
-import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 import kotlinx.coroutines.launch
 
@@ -391,7 +390,7 @@ private fun LyricsFilterChips(
         Triple(
             LyricsFilter.NO_LYRICS,
             stringResource(R.string.lyrics_manager_no_lyrics),
-            DefaultPrimaryAccent
+            FoamTheme.accentColor
         ),
         Triple(
             LyricsFilter.CACHED,
@@ -546,7 +545,7 @@ private fun LyricsManagerSongItem(
                         cached || status?.hasCached == true ->
                             FoamTheme.colors.bitPerfectInactive
                         status == null -> FoamTheme.colors.textSecondary
-                        else -> DefaultPrimaryAccent
+                        else -> FoamTheme.accentColor
                     }
                 )
         )

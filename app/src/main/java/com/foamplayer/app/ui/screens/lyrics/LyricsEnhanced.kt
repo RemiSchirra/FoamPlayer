@@ -205,7 +205,7 @@ fun LyricsEnhanced(
             )
         }
 
-    val textColor = Color.White
+    val textColor = textColorOverride ?: FoamTheme.colors.textPrimary
     val lyricsLineBlur = lyricsLineBlurOverride ?: lyricsLineBlurPreference
 
     // isTtml() normalizes the entire payload (several whole-string regex passes)

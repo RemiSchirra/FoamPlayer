@@ -77,7 +77,7 @@ fun FoamSliderItem(
                     thumbColor = FoamTheme.accentColor,
                     activeTrackColor = FoamTheme.accentColor,
                     inactiveTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f),
-                    activeTickColor = Color.White.copy(alpha = 0.5f),
+                    activeTickColor = FoamTheme.colors.background.copy(alpha = 0.5f),
                     inactiveTickColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)
                 )
             )

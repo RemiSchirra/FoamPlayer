@@ -108,7 +108,7 @@ fun LyricsScreen(
                         Icon(
                             imageVector = Icons.Filled.MusicNote,
                             contentDescription = "Instrumental",
-                            tint = Color.White.copy(alpha = 0.6f),
+                            tint = FoamTheme.colors.textPrimary.copy(alpha = 0.6f),
                             modifier = Modifier.size(72.dp)
                         )
                     }
@@ -118,7 +118,7 @@ fun LyricsScreen(
                             Text(
                                 text = "Lyrics not found",
                                 style = FoamTheme.typography.titleMedium,
-                                color = Color.White.copy(alpha = 0.6f),
+                                color = FoamTheme.colors.textPrimary.copy(alpha = 0.6f),
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(8.dp))

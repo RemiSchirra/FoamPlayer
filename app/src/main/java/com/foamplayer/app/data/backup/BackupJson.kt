@@ -22,6 +22,7 @@ import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.SearchHistoryEntry
+import com.foamplayer.app.data.settings.ThemeMode
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -72,6 +73,7 @@ object BackupJson {
         put("searchInArtists", settings.searchInArtists)
         put("searchInTracks", settings.searchInTracks)
         put("language", settings.language)
+        put("themeMode", settings.themeMode.name)
         put("navigationBarMode", settings.navigationBarMode.name)
         put("navBarTransparentWhenPlayerOpen", settings.navBarTransparentWhenPlayerOpen)
         put("navBarPrimaryOrder", toNamesArray(settings.navBarPrimaryOrder))
@@ -149,6 +151,7 @@ object BackupJson {
         searchInArtists = json.optBoolean("searchInArtists", true),
         searchInTracks = json.optBoolean("searchInTracks", true),
         language = json.optString("language", "auto"),
+        themeMode = decodeEnum(json.optString("themeMode"), ThemeMode.FOLLOW_SYSTEM),
         navigationBarMode = decodeEnum(json.optString("navigationBarMode"), NavigationBarMode.ATTACHED),
         navBarTransparentWhenPlayerOpen = json.optBoolean("navBarTransparentWhenPlayerOpen", false),
         navBarPrimaryOrder = decodeEnumList(json.optJSONArray("navBarPrimaryOrder")),

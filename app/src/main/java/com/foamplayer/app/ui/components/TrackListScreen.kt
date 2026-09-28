@@ -69,6 +69,7 @@ import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.adaptAccentForTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.TimeUtils
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
@@ -401,6 +402,7 @@ fun TrackListScreen(
     }
 
     val heroAccentColor = imageUrl?.let { path -> AlbumArtPaletteCache.colors[path] }
+        ?.adaptAccentForTheme(FoamTheme.isDark)
         ?: FoamTheme.accentColor
 
     Box(modifier = modifier.fillMaxSize()) {

@@ -39,6 +39,7 @@ import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.SearchHistoryEntry
+import com.foamplayer.app.data.settings.ThemeMode
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -159,6 +160,8 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setLanguage(language: String) = update { it.copy(language = language) }
+
+    suspend fun setThemeMode(mode: ThemeMode) = update { it.copy(themeMode = mode) }
 
     suspend fun setNavigationBarMode(mode: NavigationBarMode) = update { it.copy(navigationBarMode = mode) }
     suspend fun setNavBarTransparentWhenPlayerOpen(enabled: Boolean) = update {
@@ -293,6 +296,9 @@ class SettingsRepository @Inject constructor(
         searchInArtists = this[Keys.SEARCH_IN_ARTISTS] ?: AppSettings().searchInArtists,
         searchInTracks = this[Keys.SEARCH_IN_TRACKS] ?: AppSettings().searchInTracks,
         language = this[Keys.LANGUAGE] ?: AppSettings().language,
+        themeMode = this[Keys.THEME_MODE]
+            ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
+            ?: AppSettings().themeMode,
         navigationBarMode = this[Keys.NAVIGATION_BAR_MODE]
             ?.let { runCatching { NavigationBarMode.valueOf(it) }.getOrNull() }
             ?: AppSettings().navigationBarMode,
@@ -362,6 +368,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.SEARCH_IN_ARTISTS] = settings.searchInArtists
         this[Keys.SEARCH_IN_TRACKS] = settings.searchInTracks
         this[Keys.LANGUAGE] = settings.language
+        this[Keys.THEME_MODE] = settings.themeMode.name
         this[Keys.NAVIGATION_BAR_MODE] = settings.navigationBarMode.name
         this[Keys.NAVBAR_TRANSPARENT_PLAYER_OPEN] = settings.navBarTransparentWhenPlayerOpen
         this[Keys.NAVBAR_PRIMARY_ORDER] = settings.navBarPrimaryOrder.joinToString(",") { it.name }
@@ -421,6 +428,7 @@ class SettingsRepository @Inject constructor(
         val SEARCH_IN_ARTISTS = booleanPreferencesKey("search_in_artists")
         val SEARCH_IN_TRACKS = booleanPreferencesKey("search_in_tracks")
         val LANGUAGE = stringPreferencesKey("language")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
         val NAVIGATION_BAR_MODE = stringPreferencesKey("navigation_bar_mode")
         val NAVBAR_TRANSPARENT_PLAYER_OPEN = booleanPreferencesKey("navbar_transparent_player_open")
         val NAVBAR_PRIMARY_ORDER = stringPreferencesKey("navbar_primary_order")

@@ -9,6 +9,8 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +43,17 @@ val DarkFoamColors = FoamColors(
     borderOverlay = Color(0xFF333333)
 )
 
+val LightFoamColors = FoamColors(
+    background = Color(0xFFFAFAFA),
+    surface = Color(0xFFECECEC),
+    surfaceVariant = Color(0xFFDFDFDF),
+    bitPerfectActive = Color(0xFF00A344),
+    bitPerfectInactive = Color(0xFFB26A00),
+    textPrimary = Color(0xFF1C1C1C),
+    textSecondary = Color(0xFF6B6B6B),
+    borderOverlay = Color(0xFFC9C9C9)
+)
+
 /** Default accent color, used until [FoamTheme] provides a live one (e.g. in previews). */
 val DefaultPrimaryAccent = Color(0xFFFF5252)
 
@@ -54,37 +67,53 @@ data class FoamTypography(
     val monospace: TextStyle
 )
 
-val DefaultFoamTypography = FoamTypography(
+private fun foamTypography(
+    titleColor: Color,
+    bodyColor: Color,
+    monoColor: Color
+) = FoamTypography(
     titleLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
         fontSize = 24.sp,
-        color = Color(0xFFE0E0E0)
+        color = titleColor
     ),
     titleMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
         fontSize = 18.sp,
-        color = Color(0xFFE0E0E0)
+        color = titleColor
     ),
     body = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
         fontSize = 15.sp,
-        color = Color(0xFF9E9E9E)
+        color = bodyColor
     ),
     caption = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
-        color = Color(0xFF9E9E9E)
+        color = bodyColor
     ),
     monospace = TextStyle(
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.Medium,
         fontSize = 13.sp,
-        color = Color(0xFF00E676)
+        color = monoColor
     )
+)
+
+val DefaultFoamTypography = foamTypography(
+    titleColor = DarkFoamColors.textPrimary,
+    bodyColor = DarkFoamColors.textSecondary,
+    monoColor = DarkFoamColors.bitPerfectActive
+)
+
+val LightFoamTypography = foamTypography(
+    titleColor = LightFoamColors.textPrimary,
+    bodyColor = LightFoamColors.textSecondary,
+    monoColor = LightFoamColors.bitPerfectActive
 )
 
 /** Corner rounding: the two player roundings are 0f..1f percentages of the art's half-size. */
@@ -105,6 +134,7 @@ val DefaultFoamShapes = FoamShapes(
 val LocalFoamColors = staticCompositionLocalOf { DarkFoamColors }
 val LocalFoamTypography = staticCompositionLocalOf { DefaultFoamTypography }
 val LocalFoamShapes = staticCompositionLocalOf { DefaultFoamShapes }
+val LocalIsDarkTheme = staticCompositionLocalOf { true }
 
 // The accent color changes at animation frequency (per-frame while swiping
 // between tracks); a non-static local keeps its invalidation scoped to readers
@@ -115,7 +145,9 @@ val LocalPrimaryAccentColor = compositionLocalOf { DefaultPrimaryAccent }
 // between their own extracted art color and the single app accent.
 val LocalAutomaticColorEnabled = compositionLocalOf { true }
 
-/** Access point for the theme values provided by [FoamTheme]. */
+/**
+ * Access point for the theme values provided by [FoamTheme].
+ */
 object FoamTheme {
     val colors: FoamColors
         @Composable @ReadOnlyComposable get() = LocalFoamColors.current
@@ -129,9 +161,36 @@ object FoamTheme {
     val shapes: FoamShapes
         @Composable get() = LocalFoamShapes.current
 
-    /** The live, possibly per-frame-animated accent color. */
+    /** Whether the current palette is the dark one (Light theme = false). */
+    val isDark: Boolean
+        @Composable @ReadOnlyComposable get() = LocalIsDarkTheme.current
+
+    /** The live, possibly per-frame-animated accent color (already theme-adapted). */
     val accentColor: Color
         @Composable get() = LocalPrimaryAccentColor.current
+}
+
+/**
+ * Adapts a raw accent color (palette pick or album-art extraction) to the
+ * active theme: the dark palettes were tuned around lightened colors, so on
+ * light backgrounds bright accents are darkened instead to stay legible.
+ */
+fun Color.adaptAccentForTheme(darkTheme: Boolean): Color {
+    val lum = luminance()
+    return if (darkTheme) {
+        // Lighten the darker the color is
+        val t = 0.45f * (1f - smoothstep(0.05f, 0.3f, lum))
+        if (t <= 0f) this else lerp(this, Color.White, t)
+    } else {
+        // Darken the lighter color
+        val t = 0.25f + 0.35f * smoothstep(0.3f, 0.95f, lum)
+        lerp(this, Color.Black, t)
+    }
+}
+
+private fun smoothstep(edge0: Float, edge1: Float, value: Float): Float {
+    val t = ((value - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
+    return t * t * (3f - 2f * t)
 }
 
 /** Provides the app's theme: colors, typography, icon style, shapes and accent. */
@@ -153,12 +212,17 @@ fun FoamTheme(
             fullPlayerRounding = fullPlayerRounding
         )
     }
+    val colors = remember(darkTheme) { if (darkTheme) DarkFoamColors else LightFoamColors }
+    val typography = remember(darkTheme) { if (darkTheme) DefaultFoamTypography else LightFoamTypography }
 
-    val targetAccentColor = accentColor ?: DefaultPrimaryAccent
+    val targetAccentColor = remember(accentColor, darkTheme) {
+        (accentColor ?: DefaultPrimaryAccent).adaptAccentForTheme(darkTheme)
+    }
 
     CompositionLocalProvider(
-        LocalFoamColors provides DarkFoamColors,
-        LocalFoamTypography provides DefaultFoamTypography,
+        LocalFoamColors provides colors,
+        LocalFoamTypography provides typography,
+        LocalIsDarkTheme provides darkTheme,
         LocalFoamIcons provides icons,
         LocalFoamShapes provides shapes,
         LocalPrimaryAccentColor provides targetAccentColor,

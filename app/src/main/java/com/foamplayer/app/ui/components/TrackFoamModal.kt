@@ -59,6 +59,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.adaptAccentForTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.TimeUtils
 import androidx.core.net.toUri
@@ -157,7 +158,7 @@ fun TrackFoamModal(
     } else {
         null
     }
-    val accentColor = artAccent ?: FoamTheme.accentColor
+    val accentColor = artAccent?.adaptAccentForTheme(FoamTheme.isDark) ?: FoamTheme.accentColor
 
     // Details is a second page of the SAME sheet (one Dialog window), so the
     // header can genuinely persist across the switch instead of being cloned
@@ -690,7 +691,7 @@ fun TrackDetailsModal(
     } else {
         null
     }
-    val accentColor = artAccent ?: FoamTheme.accentColor
+    val accentColor = artAccent?.adaptAccentForTheme(FoamTheme.isDark) ?: FoamTheme.accentColor
 
     FoamBottomModal(
         visible = track != null,

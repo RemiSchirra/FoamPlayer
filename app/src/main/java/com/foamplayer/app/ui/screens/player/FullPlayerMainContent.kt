@@ -674,7 +674,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
         Icon(
             imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
             contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
-            tint = Color.White,
+            tint = FoamTheme.colors.textPrimary,
             modifier = Modifier.size(PlayerDimens.playButtonIconSize)
         )
     }

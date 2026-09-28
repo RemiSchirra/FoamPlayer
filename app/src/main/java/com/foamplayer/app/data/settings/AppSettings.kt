@@ -33,6 +33,13 @@ enum class MarqueeMode(val label: String) {
     INFINITE("Infinite")
 }
 
+/** Which color palette the UI renders with; FOLLOW_SYSTEM resolves per system dark mode. */
+enum class ThemeMode(val label: String) {
+    FOLLOW_SYSTEM("Follow system"),
+    DARK("Dark"),
+    LIGHT("Light")
+}
+
 // Immutable by construction, but its Set/List/Map fields make it unstable to the
 // compiler's inference. This annotation lets every composable receiving AppSettings
 // (or screens fed from it) skip when an unrelated preference changes.
@@ -76,6 +83,7 @@ data class AppSettings(
     val searchInArtists: Boolean = true,
     val searchInTracks: Boolean = true,
     val language: String = "auto",
+    val themeMode: ThemeMode = ThemeMode.FOLLOW_SYSTEM,
     val navigationBarMode: NavigationBarMode = NavigationBarMode.ATTACHED,
     val navBarTransparentWhenPlayerOpen: Boolean = false,
     val navBarPrimaryOrder: List<NavBarItem> = DefaultNavBarPrimaryOrder,

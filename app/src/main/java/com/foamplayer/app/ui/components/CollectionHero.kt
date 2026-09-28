@@ -1490,7 +1490,7 @@ fun CollectionScrollTopBar(
                 .matchParentSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = CollectionScrollTopBarMaxAlpha),
+                        0f to FoamTheme.colors.background.copy(alpha = CollectionScrollTopBarMaxAlpha),
                         1f to Color.Transparent
                     )
                 )

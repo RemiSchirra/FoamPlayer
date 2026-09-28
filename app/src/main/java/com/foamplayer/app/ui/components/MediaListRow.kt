@@ -67,6 +67,7 @@ import com.foamplayer.app.ui.screens.player.immersiveArtFadeSpan
 import com.foamplayer.app.ui.screens.player.PlayerDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
+import com.foamplayer.app.ui.theme.adaptAccentForTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import kotlin.math.roundToInt
 
@@ -524,7 +525,10 @@ internal fun activeRowHighlight(
     val target = when {
         !active -> Color.Transparent
         !automaticColorEnabled -> FoamTheme.accentColor.copy(alpha = 0.4f)
-        else -> (extractedColor ?: FoamTheme.accentColor).copy(alpha = 0.4f)
+        else -> (
+            extractedColor?.adaptAccentForTheme(FoamTheme.isDark)
+                ?: FoamTheme.accentColor
+            ).copy(alpha = 0.4f)
     }
 
     return animateColorAsState(

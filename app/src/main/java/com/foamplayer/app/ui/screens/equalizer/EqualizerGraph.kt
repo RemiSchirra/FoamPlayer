@@ -573,6 +573,7 @@ fun EqMiniMap(
     val accent = FoamTheme.accentColor
     val dimColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)
     val referenceColor = FoamTheme.colors.borderOverlay
+    val viewportOverlayColor = if (FoamTheme.isDark) Color.White else Color.Black
 
     Canvas(
         modifier = modifier
@@ -641,7 +642,8 @@ fun EqMiniMap(
             strokeWidth = 1f
         )
 
-        // Translucent white viewport overlay over the visible EQ section.
+        // Translucent viewport overlay over the visible EQ section: white on
+        // dark surfaces, black on light ones.
         val viewportWidth = latestViewportWidth
         if (interactive && viewportWidth > 0) {
             val scroll = latestScroll ?: return@Canvas
@@ -656,13 +658,13 @@ fun EqMiniMap(
             if (right - left < 2f) return@Canvas
 
             drawRoundRect(
-                color = Color.White.copy(alpha = 0.16f),
+                color = viewportOverlayColor.copy(alpha = 0.16f),
                 topLeft = Offset(left, 1.dp.toPx()),
                 size = Size(right - left, h - 2.dp.toPx()),
                 cornerRadius = CornerRadius(3.dp.toPx())
             )
             drawRoundRect(
-                color = Color.White.copy(alpha = 0.55f),
+                color = viewportOverlayColor.copy(alpha = 0.55f),
                 topLeft = Offset(left, 1.dp.toPx()),
                 size = Size(right - left, h - 2.dp.toPx()),
                 cornerRadius = CornerRadius(3.dp.toPx()),

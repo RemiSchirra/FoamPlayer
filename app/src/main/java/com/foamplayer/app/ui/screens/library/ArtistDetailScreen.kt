@@ -70,6 +70,7 @@ import com.foamplayer.app.ui.components.rememberCollectionHeroFlightFraction
 import com.foamplayer.app.ui.components.rememberCollectionScrollFraction
 import com.foamplayer.app.ui.components.rememberCollectionSearchState
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.adaptAccentForTheme
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -166,6 +167,7 @@ fun ArtistDetailScreen(
         AlbumArtPaletteCache.ensure(this, context, heroImageUrl, heroImageIsEmbeddedArt)
     }
     val accentColor = heroImageUrl?.let { AlbumArtPaletteCache.colors[it] }
+        ?.adaptAccentForTheme(FoamTheme.isDark)
         ?: FoamTheme.accentColor
 
     val gridState = rememberLazyGridState()

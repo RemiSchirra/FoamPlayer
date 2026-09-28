@@ -218,6 +218,11 @@
     <string name="on">ON</string>
     <string name="off">OFF</string>
 
+    <string name="theme">Thème</string>
+    <string name="theme_follow_system">Suivre le système</string>
+    <string name="theme_dark">Sombre</string>
+    <string name="theme_light">Clair</string>
+
     <string name="language">Langue</string>
 
     <string name="lyrics_manager">Gestion des paroles</string>

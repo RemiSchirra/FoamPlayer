@@ -44,7 +44,6 @@ import com.foamplayer.app.data.lyrics.LyricsResultType
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.lyrics.LyricsUtils
 import com.foamplayer.app.ui.components.FoamBottomModal
-import com.foamplayer.app.ui.theme.DefaultPrimaryAccent
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
@@ -298,7 +297,7 @@ private fun DeleteLyricsButton(enabled: Boolean, onClick: () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
             .background(
-                if (enabled) DefaultPrimaryAccent.copy(alpha = 0.15f) else FoamTheme.colors.surfaceVariant
+                if (enabled) FoamTheme.accentColor.copy(alpha = 0.15f) else FoamTheme.colors.surfaceVariant
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -308,11 +307,11 @@ private fun DeleteLyricsButton(enabled: Boolean, onClick: () -> Unit) {
             .padding(vertical = FoamDimens.paddingSmall),
         contentAlignment = Alignment.Center
     ) {
-        BasicText(
-            text = stringResource(R.string.lyrics_manager_delete),
-            style = FoamTheme.typography.body.copy(
-                color = if (enabled) DefaultPrimaryAccent else FoamTheme.colors.textSecondary
+            BasicText(
+                text = stringResource(R.string.lyrics_manager_delete),
+                style = FoamTheme.typography.body.copy(
+                    color = if (enabled) FoamTheme.accentColor else FoamTheme.colors.textSecondary
+                )
             )
-        )
     }
 }

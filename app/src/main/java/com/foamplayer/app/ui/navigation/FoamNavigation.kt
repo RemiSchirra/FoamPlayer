@@ -116,6 +116,7 @@ import com.foamplayer.app.ui.screens.player.MiniPlayerSwipeController
 import com.foamplayer.app.ui.screens.player.PlayerDimens
 import com.foamplayer.app.ui.screens.player.PlayerFlightGeometryState
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
+import com.foamplayer.app.ui.screens.player.backdropScrimColor
 import com.foamplayer.app.ui.screens.player.progress
 import com.foamplayer.app.ui.screens.playlists.PlaylistDetailScreen
 import com.foamplayer.app.ui.screens.playlists.PlaylistsScreen
@@ -720,7 +721,8 @@ fun FoamNavHost(
                             .graphicsLayer { alpha = playerBackdropAlpha() }
                     )
 
-                    // Subview scrim, drawn by the player's container.
+                    // Subview scrim, drawn by the player's container. Theme-aware:
+                    // lightens toward the background color in light mode.
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -729,7 +731,7 @@ fun FoamNavHost(
                                         fullPlayerBackdropState.subViewBlurProgress() *
                                         playerBackdropAlpha()
                             }
-                            .background(Color.Black)
+                            .background(backdropScrimColor())
                     )
                 }
 

@@ -1,12 +1,14 @@
 package com.foamplayer.app
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.OptIn
@@ -15,6 +17,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -32,6 +35,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import com.foamplayer.app.audio.service.PlaybackService
 import com.foamplayer.app.constants.CollectionHeroTarget
+import com.foamplayer.app.data.settings.ThemeMode
 import com.foamplayer.app.ui.components.LocalDefaultCollectionHeroLayout
 import com.foamplayer.app.ui.navigation.FoamNavHost
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
@@ -48,6 +52,29 @@ class MainActivity : AppCompatActivity() {
 
     private val playerViewModel: PlayerViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
+
+    private companion object {
+        val TRANSPARENT = android.graphics.Color.TRANSPARENT
+    }
+
+    /**
+     * Synchronously-readable mirror of the persisted theme mode. DataStore's
+     * first emission is async, so without this the UI would seed with the
+     * default (dark) palette for the first frames after a force-close -- a
+     * dark flash for Light-theme users. Written on every theme change.
+     */
+    private val themeModePrefs by lazy {
+        getSharedPreferences("theme_mirror", MODE_PRIVATE)
+    }
+
+    private fun readMirroredThemeMode(): ThemeMode =
+        themeModePrefs.getString("mode", null)
+            ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
+            ?: ThemeMode.FOLLOW_SYSTEM
+
+    private fun writeMirroredThemeMode(mode: ThemeMode) {
+        themeModePrefs.edit().putString("theme_mirror", mode.name).apply()
+    }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -72,6 +99,12 @@ class MainActivity : AppCompatActivity() {
 
         setContent {
             val settings by settingsViewModel.settings.collectAsState()
+            val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsState()
+            val systemDark = isSystemInDarkTheme()
+            // DataStore's first emission hasn't landed until onboardingCompleted
+            // (same flow) turns non-null; before that `settings` still holds
+            // defaults, so the mirror must not be clobbered with them.
+            val settingsLoaded = onboardingCompleted != null
 
             LaunchedEffect(settings.language) {
                 val appLocale: LocaleListCompat = if (settings.language == "auto") {
@@ -82,7 +115,36 @@ class MainActivity : AppCompatActivity() {
                 AppCompatDelegate.setApplicationLocales(appLocale)
             }
 
-            FoamApp(playerViewModel = playerViewModel, settingsViewModel = settingsViewModel)
+            LaunchedEffect(settings.themeMode, settingsLoaded) {
+                if (settingsLoaded) writeMirroredThemeMode(settings.themeMode)
+            }
+
+            LaunchedEffect(settings.themeMode, systemDark) {
+                val dark = when (settings.themeMode) {
+                    ThemeMode.FOLLOW_SYSTEM -> systemDark
+                    ThemeMode.DARK -> true
+                    ThemeMode.LIGHT -> false
+                }
+                val barStyle = if (dark) {
+                    SystemBarStyle.dark(TRANSPARENT)
+                } else {
+                    SystemBarStyle.light(TRANSPARENT, TRANSPARENT)
+                }
+                enableEdgeToEdge(statusBarStyle = barStyle, navigationBarStyle = barStyle)
+                AppCompatDelegate.setDefaultNightMode(
+                    when (settings.themeMode) {
+                        ThemeMode.FOLLOW_SYSTEM -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+                        ThemeMode.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+                        ThemeMode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+                    }
+                )
+            }
+
+            FoamApp(
+                playerViewModel = playerViewModel,
+                settingsViewModel = settingsViewModel,
+                seededThemeMode = readMirroredThemeMode()
+            )
         }
     }
 
@@ -129,10 +191,19 @@ class MainActivity : AppCompatActivity() {
 @Composable
 private fun FoamApp(
     settingsViewModel: SettingsViewModel = hiltViewModel(),
-    playerViewModel: PlayerViewModel
+    playerViewModel: PlayerViewModel,
+    seededThemeMode: ThemeMode
 ) {
     val settings by settingsViewModel.settings.collectAsState()
     val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsState()
+    val systemDark = isSystemInDarkTheme()
+    val settingsLoaded = onboardingCompleted != null
+    val themeMode = if (settingsLoaded) settings.themeMode else seededThemeMode
+    val darkTheme = when (themeMode) {
+        ThemeMode.FOLLOW_SYSTEM -> systemDark
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+    }
 
     val albumArtPath by playerViewModel.currentAlbumArtPath.collectAsState()
     val dynamicAccentColor by playerViewModel.dynamicAccentColor.collectAsState()
@@ -149,6 +220,7 @@ private fun FoamApp(
         LocalDefaultCollectionHeroLayout provides settings.collectionHeroLayout(CollectionHeroTarget.Default)
     ) {
         FoamTheme(
+            darkTheme = darkTheme,
             iconStyle = settings.iconStyle,
             miniPlayerRounding = settings.miniPlayerRounding / 100f,
             fullPlayerRounding = settings.fullPlayerRounding / 100f,

@@ -18,6 +18,7 @@ import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.data.settings.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
@@ -150,6 +151,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setLanguage(language: String) = launch {
         settingsRepository.setLanguage(language)
+    }
+
+    fun setThemeMode(mode: ThemeMode) = launch {
+        settingsRepository.setThemeMode(mode)
     }
 
     fun setNavigationBarMode(mode: NavigationBarMode) = launch {
