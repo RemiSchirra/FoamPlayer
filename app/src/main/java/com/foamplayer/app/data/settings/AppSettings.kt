@@ -162,7 +162,7 @@ data class AppSettings(
     fun mediaSortMode(view: MediaListView): CollectionSortMode =
         mediaSortModes[view] ?: view.defaultSortMode()
 
-    /** Whether [view]'s sort order is inverted (organisation modal's "Inverse" checkbox). */
+    /** Whether [view]'s sort order is inverted (the organisation modal's "Inverse" checkbox). */
     fun mediaSortIsInverted(view: MediaListView): Boolean = view in mediaSortInverted
 
     /**
@@ -239,10 +239,19 @@ data class AppSettings(
         const val DEFAULT_PLAYER_BACKGROUND_INTENSITY = 80
         const val MIN_GRADIENT_STOPS = 1
         const val MAX_GRADIENT_STOPS = 4
+
+        /**
+         * The out-of-box gradient: three vibrant anchors (magenta -> purple ->
+         * teal, colors from the picker's [com.foamplayer.app.ui.screens.settings.DefaultStopPalette])
+         * spread down the field and staggered in X so the editor's dots don't
+         * overlap out of the box.
+         */
         val DefaultGradientStops = listOf(
-            GradientStop(0f, 0xFF141E30.toInt(), 0.3f),
-            GradientStop(1f, 0xFF243B55.toInt(), 0.7f)
+            GradientStop(0.1f, 0xFFFF2D55.toInt(), 0.3f), // vivid magenta
+            GradientStop(0.5f, 0xFFAF52DE.toInt(), 0.7f), // vibrant purple
+            GradientStop(0.9f, 0xFF00C7BE.toInt(), 0.5f) // vivid teal
         )
+
         const val MIN_NORMAL_FADE_SECONDS = 0f
         const val MAX_NORMAL_FADE_SECONDS = 15f
         const val DEFAULT_NORMAL_FADE_SECONDS = 5f

@@ -3,6 +3,7 @@ package com.foamplayer.app.ui.components
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.GradientStop
 import kotlin.math.roundToInt
 
@@ -16,7 +17,7 @@ import kotlin.math.roundToInt
  * drives Y, [GradientStop.x] the free horizontal placement).
  */
 fun gradientColorAt(stops: List<GradientStop>, x: Float, y: Float): Int {
-    if (stops.isEmpty()) return 0xFF141E30.toInt()
+    if (stops.isEmpty()) return AppSettings.DefaultGradientStops.first().argb
     var r = 0f
     var g = 0f
     var b = 0f
