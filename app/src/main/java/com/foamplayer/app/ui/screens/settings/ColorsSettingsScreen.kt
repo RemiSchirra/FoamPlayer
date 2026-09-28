@@ -26,6 +26,8 @@ import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,7 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -48,38 +49,23 @@ import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
- * The accent palette, constant for the lifetime of the process. Hoisted out of
- * [ColorsSettingsScreen] so screen recompositions (toggle flips, parent
- * recompositions) never rebuild the palette or re-run the row chunking -- the
- * previous inline `listOf(...)` + `chunked(4)` allocated a fresh 16-element
- * list plus 16 boxed [Color]s and a 4-element chunk list on every pass.
+ * One-tap accent shortcuts under the picker: 12 vibrant, evenly spread hues
+ * laid out 6 per row (see [DefaultStopPalette], shared with the gradient
+ * tool's picker).
  */
-private val AccentPalette: List<List<Color>> = listOf(
-    listOf(
-        Color(0xFFFF5252), // Default Red
-        Color(0xFFFF4081), // Pink
-        Color(0xFFE040FB), // Purple
-        Color(0xFF7C4DFF)  // Deep Purple
-    ),
-    listOf(
-        Color(0xFF536DFE), // Indigo
-        Color(0xFF448AFF), // Blue
-        Color(0xFF40C4FF), // Light Blue
-        Color(0xFF18FFFF)  // Cyan
-    ),
-    listOf(
-        Color(0xFF64FFDA), // Teal
-        Color(0xFF69F0AE), // Green
-        Color(0xFFB2FF59), // Light Green
-        Color(0xFFEEFF41)  // Lime
-    ),
-    listOf(
-        Color(0xFFFFFF00), // Yellow
-        Color(0xFFFFD740), // Amber
-        Color(0xFFFFAB40), // Orange
-        Color(0xFFFF6E40)  // Deep Orange
-    )
-)
+private val AccentShortcutRows: List<List<Int>> = DefaultStopPalette.chunked(6)
+
+/** Side of one palette swatch in the accent card. */
+private val PaletteSwatchSize = 36.dp
+
+/**
+ * Minimum interval between mid-drag accent persists. Persisting on every
+ * pointer frame would flood DataStore with writes and recompose every
+ * accent reader at gesture frequency; ~8 Hz reads as a continuous recolor
+ * while keeping the disk quiet. The gesture end always persists once more so
+ * the final, exact color is never lost to the throttle window.
+ */
+private const val AccentPersistIntervalMs = 120L
 
 @Composable
 fun ColorsSettingsScreen(
@@ -154,31 +140,101 @@ fun ColorsSettingsScreen(
                             .background(FoamTheme.colors.surface)
                             .padding(FoamDimens.paddingMedium)
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingStandard)) {
-                            AccentPalette.forEach { rowColors ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    rowColors.forEach { color ->
-                                        val isSelected = color.toArgb() == accentColorInt
-                                        Swatch(
-                                            color = color,
-                                            isSelected = isSelected,
-                                            onSelect = { viewModel.setAccentColor(color.toArgb()) }
-                                        )
-                                    }
-                                    // Fill empty slots if row is not full
-                                    if (rowColors.size < 4) {
-                                        repeat(4 - rowColors.size) {
-                                            Spacer(modifier = Modifier.size(64.dp))
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        AccentPickerSection(
+                            accentColorInt = accentColorInt,
+                            onAccentColorSelected = viewModel::setAccentColor
+                        )
                     }
                     Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The accent card: the same HSV picker as the gradient tool's modal
+ * ([SaturationValueField] + [HueBar], with the shortcut palette under it),
+ * inlined into the card instead of hosted in a sheet.
+ *
+ * The picker edits local HSV state and the draft recolors the rings AND the
+ * live app accent: the draft is persisted at [AccentPersistIntervalMs] during
+ * a drag and once more on release, so dragging the square or the hue bar
+ * visibly recolors the app while the disk write rate stays bounded. A palette
+ * tap seeds the HSV state (the rings jump along) and persists immediately.
+ *
+ * The HSV state is deliberately NOT keyed on [accentColorInt]: mid-drag
+ * persists echo back through the settings flow as a new committed value, and
+ * re-seeding on every echo would reset the rings under a moving finger. The
+ * seed happens once when the section enters composition (leaving via the
+ * Automatic Color toggle or scrolling this LazyColumn item off-screen
+ * disposes it, so the next entry re-seeds from the committed accent).
+ */
+@Composable
+private fun AccentPickerSection(
+    accentColorInt: Int,
+    onAccentColorSelected: (Int) -> Unit
+) {
+    val seed = remember {
+        FloatArray(3).also { android.graphics.Color.colorToHSV(accentColorInt, it) }
+    }
+    var hue by remember { mutableFloatStateOf(seed[0]) }
+    var saturation by remember { mutableFloatStateOf(seed[1]) }
+    var value by remember { mutableFloatStateOf(seed[2]) }
+
+    // The live draft, for the palette selection highlight.
+    val draftArgb = android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value))
+
+    var lastPersistAtMs by remember { mutableLongStateOf(0L) }
+    fun persistDraft(force: Boolean) {
+        val now = System.currentTimeMillis()
+        if (force || now - lastPersistAtMs >= AccentPersistIntervalMs) {
+            lastPersistAtMs = now
+            onAccentColorSelected(
+                android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value))
+            )
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingStandard)) {
+        // Drags update local HSV per frame (rings + live accent recolor) and
+        // persist the draft on the throttle; release persists the final value.
+        SaturationValueField(
+            hue = hue,
+            saturation = saturation,
+            value = value,
+            onSaturationValue = { s, v ->
+                saturation = s
+                value = v
+                persistDraft(force = false)
+            },
+            onEditFinished = { persistDraft(force = true) }
+        )
+        HueBar(
+            hue = hue,
+            onHueChange = { hue = it; persistDraft(force = false) },
+            onEditFinished = { persistDraft(force = true) }
+        )
+
+        // The shortcut palette: one tap commits (and steers the picker rings).
+        AccentShortcutRows.forEach { rowColors ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                rowColors.forEach { argb ->
+                    Swatch(
+                        color = Color(argb),
+                        isSelected = argb == draftArgb,
+                        onSelect = {
+                            val hsv = FloatArray(3)
+                            android.graphics.Color.colorToHSV(argb, hsv)
+                            hue = hsv[0]
+                            saturation = hsv[1]
+                            value = hsv[2]
+                            onAccentColorSelected(argb)
+                        }
+                    )
                 }
             }
         }
@@ -284,9 +340,8 @@ private fun ThemeSelector(
 
 /**
  * One selectable palette swatch, its own composable scope: a tap only
- * recomposes the two swatches whose selection state actually flips (this one
- * and the previously selected one), not the surrounding card / LazyColumn
- * item or the remaining 14 swatches.
+ * recomposes the swatches whose selection state actually flips, not the
+ * surrounding card / LazyColumn item or the other swatches.
  */
 @Composable
 private fun Swatch(
@@ -296,11 +351,11 @@ private fun Swatch(
 ) {
     Box(
         modifier = Modifier
-            .size(64.dp)
+            .size(PaletteSwatchSize)
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
             .background(color)
             .border(
-                width = if ( isSelected) 3.dp else 0.dp,
+                width = if ( isSelected) 2.dp else 0.dp,
                 color = if (isSelected) FoamTheme.colors.textPrimary else Color.Transparent,
                 shape = RoundedCornerShape(FoamDimens.buttonRounding)
             )
@@ -310,7 +365,7 @@ private fun Swatch(
         if (isSelected) {
             Box(
                 modifier = Modifier
-                    .size(FoamDimens.paddingSmall)
+                    .size(10.dp)
                     .clip(CircleShape)
                     .background(FoamTheme.colors.textPrimary)
             )

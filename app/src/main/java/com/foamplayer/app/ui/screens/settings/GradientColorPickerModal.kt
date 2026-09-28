@@ -225,13 +225,17 @@ private fun ColorPickerContent(
  * to black vertically, with a ring at the current color's position. The field
  * is drawn (two cheap gradient passes over one rect) rather than composed, so
  * drag frames only redraw and the hue-derived brush is reallocated per hue.
+ *
+ * [onEditFinished] fires once when the gesture ends (also shared by the
+ * inline accent picker, which commits on release instead of on an OK button).
  */
 @Composable
-private fun SaturationValueField(
+internal fun SaturationValueField(
     hue: Float,
     saturation: Float,
     value: Float,
-    onSaturationValue: (saturation: Float, value: Float) -> Unit
+    onSaturationValue: (saturation: Float, value: Float) -> Unit,
+    onEditFinished: () -> Unit = {}
 ) {
     val saturationBrush = remember(hue) {
         Brush.horizontalGradient(
@@ -257,15 +261,23 @@ private fun SaturationValueField(
             }
             // Border after the field drawing so the outline reads over it.
             .border(1.dp, FoamTheme.colors.borderOverlay, RoundedCornerShape(FoamDimens.itemRounding))
-            .normalizedDrag { x, y -> onSaturationValue(x, 1f - y) }
+            .normalizedDrag(
+                onDrag = { x, y -> onSaturationValue(x, 1f - y) },
+                onEnd = onEditFinished
+            )
     )
 }
 
-/** Horizontal hue strip with a draggable ring; drag X maps to 0..360 degrees. */
+/**
+ * Horizontal hue strip with a draggable ring; drag X maps to 0..360 degrees.
+ * [onEditFinished] fires once when the gesture ends (see
+ * [SaturationValueField]).
+ */
 @Composable
-private fun HueBar(
+internal fun HueBar(
     hue: Float,
-    onHueChange: (Float) -> Unit
+    onHueChange: (Float) -> Unit,
+    onEditFinished: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -279,21 +291,29 @@ private fun HueBar(
                 drawCircle(Color.Black.copy(alpha = 0.4f), radius = radius, center = center, style = Stroke(4.dp.toPx()))
                 drawCircle(Color.White, radius = radius, center = center, style = Stroke(2.dp.toPx()))
             }
-            .normalizedDrag { x, _ -> onHueChange(x * 360f) }
+            .normalizedDrag(
+                onDrag = { x, _ -> onHueChange(x * 360f) },
+                onEnd = onEditFinished
+            )
     )
 }
 
 /**
  * Drag handler reporting every touch position as normalized 0..1 coordinates,
  * starting with the initial down (grab-anywhere, snap-to-finger -- the same
- * behavior as the gradient preview's dots). Consuming the changes also keeps
- * the hosting sheet's scroll / drag-to-dismiss from fighting the picker.
- * [onDrag] is read through [rememberUpdatedState]: the pointerInput below
- * outlives many recompositions and must never call a stale lambda.
+ * behavior as the gradient preview's dots), and [onEnd] once the gesture is
+ * over. Consuming the changes also keeps the hosting sheet's scroll /
+ * drag-to-dismiss from fighting the picker. Both callbacks are read through
+ * [rememberUpdatedState]: the pointerInput below outlives many recompositions
+ * and must never call a stale lambda.
  */
 @Composable
-private fun Modifier.normalizedDrag(onDrag: (x: Float, y: Float) -> Unit): Modifier {
+private fun Modifier.normalizedDrag(
+    onDrag: (x: Float, y: Float) -> Unit,
+    onEnd: () -> Unit = {}
+): Modifier {
     val latestOnDrag by rememberUpdatedState(onDrag)
+    val latestOnEnd by rememberUpdatedState(onEnd)
     return pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown()
@@ -313,6 +333,7 @@ private fun Modifier.normalizedDrag(onDrag: (x: Float, y: Float) -> Unit): Modif
                     (change.position.y / size.height).coerceIn(0f, 1f)
                 )
             }
+            latestOnEnd()
         }
     }
 }
