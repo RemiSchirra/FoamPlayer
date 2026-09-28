@@ -19,7 +19,9 @@ import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.FoamIconStyle
+import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.ThemeMode
@@ -58,7 +60,9 @@ object BackupJson {
         put("autoOpenPlayerEnabled", settings.autoOpenPlayerEnabled)
         put("animatedCoverEnabled", settings.animatedCoverEnabled)
         put("animatedCoverAllowMobileData", settings.animatedCoverAllowMobileData)
-        put("dynamicBackgroundEnabled", settings.dynamicBackgroundEnabled)
+        put("backgroundMode", settings.backgroundMode.name)
+        put("customBackgroundUri", settings.customBackgroundUri.orEmpty())
+        put("gradientStops", gradientStopsToJson(settings.gradientStops))
         put("backgroundBlur", settings.backgroundBlur)
         put("appBackgroundIntensity", settings.appBackgroundIntensity)
         put("playerBackgroundIntensity", settings.playerBackgroundIntensity)
@@ -124,7 +128,10 @@ object BackupJson {
         autoOpenPlayerEnabled = json.optBoolean("autoOpenPlayerEnabled", false),
         animatedCoverEnabled = json.optBoolean("animatedCoverEnabled", false),
         animatedCoverAllowMobileData = json.optBoolean("animatedCoverAllowMobileData", false),
-        dynamicBackgroundEnabled = json.optBoolean("dynamicBackgroundEnabled", false),
+        backgroundMode = decodeEnum(json.optString("backgroundMode"), BackgroundMode.DYNAMIC),
+        customBackgroundUri = json.optString("customBackgroundUri").takeIf { it.isNotEmpty() },
+        gradientStops = gradientStopsFromJson(json.optJSONArray("gradientStops"))
+            ?: AppSettings.DefaultGradientStops,
         backgroundBlur = json.optInt("backgroundBlur", AppSettings.DEFAULT_BACKGROUND_BLUR),
         appBackgroundIntensity = json.optInt(
             "appBackgroundIntensity",
@@ -178,6 +185,30 @@ object BackupJson {
         dspUserPresets = json.optString("dspUserPresets", ""),
         deviceAudioConfigs = deviceAudioConfigsFromJson(json.optJSONObject("deviceAudioConfigs"))
     )
+
+    private fun gradientStopsToJson(stops: List<GradientStop>): JSONArray = JSONArray().apply {
+        stops.forEach { stop ->
+            put(
+                JSONObject().apply {
+                    put("offset", stop.offset.toDouble())
+                    put("x", stop.x.toDouble())
+                    put("argb", stop.argb)
+                }
+            )
+        }
+    }
+
+    private fun gradientStopsFromJson(array: JSONArray?): List<GradientStop>? {
+        if (array == null) return null
+        val stops = (0 until array.length()).mapNotNull { i ->
+            val entry = array.optJSONObject(i) ?: return@mapNotNull null
+            val offset = entry.optDouble("offset", Double.NaN).toFloat()
+            if (offset.isNaN()) return@mapNotNull null
+            // "x" is absent in older backups; default the dot to the middle.
+            GradientStop(offset, entry.optInt("argb"), entry.optDouble("x", 0.5).toFloat())
+        }
+        return stops.ifEmpty { null }
+    }
 
     private fun deviceAudioConfigsToJson(configs: Map<String, DeviceAudioConfig>): JSONObject =
         JSONObject().apply {

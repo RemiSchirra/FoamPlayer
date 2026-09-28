@@ -1,6 +1,7 @@
 package com.foamplayer.app.ui.screens.player
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,6 +22,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -36,21 +38,22 @@ import androidx.core.net.toUri
 import kotlin.math.roundToInt
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.foamplayer.app.data.settings.BackgroundMode
+import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.buildGradientImage
 import com.foamplayer.app.ui.theme.FoamTheme
 
 
 /**
  * Backdrop state written by [FullPlayerScreen] and read by the root-level backdrop host in
- * FoamNavigation. The full player's backdrop is deliberately rendered at the very root of
- * the hierarchy -- in the exact same fillMaxSize Box as the app-wide DynamicAlbumArtBackground --
- * so its blurred artwork is cropped to the physical screen with no overflow tricks, no
- * bottom-extension arithmetic and no possibility of being clipped by an intermediate
- * container. Because both backdrops now crop the same artwork into the same box with the
- * same blur and the same intensity dim, the open/close crossfade between them is seamless
- * (the player now has its own intensity, so parity -- and thus seamlessness -- holds while
- * the two intensity settings match).
+ * FoamNavigation. The full player's new modes (custom image / gradient) reuse the same
+ * treatment as the dynamic art: the full player's backdrop is deliberately rendered at the
+ * very root of the hierarchy -- in the exact same fillMaxSize Box as the app-wide
+ * DynamicAlbumArtBackground -- so its blurred artwork is cropped to the physical screen
+ * with no overflow tricks, no bottom-extension arithmetic and no possibility of being
+ * clipped by an intermediate container.
  *
  * [frontArtPath]/[backArtPath]/[immersive] are snapshot states; [crossfadeFraction] and
  * [subViewBlurProgress] are plain lambda fields whose bodies only read snapshot state
@@ -207,6 +210,75 @@ internal fun DynamicAlbumArtBackground(
 }
 
 /**
+ * One backdrop layer for [BackgroundMode.CUSTOM]: a blurred version of the
+ * user's chosen image, cropping like the album art treatment does, with the
+ * standard intensity scrim on top.
+ */
+@Composable
+internal fun CustomImageBackground(
+    imageUri: String?,
+    blur: Dp,
+    intensity: Float,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier) {
+        if (imageUri != null) {
+            val context = LocalContext.current
+            val request = remember(imageUri) {
+                ImageRequest.Builder(context)
+                    .data(imageUri.toUri())
+                    .crossfade(300)
+                    .build()
+            }
+            AsyncImage(
+                model = request,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().performantBlur(blur),
+                contentScale = ContentScale.Crop
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(backdropScrimColor().copy(alpha = 1f - intensity.coerceIn(0f, 1f)))
+        )
+    }
+}
+
+/**
+ * One backdrop layer for [BackgroundMode.GRADIENT]: the user's stops rendered
+ * as the same true 2D color field the settings preview shows (each point
+ * painting its own neighborhood via [buildGradientImage]), scaled up with
+ * bilinear filtering, with the standard intensity scrim on top.
+ *
+ * The field is rasterized once per [stops] change (portrait proportions -- the
+ * surfaces this fills are phone screens), which is cheap enough to rebuild
+ * live while the editor's dots are dragged on another screen.
+ */
+@Composable
+internal fun GradientBackground(
+    stops: List<GradientStop>,
+    intensity: Float,
+    modifier: Modifier = Modifier
+) {
+    val fieldBitmap = remember(stops) { buildGradientImage(stops, 128, 256) }
+    Box(modifier.fillMaxSize()) {
+        Image(
+            bitmap = fieldBitmap,
+            contentDescription = null,
+            contentScale = ContentScale.FillBounds,
+            filterQuality = FilterQuality.Medium,
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(backdropScrimColor().copy(alpha = 1f - intensity.coerceIn(0f, 1f)))
+        )
+    }
+}
+
+/**
  * Background layer for the classic blurred treatment and the immersive art hero.
  *
  * The two-layer front/back + [crossfadeFraction] scheme below is a manual crossfade, not
@@ -233,6 +305,9 @@ internal fun DynamicAlbumArtBackground(
  * fade at the bottom of the region where the backdrop is actually visible (the docked
  * bar's top edge hides everything below it); pass 0.dp when the backdrop is visible all
  * the way to the physical bottom of the screen.
+ *
+ * [backgroundMode] extends the classic dynamic treatment with two user-configured
+ * layers: a blurred custom image and a user-edited gradient.
  */
 @Composable
 internal fun AlbumArtBackdrop(
@@ -241,7 +316,9 @@ internal fun AlbumArtBackdrop(
     crossfadeFraction: () -> Float,
     immersive: Boolean,
     subViewProgress: () -> Float,
-    dynamicBackgroundEnabled: Boolean,
+    backgroundMode: BackgroundMode,
+    customBackgroundUri: String?,
+    gradientStops: List<GradientStop>,
     backgroundBlur: Dp,
     intensity: Float,
     bottomFadeInset: Dp,
@@ -269,46 +346,62 @@ internal fun AlbumArtBackdrop(
 
     Box(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
-        if (dynamicBackgroundEnabled) {
-            val context = LocalContext.current
-            // The two art layers remain composed throughout a pager transition so the
-            // currently playing track can dissolve into the next track's background.
-            Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f }) {
-                if (frontArtPath != null) {
-                    val frontRequest = remember(frontArtPath) {
-                        ImageRequest.Builder(context)
-                            .data(EmbeddedAlbumArt(frontArtPath.toUri()))
-                            .size(AlbumArtRequestSize)
-                            .crossfade(false)
-                            .build()
+        when (backgroundMode) {
+            BackgroundMode.DYNAMIC -> {
+                val context = LocalContext.current
+                // The two art layers remain composed throughout a pager transition so the
+                // currently playing track can dissolve into the next track's background.
+                Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f }) {
+                    if (frontArtPath != null) {
+                        val frontRequest = remember(frontArtPath) {
+                            ImageRequest.Builder(context)
+                                .data(EmbeddedAlbumArt(frontArtPath.toUri()))
+                                .size(AlbumArtRequestSize)
+                                .crossfade(false)
+                                .build()
+                        }
+                        AsyncImage(
+                            model = frontRequest,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize().performantBlur(backgroundBlur),
+                            contentScale = ContentScale.Crop
+                        )
                     }
-                    AsyncImage(
-                        model = frontRequest,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize().performantBlur(backgroundBlur),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                if (backArtPath != null && backArtPath != frontArtPath) {
-                    val backRequest = remember(backArtPath) {
-                        ImageRequest.Builder(context)
-                            .data(EmbeddedAlbumArt(backArtPath.toUri()))
-                            .size(AlbumArtRequestSize)
-                            .crossfade(false)
-                            .build()
+                    if (backArtPath != null && backArtPath != frontArtPath) {
+                        val backRequest = remember(backArtPath) {
+                            ImageRequest.Builder(context)
+                                .data(EmbeddedAlbumArt(backArtPath.toUri()))
+                                .size(AlbumArtRequestSize)
+                                .crossfade(false)
+                                .build()
+                        }
+                        AsyncImage(
+                            model = backRequest,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .performantBlur(backgroundBlur)
+                                .graphicsLayer { alpha = crossfadeFraction() },
+                            contentScale = ContentScale.Crop
+                        )
                     }
-                    AsyncImage(
-                        model = backRequest,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize().performantBlur(backgroundBlur).graphicsLayer { alpha = crossfadeFraction() },
-                        contentScale = ContentScale.Crop
-                    )
                 }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(backdropScrimColor().copy(alpha = 1f - intensity.coerceIn(0f, 1f)))
+                )
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(backdropScrimColor().copy(alpha = 1f - intensity.coerceIn(0f, 1f)))
+            BackgroundMode.CUSTOM -> CustomImageBackground(
+                imageUri = customBackgroundUri,
+                blur = backgroundBlur,
+                intensity = intensity,
+                modifier = Modifier.fillMaxSize()
+            )
+            BackgroundMode.GRADIENT -> GradientBackground(
+                stops = gradientStops,
+                intensity = intensity,
+                modifier = Modifier.fillMaxSize()
             )
         }
         BackdropGradient(modifier = Modifier.padding(bottom = bottomFadeInset))

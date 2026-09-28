@@ -187,9 +187,9 @@
     <string name="lyrics_results_save_as_file">Save as file</string>
     <string name="lyrics_results_embed">Embed in file</string>
     <string name="lyrics_results_saved">Lyrics saved to file</string>
-    <string name="lyrics_results_embedded">Lyrics embedded in file</string>
-    <string name="lyrics_results_save_failed">Could not save lyrics: %1$s</string>
     <string name="lyrics_results_embed_failed">Could not embed lyrics: %1$s</string>
+    <string name="lyrics_results_save_failed">Could not save lyrics: %1$s</string>
+    <string name="lyrics_results_embedded">Lyrics embedded in file</string>
     <string name="lyrics_results_duration_match">Duration matches</string>
     <string name="lyrics_results_expand">Show all</string>
     <string name="lyrics_results_collapse">Show less</string>
@@ -250,6 +250,13 @@
 
     <string name="dynamic_background">Dynamic Background</string>
     <string name="dynamic_background_desc">Extract colors from track art for background</string>
+    <string name="background_mode_custom">Custom Image</string>
+    <string name="background_mode_custom_desc">Pick an image and blur it like the dynamic art</string>
+    <string name="background_mode_gradient">Gradient</string>
+    <string name="background_mode_gradient_desc">Compose a gradient from up to four colors</string>
+    <string name="background_custom_image">Custom background image</string>
+    <string name="background_custom_pick_hint">Choose an image</string>
+    <string name="background_add_stop">Add color stop</string>
     <string name="background_blur">Background Blur</string>
     <string name="color_intensity">Color Intensity</string>
     <string name="none">None</string>

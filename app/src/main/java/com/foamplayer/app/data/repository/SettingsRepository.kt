@@ -36,7 +36,9 @@ import com.foamplayer.app.constants.deserializeLyricsProviderOrder
 import com.foamplayer.app.constants.deserializeLyricsSourceOrder
 import com.foamplayer.app.constants.deserializeNavBarItemOrder
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.FoamIconStyle
+import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.ThemeMode
@@ -95,7 +97,14 @@ class SettingsRepository @Inject constructor(
     suspend fun setAnimatedCoverAllowMobileData(enabled: Boolean) = update {
         it.copy(animatedCoverAllowMobileData = enabled)
     }
-    suspend fun setDynamicBackgroundEnabled(enabled: Boolean) = update { it.copy(dynamicBackgroundEnabled = enabled) }
+
+    /** Legacy boolean entry point kept for existing callers before the mode enum existed. */
+    suspend fun setDynamicBackgroundEnabled(enabled: Boolean) = update {
+        it.copy(backgroundMode = if (enabled) BackgroundMode.DYNAMIC else BackgroundMode.CUSTOM)
+    }
+    suspend fun setBackgroundMode(mode: BackgroundMode) = update { it.copy(backgroundMode = mode) }
+    suspend fun setCustomBackgroundUri(uri: String?) = update { it.copy(customBackgroundUri = uri) }
+    suspend fun setGradientStops(stops: List<GradientStop>) = update { it.copy(gradientStops = stops) }
     suspend fun setBackgroundBlur(blur: Int) = update { it.copy(backgroundBlur = blur) }
     suspend fun setAppBackgroundIntensity(intensity: Int) = update {
         it.copy(appBackgroundIntensity = intensity)
@@ -273,7 +282,12 @@ class SettingsRepository @Inject constructor(
         animatedCoverEnabled = this[Keys.ANIMATED_COVER_ENABLED] ?: AppSettings().animatedCoverEnabled,
         animatedCoverAllowMobileData = this[Keys.ANIMATED_COVER_ALLOW_MOBILE_DATA]
             ?: AppSettings().animatedCoverAllowMobileData,
-        dynamicBackgroundEnabled = this[Keys.DYNAMIC_BACKGROUND] ?: AppSettings().dynamicBackgroundEnabled,
+        backgroundMode = this[Keys.BACKGROUND_MODE]
+            ?.let { runCatching { BackgroundMode.valueOf(it) }.getOrNull() }
+            ?: AppSettings().backgroundMode,
+        customBackgroundUri = this[Keys.CUSTOM_BACKGROUND_URI]?.takeIf { it.isNotEmpty() },
+        gradientStops = deserializeGradientStops(this[Keys.GRADIENT_STOPS])
+            ?: AppSettings().gradientStops,
         backgroundBlur = this[Keys.BACKGROUND_BLUR] ?: AppSettings().backgroundBlur,
         appBackgroundIntensity = this[Keys.APP_BACKGROUND_INTENSITY]
             // Migration: the pre-split single intensity becomes the app background's value.
@@ -353,7 +367,9 @@ class SettingsRepository @Inject constructor(
         this[Keys.AUTO_OPEN_PLAYER] = settings.autoOpenPlayerEnabled
         this[Keys.ANIMATED_COVER_ENABLED] = settings.animatedCoverEnabled
         this[Keys.ANIMATED_COVER_ALLOW_MOBILE_DATA] = settings.animatedCoverAllowMobileData
-        this[Keys.DYNAMIC_BACKGROUND] = settings.dynamicBackgroundEnabled
+        this[Keys.BACKGROUND_MODE] = settings.backgroundMode.name
+        this[Keys.CUSTOM_BACKGROUND_URI] = settings.customBackgroundUri.orEmpty()
+        this[Keys.GRADIENT_STOPS] = serializeGradientStops(settings.gradientStops)
         this[Keys.BACKGROUND_BLUR] = settings.backgroundBlur
         this[Keys.APP_BACKGROUND_INTENSITY] = settings.appBackgroundIntensity
         this[Keys.PLAYER_BACKGROUND_INTENSITY] = settings.playerBackgroundIntensity
@@ -412,7 +428,9 @@ class SettingsRepository @Inject constructor(
         val AUTO_OPEN_PLAYER = booleanPreferencesKey("auto_open_player")
         val ANIMATED_COVER_ENABLED = booleanPreferencesKey("animated_cover_enabled")
         val ANIMATED_COVER_ALLOW_MOBILE_DATA = booleanPreferencesKey("animated_cover_allow_mobile_data")
-        val DYNAMIC_BACKGROUND = booleanPreferencesKey("dynamic_background")
+        val BACKGROUND_MODE = stringPreferencesKey("background_mode")
+        val CUSTOM_BACKGROUND_URI = stringPreferencesKey("custom_background_uri")
+        val GRADIENT_STOPS = stringPreferencesKey("gradient_stops")
         val BACKGROUND_BLUR = intPreferencesKey("background_blur")
         val DYNAMIC_BACKGROUND_INTENSITY = intPreferencesKey("dynamic_background_intensity")
         val APP_BACKGROUND_INTENSITY = intPreferencesKey("app_background_intensity")
@@ -451,6 +469,37 @@ class SettingsRepository @Inject constructor(
         val DEVICE_AUDIO_CONFIGS = stringPreferencesKey("device_audio_configs")
     }
 }
+
+/**
+ * "offset:x:argb" entries joined with ';'. Entries with unparsable numbers are
+ * dropped; a legacy 2-part entry ("offset:argb") is accepted and defaults its
+ * dot to the horizontal middle. A value that decodes to nothing falls back to
+ * the defaults via the caller's `?:`.
+ */
+internal fun deserializeGradientStops(stored: String?): List<GradientStop>? {
+    if (stored.isNullOrEmpty()) return null
+    val stops = stored.split(";").mapNotNull { entry ->
+        val parts = entry.split(":")
+        when (parts.size) {
+            3 -> {
+                val offset = parts[0].toFloatOrNull() ?: return@mapNotNull null
+                val x = parts[1].toFloatOrNull() ?: return@mapNotNull null
+                val argb = parts[2].toIntOrNull() ?: return@mapNotNull null
+                GradientStop(offset, argb, x)
+            }
+            2 -> {
+                val offset = parts[0].toFloatOrNull() ?: return@mapNotNull null
+                val argb = parts[1].toIntOrNull() ?: return@mapNotNull null
+                GradientStop(offset, argb, 0.5f)
+            }
+            else -> null
+        }
+    }
+    return stops.ifEmpty { null }
+}
+
+internal fun serializeGradientStops(stops: List<GradientStop>): String =
+    stops.joinToString(";") { "${it.offset}:${it.x}:${it.argb}" }
 
 /**
  * "id=mode:rate" entries joined with ';'. Unknown ids/modes are dropped so

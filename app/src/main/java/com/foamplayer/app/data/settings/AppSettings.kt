@@ -40,6 +40,26 @@ enum class ThemeMode(val label: String) {
     LIGHT("Light")
 }
 
+/** Which visual treatment drives the app-wide and player backgrounds. */
+enum class BackgroundMode(val label: String) {
+    DYNAMIC("Dynamic"),
+    CUSTOM("Custom"),
+    GRADIENT("Gradient")
+}
+
+/**
+ * One draggable color anchor of the gradient background. [offset] is the
+ * normalized vertical position on the gradient (0..1); [x] is the dot's
+ * normalized horizontal placement in the editor preview (0..1) so dots can be
+ * spread out visually — it does not affect the rendered gradient.
+ */
+@Immutable
+data class GradientStop(
+    val offset: Float,
+    val argb: Int,
+    val x: Float = 0.5f
+)
+
 // Immutable by construction, but its Set/List/Map fields make it unstable to the
 // compiler's inference. This annotation lets every composable receiving AppSettings
 // (or screens fed from it) skip when an unrelated preference changes.
@@ -67,7 +87,12 @@ data class AppSettings(
     /** Animated (canvas) album cover in the immersive full player; the sub-toggle allows mobile data. */
     val animatedCoverEnabled: Boolean = false,
     val animatedCoverAllowMobileData: Boolean = false,
-    val dynamicBackgroundEnabled: Boolean = false,
+    /** Which of the dynamic art / custom image / gradient treatments the backdrops use. */
+    val backgroundMode: BackgroundMode = BackgroundMode.DYNAMIC,
+    /** Content URI of the custom background image ([BackgroundMode.CUSTOM]); null until picked. */
+    val customBackgroundUri: String? = null,
+    /** Color anchors of the gradient background ([BackgroundMode.GRADIENT]); 1..4 stops. */
+    val gradientStops: List<GradientStop> = DefaultGradientStops,
     val backgroundBlur: Int = DEFAULT_BACKGROUND_BLUR,
     val appBackgroundIntensity: Int = DEFAULT_APP_BACKGROUND_INTENSITY,
     val playerBackgroundIntensity: Int = DEFAULT_PLAYER_BACKGROUND_INTENSITY,
@@ -187,6 +212,7 @@ data class AppSettings(
                 MIN_DYNAMIC_BACKGROUND_INTENSITY,
                 MAX_DYNAMIC_BACKGROUND_INTENSITY
             ),
+            gradientStops = gradientStops.sanitizedGradientStops(),
             artistSeparators = artistSeparators.normalizedSeparators(),
             genreSeparators = genreSeparators.normalizedSeparators(),
             navBarPrimaryOrder = normalizedNavBarOrder(navBarPrimaryOrder, DefaultNavBarPrimaryOrder),
@@ -211,6 +237,12 @@ data class AppSettings(
         const val MAX_DYNAMIC_BACKGROUND_INTENSITY = 100
         const val DEFAULT_APP_BACKGROUND_INTENSITY = 50
         const val DEFAULT_PLAYER_BACKGROUND_INTENSITY = 80
+        const val MIN_GRADIENT_STOPS = 1
+        const val MAX_GRADIENT_STOPS = 4
+        val DefaultGradientStops = listOf(
+            GradientStop(0f, 0xFF141E30.toInt(), 0.3f),
+            GradientStop(1f, 0xFF243B55.toInt(), 0.7f)
+        )
         const val MIN_NORMAL_FADE_SECONDS = 0f
         const val MAX_NORMAL_FADE_SECONDS = 15f
         const val DEFAULT_NORMAL_FADE_SECONDS = 5f
@@ -223,6 +255,15 @@ data class AppSettings(
 
 private fun Set<String>.normalizedSeparators(): Set<String> =
     map(String::trim).filter(String::isNotEmpty).toSet().ifEmpty { AppSettings.DEFAULT_SEPARATORS }
+
+/** Clamps every position, drops malformed stops and caps the list at [AppSettings.MAX_GRADIENT_STOPS]. */
+private fun List<GradientStop>.sanitizedGradientStops(): List<GradientStop> {
+    val cleaned = filter { it.offset.isFinite() && it.x.isFinite() }
+        .map { GradientStop(it.offset.coerceIn(0f, 1f), it.argb, it.x.coerceIn(0f, 1f)) }
+        .distinct()
+        .take(AppSettings.MAX_GRADIENT_STOPS)
+    return cleaned.ifEmpty { AppSettings.DefaultGradientStops }
+}
 
 /** Completes a stored nav-bar order so it contains every [allowed] item exactly once. */
 private fun normalizedNavBarOrder(order: List<NavBarItem>, allowed: List<NavBarItem>): List<NavBarItem> {

@@ -16,7 +16,9 @@ import com.foamplayer.app.data.scanner.ArtistImageScanState
 import com.foamplayer.app.data.scanner.ArtistImageScanner
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.FoamIconStyle
+import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -85,6 +87,9 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setAnimatedCoverAllowMobileData(enabled)
     }
     fun setDynamicBackgroundEnabled(enabled: Boolean) = launch { settingsRepository.setDynamicBackgroundEnabled(enabled) }
+    fun setBackgroundMode(mode: BackgroundMode) = launch { settingsRepository.setBackgroundMode(mode) }
+    fun setCustomBackgroundUri(uri: String?) = launch { settingsRepository.setCustomBackgroundUri(uri) }
+    fun setGradientStops(stops: List<GradientStop>) = launch { settingsRepository.setGradientStops(stops) }
     fun setBackgroundBlur(blur: Int) = launch { settingsRepository.setBackgroundBlur(blur) }
     fun setAppBackgroundIntensity(intensity: Int) = launch {
         settingsRepository.setAppBackgroundIntensity(intensity)

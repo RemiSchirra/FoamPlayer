@@ -75,6 +75,7 @@ import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.ui.components.CollectionFoamModal
 import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
@@ -108,10 +109,12 @@ import com.foamplayer.app.ui.screens.library.AlbumDetailScreen
 import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
 import com.foamplayer.app.ui.screens.library.ArtistSongsScreen
 import com.foamplayer.app.ui.screens.player.AlbumArtBackdrop
+import com.foamplayer.app.ui.screens.player.CustomImageBackground
 import com.foamplayer.app.ui.screens.player.DownSwipeCommitVelocityPxPerSec
 import com.foamplayer.app.ui.screens.player.FullPlayerBackdropState
 import com.foamplayer.app.ui.screens.player.FullPlayerScreen
 import com.foamplayer.app.ui.screens.player.DynamicAlbumArtBackground
+import com.foamplayer.app.ui.screens.player.GradientBackground
 import com.foamplayer.app.ui.screens.player.MiniPlayerSwipeController
 import com.foamplayer.app.ui.screens.player.PlayerDimens
 import com.foamplayer.app.ui.screens.player.PlayerFlightGeometryState
@@ -309,7 +312,7 @@ fun FoamNavHost(
     val scoreOverrides by playerViewModel.scoreOverrides.collectAsState()
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
     val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
-    val isDynamicBackgroundEnabled = playerSettings.dynamicBackgroundEnabled
+    val backgroundMode = playerSettings.backgroundMode
     val navigationBarMode = playerSettings.navigationBarMode
     val navBarTransparentWhenPlayerOpen = playerSettings.navBarTransparentWhenPlayerOpen
 
@@ -593,7 +596,7 @@ fun FoamNavHost(
             Box(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
 
                 // App-wide dynamic album-art backdrop
-                val backgroundEnabled = isDynamicBackgroundEnabled && !isSettingsRoute(currentRoute)
+                val backgroundEnabled = backgroundMode == BackgroundMode.DYNAMIC && !isSettingsRoute(currentRoute)
                 val onBackgroundTransition = if (backgroundEnabled) {
                     rememberAnimatedBackground(
                         enabled = true,
@@ -606,11 +609,30 @@ fun FoamNavHost(
                     remember { { _: String?, _: String?, _: Float -> } }
                 }
 
+                // The user-configured static layers (custom blurred image / gradient):
+                // same dim as the dynamic art, hidden on settings routes like the art.
+                if (!isSettingsRoute(currentRoute) && backgroundMode != BackgroundMode.DYNAMIC) {
+                    when (backgroundMode) {
+                        BackgroundMode.CUSTOM -> CustomImageBackground(
+                            imageUri = playerSettings.customBackgroundUri,
+                            blur = playerSettings.backgroundBlur.dp,
+                            intensity = playerSettings.appBackgroundIntensity / 100f,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        BackgroundMode.GRADIENT -> GradientBackground(
+                            stops = playerSettings.gradientStops,
+                            intensity = playerSettings.appBackgroundIntensity / 100f,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        BackgroundMode.DYNAMIC -> Unit
+                    }
+                }
+
                 // Full-bleed backdrop for the detail list screens (album/playlist/artist),
                 // drawn at the root so it covers the status bar and nav zone. Its alpha
                 // tween runs in lock-step with the screens' fade; between two detail
                 // routes the alpha never leaves 1f and the art switch is a front/back
-                // crossfade instead.
+                // crossfade instead. Art-driven, so it only applies in DYNAMIC mode.
                 var listBackdropArt by remember { mutableStateOf<ListBackdropArt?>(null) }
                 var lastListBackdropArt by remember { mutableStateOf<ListBackdropArt?>(null) }
                 LaunchedEffect(currentRoute) {
@@ -665,9 +687,10 @@ fun FoamNavHost(
                     label = "listBackdropAlpha"
                 )
                 val listBackdropDisplay = listBackdropArt ?: lastListBackdropArt
-                val showListBackdrop by remember {
+                val showListBackdrop by remember(backgroundMode) {
                     derivedStateOf {
-                        (listBackdropArt ?: lastListBackdropArt) != null && listBackdropAlpha > 0f
+                        backgroundMode == BackgroundMode.DYNAMIC &&
+                                (listBackdropArt ?: lastListBackdropArt) != null && listBackdropAlpha > 0f
                     }
                 }
                 if (showListBackdrop) {
@@ -709,7 +732,9 @@ fun FoamNavHost(
                         crossfadeFraction = fullPlayerBackdropState.crossfadeFraction,
                         immersive = fullPlayerBackdropState.immersive,
                         subViewProgress = fullPlayerBackdropState.subViewBlurProgress,
-                        dynamicBackgroundEnabled = isDynamicBackgroundEnabled,
+                        backgroundMode = backgroundMode,
+                        customBackgroundUri = playerSettings.customBackgroundUri,
+                        gradientStops = playerSettings.gradientStops,
                         backgroundBlur = playerSettings.backgroundBlur.dp,
                         intensity = playerSettings.playerBackgroundIntensity / 100f,
                         bottomFadeInset = playerBackdropFadeInset,
@@ -1675,7 +1700,7 @@ fun FoamNavHost(
                             .fillMaxWidth()
                             .onSizeChanged { navZoneHeightPx = it.height }
                     ) {
-                    when (navigationBarMode) {
+                        when (navigationBarMode) {
                             NavigationBarMode.DOCKED -> Box(
                                 modifier = Modifier.fillMaxWidth().navigationBarsPadding()
                             ) {
@@ -1731,13 +1756,13 @@ fun FoamNavHost(
                                     playerClosedFraction = playerClosedFraction,
                                     cardPresenceFraction = { miniPlayerPresence.value },
                                     navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
-                                     expandFraction = navBarExpandFraction,
-                                      onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }
-                                  )
-                              }
-                          }
-                      }
-                 }
+                                    expandFraction = navBarExpandFraction,
+                                    onToggleExpand = { isNavBarExpanded = !isNavBarExpanded }
+                                )
+                            }
+                        }
+                    }
+                }
 
                 val miniPlayerBottomPadding = NavBarDimens.miniPlayerBottomPadding(
                     mode = navigationBarMode,
@@ -1766,8 +1791,8 @@ fun FoamNavHost(
                         },
                         exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
                     ) {
-                         val miniPlayerVisibilityScope = this
-                         if (hasCurrentTrack && currentRoute != Screen.Onboarding.route) {
+                        val miniPlayerVisibilityScope = this
+                        if (hasCurrentTrack && currentRoute != Screen.Onboarding.route) {
                             MiniPlayer(
                                 playbackStateFlow = playerViewModel.playbackState,
                                 positionMsFlow = playerViewModel.positionMs,

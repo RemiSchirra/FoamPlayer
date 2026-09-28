@@ -195,6 +195,13 @@
 
     <string name="dynamic_background">Arrière-plan dynamique</string>
     <string name="dynamic_background_desc">Extraire les couleurs de la pochette pour l\'arrière-plan</string>
+    <string name="background_mode_custom">Image personnalisée</string>
+    <string name="background_mode_custom_desc">Choisir une image et la flouter comme l\'art dynamique</string>
+    <string name="background_mode_gradient">Dégradé</string>
+    <string name="background_mode_gradient_desc">Composer un dégradé jusqu\'à quatre couleurs</string>
+    <string name="background_custom_image">Image d\'arrière-plan personnalisée</string>
+    <string name="background_custom_pick_hint">Choisir une image</string>
+    <string name="background_add_stop">Ajouter un arrêt de couleur</string>
     <string name="background_blur">Flou d\'arrière-plan</string>
     <string name="color_intensity">Intensité des couleurs</string>
     <string name="none">Aucun</string>
@@ -206,7 +213,7 @@
     <string name="auto_open_player_desc">Ouvrir le lecteur au lancement d\'une piste</string>
     <string name="immersive_mode">Mode immersif</string>
     <string name="immersive_mode_desc">La pochette d\'album remplit tout l\'écran</string>
-    <string name="animate_seek_bar">Animer la barre de recherche</string>
+    <string name="animate_seek_bar">Animer la barre de progression</string>
     <string name="animate_seek_bar_desc">Mouvement fluide de la barre de progression</string>
     <string name="mini_player">Mini lecteur</string>
     <string name="full_player">Lecteur complet</string>
@@ -273,7 +280,7 @@
     <string name="onboarding_permission_audio_title">Accès audio</string>
     <string name="onboarding_permission_audio_desc">Lire les fichiers musicaux stockés sur votre appareil</string>
     <string name="onboarding_permission_notifications_title">Notifications</string>
-    <string name="onboarding_permission_notifications_desc">Afficher les contrôles de lecture et la pochette dans le volet des notifications</string>
+    <string name="onboarding_permission_notifications_desc">Afficher les contrôles et la pochette dans le volet des notifications</string>
     <string name="onboarding_grant">Accorder</string>
     <string name="onboarding_granted">Accordée</string>
     <string name="onboarding_skip_hint">Vous pouvez modifier ces éléments à tout moment dans les paramètres.</string>
