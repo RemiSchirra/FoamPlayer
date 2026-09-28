@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -392,12 +393,22 @@ private val DefaultStopPalette = listOf(
  * Gradient editor: a vertical-format live preview on the left (a true 2D color
  * field with 2D-draggable color dots) and the point list on the right, with the
  * add control underneath it. The count stays within 1..4 points.
+ *
+ * Edits land in a local snapshot state first so drags update on every frame
+ * (commit-on-release, like [FoamSliderStateItem]); the persisted setting is
+ * written when an edit completes -- drag release, color pick, add or remove.
+ * Persisting per drag frame would round-trip through DataStore on each pointer
+ * event, which both lags the dots behind the finger and floods the disk.
  */
 @Composable
 private fun GradientEditor(
     stops: List<GradientStop>,
     onChange: (List<GradientStop>) -> Unit
 ) {
+    var localStops by remember { mutableStateOf(stops) }
+    // Re-sync when the persisted value changes from elsewhere (import, reset);
+    // a drag never persists mid-flight, so this cannot fight an active gesture.
+    LaunchedEffect(stops) { localStops = stops }
     var expandedStopIndex by remember { mutableStateOf<Int?>(null) }
 
     Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
@@ -407,8 +418,13 @@ private fun GradientEditor(
         ) {
             // Vertical-format 2D gradient preview with the draggable dots, left.
             GradientPreview(
-                stops = stops,
-                onChange = onChange,
+                stops = localStops,
+                onDrag = { index, x, y ->
+                    localStops = localStops.mapIndexed { i, s ->
+                        if (i == index) s.copy(offset = y, x = x) else s
+                    }
+                },
+                onDragEnd = { onChange(localStops) },
                 modifier = Modifier
                     .width(140.dp)
                     .height(260.dp)
@@ -424,7 +440,7 @@ private fun GradientEditor(
                     .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
                     .background(FoamTheme.colors.surface)
             ) {
-                stops.forEachIndexed { index, stop ->
+                localStops.forEachIndexed { index, stop ->
                     if (index > 0) {
                         Box(
                             modifier = Modifier
@@ -437,26 +453,26 @@ private fun GradientEditor(
                         label = "Point ${index + 1}",
                         stop = stop,
                         isExpanded = expandedStopIndex == index,
-                        canRemove = stops.size > AppSettings.MIN_GRADIENT_STOPS,
+                        canRemove = localStops.size > AppSettings.MIN_GRADIENT_STOPS,
                         onToggle = {
                             expandedStopIndex = if (expandedStopIndex == index) null else index
                         },
                         onColorChange = { argb ->
-                            onChange(stops.mapIndexed { i, s ->
+                            localStops = localStops.mapIndexed { i, s ->
                                 if (i == index) s.copy(argb = argb) else s
-                            })
+                            }
+                            onChange(localStops)
                         },
                         onRemove = {
-                            onChange(
-                                stops.filterIndexed { i, _ -> i != index }
-                                    .ifEmpty { listOf(AppSettings.DefaultGradientStops.first()) }
-                            )
+                            localStops = localStops.filterIndexed { i, _ -> i != index }
+                                .ifEmpty { listOf(AppSettings.DefaultGradientStops.first()) }
+                            onChange(localStops)
                             expandedStopIndex = null
                         }
                     )
                 }
 
-                if (stops.size < AppSettings.MAX_GRADIENT_STOPS) {
+                if (localStops.size < AppSettings.MAX_GRADIENT_STOPS) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -469,13 +485,14 @@ private fun GradientEditor(
                         // existing points use -- identical stops are deduped by
                         // the settings sanitizer, so an exact clone of the last
                         // point would silently vanish (the "add does nothing" bug).
-                        val last = stops.lastOrNull() ?: return@AddStopButton
+                        val last = localStops.lastOrNull() ?: return@AddStopButton
                         val newOffset = ((last.offset + 1f) / 2f).coerceIn(0f, 1f)
                         val newX = (1f - last.x).coerceIn(0f, 1f)
-                        val usedColors = stops.map { it.argb }.toSet()
+                        val usedColors = localStops.map { it.argb }.toSet()
                         val newColor = DefaultStopPalette.firstOrNull { it !in usedColors }
                             ?: last.argb
-                        onChange(stops + GradientStop(newOffset, newColor, newX))
+                        localStops = localStops + GradientStop(newOffset, newColor, newX)
+                        onChange(localStops)
                     })
                 }
             }
@@ -493,21 +510,28 @@ private fun GradientEditor(
  * only the first would ever receive a drag. Any dot can therefore be grabbed
  * and moved; its Y position drives the stop's place in the field, X is free
  * placement so overlapping dots can be pulled apart.
+ *
+ * [onDrag] fires on every frame with the dragged dot's index and its new
+ * normalized position; the caller owns instant, in-composition state so the
+ * dot tracks the finger with no persistence round-trip in the loop. [onDragEnd]
+ * commits the final positions.
  */
 @Composable
 private fun GradientPreview(
     stops: List<GradientStop>,
-    onChange: (List<GradientStop>) -> Unit,
+    onDrag: (index: Int, x: Float, y: Float) -> Unit,
+    onDragEnd: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var draggingIndex by remember { mutableIntStateOf(-1) }
     var previewSize by remember { mutableStateOf(IntSize.Zero) }
 
     // Fresh reads inside the gesture loop: the handler below outlives many
-    // recompositions, and writing back the list captured when it (re)started
-    // would revert every other dot's last-moved position on each drag frame.
+    // recompositions, so the callbacks and the list it hit-tests against must
+    // never be captured stale.
     val latestStops by rememberUpdatedState(stops)
-    val latestOnChange by rememberUpdatedState(onChange)
+    val latestOnDrag by rememberUpdatedState(onDrag)
+    val latestOnDragEnd by rememberUpdatedState(onDragEnd)
 
     // Rasterize the 2D field at a small resolution and let Compose scale it up
     // with bilinear filtering: smooth at any size, cheap to rebuild per frame.
@@ -530,6 +554,14 @@ private fun GradientPreview(
                     )?.takeIf { (_, distance) -> distance <= hitRadiusPx }
                     draggingIndex = hit?.first ?: -1
                     if (draggingIndex < 0) return@awaitEachGesture
+                    // Snap the dot to the finger immediately: apply the down
+                    // position before any move arrives, so there is no dead
+                    // frame between grabbing and the dot following.
+                    latestOnDrag(
+                        draggingIndex,
+                        (down.position.x / size.width).coerceIn(0f, 1f),
+                        (down.position.y / size.height).coerceIn(0f, 1f)
+                    )
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull { it.id == down.id }
@@ -539,11 +571,9 @@ private fun GradientPreview(
                         change.consume()
                         val nx = (change.position.x / size.width).coerceIn(0f, 1f)
                         val ny = (change.position.y / size.height).coerceIn(0f, 1f)
-                        val index = draggingIndex
-                        latestOnChange(latestStops.mapIndexed { i, s ->
-                            if (i == index) s.copy(offset = ny, x = nx) else s
-                        })
+                        latestOnDrag(draggingIndex, nx, ny)
                     }
+                    latestOnDragEnd()
                 }
             }
     ) {
@@ -618,7 +648,12 @@ private fun GradientDot(
     }
 }
 
-/** One expandable row of the point list: color chip, palette, custom hex input, remove. */
+/**
+ * One row of the point list: color chip, label and a cross to delete the
+ * point. Tapping the row expands its color editor. The cross is clipped to a
+ * [CircleShape] *before* becoming clickable, so its ripple stays a bounded
+ * circle instead of squaring off in the row's corner.
+ */
 @Composable
 private fun StopRow(
     label: String,
@@ -655,8 +690,32 @@ private fun StopRow(
                 text = label,
                 style = FoamTheme.typography.body.copy(
                     fontWeight = if (isExpanded) FontWeight.Bold else FontWeight.Normal
-                )
+                ),
+                modifier = Modifier.weight(1f)
             )
+
+            if (canRemove) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        // Clip BEFORE the clickable: the ripple is bounded by the
+                        // node's clip, so the cross's ripple stays a circle.
+                        .clip(CircleShape)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(color = FoamTheme.colors.textPrimary),
+                            onClick = onRemove
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = stringResource(R.string.remove),
+                        tint = FoamTheme.colors.textSecondary,
+                        modifier = Modifier.size(FoamDimens.iconSmall)
+                    )
+                }
+            }
         }
 
         if (isExpanded) {
@@ -693,11 +752,6 @@ private fun StopRow(
 
                 // Custom color input (#RRGGBB or #AARRGGBB).
                 CustomColorInput(onSubmit = onColorChange)
-
-                if (canRemove) {
-                    Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
-                    RemoveStopButton(onRemove = onRemove)
-                }
             }
         }
     }
@@ -760,34 +814,6 @@ private fun AddStopButton(onAdd: () -> Unit) {
         BasicText(
             text = stringResource(R.string.background_add_stop),
             style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor)
-        )
-    }
-}
-
-@Composable
-private fun RemoveStopButton(onRemove: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                onClick = onRemove
-            )
-            .padding(vertical = FoamDimens.spacingSmall),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.Close,
-            contentDescription = null,
-            tint = FoamTheme.colors.textSecondary,
-            modifier = Modifier.size(FoamDimens.iconSmall)
-        )
-        Spacer(modifier = Modifier.size(FoamDimens.spacingSmall))
-        BasicText(
-            text = stringResource(R.string.remove),
-            style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary)
         )
     }
 }
