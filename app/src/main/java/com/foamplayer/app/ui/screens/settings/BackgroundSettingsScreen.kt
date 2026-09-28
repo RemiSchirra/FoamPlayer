@@ -377,16 +377,20 @@ private fun CustomImageSection(
     }
 }
 
-/** Default palette offered in each point's expanded editor. */
+/** Default palette offered in each point's expanded editor: 12 vibrant, evenly spread hues. */
 private val DefaultStopPalette = listOf(
-    0xFF141E30.toInt(), 0xFF243B55.toInt(),
-    0xFF0F2027.toInt(), 0xFF2C5364.toInt(),
-    0xFFFF5252.toInt(), 0xFFFF4081.toInt(),
-    0xFF7C4DFF.toInt(), 0xFF448AFF.toInt(),
-    0xFF40C4FF.toInt(), 0xFF64FFDA.toInt(),
-    0xFF69F0AE.toInt(), 0xFFFFD740.toInt(),
-    0xFFFFAB40.toInt(), 0xFF8D6E63.toInt(),
-    0xFF263238.toInt(), 0xFFECEFF1.toInt()
+    0xFFFF3B30.toInt(), // red
+    0xFFFF9500.toInt(), // orange
+    0xFFFFCC00.toInt(), // yellow
+    0xFFB8E62E.toInt(), // lime
+    0xFF34C759.toInt(), // green
+    0xFF00C7BE.toInt(), // teal
+    0xFF32ADE6.toInt(), // sky
+    0xFF007AFF.toInt(), // blue
+    0xFF5856D6.toInt(), // indigo
+    0xFFAF52DE.toInt(), // purple
+    0xFFFF2D55.toInt(), // magenta
+    0xFFFF6482.toInt()  // pink
 )
 
 /**
