@@ -1,5 +1,12 @@
 package com.foamplayer.app.ui.screens.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +22,9 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
@@ -41,6 +51,12 @@ fun PlayerSettingsScreen(
     val isAnimatedCoverEnabled = settings.animatedCoverEnabled
     val isAnimatedCoverAllowMobileData = settings.animatedCoverAllowMobileData
     val marqueeMode = settings.marqueeMode
+
+    // Animations only play after the user toggles a switch, never on screen open
+    // (even if the settings flow emits its stored value after the first frame).
+    var animateChanges by remember { mutableStateOf(false) }
+    val enterTransition = if (animateChanges) expandVertically() + fadeIn() else EnterTransition.None
+    val exitTransition = if (animateChanges) shrinkVertically() + fadeOut() else ExitTransition.None
 
     Column(
         modifier = Modifier
@@ -97,7 +113,10 @@ fun PlayerSettingsScreen(
                                 title = stringResource(R.string.immersive_mode),
                                 description = "Album art fills the entire screen",
                                 checked = isImmersiveEnabled,
-                                onCheckedChange = { viewModel.setImmersiveModeEnabled(it) }
+                                onCheckedChange = {
+                                    animateChanges = true
+                                    viewModel.setImmersiveModeEnabled(it)
+                                }
                             )
                             Box(
                                 modifier = Modifier
@@ -111,31 +130,48 @@ fun PlayerSettingsScreen(
                                 checked = isAnimateSeekBarEnabled,
                                 onCheckedChange = { viewModel.setAnimateSeekBarEnabled(it) }
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
-                            )
-                            FoamSwitchItem(
-                                title = "Animated Album Cover",
-                                description = "Animated artwork in the immersive player",
-                                checked = isAnimatedCoverEnabled,
-                                onCheckedChange = { viewModel.setAnimatedCoverEnabled(it) }
-                            )
-                            if (isAnimatedCoverEnabled) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(FoamDimens.separatorHeight)
-                                        .background(FoamTheme.colors.borderOverlay)
-                                )
-                                FoamSwitchItem(
-                                    title = "Allow Mobile Data",
-                                    description = "Load animated covers on mobile data, not Wi-Fi only",
-                                    checked = isAnimatedCoverAllowMobileData,
-                                    onCheckedChange = { viewModel.setAnimatedCoverAllowMobileData(it) }
-                                )
+                            AnimatedVisibility(
+                                visible = isImmersiveEnabled,
+                                enter = enterTransition,
+                                exit = exitTransition
+                            ) {
+                                Column {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(FoamDimens.separatorHeight)
+                                            .background(FoamTheme.colors.borderOverlay)
+                                    )
+                                    FoamSwitchItem(
+                                        title = "Animated Album Cover",
+                                        description = "Animated artwork in the immersive player",
+                                        checked = isAnimatedCoverEnabled,
+                                        onCheckedChange = {
+                                            animateChanges = true
+                                            viewModel.setAnimatedCoverEnabled(it)
+                                        }
+                                    )
+                                    AnimatedVisibility(
+                                        visible = isAnimatedCoverEnabled,
+                                        enter = enterTransition,
+                                        exit = exitTransition
+                                    ) {
+                                        Column {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(FoamDimens.separatorHeight)
+                                                    .background(FoamTheme.colors.borderOverlay)
+                                            )
+                                            FoamSwitchItem(
+                                                title = "Allow Mobile Data",
+                                                description = "Load animated covers on mobile data, not Wi-Fi only",
+                                                checked = isAnimatedCoverAllowMobileData,
+                                                onCheckedChange = { viewModel.setAnimatedCoverAllowMobileData(it) }
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
