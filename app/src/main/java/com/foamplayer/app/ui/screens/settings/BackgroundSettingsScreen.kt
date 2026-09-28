@@ -25,7 +25,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
@@ -52,7 +51,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -377,30 +375,16 @@ private fun CustomImageSection(
     }
 }
 
-/** Default palette offered in each point's expanded editor: 12 vibrant, evenly spread hues. */
-private val DefaultStopPalette = listOf(
-    0xFFFF3B30.toInt(), // red
-    0xFFFF9500.toInt(), // orange
-    0xFFFFCC00.toInt(), // yellow
-    0xFFB8E62E.toInt(), // lime
-    0xFF34C759.toInt(), // green
-    0xFF00C7BE.toInt(), // teal
-    0xFF32ADE6.toInt(), // sky
-    0xFF007AFF.toInt(), // blue
-    0xFF5856D6.toInt(), // indigo
-    0xFFAF52DE.toInt(), // purple
-    0xFFFF2D55.toInt(), // magenta
-    0xFFFF6482.toInt()  // pink
-)
-
 /**
  * Gradient editor: a vertical-format live preview on the left (a true 2D color
  * field with 2D-draggable color dots) and the point list on the right, with the
  * add control underneath it. The count stays within 1..4 points.
  *
- * Edits land in a local snapshot state first so drags update on every frame
+ * Editing a point's color opens [GradientColorPickerModal] (a FoamModal sheet
+ * with a full HSV picker); its OK commits, its Cancel discards. Position edits
+ * land in a local snapshot state first so drags update on every frame
  * (commit-on-release, like [FoamSliderStateItem]); the persisted setting is
- * written when an edit completes -- drag release, color pick, add or remove.
+ * written when an edit completes -- drag release, color confirm, add or remove.
  * Persisting per drag frame would round-trip through DataStore on each pointer
  * event, which both lags the dots behind the finger and floods the disk.
  */
@@ -410,10 +394,12 @@ private fun GradientEditor(
     onChange: (List<GradientStop>) -> Unit
 ) {
     var localStops by remember { mutableStateOf(stops) }
-    // Re-sync when the persisted value changes from elsewhere (import, reset);
-    // a drag never persists mid-flight, so this cannot fight an active gesture.
     LaunchedEffect(stops) { localStops = stops }
-    var expandedStopIndex by remember { mutableStateOf<Int?>(null) }
+
+    var editingStopIndex by remember { mutableStateOf<Int?>(null) }
+    var pickerStop by remember { mutableStateOf(AppSettings.DefaultGradientStops.first()) }
+    var pickerLabel by remember { mutableStateOf("Point 1") }
+    var pickerSession by remember { mutableIntStateOf(0) }
 
     Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
         Row(
@@ -436,7 +422,7 @@ private fun GradientEditor(
 
             Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
 
-            // The point list, right; tap a row to expand its color editor. The
+            // The point list, right; tapping a row opens its color picker. The
             // add control sits underneath the list, inside the same card.
             Column(
                 modifier = Modifier
@@ -456,22 +442,17 @@ private fun GradientEditor(
                     StopRow(
                         label = "Point ${index + 1}",
                         stop = stop,
-                        isExpanded = expandedStopIndex == index,
                         canRemove = localStops.size > AppSettings.MIN_GRADIENT_STOPS,
-                        onToggle = {
-                            expandedStopIndex = if (expandedStopIndex == index) null else index
-                        },
-                        onColorChange = { argb ->
-                            localStops = localStops.mapIndexed { i, s ->
-                                if (i == index) s.copy(argb = argb) else s
-                            }
-                            onChange(localStops)
+                        onEdit = {
+                            pickerLabel = "Point ${index + 1}"
+                            pickerStop = stop
+                            pickerSession++
+                            editingStopIndex = index
                         },
                         onRemove = {
                             localStops = localStops.filterIndexed { i, _ -> i != index }
                                 .ifEmpty { listOf(AppSettings.DefaultGradientStops.first()) }
                             onChange(localStops)
-                            expandedStopIndex = null
                         }
                     )
                 }
@@ -501,6 +482,24 @@ private fun GradientEditor(
                 }
             }
         }
+
+        GradientColorPickerModal(
+            visible = editingStopIndex != null,
+            session = pickerSession,
+            label = pickerLabel,
+            initialArgb = pickerStop.argb,
+            onConfirm = { argb ->
+                val index = editingStopIndex
+                if (index != null && index < localStops.size) {
+                    localStops = localStops.mapIndexed { i, s ->
+                        if (i == index) s.copy(argb = argb) else s
+                    }
+                    onChange(localStops)
+                }
+                editingStopIndex = null
+            },
+            onDismiss = { editingStopIndex = null }
+        )
     }
 }
 
@@ -654,148 +653,64 @@ private fun GradientDot(
 
 /**
  * One row of the point list: color chip, label and a cross to delete the
- * point. Tapping the row expands its color editor. The cross is clipped to a
- * [CircleShape] *before* becoming clickable, so its ripple stays a bounded
- * circle instead of squaring off in the row's corner.
+ * point. Tapping the row opens its color picker sheet. The cross is clipped
+ * to a [CircleShape] *before* becoming clickable, so its ripple stays a
+ * bounded circle instead of squaring off in the row's corner.
  */
 @Composable
 private fun StopRow(
     label: String,
     stop: GradientStop,
-    isExpanded: Boolean,
     canRemove: Boolean,
-    onToggle: () -> Unit,
-    onColorChange: (Int) -> Unit,
+    onEdit: () -> Unit,
     onRemove: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onEdit
+            )
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(color = FoamTheme.colors.textPrimary),
-                    onClick = onToggle
-                )
-                .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(Color(stop.argb))
-                    .border(1.dp, FoamTheme.colors.borderOverlay, CircleShape)
-            )
-            Spacer(modifier = Modifier.size(FoamDimens.paddingMedium))
-            BasicText(
-                text = label,
-                style = FoamTheme.typography.body.copy(
-                    fontWeight = if (isExpanded) FontWeight.Bold else FontWeight.Normal
-                ),
-                modifier = Modifier.weight(1f)
-            )
-
-            if (canRemove) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        // Clip BEFORE the clickable: the ripple is bounded by the
-                        // node's clip, so the cross's ripple stays a circle.
-                        .clip(CircleShape)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple(color = FoamTheme.colors.textPrimary),
-                            onClick = onRemove
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = stringResource(R.string.remove),
-                        tint = FoamTheme.colors.textSecondary,
-                        modifier = Modifier.size(FoamDimens.iconSmall)
-                    )
-                }
-            }
-        }
-
-        if (isExpanded) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = FoamDimens.paddingMedium)
-                    .padding(bottom = FoamDimens.spacingMedium)
-            ) {
-                // Default palette grid (rows of four, spaced apart vertically,
-                // sized for the narrow column).
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
-                ) {
-                    DefaultStopPalette.chunked(4).forEach { rowColors ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            rowColors.forEach { argb ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(26.dp)
-                                        .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                        .background(Color(argb))
-                                        .border(
-                                            width = if (argb == stop.argb) 2.dp else 0.dp,
-                                            color = FoamTheme.colors.textPrimary,
-                                            shape = RoundedCornerShape(FoamDimens.buttonRounding)
-                                        )
-                                        .clickable { onColorChange(argb) }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
-
-                // Custom color input (#RRGGBB or #AARRGGBB).
-                CustomColorInput(onSubmit = onColorChange)
-            }
-        }
-    }
-}
-
-@Composable
-private fun CustomColorInput(onSubmit: (Int) -> Unit) {
-    var text by remember { mutableStateOf("") }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        BasicTextField(
-            value = text,
-            onValueChange = { text = it },
-            textStyle = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
-            singleLine = true,
-            modifier = Modifier
-                .weight(1f)
-                .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                .background(FoamTheme.colors.surfaceVariant)
-                .padding(horizontal = FoamDimens.paddingSmall, vertical = FoamDimens.spacingSmall)
-        )
-        Spacer(modifier = Modifier.size(FoamDimens.spacingSmall))
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                .background(FoamTheme.accentColor)
-                .clickable {
-                    parseHexColor(text)?.let(onSubmit)
-                }
-                .padding(horizontal = FoamDimens.paddingSmall, vertical = FoamDimens.spacingSmall)
-        ) {
-            BasicText(
-                text = stringResource(R.string.ok),
-                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.background)
-            )
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(Color(stop.argb))
+                .border(1.dp, FoamTheme.colors.borderOverlay, CircleShape)
+        )
+        Spacer(modifier = Modifier.size(FoamDimens.paddingMedium))
+        BasicText(
+            text = label,
+            style = FoamTheme.typography.body,
+            modifier = Modifier.weight(1f)
+        )
+
+        if (canRemove) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    // Clip BEFORE the clickable: the ripple is bounded by the
+                    // node's clip, so the cross's ripple stays a circle.
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = onRemove
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(R.string.remove),
+                    tint = FoamTheme.colors.textSecondary,
+                    modifier = Modifier.size(FoamDimens.iconSmall)
+                )
+            }
         }
     }
 }
@@ -825,17 +740,5 @@ private fun AddStopButton(onAdd: () -> Unit) {
             text = stringResource(R.string.background_add_stop),
             style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor)
         )
-    }
-}
-
-/** Parses "#RGB", "#RRGGBB" or "#AARRGGBB"; returns null for anything else. */
-private fun parseHexColor(input: String): Int? {
-    val cleaned = input.trim().removePrefix("#")
-    return when (cleaned.length) {
-        3 -> cleaned.map { "$it$it" }.joinToString("").toLongOrNull(16)
-            ?.let { 0xFF000000.toInt() or it.toInt() }
-        6 -> cleaned.toLongOrNull(16)?.let { 0xFF000000.toInt() or it.toInt() }
-        8 -> cleaned.toLongOrNull(16)?.toInt()
-        else -> null
     }
 }
