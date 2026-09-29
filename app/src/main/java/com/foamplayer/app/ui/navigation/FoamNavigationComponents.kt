@@ -294,13 +294,14 @@ object NavBarDimens {
     val AttachedCardDrop = 24.dp
 
     /**
-     * Gap between the mini player card's visible bottom edge and the extra row's
-     * icon hit-areas in ATTACHED mode once the row is fully expanded. Slightly
-     * negative: the card's edge sinks into the icons' hit padding and lands right
-     * on the glyphs' top edge, matching how deep the card sinks into the pill
-     * when the row is closed.
+     * Where the mini player card's visible bottom edge lands relative to the extra
+     * row's glyph tops in ATTACHED mode once the row is fully expanded. Negative:
+     * the card sinks past the glyphs' top edge, so the card's artwork ends up only
+     * [MiniPlayerCardVerticalPadding] + [MiniPlayerContainerPadding] - |this| above
+     * the icons -- a tight sliver of surface instead of a full container-padding
+     * gap, echoing how deeply the card sinks into the pill when the row is closed.
      */
-    val AttachedExpandedIconGap = (-2).dp
+    val AttachedExpandedIconGap = (-12).dp
 
     // ---- Player backdrop reach into the nav zone -------------------------------
     /**
