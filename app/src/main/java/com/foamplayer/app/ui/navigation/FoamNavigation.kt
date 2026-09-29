@@ -612,7 +612,7 @@ fun FoamNavHost(
                 }
 
                 // The user-configured static layers (custom blurred image / gradient):
-                // same dim as the dynamic art, hidden on settings routes like the art.
+                // same dim as the dynamic art, hidden on settings pages like the art.
                 // They are never suppressed on detail pages: the collection backdrop
                 // below paints over them once opaque, and keeping them composed
                 // underneath makes every fade crossfade over the custom image /
@@ -984,9 +984,11 @@ fun FoamNavHost(
                                                     )
                                                 )
                                             },
-                                            onArtistClick = { artist, image ->
+                                            onArtistClick = { artist, image, imageIsEmbeddedArt ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artist)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artist, image))
+                                                navController.navigate(
+                                                    Screen.ArtistDetail.createRoute(artist, image, imageIsEmbeddedArt)
+                                                )
                                             },
                                             onTrackClick = { track -> playTrackFromList(listOf(track), 0) },
                                             onSeeAllAlbums = { navController.navigate(Screen.HomeSeeAllAlbums.route) },
@@ -1088,9 +1090,11 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.HomeSeeAllArtists.route) {
                                         FavoriteArtistsSeeAllScreen(
-                                            onArtistClick = { artist, image ->
+                                            onArtistClick = { artist, image, imageIsEmbeddedArt ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artist)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artist, image))
+                                                navController.navigate(
+                                                    Screen.ArtistDetail.createRoute(artist, image, imageIsEmbeddedArt)
+                                                )
                                             },
                                             onBack = { navController.popBackStack() },
                                             sharedTransitionScope = this@SharedTransitionLayout,
@@ -1130,9 +1134,11 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.Search.route) {
                                         SearchScreen(
-                                            onArtistClick = { artist, image ->
+                                            onArtistClick = { artist, image, imageIsEmbeddedArt ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artist)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artist, image))
+                                                navController.navigate(
+                                                    Screen.ArtistDetail.createRoute(artist, image, imageIsEmbeddedArt)
+                                                )
                                             },
                                             onAlbumClick = { albumResult ->
                                                 activeSharedCollection = sharedCollectionTag("album", albumResult.album)
@@ -1203,9 +1209,11 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.BrowseArtists.route) {
                                         ArtistsBrowseScreen(
-                                            onArtistClick = { artist, image ->
+                                            onArtistClick = { artist, image, imageIsEmbeddedArt ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artist)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artist, image))
+                                                navController.navigate(
+                                                    Screen.ArtistDetail.createRoute(artist, image, imageIsEmbeddedArt)
+                                                )
                                             },
                                             onBack = { navController.popBackStack() },
                                             sharedTransitionScope = this@SharedTransitionLayout,
@@ -1313,9 +1321,11 @@ fun FoamNavHost(
                                         CollectionArtistsScreen(
                                             kind = backStackEntry.arguments?.getString("kind").orEmpty(),
                                             key = backStackEntry.arguments?.getString("key").orEmpty(),
-                                            onArtistClick = { artist, image ->
+                                            onArtistClick = { artist, image, imageIsEmbeddedArt ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artist)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artist, image))
+                                                navController.navigate(
+                                                    Screen.ArtistDetail.createRoute(artist, image, imageIsEmbeddedArt)
+                                                )
                                             },
                                             onBack = { navController.popBackStack() },
                                             sharedTransitionScope = this@SharedTransitionLayout,
@@ -1388,9 +1398,11 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.Stats.route) {
                                         StatsScreen(
-                                            onArtistClick = { artistName, image ->
+                                            onArtistClick = { artistName, image, imageIsEmbeddedArt ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artistName)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artistName, image))
+                                                navController.navigate(
+                                                    Screen.ArtistDetail.createRoute(artistName, image, imageIsEmbeddedArt)
+                                                )
                                             },
                                             onAlbumClick = { album, artUrl, artist ->
                                                 activeSharedCollection = sharedCollectionTag("album", album)
@@ -1419,9 +1431,11 @@ fun FoamNavHost(
                                         }
                                         StatsSeeAllScreen(
                                             onBack = { navController.popBackStack() },
-                                            onArtistClick = { artistName, image ->
+                                            onArtistClick = { artistName, image, imageIsEmbeddedArt ->
                                                 activeSharedCollection = sharedCollectionTag("artist", artistName)
-                                                navController.navigate(Screen.ArtistDetail.createRoute(artistName, image))
+                                                navController.navigate(
+                                                    Screen.ArtistDetail.createRoute(artistName, image, imageIsEmbeddedArt)
+                                                )
                                             },
                                             onAlbumClick = { album, artUrl, artist ->
                                                 activeSharedCollection = sharedCollectionTag("album", album)
@@ -1530,15 +1544,19 @@ fun FoamNavHost(
                                         Screen.ArtistDetail.route,
                                         arguments = listOf(
                                             navArgument("artistName") { type = NavType.StringType },
-                                            navArgument("image") { type = NavType.StringType; defaultValue = "" }
+                                            navArgument("image") { type = NavType.StringType; defaultValue = "" },
+                                            navArgument("embedded") { type = NavType.StringType; defaultValue = "false" }
                                         )
                                     ) { backStackEntry ->
                                         val artistName = backStackEntry.arguments?.getString("artistName") ?: ""
                                         val seedImageUrl = backStackEntry.arguments?.getString("image")
                                             ?.takeIf { it.isNotBlank() }
+                                        val seedImageIsEmbeddedArt = backStackEntry.arguments
+                                            ?.getString("embedded")?.toBooleanStrictOrNull() ?: false
                                         ArtistDetailScreen(
                                             artistName = artistName,
                                             seedImageUrl = seedImageUrl,
+                                            seedImageIsEmbeddedArt = seedImageIsEmbeddedArt,
                                             onAlbumClick = { album ->
                                                 activeSharedCollection = sharedCollectionTag("album", album.album)
                                                 navController.navigate(

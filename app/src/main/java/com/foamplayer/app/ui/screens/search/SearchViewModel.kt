@@ -7,7 +7,8 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.LyricsRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
-import com.foamplayer.app.data.scanner.ArtistImageScanner
+import com.foamplayer.app.data.scanner.ArtistCover
+import com.foamplayer.app.data.scanner.ArtistCoverProvider
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.identityKey
@@ -80,15 +81,20 @@ class SearchViewModel @Inject constructor(
     private val repository: TrackRepository,
     private val settingsRepository: SettingsRepository,
     private val lyricsRepository: LyricsRepository,
-    artistImageScanner: ArtistImageScanner
+    artistCoverProvider: ArtistCoverProvider
 ) : ViewModel() {
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
-    /** Cached Spotify pictures per artist name, for the artist result rows. */
-    val artistImages: StateFlow<Map<String, String>> =
-        artistImageScanner.imagesFlow(repository.getAllArtists())
+    /**
+     * Resolved pictures per artist name: a cached Spotify image when the scan
+     * found one, else the artist's first track with embedded art (both are
+     * automatic — no scan has to run for the fallback), for the artist result
+     * rows.
+     */
+    val artistImages: StateFlow<Map<String, ArtistCover>> =
+        artistCoverProvider.coversFlow(repository.getAllArtists())
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     /**

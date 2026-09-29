@@ -8,7 +8,8 @@ import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.PlaylistRepository
 import com.foamplayer.app.data.repository.TrackRepository
-import com.foamplayer.app.data.scanner.ArtistImageScanner
+import com.foamplayer.app.data.scanner.ArtistCover
+import com.foamplayer.app.data.scanner.ArtistCoverProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,7 +37,7 @@ data class FavoriteArtist(
 class HomeViewModel @Inject constructor(
     private val trackRepository: TrackRepository,
     private val playlistRepository: PlaylistRepository,
-    artistImageScanner: ArtistImageScanner
+    artistCoverProvider: ArtistCoverProvider
 ) : ViewModel() {
 
     /** All playlists, for resolving a recommendation into its real entity (long-press modal). */
@@ -99,12 +100,13 @@ class HomeViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
-     * Cached Spotify pictures per artist name (local cache file URIs) for the
-     * favorite-artist cards and their see-all page; rebuilt live as the
-     * Settings scan resolves more artists.
+     * Resolved pictures per artist name: a cached Spotify image when the scan
+     * found one, else the artist's first track with embedded art (both are
+     * automatic — no scan has to run for the fallback), for the
+     * favorite-artist cards and their see-all page.
      */
-    val artistImages: StateFlow<Map<String, String>> =
-        artistImageScanner.imagesFlow(favoriteArtists.map { artists -> artists.map { it.name } })
+    val artistImages: StateFlow<Map<String, ArtistCover>> =
+        artistCoverProvider.coversFlow(favoriteArtists.map { artists -> artists.map { it.name } })
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     // Long-press collection actions for the see-all pages, mirroring the browse

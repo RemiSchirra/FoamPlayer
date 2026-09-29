@@ -8,7 +8,8 @@ import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
-import com.foamplayer.app.data.scanner.ArtistImageScanner
+import com.foamplayer.app.data.scanner.ArtistCover
+import com.foamplayer.app.data.scanner.ArtistCoverProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -65,7 +66,7 @@ private object TrackDocumentIds {
  * BrowseViewModels: every folder screen is a new ViewModel, so without this
  * each click rebuilt its listing from scratch. Entries are keyed by folder
  * path and remember which tracks snapshot they were built from, so a hit is
- * known to be current (the live Room stream still re-groups on real changes).
+ * known to be current (the live Room stream still re-group on real changes).
  */
 private object FolderListingCache {
     private class Entry(
@@ -97,7 +98,7 @@ private object FolderListingCache {
 class BrowseViewModel @Inject constructor(
     private val trackRepository: TrackRepository,
     private val settingsRepository: SettingsRepository,
-    artistImageScanner: ArtistImageScanner
+    artistCoverProvider: ArtistCoverProvider
 ) : ViewModel() {
 
     val albums: StateFlow<List<AlbumSearchResult>> = trackRepository.getAllAlbums()
@@ -110,12 +111,14 @@ class BrowseViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
-     * Cached Spotify pictures per artist name (local cache file URIs), shown
-     * in the artist lists. Rebuilt whenever the scan lands new files, so rows
-     * fill in live while the scan runs.
+     * Resolved pictures per artist name: a cached Spotify image when the scan
+     * found one, else the artist's first track with embedded art (both are
+     * automatic — no scan has to run for the fallback), shown in the artist
+     * lists. Rebuilt whenever the scan lands new files, so rows fill in live
+     * while it runs.
      */
-    val artistImages: StateFlow<Map<String, String>> =
-        artistImageScanner.imagesFlow(artists)
+    val artistImages: StateFlow<Map<String, ArtistCover>> =
+        artistCoverProvider.coversFlow(artists)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     val genres: StateFlow<List<String>> = trackRepository.getAllGenres()

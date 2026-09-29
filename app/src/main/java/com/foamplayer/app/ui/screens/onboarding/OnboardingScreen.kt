@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -32,6 +33,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
@@ -76,6 +78,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.floor
 
 private const val OnboardingPageCount = 3
 
@@ -623,18 +626,41 @@ private fun ForwardText(text: String, alpha: Float) {
 
 @Composable
 private fun OnboardingDots(scrollPosition: Float, pageCount: Int) {
-    Row(horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
-        repeat(pageCount) { index ->
-            // 0 when the position sits on this dot, 1 when fully passed.
-            val distance = abs(scrollPosition - index).coerceIn(0f, 1f)
-            Box(
-                modifier = Modifier
-                    .height(8.dp)
-                    .width(lerpDp(24.dp, 8.dp, distance))
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(lerpColor(FoamTheme.accentColor, FoamTheme.colors.surfaceVariant, distance))
-            )
+    val dotSize = 8.dp
+    val dotSpacing = 8.dp
+    val pitch = dotSize + dotSpacing
+
+    // Worm indicator: the head leads during the first half of the swipe,
+    // the tail catches up during the second half.
+    val page = floor(scrollPosition).toInt().coerceIn(0, pageCount - 1)
+    val fraction = (scrollPosition - page).coerceIn(0f, 1f)
+    val head = page + (fraction * 2f).coerceAtMost(1f)
+    val tail = page + (fraction * 2f - 1f).coerceAtLeast(0f)
+
+    val indicatorOffset = pitch * tail
+    val indicatorWidth = dotSize + pitch * (head - tail)
+
+    Box(contentAlignment = Alignment.CenterStart) {
+        // Static inactive dots
+        Row(horizontalArrangement = Arrangement.spacedBy(dotSpacing)) {
+            repeat(pageCount) {
+                Box(
+                    modifier = Modifier
+                        .size(dotSize)
+                        .clip(CircleShape)
+                        .background(FoamTheme.colors.surfaceVariant)
+                )
+            }
         }
+        // Active indicator that stretches between dots
+        Box(
+            modifier = Modifier
+                .offset(x = indicatorOffset)
+                .width(indicatorWidth)
+                .height(dotSize)
+                .clip(CircleShape)
+                .background(FoamTheme.accentColor)
+        )
     }
 }
 

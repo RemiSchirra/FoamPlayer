@@ -89,6 +89,7 @@ private const val ArtistAlbumGridColumns = 3
 fun ArtistDetailScreen(
     artistName: String,
     seedImageUrl: String? = null,
+    seedImageIsEmbeddedArt: Boolean = false,
     onAlbumClick: (AlbumSearchResult) -> Unit,
     onAllSongsClick: () -> Unit,
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
@@ -145,18 +146,20 @@ fun ArtistDetailScreen(
     // The first track in alphabetical order is the fallback artwork source.
     val headerArtPath = tracks.firstOrNull()?.albumArtPath
 
-    // Spotify-resolved artist picture: seeded through the route by the source
-    // screen (available on the very first frame so the shared-element flight
-    // never flashes the letter fallback), then confirmed from the cache.
+    // Artist picture: the cached Spotify image (seeded through the route by the
+    // source screen so the shared-element flight never flashes the letter
+    // fallback), else the automatic first-track fallback.
     val cachedArtistImage by viewModel.artistImage.collectAsState()
     val artistImage = cachedArtistImage ?: seedImageUrl?.takeIf { it.isNotBlank() }
+    // A seed carries its own load mode; otherwise Spotify results are plain
+    // cache files while the first-track fallback is embedded art.
+    val artistImageIsEmbeddedArt = artistImage == null ||
+            (cachedArtistImage == null && seedImageIsEmbeddedArt)
 
     // The hero art (artist picture, else the first track's album art) drives
     // the hero image, the screen's backdrop and the accent color.
     val heroImageUrl = artistImage ?: headerArtPath
-    // The Spotify picture is a plain cache file; the fallback is a track file
-    // whose artwork must be extracted from the audio container.
-    val heroImageIsEmbeddedArt = artistImage == null
+    val heroImageIsEmbeddedArt = artistImage == null || artistImageIsEmbeddedArt
 
     LaunchedEffect(heroImageUrl, heroImageIsEmbeddedArt) {
         onListBackdropArt(heroImageUrl, heroImageIsEmbeddedArt)

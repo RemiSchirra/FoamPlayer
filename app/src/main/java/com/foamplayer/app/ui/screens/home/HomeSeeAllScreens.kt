@@ -323,7 +323,7 @@ fun OldFavoritesSeeAllScreen(
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun FavoriteArtistsSeeAllScreen(
-    onArtistClick: (artist: String, imageUrl: String?) -> Unit,
+    onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -361,9 +361,12 @@ fun FavoriteArtistsSeeAllScreen(
                 CollectionListItem(
                     title = artist.name,
                     subtitle = null,
-                    imageUrl = artistImages[artist.name],
-                    imageIsEmbeddedArt = false,
-                    onClick = { onArtistClick(artist.name, artistImages[artist.name]) },
+                    imageUrl = artistImages[artist.name]?.imageUrl,
+                    imageIsEmbeddedArt = artistImages[artist.name]?.isEmbeddedArt ?: false,
+                    onClick = {
+                        val cover = artistImages[artist.name]
+                        onArtistClick(artist.name, cover?.imageUrl, cover?.isEmbeddedArt ?: false)
+                    },
                     active = CollectionId.artist(artist.name) == activeCollectionId,
                     density = density,
                     onLongClick = {
@@ -371,12 +374,11 @@ fun FavoriteArtistsSeeAllScreen(
                             collectionModalState?.show(
                                 CollectionInfo(
                                     title = artist.name,
-                                    // The Spotify artist picture is a plain cache
-                                    // file, not embedded art: the header must load
-                                    // it directly instead of extracting a picture
-                                    // from an audio container.
-                                    imageUrl = artistImages[artist.name],
-                                    imageIsEmbeddedArt = false,
+                                    // Either a Spotify cache file (plain) or an
+                                    // audio file (embedded art): the flag routes
+                                    // the modal header to the right Coil model.
+                                    imageUrl = artistImages[artist.name]?.imageUrl,
+                                    imageIsEmbeddedArt = artistImages[artist.name]?.isEmbeddedArt ?: false,
                                     kind = CollectionKind.Artist,
                                     tracks = viewModel.tracksForArtist(artist.name)
                                 )

@@ -7,7 +7,8 @@ import com.foamplayer.app.data.db.dao.TopAlbumStat
 import com.foamplayer.app.data.db.dao.TopTrackStat
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.TrackRepository
-import com.foamplayer.app.data.scanner.ArtistImageScanner
+import com.foamplayer.app.data.scanner.ArtistCover
+import com.foamplayer.app.data.scanner.ArtistCoverProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,7 +30,7 @@ import javax.inject.Inject
 @HiltViewModel
 class StatsSeeAllViewModel @Inject constructor(
     private val trackRepository: TrackRepository,
-    artistImageScanner: ArtistImageScanner,
+    artistCoverProvider: ArtistCoverProvider,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -71,9 +72,13 @@ class StatsSeeAllViewModel @Inject constructor(
             emptyStateFlow()
         }
 
-    /** Cached Spotify pictures per artist name for the top-artist rows. */
-    val artistImages: StateFlow<Map<String, String>> =
-        artistImageScanner.imagesFlow(trackRepository.getAllArtists())
+    /**
+     * Resolved pictures per artist name: a cached Spotify image when the scan
+     * found one, else the artist's first track with embedded art (both are
+     * automatic — no scan has to run for the fallback), for the top-artist rows.
+     */
+    val artistImages: StateFlow<Map<String, ArtistCover>> =
+        artistCoverProvider.coversFlow(trackRepository.getAllArtists())
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     // Long-press collection actions, mirroring the browse screens: resolve the

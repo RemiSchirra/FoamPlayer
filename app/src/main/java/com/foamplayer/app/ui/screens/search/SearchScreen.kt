@@ -205,7 +205,7 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
-    onArtistClick: (artist: String, imageUrl: String?) -> Unit,
+    onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
     onAlbumClick: (AlbumSearchResult) -> Unit,
     onBrowseAllTracks: () -> Unit,
     onBrowseAlbums: () -> Unit,
@@ -263,12 +263,15 @@ fun SearchScreen(
     val showArtistModal: (String) -> Unit = { artist ->
         longPressScope.launch {
             awaitKeyboardClosed()
+            val cover = artistImages[artist]
             collectionModalState?.show(
                 CollectionInfo(
                     title = artist,
-                    // A Spotify cache file, not embedded art: load it directly.
-                    imageUrl = artistImages[artist],
-                    imageIsEmbeddedArt = false,
+                    // Either a Spotify cache file (plain) or an audio file
+                    // (embedded art): the flag routes the header to the right
+                    // Coil model.
+                    imageUrl = cover?.imageUrl,
+                    imageIsEmbeddedArt = cover?.isEmbeddedArt ?: false,
                     kind = CollectionKind.Artist,
                     tracks = searchViewModel.tracksForArtist(artist)
                 )
@@ -404,12 +407,18 @@ fun SearchScreen(
                         }
                         // Content-keyed: results change identity on every keystroke.
                         items(uiState.artists, key = { "artist_$it" }) { artist ->
+                            val cover = artistImages[artist]
                             ArtistSearchResultItem(
                                 artist = artist,
-                                imageUrl = artistImages[artist],
+                                imageUrl = cover?.imageUrl,
+                                imageIsEmbeddedArt = cover?.isEmbeddedArt ?: false,
                                 onClick = {
                                     searchViewModel.addToHistory(artist)
-                                    onArtistClick(artist, artistImages[artist])
+                                    onArtistClick(
+                                        artist,
+                                        cover?.imageUrl,
+                                        cover?.isEmbeddedArt ?: false
+                                    )
                                 },
                                 onLongClick = { showArtistModal(artist) },
                                 sharedTransitionScope = sharedTransitionScope,
@@ -553,12 +562,18 @@ fun SearchScreen(
                                     onRemove = { searchViewModel.removeFromHistory(entry) },
                                     modifier = Modifier.animateItem()
                                 ) {
+                                    val cover = artistImages[entry.name]
                                     ArtistSearchResultItem(
                                         artist = entry.name,
-                                        imageUrl = artistImages[entry.name],
+                                        imageUrl = cover?.imageUrl,
+                                        imageIsEmbeddedArt = cover?.isEmbeddedArt ?: false,
                                         onClick = {
                                             searchViewModel.addToHistory(entry.name)
-                                            onArtistClick(entry.name, artistImages[entry.name])
+                                            onArtistClick(
+                                                entry.name,
+                                                cover?.imageUrl,
+                                                cover?.isEmbeddedArt ?: false
+                                            )
                                         },
                                         onLongClick = { showArtistModal(entry.name) },
                                         sharedTransitionScope = sharedTransitionScope,
@@ -666,6 +681,9 @@ private fun SearchFilterChip(
  * One artist result row: circular portrait (image or initial) plus the name.
  * When this row is the one clicked to start the current navigation, its art
  * and title join the shared-element flight into the artist detail hero.
+ *
+ * The portrait loads either a plain file (Spotify picture) or an audio file's
+ * embedded art ([imageIsEmbeddedArt]) — the automatic first-track fallback.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -674,6 +692,7 @@ fun ArtistSearchResultItem(
     imageUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    imageIsEmbeddedArt: Boolean = false,
     onLongClick: (() -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
@@ -719,9 +738,15 @@ fun ArtistSearchResultItem(
         ) {
             if (imageUrl != null) {
                 val context = LocalContext.current
-                val artRequest = remember(imageUrl) {
+                val artRequest = remember(imageUrl, imageIsEmbeddedArt) {
                     ImageRequest.Builder(context)
-                        .data(imageUrl)
+                        .data(
+                            if (imageIsEmbeddedArt) {
+                                EmbeddedAlbumArt(imageUrl.toUri())
+                            } else {
+                                imageUrl
+                            }
+                        )
                         .size(AlbumArtRequestSize)
                         .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
                         .build()

@@ -16,7 +16,8 @@ import javax.inject.Inject
 
 /**
  * Loads one artist's albums, tracks, top tracks (most-listened, padded with
- * random picks) and cached Spotify image.
+ * random picks) and picture (cached Spotify image, else the first track's
+ * embedded art).
  */
 @HiltViewModel
 class ArtistDetailViewModel @Inject constructor(
@@ -38,7 +39,10 @@ class ArtistDetailViewModel @Inject constructor(
     private val _topTracks = MutableStateFlow<List<TrackEntity>>(emptyList())
     val topTracks: StateFlow<List<TrackEntity>> = _topTracks
 
-    /** Cached artist picture (Spotify, downloaded to the app cache). */
+    /**
+     * Cached artist picture (Spotify, downloaded to the app cache), or null
+     * when the artist has none and the screen falls back to its tracks' art.
+     */
     private val _artistImage = MutableStateFlow<String?>(null)
     val artistImage: StateFlow<String?> = _artistImage
 

@@ -156,7 +156,7 @@ fun AlbumsBrowseScreen(
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistsBrowseScreen(
-    onArtistClick: (artist: String, imageUrl: String?) -> Unit,
+    onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -203,9 +203,13 @@ fun ArtistsBrowseScreen(
                 CollectionListItem(
                     title = artist,
                     subtitle = null,
-                    imageUrl = artistImages[artist],
-                    imageIsEmbeddedArt = false,
-                    onClick = { onArtistClick(artist, artistImages[artist]) },
+                    imageUrl = artistImages[artist]?.imageUrl,
+                    imageIsEmbeddedArt = artistImages[artist]?.isEmbeddedArt ?: false,
+                    onClick = {
+                        artistImages[artist]?.let { cover ->
+                            onArtistClick(artist, cover.imageUrl, cover.isEmbeddedArt)
+                        } ?: onArtistClick(artist, null, false)
+                    },
                     active = CollectionId.artist(artist) == activeCollectionId,
                     density = density,
                     onLongClick = {
@@ -213,12 +217,11 @@ fun ArtistsBrowseScreen(
                             collectionModalState?.show(
                                 CollectionInfo(
                                     title = artist,
-                                    // The Spotify artist picture is a plain cache
-                                    // file, not embedded art: the header must load
-                                    // it directly instead of extracting a picture
-                                    // from an audio container.
-                                    imageUrl = artistImages[artist],
-                                    imageIsEmbeddedArt = false,
+                                    // Either a Spotify cache file (plain) or an
+                                    // audio file (embedded art): the flag routes
+                                    // the modal header to the right Coil model.
+                                    imageUrl = artistImages[artist]?.imageUrl,
+                                    imageIsEmbeddedArt = artistImages[artist]?.isEmbeddedArt ?: false,
                                     kind = CollectionKind.Artist,
                                     tracks = viewModel.tracksForArtist(artist)
                                 )
@@ -702,7 +705,7 @@ private suspend fun BrowseViewModel.tracksForSource(kind: String, key: String): 
 fun CollectionArtistsScreen(
     kind: String,
     key: String,
-    onArtistClick: (artist: String, imageUrl: String?) -> Unit,
+    onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -755,9 +758,12 @@ fun CollectionArtistsScreen(
                 CollectionListItem(
                     title = row.name,
                     subtitle = if (row.albumCount == 1) "1 album" else "${row.albumCount} albums",
-                    imageUrl = artistImages[row.name],
-                    imageIsEmbeddedArt = false,
-                    onClick = { onArtistClick(row.name, artistImages[row.name]) },
+                    imageUrl = artistImages[row.name]?.imageUrl,
+                    imageIsEmbeddedArt = artistImages[row.name]?.isEmbeddedArt ?: false,
+                    onClick = {
+                        val cover = artistImages[row.name]
+                        onArtistClick(row.name, cover?.imageUrl, cover?.isEmbeddedArt ?: false)
+                    },
                     active = CollectionId.artist(row.name) == activeCollectionId,
                     density = density,
                     sharedTransitionScope = sharedTransitionScope,

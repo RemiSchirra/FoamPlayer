@@ -8,7 +8,8 @@ import com.foamplayer.app.data.db.dao.GenrePlayRow
 import com.foamplayer.app.data.db.dao.HourBucket
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.TrackRepository
-import com.foamplayer.app.data.scanner.ArtistImageScanner
+import com.foamplayer.app.data.scanner.ArtistCover
+import com.foamplayer.app.data.scanner.ArtistCoverProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.DayOfWeek
 import java.time.Instant
@@ -37,7 +38,7 @@ import kotlinx.coroutines.withContext
 @HiltViewModel
 class StatsViewModel @Inject constructor(
     private val trackRepository: TrackRepository,
-    artistImageScanner: ArtistImageScanner
+    artistCoverProvider: ArtistCoverProvider
 ) : ViewModel() {
 
     private val _period = MutableStateFlow(StatsPeriod.WEEK)
@@ -47,9 +48,13 @@ class StatsViewModel @Inject constructor(
         .flatMapLatest { period -> buildStats(period) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StatsUiState())
 
-    /** Cached Spotify pictures per artist name for the top-artist rows. */
-    val artistImages: StateFlow<Map<String, String>> =
-        artistImageScanner.imagesFlow(trackRepository.getAllArtists())
+    /**
+     * Resolved pictures per artist name: a cached Spotify image when the scan
+     * found one, else the artist's first track with embedded art (both are
+     * automatic — no scan has to run for the fallback), for the top-artist rows.
+     */
+    val artistImages: StateFlow<Map<String, ArtistCover>> =
+        artistCoverProvider.coversFlow(trackRepository.getAllArtists())
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     fun setPeriod(period: StatsPeriod) {

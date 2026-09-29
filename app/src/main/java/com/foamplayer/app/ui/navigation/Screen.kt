@@ -33,14 +33,22 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsMisc : Screen("settings/misc", "Misc Settings")
     object SettingsTest : Screen("settings/test", "Component Test")
 
-    object ArtistDetail : Screen("artist/{artistName}?image={image}", "Artist") {
+    object ArtistDetail : Screen("artist/{artistName}?image={image}&embedded={embedded}", "Artist") {
         /**
          * [image] seeds the hero on its very first frame (before the cache lookup
          * completes) so the shared-element transition from the artist lists never
          * flashes the letter fallback — the same mechanism as [PlaylistDetail].
+         * [imageIsEmbeddedArt] says how the seed loads: a Spotify picture is a
+         * plain file, the automatic first-track fallback is an audio file whose
+         * embedded picture must be extracted.
          */
-        fun createRoute(artistName: String, image: String? = null): String =
-            "artist/${Uri.encode(artistName)}?image=${Uri.encode(image.orEmpty())}"
+        fun createRoute(
+            artistName: String,
+            image: String? = null,
+            imageIsEmbeddedArt: Boolean = false
+        ): String =
+            "artist/${Uri.encode(artistName)}" +
+                "?image=${Uri.encode(image.orEmpty())}&embedded=$imageIsEmbeddedArt"
     }
     object ArtistSongs : Screen("artist/{artistName}/songs", "Artist Songs") {
         fun createRoute(artistName: String) = "artist/${Uri.encode(artistName)}/songs"

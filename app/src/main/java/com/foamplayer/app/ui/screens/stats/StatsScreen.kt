@@ -65,6 +65,7 @@ import com.foamplayer.app.data.db.dao.TopAlbumStat
 import com.foamplayer.app.data.db.dao.TopTrackStat
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.data.scanner.ArtistCover
 import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.CollectionInfo
@@ -95,7 +96,7 @@ private const val TopListDisplaySize = 10
  */
 @Composable
 fun StatsScreen(
-    onArtistClick: (artist: String, imageUrl: String?) -> Unit,
+    onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
     onAlbumClick: (album: String, artUrl: String?, artist: String?) -> Unit,
     onSeeAll: (kind: StatsTopKind, period: StatsPeriod) -> Unit,
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
@@ -317,19 +318,25 @@ fun StatsScreen(
                 ) { _, artist ->
                     TopArtistRow(
                         artist = artist,
-                        imageUrl = artistImages[artist.name],
-                        onOpen = { onArtistClick(artist.name, artistImages[artist.name]) },
+                        cover = artistImages[artist.name],
+                        onOpen = {
+                            val cover = artistImages[artist.name]
+                            onArtistClick(
+                                artist.name,
+                                cover?.imageUrl,
+                                cover?.isEmbeddedArt ?: false
+                            )
+                        },
                         onLongClick = {
                             longPressScope.launch {
                                 collectionModalState?.show(
                                     CollectionInfo(
                                         title = artist.name,
-                                        // The Spotify artist picture is a plain cache
-                                        // file, not embedded art: the header must load
-                                        // it directly instead of extracting a picture
-                                        // from an audio container.
-                                        imageUrl = artistImages[artist.name],
-                                        imageIsEmbeddedArt = false,
+                                        // Either a Spotify cache file (plain) or an
+                                        // audio file (embedded art): the flag routes
+                                        // the modal header to the right Coil model.
+                                        imageUrl = artistImages[artist.name]?.imageUrl,
+                                        imageIsEmbeddedArt = artistImages[artist.name]?.isEmbeddedArt ?: false,
                                         kind = CollectionKind.Artist,
                                         tracks = viewModel.tracksForArtist(artist.name)
                                     )
@@ -597,11 +604,15 @@ internal fun TopTrackRow(
     )
 }
 
-/** Ranked artist row: picture (or monogram disc), name, listening time. Opens the artist page. */
+/**
+ * Ranked artist row: picture (or monogram disc), name, listening time. Opens
+ * the artist page. The picture is either a Spotify cache file or the artist's
+ * first track with embedded art ([cover] says which).
+ */
 @Composable
 internal fun TopArtistRow(
     artist: ArtistStat,
-    imageUrl: String?,
+    cover: ArtistCover?,
     onOpen: () -> Unit,
     onLongClick: (() -> Unit)? = null
 ) {
@@ -612,11 +623,17 @@ internal fun TopArtistRow(
             .clip(CircleShape)
             .background(FoamTheme.colors.surfaceVariant),
         artworkContent = {
-            if (imageUrl != null) {
+            if (cover != null) {
                 val context = LocalContext.current
-                val artRequest = remember(imageUrl) {
+                val artRequest = remember(cover.imageUrl, cover.isEmbeddedArt) {
                     ImageRequest.Builder(context)
-                        .data(imageUrl)
+                        .data(
+                            if (cover.isEmbeddedArt) {
+                                EmbeddedAlbumArt(cover.imageUrl.toUri())
+                            } else {
+                                cover.imageUrl
+                            }
+                        )
                         .size(AlbumArtRequestSize)
                         .build()
                 }
