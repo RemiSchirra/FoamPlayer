@@ -94,16 +94,20 @@ fun ExportSettingsModal(
         title = stringResource(R.string.settings_export),
         modifier = modifier
     ) {
-        PickerRow(
-            title = stringResource(R.string.settings_export_folder),
-            subtitle = folderName ?: stringResource(R.string.settings_export_folder_hint),
-            selected = folderUri != null,
-            onClick = { folderPicker.launch(null) },
-            onReset = {
-                folderUri = null
-                folderName = null
-            }
-        )
+        // Picker card; the Export button sits BELOW it (spaced by the
+        // scaffold's Column), never inside the card.
+        PickerCard {
+            PickerRow(
+                title = stringResource(R.string.settings_export_folder),
+                subtitle = folderName ?: stringResource(R.string.settings_export_folder_hint),
+                selected = folderUri != null,
+                onClick = { folderPicker.launch(null) },
+                onReset = {
+                    folderUri = null
+                    folderName = null
+                }
+            )
+        }
 
         FeatureList(
             title = stringResource(R.string.settings_export_features),
@@ -188,17 +192,19 @@ fun ImportSettingsModal(
         title = stringResource(R.string.settings_import),
         modifier = modifier
     ) {
-        PickerRow(
-            title = stringResource(R.string.settings_import_files),
-            subtitle = fileNames.takeIf { it.isNotEmpty() }?.joinToString(", ")
-                ?: stringResource(R.string.settings_import_files_hint),
-            selected = fileUris.isNotEmpty(),
-            onClick = { filePicker.launch(arrayOf("*/*")) },
-            onReset = {
-                fileUris = emptyList()
-                fileNames = emptyList()
-            }
-        )
+        PickerCard {
+            PickerRow(
+                title = stringResource(R.string.settings_import_files),
+                subtitle = fileNames.takeIf { it.isNotEmpty() }?.joinToString(", ")
+                    ?: stringResource(R.string.settings_import_files_hint),
+                selected = fileUris.isNotEmpty(),
+                onClick = { filePicker.launch(arrayOf("*/*")) },
+                onReset = {
+                    fileUris = emptyList()
+                    fileNames = emptyList()
+                }
+            )
+        }
 
         if (fileUris.isNotEmpty()) {
             FeatureList(
@@ -292,6 +298,12 @@ fun BackupResultModal(
     }
 }
 
+/**
+ * Shared sheet chrome for the backup pickers: title, then [content] laid out
+ * in a spaced column -- rows go in cards, and the confirm button sits OUTSIDE
+ * them so the card never runs into the button (same layout as the playlist
+ * sheets in [CreatePlaylistModal]).
+ */
 @Composable
 private fun BackupModalScaffold(
     visible: Boolean,
@@ -315,15 +327,21 @@ private fun BackupModalScaffold(
                 )
             )
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                    .background(FoamTheme.colors.surfaceVariant)
-            ) {
-                content()
-            }
+            content()
         }
+    }
+}
+
+/** Rounded surfaceVariant card wrapping a picker row, as on the playlist sheets. */
+@Composable
+private fun PickerCard(content: @Composable () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(FoamDimens.itemRounding))
+            .background(FoamTheme.colors.surfaceVariant)
+    ) {
+        content()
     }
 }
 
