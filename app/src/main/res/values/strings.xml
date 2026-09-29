@@ -258,10 +258,8 @@
     <string name="background_custom_pick_hint">Choose an image</string>
     <string name="background_add_stop">Add color stop</string>
     <string name="background_blur">Background Blur</string>
-    <string name="force_dynamic_background">Force dynamic background in collections</string>
-    <string name="force_dynamic_background_desc">Collection screens always show the collection\'s art, even with a custom image or gradient</string>
-    <string name="force_dynamic_background_player">Force dynamic background in player</string>
-    <string name="force_dynamic_background_player_desc">The full player always shows the playing track\'s blurred art, even with a custom image or gradient</string>
+    <string name="force_dynamic_background_title">Force dynamic background</string>
+    <string name="force_dynamic_background_summary">Show the playing artwork instead of the custom image or gradient</string>
     <string name="color_intensity">Color Intensity</string>
     <string name="none">None</string>
     <string name="max">Max</string>

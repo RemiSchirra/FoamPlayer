@@ -30,11 +30,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
+import androidx.compose.material.Switch
+import androidx.compose.material.SwitchDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -59,6 +62,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -70,7 +75,6 @@ import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.ui.components.FoamSliderStateItem
-import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.components.buildGradientImage
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
@@ -192,7 +196,11 @@ fun BackgroundSettingsScreen(
                     )
                 }
             }
-            // Force dynamic switches.
+            // The two "force dynamic" toggles are only meaningful in CUSTOM or
+            // GRADIENT mode: in DYNAMIC mode the art already drives every backdrop.
+            // Compact layout: one shared title + summary line, then two slim
+            // single-line [CompactSwitchRow]s so the whole group fits one card
+            // without airy gaps.
             AnimatedVisibility(
                 visible = mode != BackgroundMode.DYNAMIC,
                 enter = modeEnter,
@@ -208,11 +216,28 @@ fun BackgroundSettingsScreen(
                             .background(FoamTheme.colors.surface)
                     ) {
                         Column {
-                            FoamSwitchItem(
-                                title = stringResource(R.string.force_dynamic_background),
-                                description = stringResource(R.string.force_dynamic_background_desc),
+                            Column(
+                                modifier = Modifier.padding(
+                                    start = FoamDimens.paddingMedium,
+                                    end = FoamDimens.paddingMedium,
+                                    top = FoamDimens.spacingSmall,
+                                    bottom = FoamDimens.spacingTiny
+                                )
+                            ) {
+                                BasicText(
+                                    text = stringResource(R.string.force_dynamic_background_title),
+                                    style = FoamTheme.typography.titleMedium
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                BasicText(
+                                    text = stringResource(R.string.force_dynamic_background_summary),
+                                    style = FoamTheme.typography.body
+                                )
+                            }
+                            CompactSwitchRow(
+                                title = stringResource(R.string.collections),
                                 checked = forceDynamicInCollections,
-                                onCheckedChange = viewModel::setForceDynamicBackgroundInCollections
+                                onCheckedChange = viewModel::setForceDynamicBackgroundInCollections,
                             )
                             Box(
                                 modifier = Modifier
@@ -220,11 +245,10 @@ fun BackgroundSettingsScreen(
                                     .height(FoamDimens.separatorHeight)
                                     .background(FoamTheme.colors.borderOverlay)
                             )
-                            FoamSwitchItem(
-                                title = stringResource(R.string.force_dynamic_background_player),
-                                description = stringResource(R.string.force_dynamic_background_player_desc),
+                            CompactSwitchRow(
+                                title = stringResource(R.string.player),
                                 checked = forceDynamicInPlayer,
-                                onCheckedChange = viewModel::setForceDynamicBackgroundInPlayer
+                                onCheckedChange = viewModel::setForceDynamicBackgroundInPlayer,
                             )
                         }
                     }
@@ -306,6 +330,53 @@ fun BackgroundSettingsScreen(
 
             Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
         }
+    }
+}
+
+/**
+ * Slim single-line toggle row used inside the "force dynamic" card, where two
+ * stacked rows must sit close together. Same look and behavior as the shared
+ * FoamSwitchItem (bounded ripple, accent-colored switch, switch hidden from
+ * semantics because the row is toggleable) but with tighter vertical padding:
+ * FoamSwitchItem's fixed row padding is too airy for a card that stacks a
+ * header plus two rows.
+ */
+@Composable
+private fun CompactSwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(
+                value = checked,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                role = Role.Switch,
+                onValueChange = onCheckedChange
+            )
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingTiny),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BasicText(
+            text = title,
+            style = FoamTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f)
+        )
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.clearAndSetSemantics {},
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = FoamTheme.accentColor,
+                checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
+                uncheckedThumbColor = FoamTheme.colors.textSecondary.copy(alpha = 1f),
+                uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)
+            )
+        )
     }
 }
 
