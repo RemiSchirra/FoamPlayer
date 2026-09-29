@@ -23,6 +23,13 @@ import javax.inject.Inject
 /**
  * Foreground media session service. Binds the session to [AudioEngine]'s active
  * player, publishes the custom shuffle/repeat commands and the notification.
+ *
+ * The service does NOT own the player: [AudioEngine] is an app-scoped singleton
+ * whose player outlives this service instance (the system can stop an idle
+ * service while the process stays alive). Releasing the session's player here
+ * would kill the engine's playback thread and brick every later command with a
+ * "sending message to a Handler on a dead thread" warning -- the session is
+ * merely a bound view of the engine's player.
  */
 @UnstableApi
 @AndroidEntryPoint
@@ -127,7 +134,6 @@ class PlaybackService : MediaSessionService() {
         audioEngine.setOnPlayerSwappedListener(null)
         discordPresenceController.stop()
         mediaSession?.run {
-            player.release()
             release()
             mediaSession = null
         }
