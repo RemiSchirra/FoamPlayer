@@ -69,7 +69,6 @@ class DspAudioProcessor : BaseAudioProcessor() {
     }
 
     override fun onReset() {
-        pendingState.set(DspState())
         configuredState = null
         configuredChain = null
         graph.updateChain(null)
