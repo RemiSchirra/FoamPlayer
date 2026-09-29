@@ -313,6 +313,8 @@ fun FoamNavHost(
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
     val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
     val backgroundMode = playerSettings.backgroundMode
+    val forceDynamicBackgroundInCollections = playerSettings.forceDynamicBackgroundInCollections
+    val forceDynamicBackgroundInPlayer = playerSettings.forceDynamicBackgroundInPlayer
     val navigationBarMode = playerSettings.navigationBarMode
     val navBarTransparentWhenPlayerOpen = playerSettings.navBarTransparentWhenPlayerOpen
 
@@ -503,7 +505,7 @@ fun FoamNavHost(
     }
 
     /**
-     * DRAG ACTIVATION: tags the playing row so the shared element pairs, letting
+     * DRAG ACTIVATION: tags the playing row's artwork so the shared element pairs, letting
      * a frame land before the drag moves so the flight's first frame is correct.
      */
     suspend fun activateDismissToRow() {
@@ -611,6 +613,10 @@ fun FoamNavHost(
 
                 // The user-configured static layers (custom blurred image / gradient):
                 // same dim as the dynamic art, hidden on settings routes like the art.
+                // They are never suppressed on detail pages: the collection backdrop
+                // below paints over them once opaque, and keeping them composed
+                // underneath makes every fade crossfade over the custom image /
+                // gradient instead of dropping to the bare background color.
                 if (!isSettingsRoute(currentRoute) && backgroundMode != BackgroundMode.DYNAMIC) {
                     when (backgroundMode) {
                         BackgroundMode.CUSTOM -> CustomImageBackground(
@@ -632,7 +638,10 @@ fun FoamNavHost(
                 // drawn at the root so it covers the status bar and nav zone. Its alpha
                 // tween runs in lock-step with the screens' fade; between two detail
                 // routes the alpha never leaves 1f and the art switch is a front/back
-                // crossfade instead. Art-driven, so it only applies in DYNAMIC mode.
+                // crossfade instead. Art-driven: it applies in DYNAMIC mode, and in any
+                // mode while "force dynamic background in collections" is on. The static
+                // layers composed above stay underneath it, so its fades crossfade over
+                // the custom image / gradient instead of the bare background color.
                 var listBackdropArt by remember { mutableStateOf<ListBackdropArt?>(null) }
                 var lastListBackdropArt by remember { mutableStateOf<ListBackdropArt?>(null) }
                 LaunchedEffect(currentRoute) {
@@ -687,9 +696,9 @@ fun FoamNavHost(
                     label = "listBackdropAlpha"
                 )
                 val listBackdropDisplay = listBackdropArt ?: lastListBackdropArt
-                val showListBackdrop by remember(backgroundMode) {
+                val showListBackdrop by remember(backgroundMode, forceDynamicBackgroundInCollections) {
                     derivedStateOf {
-                        backgroundMode == BackgroundMode.DYNAMIC &&
+                        (backgroundMode == BackgroundMode.DYNAMIC || forceDynamicBackgroundInCollections) &&
                                 (listBackdropArt ?: lastListBackdropArt) != null && listBackdropAlpha > 0f
                     }
                 }
@@ -719,6 +728,8 @@ fun FoamNavHost(
 
                 // Hosted at the very root, cropping the same art with the same blur and
                 // dim as the app-wide backdrop so the open/close crossfade is seamless.
+                // forceDynamicBackgroundInPlayer overrides the CUSTOM/GRADIENT layers with
+                // the classic art treatment ("force dynamic background in player").
                 val fullPlayerBackdropState = remember { FullPlayerBackdropState() }
                 val playerBackdropAlpha = {
                     EaseInOutCubic.transform(playerTransitionState.progress().coerceIn(0f, 1f))
@@ -738,6 +749,7 @@ fun FoamNavHost(
                         backgroundBlur = playerSettings.backgroundBlur.dp,
                         intensity = playerSettings.playerBackgroundIntensity / 100f,
                         bottomFadeInset = playerBackdropFadeInset,
+                        forceDynamic = forceDynamicBackgroundInPlayer,
                         canvasUrl = fullPlayerBackdropState.canvasUrl,
                         canvasPlaying = fullPlayerBackdropState.canvasPlaying,
                         canvasSwipeFraction = fullPlayerBackdropState.canvasSwipeFraction,

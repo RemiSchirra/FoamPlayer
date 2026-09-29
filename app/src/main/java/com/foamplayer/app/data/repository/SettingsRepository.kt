@@ -112,6 +112,12 @@ class SettingsRepository @Inject constructor(
     suspend fun setPlayerBackgroundIntensity(intensity: Int) = update {
         it.copy(playerBackgroundIntensity = intensity)
     }
+    suspend fun setForceDynamicBackgroundInCollections(enabled: Boolean) = update {
+        it.copy(forceDynamicBackgroundInCollections = enabled)
+    }
+    suspend fun setForceDynamicBackgroundInPlayer(enabled: Boolean) = update {
+        it.copy(forceDynamicBackgroundInPlayer = enabled)
+    }
     suspend fun addFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders + path) }
     suspend fun removeFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders - path) }
     suspend fun setArtistSeparators(separators: Set<String>) = update { it.copy(artistSeparators = separators) }
@@ -295,6 +301,10 @@ class SettingsRepository @Inject constructor(
             ?: AppSettings().appBackgroundIntensity,
         playerBackgroundIntensity = this[Keys.PLAYER_BACKGROUND_INTENSITY]
             ?: AppSettings().playerBackgroundIntensity,
+        forceDynamicBackgroundInCollections = this[Keys.FORCE_DYNAMIC_BACKGROUND_IN_COLLECTIONS]
+            ?: AppSettings().forceDynamicBackgroundInCollections,
+        forceDynamicBackgroundInPlayer = this[Keys.FORCE_DYNAMIC_BACKGROUND_IN_PLAYER]
+            ?: AppSettings().forceDynamicBackgroundInPlayer,
         lyricsProviderOrder = deserializeLyricsProviderOrder(this[Keys.LYRICS_PROVIDER_ORDER]),
         enabledLyricsProviders = this[Keys.ENABLED_LYRICS_PROVIDERS]
             ?.mapNotNull { name -> PreferredLyricsProvider.entries.find { it.name == name } }
@@ -373,6 +383,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.BACKGROUND_BLUR] = settings.backgroundBlur
         this[Keys.APP_BACKGROUND_INTENSITY] = settings.appBackgroundIntensity
         this[Keys.PLAYER_BACKGROUND_INTENSITY] = settings.playerBackgroundIntensity
+        this[Keys.FORCE_DYNAMIC_BACKGROUND_IN_COLLECTIONS] = settings.forceDynamicBackgroundInCollections
+        this[Keys.FORCE_DYNAMIC_BACKGROUND_IN_PLAYER] = settings.forceDynamicBackgroundInPlayer
         this[Keys.LYRICS_PROVIDER_ORDER] = settings.lyricsProviderOrder.joinToString(",") { it.name }
         this[Keys.ENABLED_LYRICS_PROVIDERS] = settings.enabledLyricsProviders.map { it.name }.toSet()
         this[Keys.LYRICS_SOURCE_ORDER] = settings.lyricsSourceOrder.joinToString(",") { it.name }
@@ -435,6 +447,9 @@ class SettingsRepository @Inject constructor(
         val DYNAMIC_BACKGROUND_INTENSITY = intPreferencesKey("dynamic_background_intensity")
         val APP_BACKGROUND_INTENSITY = intPreferencesKey("app_background_intensity")
         val PLAYER_BACKGROUND_INTENSITY = intPreferencesKey("player_background_intensity")
+        val FORCE_DYNAMIC_BACKGROUND_IN_COLLECTIONS =
+            booleanPreferencesKey("force_dynamic_background_in_collections")
+        val FORCE_DYNAMIC_BACKGROUND_IN_PLAYER = booleanPreferencesKey("force_dynamic_background_in_player")
         val LYRICS_PROVIDER_ORDER = stringPreferencesKey("lyrics_provider_order")
         val ENABLED_LYRICS_PROVIDERS = stringSetPreferencesKey("enabled_lyrics_providers")
         val LYRICS_SOURCE_ORDER = stringPreferencesKey("lyrics_source_order")

@@ -203,6 +203,10 @@
     <string name="background_custom_pick_hint">Choisir une image</string>
     <string name="background_add_stop">Ajouter un arrêt de couleur</string>
     <string name="background_blur">Flou d\'arrière-plan</string>
+    <string name="force_dynamic_background">Forcer l\'arrière-plan dynamique dans les collections</string>
+    <string name="force_dynamic_background_desc">Les écrans de collection affichent toujours l\'art de la collection, même avec une image personnalisée ou un dégradé</string>
+    <string name="force_dynamic_background_player">Forcer l\'arrière-plan dynamique dans le lecteur</string>
+    <string name="force_dynamic_background_player_desc">Le lecteur complet affiche toujours l\'art flouté de la piste en cours, même avec une image personnalisée ou un dégradé</string>
     <string name="color_intensity">Intensité des couleurs</string>
     <string name="none">Aucun</string>
     <string name="max">Max</string>

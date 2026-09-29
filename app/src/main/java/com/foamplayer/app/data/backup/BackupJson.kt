@@ -66,6 +66,8 @@ object BackupJson {
         put("backgroundBlur", settings.backgroundBlur)
         put("appBackgroundIntensity", settings.appBackgroundIntensity)
         put("playerBackgroundIntensity", settings.playerBackgroundIntensity)
+        put("forceDynamicBackgroundInCollections", settings.forceDynamicBackgroundInCollections)
+        put("forceDynamicBackgroundInPlayer", settings.forceDynamicBackgroundInPlayer)
         put("lyricsProviderOrder", toNamesArray(settings.lyricsProviderOrder))
         put("enabledLyricsProviders", toNamesArray(settings.enabledLyricsProviders))
         put("lyricsSourceOrder", toNamesArray(settings.lyricsSourceOrder))
@@ -140,6 +142,14 @@ object BackupJson {
         playerBackgroundIntensity = json.optInt(
             "playerBackgroundIntensity",
             AppSettings.DEFAULT_PLAYER_BACKGROUND_INTENSITY
+        ),
+        forceDynamicBackgroundInCollections = json.optBoolean(
+            "forceDynamicBackgroundInCollections",
+            true
+        ),
+        forceDynamicBackgroundInPlayer = json.optBoolean(
+            "forceDynamicBackgroundInPlayer",
+            true
         ),
         lyricsProviderOrder = decodeEnumList(json.optJSONArray("lyricsProviderOrder")),
         enabledLyricsProviders = decodeEnumSet(

@@ -70,6 +70,7 @@ import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.ui.components.FoamSliderStateItem
+import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.components.buildGradientImage
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
@@ -92,6 +93,8 @@ fun BackgroundSettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsState()
     val mode = settings.backgroundMode
+    val forceDynamicInCollections = settings.forceDynamicBackgroundInCollections
+    val forceDynamicInPlayer = settings.forceDynamicBackgroundInPlayer
 
     // Transitions only play once the user has actually picked a mode. The
     // settings flow can emit its real value a moment after the screen opens,
@@ -187,6 +190,44 @@ fun BackgroundSettingsScreen(
                         stops = settings.gradientStops,
                         onChange = viewModel::setGradientStops
                     )
+                }
+            }
+            // Force dynamic switches.
+            AnimatedVisibility(
+                visible = mode != BackgroundMode.DYNAMIC,
+                enter = modeEnter,
+                exit = modeExit
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = FoamDimens.paddingMedium)
+                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                            .background(FoamTheme.colors.surface)
+                    ) {
+                        Column {
+                            FoamSwitchItem(
+                                title = stringResource(R.string.force_dynamic_background),
+                                description = stringResource(R.string.force_dynamic_background_desc),
+                                checked = forceDynamicInCollections,
+                                onCheckedChange = viewModel::setForceDynamicBackgroundInCollections
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(FoamDimens.separatorHeight)
+                                    .background(FoamTheme.colors.borderOverlay)
+                            )
+                            FoamSwitchItem(
+                                title = stringResource(R.string.force_dynamic_background_player),
+                                description = stringResource(R.string.force_dynamic_background_player_desc),
+                                checked = forceDynamicInPlayer,
+                                onCheckedChange = viewModel::setForceDynamicBackgroundInPlayer
+                            )
+                        }
+                    }
                 }
             }
 

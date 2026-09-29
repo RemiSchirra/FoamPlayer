@@ -88,7 +88,7 @@ data class AppSettings(
     val animatedCoverEnabled: Boolean = false,
     val animatedCoverAllowMobileData: Boolean = false,
     /** Which of the dynamic art / custom image / gradient treatments the backdrops use. */
-    val backgroundMode: BackgroundMode = BackgroundMode.DYNAMIC,
+    val backgroundMode: BackgroundMode = BackgroundMode.GRADIENT,
     /** Content URI of the custom background image ([BackgroundMode.CUSTOM]); null until picked. */
     val customBackgroundUri: String? = null,
     /** Color anchors of the gradient background ([BackgroundMode.GRADIENT]); 1..4 stops. */
@@ -96,6 +96,8 @@ data class AppSettings(
     val backgroundBlur: Int = DEFAULT_BACKGROUND_BLUR,
     val appBackgroundIntensity: Int = DEFAULT_APP_BACKGROUND_INTENSITY,
     val playerBackgroundIntensity: Int = DEFAULT_PLAYER_BACKGROUND_INTENSITY,
+    val forceDynamicBackgroundInCollections: Boolean = true,
+    val forceDynamicBackgroundInPlayer: Boolean = true,
     val lyricsProviderOrder: List<PreferredLyricsProvider> = DefaultLyricsProviderOrder,
     val enabledLyricsProviders: Set<PreferredLyricsProvider> = PreferredLyricsProvider.entries.toSet(),
     val lyricsSourceOrder: List<LyricsSource> = DefaultLyricsSourceOrder,

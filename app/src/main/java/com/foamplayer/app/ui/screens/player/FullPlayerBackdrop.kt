@@ -307,7 +307,10 @@ internal fun GradientBackground(
  * the way to the physical bottom of the screen.
  *
  * [backgroundMode] extends the classic dynamic treatment with two user-configured
- * layers: a blurred custom image and a user-edited gradient.
+ * layers: a blurred custom image and a user-edited gradient. [forceDynamic] overrides
+ * both of them with the classic blurred treatment ("force dynamic background in
+ * player"), matching the collections switch: the art drives the background regardless
+ * of the selected mode.
  */
 @Composable
 internal fun AlbumArtBackdrop(
@@ -324,6 +327,7 @@ internal fun AlbumArtBackdrop(
     bottomFadeInset: Dp,
     modifier: Modifier = Modifier,
     foregroundModifier: Modifier = Modifier,
+    forceDynamic: Boolean = false,
     canvasUrl: String? = null,
     canvasPlaying: Boolean = false,
     canvasSwipeFraction: () -> Float = { 0f }
@@ -344,9 +348,11 @@ internal fun AlbumArtBackdrop(
         return
     }
 
+    val effectiveMode = if (forceDynamic) BackgroundMode.DYNAMIC else backgroundMode
+
     Box(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
-        when (backgroundMode) {
+        when (effectiveMode) {
             BackgroundMode.DYNAMIC -> {
                 val context = LocalContext.current
                 // The two art layers remain composed throughout a pager transition so the

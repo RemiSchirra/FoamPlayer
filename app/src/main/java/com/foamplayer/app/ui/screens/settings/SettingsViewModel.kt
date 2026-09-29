@@ -97,6 +97,12 @@ class SettingsViewModel @Inject constructor(
     fun setPlayerBackgroundIntensity(intensity: Int) = launch {
         settingsRepository.setPlayerBackgroundIntensity(intensity)
     }
+    fun setForceDynamicBackgroundInCollections(enabled: Boolean) = launch {
+        settingsRepository.setForceDynamicBackgroundInCollections(enabled)
+    }
+    fun setForceDynamicBackgroundInPlayer(enabled: Boolean) = launch {
+        settingsRepository.setForceDynamicBackgroundInPlayer(enabled)
+    }
 
     fun setCollectionLayoutDefault(layout: CollectionHeroLayout) = launch {
         settingsRepository.setCollectionLayoutDefault(layout)
