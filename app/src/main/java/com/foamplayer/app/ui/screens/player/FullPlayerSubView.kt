@@ -365,7 +365,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                 shape = RoundedCornerShape(containerRadius)
                 clip = true
             }
-            .background(Color.Black.copy(alpha = 0.2f))
+            .background(FoamTheme.colors.background.copy(alpha = 0.2f))
             .clickable(
                 interactionSource = headerInteractions,
                 indication = ripple(color = FoamTheme.colors.textPrimary),
