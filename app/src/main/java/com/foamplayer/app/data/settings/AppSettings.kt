@@ -244,7 +244,7 @@ data class AppSettings(
 
         /**
          * The out-of-box gradient: three vibrant anchors (magenta -> purple ->
-         * teal, colors from the picker's [com.foamplayer.app.ui.screens.settings.DefaultStopPalette])
+         * teal, colors from the picker's [com.foamplayer.app.ui.modals.DefaultStopPalette])
          * spread down the field and staggered in X so the editor's dots don't
          * overlap out of the box.
          */

@@ -1,4 +1,4 @@
-package com.foamplayer.app.ui.components
+package com.foamplayer.app.ui.modals
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
@@ -41,6 +41,9 @@ import coil.request.ImageRequest
 import androidx.core.net.toUri
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.albumArtCornerRadius
+import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.adaptAccentForTheme
@@ -327,7 +330,7 @@ fun CollectionFoamModal(
 
 /**
  * Provided by [com.foamplayer.app.ui.navigation.FoamNavHost] at the app root so
- * every [CollectionListItem] can open the collection modal on long-press
+ * every [com.foamplayer.app.ui.components.CollectionListItem] can open the collection modal on long-press
  * without each screen threading it through. Screens that pass an explicit
  * onLongClick to the item always take precedence.
  */

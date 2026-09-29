@@ -79,6 +79,8 @@ import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.buildGradientImage
+import com.foamplayer.app.ui.modals.DefaultStopPalette
+import com.foamplayer.app.ui.modals.GradientColorPickerModal
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -554,7 +556,7 @@ private fun CustomImageSection(
  * removed row is no longer in the stop list but stays composed, in its old
  * place, until its exit finishes -- see [ExitingStopRow].
  *
- * Editing a point's color opens [GradientColorPickerModal] (a FoamModal sheet
+ * Editing a point's color opens [com.foamplayer.app.ui.modals.GradientColorPickerModal] (a FoamModal sheet
  * with a full HSV picker); its OK commits, its Cancel discards. Position edits
  * land in a local snapshot state first so drags update on every frame
  * (commit-on-release, like [FoamSliderStateItem]); the persisted setting is

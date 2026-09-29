@@ -1,4 +1,4 @@
-package com.foamplayer.app.ui.screens.playlists
+package com.foamplayer.app.ui.modals
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
@@ -44,11 +44,6 @@ import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
-import com.foamplayer.app.ui.components.DetailRow
-import com.foamplayer.app.ui.components.DetailsSection
-import com.foamplayer.app.ui.components.FoamBottomModal
-import com.foamplayer.app.ui.components.ModalBackButton
-import com.foamplayer.app.ui.components.ModalRowButton
 import com.foamplayer.app.ui.components.albumArtCornerRadius
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme

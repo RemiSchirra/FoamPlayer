@@ -43,7 +43,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.lyrics.LyricsResultType
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.lyrics.LyricsUtils
-import com.foamplayer.app.ui.components.FoamBottomModal
+import com.foamplayer.app.ui.modals.FoamBottomModal
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils

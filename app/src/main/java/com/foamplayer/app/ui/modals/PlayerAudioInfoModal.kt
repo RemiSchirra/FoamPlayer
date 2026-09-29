@@ -1,4 +1,4 @@
-package com.foamplayer.app.ui.screens.player
+package com.foamplayer.app.ui.modals
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -12,8 +12,6 @@ import com.foamplayer.app.R
 import com.foamplayer.app.audio.bitperfect.AudioOutputInfo
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.FidelityScoreCard
-import com.foamplayer.app.ui.components.FoamBottomModal
-import com.foamplayer.app.ui.screens.settings.AudioPipelineContent
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 

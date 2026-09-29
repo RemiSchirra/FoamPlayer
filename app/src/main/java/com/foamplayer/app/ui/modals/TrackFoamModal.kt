@@ -1,4 +1,4 @@
-package com.foamplayer.app.ui.components
+package com.foamplayer.app.ui.modals
 
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -63,6 +63,9 @@ import com.foamplayer.app.ui.theme.adaptAccentForTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.TimeUtils
 import androidx.core.net.toUri
+import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.TrackScoreHeart
+import com.foamplayer.app.ui.components.albumArtCornerRadius
 import java.util.Locale
 
 // Hoisted: this was compiled inside simplifiedDisplayPath on every composition pass.

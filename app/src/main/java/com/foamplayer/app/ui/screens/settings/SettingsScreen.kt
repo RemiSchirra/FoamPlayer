@@ -38,6 +38,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.backup.BackupFeature
+import com.foamplayer.app.ui.modals.BackupLoadingModal
+import com.foamplayer.app.ui.modals.BackupModalType
+import com.foamplayer.app.ui.modals.BackupResultModal
+import com.foamplayer.app.ui.modals.ExportSettingsModal
+import com.foamplayer.app.ui.modals.ImportSettingsModal
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -121,7 +126,7 @@ fun SettingsScreen(
                     icon = FoamTheme.icons.current.misc,
                     onClick = onNavigateToMisc
                 )
-                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
             item {

@@ -63,7 +63,7 @@ import com.foamplayer.app.audio.dsp.ParametricEqSettings
 import com.foamplayer.app.audio.dsp.ParametricNode
 import com.foamplayer.app.audio.dsp.PresetKind
 import com.foamplayer.app.audio.dsp.ToneSettings
-import com.foamplayer.app.ui.components.FoamBottomModal
+import com.foamplayer.app.ui.modals.FoamBottomModal
 import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.components.KnobControl

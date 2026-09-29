@@ -38,7 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.FoamIconStyle
-import com.foamplayer.app.ui.components.FoamBottomModal
+import com.foamplayer.app.ui.modals.FoamBottomModal
 import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance

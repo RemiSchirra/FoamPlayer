@@ -1,4 +1,4 @@
-package com.foamplayer.app.ui.screens.playlists
+package com.foamplayer.app.ui.modals
 
 import android.content.Context
 import android.content.Intent
@@ -61,8 +61,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.foamplayer.app.R
-import com.foamplayer.app.ui.components.FoamBottomModal
-import com.foamplayer.app.ui.components.ModalSectionDivider
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -600,19 +598,29 @@ fun MissingSongsModal(
     }
 }
 
-/** Filled (accent) or flat full-width button, shared by the playlist sheets. */
+/**
+ * Filled (accent) or flat full-width button, shared by the modal sheets.
+ * A disabled button dims to 40% opacity and swallows taps.
+ */
 @Composable
 internal fun ModalButton(
     label: String,
     filled: Boolean,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.4f)
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
             .background(if (filled) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant)
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                enabled = enabled,
+                onClick = onClick
+            )
             .padding(vertical = FoamDimens.spacingStandard),
         contentAlignment = Alignment.Center
     ) {

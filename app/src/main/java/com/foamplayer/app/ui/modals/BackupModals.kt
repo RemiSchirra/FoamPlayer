@@ -1,4 +1,4 @@
-package com.foamplayer.app.ui.screens.settings
+package com.foamplayer.app.ui.modals
 
 import android.content.Context
 import android.content.Intent
@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.CircularProgressIndicator
@@ -41,15 +40,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
 import com.foamplayer.app.data.backup.BackupFeature
-import com.foamplayer.app.data.backup.BackupOutcome
-import com.foamplayer.app.ui.components.FoamBottomModal
-import com.foamplayer.app.ui.components.FoamSwitchItem
-import com.foamplayer.app.ui.components.ModalSectionDivider
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -122,6 +116,7 @@ fun ExportSettingsModal(
 
         ModalButton(
             label = stringResource(R.string.settings_export),
+            filled = true,
             enabled = folderUri != null && selected.isNotEmpty() && !isRunning,
             onClick = { onExport(folderUri.orEmpty(), selected) }
         )
@@ -218,6 +213,7 @@ fun ImportSettingsModal(
 
         ModalButton(
             label = stringResource(R.string.settings_import),
+            filled = true,
             enabled = fileUris.isNotEmpty() && selected.isNotEmpty() && !isRunning,
             onClick = { onImport(fileUris, selected) }
         )
@@ -289,7 +285,7 @@ fun BackupResultModal(
             )
             ModalButton(
                 label = stringResource(R.string.ok),
-                enabled = true,
+                filled = true,
                 onClick = onDismiss
             )
         }
@@ -504,40 +500,6 @@ private fun PickerRow(
                 )
             }
         }
-    }
-}
-
-/** Filled (accent) or flat full-width button; disabled state dims and swallows taps. */
-@Composable
-private fun ModalButton(
-    label: String,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (enabled) 1f else 0.4f)
-            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(
-                if (enabled) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant
-            )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                enabled = enabled,
-                onClick = onClick
-            )
-            .padding(vertical = FoamDimens.spacingStandard),
-        contentAlignment = Alignment.Center
-    ) {
-        BasicText(
-            text = label,
-            style = FoamTheme.typography.body.copy(
-                color = if (enabled) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
-                fontWeight = FontWeight.Bold
-            )
-        )
     }
 }
 

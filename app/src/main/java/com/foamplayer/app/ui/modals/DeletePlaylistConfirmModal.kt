@@ -1,4 +1,4 @@
-package com.foamplayer.app.ui.screens.playlists
+package com.foamplayer.app.ui.modals
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.PlaylistEntity
-import com.foamplayer.app.ui.components.FoamBottomModal
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 

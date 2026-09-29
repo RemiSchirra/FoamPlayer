@@ -1,4 +1,4 @@
-package com.foamplayer.app.ui.screens.settings
+package com.foamplayer.app.ui.modals
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -42,15 +42,15 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.PreferredLyricsProvider
-import com.foamplayer.app.ui.components.FoamBottomModal
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
+import com.foamplayer.app.ui.screens.settings.SettingsViewModel
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
  * Bottom sheet for the lyrics providers: each row shows the provider's search
  * priority (top = first), an enable/disable switch, and a drag handle for
- * reordering. Changes commit to [SettingsViewModel] (and are persisted) as the
+ * reordering. Changes commit to [com.foamplayer.app.ui.screens.settings.SettingsViewModel] (and are persisted) as the
  * gestures complete.
  */
 @Composable

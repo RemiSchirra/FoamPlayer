@@ -1,4 +1,4 @@
-package com.foamplayer.app.ui.screens.settings
+package com.foamplayer.app.ui.modals
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,7 +39,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
-import com.foamplayer.app.ui.components.FoamBottomModal
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import java.util.Locale
@@ -47,7 +46,7 @@ import java.util.Locale
 /**
  * Default palette offered in the color picker as one-tap shortcuts: 12
  * vibrant, evenly spread hues. Also used to color freshly added points so
- * they never start identical to an existing one (see [GradientEditor]).
+ * they never start identical to an existing one (see [com.foamplayer.app.ui.screens.settings.GradientEditor]).
  */
 internal val DefaultStopPalette = listOf(
     0xFFFF3B30.toInt(), // red

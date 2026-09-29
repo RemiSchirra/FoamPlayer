@@ -25,11 +25,11 @@ import com.foamplayer.app.constants.TrackSortOptions
 import com.foamplayer.app.data.db.dao.TopAlbumStat
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.CollectionId
-import com.foamplayer.app.ui.components.CollectionInfo
-import com.foamplayer.app.ui.components.CollectionKind
+import com.foamplayer.app.ui.modals.CollectionInfo
+import com.foamplayer.app.ui.modals.CollectionKind
 import com.foamplayer.app.ui.components.CollectionListScreen
 import com.foamplayer.app.ui.components.CollectionListItem
-import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
+import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.TrackListScreen
 import com.foamplayer.app.ui.components.caseInsensitiveComparator

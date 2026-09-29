@@ -1,4 +1,4 @@
-package com.foamplayer.app.ui.components
+package com.foamplayer.app.ui.modals
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

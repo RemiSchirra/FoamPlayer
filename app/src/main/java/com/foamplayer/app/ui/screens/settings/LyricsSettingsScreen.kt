@@ -45,6 +45,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.components.FoamSwitchItem
+import com.foamplayer.app.ui.modals.LyricsProvidersModal
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance

@@ -49,15 +49,18 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.ThemeMode
-import com.foamplayer.app.ui.components.FoamBottomModal
+import com.foamplayer.app.ui.modals.FoamBottomModal
 import com.foamplayer.app.ui.components.FoamSwitchItem
+import com.foamplayer.app.ui.modals.DefaultStopPalette
+import com.foamplayer.app.ui.modals.HueBar
+import com.foamplayer.app.ui.modals.SaturationValueField
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
  * One-tap accent shortcuts under the picker: 12 vibrant, evenly spread hues
- * laid out 6 per row (see [DefaultStopPalette], shared with the gradient
+ * laid out 6 per row (see [com.foamplayer.app.ui.modals.DefaultStopPalette], shared with the gradient
  * tool's picker).
  */
 private val AccentShortcutRows: List<List<Int>> = DefaultStopPalette.chunked(6)
@@ -172,7 +175,7 @@ fun ColorsSettingsScreen(
 
 /**
  * The accent card: the same HSV picker as the gradient tool's modal
- * ([SaturationValueField] + [HueBar], with the shortcut palette under it),
+ * ([com.foamplayer.app.ui.modals.SaturationValueField] + [com.foamplayer.app.ui.modals.HueBar], with the shortcut palette under it),
  * inlined into the card instead of hosted in a sheet.
  *
  * The picker edits local HSV state and the draft recolors the rings AND the

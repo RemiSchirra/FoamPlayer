@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -43,6 +42,7 @@ import com.foamplayer.app.ui.components.FidelityScoreCard
 import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
+import com.foamplayer.app.ui.modals.AudioPipelineModal
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme

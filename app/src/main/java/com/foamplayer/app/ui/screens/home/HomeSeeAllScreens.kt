@@ -35,11 +35,11 @@ import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
 import com.foamplayer.app.ui.components.CollectionId
-import com.foamplayer.app.ui.components.CollectionInfo
-import com.foamplayer.app.ui.components.CollectionKind
+import com.foamplayer.app.ui.modals.CollectionInfo
+import com.foamplayer.app.ui.modals.CollectionKind
 import com.foamplayer.app.ui.components.CollectionListItem
 import com.foamplayer.app.ui.components.CollectionListScreen
-import com.foamplayer.app.ui.components.LocalCollectionFoamModalState
+import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.MediaGridCell
 import com.foamplayer.app.ui.components.MediaListRow

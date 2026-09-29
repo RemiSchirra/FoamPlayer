@@ -1,6 +1,5 @@
-package com.foamplayer.app.ui.screens.settings
+package com.foamplayer.app.ui.modals
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,9 +29,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.audio.bitperfect.AudioOutputInfo
+import com.foamplayer.app.audio.pipeline.PipelineStage
 import com.foamplayer.app.audio.pipeline.PipelineStageStatus
 import com.foamplayer.app.data.db.entities.TrackEntity
-import com.foamplayer.app.ui.components.FoamBottomModal
+import com.foamplayer.app.ui.screens.settings.AudioSettingsViewModel
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -102,7 +102,7 @@ fun AudioPipelineContent(
 
 @Composable
 private fun PipelineStageRow(
-    stage: com.foamplayer.app.audio.pipeline.PipelineStage,
+    stage: PipelineStage,
     isLast: Boolean
 ) {
     val statusColor = when (stage.status) {
