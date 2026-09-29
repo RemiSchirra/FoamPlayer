@@ -163,8 +163,8 @@ fun CollectionListScreen(
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
     // Measured by the header item's layout pass (see [CollectionHeroImmersiveHeader]);
-    // read untracked inside the offset lambda, and consumed by the search-open
-    // scroll effect (see [CollectionSearchScrollToBarEffect]).
+    // read untracked inside the offset lambda, and consumed by the search-open scroll effect
+    // (see [CollectionSearchScrollToBarEffect]).
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
         if (density.isGrid) {
@@ -511,6 +511,24 @@ fun CollectionListItem(
     val artShape: Shape = if (fullyRoundedArtwork) CircleShape else AlbumArtShape()
     val highlightBackground = activeRowHighlight(active, imageUrl)
 
+    // Close-flight shadow hand-off (mirrors TrackListItem's player-dismiss
+    // handling): while a collection detail hero closes back onto THIS tagged
+    // row, the flying artwork casts the row's static drop shadow itself,
+    // elevation riding the flight (see [collectionRowFlightArtwork]'s
+    // castsFlightShadow). The scaffold's static shadow — drawn by
+    // [MediaListRow]/[MediaGridCell] OUTSIDE the sharedElement modifier —
+    // would otherwise sit at the target position from the first flight frame
+    // ("a static shadow at the target image position while the animation is
+    // playing"), so it steps aside for the flight and resumes on the settle
+    // frame, where the flight layer's elevation lands on exactly the same
+    // value — an identical-strength hand-off.
+    val closeFlightActive = rememberCollectionCloseFlightActive(
+        sharedTransitionScope = sharedTransitionScope?.takeIf { elementKey != null },
+        animatedVisibilityScope = animatedVisibilityScope
+    ).value
+    val artworkRestElevation = MediaItemArtElevation
+    val artworkElevation = if (closeFlightActive) 0.dp else artworkRestElevation
+
     val sharedArtModifier = Modifier
         .collectionRowFlightArtwork(
             key = "$sharedElementPrefix-art-$elementKey",
@@ -519,7 +537,8 @@ fun CollectionListItem(
             enabled = elementKey != null,
             restShape = artShape,
             immersiveFlightHero = immersiveFlightHero,
-            fullyRounded = fullyRoundedArtwork
+            fullyRounded = fullyRoundedArtwork,
+            castsFlightShadow = true
         )
         .background(FoamTheme.colors.surfaceVariant)
 
@@ -563,7 +582,8 @@ fun CollectionListItem(
             subtitle = subtitle,
             highlightBackground = highlightBackground,
             titleModifier = sharedTitleModifier,
-            subtitleModifier = sharedSubtitleModifier
+            subtitleModifier = sharedSubtitleModifier,
+            artworkElevation = artworkElevation
         )
         return
     }
@@ -588,7 +608,8 @@ fun CollectionListItem(
         density = density,
         highlightBackground = highlightBackground,
         titleModifier = sharedTitleModifier,
-        subtitleModifier = sharedSubtitleModifier
+        subtitleModifier = sharedSubtitleModifier,
+        artworkElevation = artworkElevation
     )
 }
 

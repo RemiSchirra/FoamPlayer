@@ -206,6 +206,48 @@ internal fun rememberCollectionFlightProgress(
 }
 
 /**
+ * Whether a collection shared-element flight (a nav transition between a
+ * collection list and a detail screen's hero) is currently landing on the
+ * given scopes' row side -- the artwork shrinking from the hero onto the
+ * clicked row.
+ *
+ * Close flights only (the row side ENTERS while the detail screen closes, its
+ * transition targeting [EnterExitState.Visible] without having settled there
+ * yet -- the same enum reads [rememberPlayerDismissFlightActive] uses for the
+ * player's own close flight). Open flights (the row side exiting toward the
+ * hero) deliberately do NOT count: there the whole page fades, which is the
+ * established open-flight look, and the row's static shadow hands off
+ * through that fade. When either scope is missing the state rests at false,
+ * so nothing suppresses anything.
+ *
+ * Used to step the tagged row's static rest shadow aside for the flight's
+ * duration: the shared-element overlay renders ONLY the becoming-visible
+ * side's content (the flying artwork, which casts the shadow itself -- see
+ * [collectionRowFlightArtwork]'s flight shadow), while the row's own artwork
+ * slot is empty in place. The static shadow is drawn by the row scaffold
+ * OUTSIDE the sharedElement modifier, so it keeps rendering in place through
+ * the whole flight and would otherwise sit under that empty slot from the
+ * first flight frame -- the "static shadow at the target position".
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun rememberCollectionCloseFlightActive(
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope?
+): State<Boolean> {
+    if (sharedTransitionScope == null || animatedVisibilityScope == null) {
+        val alwaysInactive = remember { mutableStateOf(false) }
+        return alwaysInactive
+    }
+    return remember(animatedVisibilityScope) {
+        derivedStateOf {
+            animatedVisibilityScope.transition.targetState == EnterExitState.Visible &&
+                    animatedVisibilityScope.transition.currentState != EnterExitState.Visible
+        }
+    }
+}
+
+/**
  * The flight-time look of a collection row that is the DRAWN side of a
  * shared-element flight with an immersive collection hero (i.e. the row the
  * hero morphs into when the detail screen closes). During the transition the
@@ -221,6 +263,17 @@ internal fun rememberCollectionFlightProgress(
  * - a bottom fade mirrors the hero's (see CollectionHero's immersive artwork)
  *   at full strength at flight start and eases out as the art lands.
  *
+ * [shadowElevationPx] lets the flying artwork CAST the row's static drop
+ * shadow itself while the flight plays (opted in by
+ * [collectionRowFlightArtwork]'s [collectionRowFlightArtwork.castsFlightShadow]):
+ * the static shadow -- drawn by the row scaffold OUTSIDE the sharedElement
+ * modifier -- is suppressed for the flight (see
+ * [rememberCollectionCloseFlightActive]), so without this the landing art
+ * would be shadowless until the flight settles. The elevation is provided by
+ * the caller so it can gate on the close flight being active and ease with
+ * the flight progress; at rest it should read 0 so the static shadow alone
+ * casts.
+ *
  * At rest the progress reads 1f: the shape is the row's own static rounding
  * and the fade strength is zero -- the rest look is byte-for-byte the
  * un-flight one, which is why the static [clip] is dropped on this path.
@@ -230,7 +283,8 @@ internal fun rememberCollectionFlightProgress(
 @Composable
 internal fun Modifier.collectionFlightArtwork(
     progress: State<Float>,
-    fullyRounded: Boolean = false
+    fullyRounded: Boolean = false,
+    shadowElevationPx: () -> Float = { 0f }
 ): Modifier {
     val restPercent = if (fullyRounded) {
         AlbumArtFlightFullyRoundedPercent
@@ -245,6 +299,11 @@ internal fun Modifier.collectionFlightArtwork(
             // The bottom fade blends with DstIn; isolate it to this layer so
             // it never erases what sits behind the artwork.
             compositingStrategy = if (p < 1f) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+            // The flying artwork casts the row's shadow for the whole flight,
+            // so the shadow follows the shrinking image instead of sitting at
+            // the target position. Reads 0 at rest: the row's own static
+            // shadow (suppressed for the flight) casts there.
+            shadowElevation = shadowElevationPx()
         }
         .drawWithContent {
             drawContent()
@@ -274,6 +333,18 @@ internal fun Modifier.collectionFlightArtwork(
  * [fullyRounded] mirrors the row's fully round (circular) rest shape
  * (artists) into the flight itself: without it the morph would land on the
  * album's percentage rounding and pop to the circle at flight end.
+ *
+ * [castsFlightShadow] opts the row into the flight's shadow hand-off: while
+ * a close flight is landing on this tagged row, the flying artwork casts the
+ * row's static drop shadow itself, elevation easing up from the hero's
+ * shadowless look to [MediaItemArtElevation] as the art lands -- so the
+ * shadow follows the shrinking image instead of sitting at the target
+ * position from the first flight frame. The HOST suppresses the scaffold's
+ * static shadow for the flight's duration (its own close-flight read, see
+ * [rememberCollectionCloseFlightActive]) and resumes it on the settle frame,
+ * where the flight layer's elevation reads exactly [MediaItemArtElevation] --
+ * an identical-strength hand-off. Home/search cards that cast no static
+ * shadow keep the default (off) and their established shadowless flights.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -284,12 +355,40 @@ internal fun Modifier.collectionRowFlightArtwork(
     enabled: Boolean,
     restShape: Shape,
     immersiveFlightHero: Boolean,
-    fullyRounded: Boolean = false
+    fullyRounded: Boolean = false,
+    castsFlightShadow: Boolean = false
 ): Modifier {
     if (!enabled || sharedTransitionScope == null || animatedVisibilityScope == null) {
         return this.clip(restShape)
     }
     if (!immersiveFlightHero) {
+        if (!castsFlightShadow) {
+            return this
+                .rowSharedArtwork(
+                    key = key,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    enabled = true,
+                    overlayClip = restShape,
+                    boundsTransform = AlbumArtBoundsTransform
+                )
+                .clip(restShape)
+        }
+        // Compact/normal heroes: the flight has no shape morph (the row keeps
+        // its own percentage corners the whole way), but the shadow must still
+        // follow the shrinking image. A dedicated layer casts the row's rest
+        // elevation, eased with the flight progress, only while the close
+        // flight is landing; at rest it reads 0 so the static shadow alone
+        // casts.
+        val flightProgress = rememberCollectionFlightProgress(
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
+        )
+        val closeFlightActive = rememberCollectionCloseFlightActive(
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
+        )
+        val restElevationPx = with(LocalDensity.current) { MediaItemArtElevation.toPx() }
         return this
             .rowSharedArtwork(
                 key = key,
@@ -299,6 +398,15 @@ internal fun Modifier.collectionRowFlightArtwork(
                 overlayClip = restShape,
                 boundsTransform = AlbumArtBoundsTransform
             )
+            .graphicsLayer {
+                shape = restShape
+                clip = true
+                shadowElevation = if (closeFlightActive.value) {
+                    restElevationPx * flightProgress.value
+                } else {
+                    0f
+                }
+            }
             .clip(restShape)
     }
     val restPercent = if (fullyRounded) {
@@ -310,6 +418,18 @@ internal fun Modifier.collectionRowFlightArtwork(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
     )
+    val closeFlightActive = rememberCollectionCloseFlightActive(
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope
+    )
+    val restElevationPx = with(LocalDensity.current) { MediaItemArtElevation.toPx() }
+    val flightShadowElevationPx: () -> Float = {
+        if (castsFlightShadow && closeFlightActive.value) {
+            restElevationPx * flightProgress.value
+        } else {
+            0f
+        }
+    }
     return this
         .rowSharedArtwork(
             key = key,
@@ -319,7 +439,7 @@ internal fun Modifier.collectionRowFlightArtwork(
             overlayClip = AlbumArtFlightShape(restPercent) { flightProgress.value },
             boundsTransform = AlbumArtBoundsTransform
         )
-        .collectionFlightArtwork(flightProgress, fullyRounded)
+        .collectionFlightArtwork(flightProgress, fullyRounded, flightShadowElevationPx)
 }
 
 /**
