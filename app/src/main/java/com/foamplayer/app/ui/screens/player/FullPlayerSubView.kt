@@ -208,12 +208,9 @@ private fun AudioInfoChip(
                 enabled = isEnabled,
                 onClick = onClick
             )
-            // Transparent touch expansion around the (unchanged) visual pill:
-            // the tappable area wraps the pill and clears the 48dp minimum,
-            // same trick as SubViewSelectorItem's touchPadding.
             .padding(horizontal = 8.dp, vertical = 12.dp)
             .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.2f))
+            .background(FoamTheme.colors.background.copy(alpha = 0.2f))
             .padding(horizontal = 14.dp, vertical = 7.dp),
         contentAlignment = Alignment.Center
     ) {
