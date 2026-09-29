@@ -5,6 +5,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -47,11 +48,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -81,6 +84,7 @@ import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import kotlinx.coroutines.flow.first
 
 private const val ModeAnimMillis = 300
 
@@ -89,6 +93,14 @@ private val ModeEnter = fadeIn(tween(ModeAnimMillis, delayMillis = 60)) +
         expandVertically(tween(ModeAnimMillis), expandFrom = Alignment.Top)
 private val ModeExit = fadeOut(tween(200)) +
         shrinkVertically(tween(ModeAnimMillis), shrinkTowards = Alignment.Top)
+
+private const val StopAnimMillis = 250
+
+/** Enter/exit for the rows of the gradient point list (and its add control). */
+private val StopEnter = fadeIn(tween(StopAnimMillis, delayMillis = 50)) +
+        expandVertically(tween(StopAnimMillis), expandFrom = Alignment.Top)
+private val StopExit = fadeOut(tween(StopAnimMillis - 80)) +
+        shrinkVertically(tween(StopAnimMillis), shrinkTowards = Alignment.Top)
 
 @Composable
 fun BackgroundSettingsScreen(
@@ -538,6 +550,10 @@ private fun CustomImageSection(
  * field with 2D-draggable color dots) and the point list on the right, with the
  * add control underneath it. The count stays within 1..4 points.
  *
+ * Adding or removing a point animates its list row (fade + expand/shrink). A
+ * removed row is no longer in the stop list but stays composed, in its old
+ * place, until its exit finishes -- see [ExitingStopRow].
+ *
  * Editing a point's color opens [GradientColorPickerModal] (a FoamModal sheet
  * with a full HSV picker); its OK commits, its Cancel discards. Position edits
  * land in a local snapshot state first so drags update on every frame
@@ -552,12 +568,68 @@ private fun GradientEditor(
     onChange: (List<GradientStop>) -> Unit
 ) {
     var localStops by remember { mutableStateOf(stops) }
-    LaunchedEffect(stops) { localStops = stops }
+
+    // One animation holder per live stop, parallel to [localStops] (same size,
+    // same order). Rows present when the editor opens start visible, so the
+    // screen opens in its final state; only rows the user adds animate in.
+    var rowStates by remember { mutableStateOf(stops.map { StopRowState(animateIn = false) }) }
+    // Rows the user removed that are still animating out.
+    var exitingRows by remember { mutableStateOf(emptyList<ExitingStopRow>()) }
+
+    LaunchedEffect(stops) {
+        localStops = stops
+        // Stops changed from outside (initial load, settings sanitizer): keep
+        // the holders in step, without animating.
+        if (rowStates.size != stops.size) {
+            rowStates = if (stops.size < rowStates.size) {
+                rowStates.take(stops.size)
+            } else {
+                rowStates + List(stops.size - rowStates.size) { StopRowState(animateIn = false) }
+            }
+        }
+    }
 
     var editingStopIndex by remember { mutableStateOf<Int?>(null) }
     var pickerStop by remember { mutableStateOf(AppSettings.DefaultGradientStops.first()) }
     var pickerLabel by remember { mutableStateOf("Point 1") }
     var pickerSession by remember { mutableIntStateOf(0) }
+
+    fun addStop() {
+        // Land the new dot between the last one and the bottom edge, mirrored
+        // horizontally and in a color none of the existing points use --
+        // identical stops are deduped by the settings sanitizer, so an exact
+        // clone of the last point would silently vanish (the "add does nothing"
+        // bug).
+        val last = localStops.lastOrNull() ?: return
+        val newOffset = ((last.offset + 1f) / 2f).coerceIn(0f, 1f)
+        val newX = (1f - last.x).coerceIn(0f, 1f)
+        val usedColors = localStops.map { it.argb }.toSet()
+        val newColor = DefaultStopPalette.firstOrNull { it !in usedColors }
+            ?: last.argb
+        localStops = localStops + GradientStop(newOffset, newColor, newX)
+        rowStates = rowStates + StopRowState(animateIn = true)
+        onChange(localStops)
+    }
+
+    fun removeStop(row: StopRowState) {
+        // Looked up by row, not by position: a second tap on a row that is
+        // already leaving finds nothing and is ignored.
+        val index = rowStates.indexOf(row)
+        if (index < 0) return
+        val removed = localStops.getOrNull(index) ?: return
+        exitingRows = exitingRows + ExitingStopRow(row, removed, "Point ${index + 1}", index)
+        row.visibleState.targetState = false
+
+        val remaining = localStops.filterIndexed { i, _ -> i != index }
+        if (remaining.isEmpty()) {
+            localStops = listOf(AppSettings.DefaultGradientStops.first())
+            rowStates = listOf(StopRowState(animateIn = true))
+        } else {
+            localStops = remaining
+            rowStates = rowStates.filterIndexed { i, _ -> i != index }
+        }
+        onChange(localStops)
+    }
 
     Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
         Row(
@@ -588,55 +660,86 @@ private fun GradientEditor(
                     .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
                     .background(FoamTheme.colors.surface)
             ) {
-                localStops.forEachIndexed { index, stop ->
-                    if (index > 0) {
+                // Live rows plus the rows still animating out, spliced back at the
+                // slot they were removed from (latest removal first, so rows that
+                // left together keep their original order).
+                val entries = buildList<StopListEntry> {
+                    localStops.forEachIndexed { index, stop ->
+                        val row = rowStates.getOrNull(index) ?: return@forEachIndexed
+                        add(StopListEntry(row, stop, "Point ${index + 1}", index > 0, index))
+                    }
+                    exitingRows.asReversed().forEach { exiting ->
+                        add(
+                            exiting.slot.coerceAtMost(size),
+                            StopListEntry(exiting.row, exiting.stop, exiting.label, exiting.slot > 0, null)
+                        )
+                    }
+                }
+
+                entries.forEach { entry ->
+                    key(entry.row) {
+                        val row = entry.row
+                        if (entry.liveIndex == null) {
+                            // Drop the row for good once its exit has finished.
+                            LaunchedEffect(row) {
+                                snapshotFlow {
+                                    row.visibleState.isIdle && !row.visibleState.currentState
+                                }.first { it }
+                                exitingRows = exitingRows.filterNot { it.row === row }
+                            }
+                        }
+                        // The separator lives inside the animated block so it
+                        // grows and shrinks together with its row.
+                        AnimatedVisibility(
+                            visibleState = row.visibleState,
+                            enter = StopEnter,
+                            exit = StopExit
+                        ) {
+                            Column {
+                                if (entry.showSeparator) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(FoamDimens.separatorHeight)
+                                            .background(FoamTheme.colors.borderOverlay)
+                                    )
+                                }
+                                StopRow(
+                                    label = entry.label,
+                                    stop = entry.stop,
+                                    // A leaving row keeps its cross so it doesn't
+                                    // flicker while it fades out.
+                                    canRemove = entry.liveIndex == null ||
+                                            localStops.size > AppSettings.MIN_GRADIENT_STOPS,
+                                    enabled = entry.liveIndex != null,
+                                    onEdit = {
+                                        val index = entry.liveIndex ?: return@StopRow
+                                        pickerLabel = entry.label
+                                        pickerStop = entry.stop
+                                        pickerSession++
+                                        editingStopIndex = index
+                                    },
+                                    onRemove = { removeStop(row) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = localStops.size < AppSettings.MAX_GRADIENT_STOPS,
+                    enter = StopEnter,
+                    exit = StopExit
+                ) {
+                    Column {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(FoamDimens.separatorHeight)
                                 .background(FoamTheme.colors.borderOverlay)
                         )
+                        AddStopButton(onAdd = { addStop() })
                     }
-                    StopRow(
-                        label = "Point ${index + 1}",
-                        stop = stop,
-                        canRemove = localStops.size > AppSettings.MIN_GRADIENT_STOPS,
-                        onEdit = {
-                            pickerLabel = "Point ${index + 1}"
-                            pickerStop = stop
-                            pickerSession++
-                            editingStopIndex = index
-                        },
-                        onRemove = {
-                            localStops = localStops.filterIndexed { i, _ -> i != index }
-                                .ifEmpty { listOf(AppSettings.DefaultGradientStops.first()) }
-                            onChange(localStops)
-                        }
-                    )
-                }
-
-                if (localStops.size < AppSettings.MAX_GRADIENT_STOPS) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(FoamDimens.separatorHeight)
-                            .background(FoamTheme.colors.borderOverlay)
-                    )
-                    AddStopButton(onAdd = {
-                        // Land the new dot between the last one and the bottom
-                        // edge, mirrored horizontally and in a color none of the
-                        // existing points use -- identical stops are deduped by
-                        // the settings sanitizer, so an exact clone of the last
-                        // point would silently vanish (the "add does nothing" bug).
-                        val last = localStops.lastOrNull() ?: return@AddStopButton
-                        val newOffset = ((last.offset + 1f) / 2f).coerceIn(0f, 1f)
-                        val newX = (1f - last.x).coerceIn(0f, 1f)
-                        val usedColors = localStops.map { it.argb }.toSet()
-                        val newColor = DefaultStopPalette.firstOrNull { it !in usedColors }
-                            ?: last.argb
-                        localStops = localStops + GradientStop(newOffset, newColor, newX)
-                        onChange(localStops)
-                    })
                 }
             }
         }
@@ -660,6 +763,36 @@ private fun GradientEditor(
         )
     }
 }
+
+/**
+ * Animation holder of one row of the point list, matched to a stop by
+ * position. Compared by identity, so it doubles as the row's Compose key.
+ * [animateIn] is true only for rows the user just added.
+ */
+private class StopRowState(animateIn: Boolean) {
+    val visibleState = MutableTransitionState(!animateIn).apply { targetState = true }
+}
+
+/**
+ * A row the user removed. It keeps the stop and label it had and is spliced
+ * back into the list at [slot] until its exit animation ends.
+ */
+private class ExitingStopRow(
+    val row: StopRowState,
+    val stop: GradientStop,
+    val label: String,
+    val slot: Int
+)
+
+/** One rendered row of the point list, live or leaving. */
+private class StopListEntry(
+    val row: StopRowState,
+    val stop: GradientStop,
+    val label: String,
+    val showSeparator: Boolean,
+    /** Position in the live stop list; null while the row is animating out. */
+    val liveIndex: Int?
+)
 
 /**
  * The gradient preview: a tall rectangle rendering the points as a true 2D
@@ -814,6 +947,11 @@ private fun GradientDot(
  * point. Tapping the row opens its color picker sheet. The cross is clipped
  * to a [CircleShape] *before* becoming clickable, so its ripple stays a
  * bounded circle instead of squaring off in the row's corner.
+ *
+ * The cross sits in a fixed 32 dp slot and fades in/out: the row keeps the
+ * same height whether or not it can be removed, so the surviving row doesn't
+ * jump when the point count reaches (or leaves) the minimum. [enabled] is
+ * false for a row that is animating out, so it can't be tapped twice.
  */
 @Composable
 private fun StopRow(
@@ -821,12 +959,14 @@ private fun StopRow(
     stop: GradientStop,
     canRemove: Boolean,
     onEdit: () -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(
+                enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
                 onClick = onEdit
@@ -848,26 +988,38 @@ private fun StopRow(
             modifier = Modifier.weight(1f)
         )
 
-        if (canRemove) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    // Clip BEFORE the clickable: the ripple is bounded by the
-                    // node's clip, so the cross's ripple stays a circle.
-                    .clip(CircleShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = ripple(color = FoamTheme.colors.textPrimary),
-                        onClick = onRemove
-                    ),
-                contentAlignment = Alignment.Center
+        Box(
+            modifier = Modifier.size(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            // Fully qualified: inside this Box the implicit RowScope of the outer
+            // Row would otherwise capture the call, and Compose forbids that.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = canRemove,
+                enter = fadeIn(tween(150)),
+                exit = fadeOut(tween(150))
             ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.remove),
-                    tint = FoamTheme.colors.textSecondary,
-                    modifier = Modifier.size(FoamDimens.iconSmall)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        // Clip BEFORE the clickable: the ripple is bounded by the
+                        // node's clip, so the cross's ripple stays a circle.
+                        .clip(CircleShape)
+                        .clickable(
+                            enabled = enabled,
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(color = FoamTheme.colors.textPrimary),
+                            onClick = onRemove
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = stringResource(R.string.remove),
+                        tint = FoamTheme.colors.textSecondary,
+                        modifier = Modifier.size(FoamDimens.iconSmall)
+                    )
+                }
             }
         }
     }
