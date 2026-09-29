@@ -237,7 +237,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
             val isAnchorPage = page == anchorPage
 
             fun anchorPageAlpha(): Float =
-                if (immersive || !isAnchorPage) {
+                if (!isAnchorPage) {
                     1f
                 } else {
                     val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
@@ -253,20 +253,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             .fillMaxWidth()
                             .aspectRatio(1f)
                             .graphicsLayer {
-                                // The pager page art casts the full player's drop shadow
-                                // while it is the visually-responsible image -- i.e. whenever
-                                // it is NOT the anchor page. The anchor's art is always
-                                // either exactly covered by the hero overlay (which casts
-                                // the shadow in its place, from identical bounds) or fully
-                                // off-viewport, so it never needs one of its own. Gating on
-                                // !isAnchorPage -- rather than tying the elevation to the
-                                // page's content alpha -- is what keeps the shadow
-                                // continuous across a swipe: the incoming image slides in
-                                // with its shadow already behind it (its alpha is 1 there),
-                                // and at the settle commit the hero reappears over it
-                                // casting the identical shadow. Every layer that casts here
-                                // runs at alpha 1, so nothing depends on how a layer's own
-                                // alpha composites with its RenderNode shadow.
                                 alpha = anchorPageAlpha()
                                 scaleX = pausedArtScale
                                 scaleY = pausedArtScale
@@ -320,39 +306,13 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             text = pageTrack.title,
                             style = FoamTheme.typography.titleLarge,
                             mode = marqueeMode,
-                            marqueeEnabled = immersive && isAnchorPage && pageTrack.id == track.id,
-                            modifier = if (immersive && isAnchorPage && pageTrack.id == track.id) {
-                                Modifier
-                                    .sharedBounds(
-                                        rememberSharedContentState(key = "track_title_${track.id}"),
-                                        animatedVisibilityScope = outerVisibilityScope
-                                    )
-                                    .sharedBounds(
-                                        rememberSharedContentState(key = "track_title_header_${track.id}"),
-                                        animatedVisibilityScope = headerVisibilityScope
-                                    )
-                            } else {
-                                Modifier
-                            }
+                            marqueeEnabled = false
                         )
                         MarqueeText(
                             text = stringResource(R.string.artist_album_separator, pageTrack.artist, pageTrack.album),
                             style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
                             mode = marqueeMode,
-                            marqueeEnabled = immersive && isAnchorPage && pageTrack.id == track.id,
-                            modifier = if (immersive && isAnchorPage && pageTrack.id == track.id) {
-                                Modifier
-                                    .sharedBounds(
-                                        rememberSharedContentState(key = "track_artist_${track.id}"),
-                                        animatedVisibilityScope = outerVisibilityScope
-                                    )
-                                    .sharedBounds(
-                                        rememberSharedContentState(key = "track_artist_header_${track.id}"),
-                                        animatedVisibilityScope = headerVisibilityScope
-                                    )
-                            } else {
-                                Modifier
-                            }
+                            marqueeEnabled = false
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
@@ -397,14 +357,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             animatedVisibilityScope = headerVisibilityScope
                         )
                         .graphicsLayer {
-                            // Eased fractions of the two flights the hero takes: outer --
-                            // the player open/close flight (1 = fully open); header -- the
-                            // up-transition to the subview header (0 = main player). Both
-                            // are read per-frame inside this draw scope, so transitions
-                            // only redraw this layer instead of recomposing anything. The
-                            // radius must chase the flight (it lives in the shared-element
-                            // overlay's interpolated bounds each frame) -- the same reason
-                            // the subview header's art radius is computed per frame.
                             val rawOuter = playerTransitionState.progress().coerceIn(0f, 1f)
                             val outerFraction = if (playerTransitionState.targetState) {
                                 EaseOutCubic.transform(rawOuter)
@@ -429,18 +381,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             clip = true
                             scaleX = pausedArtScale
                             scaleY = pausedArtScale
-                            // The hero casts the full player's drop shadow while it rests
-                            // over the anchor page -- the anchor page itself casts none
-                            // (see the pager page art), so this is the shadow visible
-                            // behind the resting image. It fades out over both flights
-                            // because neither destination -- the mini player's art nor the
-                            // subview header's art -- carries its own shadow; a constant
-                            // one would pop off the frame the hero leaves composition.
-                            // During pager swipes both fractions rest at (1, 0), so the
-                            // shadow rides the hero at full strength and hands off to the
-                            // incoming page's own shadow without an intensity jump. The
-                            // hero's alpha is 1 in the classic player, so the shadow never
-                            // depends on layer-alpha/shadow compositing semantics.
                             shadowElevation = if (!immersive) {
                                 with(density) {
                                     PlayerDimens.fullPlayerArtElevation.toPx()
@@ -481,57 +421,55 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         )
                     }
                 }
-                if (!immersive) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Column(
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                            .combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = ripple(color = FoamTheme.colors.textPrimary),
+                                onClick = { onOpenAlbum(track) },
+                                onLongClick = { onOpenArtist(track) }
+                            )
+                            .padding(horizontal = 8.dp, vertical = 8.dp)
+                    ) {
+                        MarqueeText(
+                            text = track.title,
+                            style = FoamTheme.typography.titleLarge,
+                            mode = marqueeMode,
                             modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                .combinedClickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = ripple(color = FoamTheme.colors.textPrimary),
-                                    onClick = { onOpenAlbum(track) },
-                                    onLongClick = { onOpenArtist(track) }
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "track_title_${track.id}"),
+                                    animatedVisibilityScope = outerVisibilityScope
                                 )
-                                .padding(horizontal = 8.dp, vertical = 8.dp)
-                        ) {
-                            MarqueeText(
-                                text = track.title,
-                                style = FoamTheme.typography.titleLarge,
-                                mode = marqueeMode,
-                                modifier = Modifier
-                                    .sharedBounds(
-                                        rememberSharedContentState(key = "track_title_${track.id}"),
-                                        animatedVisibilityScope = outerVisibilityScope
-                                    )
-                                    .sharedBounds(
-                                        rememberSharedContentState(key = "track_title_header_${track.id}"),
-                                        animatedVisibilityScope = headerVisibilityScope
-                                    )
-                            )
-                            MarqueeText(
-                                text = stringResource(R.string.artist_album_separator, track.artist, track.album),
-                                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
-                                mode = marqueeMode,
-                                modifier = Modifier
-                                    .sharedBounds(
-                                        rememberSharedContentState(key = "track_artist_${track.id}"),
-                                        animatedVisibilityScope = outerVisibilityScope
-                                    )
-                                    .sharedBounds(
-                                        rememberSharedContentState(key = "track_artist_header_${track.id}"),
-                                        animatedVisibilityScope = headerVisibilityScope
-                                    )
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        TrackScoreHeart(
-                            score = scoreOverrides[track.id] ?: track.score,
-                            onSetScore = { value -> onSetScore(track.id, value) }
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "track_title_header_${track.id}"),
+                                    animatedVisibilityScope = headerVisibilityScope
+                                )
                         )
-                        TrackMoreButton(track = track)
+                        MarqueeText(
+                            text = stringResource(R.string.artist_album_separator, track.artist, track.album),
+                            style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
+                            mode = marqueeMode,
+                            modifier = Modifier
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "track_artist_${track.id}"),
+                                    animatedVisibilityScope = outerVisibilityScope
+                                )
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "track_artist_header_${track.id}"),
+                                    animatedVisibilityScope = headerVisibilityScope
+                                )
+                        )
                     }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    TrackScoreHeart(
+                        score = scoreOverrides[track.id] ?: track.score,
+                        onSetScore = { value -> onSetScore(track.id, value) }
+                    )
+                    TrackMoreButton(track = track)
                 }
             }
         }
@@ -689,10 +627,6 @@ internal fun PlaybackProgressSlider(
     labelSpacing: Dp = PlayerDimens.seekBarLabelSpacing
 ) {
     Column(modifier = modifier) {
-        // Hold the dragged position locally and commit the seek only on release.
-        // Forwarding onSeek on every change used to issue a real media seek and a
-        // PlaybackState emission per drag pixel, recomposing every collector of
-        // playbackState while the user was still holding the bar.
         var dragValue by remember { mutableStateOf<Float?>(null) }
         val currentOnSeek by rememberUpdatedState(onSeek)
 
