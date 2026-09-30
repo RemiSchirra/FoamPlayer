@@ -865,6 +865,7 @@ fun FoamNavHost(
 
                 val handleNavBarNavigation: (String) -> Unit = { route ->
                     isNavBarExpanded = false
+                    activeSharedCollection = null
                     if (playerTransitionState.currentState || playerTransitionState.targetState) {
                         animatePlayerTransition(open = false)
                     }
