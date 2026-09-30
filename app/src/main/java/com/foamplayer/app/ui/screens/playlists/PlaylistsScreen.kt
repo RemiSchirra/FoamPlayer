@@ -81,12 +81,14 @@ import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.modals.DensityOrganisationModal
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.MediaGridCell
+import com.foamplayer.app.ui.components.MediaItemArtElevation
 import com.foamplayer.app.ui.components.MediaListRow
 import com.foamplayer.app.ui.components.ScreenTitle
 import com.foamplayer.app.ui.components.ScreenTitleActionButton
 import com.foamplayer.app.ui.components.activeRowHighlight
 import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.collectionRowFlightArtwork
+import com.foamplayer.app.ui.components.rememberCollectionCloseFlightActive
 import com.foamplayer.app.ui.components.rememberDragDropGridState
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
 import com.foamplayer.app.ui.components.rememberSortedList
@@ -555,6 +557,18 @@ private fun PlaylistItemRow(
     val context = LocalContext.current
     val highlightBackground = activeRowHighlight(active, playlist.imageUrl, isEmbeddedArt = false)
 
+    // The scaffold's static rest shadow is drawn OUTSIDE the shared element, so
+    // it would stay at the row's position while the cover flies in on a close.
+    // Step it aside for the flight; the flying artwork casts the shadow itself
+    // (castsFlightShadow below) and the static one resumes on the settle frame.
+    val isActiveCollection = isActiveSharedCollection("playlist", "${playlist.playlistId}")
+    val closeFlightActive by rememberCollectionCloseFlightActive(
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope
+    )
+    val staticArtElevation =
+        if (isActiveCollection && closeFlightActive) 0.dp else MediaItemArtElevation
+
     // Elevation shadow under the cover while the row is lifted by a drag.
     val artworkElevation by animateDpAsState(
         targetValue = if (lifted) DragArtworkElevation else 0.dp,
@@ -572,34 +586,20 @@ private fun PlaylistItemRow(
                 .clip(AlbumArtShape())
                 .background(FoamTheme.colors.surfaceVariant)
         }
-        // With an immersive destination hero this row is the DRAWN side of the
-        // closing flight and must carry the mirrored morph itself (square +
-        // faded -> its own rounded, unfaded look); the static clip is dropped
-        // there so the flight's shape can follow the transition.
         val flight = LocalCollectionHeroLayoutLookup
             .current(CollectionHeroTarget.Playlist)
             .isImmersive
-        return (if (flight) {
-            Modifier.collectionRowFlightArtwork(
+        return Modifier
+            .collectionRowFlightArtwork(
                 key = "playlist-art-${playlist.playlistId}",
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 enabled = true,
                 restShape = AlbumArtShape(),
-                immersiveFlightHero = true
+                immersiveFlightHero = flight,
+                castsFlightShadow = true
             )
-        } else {
-            with(sharedTransitionScope) {
-                this@sharedArtworkModifier.sharedElement(
-                    rememberSharedContentState(key = "playlist-art-${playlist.playlistId}"),
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    clipInOverlayDuringTransition = OverlayClip(AlbumArtShape()),
-                    boundsTransform = AlbumArtBoundsTransform
-                )
-            }
-        })
             .shadow(elevation = artworkElevation, shape = AlbumArtShape())
-            .let { if (flight) it else it.clip(AlbumArtShape()) }
             .background(FoamTheme.colors.surfaceVariant)
     }
     @Composable
@@ -652,6 +652,7 @@ private fun PlaylistItemRow(
             onLongClick = onLongClick,
             artworkModifier = Modifier
                 .sharedArtworkModifier(),
+            artworkElevation = staticArtElevation,
             artworkContent = { PlaylistArtwork() },
             artworkOverlay = {
                 AnimatedVisibility(
@@ -694,6 +695,7 @@ private fun PlaylistItemRow(
             onLongClick = onLongClick,
             artworkModifier = Modifier
                 .sharedArtworkModifier(),
+            artworkElevation = staticArtElevation,
             artworkContent = { PlaylistArtwork() },
             title = playlist.name,
             subtitle = "$trackCount tracks",
@@ -729,12 +731,12 @@ private val DragArtworkElevation: Dp = 8.dp
 /** Fade + scale-in of the edit-mode drag handle when entering edit mode. */
 private val DragHandleEnter =
     fadeIn(animationSpec = tween(durationMillis = 200)) +
-        scaleIn(initialScale = 0.6f, animationSpec = tween(durationMillis = 200))
+            scaleIn(initialScale = 0.6f, animationSpec = tween(durationMillis = 200))
 
 /** Fade + scale-out of the edit-mode drag handle when leaving edit mode. */
 private val DragHandleExit =
     fadeOut(animationSpec = tween(durationMillis = 200)) +
-        scaleOut(targetScale = 0.6f, animationSpec = tween(durationMillis = 200))
+            scaleOut(targetScale = 0.6f, animationSpec = tween(durationMillis = 200))
 
 /** Whole-row drag gesture driving edit-mode reordering (swaps come from the drag-drop states). */
 private fun Modifier.playlistEditDrag(

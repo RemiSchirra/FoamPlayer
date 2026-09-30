@@ -374,12 +374,6 @@ internal fun Modifier.collectionRowFlightArtwork(
                 )
                 .clip(restShape)
         }
-        // Compact/normal heroes: the flight has no shape morph (the row keeps
-        // its own percentage corners the whole way), but the shadow must still
-        // follow the shrinking image. A dedicated layer casts the row's rest
-        // elevation, eased with the flight progress, only while the close
-        // flight is landing; at rest it reads 0 so the static shadow alone
-        // casts.
         val flightProgress = rememberCollectionFlightProgress(
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope
@@ -395,7 +389,7 @@ internal fun Modifier.collectionRowFlightArtwork(
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 enabled = true,
-                overlayClip = restShape,
+                overlayClip = null,
                 boundsTransform = AlbumArtBoundsTransform
             )
             .graphicsLayer {
@@ -436,7 +430,11 @@ internal fun Modifier.collectionRowFlightArtwork(
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             enabled = true,
-            overlayClip = AlbumArtFlightShape(restPercent) { flightProgress.value },
+            overlayClip = if (castsFlightShadow) {
+                null
+            } else {
+                AlbumArtFlightShape(restPercent) { flightProgress.value }
+            },
             boundsTransform = AlbumArtBoundsTransform
         )
         .collectionFlightArtwork(flightProgress, fullyRounded, flightShadowElevationPx)
@@ -646,9 +644,9 @@ internal fun activeRowHighlight(
         !active -> Color.Transparent
         !automaticColorEnabled -> FoamTheme.accentColor.copy(alpha = 0.4f)
         else -> (
-            extractedColor?.adaptAccentForTheme(FoamTheme.isDark)
-                ?: FoamTheme.accentColor
-            ).copy(alpha = 0.4f)
+                extractedColor?.adaptAccentForTheme(FoamTheme.isDark)
+                    ?: FoamTheme.accentColor
+                ).copy(alpha = 0.4f)
     }
 
     return animateColorAsState(
