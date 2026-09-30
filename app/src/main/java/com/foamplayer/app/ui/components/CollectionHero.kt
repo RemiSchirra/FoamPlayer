@@ -1667,6 +1667,36 @@ fun CollectionScrollTopBar(
 }
 
 /**
+ * Alpha-fades the host list's OWN pixels to transparent across the floating
+ * chrome zone at its top (list-local 0..[CollectionScrollTopBarZoneHeight]):
+ * rows scrolling full-bleed under the chrome dissolve into it instead of just
+ * being dimmed by the chrome's (deliberately subtle) gradient scrim — the same
+ * alpha-fade look the immersive heroes' artwork has at its bottom edge. At
+ * rest nothing is drawn inside the fade zone (the compact/normal lists' top
+ * content padding covers it), so resting heroes are unaffected.
+ *
+ * Draw-phase only — an offscreen layer plus a DstIn mask — so scrolling costs
+ * no recompositions. The offscreen layer is REQUIRED: without it the DstIn
+ * blend would multiply the alpha of everything already drawn beneath the list
+ * (the immersive artwork layer, the app backdrop) and erase it, instead of
+ * fading only the list's own pixels.
+ */
+fun Modifier.collectionListTopFade(): Modifier =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            drawRect(
+                brush = Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = 0f),
+                    1f to Color.Black,
+                    startY = 0f,
+                    endY = CollectionScrollTopBarZoneHeight.toPx()
+                ),
+                blendMode = BlendMode.DstIn
+            )
+        }
+
+/**
  * Grid-only counterpart used by screens that only ever render a
  * [LazyVerticalGrid] (the artist page).
  */

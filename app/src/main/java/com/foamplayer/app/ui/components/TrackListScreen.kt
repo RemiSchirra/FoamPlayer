@@ -324,7 +324,7 @@ fun TrackListScreen(
     // filters whatever is currently displayed (never active in edit mode).
     // rememberFilteredList keeps the incoming list identity while the hero's
     // search bar is closed/blank — no O(n) filter pass (and no fresh list
-    // instance re-diffed into every visible row) on unrelated recompositions —
+    // instance re-diffed into everything below) on unrelated recompositions —
     // and moves big lists' filtering off the main thread entirely.
     val shownTracks = if (editMode) {
         displayedTracks
@@ -437,7 +437,10 @@ fun TrackListScreen(
         if (density.isGrid) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(density.gridColumns),
-                modifier = Modifier.fillMaxSize().then(listTopObserver),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .collectionListTopFade()
+                    .then(listTopObserver),
                 state = gridState,
                 contentPadding = PaddingValues(
                     start = 10.dp,
@@ -598,7 +601,10 @@ fun TrackListScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().then(listTopObserver),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .collectionListTopFade()
+                    .then(listTopObserver),
                 state = listState,
                 contentPadding = PaddingValues(
                     top = heroTopPadding,
@@ -734,12 +740,12 @@ fun TrackListScreen(
             }
         }
 
-        // The scroll top bar's gradient above the scrolling list (tracks and the
-        // hero fade behind it), then the floating back/more row above THAT —
-        // for every hero layout; the rows never hard-clip at the chrome edge.
-        // The row is lifted into the shared-element overlay during transitions
-        // so the flying artwork passes beneath the buttons; its alpha mirrors
-        // the host hierarchy's fades (see transitionAlpha above).
+        // The scroll top bar's subtle gradient above the scrolling list (whose
+        // own pixels fade transparent across the chrome zone), then the
+        // floating back/more row above THAT — for every hero layout. The row
+        // is lifted into the shared-element overlay during transitions so the
+        // flying artwork passes beneath the buttons; its alpha mirrors the
+        // host hierarchy's fades (see transitionAlpha above).
         CollectionScrollTopBar(
             title = title,
             fraction = topBarFraction,

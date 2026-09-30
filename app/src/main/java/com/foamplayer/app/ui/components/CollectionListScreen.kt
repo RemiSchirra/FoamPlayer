@@ -133,12 +133,10 @@ private class GridMediaContentScope(private val scope: LazyGridScope) : MediaLis
  * Every hero layout scrolls full-bleed: the lazy container is the screen's
  * root (its top content padding reserves the floating chrome zone, see
  * [CollectionTopBarRowHeight]) and the scroll top bar's gradient plus the
- * floating back/more row are drawn ON TOP of it, so rows and the header fade
- * behind the chrome while scrolling — the behaviour the immersive layouts
- * always had, now shared with compact/normal. The hero header is the list's
- * leading item, so the padding also positions the resting header below the
- * chrome (the compact/normal heroes' artwork is fully visible at rest, the
- * immersive ones bleed under the chrome on purpose).
+ * floating back/more row are drawn ON TOP of it, while the list itself fades
+ * its own pixels transparent across the chrome zone
+ * ([collectionListTopFade]) — rows dissolve into the chrome instead of being
+ * hard-clipped, on every layout.
  */
 @Composable
 fun CollectionListScreen(
@@ -240,7 +238,10 @@ fun CollectionListScreen(
         if (density.isGrid) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(density.gridColumns),
-                modifier = Modifier.fillMaxSize().then(listTopObserver),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .collectionListTopFade()
+                    .then(listTopObserver),
                 state = gridState,
                 contentPadding = PaddingValues(
                     start = 10.dp,
@@ -275,7 +276,10 @@ fun CollectionListScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().then(listTopObserver),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .collectionListTopFade()
+                    .then(listTopObserver),
                 state = listState,
                 contentPadding = PaddingValues(
                     top = heroTopPadding,
@@ -305,9 +309,9 @@ fun CollectionListScreen(
             }
         }
 
-        // The scroll top bar's gradient above the scrolling list (rows and the
-        // hero fade behind it), then the floating back/more row above THAT —
-        // for every hero layout; the rows never hard-clip at the chrome edge.
+        // The scroll top bar's subtle gradient above the scrolling list (whose
+        // own pixels fade transparent across the chrome zone), then the
+        // floating back/more row above THAT — for every hero layout.
         CollectionScrollTopBar(
             title = title,
             fraction = topBarFraction,

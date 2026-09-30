@@ -64,6 +64,7 @@ import com.foamplayer.app.ui.components.CollectionTopBarRowHeight
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.collectionHeroOverlayLayer
+import com.foamplayer.app.ui.components.collectionListTopFade
 import com.foamplayer.app.ui.components.collectionSearchOpenBottomPadding
 import com.foamplayer.app.ui.components.rememberCollectionHeroFlightFraction
 import com.foamplayer.app.ui.components.rememberCollectionScrollFraction
@@ -85,9 +86,11 @@ private const val ArtistAlbumGridColumns = 3
  *
  * Every hero layout scrolls full-bleed: the grid's top content padding
  * ([CollectionTopBarRowHeight] on compact/normal, 0 on immersive — whose
- * artwork bleeds under the status bar) reserves the floating chrome zone, and
- * the scroll top bar's gradient plus the floating back row are drawn ON TOP of
- * the grid, so content fades behind the chrome while scrolling on every layout.
+ * artwork bleeds under the status bar) reserves the floating chrome zone, the
+ * scroll top bar's subtle gradient plus the floating back row are drawn ON TOP
+ * of the grid, and the grid itself fades its own pixels transparent across the
+ * chrome zone ([collectionListTopFade]) — content dissolves into the chrome
+ * instead of being hard-clipped, on every layout.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -262,7 +265,10 @@ fun ArtistDetailScreen(
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(ArtistAlbumGridColumns),
-            modifier = Modifier.fillMaxSize().then(gridTopObserver),
+            modifier = Modifier
+                .fillMaxSize()
+                .collectionListTopFade()
+                .then(gridTopObserver),
             state = gridState,
             contentPadding = PaddingValues(
                 start = 10.dp,
@@ -362,9 +368,9 @@ fun ArtistDetailScreen(
             }
         }
 
-        // The scroll top bar's gradient above the scrolling grid (content dims
-        // behind it), then the floating back row above THAT — for every hero
-        // layout; the rows never hard-clip at the chrome edge. The row is
+        // The scroll top bar's subtle gradient above the scrolling grid (whose
+        // own pixels fade transparent across the chrome zone), then the
+        // floating back row above THAT — for every hero layout. The row is
         // lifted into the shared-element overlay during transitions so the
         // flying artwork passes beneath the back button; its alpha mirrors
         // the host hierarchy's fades (see transitionAlpha above).
