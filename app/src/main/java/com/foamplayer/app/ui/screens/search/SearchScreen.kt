@@ -1,11 +1,14 @@
 package com.foamplayer.app.ui.screens.search
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -472,7 +475,15 @@ fun SearchScreen(
                     if (uiState.lyricsMatches.isNotEmpty() || uiState.lyricsSearchInProgress) {
                         item(key = "lyrics_header") {
                             SectionHeader(
-                                if (uiState.lyricsSearchInProgress) "Found in lyrics..." else "Found in lyrics"
+                                title = "Found in lyrics",
+                                trailingVisible = uiState.lyricsSearchInProgress,
+                                trailing = {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = FoamTheme.accentColor
+                                    )
+                                }
                             )
                         }
                         items(uiState.lyricsMatches, key = { "lyrics_${it.id}" }) { track ->
@@ -488,22 +499,6 @@ fun SearchScreen(
                                 animatedVisibilityScope = playerTransitionVisibilityScope,
                                 isSharedTransitionSource = track.id == sharedTrackId
                             )
-                        }
-                        if (uiState.lyricsSearchInProgress) {
-                            item(key = "lyrics_progress") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp,
-                                        color = FoamTheme.accentColor
-                                    )
-                                }
-                            }
                         }
                     }
                 }
@@ -630,14 +625,54 @@ fun SearchScreen(
     }
 }
 
-/** Accent-colored section title above a result group. */
+/** Accent-colored section title centered between two thin lines: ——— Artists ——— */
 @Composable
-fun SectionHeader(title: String, modifier: Modifier = Modifier) {
-    BasicText(
-        text = title,
-        style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.accentColor),
-        modifier = modifier.padding(vertical = 8.dp)
-    )
+fun SectionHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    trailingVisible: Boolean = true,
+    trailing: (@Composable () -> Unit)? = null
+) {
+    val lineColor = FoamTheme.accentColor.copy(alpha = 0.35f)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(2.dp)
+                .background(lineColor)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        BasicText(
+            text = title,
+            style = FoamTheme.typography.titleMedium.copy(color = FoamTheme.accentColor)
+        )
+        if (trailing != null) {
+            // Fades + collapses toward the text so the title glides back to
+            // the center instead of jumping when the trailing content goes.
+            AnimatedVisibility(
+                visible = trailingVisible,
+                enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start),
+                exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.Start)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    trailing()
+                }
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(2.dp)
+                .background(lineColor)
+        )
+    }
 }
 
 /** One scope filter chip; long-press solos that scope (All + one). */
