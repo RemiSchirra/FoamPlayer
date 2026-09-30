@@ -329,8 +329,8 @@
     <string name="settings_export_folder">Export folder</string>
     <string name="settings_export_folder_hint">Choose where the JSON files are written</string>
     <string name="settings_export_features">Features to export</string>
-    <string name="settings_import_files">JSON files</string>
-    <string name="settings_import_files_hint">Choose one or more backup files</string>
+    <string name="settings_import_files">JSON file</string>
+    <string name="settings_import_files_hint">Choose a JSON backup file</string>
     <string name="settings_import_features">Features to import</string>
     <string name="settings_backup_feature_app">App settings</string>
     <string name="settings_backup_feature_folders">Music folders</string>

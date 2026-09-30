@@ -314,8 +314,8 @@
     <string name="settings_export_folder">Dossier d\'export</string>
     <string name="settings_export_folder_hint">Choisissez où écrire les fichiers JSON</string>
     <string name="settings_export_features">Fonctionnalités à exporter</string>
-    <string name="settings_import_files">Fichiers JSON</string>
-    <string name="settings_import_files_hint">Choisissez un ou plusieurs fichiers de sauvegarde</string>
+    <string name="settings_import_files">Fichier JSON</string>
+    <string name="settings_import_files_hint">Choisissez un un fichier de sauvegarde JSON</string>
     <string name="settings_import_features">Fonctionnalités à importer</string>
     <string name="settings_backup_feature_app">Paramètres de l\'application</string>
     <string name="settings_backup_feature_folders">Dossiers de musique</string>
