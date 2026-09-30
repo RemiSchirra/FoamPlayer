@@ -276,6 +276,32 @@ fun FoamNavHost(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    // Previous route, for backdrop fade timing below: the full-bleed detail
+    // backdrop is the ONLY layer painting the status-bar strip (screens start
+    // below the inset), so its fade must run on EXACTLY the same clock as the
+    // screens' transition — same duration AND easing — or the strip visibly
+    // lags or leads the content while a collection closes. The duration is
+    // derived from the TRANSITION PAIR (the rule the NavHost uses for its
+    // fades: shared-element when EITHER endpoint is one), not from the
+    // destination alone — closing album -> browse fades the screens in 350ms
+    // (the outgoing detail route is shared-element) and the backdrop must
+    // match, even though browse itself is not a shared-element route.
+    // [SideEffect] keeps [lastRoute] one composition behind [currentRoute]:
+    // during the frame where the route flips, it still holds the route the
+    // transition leaves.
+    //
+    // NOTE: this must be updated DURING composition, not in a [SideEffect]. The
+    // backdrop's target flips in a later recomposition (its art is cleared from a
+    // LaunchedEffect), and by then a SideEffect has already overwritten the
+    // previous route with the current one, so the pair read as (browse, browse)
+    // and the fade got the wrong duration.
+    val routePair = remember { object { var previous: String? = currentRoute; var current: String? = currentRoute } }
+    if (routePair.current != currentRoute) {
+        routePair.previous = routePair.current
+        routePair.current = currentRoute
+    }
+    val lastRoute = routePair.previous
+
     val homeViewModel: HomeViewModel = hiltViewModel()
     val playlistsViewModel: PlaylistsViewModel = hiltViewModel()
     val playlists by playlistsViewModel.playlists.collectAsState()
@@ -635,12 +661,14 @@ fun FoamNavHost(
 
                 // Full-bleed backdrop for the detail list screens (album/playlist/artist),
                 // drawn at the root so it covers the status bar and nav zone. Its alpha
-                // tween runs in lock-step with the screens' fade; between two detail
-                // routes the alpha never leaves 1f and the art switch is a front/back
-                // crossfade instead. Art-driven: it applies in DYNAMIC mode, and in any
-                // mode while "force dynamic background in collections" is on. The static
-                // layers composed above stay underneath it, so its fades crossfade over
-                // the custom image / gradient instead of the bare background color.
+                // tween runs in lock-step with the screens' fade (same duration rule as
+                // the NavHost's fades for the route PAIR, and the same easing); between
+                // two detail routes the alpha never leaves 1f and the art switch is a
+                // front/back crossfade instead. Art-driven: it applies in DYNAMIC mode,
+                // and in any mode while "force dynamic background in collections" is on.
+                // The static layers composed above stay underneath it, so its fades
+                // crossfade over the custom image / gradient instead of the bare
+                // background color.
                 var listBackdropArt by remember { mutableStateOf<ListBackdropArt?>(null) }
                 var lastListBackdropArt by remember { mutableStateOf<ListBackdropArt?>(null) }
                 LaunchedEffect(currentRoute) {
@@ -684,13 +712,26 @@ fun FoamNavHost(
                     }
                 }
                 val listBackdropAlpha by animateFloatAsState(
-                    targetValue = if (listBackdropArt != null) 1f else 0f,
+                    // Keyed on the ROUTE as well as the art: the art is only cleared from a
+                    // LaunchedEffect (a frame or more after the route flips), so keying on
+                    // art alone started this fade late while the screens were already
+                    // fading, and the status-bar strip (painted only by this backdrop)
+                    // held full alpha then dropped out of step.
+                    targetValue = if (listBackdropArt != null && isDetailListRoute(currentRoute)) 1f else 0f,
                     animationSpec = tween(
-                        durationMillis = if (isSharedElementRoute(currentRoute)) {
+                        durationMillis = if (isSharedElementRoute(currentRoute) ||
+                            isSharedElementRoute(lastRoute)
+                        ) {
                             SharedElementTransitionDurationMs
                         } else {
                             NavScreenFadeDurationMs
-                        }
+                        },
+                        // Lock-step with the NavHost's screen fades (FastOutSlowIn):
+                        // animateFloatAsState's tween defaults to LINEAR, which made the
+                        // backdrop — and with it the status-bar strip it alone paints —
+                        // linger half-strength over the already-faded content while a
+                        // collection closed.
+                        easing = SharedElementEasing
                     ),
                     label = "listBackdropAlpha"
                 )

@@ -110,9 +110,9 @@ private suspend fun LazyListState.scrollToCenteredItem(index: Int): LazyListItem
     val info = layoutInfo
     val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return null
     val delta = (
-        item.offset + item.size / 2 -
-                (info.viewportEndOffset + info.viewportStartOffset) / 2
-        ).toFloat()
+            item.offset + item.size / 2 -
+                    (info.viewportEndOffset + info.viewportStartOffset) / 2
+            ).toFloat()
     if (delta != 0f) scrollBy(delta)
     return layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
 }
@@ -123,9 +123,9 @@ private suspend fun LazyGridState.scrollToCenteredItem(index: Int): LazyGridItem
     val info = layoutInfo
     val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return null
     val delta = (
-        item.offset.y + item.size.height / 2 -
-                (info.viewportEndOffset + info.viewportStartOffset) / 2
-        ).toFloat()
+            item.offset.y + item.size.height / 2 -
+                    (info.viewportEndOffset + info.viewportStartOffset) / 2
+            ).toFloat()
     if (delta != 0f) scrollBy(delta)
     return layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
 }
@@ -746,17 +746,35 @@ fun TrackListScreen(
         // is lifted into the shared-element overlay during transitions so the
         // flying artwork passes beneath the buttons; its alpha mirrors the
         // host hierarchy's fades (see transitionAlpha above).
+        // Lifted into the overlay like the back row below (zIndex 0.5f: above the
+        // flying artwork at 0f, beneath the buttons at 1f) and multiplied by the
+        // nav/container flight alpha: drawn in place it sat in the status-bar
+        // strip outside the NavHost bounds and dropped out on the first frame of
+        // the close instead of fading with the screen.
         CollectionScrollTopBar(
             title = title,
-            fraction = topBarFraction,
-            modifier = Modifier.align(Alignment.TopCenter)
+            fraction = { topBarFraction() * transitionAlpha() },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .collectionHeroOverlayLayer(
+                    sharedTransitionScope = sharedTransitionScope,
+                    zIndexInOverlay = 0.5f,
+                    renderInOverlay = animatedVisibilityScope?.let { scope ->
+                        { scope.isNavTransitionInProgress() }
+                    }
+                )
         )
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .collectionHeroOverlayLayer(sharedTransitionScope)
+                .collectionHeroOverlayLayer(
+                    sharedTransitionScope = sharedTransitionScope,
+                    renderInOverlay = animatedVisibilityScope?.let { scope ->
+                        { scope.isNavTransitionInProgress() }
+                    }
+                )
                 .graphicsLayer { alpha = transitionAlpha() }
         ) {
             TrackListTopBarRow(

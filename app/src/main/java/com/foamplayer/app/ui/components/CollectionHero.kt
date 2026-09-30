@@ -964,7 +964,12 @@ private fun CollectionHeroImmersiveArtwork(
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
                 .height(statusBarHeight + CollectionHeroStatusBarScrimExtraHeight)
-                .collectionHeroOverlayLayer(sharedTransitionScope)
+                .collectionHeroOverlayLayer(
+                    sharedTransitionScope = sharedTransitionScope,
+                    renderInOverlay = animatedVisibilityScope?.let { scope ->
+                        { scope.isNavTransitionInProgress() }
+                    }
+                )
                 .graphicsLayer {
                     alpha = (1f - flightFraction.value) * (transitionAlpha?.invoke() ?: 1f)
                 }
@@ -1516,13 +1521,37 @@ fun rememberCollectionHeroFlightFraction(
 @OptIn(ExperimentalSharedTransitionApi::class)
 fun Modifier.collectionHeroOverlayLayer(
     sharedTransitionScope: SharedTransitionScope?,
-    zIndexInOverlay: Float = 1f
+    zIndexInOverlay: Float = 1f,
+    renderInOverlay: (() -> Boolean)? = null
 ): Modifier {
     if (sharedTransitionScope == null) return this
     return with(sharedTransitionScope) {
-        renderInSharedTransitionScopeOverlay(zIndexInOverlay = zIndexInOverlay)
+        // The default predicate (isTransitionActive) is only true while a shared
+        // ELEMENT is in flight. Closing a collection towards a page with no
+        // matching shared element leaves it false, so chrome that overflows the
+        // NavHost bounds (the status-bar strip) stays in place and is cut / faded
+        // by the host instead of riding the flight alpha. Callers can pass a
+        // predicate that covers the whole nav transition.
+        if (renderInOverlay == null) {
+            renderInSharedTransitionScopeOverlay(zIndexInOverlay = zIndexInOverlay)
+        } else {
+            renderInSharedTransitionScopeOverlay(
+                zIndexInOverlay = zIndexInOverlay,
+                renderInOverlay = renderInOverlay
+            )
+        }
     }
 }
+
+/**
+ * True from the first frame a screen starts entering or exiting until it has
+ * fully settled (Visible -> Visible). Unlike the shared-element scope's
+ * isTransitionActive it also covers route pairs without any shared element.
+ * Pass it as `renderInOverlay` to [collectionHeroOverlayLayer].
+ */
+fun AnimatedVisibilityScope.isNavTransitionInProgress(): Boolean =
+    transition.currentState != EnterExitState.Visible ||
+            transition.targetState != EnterExitState.Visible
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable

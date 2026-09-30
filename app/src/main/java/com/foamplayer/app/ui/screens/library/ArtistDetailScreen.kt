@@ -65,6 +65,7 @@ import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.collectionHeroOverlayLayer
 import com.foamplayer.app.ui.components.collectionListTopFade
+import com.foamplayer.app.ui.components.isNavTransitionInProgress
 import com.foamplayer.app.ui.components.collectionSearchOpenBottomPadding
 import com.foamplayer.app.ui.components.rememberCollectionHeroFlightFraction
 import com.foamplayer.app.ui.components.rememberCollectionScrollFraction
@@ -374,17 +375,30 @@ fun ArtistDetailScreen(
         // lifted into the shared-element overlay during transitions so the
         // flying artwork passes beneath the back button; its alpha mirrors
         // the host hierarchy's fades (see transitionAlpha above).
+        // Lifted into the overlay (zIndex 0.5f: above the flying artwork, beneath
+        // the back button) with the flight alpha multiplied in: drawn in place it
+        // sat in the status-bar strip outside the NavHost bounds and dropped out
+        // on the first frame of the close instead of fading with the screen.
         CollectionScrollTopBar(
             title = artistName,
-            fraction = topBarFraction,
-            modifier = Modifier.align(Alignment.TopCenter)
+            fraction = { topBarFraction() * transitionAlpha() },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .collectionHeroOverlayLayer(
+                    sharedTransitionScope = sharedTransitionScope,
+                    zIndexInOverlay = 0.5f,
+                    renderInOverlay = { animatedVisibilityScope.isNavTransitionInProgress() }
+                )
         )
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .collectionHeroOverlayLayer(sharedTransitionScope)
+                .collectionHeroOverlayLayer(
+                    sharedTransitionScope = sharedTransitionScope,
+                    renderInOverlay = { animatedVisibilityScope.isNavTransitionInProgress() }
+                )
                 .graphicsLayer { alpha = transitionAlpha() }
         ) {
             Row(
