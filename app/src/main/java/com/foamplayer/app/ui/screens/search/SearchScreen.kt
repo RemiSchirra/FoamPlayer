@@ -134,12 +134,12 @@ private val textFlightFadeSpec = tween<Float>(
     easing = SharedElementEasing
 )
 
-/** Blends the color toward white, keeping the same hue — used for the card icons. */
-private fun Color.lightened(factor: Float): Color =
+/** Blends the color toward [overlayColor] using the given [factor] (0.0 = original, 1.0 = overlay color). */
+private fun Color.overlay(overlayColor: Color, factor: Float): Color =
     copy(
-        red = red + (1f - red) * factor,
-        green = green + (1f - green) * factor,
-        blue = blue + (1f - blue) * factor
+        red = red + (overlayColor.red - red) * factor,
+        green = green + (overlayColor.green - green) * factor,
+        blue = blue + (overlayColor.blue - blue) * factor
     )
 
 /** One colored entry card of the idle browse grid. */
@@ -174,7 +174,7 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
             Icon(
                 imageVector = card.icon,
                 contentDescription = null,
-                tint = card.color.lightened(0.1f).copy(alpha = 0.7f),
+                tint = card.color.overlay(FoamTheme.colors.textPrimary, 0.1f).copy(alpha = 0.7f),
                 modifier = Modifier.size(44.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -183,7 +183,7 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
         Icon(
             imageVector = card.icon,
             contentDescription = null,
-            tint = card.color.lightened(0.1f).copy(alpha = 0.4f),
+            tint = card.color.overlay(FoamTheme.colors.textPrimary, 0.1f).copy(alpha = 0.4f),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .offset(x = 0.dp, y = 4.dp)
