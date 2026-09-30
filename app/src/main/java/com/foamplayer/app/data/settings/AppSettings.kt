@@ -125,9 +125,9 @@ data class AppSettings(
     val mediaSortInverted: Set<MediaListView> = emptySet(),
     /** Hero layout of collection screens; every kind starts as the classic compact header. */
     val collectionLayoutDefault: CollectionHeroLayout = CollectionHeroLayout.Compact,
-    val collectionLayoutArtist: CollectionHeroLayout = CollectionHeroLayout.Compact,
-    val collectionLayoutAlbum: CollectionHeroLayout = CollectionHeroLayout.Compact,
-    val collectionLayoutPlaylist: CollectionHeroLayout = CollectionHeroLayout.Compact,
+    val collectionLayoutArtist: CollectionHeroLayout = CollectionHeroLayout.Normal,
+    val collectionLayoutAlbum: CollectionHeroLayout = CollectionHeroLayout.Immersive,
+    val collectionLayoutPlaylist: CollectionHeroLayout = CollectionHeroLayout.CompactImmersive,
     /** False until the first-run onboarding flow (welcome / permissions / library) is finished. */
     val onboardingCompleted: Boolean = false,
     /** Publishes the currently playing track as Discord Rich Presence via the user's Discord account. */
