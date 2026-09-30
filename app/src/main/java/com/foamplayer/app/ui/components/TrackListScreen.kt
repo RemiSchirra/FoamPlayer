@@ -9,7 +9,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -201,11 +200,11 @@ fun TrackListScreen(
     val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
     // Flight fractions of this screen's two transitions: the nav flight
     // (open/close of the collection itself) and the player-container flight
-    // (full player expanding over / collapsing back onto this screen). The hero
-    // chrome and the top bar are lifted into the shared-element overlay while
+    // (full player expanding over / collapsing back onto this screen). The
+    // floating back/more row is lifted into the shared-element overlay while
     // any transition is active (collectionHeroOverlayLayer), and the overlay
-    // escapes the host hierarchy's own fades — so their alpha must multiply
-    // both fractions explicitly or they would pop at flight ends.
+    // escapes the host hierarchy's own fades — so its alpha must multiply
+    // both fractions explicitly or it would pop at flight ends.
     val navFlightFraction =
         rememberCollectionHeroFlightFraction(sharedTransitionScope, animatedVisibilityScope)
     val containerFlightFraction =
@@ -243,19 +242,23 @@ fun TrackListScreen(
     // Search-open scroll: when the search toggle opens the hero's search bar
     // while the hero sits scrolled away (or hidden under the fixed chrome), the
     // list is brought up so the bar opens at the screen top — below the floating
-    // back row on the immersive layouts; the non-immersive lists start below
-    // their fixed top-bar row, so no extra clearance is needed there. The open
-    // bottom padding keeps the bar reachable even when the collection has only
-    // a handful of rows (no scroll range otherwise) and the rows visible above
-    // the keyboard.
+    // back row, which covers every layout's list top (all of them scroll
+    // full-bleed beneath it). The open bottom padding keeps the bar reachable
+    // even when the collection has only a handful of rows (no scroll range
+    // otherwise) and the rows visible above the keyboard.
     CollectionSearchScrollToBarEffect(
         searchState = searchState,
         listState = listState,
         gridState = gridState,
         useGrid = density.isGrid,
         listTopYInRootPx = { listTopYInRootPx },
-        topChromeHeight = if (heroLayout.isImmersive) CollectionSearchImmersiveTopClearance else 0.dp
+        topChromeHeight = CollectionSearchImmersiveTopClearance
     )
+
+    // Top content padding reserving the floating chrome zone: compact/normal
+    // heroes must rest below the back/more row (their artwork is fully
+    // visible), while the immersive heroes bleed under it on purpose.
+    val heroTopPadding = if (heroLayout.isImmersive) 0.dp else CollectionTopBarRowHeight
 
     // Only the row that can become the shared-element endpoint of the player-dismiss
     // flight needs the paused shrink; one animation is hoisted here and read by that
@@ -431,357 +434,333 @@ fun TrackListScreen(
             )
         }
 
-        if (!heroLayout.isImmersive) {
-            // Compact/Normal: composed BEFORE the Column (whose first child is
-            // the top-bar row) so the gradient can never dim the buttons; the
-            // list never scrolls into the bar's zone in these layouts.
-            CollectionScrollTopBar(
-                title = title,
-                fraction = topBarFraction,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-        }
-
-        Column(modifier = Modifier.fillMaxSize()) {
-            if (!heroLayout.isImmersive) {
-                TrackListTopBarRow(
-                    onBack = onBack,
-                    accentColor = heroAccentColor,
-                    editMode = editMode,
-                    onEditModeChange = onEditModeChange,
-                    onDensityChange = onDensityChange,
-                    onOpenOrganisation = { showOrganisationModal = true }
+        if (density.isGrid) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(density.gridColumns),
+                modifier = Modifier.fillMaxSize().then(listTopObserver),
+                state = gridState,
+                contentPadding = PaddingValues(
+                    start = 10.dp,
+                    top = heroTopPadding,
+                    end = 10.dp,
+                    bottom = collectionSearchOpenBottomPadding(searchState)
                 )
-            }
-
-            if (density.isGrid) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(density.gridColumns),
-                    modifier = Modifier.fillMaxSize().then(listTopObserver),
-                    state = gridState,
-                    contentPadding = PaddingValues(
-                        start = 10.dp,
-                        top = 0.dp,
-                        end = 10.dp,
-                        bottom = collectionSearchOpenBottomPadding(searchState)
-                    )
-                ) {
-                    item(
-                        key = "grid_header",
-                        span = { GridItemSpan(maxLineSpan) }
-                    ) {
-                        TrackListHero(
-                            heroLayout = heroLayout,
-                            title = title,
-                            artistName = artistName,
-                            statsText = "$trackCount Tracks • $durationText",
-                            imageUrl = imageUrl,
-                            imageIsEmbeddedArt = imageIsEmbeddedArt,
-                            onPlayAllClick = onPlayAllClick,
-                            onShuffleAllClick = onShuffleAllClick?.let { callback ->
-                                { callback(shownTracks.shuffled()) }
-                            },
-                            searchState = searchState,
-                            accentColor = heroAccentColor,
-                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
-                            scrollOffsetPx = heroScrollOffsetPx,
-                            transitionAlpha = transitionAlpha,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            sharedElementKey = sharedElementKey,
-                            sharedElementPrefix = sharedElementPrefix
-                        )
-                    }
-
-                    itemsIndexed(shownTracks, key = { _, track -> track.id }) { index, track ->
-                        // +1: the hero header sits at grid item 0; the drag-drop
-                        // state works in raw LazyGrid indices.
-                        val gridItemIndex = index + 1
-                        // derivedStateOf: draggedIndex is shared by every cell, so
-                        // reading it directly in each cell's scope would recompose
-                        // the whole viewport on every swap; the derived boolean only
-                        // invalidates the cells whose dragging state actually flips.
-                        val isDragging by remember(gridItemIndex) {
-                            derivedStateOf { gridDragState.isItemDragging(gridItemIndex) }
-                        }
-                        val currentIndex = rememberUpdatedState(index)
-                        val liftScale by animateFloatAsState(
-                            targetValue = if (isDragging && !dragReleased) GridDragLiftScale else 1f,
-                            animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
-                            label = "trackGridDragLift"
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .let { if (isDragging) it else it.animateItem() }
-                                .zIndex(if (isDragging) 1f else 0f)
-                                // The drag layer only exists while a drag is live:
-                                // its lambda graphicsLayer is its own render node, and
-                                // at rest every value it produces is the identity
-                                // transform — one extra layer per resting cell, every
-                                // scroll frame, for nothing. zIndex already reads
-                                // isDragging, so the gate adds no new recompositions.
-                                .then(
-                                    if (isDragging) {
-                                        Modifier.graphicsLayer {
-                                            val itemInfo = gridState.layoutInfo.visibleItemsInfo
-                                                .firstOrNull { it.index == gridItemIndex }
-                                            translationX = if (itemInfo != null) {
-                                                (gridDragState.draggingItemOffset.x - itemInfo.offset.x).toFloat()
-                                            } else {
-                                                0f
-                                            }
-                                            translationY = if (itemInfo != null) {
-                                                (gridDragState.draggingItemOffset.y - itemInfo.offset.y).toFloat()
-                                            } else {
-                                                0f
-                                            }
-                                            scaleX = liftScale
-                                            scaleY = liftScale
-                                        }
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                        ) {
-                            TrackListItem(
-                                track = track,
-                                onClick = { onRowClick(index) },
-                                onLongClick = if (editMode) {
-                                    // The track actions modal stays closed while editing.
-                                    ({ })
-                                } else {
-                                    null
-                                },
-                                active = track.id == activeTrackId,
-                                trackNumberText = if (showTrackNumbers) {
-                                    track.trackNumber?.toString() ?: (index + 1).toString()
-                                } else {
-                                    null
-                                },
-                                density = density,
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
-                                flightPausedArtScale = { flightPausedArtScale.value },
-                                immersiveArt = immersiveMode,
-                                showDragHandle = editMode,
-                                dragHandleModifier = if (editMode) {
-                                    // Reordering starts only from the drag chip;
-                                    // the cell itself stays scroll/tap-through.
-                                    Modifier.pointerInput(track.id) {
-                                        detectDragGestures(
-                                            onDragStart = {
-                                                dragOriginIndex = currentIndex.value + 1
-                                                dragReleased = false
-                                                gridDragState.onDragStart(currentIndex.value + 1)
-                                            },
-                                            onDrag = { change, dragAmount ->
-                                                change.consume()
-                                                gridDragState.onDrag(dragAmount)
-                                            },
-                                            onDragEnd = {
-                                                val from = dragOriginIndex
-                                                val to = gridDragState.draggedIndex
-                                                // Scale-down starts with the release; the
-                                                // settle animation flies the item to its slot.
-                                                dragReleased = true
-                                                gridDragState.onDragEnd()
-                                                dragOriginIndex = null
-                                                if (from != null && to != null && from != to) {
-                                                    latestOnPersistTrackOrder
-                                                        ?.invoke(latestDisplayedTracks.map { it.id })
-                                                }
-                                            },
-                                            onDragCancel = {
-                                                dragReleased = true
-                                                gridDragState.onDragCancel()
-                                                dragOriginIndex = null
-                                                displayedTracks = latestTracks
-                                            }
-                                        )
-                                    }
-                                } else {
-                                    Modifier
-                                },
-                                isDismissFlightActive = { dismissFlightActive.value },
-                                isSharedTransitionSource = rowSharedTagActive(track.id) && !editMode
-                            )
-                        }
-                    }
-
-                    item(
-                        key = "grid_bottom_spacer",
-                        span = { GridItemSpan(maxLineSpan) }
-                    ) {
-                        Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
-                    }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().then(listTopObserver),
-                    state = listState,
-                    contentPadding = PaddingValues(
-                        bottom = collectionSearchOpenBottomPadding(searchState)
-                    )
-                ) {
-                    item(key = "list_header") {
-                        TrackListHero(
-                            heroLayout = heroLayout,
-                            title = title,
-                            artistName = artistName,
-                            statsText = "$trackCount Tracks • $durationText",
-                            imageUrl = imageUrl,
-                            imageIsEmbeddedArt = imageIsEmbeddedArt,
-                            onPlayAllClick = onPlayAllClick,
-                            onShuffleAllClick = onShuffleAllClick?.let { callback ->
-                                { callback(shownTracks.shuffled()) }
-                            },
-                            searchState = searchState,
-                            accentColor = heroAccentColor,
-                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
-                            scrollOffsetPx = heroScrollOffsetPx,
-                            transitionAlpha = transitionAlpha,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            sharedElementKey = sharedElementKey,
-                            sharedElementPrefix = sharedElementPrefix
-                        )
-                    }
-
-                    itemsIndexed(shownTracks, key = { _, track -> track.id }) { index, track ->
-                        // +1: the hero header sits at list item 0; the drag-drop
-                        // state works in raw LazyColumn indices.
-                        val listItemIndex = index + 1
-                        // derivedStateOf: draggedIndex is shared by every row, so reading it
-                        // directly in each row's scope would recompose the whole viewport on
-                        // every swap; the derived boolean only invalidates the rows whose
-                        // dragging state actually flips (the two rows involved in the swap).
-                        val isDragging by remember(listItemIndex) {
-                            derivedStateOf { listDragState.isItemDragging(listItemIndex) }
-                        }
-                        val currentIndex = rememberUpdatedState(index)
-
-                        Box(
-                            modifier = Modifier
-                                .let { if (isDragging) it else it.animateItem() }
-                                .zIndex(if (isDragging) 1f else 0f)
-                                // Same drag-only gate as the grid branch above: the
-                                // lambda graphicsLayer is a render node per row whose
-                                // resting transform is the identity, so it only earns
-                                // its place while a drag is actually in flight.
-                                .then(
-                                    if (isDragging) {
-                                        Modifier.graphicsLayer {
-                                            translationY = run {
-                                                val itemInfo = listState.layoutInfo.visibleItemsInfo
-                                                    .firstOrNull { it.index == listItemIndex }
-                                                if (itemInfo != null) {
-                                                    listDragState.draggingItemTop - itemInfo.offset
-                                                } else 0f
-                                            }
-                                        }
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                                .padding(horizontal = 16.dp)
-                        ) {
-                            TrackListItem(
-                                track = track,
-                                onClick = { onRowClick(index) },
-                                onLongClick = if (editMode) {
-                                    // The track actions modal stays closed while editing.
-                                    ({ })
-                                } else {
-                                    null
-                                },
-                                active = track.id == activeTrackId,
-                                trackNumberText = if (showTrackNumbers) {
-                                    track.trackNumber?.toString() ?: (index + 1).toString()
-                                } else {
-                                    null
-                                },
-                                density = density,
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
-                                flightPausedArtScale = { flightPausedArtScale.value },
-                                immersiveArt = immersiveMode,
-                                showDragHandle = editMode,
-                                dragHandleModifier = if (editMode) {
-                                    Modifier.pointerInput(track.id) {
-                                        detectDragGestures(
-                                            onDragStart = {
-                                                dragOriginIndex = currentIndex.value + 1
-                                                listDragState.onDragStart(currentIndex.value + 1)
-                                            },
-                                            onDrag = { change, dragAmount ->
-                                                change.consume()
-                                                listDragState.onDrag(dragAmount)
-                                            },
-                                            onDragEnd = {
-                                                val from = dragOriginIndex
-                                                val to = listDragState.draggedIndex
-                                                listDragState.onDragEnd()
-                                                dragOriginIndex = null
-                                                if (from != null && to != null && from != to) {
-                                                    latestOnPersistTrackOrder
-                                                        ?.invoke(latestDisplayedTracks.map { it.id })
-                                                }
-                                            },
-                                            onDragCancel = {
-                                                listDragState.onDragCancel()
-                                                dragOriginIndex = null
-                                                displayedTracks = latestTracks
-                                            }
-                                        )
-                                    }
-                                } else {
-                                    Modifier
-                                },
-                                onRemove = if (editMode) {
-                                    { latestOnRemoveTrack?.invoke(track) }
-                                } else {
-                                    null
-                                },
-                                isDismissFlightActive = { dismissFlightActive.value },
-                                isSharedTransitionSource = rowSharedTagActive(track.id) && !editMode
-                            )
-                        }
-                    }
-
-                    item(key = "list_bottom_spacer") { Spacer(modifier = Modifier.height(LocalBottomBarClearance.current)) }
-                }
-            }
-        }
-
-        if (heroLayout.isImmersive) {
-            // Above the scrolling list (so tracks dim under it) but below the
-            // overlay back/more row.
-            CollectionScrollTopBar(
-                title = title,
-                fraction = topBarFraction,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-
-            // Lifted into the shared-element overlay during transitions so the
-            // flying artwork passes beneath the back/more buttons; the alpha
-            // mirrors the host hierarchy's fades (see transitionAlpha above).
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .collectionHeroOverlayLayer(sharedTransitionScope)
-                    .graphicsLayer { alpha = transitionAlpha() }
             ) {
-                TrackListTopBarRow(
-                    onBack = onBack,
-                    accentColor = heroAccentColor,
-                    editMode = editMode,
-                    onEditModeChange = onEditModeChange,
-                    onDensityChange = onDensityChange,
-                    onOpenOrganisation = { showOrganisationModal = true }
-                )
+                item(
+                    key = "grid_header",
+                    span = { GridItemSpan(maxLineSpan) }
+                ) {
+                    TrackListHero(
+                        heroLayout = heroLayout,
+                        title = title,
+                        artistName = artistName,
+                        statsText = "$trackCount Tracks • $durationText",
+                        imageUrl = imageUrl,
+                        imageIsEmbeddedArt = imageIsEmbeddedArt,
+                        onPlayAllClick = onPlayAllClick,
+                        onShuffleAllClick = onShuffleAllClick?.let { callback ->
+                            { callback(shownTracks.shuffled()) }
+                        },
+                        searchState = searchState,
+                        accentColor = heroAccentColor,
+                        onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                        scrollOffsetPx = heroScrollOffsetPx,
+                        transitionAlpha = transitionAlpha,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        sharedElementKey = sharedElementKey,
+                        sharedElementPrefix = sharedElementPrefix
+                    )
+                }
+
+                itemsIndexed(shownTracks, key = { _, track -> track.id }) { index, track ->
+                    // +1: the hero header sits at grid item 0; the drag-drop
+                    // state works in raw LazyGrid indices.
+                    val gridItemIndex = index + 1
+                    // derivedStateOf: draggedIndex is shared by every cell, so
+                    // reading it directly in each cell's scope would recompose
+                    // the whole viewport on every swap; the derived boolean only
+                    // invalidates the cells whose dragging state actually flips.
+                    val isDragging by remember(gridItemIndex) {
+                        derivedStateOf { gridDragState.isItemDragging(gridItemIndex) }
+                    }
+                    val currentIndex = rememberUpdatedState(index)
+                    val liftScale by animateFloatAsState(
+                        targetValue = if (isDragging && !dragReleased) GridDragLiftScale else 1f,
+                        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+                        label = "trackGridDragLift"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .let { if (isDragging) it else it.animateItem() }
+                            .zIndex(if (isDragging) 1f else 0f)
+                            // The drag layer only exists while a drag is live:
+                            // its lambda graphicsLayer is its own render node, and
+                            // at rest every value it produces is the identity
+                            // transform — one extra layer per resting cell, every
+                            // scroll frame, for nothing. zIndex already reads
+                            // isDragging, so the gate adds no new recompositions.
+                            .then(
+                                if (isDragging) {
+                                    Modifier.graphicsLayer {
+                                        val itemInfo = gridState.layoutInfo.visibleItemsInfo
+                                            .firstOrNull { it.index == gridItemIndex }
+                                        translationX = if (itemInfo != null) {
+                                            (gridDragState.draggingItemOffset.x - itemInfo.offset.x).toFloat()
+                                        } else {
+                                            0f
+                                        }
+                                        translationY = if (itemInfo != null) {
+                                            (gridDragState.draggingItemOffset.y - itemInfo.offset.y).toFloat()
+                                        } else {
+                                            0f
+                                        }
+                                        scaleX = liftScale
+                                        scaleY = liftScale
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    ) {
+                        TrackListItem(
+                            track = track,
+                            onClick = { onRowClick(index) },
+                            onLongClick = if (editMode) {
+                                // The track actions modal stays closed while editing.
+                                ({ })
+                            } else {
+                                null
+                            },
+                            active = track.id == activeTrackId,
+                            trackNumberText = if (showTrackNumbers) {
+                                track.trackNumber?.toString() ?: (index + 1).toString()
+                            } else {
+                                null
+                            },
+                            density = density,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
+                            flightPausedArtScale = { flightPausedArtScale.value },
+                            immersiveArt = immersiveMode,
+                            showDragHandle = editMode,
+                            dragHandleModifier = if (editMode) {
+                                // Reordering starts only from the drag chip;
+                                // the cell itself stays scroll/tap-through.
+                                Modifier.pointerInput(track.id) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            dragOriginIndex = currentIndex.value + 1
+                                            dragReleased = false
+                                            gridDragState.onDragStart(currentIndex.value + 1)
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            gridDragState.onDrag(dragAmount)
+                                        },
+                                        onDragEnd = {
+                                            val from = dragOriginIndex
+                                            val to = gridDragState.draggedIndex
+                                            // Scale-down starts with the release; the
+                                            // settle animation flies the item to its slot.
+                                            dragReleased = true
+                                            gridDragState.onDragEnd()
+                                            dragOriginIndex = null
+                                            if (from != null && to != null && from != to) {
+                                                latestOnPersistTrackOrder
+                                                    ?.invoke(latestDisplayedTracks.map { it.id })
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            dragReleased = true
+                                            gridDragState.onDragCancel()
+                                            dragOriginIndex = null
+                                            displayedTracks = latestTracks
+                                        }
+                                    )
+                                }
+                            } else {
+                                Modifier
+                            },
+                            isDismissFlightActive = { dismissFlightActive.value },
+                            isSharedTransitionSource = rowSharedTagActive(track.id) && !editMode
+                        )
+                    }
+                }
+
+                item(
+                    key = "grid_bottom_spacer",
+                    span = { GridItemSpan(maxLineSpan) }
+                ) {
+                    Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
+                }
             }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().then(listTopObserver),
+                state = listState,
+                contentPadding = PaddingValues(
+                    top = heroTopPadding,
+                    bottom = collectionSearchOpenBottomPadding(searchState)
+                )
+            ) {
+                item(key = "list_header") {
+                    TrackListHero(
+                        heroLayout = heroLayout,
+                        title = title,
+                        artistName = artistName,
+                        statsText = "$trackCount Tracks • $durationText",
+                        imageUrl = imageUrl,
+                        imageIsEmbeddedArt = imageIsEmbeddedArt,
+                        onPlayAllClick = onPlayAllClick,
+                        onShuffleAllClick = onShuffleAllClick?.let { callback ->
+                            { callback(shownTracks.shuffled()) }
+                        },
+                        searchState = searchState,
+                        accentColor = heroAccentColor,
+                        onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                        scrollOffsetPx = heroScrollOffsetPx,
+                        transitionAlpha = transitionAlpha,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        sharedElementKey = sharedElementKey,
+                        sharedElementPrefix = sharedElementPrefix
+                    )
+                }
+
+                itemsIndexed(shownTracks, key = { _, track -> track.id }) { index, track ->
+                    // +1: the hero header sits at list item 0; the drag-drop
+                    // state works in raw LazyColumn indices.
+                    val listItemIndex = index + 1
+                    // derivedStateOf: draggedIndex is shared by every row, so reading it
+                    // directly in each row's scope would recompose the whole viewport on
+                    // every swap; the derived boolean only invalidates the rows whose
+                    // dragging state actually flips (the two rows involved in the swap).
+                    val isDragging by remember(listItemIndex) {
+                        derivedStateOf { listDragState.isItemDragging(listItemIndex) }
+                    }
+                    val currentIndex = rememberUpdatedState(index)
+
+                    Box(
+                        modifier = Modifier
+                            .let { if (isDragging) it else it.animateItem() }
+                            .zIndex(if (isDragging) 1f else 0f)
+                            // Same drag-only gate as the grid branch above: the
+                            // lambda graphicsLayer is a render node per row whose
+                            // resting transform is the identity, so it only earns
+                            // its place while a drag is actually in flight.
+                            .then(
+                                if (isDragging) {
+                                    Modifier.graphicsLayer {
+                                        translationY = run {
+                                            val itemInfo = listState.layoutInfo.visibleItemsInfo
+                                                .firstOrNull { it.index == listItemIndex }
+                                            if (itemInfo != null) {
+                                                listDragState.draggingItemTop - itemInfo.offset
+                                            } else 0f
+                                        }
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        TrackListItem(
+                            track = track,
+                            onClick = { onRowClick(index) },
+                            onLongClick = if (editMode) {
+                                // The track actions modal stays closed while editing.
+                                ({ })
+                            } else {
+                                null
+                            },
+                            active = track.id == activeTrackId,
+                            trackNumberText = if (showTrackNumbers) {
+                                track.trackNumber?.toString() ?: (index + 1).toString()
+                            } else {
+                                null
+                            },
+                            density = density,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = playerTransitionVisibilityScope ?: animatedVisibilityScope,
+                            flightPausedArtScale = { flightPausedArtScale.value },
+                            immersiveArt = immersiveMode,
+                            showDragHandle = editMode,
+                            dragHandleModifier = if (editMode) {
+                                Modifier.pointerInput(track.id) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            dragOriginIndex = currentIndex.value + 1
+                                            listDragState.onDragStart(currentIndex.value + 1)
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            listDragState.onDrag(dragAmount)
+                                        },
+                                        onDragEnd = {
+                                            val from = dragOriginIndex
+                                            val to = listDragState.draggedIndex
+                                            listDragState.onDragEnd()
+                                            dragOriginIndex = null
+                                            if (from != null && to != null && from != to) {
+                                                latestOnPersistTrackOrder
+                                                    ?.invoke(latestDisplayedTracks.map { it.id })
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            listDragState.onDragCancel()
+                                            dragOriginIndex = null
+                                            displayedTracks = latestTracks
+                                        }
+                                    )
+                                }
+                            } else {
+                                Modifier
+                            },
+                            onRemove = if (editMode) {
+                                { latestOnRemoveTrack?.invoke(track) }
+                            } else {
+                                null
+                            },
+                            isDismissFlightActive = { dismissFlightActive.value },
+                            isSharedTransitionSource = rowSharedTagActive(track.id) && !editMode
+                        )
+                    }
+                }
+
+                item(key = "list_bottom_spacer") { Spacer(modifier = Modifier.height(LocalBottomBarClearance.current)) }
+            }
+        }
+
+        // The scroll top bar's gradient above the scrolling list (tracks and the
+        // hero fade behind it), then the floating back/more row above THAT —
+        // for every hero layout; the rows never hard-clip at the chrome edge.
+        // The row is lifted into the shared-element overlay during transitions
+        // so the flying artwork passes beneath the buttons; its alpha mirrors
+        // the host hierarchy's fades (see transitionAlpha above).
+        CollectionScrollTopBar(
+            title = title,
+            fraction = topBarFraction,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .collectionHeroOverlayLayer(sharedTransitionScope)
+                .graphicsLayer { alpha = transitionAlpha() }
+        ) {
+            TrackListTopBarRow(
+                onBack = onBack,
+                accentColor = heroAccentColor,
+                editMode = editMode,
+                onEditModeChange = onEditModeChange,
+                onDensityChange = onDensityChange,
+                onOpenOrganisation = { showOrganisationModal = true }
+            )
         }
     }
 

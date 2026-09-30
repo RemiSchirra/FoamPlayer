@@ -3,10 +3,8 @@ package com.foamplayer.app.ui.screens.library
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -62,6 +60,7 @@ import com.foamplayer.app.ui.components.CollectionScrollTopBar
 import com.foamplayer.app.ui.components.CollectionSearchScrollToBarEffect
 import com.foamplayer.app.ui.components.CollectionSearchImmersiveTopClearance
 import com.foamplayer.app.ui.components.CollectionSearchState
+import com.foamplayer.app.ui.components.CollectionTopBarRowHeight
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.collectionHeroOverlayLayer
@@ -83,6 +82,12 @@ private const val ArtistAlbumGridColumns = 3
  * then the artist's top tracks, then their albums in a grid. The artwork comes
  * from the artist's first track in alphabetical order and also drives the
  * screen's backdrop and accent color.
+ *
+ * Every hero layout scrolls full-bleed: the grid's top content padding
+ * ([CollectionTopBarRowHeight] on compact/normal, 0 on immersive — whose
+ * artwork bleeds under the status bar) reserves the floating chrome zone, and
+ * the scroll top bar's gradient plus the floating back row are drawn ON TOP of
+ * the grid, so content fades behind the chrome while scrolling on every layout.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -118,28 +123,21 @@ fun ArtistDetailScreen(
     // reveals its tracks); an album matches when its name/artist matches or
     // any of its tracks matched (typing a track title reveals its album).
     // An empty query shows everything. While searching, the tracks section
-    // expands beyond the 5 top tracks to EVERY matching artist track. Clicking
-    // a track closes the search session (see the row's onClick below).
+    // expands from the top 5 to EVERY matching track.
     val searchState = rememberCollectionSearchState()
     val searchActive = searchState.open && searchState.query.isNotBlank()
     val searchSource = if (searchActive) tracks else topTracks
-    // The hero accent is read from the palette's snapshot map below, so any
-    // palette write (any artwork color extracted anywhere in the app) used to
-    // invalidate THIS composition and re-run these filter/set passes over the
-    // full track list. Remembering each pass against its actual inputs confines
-    // the work to search keystrokes and data emissions instead of every
-    // unrelated recomposition of the screen.
-    val shownTopTracks = remember(searchSource, searchState.open, searchState.query) {
-        searchSource.filter { searchState.matches(it.title, it.artist, it.album) }
+    val shownTopTracks = remember(searchSource, searchActive) {
+        searchSource.filter { track ->
+            !searchActive || listOfNotNull(track.title, track.artist, track.album).any {
+                it.contains(searchState.query, ignoreCase = true)
+            }
+        }
     }
-    val titleMatchedAlbumNames = remember(tracks, searchState.open, searchState.query) {
-        tracks
-            .filter { searchState.matches(it.title, it.artist) }
-            .mapTo(mutableSetOf()) { it.album }
-    }
-    val shownAlbums = remember(albums, titleMatchedAlbumNames, searchState.open, searchState.query) {
-        albums.filter {
-            searchState.matches(it.album, it.artist) || it.album in titleMatchedAlbumNames
+    val shownAlbums = remember(albums, searchActive) {
+        albums.filter { album ->
+            !searchActive || album.album.contains(searchState.query, ignoreCase = true) ||
+                    album.artist?.contains(searchState.query, ignoreCase = true) == true
         }
     }
 
@@ -177,11 +175,11 @@ fun ArtistDetailScreen(
     val topBarFraction = rememberCollectionScrollFraction(gridState)
     // Flight fractions of this screen's two transitions: the nav flight
     // (open/close of the artist page itself) and the player-container flight
-    // (full player expanding over / collapsing back onto this page). The hero
-    // chrome and the back row are lifted into the shared-element overlay while
-    // any transition is active (collectionHeroOverlayLayer), and the overlay
-    // escapes the host hierarchy's own fades — so their alpha must multiply
-    // both fractions explicitly or they would pop at flight ends.
+    // (full player expanding over / collapsing back onto this page). The
+    // floating back row is lifted into the shared-element overlay while any
+    // transition is active (collectionHeroOverlayLayer), and the overlay
+    // escapes the host hierarchy's own fades — so its alpha must multiply
+    // both fractions explicitly or it would pop at flight ends.
     val navFlightFraction =
         rememberCollectionHeroFlightFraction(sharedTransitionScope, animatedVisibilityScope)
     val containerFlightFraction =
@@ -219,18 +217,17 @@ fun ArtistDetailScreen(
     // Search-open scroll: when the search toggle opens the hero's search bar
     // while the hero sits scrolled away (or hidden under the fixed chrome), the
     // grid is brought up so the bar opens at the screen top — below the floating
-    // back row on the immersive layouts; the non-immersive grid starts below
-    // its fixed top-bar row, so no extra clearance is needed there. The open
-    // bottom padding keeps the bar reachable even when the artist has only a
-    // handful of rows (no scroll range otherwise) and the rows visible above
-    // the keyboard.
+    // back row, which covers the grid top on every hero layout (the grid
+    // scrolls full-bleed beneath it). The open bottom padding keeps the bar
+    // reachable even when the artist has only a handful of rows (no scroll
+    // range otherwise) and the rows visible above the keyboard.
     CollectionSearchScrollToBarEffect(
         searchState = searchState,
         listState = null,
         gridState = gridState,
         useGrid = true,
         listTopYInRootPx = { gridTopYInRootPx },
-        topChromeHeight = if (heroLayout.isImmersive) CollectionSearchImmersiveTopClearance else 0.dp
+        topChromeHeight = CollectionSearchImmersiveTopClearance
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -263,70 +260,38 @@ fun ArtistDetailScreen(
             )
         }
 
-        if (!heroLayout.isImmersive) {
-            // Compact/Normal: composed BEFORE the Column (whose first child is
-            // the top-bar row) so the gradient can never dim the button; the
-            // grid never scrolls into the bar's zone in these layouts.
-            CollectionScrollTopBar(
-                title = artistName,
-                fraction = topBarFraction,
-                modifier = Modifier.align(Alignment.TopCenter)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(ArtistAlbumGridColumns),
+            modifier = Modifier.fillMaxSize().then(gridTopObserver),
+            state = gridState,
+            contentPadding = PaddingValues(
+                start = 10.dp,
+                top = if (heroLayout.isImmersive) 0.dp else CollectionTopBarRowHeight,
+                end = 10.dp,
+                bottom = collectionSearchOpenBottomPadding(searchState)
             )
-        }
-
-        Column(modifier = Modifier.fillMaxSize()) {
-            if (!heroLayout.isImmersive) {
-                // Top Bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        tint = FoamTheme.colors.textPrimary,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clickable { onBack() }
-                            .padding(4.dp)
-                    )
-                }
-            }
-
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(ArtistAlbumGridColumns),
-                modifier = Modifier.fillMaxSize().then(gridTopObserver),
-                state = gridState,
-                contentPadding = PaddingValues(
-                    start = 10.dp,
-                    top = 0.dp,
-                    end = 10.dp,
-                    bottom = collectionSearchOpenBottomPadding(searchState)
+        ) {
+            item(key = "artist_header", span = { GridItemSpan(maxLineSpan) }) {
+                ArtistHero(
+                    heroLayout = heroLayout,
+                    title = artistName,
+                    imageUrl = heroImageUrl,
+                    imageIsEmbeddedArt = heroImageIsEmbeddedArt,
+                    trackCount = tracks.size,
+                    accentColor = accentColor,
+                    onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+                    onShuffleAllClick = {
+                        if (tracks.isNotEmpty()) onTrackClick(tracks.shuffled(), 0)
+                    },
+                    searchState = searchState,
+                    onVisibleHeightPx = { heroVisibleHeightPx = it },
+                    scrollOffsetPx = heroScrollOffsetPx,
+                    transitionAlpha = transitionAlpha,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    sharedElementKey = artistName
                 )
-            ) {
-                item(key = "artist_header", span = { GridItemSpan(maxLineSpan) }) {
-                    ArtistHero(
-                        heroLayout = heroLayout,
-                        title = artistName,
-                        imageUrl = heroImageUrl,
-                        imageIsEmbeddedArt = heroImageIsEmbeddedArt,
-                        trackCount = tracks.size,
-                        accentColor = accentColor,
-                        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
-                        onShuffleAllClick = {
-                            if (tracks.isNotEmpty()) onTrackClick(tracks.shuffled(), 0)
-                        },
-                        searchState = searchState,
-                        onVisibleHeightPx = { heroVisibleHeightPx = it },
-                        scrollOffsetPx = heroScrollOffsetPx,
-                        transitionAlpha = transitionAlpha,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        sharedElementKey = artistName
-                    )
-                }
+            }
 
             if (shownTopTracks.isNotEmpty()) {
                 item(key = "artist_top_tracks_header", span = { GridItemSpan(maxLineSpan) }) {
@@ -396,43 +361,41 @@ fun ArtistDetailScreen(
                 Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
             }
         }
-        }
 
-        if (heroLayout.isImmersive) {
-            // Above the scrolling grid (so content dims under it) but below the
-            // overlay back row.
-            CollectionScrollTopBar(
-                title = artistName,
-                fraction = topBarFraction,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+        // The scroll top bar's gradient above the scrolling grid (content dims
+        // behind it), then the floating back row above THAT — for every hero
+        // layout; the rows never hard-clip at the chrome edge. The row is
+        // lifted into the shared-element overlay during transitions so the
+        // flying artwork passes beneath the back button; its alpha mirrors
+        // the host hierarchy's fades (see transitionAlpha above).
+        CollectionScrollTopBar(
+            title = artistName,
+            fraction = topBarFraction,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
 
-            // Lifted into the shared-element overlay during transitions so the
-            // flying artwork passes beneath the back button; the alpha mirrors
-            // the host hierarchy's fades (see transitionAlpha above).
-            Box(
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .collectionHeroOverlayLayer(sharedTransitionScope)
+                .graphicsLayer { alpha = transitionAlpha() }
+        ) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .statusBarsPadding()
-                    .collectionHeroOverlayLayer(sharedTransitionScope)
-                    .graphicsLayer { alpha = transitionAlpha() }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    tint = FoamTheme.colors.textPrimary,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        tint = FoamTheme.colors.textPrimary,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clickable { onBack() }
-                            .padding(4.dp)
-                    )
-                }
+                        .size(32.dp)
+                        .clickable { onBack() }
+                        .padding(4.dp)
+                )
             }
         }
     }

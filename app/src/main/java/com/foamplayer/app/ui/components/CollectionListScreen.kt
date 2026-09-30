@@ -129,6 +129,16 @@ private class GridMediaContentScope(private val scope: LazyGridScope) : MediaLis
  * [density] switches the body between the row list and a square-art grid
  (columns fixed by the GRID_* mode); [onDensityChange], when set, adds the
  * 3-dots top-bar button that opens the organisation modal.
+ *
+ * Every hero layout scrolls full-bleed: the lazy container is the screen's
+ * root (its top content padding reserves the floating chrome zone, see
+ * [CollectionTopBarRowHeight]) and the scroll top bar's gradient plus the
+ * floating back/more row are drawn ON TOP of it, so rows and the header fade
+ * behind the chrome while scrolling — the behaviour the immersive layouts
+ * always had, now shared with compact/normal. The hero header is the list's
+ * leading item, so the padding also positions the resting header below the
+ * chrome (the compact/normal heroes' artwork is fully visible at rest, the
+ * immersive ones bleed under the chrome on purpose).
  */
 @Composable
 fun CollectionListScreen(
@@ -190,19 +200,23 @@ fun CollectionListScreen(
     // Search-open scroll: when the search toggle opens the hero's search bar
     // while the hero sits scrolled away (or hidden under the fixed chrome), the
     // list is brought up so the bar opens at the screen top — below the floating
-    // back row on the immersive layouts; the non-immersive lists start below
-    // their fixed top-bar row, so no extra clearance is needed there. The open
-    // bottom padding keeps the bar reachable even when the collection has only
-    // a handful of rows (no scroll range otherwise) and the rows visible above
-    // the keyboard.
+    // back row, which covers every layout's list top (all of them scroll
+    // full-bleed beneath it). The open bottom padding keeps the bar reachable
+    // even when the collection has only a handful of rows (no scroll range
+    // otherwise) and the rows visible above the keyboard.
     CollectionSearchScrollToBarEffect(
         searchState = searchState,
         listState = listState,
         gridState = gridState,
         useGrid = density.isGrid,
         listTopYInRootPx = { listTopYInRootPx },
-        topChromeHeight = if (heroLayout.isImmersive) CollectionSearchImmersiveTopClearance else 0.dp
+        topChromeHeight = CollectionSearchImmersiveTopClearance
     )
+
+    // Top content padding reserving the floating chrome zone: compact/normal
+    // heroes must rest below the back/more row (their artwork is fully
+    // visible), while the immersive heroes bleed under it on purpose.
+    val heroTopPadding = if (heroLayout.isImmersive) 0.dp else CollectionTopBarRowHeight
 
     Box(modifier = modifier.fillMaxSize()) {
         if (heroLayout.isImmersive) {
@@ -223,147 +237,106 @@ fun CollectionListScreen(
             )
         }
 
-        if (!heroLayout.isImmersive) {
-            // Compact/Normal: composed BEFORE the Column (whose first child is
-            // the top-bar row) so the gradient can never dim the buttons; the
-            // list never scrolls into the bar's zone in these layouts.
-            CollectionScrollTopBar(
-                title = title,
-                fraction = topBarFraction,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-        }
-
-        Column(modifier = Modifier.fillMaxSize()) {
-            if (!heroLayout.isImmersive) {
-                // Top Bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        if (density.isGrid) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(density.gridColumns),
+                modifier = Modifier.fillMaxSize().then(listTopObserver),
+                state = gridState,
+                contentPadding = PaddingValues(
+                    start = 10.dp,
+                    top = heroTopPadding,
+                    end = 10.dp,
+                    bottom = collectionSearchOpenBottomPadding(searchState)
+                )
+            ) {
+                val gridScope = this
+                item(
+                    key = "collection_header",
+                    span = { GridItemSpan(maxLineSpan) }
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        tint = FoamTheme.colors.textPrimary,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clickable { onBack() }
-                            .padding(4.dp)
+                    CollectionListHero(
+                        heroLayout = heroLayout,
+                        title = title,
+                        subtitle = subtitle,
+                        itemCount = itemCount,
+                        imageUrl = headerImageUrl,
+                        icon = headerIcon,
+                        searchState = searchState,
+                        onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                        scrollOffsetPx = heroScrollOffsetPx
                     )
+                }
 
-                    if (onDensityChange != null) {
-                        Spacer(modifier = Modifier.weight(1f))
-                        OrganisationMenuButton(
-                            contentDescription = "Organisation",
-                            onClick = { showOrganisationModal = true }
-                        )
-                    }
+                GridMediaContentScope(gridScope).content()
+
+                item(key = "collection_bottom_spacer", span = { GridItemSpan(maxLineSpan) }) {
+                    Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
                 }
             }
-
-            if (density.isGrid) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(density.gridColumns),
-                    modifier = Modifier.fillMaxSize().then(listTopObserver),
-                    state = gridState,
-                    contentPadding = PaddingValues(
-                        start = 10.dp,
-                        top = 0.dp,
-                        end = 10.dp,
-                        bottom = collectionSearchOpenBottomPadding(searchState)
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().then(listTopObserver),
+                state = listState,
+                contentPadding = PaddingValues(
+                    top = heroTopPadding,
+                    bottom = collectionSearchOpenBottomPadding(searchState)
+                )
+            ) {
+                val listScope = this
+                item(key = "collection_header") {
+                    CollectionListHero(
+                        heroLayout = heroLayout,
+                        title = title,
+                        subtitle = subtitle,
+                        itemCount = itemCount,
+                        imageUrl = headerImageUrl,
+                        icon = headerIcon,
+                        searchState = searchState,
+                        onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                        scrollOffsetPx = heroScrollOffsetPx
                     )
-                ) {
-                    val gridScope = this
-                    item(
-                        key = "collection_header",
-                        span = { GridItemSpan(maxLineSpan) }
-                    ) {
-                        CollectionListHero(
-                            heroLayout = heroLayout,
-                            title = title,
-                            subtitle = subtitle,
-                            itemCount = itemCount,
-                            imageUrl = headerImageUrl,
-                            icon = headerIcon,
-                            searchState = searchState,
-                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
-                            scrollOffsetPx = heroScrollOffsetPx
-                        )
-                    }
-
-                    GridMediaContentScope(gridScope).content()
-
-                    item(key = "collection_bottom_spacer", span = { GridItemSpan(maxLineSpan) }) {
-                        Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
-                    }
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().then(listTopObserver),
-                    state = listState,
-                    contentPadding = PaddingValues(
-                        bottom = collectionSearchOpenBottomPadding(searchState)
-                    )
-                ) {
-                    val listScope = this
-                    item(key = "collection_header") {
-                        CollectionListHero(
-                            heroLayout = heroLayout,
-                            title = title,
-                            subtitle = subtitle,
-                            itemCount = itemCount,
-                            imageUrl = headerImageUrl,
-                            icon = headerIcon,
-                            searchState = searchState,
-                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
-                            scrollOffsetPx = heroScrollOffsetPx
-                        )
-                    }
 
-                    ListMediaContentScope(listScope).content()
+                ListMediaContentScope(listScope).content()
 
-                    item(key = "collection_bottom_spacer") {
-                        Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
-                    }
+                item(key = "collection_bottom_spacer") {
+                    Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
                 }
             }
         }
 
-        if (heroLayout.isImmersive) {
-            // Above the scrolling list (so content dims under it) but below the
-            // overlay back/more row.
-            CollectionScrollTopBar(
-                title = title,
-                fraction = topBarFraction,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+        // The scroll top bar's gradient above the scrolling list (rows and the
+        // hero fade behind it), then the floating back/more row above THAT —
+        // for every hero layout; the rows never hard-clip at the chrome edge.
+        CollectionScrollTopBar(
+            title = title,
+            fraction = topBarFraction,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
 
-            Box(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
-                Row(
+        Box(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    tint = FoamTheme.colors.textPrimary,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        tint = FoamTheme.colors.textPrimary,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clickable { onBack() }
-                            .padding(4.dp)
-                    )
+                        .size(32.dp)
+                        .clickable { onBack() }
+                        .padding(4.dp)
+                )
 
-                    if (onDensityChange != null) {
-                        Spacer(modifier = Modifier.weight(1f))
-                        OrganisationMenuButton(
-                            contentDescription = "Organisation",
-                            onClick = { showOrganisationModal = true }
-                        )
-                    }
+                if (onDensityChange != null) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    OrganisationMenuButton(
+                        contentDescription = "Organisation",
+                        onClick = { showOrganisationModal = true }
+                    )
                 }
             }
         }

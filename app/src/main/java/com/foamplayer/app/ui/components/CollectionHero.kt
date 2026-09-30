@@ -123,6 +123,16 @@ val CollectionHeroStatusBarScrimExtraHeight = 12.dp
 /** Height of the scroll top bar's gradient zone, measured below the status-bar inset. */
 val CollectionScrollTopBarZoneHeight = 64.dp
 
+/**
+ * Height of the screens' floating back/more top-bar row: 16dp padding + 32dp
+ * button + 16dp padding. Compact/Normal lists reserve it as their top content
+ * padding so the hero rests below the chrome while the list still scrolls
+ * full-bleed beneath it — the same zone the scroll top bar's title occupies
+ * ([CollectionScrollTopBarZoneHeight]), so the fading title and the buttons
+ * stay on one level.
+ */
+val CollectionTopBarRowHeight = 64.dp
+
 /** Scroll distance over which the scroll top bar fades from invisible to fully shown. */
 val CollectionScrollTopBarFadeDistance = 160.dp
 
@@ -137,11 +147,13 @@ val CollectionHeroImmersiveListTopPadding = 16.dp
 
 /**
  * Where the hero's shuffle/play/search button row lands below the list's top
- * when search opens on an immersive layout (see
- * [CollectionSearchScrollToBarEffect]): the floating back row covers the list's
- * first 48dp (the status-bar inset is consumed at the nav root), plus 8dp of
- * breathing room, so the open search bar ends up right below the fixed chrome
- * instead of colliding with the back button.
+ * when search opens (see [CollectionSearchScrollToBarEffect]): the floating
+ * back row covers the list's first 48dp (the status-bar inset is consumed at
+ * the nav root), plus 8dp of breathing room, so the open search bar ends up
+ * right below the floating chrome instead of colliding with the back button.
+ * Every list layout scrolls full-bleed under the same floating chrome, so the
+ * clearance applies to compact/normal heroes too (their top content padding
+ * matches [CollectionTopBarRowHeight], with the same 48dp icon zone).
  */
 val CollectionSearchImmersiveTopClearance = 56.dp
 
@@ -226,13 +238,13 @@ class CollectionSearchState {
      * Closes the search bar. The query is deliberately NOT cleared here: at
      * this instant the field is still composed (its exit animation is pending),
      * and resetting it while it might still hold focus would restart its IME
-     * connection, briefly re-showing the keyboard a frame after the hide
-     * request went out (the hide -> show -> hide flicker). The query is cleared
-     * instead when the field leaves composition AFTER this close (see
-     * [CollectionHeroSearchBar]); until then [matches] already ignores it via
-     * the closed-[open] short-circuit, so the rows restore immediately. A
-     * disposal from the header scrolling out of the lazy viewport (bar still
-     * open) keeps the query, so the filter survives the scroll round-trip.
+     * connection, briefly re-showing a keyboard the user had already dismissed
+     * (the hide -> show -> hide flicker). The query is cleared instead when the
+     * field leaves composition AFTER this close (see [CollectionHeroSearchBar]);
+     * until then [matches] already ignores it via the closed-[open]
+     * short-circuit, so the rows restore immediately. A disposal from the
+     * header scrolling out of the lazy viewport (bar still open) keeps the
+     * query, so the filter survives the scroll round-trip.
      */
     fun close() {
         open = false
@@ -261,7 +273,7 @@ private const val SearchOpenScrollDurationMs = 300
  * keyboard, and a screen-fraction reserve gives even a handful of rows enough
  * scroll range for [CollectionSearchScrollToBarEffect] to bring the bar to the
  * screen top — a short list otherwise has no scrollable range at all, so the
- * open scroll would silently do nothing.
+ * scroll here would silently do nothing.
  *
  * The value ANIMATES on both edges: growing when the bar opens (the rows part
  * smoothly instead of being pushed apart in one frame) and, just as
@@ -312,11 +324,11 @@ fun collectionSearchOpenBottomPadding(searchState: CollectionSearchState?): Dp {
  *
  * [listTopYInRootPx] supplies the lazy container's own root-space top y and
  * [topChromeHeight] how much of the list's top is covered by floating chrome:
- * on compact/normal layouts the list starts below its fixed top-bar row, so 0dp
- * puts the anchor at the very top of the scrolling content; on the immersive
- * ones the floating back row covers the list's first 48dp, so
- * [CollectionSearchImmersiveTopClearance] keeps the bar clear of it. A missing
- * anchor report (NaN, header scrolled off-screen) makes the effect a no-op.
+ * every layout's list scrolls full-bleed beneath the floating back row (the
+ * status-bar inset is consumed at the nav root), so hosts pass
+ * [CollectionSearchImmersiveTopClearance] to keep the open bar clear of it. A
+ * missing anchor report (NaN, header scrolled off-screen) makes the effect a
+ * no-op.
  *
  * Hosts must pad their lists with [collectionSearchOpenBottomPadding] while the
  * bar is open: without that reserve a list with only a few rows has no scroll
@@ -1062,8 +1074,8 @@ private fun Modifier.reportHeroButtonRowTop(searchState: CollectionSearchState?)
  * the search-open scroll ([CollectionSearchScrollToBarEffect]) on heroes whose
  * bar does not hang right under the button row (the compact one). Reported by
  * an always-present wrapper AROUND the bar, so the value exists before the
- * entering bar's own first layout (the scroll effect reads it in the same
- * frame [CollectionSearchState.open] flips). No-op when [searchState] is null.
+ * bar's own first layout (the scroll effect reads it in the same frame
+ * [CollectionSearchState.open] flips). No-op when [searchState] is null.
  */
 private fun Modifier.reportHeroSearchBarTop(searchState: CollectionSearchState?): Modifier =
     onGloballyPositioned { info ->
