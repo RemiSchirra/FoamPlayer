@@ -20,9 +20,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @HiltViewModel
@@ -76,10 +78,16 @@ class PlayerViewModel @Inject constructor(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    // Seeded with the SAVED settings, not AppSettings() defaults: with a default seed the
+    // first frame drew the default nav-bar order (and mode, background, ...) and then
+    // jumped to the stored one once DataStore emitted. The first DataStore read is a few
+    // milliseconds; waiting for it once here means every collector starts on real values.
+    private val initialSettings: AppSettings = runBlocking { settingsRepository.settings.first() }
+
     val settings: StateFlow<AppSettings> = settingsRepository.settings.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = AppSettings()
+        initialValue = initialSettings
     )
 
     private val _dynamicAccentColor = MutableStateFlow<Color?>(null)
