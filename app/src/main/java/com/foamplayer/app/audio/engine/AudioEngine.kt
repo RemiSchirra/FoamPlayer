@@ -115,6 +115,13 @@ class AudioEngine @Inject constructor(
     // Invoked after a crossfade promoted a new player (set by PlaybackService).
     private var onPlayerSwappedListener: (() -> Unit)? = null
 
+    // Invoked whenever the player representing "now playing" changes mid-crossfade:
+    // the logical switch hands the session over to the incoming stream at the fade's
+    // switch point (halfway through the automatic crossfade), an abort hands it back
+    // to the outgoing one. Lets the notification switch songs together with the
+    // in-app UI instead of waiting for the swap.
+    private var onDisplayPlayerChangedListener: ((Player) -> Unit)? = null
+
     // Session audio attributes, re-applied (with focus handling) at every swap:
     // crossfade secondaries are built WITHOUT focus handling.
     private val mediaAudioAttributes: AudioAttributes = AudioAttributes.Builder()
@@ -339,6 +346,13 @@ class AudioEngine @Inject constructor(
 
             recomputeAudioOutputInfo()
             if (wasAuxiliary) scheduleAuxiliaryRefill()
+
+            // The notification follows the in-app switch instead of waiting for
+            // the swap: re-bind the session to the incoming stream at the fade's
+            // switch point.
+            onDisplayPlayerChangedListener?.invoke(
+                fadeEngine.displayPlayer ?: activePlayerField
+            )
         }
 
         override fun onCrossfadeSwapped(targetQueueIndex: Int, targetPositionMs: Long) {
@@ -408,6 +422,10 @@ class AudioEngine @Inject constructor(
             }
 
             _playbackState.value = _playbackState.value.copy(isPlaying = player.isPlaying)
+
+            // The logical switch may have re-bound the session to the secondary,
+            // which has just been released: hand the session back to the primary.
+            onDisplayPlayerChangedListener?.invoke(activePlayerField)
         }
 
         override fun onFadeTargetError(targetTrackId: Long) {
@@ -466,6 +484,18 @@ class AudioEngine @Inject constructor(
     /** Re-bind hook for the MediaSession (set by [PlaybackService]). */
     fun setOnPlayerSwappedListener(listener: (() -> Unit)?) {
         onPlayerSwappedListener = listener
+    }
+
+    /**
+     * Mid-crossfade re-bind hook for the MediaSession (set by [PlaybackService]).
+     *
+     * Invoked with the player the session should advertise as "now playing":
+     * the incoming secondary at the fade's logical switch (so the notification
+     * switches songs together with the in-app UI instead of trailing it by the
+     * fade's second half), the outgoing primary after an abort.
+     */
+    fun setOnDisplayPlayerChangedListener(listener: ((Player) -> Unit)?) {
+        onDisplayPlayerChangedListener = listener
     }
 
     /**
