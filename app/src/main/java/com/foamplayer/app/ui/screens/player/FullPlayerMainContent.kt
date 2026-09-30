@@ -36,6 +36,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -74,6 +75,7 @@ import com.foamplayer.app.ui.utils.TimeUtils
 import com.foamplayer.app.ui.utils.pressShrink
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import kotlin.math.abs
+import kotlinx.coroutines.launch
 
 /** Layer 1 content: handle, hi-res badge, the track hero pager, playback controls, subview shortcuts. */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -132,6 +134,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
             upTransitionState = upTransitionState,
             scoreOverrides = scoreOverrides,
             onSetScore = onSetScore,
+            viewModel = viewModel,
             onOpenAlbum = onOpenAlbum,
             onOpenArtist = onOpenArtist,
             marqueeMode = marqueeMode,
@@ -195,6 +198,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
     upTransitionState: SeekableTransitionState<Boolean>,
     scoreOverrides: Map<Long, Int>,
     onSetScore: (Long, Int) -> Unit,
+    viewModel: PlayerViewModel,
     onOpenAlbum: (TrackEntity) -> Unit,
     onOpenArtist: (TrackEntity) -> Unit,
     marqueeMode: MarqueeMode,
@@ -320,7 +324,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         score = scoreOverrides[pageTrack.id] ?: pageTrack.score,
                         onSetScore = { value -> onSetScore(pageTrack.id, value) }
                     )
-                    TrackMoreButton(track = pageTrack)
+                    TrackMoreButton(track = pageTrack, refresh = viewModel::freshTrack)
                 }
             }
         }
@@ -469,7 +473,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         score = scoreOverrides[track.id] ?: track.score,
                         onSetScore = { value -> onSetScore(track.id, value) }
                     )
-                    TrackMoreButton(track = track)
+                    TrackMoreButton(track = track, refresh = viewModel::freshTrack)
                 }
             }
         }
@@ -482,8 +486,14 @@ internal fun SharedTransitionScope.TrackHeroPager(
  * modal state. Same 40dp touch target / 26dp icon sizing as the score heart.
  */
 @Composable
-internal fun TrackMoreButton(track: TrackEntity) {
+internal fun TrackMoreButton(
+    track: TrackEntity,
+    // Re-reads the track from the DB right before the modal opens: the queue entity is a
+    // snapshot, so its play count / last-listen date are stale once the track has played.
+    refresh: suspend (TrackEntity) -> TrackEntity = { it }
+) {
     val trackModalState = LocalTrackFoamModalState.current
+    val scope = rememberCoroutineScope()
     val moreInteractions = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
@@ -492,7 +502,7 @@ internal fun TrackMoreButton(track: TrackEntity) {
             .clickable(
                 interactionSource = moreInteractions,
                 indication = null
-            ) { trackModalState?.show(track) },
+            ) { scope.launch { trackModalState?.show(refresh(track)) } },
         contentAlignment = Alignment.Center
     ) {
         Icon(

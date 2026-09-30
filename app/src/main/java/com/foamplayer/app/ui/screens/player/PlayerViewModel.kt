@@ -155,6 +155,12 @@ class PlayerViewModel @Inject constructor(
     fun toggleShuffle() = audioEngine.toggleShuffle()
     fun toggleRepeat() = audioEngine.toggleRepeat()
 
+    // Track details modal: the queue entities held in PlaybackState are snapshots and go
+    // stale as soon as the DB row changes (play count, last-listen date, ...). Re-read the
+    // row when the modal opens; fall back to the snapshot if it can't be found.
+    suspend fun freshTrack(track: TrackEntity): TrackEntity =
+        trackRepository.getTrackById(track.id) ?: track
+
     // Track details modal: reset the listen counter and last-listen date.
     fun resetPlayStats(trackId: Long) {
         viewModelScope.launch { trackRepository.resetPlayStats(trackId) }
