@@ -43,6 +43,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
@@ -156,10 +157,23 @@ class AudioEngine @Inject constructor(
     // True while a refill is running; prevents duplicate appends.
     private var refillScheduled: Boolean = false
 
-    // A track counts as listened once it has played listenedThresholdPercent of
-    // its duration; the pending id marks the current occurrence.
-    private var listenTimerJob: Job? = null
+    // A track counts as listened once [listenedElapsedMs] — forward playback
+    // accumulated in the progress tracker — reaches listenedThresholdPercent of
+    // its duration. [pendingListenTrackId] marks the current occurrence and is
+    // cleared once counted, so a pause/resume or seek never counts twice.
+    // Driven by the player's POSITION rather than a wall-clock timer: timers
+    // stall in Doze and while the process is frozen, and a quick-fade seek
+    // restarts them — both silently lose listens during background playback.
     private var pendingListenTrackId: Long? = null
+    private var listenedElapsedMs: Long = 0L
+
+    // Player position at the previous accumulation tick; -1 until the first
+    // tick of an occurrence (its delta is dropped).
+    private var lastListenedPositionMs: Long = -1L
+
+    // Occurrence state stashed when a crossfade hands counting to the incoming
+    // track, restored if that fade aborts and the outgoing track resumes.
+    private var stashedListenOccurrence: Pair<Long, Long>? = null
 
     @Volatile
     private var listenedThresholdPercent: Int = AppSettings.DEFAULT_LISTENED_THRESHOLD_PERCENT
@@ -194,6 +208,13 @@ class AudioEngine @Inject constructor(
         private const val POSITION_POLL_SLOW_INTERVAL_MS = 250L
         // Position poll rate while paused.
         private const val PAUSED_POLL_INTERVAL_MS = 200L
+        // Cap on waiting for a Choreographer frame; the wait itself becomes the
+        // background poll cadence when no frames are delivered.
+        private const val FRAME_WAIT_TIMEOUT_MS = POSITION_POLL_SLOW_INTERVAL_MS
+        // Forward position jumps larger than this are seeks/jumps (or frames
+        // missed while the process was frozen), not played audio: they don't
+        // count toward the listen threshold.
+        private const val MAX_LISTENED_TICK_GAP_MS = 2_000L
         // Max unreadable tracks skipped in a row before playback gives up.
         private const val MAX_CONSECUTIVE_LOAD_ERRORS = 10
     }
@@ -211,15 +232,9 @@ class AudioEngine @Inject constructor(
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _playbackState.value = _playbackState.value.copy(isPlaying = isPlaying)
-            if (isPlaying) {
-                // (Re)start the listen timer from a clean threshold window.
-                val trackId = player.currentMediaItem?.mediaId?.toLongOrNull()
-                if (trackId != null && trackId == pendingListenTrackId) {
-                    scheduleListenCount(trackId)
-                }
-            } else {
-                listenTimerJob?.cancel()
-            }
+            // Listen accounting needs no play-state hook: the progress tracker
+            // accumulates only while a stream is audibly playing, so pauses and
+            // focus losses freeze the accrual instead of discarding it.
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -273,10 +288,14 @@ class AudioEngine @Inject constructor(
             pendingFadeWindowStart = windowStart
             pendingFadeWindowEnd = windowEnd
 
-            // Listen counting restarts for the incoming track.
-            listenTimerJob?.cancel()
-            pendingListenTrackId = targetTrackId
-            scheduleListenCount(targetTrackId)
+            // Listen counting hands over to the incoming track, exactly like a
+            // natural transition would; the outgoing occurrence is stashed so
+            // an aborted fade can resume its accrued progress.
+            val outgoingId = pendingListenTrackId
+            if (outgoingId != null && outgoingId != targetTrackId) {
+                stashedListenOccurrence = outgoingId to listenedElapsedMs
+            }
+            beginListenOccurrence(targetTrackId)
 
             // Detach the main listener so its events don't touch queue state mid-fade.
             activePlayerField.removeListener(playerListener)
@@ -318,6 +337,8 @@ class AudioEngine @Inject constructor(
             }
             pendingFadeWindowStart = null
             pendingFadeWindowEnd = null
+            // The fade completed: the outgoing occurrence is gone for good.
+            stashedListenOccurrence = null
 
             // Re-apply session modes: toggles landing mid-fade would otherwise be lost.
             player.repeatMode = when (_playbackState.value.repeatMode) {
@@ -359,11 +380,20 @@ class AudioEngine @Inject constructor(
                 recomputeAudioOutputInfo()
             }
 
-            // The incoming track never became current: resume listen counting on the old one.
+            // The incoming track never became current: restore the outgoing
+            // occurrence's stashed progress, so its listen still lands once
+            // enough of it has played in total.
             val trackId = player.currentMediaItem?.mediaId?.toLongOrNull()
+            val stash = stashedListenOccurrence
+            stashedListenOccurrence = null
             if (trackId != null) {
-                pendingListenTrackId = trackId
-                if (player.isPlaying) scheduleListenCount(trackId)
+                if (stash != null && stash.first == trackId) {
+                    pendingListenTrackId = trackId
+                    listenedElapsedMs = stash.second
+                    lastListenedPositionMs = -1L
+                } else {
+                    beginListenOccurrence(trackId)
+                }
             }
 
             _playbackState.value = _playbackState.value.copy(isPlaying = player.isPlaying)
@@ -390,11 +420,21 @@ class AudioEngine @Inject constructor(
         startAudioPathObservers()
     }
 
-    /** Suspends until the next frame is rendered (no Compose frame clock in this scope). */
-    private suspend fun awaitFrame() = suspendCancellableCoroutine { cont ->
-        val callback = Choreographer.FrameCallback { cont.resumeWith(Result.success(Unit)) }
-        Choreographer.getInstance().postFrameCallback(callback)
-        cont.invokeOnCancellation { Choreographer.getInstance().removeFrameCallback(callback) }
+    /**
+     * Suspends until the next frame is rendered (no Compose frame clock in this
+     * scope), giving up after [FRAME_WAIT_TIMEOUT_MS]. Choreographer stops
+     * delivering frames while the app is backgrounded or the screen is off — an
+     * unbounded wait froze this whole loop there, killing position updates,
+     * crossfade arming and listen counting during background playback.
+     */
+    private suspend fun awaitFrame() {
+        withTimeoutOrNull(FRAME_WAIT_TIMEOUT_MS) {
+            suspendCancellableCoroutine { cont ->
+                val callback = Choreographer.FrameCallback { cont.resumeWith(Result.success(Unit)) }
+                Choreographer.getInstance().postFrameCallback(callback)
+                cont.invokeOnCancellation { Choreographer.getInstance().removeFrameCallback(callback) }
+            }
+        }
     }
 
     private fun TrackEntity.toMediaItem(): MediaItem =
@@ -435,12 +475,10 @@ class AudioEngine @Inject constructor(
     ) {
         val currentQueue = _playbackState.value.queue
 
-        // New play occurrence: restart the listen timer.
-        listenTimerJob?.cancel()
-        pendingListenTrackId = trackId
-        if (player.isPlaying) {
-            scheduleListenCount(trackId)
-        }
+        // New play occurrence: restart listen accounting from zero. The count
+        // itself lands in the progress tracker once enough of the track has
+        // actually played — no isPlaying check needed here.
+        beginListenOccurrence(trackId)
 
         // Duplicates possible (aux pool): use the player's timeline position.
         val index = resolveExactQueueIndex(trackId) ?: fallbackIndex ?: return
@@ -595,19 +633,23 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    /** Counts [trackId] as listened once it survives [listenedThresholdPercent] of its duration. */
-    private fun scheduleListenCount(trackId: Long) {
-        listenTimerJob?.cancel()
-        listenTimerJob = scope.launch {
-            delay(listenThresholdMs(trackId))
-            if (player.isPlaying && player.currentMediaItem?.mediaId?.toLongOrNull() == trackId) {
-                pendingListenTrackId = null
-                trackRepository.incrementPlayCount(trackId, System.currentTimeMillis())
-            }
-        }
+    /** Starts a fresh listen occurrence for [trackId] (a new play). */
+    private fun beginListenOccurrence(trackId: Long) {
+        pendingListenTrackId = trackId
+        listenedElapsedMs = 0L
+        lastListenedPositionMs = -1L
     }
 
-    /** Playback time after which [trackId] counts as listened (user-configured % of duration). */
+    private fun clearListenOccurrence() {
+        pendingListenTrackId = null
+        listenedElapsedMs = 0L
+        lastListenedPositionMs = -1L
+        stashedListenOccurrence = null
+    }
+
+    /**
+     * Playback time after which [trackId] counts as listened (user-configured % of duration).
+     */
     private fun listenThresholdMs(trackId: Long): Long {
         val percent = listenedThresholdPercent
         if (percent <= 0) return 0L
@@ -616,6 +658,38 @@ class AudioEngine @Inject constructor(
             ?: player.duration.takeIf { it > 0 }
             ?: return 0L
         return durationMs * percent / 100
+    }
+
+    /**
+     * Accumulates [positionMs] toward the listen threshold of the pending
+     * occurrence; called from the progress tracker, which is why background
+     * playback counts exactly like foreground playback. Only forward motion
+     * actually played counts: pauses freeze the position (zero delta), a
+     * backward seek replays (re-accumulates), and a forward jump — or a gap
+     * wider than [MAX_LISTENED_TICK_GAP_MS] — adds nothing. The listen lands
+     * the moment accrued playback reaches [listenThresholdMs].
+     */
+    private fun tickListenCount(displayPlayer: Player, positionMs: Long) {
+        val pendingId = pendingListenTrackId ?: return
+        if (!displayPlayer.isPlaying) return
+        if (displayPlayer.currentMediaItem?.mediaId?.toLongOrNull() != pendingId) return
+
+        val last = lastListenedPositionMs
+        val delta = if (last >= 0L) {
+            (positionMs - last).takeIf { it in 1..MAX_LISTENED_TICK_GAP_MS } ?: 0L
+        } else {
+            0L
+        }
+        lastListenedPositionMs = positionMs
+        if (delta <= 0L) return
+
+        listenedElapsedMs += delta
+        if (listenedElapsedMs >= listenThresholdMs(pendingId)) {
+            pendingListenTrackId = null
+            scope.launch {
+                trackRepository.incrementPlayCount(pendingId, System.currentTimeMillis())
+            }
+        }
     }
 
     private fun observeListenedThreshold() {
@@ -655,6 +729,7 @@ class AudioEngine @Inject constructor(
     fun setQueue(tracks: List<TrackEntity>, startIndex: Int = 0, sourceCollectionId: String? = null) {
         fadeEngine.cancel()
         crossfadeArmedForTrackId = null
+        clearListenOccurrence()
         windowJumpJob?.cancel()
         failedTrackIds.clear()
 
@@ -1005,7 +1080,6 @@ class AudioEngine @Inject constructor(
         if (fadeEngine.quickFadeEnabled && player.isPlaying) {
             // Ramp to silence, then pause; the button reacts to the tap instantly.
             fadeEngine.fadeOutAndPause()
-            listenTimerJob?.cancel()
             _playbackState.value = _playbackState.value.copy(isPlaying = false)
         } else {
             player.pause()
@@ -1535,9 +1609,14 @@ class AudioEngine @Inject constructor(
                 if (player.isPlaying) {
                     maybeStartTrackCrossfade()
                 }
+                // Listen accounting rides the same tick, so background playback
+                // counts identically to foreground playback.
+                tickListenCount(displayPlayer, position)
                 if (displayPlayer.isPlaying) {
                     if (_positionMs.subscriptionCount.value > 0) {
                         // UI listening: per-frame ticks keep the seek bar smooth.
+                        // Bounded (see awaitFrame): Choreographer stops ticking
+                        // while the app is backgrounded.
                         awaitFrame()
                     } else {
                         delay(POSITION_POLL_SLOW_INTERVAL_MS)
