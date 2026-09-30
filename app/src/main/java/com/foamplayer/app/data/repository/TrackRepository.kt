@@ -142,6 +142,19 @@ class TrackRepository @Inject constructor(
 
     suspend fun getTrackById(trackId: Long): TrackEntity? = trackDao.getTrackById(trackId)
 
+    /**
+     * Tracks for [trackIds], in [trackIds] order, dropping ids that no longer
+     * exist in the library (a rescan re-assigns ids when files are re-scanned).
+     * [trackIds] may exceed SQLite's host-variable limit, so it is chunked.
+     */
+    suspend fun getTracksByIds(trackIds: List<Long>): List<TrackEntity> {
+        if (trackIds.isEmpty()) return emptyList()
+        val byId = trackIds.chunked(SQL_VARIABLE_CHUNK)
+            .flatMap { trackDao.getTracksByIds(it) }
+            .associateBy { it.id }
+        return trackIds.mapNotNull { byId[it] }
+    }
+
     fun searchTracks(query: String): Flow<List<TrackEntity>> = trackDao.searchTracks(query)
 
     /** Searches credited artists (the "; " convention split apart), matching filtered. */

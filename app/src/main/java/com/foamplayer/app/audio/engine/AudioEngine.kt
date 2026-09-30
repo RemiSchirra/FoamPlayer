@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
@@ -68,7 +69,8 @@ class AudioEngine @Inject constructor(
     private val outputDeviceManager: OutputDeviceManager,
     private val settingsRepository: SettingsRepository,
     private val trackRepository: TrackRepository,
-    private val fadeEngine: FadeEngine
+    private val fadeEngine: FadeEngine,
+    private val queuePersistence: QueuePersistence
 ) {
     /** The active player; replaced at each crossfade swap. */
     val player: ExoPlayer
@@ -175,6 +177,11 @@ class AudioEngine @Inject constructor(
     // track, restored if that fade aborts and the outgoing track resumes.
     private var stashedListenOccurrence: Pair<Long, Long>? = null
 
+    // True once THIS process has written a resumption snapshot; guards clear()
+    // so the first (empty-queue) emission on process start never wipes the
+    // snapshot a previous process wrote (it is what a media button resumes from).
+    private var hasSessionSaved: Boolean = false
+
     @Volatile
     private var listenedThresholdPercent: Int = AppSettings.DEFAULT_LISTENED_THRESHOLD_PERCENT
 
@@ -217,6 +224,10 @@ class AudioEngine @Inject constructor(
         private const val MAX_LISTENED_TICK_GAP_MS = 2_000L
         // Max unreadable tracks skipped in a row before playback gives up.
         private const val MAX_CONSECUTIVE_LOAD_ERRORS = 10
+        // Persistence: initial write delay collapsing queue-mutation bursts, and
+        // the cadence the saved position is refreshed while playing.
+        private const val PERSIST_DEBOUNCE_MS = 1_000L
+        private const val POSITION_SAVE_INTERVAL_MS = 15_000L
     }
 
     private val playerListener = object : Player.Listener {
@@ -417,6 +428,7 @@ class AudioEngine @Inject constructor(
         startProgressTracker()
         observeLibraryForAuxiliaryRefill()
         observeListenedThreshold()
+        observeSessionForPersistence()
         startAudioPathObservers()
     }
 
@@ -454,6 +466,87 @@ class AudioEngine @Inject constructor(
     /** Re-bind hook for the MediaSession (set by [PlaybackService]). */
     fun setOnPlayerSwappedListener(listener: (() -> Unit)?) {
         onPlayerSwappedListener = listener
+    }
+
+    /**
+     * Media items for [tracks]; the resumption path hands these back to Media3
+     * for the session so the platform sees the same timeline the engine built.
+     */
+    fun mediaItemsFor(tracks: List<TrackEntity>): List<MediaItem> = tracks.map { it.toMediaItem() }
+
+    /**
+     * Rebuilds a paused session from a resumption snapshot: the full main queue
+     * plus a redrawn auxiliary pool goes on the timeline, the cursor lands on
+     * [startIndex] and the prepared stream waits (PAUSED) at [positionMs].
+     * Playback is NOT started here — the triggering event (a media button play
+     * or a session chip) decides that. Returns the media items of the built
+     * timeline so the caller can hand the identical list back to Media3.
+     */
+    fun restoreQueue(
+        tracks: List<TrackEntity>,
+        startIndex: Int,
+        positionMs: Long,
+        sourceCollectionId: String?,
+        sourceFlags: List<Boolean>?,
+        isShuffle: Boolean,
+        repeatMode: RepeatMode
+    ): List<MediaItem> {
+        if (tracks.isEmpty()) return emptyList()
+
+        fadeEngine.cancel()
+        crossfadeArmedForTrackId = null
+        clearListenOccurrence()
+        windowJumpJob?.cancel()
+        failedTrackIds.clear()
+
+        val clampedStart = startIndex.coerceIn(0, tracks.lastIndex)
+        val restoredPosition = positionMs.coerceAtLeast(0L)
+
+        // Ids for the main queue, then the auxiliary queue.
+        val entryIds = List(tracks.size) { allocateEntryId() } +
+                List(AUXILIARY_QUEUE_LENGTH) { allocateEntryId() }
+        val newQueue = tracks + drawAuxiliaryTracks(emptySet(), AUXILIARY_QUEUE_LENGTH)
+
+        pendingWindowResync = false
+        _playbackState.value = _playbackState.value.copy(
+            queue = newQueue,
+            queueIndex = clampedStart,
+            queueEntryIds = entryIds,
+            auxiliaryFlags = List(entryIds.size) { i -> i >= tracks.size },
+            currentTrack = newQueue[clampedStart],
+            durationMs = newQueue[clampedStart].duration,
+            isPlaying = false,
+            isShuffle = isShuffle,
+            repeatMode = repeatMode,
+            queueSourceId = sourceCollectionId,
+            queueSourceFlags = if (sourceFlags != null && sourceFlags.size == tracks.size) {
+                sourceFlags + List(AUXILIARY_QUEUE_LENGTH) { false }
+            } else {
+                List(tracks.size) { sourceCollectionId != null } +
+                        List(AUXILIARY_QUEUE_LENGTH) { false }
+            }
+        )
+
+        player.repeatMode = when (repeatMode) {
+            RepeatMode.NONE -> Player.REPEAT_MODE_OFF
+            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
+            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
+        }
+        player.shuffleModeEnabled = isShuffle
+
+        // The whole queue goes on the timeline (adjustWindow trims the overhang
+        // back as playback proceeds); prepared and PAUSED at the saved position —
+        // the resumption flow decides when to press play.
+        loadedRange = newQueue.indices
+        val items = newQueue.map { it.toMediaItem() }
+        player.setMediaItems(items, clampedStart, restoredPosition)
+        player.prepare()
+        player.pause()
+
+        _positionMs.value = restoredPosition
+        _seekEvents.tryEmit(restoredPosition)
+
+        return items
     }
 
     /**
@@ -720,6 +813,56 @@ class AudioEngine @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Persists the playing session for resumption. The first write collapses
+     * queue-mutation bursts; while playing, the saved position keeps refreshing
+     * so a killed process resumes near the mark. A queue that empties clears
+     * THIS process's snapshot (a previous process's snapshot is preserved).
+     */
+    private fun observeSessionForPersistence() {
+        scope.launch {
+            playbackState.collectLatest { state ->
+                if (state.currentTrack == null) {
+                    if (hasSessionSaved) {
+                        queuePersistence.clear()
+                        hasSessionSaved = false
+                    }
+                    return@collectLatest
+                }
+                delay(PERSIST_DEBOUNCE_MS)
+                saveSessionSnapshot(state)
+                while (state.isPlaying) {
+                    delay(POSITION_SAVE_INTERVAL_MS)
+                    saveSessionSnapshot(state)
+                }
+            }
+        }
+    }
+
+    private suspend fun saveSessionSnapshot(state: PlaybackState) {
+        val ids = ArrayList<Long>(state.queue.size)
+        val flags = ArrayList<Boolean>(state.queue.size)
+        state.queue.forEachIndexed { i, track ->
+            if (state.auxiliaryFlags.getOrNull(i) != true) {
+                ids.add(track.id)
+                flags.add(state.queueSourceFlags.getOrNull(i) == true)
+            }
+        }
+        if (ids.isEmpty()) return
+        hasSessionSaved = true
+        queuePersistence.save(
+            PersistedPlayback(
+                trackIds = ids,
+                sourceFlags = flags,
+                currentIndex = state.queueIndex.coerceIn(0, ids.lastIndex),
+                positionMs = _positionMs.value,
+                isShuffle = state.isShuffle,
+                repeatMode = state.repeatMode,
+                queueSourceId = state.queueSourceId
+            )
+        )
     }
 
     /**

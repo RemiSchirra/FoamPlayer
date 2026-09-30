@@ -21,6 +21,9 @@ interface TrackDao {
     @Query("SELECT * FROM tracks WHERE id = :trackId LIMIT 1")
     suspend fun getTrackById(trackId: Long): TrackEntity?
 
+    @Query("SELECT * FROM tracks WHERE id IN (:trackIds)")
+    suspend fun getTracksByIds(trackIds: List<Long>): List<TrackEntity>
+
     @Query("SELECT * FROM tracks WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' OR album LIKE '%' || :query || '%' ORDER BY title ASC")
     fun searchTracks(query: String): Flow<List<TrackEntity>>
 
