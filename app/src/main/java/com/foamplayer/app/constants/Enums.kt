@@ -545,10 +545,10 @@ fun deserializeNavBarItemOrder(orderStr: String?, allowed: List<NavBarItem>): Li
  * Normal is a big rounded artwork with the text underneath.
  */
 enum class CollectionHeroLayout(val label: String) {
-    Compact("Compact"),
-    Immersive("Immersive"),
-    CompactImmersive("Compact Immersive"),
     Normal("Normal"),
+    Immersive("Immersive"),
+    Compact("Compact"),
+    CompactImmersive("Compact Immersive"),
     ;
 
     /** True when the artwork bleeds under the status bar with overlaid text. */
