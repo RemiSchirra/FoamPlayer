@@ -21,7 +21,7 @@ class FoamMediaNotificationProvider(
     private val shuffleCommand: SessionCommand,
     private val repeatCommand: SessionCommand,
     private val playbackState: () -> PlaybackState
-) : DefaultMediaNotificationProvider(context, { DEFAULT_NOTIFICATION_ID }, channelId, 0) {
+) : DefaultMediaNotificationProvider(context, { DEFAULT_NOTIFICATION_ID }, channelId, R.string.playback_channel_name) {
 
     override fun getMediaButtons(
         session: MediaSession,

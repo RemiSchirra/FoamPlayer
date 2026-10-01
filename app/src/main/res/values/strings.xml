@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">FoamPlayer</string>
+    <string name="playback_channel_name">FoamPlayer Playback</string>
     <string name="action_shuffle">Shuffle</string>
     <string name="action_repeat">Repeat</string>
     <string name="play">Play</string>
