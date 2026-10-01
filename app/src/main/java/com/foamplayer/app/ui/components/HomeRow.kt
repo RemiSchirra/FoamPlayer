@@ -294,18 +294,22 @@ fun HomeRowCard(
             }
         }
 
-        BasicText(
-            text = title,
-            style = FoamTheme.typography.titleMedium.copy(
-                fontSize = 15.sp,
-                textAlign = TextAlign.Center
-            ),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = HomeRowCardPadding)
-                .then(sharedTitleModifier)
-        )
+                .padding(top = HomeRowCardPadding),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            BasicText(
+                text = title,
+                style = FoamTheme.typography.titleMedium.copy(
+                    fontSize = 15.sp,
+                    textAlign = TextAlign.Center
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.then(sharedTitleModifier)
+            )
+        }
     }
 }

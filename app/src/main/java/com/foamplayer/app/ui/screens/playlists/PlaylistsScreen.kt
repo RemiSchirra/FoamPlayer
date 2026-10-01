@@ -657,6 +657,7 @@ private fun PlaylistItemRow(
                     animatedVisibilityScope = animatedVisibilityScope,
                     enter = fadeIn(textFlightFadeSpec),
                     exit = fadeOut(textFlightFadeSpec),
+                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
                     boundsTransform = AlbumArtBoundsTransform
                 )
             }

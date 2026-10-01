@@ -884,6 +884,7 @@ internal fun Modifier.rowSharedText(
                 animatedVisibilityScope = animatedVisibilityScope,
                 enter = fadeIn(fadeSpec),
                 exit = fadeOut(fadeSpec),
+                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
                 boundsTransform = boundsTransform,
                 zIndexInOverlay = 1f
             )
@@ -893,6 +894,7 @@ internal fun Modifier.rowSharedText(
                 animatedVisibilityScope = animatedVisibilityScope,
                 enter = fadeIn(fadeSpec),
                 exit = fadeOut(fadeSpec),
+                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
                 zIndexInOverlay = 1f
             )
         }

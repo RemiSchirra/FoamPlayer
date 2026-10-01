@@ -74,6 +74,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -1226,7 +1227,7 @@ private fun CollectionHeroTexts(
             style = titleStyle,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = textWidth.collectionHeroSharedText(
+            modifier = Modifier.collectionHeroSharedText(
                 key = "$sharedElementPrefix-title-$sharedElementKey",
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
@@ -1240,7 +1241,7 @@ private fun CollectionHeroTexts(
                 style = subtitleStyle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = textWidth.collectionHeroSharedText(
+                modifier = Modifier.collectionHeroSharedText(
                     key = "$sharedElementPrefix-artist-$sharedElementKey",
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
@@ -1679,6 +1680,7 @@ private fun Modifier.collectionHeroSharedText(
             animatedVisibilityScope = animatedVisibilityScope,
             enter = fadeIn(fadeSpec),
             exit = fadeOut(fadeSpec),
+            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.FillHeight, Alignment.Center),
             boundsTransform = AlbumArtBoundsTransform,
             // Above the flying artwork so the title never disappears behind it
             // mid-flight (the artwork is zIndexInOverlay 0f).
