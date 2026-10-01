@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.components
 
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.Crossfade
@@ -10,6 +11,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
@@ -1087,7 +1089,15 @@ private fun Modifier.reportHeroSearchBarTop(searchState: CollectionSearchState?)
         searchState?.searchBarTopYInRootPx = info.positionInRoot().y
     }
 
-/** Artwork fill: embedded/plain image, collection icon, or the title's initial. */
+/**
+ * Artwork fill: embedded/plain image, collection icon, or the title's initial.
+ *
+ * When the image CHANGES in place (e.g. a playlist reordered so its automatic
+ * first-track cover picks a different track), the old image keeps rendering on
+ * a top layer whose alpha tweens to 0 while the new image draws beneath it —
+ * a crossfade instead of a pop through the placeholder. First compositions
+ * (nav flights) render the single image directly: no extra layer, no fade.
+ */
 @Composable
 private fun CollectionHeroArtworkContent(
     title: String,
@@ -1097,25 +1107,48 @@ private fun CollectionHeroArtworkContent(
 ) {
     val context = LocalContext.current
     if (imageUrl != null) {
-        val heroArtRequest = remember(imageUrl, imageIsEmbeddedArt) {
-            val data = if (imageIsEmbeddedArt) {
-                EmbeddedAlbumArt(imageUrl.toUri())
-            } else {
-                imageUrl
+        // The art currently rendered, plus the old art kept only while its
+        // fade-out runs. Both live in state so the swap happens frame-atomic.
+        var displayed by remember { mutableStateOf(imageUrl to imageIsEmbeddedArt) }
+        var fading by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+        val fade = remember { Animatable(1f) }
+
+        LaunchedEffect(imageUrl, imageIsEmbeddedArt) {
+            if (imageUrl != displayed.first || imageIsEmbeddedArt != displayed.second) {
+                fading = displayed
+                displayed = imageUrl to imageIsEmbeddedArt
+                fade.snapTo(1f)
+                fade.animateTo(0f, tween(durationMillis = SharedElementTransitionDurationMs))
+                fading = null
             }
-            ImageRequest.Builder(context)
-                .data(data)
-                .size(AlbumArtRequestSize)
-                .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
-                .crossfade(false)
-                .build()
         }
-        AlbumArtImage(
-            model = heroArtRequest,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            placeholderSize = 40.dp,
-        )
+
+        val fadingArt = fading
+        if (fadingArt == null) {
+            CollectionHeroArtworkImage(
+                displayed.first,
+                displayed.second,
+                context,
+                Modifier.fillMaxSize()
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize()) {
+                CollectionHeroArtworkImage(
+                    displayed.first,
+                    displayed.second,
+                    context,
+                    Modifier.fillMaxSize()
+                )
+                CollectionHeroArtworkImage(
+                    fadingArt.first,
+                    fadingArt.second,
+                    context,
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = fade.value }
+                )
+            }
+        }
     } else if (icon != null) {
         Icon(
             imageVector = icon,
@@ -1129,6 +1162,35 @@ private fun CollectionHeroArtworkContent(
             style = FoamTheme.typography.titleLarge.copy(fontSize = 48.sp)
         )
     }
+}
+
+/** One hero artwork image request + [AlbumArtImage] render, shared by the crossfade layers. */
+@Composable
+private fun CollectionHeroArtworkImage(
+    imageUrl: String,
+    imageIsEmbeddedArt: Boolean,
+    context: Context,
+    modifier: Modifier
+) {
+    val heroArtRequest = remember(imageUrl, imageIsEmbeddedArt) {
+        val data = if (imageIsEmbeddedArt) {
+            EmbeddedAlbumArt(imageUrl.toUri())
+        } else {
+            imageUrl
+        }
+        ImageRequest.Builder(context)
+            .data(data)
+            .size(AlbumArtRequestSize)
+            .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
+            .crossfade(false)
+            .build()
+    }
+    AlbumArtImage(
+        model = heroArtRequest,
+        contentDescription = null,
+        modifier = modifier,
+        placeholderSize = 40.dp,
+    )
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)

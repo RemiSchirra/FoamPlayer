@@ -75,24 +75,28 @@ fun PlaylistDetailScreen(
     // The nav-route seed keeps the header correct on its very first frame (the
     // DB-loaded playlist takes a moment to arrive) so the shared-element
     // transition from the playlists list never flashes the letter fallback.
-    // A seed carries its own load mode (custom covers are plain image URIs,
-    // the automatic first-track fallback is embedded art); the DB-loaded
-    // custom cover, once it arrives, always wins and is a plain image URI.
+    // It is ONLY a load-window placeholder, dropped as soon as the live cover
+    // sources have landed: a seed captured at navigation time must never
+    // override them, or a reorder (which moves the automatic first-track
+    // cover) would never show up until the screen is reopened. Gating on
+    // [firstTrackArt] != null is the readiness signal — and when the playlist
+    // genuinely has no art, the seed is null too, so nothing is masked.
     val seedImageUrl = initialImageUrl?.takeIf { it.isNotBlank() }
-    val customCover = playlist?.imageUrl ?: seedImageUrl
+    val seedCover = if (firstTrackArt == null) seedImageUrl else null
 
     // Cover resolution, artist-style: custom image first, else the first
     // track in the playlist's custom order that carries embedded art (live
     // fallback query), else the displayed tracks' first art — no image at all
     // lets the hero render its letter monogram.
-    val heroImageUrl = customCover
+    val heroImageUrl = playlist?.imageUrl
+        ?: seedCover
         ?: firstTrackArt
         ?: sortedTracks.firstOrNull { it.albumArtPath != null }?.albumArtPath
     val heroImageIsEmbeddedArt = when {
         heroImageUrl == null -> false
-        customCover == null -> true
-        playlist?.imageUrl == null -> initialImageIsEmbeddedArt
-        else -> false
+        playlist?.imageUrl != null -> false
+        seedCover != null -> initialImageIsEmbeddedArt
+        else -> true
     }
 
     // The hero art drives the blurred list backdrop, like every other detail
