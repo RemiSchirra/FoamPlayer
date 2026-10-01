@@ -58,6 +58,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -227,7 +228,7 @@ fun SearchScreen(
     val query by searchViewModel.query.collectAsState()
     val uiState by searchViewModel.uiState.collectAsState()
     val artistImages by searchViewModel.artistImages.collectAsState()
-    var searchActive by remember { mutableStateOf(false) }
+    var searchActive by rememberSaveable { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val density = LocalDensity.current
