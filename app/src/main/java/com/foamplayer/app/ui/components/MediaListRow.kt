@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -878,13 +879,17 @@ internal fun Modifier.rowSharedText(
             durationMillis = SharedElementTransitionDurationMs,
             easing = SharedElementEasing
         )
+        val resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
+            contentScale = ContentScale.FillWidth,
+            alignment = Alignment.Center
+        )
         if (boundsTransform != null) {
             sharedBounds(
                 state,
                 animatedVisibilityScope = animatedVisibilityScope,
                 enter = fadeIn(fadeSpec),
                 exit = fadeOut(fadeSpec),
-                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                resizeMode = resizeMode,
                 boundsTransform = boundsTransform,
                 zIndexInOverlay = 1f
             )
@@ -894,7 +899,7 @@ internal fun Modifier.rowSharedText(
                 animatedVisibilityScope = animatedVisibilityScope,
                 enter = fadeIn(fadeSpec),
                 exit = fadeOut(fadeSpec),
-                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                resizeMode = resizeMode,
                 zIndexInOverlay = 1f
             )
         }
