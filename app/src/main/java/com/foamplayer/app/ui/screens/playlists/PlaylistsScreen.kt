@@ -92,7 +92,6 @@ import com.foamplayer.app.ui.components.activeRowHighlight
 import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.components.rememberCollectionCloseFlightActive
-import com.foamplayer.app.ui.components.rememberCollectionFlightProgress
 import com.foamplayer.app.ui.components.rememberDragDropGridState
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
 import com.foamplayer.app.ui.components.rememberSortedList
@@ -605,21 +604,8 @@ private fun PlaylistItemRow(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
     )
-    val flightProgress = if (isActiveCollection) {
-        rememberCollectionFlightProgress(
-            sharedTransitionScope = sharedTransitionScope,
-            animatedVisibilityScope = animatedVisibilityScope
-        )
-    } else {
-        null
-    }
-    val staticArtElevation = when {
-        !isActiveCollection -> MediaItemArtElevation
-        !flight -> if (closeFlightActive) 0.dp else MediaItemArtElevation
-        closeFlightActive && flightProgress != null ->
-            MediaItemArtElevation * flightProgress.value
-        else -> MediaItemArtElevation
-    }
+    val staticArtElevation =
+        if (isActiveCollection && closeFlightActive) 0.dp else MediaItemArtElevation
 
     val artworkElevation by animateDpAsState(
         targetValue = if (lifted) DragArtworkElevation else 0.dp,

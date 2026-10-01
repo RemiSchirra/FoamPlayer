@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.toRect
@@ -49,7 +50,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -101,6 +104,53 @@ fun AlbumArtShape(): Shape = RoundedCornerShape(
  * own rest look.
  */
 internal const val AlbumArtFlightFullyRoundedPercent = 50f
+
+/**
+ * Overlay clip of a collection flight whose flying artwork casts its own
+ * drop shadow: the animated artwork shape expanded by [marginPx] on every
+ * side, so the RenderNode shadow -- drawn just outside the artwork's
+ * silhouette -- survives the overlay's clipPath while the artwork itself is
+ * still clipped to (a rounding of) the shape.
+ *
+ * A plain [AlbumArtFlightShape] overlay clip cuts the flying artwork's
+ * shadow off exactly at the silhouette: the shadow is rendered BEHIND the
+ * layer's content by the RenderNode, and the overlay draws that layer
+ * through the clipPath -- anything outside the path (the shadow) never
+ * reaches the screen. The compact path gets away with no overlay clip at
+ * all; the immersive morph path must keep one (see
+ * [collectionRowFlightArtwork]) because without it the drawn side's first
+ * overlay frame renders transparent -- this variant is the middle ground:
+ * the morph shape grows by the margin the shadow needs, nothing more.
+ *
+ * Returning null clips nothing (the framework treats a null path as "no
+ * clip"), so the margin is read per frame through [shapeFraction] and the
+ * rest look stays byte-for-byte the un-clipped one.
+ */
+private class ExpandedAlbumArtFlightClip(
+    private val restPercent: Float,
+    private val shapeFraction: () -> Float,
+    private val marginPx: () -> Float
+) : SharedTransitionScope.OverlayClip {
+    private val path = Path()
+
+    override fun getClipPath(
+        sharedContentState: SharedTransitionScope.SharedContentState,
+        bounds: Rect,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Path? {
+        val margin = marginPx()
+        if (margin <= 0f) return null
+        val expanded = bounds.inflate(margin)
+        path.reset()
+        path.addOutline(
+            AlbumArtFlightShape(restPercent) { shapeFraction() }
+                .createOutline(expanded.size, layoutDirection, density)
+        )
+        path.translate(expanded.topLeft)
+        return path
+    }
+}
 
 /**
  * Fixed decode size (px) for album art shared across the app. Coil's
@@ -347,14 +397,15 @@ internal fun Modifier.collectionFlightArtwork(
  * an identical-strength hand-off. Home/search cards that cast no static
  * shadow keep the default (off) and their established shadowless flights.
  *
- * IMMERSIVE heroes are the exception: their flight must keep the animated
- * overlay clip (the flight path below always carries it) because without it
- * the drawn (entering) side's first overlay frame renders transparent -- the
- * flying cover flickers away for a frame at the start of the close flight.
- * That clip also clips the flying artwork's RenderNode shadow, so the
- * immersive path drops the flight shadow and hosts instead ease their static
- * shadow up with the flight progress (no shadow at the hero's shadowless
- * departure, exactly rest strength on the settle frame -- no pop either way).
+ * IMMERSIVE heroes keep the animated overlay clip (the flight path below
+ * always carries it) because without it the drawn (entering) side's first
+ * overlay frame renders transparent -- the flying cover flickers away for a
+ * frame at the start of the close flight. A plain shape clip would cut the
+ * flying artwork's RenderNode shadow off exactly at the silhouette, so the
+ * clip is the EXPANDED variant ([ExpandedAlbumArtFlightClip]): the morph
+ * shape grown by the shadow's margin -- the shadow survives while the
+ * artwork still rides the morph, and [castsFlightShadow] hands the row's
+ * static shadow to the flying artwork exactly like the compact path.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -422,6 +473,18 @@ internal fun Modifier.collectionRowFlightArtwork(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
     )
+    val closeFlightActive = rememberCollectionCloseFlightActive(
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope
+    )
+    val restElevationPx = with(LocalDensity.current) { MediaItemArtElevation.toPx() }
+    val flightShadowElevationPx: () -> Float = {
+        if (castsFlightShadow && closeFlightActive.value) {
+            restElevationPx * flightProgress.value
+        } else {
+            0f
+        }
+    }
     return this
         .rowSharedArtwork(
             key = key,
@@ -433,16 +496,19 @@ internal fun Modifier.collectionRowFlightArtwork(
             // drawn (entering) side's first overlay frame renders TRANSPARENT
             // -- the flying cover flickers away for a frame at the start of
             // the close flight. (The compact path above gets away with no
-            // clip because it carries no morph layer.) The cost: the flying
-            // artwork's own RenderNode shadow is clipped away with the
-            // content, so hosts carrying a static shadow ease that one up
-            // with the flight progress instead of suppressing it for the
-            // flight (see PlaylistsScreen's staticArtElevation and
-            // CollectionListItem's artworkElevation).
-            overlayClip = AlbumArtFlightShape(restPercent) { flightProgress.value },
+            // clip because it carries no morph layer.) The clip is the shape
+            // EXPANDED by the flight shadow's margin: a plain shape clip
+            // would cut the flying artwork's RenderNode shadow off exactly at
+            // the silhouette, killing the shadow hand-off for the whole
+            // flight (see [ExpandedAlbumArtFlightClip]).
+            overlayClipShape = ExpandedAlbumArtFlightClip(
+                restPercent = restPercent,
+                shapeFraction = { flightProgress.value },
+                marginPx = flightShadowElevationPx
+            ),
             boundsTransform = AlbumArtBoundsTransform
         )
-        .collectionFlightArtwork(flightProgress, fullyRounded)
+        .collectionFlightArtwork(flightProgress, fullyRounded, flightShadowElevationPx)
 }
 
 /**
@@ -805,8 +871,10 @@ internal fun MediaListRow(
  * Marks a list row's artwork as the source of a shared-element transition
  * ([SharedTransitionScope.sharedElement]). No-ops when not [enabled] or when
  * the transition scopes are missing (i.e. the row is not part of a
- * transition). [overlayClip] keeps the given shape applied to every frame of
- * the transition; [boundsTransform] overrides the default spring.
+ * transition). [overlayClipShape] keeps the given shape applied to every
+ * frame of the transition; [overlayClip] passes a raw OverlayClip instead
+ * (for clips the shape API cannot express, e.g. [ExpandedAlbumArtFlightClip]);
+ * [boundsTransform] overrides the default spring.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -816,32 +884,32 @@ internal fun Modifier.rowSharedArtwork(
     animatedVisibilityScope: AnimatedVisibilityScope?,
     enabled: Boolean = true,
     overlayClip: Shape? = null,
+    overlayClipShape: SharedTransitionScope.OverlayClip? = null,
     boundsTransform: BoundsTransform? = null
 ): Modifier {
     if (!enabled || sharedTransitionScope == null || animatedVisibilityScope == null) return this
     return with(sharedTransitionScope) {
         val state = rememberSharedContentState(key = key)
-        if (overlayClip != null && boundsTransform != null) {
-            sharedElement(
+        val resolvedOverlayClip: SharedTransitionScope.OverlayClip? =
+            overlayClipShape ?: overlayClip?.let { OverlayClip(it) }
+        when {
+            resolvedOverlayClip != null && boundsTransform != null -> sharedElement(
                 state,
                 animatedVisibilityScope = animatedVisibilityScope,
                 boundsTransform = boundsTransform,
-                clipInOverlayDuringTransition = OverlayClip(overlayClip)
+                clipInOverlayDuringTransition = resolvedOverlayClip
             )
-        } else if (overlayClip != null) {
-            sharedElement(
+            resolvedOverlayClip != null -> sharedElement(
                 state,
                 animatedVisibilityScope = animatedVisibilityScope,
-                clipInOverlayDuringTransition = OverlayClip(overlayClip)
+                clipInOverlayDuringTransition = resolvedOverlayClip
             )
-        } else if (boundsTransform != null) {
-            sharedElement(
+            boundsTransform != null -> sharedElement(
                 state,
                 animatedVisibilityScope = animatedVisibilityScope,
                 boundsTransform = boundsTransform
             )
-        } else {
-            sharedElement(state, animatedVisibilityScope = animatedVisibilityScope)
+            else -> sharedElement(state, animatedVisibilityScope = animatedVisibilityScope)
         }
     }
 }
