@@ -95,6 +95,7 @@ fun HomeScreen(
     sharedTrackId: Long? = null
 ) {
     val playlists by viewModel.recommendedPlaylists.collectAsState()
+    val playlistCovers by viewModel.playlistCovers.collectAsState()
     val albums by viewModel.recommendedAlbums.collectAsState()
     val recentTracks by viewModel.recentTracks.collectAsState()
     val oldFavorites by viewModel.oldFavoriteTracks.collectAsState()
@@ -174,10 +175,11 @@ fun HomeScreen(
                 items = playlists.take(HomeRowItemCount),
                 key = { it.playlistId }
             ) { playlist ->
+                val cover = playlistCovers[playlist.playlistId]
                 HomeRowCard(
                     title = playlist.name,
-                    imageUrl = playlist.imageUrl,
-                    imageIsEmbeddedArt = false,
+                    imageUrl = cover?.imageUrl ?: playlist.imageUrl,
+                    imageIsEmbeddedArt = cover?.isEmbeddedArt ?: false,
                     onClick = { onPlaylistClick(playlist) },
                     onLongClick = {
                         val entity = allPlaylists.firstOrNull { it.playlistId == playlist.playlistId }
@@ -333,6 +335,7 @@ fun HomeScreen(
     PlaylistFoamModal(
         state = playlistModalState,
         stats = modalStats,
+        cover = playlistModalState.playlist?.let { playlistCovers[it.playlistId] },
         onEditImage = { playlist ->
             imagePickerTarget = playlist
             coverPicker.launch(ImageMimeTypes)

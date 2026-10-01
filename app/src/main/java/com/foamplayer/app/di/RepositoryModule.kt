@@ -12,6 +12,7 @@ import com.foamplayer.app.data.repository.PlaylistRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.LocalAudioScanner
+import com.foamplayer.app.data.scanner.PlaylistCoverProvider
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -46,8 +47,11 @@ object RepositoryModule {
 
     @Provides
     @Singleton
-    fun providePlaylistRepository(playlistDao: PlaylistDao): PlaylistRepository {
-        return PlaylistRepository(playlistDao)
+    fun providePlaylistRepository(
+        playlistDao: PlaylistDao,
+        playlistCoverProvider: PlaylistCoverProvider
+    ): PlaylistRepository {
+        return PlaylistRepository(playlistDao, playlistCoverProvider)
     }
 
     @Provides

@@ -10,14 +10,17 @@ import com.foamplayer.app.data.repository.PlaylistImporter
 import com.foamplayer.app.data.repository.PlaylistRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
+import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.data.scanner.ScanStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -69,6 +72,15 @@ class PlaylistsViewModel @Inject constructor(
     /** Track count per playlist id, for list-row subtitles. */
     private val _trackCounts = MutableStateFlow<Map<Long, Int>>(emptyMap())
     val trackCounts: StateFlow<Map<Long, Int>> = _trackCounts
+
+    /**
+     * Resolved covers per playlist id (custom image first, else the first
+     * track in custom order carrying embedded art, else absent = letter
+     * fallback), mirroring how artist rows resolve their pictures.
+     */
+    val playlistCovers: StateFlow<Map<Long, PlaylistCover>> =
+        playlistRepository.getPlaylistCovers()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private val _createState = MutableStateFlow<CreatePlaylistState>(CreatePlaylistState.Idle)
     val createState: StateFlow<CreatePlaylistState> = _createState

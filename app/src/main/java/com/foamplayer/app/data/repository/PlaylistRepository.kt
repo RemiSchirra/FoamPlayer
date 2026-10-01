@@ -6,6 +6,8 @@ import com.foamplayer.app.data.db.dao.PlaylistTrackCount
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.PlaylistTrackCrossRef
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.scanner.PlaylistCover
+import com.foamplayer.app.data.scanner.PlaylistCoverProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -14,9 +16,18 @@ import javax.inject.Singleton
 /** Playlist CRUD and ordering, on top of [PlaylistDao]. */
 @Singleton
 class PlaylistRepository @Inject constructor(
-    private val playlistDao: PlaylistDao
+    private val playlistDao: PlaylistDao,
+    private val playlistCoverProvider: PlaylistCoverProvider
 ) {
     fun getAllPlaylists(): Flow<List<PlaylistEntity>> = playlistDao.getAllPlaylists()
+
+    /**
+     * Resolved covers per playlist id: the user's custom image when set, else
+     * the first track in the playlist's custom order that carries embedded
+     * art (see [PlaylistCoverProvider]); a missing entry means "letter fallback".
+     */
+    fun getPlaylistCovers(): Flow<Map<Long, PlaylistCover>> =
+        playlistCoverProvider.coversFlow(playlistDao.getAllPlaylists())
 
     fun getTracksForPlaylist(playlistId: Long): Flow<List<TrackEntity>> =
         playlistDao.getTracksForPlaylist(playlistId)
@@ -59,6 +70,10 @@ class PlaylistRepository @Inject constructor(
 
     suspend fun getTracksForPlaylistOnce(playlistId: Long): Flow<List<TrackEntity>> =
         playlistDao.getTracksForPlaylist(playlistId)
+
+    /** Live first-track-art fallback of one playlist in its custom order (detail hero). */
+    fun getFirstTrackArtForPlaylist(playlistId: Long): Flow<String?> =
+        playlistDao.getFirstTrackArtForPlaylist(playlistId)
 
     suspend fun addTrackToPlaylist(playlistId: Long, trackId: Long, orderIndex: Int) {
         playlistDao.addTrackToPlaylist(PlaylistTrackCrossRef(playlistId, trackId, orderIndex))

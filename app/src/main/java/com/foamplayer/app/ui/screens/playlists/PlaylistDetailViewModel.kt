@@ -23,6 +23,13 @@ class PlaylistDetailViewModel @Inject constructor(
     private val _playlist = MutableStateFlow<PlaylistEntity?>(null)
     val playlist: StateFlow<PlaylistEntity?> = _playlist
 
+    /**
+     * Automatic cover fallback: the first track in the playlist's custom order
+     * that carries embedded art (null = letter fallback in the UI).
+     */
+    private val _firstTrackArt = MutableStateFlow<String?>(null)
+    val firstTrackArt: StateFlow<String?> = _firstTrackArt
+
     /** Edit mode: rows gain swipe-to-remove and a drag handle for reordering. */
     private val _editMode = MutableStateFlow(false)
     val editMode: StateFlow<Boolean> = _editMode
@@ -54,6 +61,12 @@ class PlaylistDetailViewModel @Inject constructor(
         viewModelScope.launch {
             repository.getAllPlaylists().collect { playlists ->
                 _playlist.value = playlists.find { it.playlistId == playlistId }
+            }
+        }
+
+        viewModelScope.launch {
+            repository.getFirstTrackArtForPlaylist(playlistId).collect { art ->
+                _firstTrackArt.value = art
             }
         }
     }

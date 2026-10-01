@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.Flow
 /** Track count per playlist, for list-row subtitles. */
 data class PlaylistTrackCount(val playlistId: Long, val trackCount: Int)
 
+/** One playlist membership, ordered by the playlist's custom track order. */
+data class PlaylistTrackOrderEntry(val playlistId: Long, val trackId: Long)
+
 @Dao
 interface PlaylistDao {
     @Query("SELECT * FROM playlists ORDER BY sortOrder ASC, name ASC")
@@ -86,6 +89,27 @@ interface PlaylistDao {
         ORDER BY ref.orderIndex ASC
     """)
     fun getTracksForPlaylist(playlistId: Long): Flow<List<TrackEntity>>
+
+    /** Every playlist's memberships in stored (custom) order, for cover fallback walks. */
+    @Query("""
+        SELECT playlistId, trackId 
+        FROM playlist_track_cross_ref 
+        ORDER BY playlistId ASC, orderIndex ASC
+    """)
+    fun getAllPlaylistTrackOrder(): Flow<List<PlaylistTrackOrderEntry>>
+
+    /**
+     * The first track's album art of one playlist in its stored (custom)
+     * order, for the detail screen's automatic cover fallback.
+     */
+    @Query("""
+        SELECT t.albumArtPath FROM tracks t 
+        INNER JOIN playlist_track_cross_ref ref ON t.id = ref.trackId 
+        WHERE ref.playlistId = :playlistId AND t.albumArtPath IS NOT NULL 
+        ORDER BY ref.orderIndex ASC 
+        LIMIT 1
+    """)
+    fun getFirstTrackArtForPlaylist(playlistId: Long): Flow<String?>
 
     /** Ids of the playlists that contain a track; pre-checks their rows in the add-to-playlist picker. */
     @Query("SELECT playlistId FROM playlist_track_cross_ref WHERE trackId = :trackId")

@@ -61,14 +61,23 @@ sealed class Screen(val route: String, val title: String) {
             return "album/$encodedName?artUrl=$encodedArt&artist=$encodedArtist"
         }
     }
-    object PlaylistDetail : Screen("playlist/{playlistId}?name={name}&imageUrl={imageUrl}", "Playlist") {
+    object PlaylistDetail : Screen("playlist/{playlistId}?name={name}&imageUrl={imageUrl}&embedded={embedded}", "Playlist") {
         /**
          * [name]/[imageUrl] seed the header on its very first frame (before the
          * DB-loaded playlist arrives) so the shared-element transition from the
-         * playlists list never flashes the letter/title fallback.
+         * playlists list never flashes the letter/title fallback. [embedded]
+         * says how [imageUrl] loads: a custom cover is a plain image URI while
+         * the automatic first-track fallback is an audio file whose embedded
+         * picture must be extracted — the same mechanism as [ArtistDetail].
          */
-        fun createRoute(playlistId: Long, name: String, imageUrl: String? = null): String =
-            "playlist/$playlistId?name=${Uri.encode(name)}&imageUrl=${Uri.encode(imageUrl.orEmpty())}"
+        fun createRoute(
+            playlistId: Long,
+            name: String,
+            imageUrl: String? = null,
+            imageIsEmbeddedArt: Boolean = false
+        ): String =
+            "playlist/$playlistId?name=${Uri.encode(name)}" +
+                "&imageUrl=${Uri.encode(imageUrl.orEmpty())}&embedded=$imageIsEmbeddedArt"
     }
 
     object BrowseAlbums : Screen("browse/albums", "Albums")

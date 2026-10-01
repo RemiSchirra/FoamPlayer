@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.request.ImageRequest
 import com.foamplayer.app.R
@@ -31,6 +32,8 @@ import com.foamplayer.app.constants.TrackSortOptions
 import com.foamplayer.app.data.db.dao.AlbumRecommendation
 import com.foamplayer.app.data.db.dao.PlaylistRecommendation
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
@@ -59,9 +62,11 @@ private fun Modifier.listRowInset(density: MediaDensity): Modifier =
 
 /**
  * "See all" page behind the Home "Recommended playlists" row: up to 50
- * playlists in the row's aggregate play/like order. Playlist covers are plain
- * image URIs, so these rows render through the shared list scaffolds directly
- * instead of [CollectionListItem] (whose artwork loader expects embedded art).
+ * playlists in the row's aggregate play/like order. Playlist covers resolve
+ * through the automatic cover chain (custom image first, else first-track
+ * embedded art), so these rows load both plain image URIs and embedded art
+ * directly instead of [CollectionListItem] (whose artwork loader expects
+ * embedded art only).
  */
 @Composable
 fun RecommendedPlaylistsSeeAllScreen(
@@ -76,6 +81,7 @@ fun RecommendedPlaylistsSeeAllScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val playlists by viewModel.recommendedPlaylists.collectAsState()
+    val playlistCovers by viewModel.playlistCovers.collectAsState()
     val searchState = rememberCollectionSearchState()
     // rememberFilteredList keeps the incoming list identity while the hero's
     // search bar is closed/blank (see rememberFilteredList): no fresh list
@@ -109,6 +115,7 @@ fun RecommendedPlaylistsSeeAllScreen(
             Box(modifier = Modifier.listRowInset(density)) {
                 HomePlaylistRow(
                     playlist = playlist,
+                    cover = playlistCovers[playlist.playlistId],
                     onClick = { onPlaylistClick(playlist) },
                     density = density
                 )
@@ -411,18 +418,27 @@ fun FavoriteArtistsSeeAllScreen(
 @Composable
 private fun HomePlaylistRow(
     playlist: PlaylistRecommendation,
+    cover: PlaylistCover?,
     onClick: () -> Unit,
     density: MediaDensity,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coverImageUrl = cover?.imageUrl
 
     @Composable
     fun PlaylistArtwork() {
-        if (playlist.imageUrl != null) {
-            val coverRequest = remember(playlist.imageUrl) {
+        if (coverImageUrl != null) {
+            val isEmbedded = cover?.isEmbeddedArt ?: false
+            val coverRequest = remember(coverImageUrl, isEmbedded) {
                 ImageRequest.Builder(context)
-                    .data(playlist.imageUrl)
+                    .data(
+                        if (isEmbedded) {
+                            EmbeddedAlbumArt(coverImageUrl.toUri())
+                        } else {
+                            coverImageUrl
+                        }
+                    )
                     .size(AlbumArtRequestSize)
                     .build()
             }

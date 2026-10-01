@@ -24,6 +24,7 @@ fun PlaylistDetailScreen(
     playlistId: Long,
     initialName: String,
     initialImageUrl: String?,
+    initialImageIsEmbeddedArt: Boolean = false,
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
@@ -47,6 +48,7 @@ fun PlaylistDetailScreen(
     val tracks by viewModel.tracks.collectAsState()
     val playlist by viewModel.playlist.collectAsState()
     val editMode by viewModel.editMode.collectAsState()
+    val firstTrackArt by viewModel.firstTrackArt.collectAsState()
 
     LaunchedEffect(playlistId) {
         viewModel.loadPlaylist(playlistId)
@@ -66,26 +68,39 @@ fun PlaylistDetailScreen(
         }
     }
 
-    // The playlist's own cover drives the blurred list backdrop (loaded as a
-    // direct image). Without one there is NO backdrop: the app-wide background
-    // of the currently playing track shows through instead.
-    LaunchedEffect(playlist?.imageUrl, initialImageUrl) {
-        val cover = playlist?.imageUrl ?: initialImageUrl
-        if (cover != null) {
-            onListBackdropArt(cover, false)
-        } else {
-            onListBackdropArt(null, true)
-        }
-    }
-
-    // The nav-route seeds keep the header correct on its very first frame (the
-    // DB-loaded playlist takes a moment to arrive) so the shared-element
-    // transition from the playlists list never flashes the letter fallback.
-    val coverImage = playlist?.imageUrl ?: initialImageUrl
-
     // CUSTOM keeps the user-defined list order; any other mode re-sorts the
     // display (edit mode is custom-only, so the drag list never diverges).
     val sortedTracks = rememberSortedTracks(tracks, sortMode, sortInverted)
+
+    // The nav-route seed keeps the header correct on its very first frame (the
+    // DB-loaded playlist takes a moment to arrive) so the shared-element
+    // transition from the playlists list never flashes the letter fallback.
+    // A seed carries its own load mode (custom covers are plain image URIs,
+    // the automatic first-track fallback is embedded art); the DB-loaded
+    // custom cover, once it arrives, always wins and is a plain image URI.
+    val seedImageUrl = initialImageUrl?.takeIf { it.isNotBlank() }
+    val customCover = playlist?.imageUrl ?: seedImageUrl
+
+    // Cover resolution, artist-style: custom image first, else the first
+    // track in the playlist's custom order that carries embedded art (live
+    // fallback query), else the displayed tracks' first art — no image at all
+    // lets the hero render its letter monogram.
+    val heroImageUrl = customCover
+        ?: firstTrackArt
+        ?: sortedTracks.firstOrNull { it.albumArtPath != null }?.albumArtPath
+    val heroImageIsEmbeddedArt = when {
+        heroImageUrl == null -> false
+        customCover == null -> true
+        playlist?.imageUrl == null -> initialImageIsEmbeddedArt
+        else -> false
+    }
+
+    // The hero art drives the blurred list backdrop, like every other detail
+    // screen; without any art there is NO backdrop: the app-wide background
+    // of the currently playing track shows through instead.
+    LaunchedEffect(heroImageUrl, heroImageIsEmbeddedArt) {
+        onListBackdropArt(heroImageUrl, heroImageIsEmbeddedArt)
+    }
 
     // Edit mode keeps the view's own organisation: row densities reorder through
     // the row drag handle, grid densities through the playlists-style cell drag.
@@ -104,8 +119,8 @@ fun PlaylistDetailScreen(
             }
         },
         onBack = onBack,
-        imageUrl = coverImage ?: sortedTracks.firstOrNull { it.albumArtPath != null }?.albumArtPath,
-        imageIsEmbeddedArt = coverImage == null,
+        imageUrl = heroImageUrl,
+        imageIsEmbeddedArt = heroImageIsEmbeddedArt,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         sharedElementKey = playlistId.toString(),

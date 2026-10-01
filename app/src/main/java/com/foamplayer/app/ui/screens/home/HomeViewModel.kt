@@ -10,6 +10,7 @@ import com.foamplayer.app.data.repository.PlaylistRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ArtistCover
 import com.foamplayer.app.data.scanner.ArtistCoverProvider
+import com.foamplayer.app.data.scanner.PlaylistCover
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -49,6 +50,15 @@ class HomeViewModel @Inject constructor(
     val recommendedPlaylists: StateFlow<List<PlaylistRecommendation>> =
         playlistRepository.getRecommendedPlaylists()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * Resolved covers per playlist id (custom image first, else the first
+     * track in custom order carrying embedded art, else absent = letter
+     * fallback), mirroring how the artist cards resolve their pictures.
+     */
+    val playlistCovers: StateFlow<Map<Long, PlaylistCover>> =
+        playlistRepository.getPlaylistCovers()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     /** Albums ranked by the aggregate play count + likes of their tracks. */
     val recommendedAlbums: StateFlow<List<AlbumRecommendation>> =

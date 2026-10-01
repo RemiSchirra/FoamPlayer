@@ -65,6 +65,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.request.ImageRequest
 import com.foamplayer.app.R
@@ -72,6 +73,8 @@ import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.entities.PlaylistEntity
+import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
 import com.foamplayer.app.ui.components.AlbumArtImage
@@ -135,6 +138,7 @@ fun PlaylistsScreen(
 ) {
     val playlists by viewModel.playlists.collectAsState()
     val trackCounts by viewModel.trackCounts.collectAsState()
+    val playlistCovers by viewModel.playlistCovers.collectAsState()
     val createState by viewModel.createState.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
 
@@ -290,6 +294,7 @@ fun PlaylistsScreen(
                     PlaylistItemRow(
                         playlist = playlist,
                         trackCount = trackCounts[playlist.playlistId] ?: 0,
+                        cover = playlistCovers[playlist.playlistId],
                         onClick = { if (!isEditMode) onPlaylistClick(playlist) },
                         onLongClick = { playlistModalState.show(playlist) },
                         active = CollectionId.playlist(playlist.playlistId) == activeCollectionId,
@@ -372,6 +377,7 @@ fun PlaylistsScreen(
                     PlaylistItemRow(
                         playlist = playlist,
                         trackCount = trackCounts[playlist.playlistId] ?: 0,
+                        cover = playlistCovers[playlist.playlistId],
                         onClick = { if (!isEditMode) onPlaylistClick(playlist) },
                         onLongClick = { playlistModalState.show(playlist) },
                         active = CollectionId.playlist(playlist.playlistId) == activeCollectionId,
@@ -446,6 +452,7 @@ fun PlaylistsScreen(
     PlaylistFoamModal(
         state = playlistModalState,
         stats = modalStats,
+        cover = playlistModalState.playlist?.let { playlistCovers[it.playlistId] },
         onEditImage = { playlist ->
             imagePickerTarget = playlist
             coverPicker.launch(ImageMimeTypes)
@@ -531,18 +538,20 @@ fun PlaylistsScreen(
 }
 
 /**
- * One playlist row/cell: cover (user image or name-initial fallback), name and
- * track count through the shared row/grid scaffolds. Long-press opens the
- * playlist actions modal; the artwork and title join the shared-element flight
- * into the playlist detail header when clicked. [active] draws the "now
- * playing" highlight when the queue was started from this playlist;
- * [showDragHandle] shows the edit-mode 2D drag handle.
+ * One playlist row/cell: cover (custom image, else the automatic first-track
+ * fallback, else the name-initial monogram), name and track count through the
+ * shared row/grid scaffolds. Long-press opens the playlist actions modal; the
+ * artwork and title join the shared-element flight into the playlist detail
+ * header when clicked. [active] draws the "now playing" highlight when the
+ * queue was started from this playlist; [showDragHandle] shows the edit-mode
+ * 2D drag handle.
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 private fun PlaylistItemRow(
     playlist: PlaylistEntity,
     trackCount: Int,
+    cover: PlaylistCover?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     active: Boolean = false,
@@ -555,7 +564,12 @@ private fun PlaylistItemRow(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val highlightBackground = activeRowHighlight(active, playlist.imageUrl, isEmbeddedArt = false)
+    val coverImageUrl = cover?.imageUrl
+    val highlightBackground = activeRowHighlight(
+        active,
+        coverImageUrl,
+        isEmbeddedArt = cover?.isEmbeddedArt ?: false
+    )
 
     // The scaffold's static rest shadow is drawn OUTSIDE the shared element, so
     // it would stay at the row's position while the cover flies in on a close.
@@ -620,15 +634,22 @@ private fun PlaylistItemRow(
 
     @Composable
     fun PlaylistArtwork() {
-        if (playlist.imageUrl != null) {
-            val coverRequest = remember(playlist.imageUrl) {
+        if (coverImageUrl != null) {
+            val isEmbedded = cover?.isEmbeddedArt ?: false
+            val coverRequest = remember(coverImageUrl, isEmbedded) {
                 ImageRequest.Builder(context)
-                    .data(playlist.imageUrl)
+                    .data(
+                        if (isEmbedded) {
+                            EmbeddedAlbumArt(coverImageUrl.toUri())
+                        } else {
+                            coverImageUrl
+                        }
+                    )
                     .size(AlbumArtRequestSize)
                     // The destination hero reads the cover under this shared key;
                     // caching under it here keeps a close flight's first frames
                     // on the image instead of the placeholder note.
-                    .memoryCacheKey(albumArtMemoryCacheKey(playlist.imageUrl))
+                    .memoryCacheKey(albumArtMemoryCacheKey(coverImageUrl))
                     .build()
             }
             AlbumArtImage(

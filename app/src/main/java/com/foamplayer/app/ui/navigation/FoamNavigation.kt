@@ -305,6 +305,7 @@ fun FoamNavHost(
     val homeViewModel: HomeViewModel = hiltViewModel()
     val playlistsViewModel: PlaylistsViewModel = hiltViewModel()
     val playlists by playlistsViewModel.playlists.collectAsState()
+    val playlistCovers by playlistsViewModel.playlistCovers.collectAsState()
 
     val trackModalState = rememberTrackFoamModalState()
     var playlistPickerTrack by remember { mutableStateOf<TrackEntity?>(null) }
@@ -1007,11 +1008,13 @@ fun FoamNavHost(
                                             viewModel = homeViewModel,
                                             onPlaylistClick = { playlist ->
                                                 activeSharedCollection = sharedCollectionTag("playlist", "${playlist.playlistId}")
+                                                val cover = playlistCovers[playlist.playlistId]
                                                 navController.navigate(
                                                     Screen.PlaylistDetail.createRoute(
                                                         playlist.playlistId,
                                                         playlist.name,
-                                                        playlist.imageUrl
+                                                        cover?.imageUrl ?: playlist.imageUrl,
+                                                        cover?.isEmbeddedArt ?: false
                                                     )
                                                 )
                                             },
@@ -1046,11 +1049,13 @@ fun FoamNavHost(
                                         RecommendedPlaylistsSeeAllScreen(
                                             onPlaylistClick = { playlist ->
                                                 activeSharedCollection = sharedCollectionTag("playlist", "${playlist.playlistId}")
+                                                val cover = playlistCovers[playlist.playlistId]
                                                 navController.navigate(
                                                     Screen.PlaylistDetail.createRoute(
                                                         playlist.playlistId,
                                                         playlist.name,
-                                                        playlist.imageUrl
+                                                        cover?.imageUrl ?: playlist.imageUrl,
+                                                        cover?.isEmbeddedArt ?: false
                                                     )
                                                 )
                                             },
@@ -1154,11 +1159,13 @@ fun FoamNavHost(
                                         PlaylistsScreen(
                                             onPlaylistClick = { playlist ->
                                                 activeSharedCollection = sharedCollectionTag("playlist", "${playlist.playlistId}")
+                                                val cover = playlistCovers[playlist.playlistId]
                                                 navController.navigate(
                                                     Screen.PlaylistDetail.createRoute(
                                                         playlist.playlistId,
                                                         playlist.name,
-                                                        playlist.imageUrl
+                                                        cover?.imageUrl ?: playlist.imageUrl,
+                                                        cover?.isEmbeddedArt ?: false
                                                     )
                                                 )
                                             },
@@ -1683,16 +1690,20 @@ fun FoamNavHost(
                                         arguments = listOf(
                                             navArgument("playlistId") { type = NavType.LongType },
                                             navArgument("name") { type = NavType.StringType; defaultValue = "" },
-                                            navArgument("imageUrl") { type = NavType.StringType; defaultValue = "" }
+                                            navArgument("imageUrl") { type = NavType.StringType; defaultValue = "" },
+                                            navArgument("embedded") { type = NavType.StringType; defaultValue = "false" }
                                         )
                                     ) { backStackEntry ->
                                         val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: -1L
                                         val initialName = backStackEntry.arguments?.getString("name").orEmpty()
                                         val initialImageUrl = backStackEntry.arguments?.getString("imageUrl")?.ifEmpty { null }
+                                        val initialImageIsEmbeddedArt = backStackEntry.arguments
+                                            ?.getString("embedded")?.toBooleanStrictOrNull() ?: false
                                         PlaylistDetailScreen(
                                             playlistId = playlistId,
                                             initialName = initialName,
                                             initialImageUrl = initialImageUrl,
+                                            initialImageIsEmbeddedArt = initialImageIsEmbeddedArt,
                                             onTrackClick = { tracks, index ->
                                                 playTrackFromList(tracks, index, CollectionId.playlist(playlistId))
                                             },
@@ -1960,6 +1971,7 @@ fun FoamNavHost(
             PlaylistPickerModal(
                 track = playlistPickerTrack,
                 playlists = playlists,
+                playlistCovers = playlistCovers,
                 playlistIdsWithTrack = playlistIdsWithTrack,
                 onToggle = { playlist, checked ->
                     playlistPickerTrack?.let { track ->

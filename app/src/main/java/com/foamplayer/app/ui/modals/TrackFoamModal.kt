@@ -57,6 +57,7 @@ import coil.request.ImageRequest
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.adaptAccentForTheme
@@ -346,6 +347,7 @@ val LocalTrackFoamModalState = staticCompositionLocalOf<TrackFoamModalState?> { 
 fun PlaylistPickerModal(
     track: TrackEntity?,
     playlists: List<PlaylistEntity>,
+    playlistCovers: Map<Long, PlaylistCover> = emptyMap(),
     playlistIdsWithTrack: Set<Long>,
     onToggle: (PlaylistEntity, Boolean) -> Unit,
     onDismiss: () -> Unit,
@@ -394,6 +396,7 @@ fun PlaylistPickerModal(
                             if (index > 0) ModalSectionDivider()
                             PlaylistPickerRow(
                                 playlist = playlist,
+                                cover = playlistCovers[playlist.playlistId],
                                 checked = playlist.playlistId in playlistIdsWithTrack,
                                 onCheckedChange = { checked -> onToggle(playlist, checked) }
                             )
@@ -406,13 +409,14 @@ fun PlaylistPickerModal(
 }
 
 /**
- * One playlist row in [PlaylistPickerModal]: cover image (first-letter fallback
- * when the playlist has none), its name, and a trailing checkbox. The whole row
- * toggles, not just the checkbox.
+ * One playlist row in [PlaylistPickerModal]: cover image (custom image, else
+ * the automatic first-track fallback, else the first-letter fallback), its
+ * name, and a trailing checkbox. The whole row toggles, not just the checkbox.
  */
 @Composable
 private fun PlaylistPickerRow(
     playlist: PlaylistEntity,
+    cover: PlaylistCover?,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
@@ -431,6 +435,7 @@ private fun PlaylistPickerRow(
             .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingSmall),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val coverImageUrl = cover?.imageUrl ?: playlist.imageUrl
         Box(
             modifier = Modifier
                 .size(48.dp)
@@ -438,11 +443,18 @@ private fun PlaylistPickerRow(
                 .background(FoamTheme.colors.surface),
             contentAlignment = Alignment.Center
         ) {
-            if (playlist.imageUrl != null) {
+            if (coverImageUrl != null) {
                 val context = LocalContext.current
-                val coverRequest = remember(playlist.imageUrl) {
+                val isEmbedded = cover?.isEmbeddedArt ?: false
+                val coverRequest = remember(coverImageUrl, isEmbedded) {
                     ImageRequest.Builder(context)
-                        .data(playlist.imageUrl)
+                        .data(
+                            if (isEmbedded) {
+                                EmbeddedAlbumArt(coverImageUrl.toUri())
+                            } else {
+                                coverImageUrl
+                            }
+                        )
                         .size(AlbumArtRequestSize)
                         .build()
                 }

@@ -39,10 +39,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.PlaylistEntity
+import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.albumArtCornerRadius
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -102,6 +105,7 @@ fun PlaylistFoamModal(
     onEditName: (PlaylistEntity) -> Unit = {},
     onDelete: (PlaylistEntity) -> Unit = {},
     stats: PlaylistModalStats? = null,
+    cover: PlaylistCover? = null,
     onDismiss: () -> Unit = { state.dismiss() }
 ) {
     // FoamBottomModal stays mounted while its exit animation plays, but
@@ -149,6 +153,7 @@ fun PlaylistFoamModal(
             ) {
                 PlaylistModalHeader(
                     playlist = displayPlaylist,
+                    cover = cover,
                     onEditImage = { perform(onEditImage) },
                     onEditName = { perform(onEditName) }
                 )
@@ -216,13 +221,15 @@ fun PlaylistFoamModal(
 }
 
 /**
- * Header block: the playlist cover with a pencil chip on top of it (change
- * image), and the name with a pencil to its right (rename), on a darker
- * container — matching the collection modal's header.
+ * Header block: the playlist cover (custom image, else the automatic
+ * first-track fallback, else the name initial) with a pencil chip on top of it
+ * (change image), and the name with a pencil to its right (rename), on a
+ * darker container — matching the collection modal's header.
  */
 @Composable
 private fun PlaylistModalHeader(
     playlist: PlaylistEntity,
+    cover: PlaylistCover?,
     onEditImage: () -> Unit,
     onEditName: () -> Unit
 ) {
@@ -234,6 +241,7 @@ private fun PlaylistModalHeader(
             .padding(FoamDimens.spacingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val coverImageUrl = cover?.imageUrl ?: playlist.imageUrl
         Box(modifier = Modifier.size(64.dp)) {
             Box(
                 modifier = Modifier
@@ -242,11 +250,18 @@ private fun PlaylistModalHeader(
                     .background(FoamTheme.colors.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                if (playlist.imageUrl != null) {
+                if (coverImageUrl != null) {
                     val context = LocalContext.current
-                    val coverRequest = remember(playlist.imageUrl) {
+                    val isEmbedded = cover?.isEmbeddedArt ?: false
+                    val coverRequest = remember(coverImageUrl, isEmbedded) {
                         ImageRequest.Builder(context)
-                            .data(playlist.imageUrl)
+                            .data(
+                                if (isEmbedded) {
+                                    EmbeddedAlbumArt(coverImageUrl.toUri())
+                                } else {
+                                    coverImageUrl
+                                }
+                            )
                             .size(AlbumArtRequestSize)
                             .build()
                     }
