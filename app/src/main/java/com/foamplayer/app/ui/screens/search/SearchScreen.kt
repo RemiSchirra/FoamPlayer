@@ -541,7 +541,14 @@ fun SearchScreen(
                                 )
                                 is RecentSearch.Album -> SwipeDismissRow(
                                     onRemove = { searchViewModel.removeFromHistory(entry) },
-                                    modifier = Modifier.animateItem()
+                                    // While this entry owns the shared-element flight, keep
+                                    // it free of item-animation / swipe layers (see SwipeDismissRow).
+                                    flightActive = isActiveSharedCollection("album", entry.album.album),
+                                    modifier = if (isActiveSharedCollection("album", entry.album.album)) {
+                                        Modifier
+                                    } else {
+                                        Modifier.animateItem()
+                                    }
                                 ) {
                                     AlbumSearchResultItem(
                                         album = entry.album,
@@ -556,7 +563,12 @@ fun SearchScreen(
                                 }
                                 is RecentSearch.Artist -> SwipeDismissRow(
                                     onRemove = { searchViewModel.removeFromHistory(entry) },
-                                    modifier = Modifier.animateItem()
+                                    flightActive = isActiveSharedCollection("artist", entry.name),
+                                    modifier = if (isActiveSharedCollection("artist", entry.name)) {
+                                        Modifier
+                                    } else {
+                                        Modifier.animateItem()
+                                    }
                                 ) {
                                     val cover = artistImages[entry.name]
                                     ArtistSearchResultItem(
@@ -954,6 +966,7 @@ fun AlbumSearchResultItem(
 @Composable
 private fun SwipeDismissRow(
     onRemove: () -> Unit,
+    flightActive: Boolean,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -983,12 +996,17 @@ private fun SwipeDismissRow(
     Box(
         modifier = modifier
             .onSizeChanged { itemWidthPx = it.width.toFloat() }
-            .graphicsLayer {
-                translationX = dismissOffsetValue
-                val threshold = max(swipeThresholdPx(), 1f)
-                val progress = (abs(dismissOffsetValue) / threshold).coerceIn(0f, 1f)
-                alpha = 1f - progress * SwipeMaxFade
-            }
+            // The always-on graphicsLayer wrapped the row's shared artwork and clipped
+            // the flight on its first frame (immersive / compact immersive heroes), so
+            // it is only attached while the row is not the active flight source.
+            .then(
+                if (flightActive) Modifier else Modifier.graphicsLayer {
+                    translationX = dismissOffsetValue
+                    val threshold = max(swipeThresholdPx(), 1f)
+                    val progress = (abs(dismissOffsetValue) / threshold).coerceIn(0f, 1f)
+                    alpha = 1f - progress * SwipeMaxFade
+                }
+            )
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragStart = {
