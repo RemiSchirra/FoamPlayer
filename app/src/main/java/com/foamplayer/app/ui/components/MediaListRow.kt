@@ -342,9 +342,18 @@ internal fun Modifier.collectionFlightArtwork(
  * position from the first flight frame. The HOST suppresses the scaffold's
  * static shadow for the flight's duration (its own close-flight read, see
  * [rememberCollectionCloseFlightActive]) and resumes it on the settle frame,
- * where the flight layer's elevation reads exactly [MediaItemArtElevation] --
+ * where the flight layer's elevation lands on exactly [MediaItemArtElevation] --
  * an identical-strength hand-off. Home/search cards that cast no static
  * shadow keep the default (off) and their established shadowless flights.
+ *
+ * IMMERSIVE heroes are the exception: their flight must keep the animated
+ * overlay clip (the flight path below always carries it) because without it
+ * the drawn (entering) side's first overlay frame renders transparent -- the
+ * flying cover flickers away for a frame at the start of the close flight.
+ * That clip also clips the flying artwork's RenderNode shadow, so the
+ * immersive path drops the flight shadow and hosts instead ease their static
+ * shadow up with the flight progress (no shadow at the hero's shadowless
+ * departure, exactly rest strength on the settle frame -- no pop either way).
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -412,32 +421,27 @@ internal fun Modifier.collectionRowFlightArtwork(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
     )
-    val closeFlightActive = rememberCollectionCloseFlightActive(
-        sharedTransitionScope = sharedTransitionScope,
-        animatedVisibilityScope = animatedVisibilityScope
-    )
-    val restElevationPx = with(LocalDensity.current) { MediaItemArtElevation.toPx() }
-    val flightShadowElevationPx: () -> Float = {
-        if (castsFlightShadow && closeFlightActive.value) {
-            restElevationPx * flightProgress.value
-        } else {
-            0f
-        }
-    }
     return this
         .rowSharedArtwork(
             key = key,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             enabled = true,
-            overlayClip = if (castsFlightShadow) {
-                null
-            } else {
-                AlbumArtFlightShape(restPercent) { flightProgress.value }
-            },
+            // The overlay clip is REQUIRED on this path even though the morph
+            // layer below clips to the same animated shape: without it the
+            // drawn (entering) side's first overlay frame renders TRANSPARENT
+            // -- the flying cover flickers away for a frame at the start of
+            // the close flight. (The compact path above gets away with no
+            // clip because it carries no morph layer.) The cost: the flying
+            // artwork's own RenderNode shadow is clipped away with the
+            // content, so hosts carrying a static shadow ease that one up
+            // with the flight progress instead of suppressing it for the
+            // flight (see PlaylistsScreen's staticArtElevation and
+            // CollectionListItem's artworkElevation).
+            overlayClip = AlbumArtFlightShape(restPercent) { flightProgress.value },
             boundsTransform = AlbumArtBoundsTransform
         )
-        .collectionFlightArtwork(flightProgress, fullyRounded, flightShadowElevationPx)
+        .collectionFlightArtwork(flightProgress, fullyRounded)
 }
 
 /**

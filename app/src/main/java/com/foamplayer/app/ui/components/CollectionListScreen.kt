@@ -420,7 +420,7 @@ private fun CollectionListHero(
  * [immersiveFlightHero] styles the artwork as the DRAWN side of a close flight
  * from an immersive collection detail hero: during the flight the shared
  * element's overlay renders only this row's own content and overlay clip, so
- * the row must itself morph from the hero's square, faded rest look to its own
+ * the row must itself morph from the hero's square, faded look to its own
  * rounded, unfaded one (see [collectionRowFlightArtwork]). The hosts resolve
  * the flag from the destination hero's layout via
  * [LocalCollectionHeroLayoutLookup].
@@ -498,12 +498,39 @@ fun CollectionListItem(
     // playing"), so it steps aside for the flight and resumes on the settle
     // frame, where the flight layer's elevation lands on exactly the same
     // value — an identical-strength hand-off.
+    //
+    // IMMERSIVE heroes: the flight's overlay clip (required to keep the flying
+    // cover from rendering its first overlay frame transparent -- see
+    // [collectionRowFlightArtwork]) also clips the flying artwork's own
+    // RenderNode shadow away, so the static shadow instead eases up with the
+    // flight progress (nothing at the hero's shadowless departure, exactly rest
+    // strength on the settle frame -- no pop either way). Compact/normal
+    // heroes keep the flying artwork's own shadow hand-off (the static one
+    // steps fully aside).
     val closeFlightActive = rememberCollectionCloseFlightActive(
         sharedTransitionScope = sharedTransitionScope?.takeIf { elementKey != null },
         animatedVisibilityScope = animatedVisibilityScope
     ).value
+    val collectionFlightProgress = if (immersiveFlightHero && elementKey != null) {
+        if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+            rememberCollectionFlightProgress(
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
+            )
+        } else {
+            null
+        }
+    } else {
+        null
+    }
     val artworkRestElevation = MediaItemArtElevation
-    val artworkElevation = if (closeFlightActive) 0.dp else artworkRestElevation
+    val artworkElevation = when {
+        !closeFlightActive -> artworkRestElevation
+        !immersiveFlightHero -> 0.dp
+        collectionFlightProgress != null ->
+            MediaItemArtElevation * collectionFlightProgress.value
+        else -> artworkRestElevation
+    }
 
     val sharedArtModifier = Modifier
         .collectionRowFlightArtwork(

@@ -92,6 +92,7 @@ import com.foamplayer.app.ui.components.activeRowHighlight
 import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.components.rememberCollectionCloseFlightActive
+import com.foamplayer.app.ui.components.rememberCollectionFlightProgress
 import com.foamplayer.app.ui.components.rememberDragDropGridState
 import com.foamplayer.app.ui.components.caseInsensitiveComparator
 import com.foamplayer.app.ui.components.rememberSortedList
@@ -165,7 +166,7 @@ fun PlaylistsScreen(
     // Edit-mode drag & drop: a local display list absorbs the swaps live; the
     // DB is written once the drag ends. Incoming emissions are ignored while
     // a drag is in flight so they can't fight the reorder.
-    var displayedPlaylists by remember { mutableStateOf(playlists) }
+    var displayedPlaylists by remember { mutableStateOf(sortedPlaylists) }
     var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
     var dragReleased by remember { mutableStateOf(false) }
     LaunchedEffect(sortedPlaylists) {
@@ -284,6 +285,7 @@ fun PlaylistsScreen(
             ) {
                 itemsIndexed(displayedPlaylists, key = { _, playlist -> playlist.playlistId }) { index, playlist ->
                     val isDragging = gridDragState.isItemDragging(index)
+                    val inFlight = isActiveSharedCollection("playlist", "${playlist.playlistId}")
                     val currentIndex by rememberUpdatedState(index)
                     val liftScale by animateFloatAsState(
                         targetValue = if (isDragging && !dragReleased) DragLiftScale else 1f,
@@ -335,24 +337,37 @@ fun PlaylistsScreen(
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
                         modifier = Modifier
-                            .let { if (isDragging) it else it.animateItem() }
+                            // The row in a shared-element flight must not also be driven by
+                            // lazy-item placement/fade animations.
+                            .let { if (isDragging || inFlight) it else it.animateItem() }
                             .zIndex(if (isDragging) 1f else 0f)
-                            .graphicsLayer {
-                                val itemInfo = lazyGridState.layoutInfo.visibleItemsInfo
-                                    .firstOrNull { it.index == index }
-                                translationX = if (isDragging && itemInfo != null) {
-                                    (gridDragState.draggingItemOffset.x - itemInfo.offset.x).toFloat()
+                            // Only add a render layer while a drag is lifting the item.
+                            .then(
+                                if (isDragging || liftScale != 1f) {
+                                    Modifier.graphicsLayer {
+                                        val itemInfo = if (isDragging) {
+                                            lazyGridState.layoutInfo.visibleItemsInfo
+                                                .firstOrNull { it.index == index }
+                                        } else {
+                                            null
+                                        }
+                                        translationX = if (isDragging && itemInfo != null) {
+                                            (gridDragState.draggingItemOffset.x - itemInfo.offset.x).toFloat()
+                                        } else {
+                                            0f
+                                        }
+                                        translationY = if (isDragging && itemInfo != null) {
+                                            (gridDragState.draggingItemOffset.y - itemInfo.offset.y).toFloat()
+                                        } else {
+                                            0f
+                                        }
+                                        scaleX = liftScale
+                                        scaleY = liftScale
+                                    }
                                 } else {
-                                    0f
+                                    Modifier
                                 }
-                                translationY = if (isDragging && itemInfo != null) {
-                                    (gridDragState.draggingItemOffset.y - itemInfo.offset.y).toFloat()
-                                } else {
-                                    0f
-                                }
-                                scaleX = liftScale
-                                scaleY = liftScale
-                            }
+                            )
                     )
                 }
 
@@ -367,6 +382,7 @@ fun PlaylistsScreen(
             ) {
                 itemsIndexed(displayedPlaylists, key = { _, playlist -> playlist.playlistId }) { index, playlist ->
                     val isDragging = listDragState.isItemDragging(index)
+                    val inFlight = isActiveSharedCollection("playlist", "${playlist.playlistId}")
                     val currentIndex by rememberUpdatedState(index)
                     val liftScale by animateFloatAsState(
                         targetValue = if (isDragging && !dragReleased) DragLiftScale else 1f,
@@ -387,23 +403,32 @@ fun PlaylistsScreen(
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
                         modifier = Modifier
-                            .let { if (isDragging) it else it.animateItem() }
+                            // The row in a shared-element flight must not also be driven by
+                            // lazy-item placement/fade animations.
+                            .let { if (isDragging || inFlight) it else it.animateItem() }
                             .zIndex(if (isDragging) 1f else 0f)
-                            .graphicsLayer {
-                                translationY = if (isDragging) {
-                                    val itemInfo = lazyListState.layoutInfo.visibleItemsInfo
-                                        .firstOrNull { it.index == index }
-                                    if (itemInfo != null) {
-                                        listDragState.draggingItemTop - itemInfo.offset
-                                    } else {
-                                        0f
+                            // Only add a render layer while a drag is lifting the item.
+                            .then(
+                                if (isDragging || liftScale != 1f) {
+                                    Modifier.graphicsLayer {
+                                        translationY = if (isDragging) {
+                                            val itemInfo = lazyListState.layoutInfo.visibleItemsInfo
+                                                .firstOrNull { it.index == index }
+                                            if (itemInfo != null) {
+                                                listDragState.draggingItemTop - itemInfo.offset
+                                            } else {
+                                                0f
+                                            }
+                                        } else {
+                                            0f
+                                        }
+                                        scaleX = liftScale
+                                        scaleY = liftScale
                                     }
                                 } else {
-                                    0f
+                                    Modifier
                                 }
-                                scaleX = liftScale
-                                scaleY = liftScale
-                            }
+                            )
                             .then(
                                 if (isEditMode) {
                                     Modifier.playlistEditDrag(
@@ -564,26 +589,38 @@ private fun PlaylistItemRow(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val coverImageUrl = cover?.imageUrl
+    val coverImageUrl = cover?.imageUrl ?: playlist.imageUrl
     val highlightBackground = activeRowHighlight(
         active,
         coverImageUrl,
         isEmbeddedArt = cover?.isEmbeddedArt ?: false
     )
 
-    // The scaffold's static rest shadow is drawn OUTSIDE the shared element, so
-    // it would stay at the row's position while the cover flies in on a close.
-    // Step it aside for the flight; the flying artwork casts the shadow itself
-    // (castsFlightShadow below) and the static one resumes on the settle frame.
     val isActiveCollection = isActiveSharedCollection("playlist", "${playlist.playlistId}")
+    val flight = LocalCollectionHeroLayoutLookup
+        .current(CollectionHeroTarget.Playlist)
+        .isImmersive
+
     val closeFlightActive by rememberCollectionCloseFlightActive(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
     )
-    val staticArtElevation =
-        if (isActiveCollection && closeFlightActive) 0.dp else MediaItemArtElevation
+    val flightProgress = if (isActiveCollection) {
+        rememberCollectionFlightProgress(
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
+        )
+    } else {
+        null
+    }
+    val staticArtElevation = when {
+        !isActiveCollection -> MediaItemArtElevation
+        !flight -> if (closeFlightActive) 0.dp else MediaItemArtElevation
+        closeFlightActive && flightProgress != null ->
+            MediaItemArtElevation * flightProgress.value
+        else -> MediaItemArtElevation
+    }
 
-    // Elevation shadow under the cover while the row is lifted by a drag.
     val artworkElevation by animateDpAsState(
         targetValue = if (lifted) DragArtworkElevation else 0.dp,
         animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
@@ -592,17 +629,11 @@ private fun PlaylistItemRow(
 
     @Composable
     fun Modifier.sharedArtworkModifier(): Modifier {
-        // Only the clicked playlist flies (see LocalActiveSharedCollection).
-        val isActive = isActiveSharedCollection("playlist", "${playlist.playlistId}")
-        if (!isActive) {
+        if (!isActiveCollection) {
             return Modifier
-                .shadow(elevation = artworkElevation, shape = AlbumArtShape())
                 .clip(AlbumArtShape())
                 .background(FoamTheme.colors.surfaceVariant)
         }
-        val flight = LocalCollectionHeroLayoutLookup
-            .current(CollectionHeroTarget.Playlist)
-            .isImmersive
         return Modifier
             .collectionRowFlightArtwork(
                 key = "playlist-art-${playlist.playlistId}",
@@ -613,7 +644,6 @@ private fun PlaylistItemRow(
                 immersiveFlightHero = flight,
                 castsFlightShadow = true
             )
-            .shadow(elevation = artworkElevation, shape = AlbumArtShape())
             .background(FoamTheme.colors.surfaceVariant)
     }
     @Composable
