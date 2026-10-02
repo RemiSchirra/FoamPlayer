@@ -160,13 +160,15 @@ fun HomeScreen(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(HomeRowSpacing),
-        contentPadding = PaddingValues(top = 16.dp, start = 8.dp, end = 8.dp, bottom = LocalBottomBarClearance.current)
+        contentPadding = PaddingValues(top = 16.dp, bottom = LocalBottomBarClearance.current)
     ) {
         item(key = "home_header") {
-            ScreenTitle(
-                icon = FoamTheme.icons.current.home,
-                title = stringResource(R.string.home)
-            )
+            Box(modifier = Modifier.padding(horizontal = 8.dp)) {
+                ScreenTitle(
+                    icon = FoamTheme.icons.current.home,
+                    title = stringResource(R.string.home)
+                )
+            }
         }
 
         item(key = "home_row_playlists") {

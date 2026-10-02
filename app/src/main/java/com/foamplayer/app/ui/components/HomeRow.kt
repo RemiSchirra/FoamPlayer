@@ -49,8 +49,15 @@ import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.theme.FoamTheme
 
-/** Horizontal breathing room around a Home row's header and its card pager. */
-private val HomeRowEdgePadding = 16.dp
+/**
+ * Horizontal breathing room around a Home row's header and its card pager.
+ * The Home list itself has no horizontal padding, so the pager scrolls its
+ * cards all the way to the screen edges instead of being masked short of them.
+ */
+private val HomeRowEdgePadding = 24.dp
+
+/** Gap between a row's title and its "See all" arrow button. */
+private val HomeRowHeaderButtonGap = 16.dp
 
 /** Gap between two cards of a Home row's pager. */
 private val HomeRowCardSpacing = 8.dp
@@ -109,7 +116,7 @@ fun <T> HomeRow(
             if (onSeeAllClick != null) {
                 Box(
                     modifier = Modifier
-                        .padding(start = HomeRowEdgePadding)
+                        .padding(start = HomeRowHeaderButtonGap)
                         .size(40.dp)
                         .clip(CircleShape)
                         .clickable(
