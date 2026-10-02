@@ -469,6 +469,8 @@ fun CollectionHeroImmersiveHeader(
     // Scroll-out fade distance in px: matches the scroll top bar's title fade
     // so the two swap places over the same stretch of scrolling.
     val fadeDistancePx = with(density) { CollectionScrollTopBarFadeDistance.toPx() }
+    // Height of the host list's top fade zone ([collectionListTopFade]) in px.
+    val topFadeZonePx = with(density) { CollectionScrollTopBarZoneHeight.toPx() }
     // Set by the measure pass below: the overlay block's height, anchoring the
     // draw-phase fade to the block's BOTTOM (the play pill). Read untracked.
     val blockHeightPx = remember { mutableIntStateOf(0) }
@@ -501,6 +503,40 @@ fun CollectionHeroImmersiveHeader(
                         alpha = scrollAlpha *
                                 (1f - flightFraction.value) *
                                 (transitionAlpha?.invoke() ?: 1f)
+                        // The top-fade mask below needs the block's own offscreen
+                        // buffer so DstIn only touches the block's pixels.
+                        compositingStrategy = if (sharedTransitionScope?.isTransitionActive == true) {
+                            CompositingStrategy.Offscreen
+                        } else {
+                            CompositingStrategy.Auto
+                        }
+                    }
+                    .drawWithContent {
+                        drawContent()
+                        // At rest the host list's [collectionListTopFade] dissolves
+                        // this block into the top chrome. While a shared-element
+                        // transition is active the block is lifted into the root
+                        // overlay and escapes that list-level mask, so it popped to
+                        // full opacity for the whole flight. Re-apply the same mask
+                        // here, in the block's own space: the block's top sits at
+                        // (overlayTopPx - scroll) in the list (it is the list's
+                        // first item), so the list-local fade zone [0, zone] maps
+                        // to [scroll - overlayTopPx, + zone] in block-local px.
+                        // Only while lifted — in place the list's mask applies and
+                        // doing both would fade the block twice.
+                        val scroll = scrollOffsetPx?.invoke()
+                        if (scroll != null && sharedTransitionScope?.isTransitionActive == true) {
+                            val zoneStart = (scroll - overlayTopPx).toFloat()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    0f to Color.Black.copy(alpha = 0f),
+                                    1f to Color.Black,
+                                    startY = zoneStart,
+                                    endY = zoneStart + topFadeZonePx
+                                ),
+                                blendMode = BlendMode.DstIn
+                            )
+                        }
                     }
             ) {
                 CollectionHeroOverlayContent(
