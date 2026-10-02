@@ -6,6 +6,7 @@ import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.data.repository.LyricsRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
+import com.foamplayer.app.lyrics.isInstrumentalOnlyLyrics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -100,6 +101,17 @@ class LyricsViewModel @Inject constructor(
                     }
 
                     val result = withContext(Dispatchers.IO) { lyricsRepository.getLyrics(track) }
+
+                    if (result != null && isInstrumentalOnlyLyrics(result)) {
+                        withContext(Dispatchers.IO) {
+                            trackRepository.setInstrumental(track.id, true)
+                        }
+                        trackRepository.observeInstrumental(track.id).first { it }
+                        _lyrics.value = null
+                        _isLoading.value = false
+                        return@collectLatest
+                    }
+
                     _lyrics.value = result
                     _isLoading.value = false
                 }
