@@ -432,6 +432,16 @@ fun FoamNavHost(
 
     var isTransitionAnimated by remember { mutableStateOf(!initialOpenRequested) }
 
+    // Cold start straight into the player: restore animated transitions once the first
+    // frames are composed (see animatePlayerTransition for the warm-start equivalent).
+    LaunchedEffect(Unit) {
+        if (initialOpenRequested) {
+            withFrameNanos { }
+            withFrameNanos { }
+            isTransitionAnimated = true
+        }
+    }
+
     /** Duration scaled to the transition's remaining distance; flicks get a floor. */
     val getPlayerAnimationSpec: (Boolean, Float) -> androidx.compose.animation.core.TweenSpec<Float> = { targetIsFull, gestureVelocityPxPerSec ->
         val isOpenProgress = if (playerTransitionState.currentState == playerTransitionState.targetState) {
@@ -493,7 +503,10 @@ fun FoamNavHost(
                     }
                     playerTransitionState.animateTo(open, getPlayerAnimationSpec(open, gestureVelocityPxPerSec))
                 } else {
-                    playerTransitionState.seekTo(if (open) 1f else 0f, targetState = open)
+                    playerTransitionState.snapTo(open)
+                    if (transitionJobHolder.generation == myGeneration) {
+                        isTransitionAnimated = true
+                    }
                 }
             } finally {
                 if (transitionJobHolder.generation == myGeneration) {
@@ -635,6 +648,14 @@ fun FoamNavHost(
                     )
                 } else {
                     remember { { _: String?, _: String?, _: Float -> } }
+                }
+
+                LaunchedEffect(onBackgroundTransition) {
+                    playerViewModel.currentAlbumArtPath.collect { path ->
+                        if (path != null && playerTransitionState.targetState) {
+                            onBackgroundTransition(path, null, 0f)
+                        }
+                    }
                 }
 
                 // The user-configured static layers (custom blurred image / gradient):
