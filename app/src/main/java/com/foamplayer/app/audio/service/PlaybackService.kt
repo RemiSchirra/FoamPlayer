@@ -58,10 +58,13 @@ import javax.inject.Inject
  * `onPlaybackResumption` rebuilds the queue exactly where it was — so the
  * notification controls recover even after the system killed the session.
  *
- * With "display on lock screen" enabled, screen on/off broadcasts bring the
- * app over the keyguard while a song is playing ([LockScreenPlayerLauncher],
- * overlay permission). Starting is the ONLY trigger: MainActivity keeps
- * itself over the keyguard until unlock, so pausing never dismisses it.
+ * With "display on lock screen" enabled, WAKING the screen while a song is
+ * playing brings the app over the keyguard ([LockScreenPlayerLauncher],
+ * overlay permission). The wake is the ONLY decision point: MainActivity holds
+ * its own `showWhenLocked` until the session is closed (pause, unlock, Fast
+ * lock), so pausing/resuming never dismisses or re-fires it, and a play/pause
+ * pressed on the lock-screen notification never raises the app (no screen
+ * event happens for it).
  */
 @UnstableApi
 @AndroidEntryPoint
@@ -96,9 +99,8 @@ class PlaybackService : MediaSessionService() {
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                // The keyguard state settles a beat after the screen-off/on
-                // broadcasts; a short delay keeps the launch check from racing it.
-                Intent.ACTION_SCREEN_OFF,
+                // The keyguard state settles a beat after the screen-on
+                // broadcast; a short delay keeps the launch check from racing it.
                 Intent.ACTION_SCREEN_ON -> serviceScope.launch {
                     delay(LOCK_ARM_DELAY_MS)
                     showLockScreenPlayer()
@@ -230,10 +232,7 @@ class PlaybackService : MediaSessionService() {
         ContextCompat.registerReceiver(
             this,
             screenStateReceiver,
-            IntentFilter().apply {
-                addAction(Intent.ACTION_SCREEN_OFF)
-                addAction(Intent.ACTION_SCREEN_ON)
-            },
+            IntentFilter(Intent.ACTION_SCREEN_ON),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
     }
@@ -249,10 +248,11 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
-     * The only trigger for the lock-screen display: waking or sleeping the
-     * phone while a song is playing and the device is locked. Once up, the
-     * app stays over the keyguard (MainActivity holds `showWhenLocked` until
-     * unlock), so pausing/resuming never dismisses or re-fires it.
+     * The only trigger for the lock-screen display: the screen WAKES while a
+     * song is playing and the device is locked. Screen-off never launches (the
+     * session decision belongs to the wake), and once up the app stays over
+     * the keyguard until an explicit close trigger in MainActivity — so
+     * pausing/resuming never dismisses or re-fires it.
      */
     private fun showLockScreenPlayer() {
         if (!displayOnLockScreenEnabled) return

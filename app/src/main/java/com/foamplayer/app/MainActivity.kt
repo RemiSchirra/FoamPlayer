@@ -60,6 +60,7 @@ class MainActivity : AppCompatActivity() {
 
     private companion object {
         val TRANSPARENT = android.graphics.Color.TRANSPARENT
+
         /** Inactivity after which the lock-display session closes (Fast lock). */
         const val FAST_LOCK_TIMEOUT_MS = 5_000L
     }
@@ -80,7 +81,7 @@ class MainActivity : AppCompatActivity() {
             ?: ThemeMode.FOLLOW_SYSTEM
 
     private fun writeMirroredThemeMode(mode: ThemeMode) {
-        themeModePrefs.edit().putString("theme_mirror", mode.name).apply()
+        themeModePrefs.edit().putString("mode", mode.name).apply()
     }
 
     private val permissionLauncher = registerForActivityResult(
@@ -91,8 +92,8 @@ class MainActivity : AppCompatActivity() {
         // with it the media session and the notification -- from running. Only
         // the audio read permission gates starting the service; re-check the
         // live grant state rather than the callback map, which only contains
-        // the permissions this particular launch asked for (e.g. a re-request
-        // of POST_NOTIFICATIONS alone with audio already granted).
+        // the permissions this particular launch (e.g. a re-request of
+        // POST_NOTIFICATIONS alone with audio already granted).
         if (ContextCompat.checkSelfPermission(this, audioReadPermission()) ==
             PackageManager.PERMISSION_GRANTED
         ) {
@@ -101,14 +102,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Lock-screen display session, started by [PlaybackService] when it
-     * brings the app over the keyguard (screen event + playing) and ended by
-     * an unlock, the queue emptying, or Fast lock (5s of inactivity).
-     * Sticky on purpose: pausing the song must NOT drop the already-shown
-     * app back behind the lock screen, and pressing play from the lock-screen
-     * notification (while the app was never shown) must NOT raise it — the
-     * flag only turns on via the screen-event launch, never from a
-     * playback-state change.
+     * Lock-screen display session. ONE decision point: the screen-event launch
+     * from [PlaybackService] (screen wakes while a song is playing and the
+     * device is locked). After that the state is fixed until an explicit close
+     * trigger:
+     *  - pausing while the overlay is up (the overlay is what's on screen, so
+     *    any pause reaching the engine is "from the app overlay");
+     *  - Fast lock: [FAST_LOCK_TIMEOUT_MS] with no user input;
+     *  - unlock ([Intent.ACTION_USER_PRESENT]);
+     *  - the queue emptying, or the display option being switched off.
+     *
+     * Playing from the lock-screen notification NEVER opens a session (no
+     * screen event happens), and a screen-off does not close one.
      */
     private var lockDisplaySessionActive = false
 
@@ -132,6 +137,13 @@ class MainActivity : AppCompatActivity() {
         setShowWhenLocked(show)
     }
 
+    /** Common path for a screen-event launch: opens (or re-arms) the session. */
+    private fun onLockDisplayLaunch() {
+        lockDisplaySessionActive = true
+        applyShowWhenLocked()
+        restartFastLock()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Edge-to-edge so the backdrop can cover the whole screen; Compose re-adds
@@ -143,17 +155,25 @@ class MainActivity : AppCompatActivity() {
             IntentFilter(Intent.ACTION_USER_PRESENT),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        // The initial intent is handled HERE, before the window draws: a cold
+        // start straight over the keyguard (the service revived the process)
+        // must show over the lock screen from the first frame, and the
+        // show-when-locked flag set below is what puts it there. onNewIntent
+        // only covers the warm start.
         handleIntent(intent)
+        if (intent?.getBooleanExtra(LockDisplayLaunch, false) == true) {
+            onLockDisplayLaunch()
+        }
         // Permissions are requested on onboarding; afterwards they're auto-requested once.
         lifecycleScope.launch {
             settingsViewModel.onboardingCompleted.collect { completed ->
                 if (completed == true) checkAndRequestPermissions()
             }
         }
-        // Re-evaluate the keyguard flag when its inputs move: a launched
-        // session with the option off or an emptied queue ends it. Play/pause
-        // while the session is active keeps the flag (applyShowWhenLocked
-        // only reads hasCurrentTrack, not isPlaying).
+        // Re-evaluate the keyguard flag when its inputs move: a launched session
+        // with the option off, or an emptied queue, ends it. A pause while the
+        // session is up is handled by the dedicated collector below (buffering
+        // must not count).
         lifecycleScope.launch {
             combine(
                 settingsViewModel.settings,
@@ -162,6 +182,9 @@ class MainActivity : AppCompatActivity() {
                 if (!hasTrack) {
                     lockDisplaySessionActive = false
                     cancelFastLock()
+                } else if (lockDisplaySessionActive && !settings.displayOnLockScreen) {
+                    // The display option was switched off mid-session.
+                    endLockDisplaySession()
                 }
                 applyShowWhenLocked()
                 // Fast lock may be toggled mid-session: arm or disarm live.
@@ -169,6 +192,19 @@ class MainActivity : AppCompatActivity() {
                     restartFastLock()
                 } else {
                     cancelFastLock()
+                }
+            }
+        }
+        // Pause while the lock-display session is up closes it: the app IS the
+        // screen (showing over the keyguard), so every pause that reaches the
+        // engine is "from the app overlay". Gated on playWhenReady, NOT on
+        // isPlaying — isPlaying flickers false while the player is buffering
+        // between tracks (playWhenReady stays true), and that must never drop
+        // the overlay mid-transition with no way back until the next wake.
+        lifecycleScope.launch {
+            playerViewModel.isPlaying.collect { playing ->
+                if (!playing && lockDisplaySessionActive && !playerViewModel.isPlaybackRequested) {
+                    endLockDisplaySession()
                 }
             }
         }
@@ -234,12 +270,10 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // The service only delivers this intent when starting the lock-screen
-        // display (or a warm-start media-notification tap): a screen-event launch
-        // opens a display session; a plain notification tap does not.
+        // display (or a warm-start media-notification tap): a screen-event
+        // launch opens a display session; a plain notification tap does not.
         if (intent.getBooleanExtra(LockDisplayLaunch, false)) {
-            lockDisplaySessionActive = true
-            applyShowWhenLocked()
-            restartFastLock()
+            onLockDisplayLaunch()
         }
         handleIntent(intent)
     }

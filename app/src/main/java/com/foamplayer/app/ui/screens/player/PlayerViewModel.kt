@@ -66,6 +66,15 @@ class PlayerViewModel @Inject constructor(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    /**
+     * Pause INTENT, distinct from "not audibly playing": [isPlaying] goes false
+     * while the player is buffering (e.g. between tracks) even though the user
+     * never pressed pause — playWhenReady stays true through those gaps. The
+     * lock-display session must only close on a real pause request.
+     */
+    val isPlaybackRequested: Boolean
+        get() = audioEngine.player.playWhenReady
+
     // Id of the collection the queue was started from (null = bare track list),
     // highlighted only while the cursor is still inside that collection's own
     // section of the queue.
