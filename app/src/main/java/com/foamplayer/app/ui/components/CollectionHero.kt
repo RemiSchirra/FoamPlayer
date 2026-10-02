@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -434,6 +435,8 @@ fun CollectionHeroImmersiveHeader(
     accentColor: Color = FoamTheme.accentColor,
     onPlayAllClick: (() -> Unit)? = null,
     onShuffleAllClick: (() -> Unit)? = null,
+    /** Tap on the subtitle line; receives the subtitle text (null = not tappable). */
+    onSubtitleClick: ((String) -> Unit)? = null,
     searchState: CollectionSearchState? = null,
     scrollOffsetPx: (() -> Int)? = null,
     overlayTextAlpha: (() -> Float)? = null,
@@ -508,6 +511,7 @@ fun CollectionHeroImmersiveHeader(
                     centered = layout == CollectionHeroLayout.Immersive,
                     onPlayAllClick = onPlayAllClick,
                     onShuffleAllClick = onShuffleAllClick,
+                    onSubtitleClick = onSubtitleClick,
                     searchState = searchState,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
@@ -535,6 +539,11 @@ fun CollectionHeroImmersiveHeader(
  * image-left/text-right header, [CollectionHeroLayout.Normal] a big rounded
  * artwork with centered text below, and the immersive variants bleed the
  * artwork under the status bar with the text block overlaid on it.
+ *
+ * When [onSubtitleClick] is provided, the subtitle (the collection's artist
+ * line) renders as a tappable link with a rounded, padded-out ripple; the
+ * callback receives the tapped subtitle text (the album detail page uses it
+ * to open the artist page).
  *
  * Compact/Normal render the whole header (texts and play pill included) and
  * are composed as the list's leading item. The immersive variants render ONLY
@@ -582,6 +591,8 @@ fun CollectionHero(
     icon: ImageVector? = null,
     searchState: CollectionSearchState? = null,
     onShuffleAllClick: (() -> Unit)? = null,
+    /** Tap on the subtitle line; receives the subtitle text (null = not tappable). */
+    onSubtitleClick: ((String) -> Unit)? = null,
     accentColor: Color = FoamTheme.accentColor,
     transitionAlpha: (() -> Float)? = null,
     scrollOffsetPx: (() -> Int)? = null,
@@ -601,6 +612,7 @@ fun CollectionHero(
             icon = icon,
             onPlayAllClick = onPlayAllClick,
             onShuffleAllClick = onShuffleAllClick,
+            onSubtitleClick = onSubtitleClick,
             searchState = searchState,
             accentColor = accentColor,
             sharedTransitionScope = sharedTransitionScope,
@@ -619,6 +631,7 @@ fun CollectionHero(
             icon = icon,
             onPlayAllClick = onPlayAllClick,
             onShuffleAllClick = onShuffleAllClick,
+            onSubtitleClick = onSubtitleClick,
             searchState = searchState,
             accentColor = accentColor,
             sharedTransitionScope = sharedTransitionScope,
@@ -668,6 +681,7 @@ private fun CollectionHeroCompact(
     icon: ImageVector?,
     onPlayAllClick: (() -> Unit)?,
     onShuffleAllClick: (() -> Unit)?,
+    onSubtitleClick: ((String) -> Unit)?,
     searchState: CollectionSearchState?,
     accentColor: Color,
     sharedTransitionScope: SharedTransitionScope?,
@@ -714,6 +728,7 @@ private fun CollectionHeroCompact(
                     statsText = statsText,
                     accentColor = accentColor,
                     centered = false,
+                    onSubtitleClick = onSubtitleClick,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedElementKey = sharedElementKey,
@@ -781,6 +796,7 @@ private fun CollectionHeroNormal(
     icon: ImageVector?,
     onPlayAllClick: (() -> Unit)?,
     onShuffleAllClick: (() -> Unit)?,
+    onSubtitleClick: ((String) -> Unit)?,
     searchState: CollectionSearchState?,
     accentColor: Color,
     sharedTransitionScope: SharedTransitionScope?,
@@ -828,6 +844,7 @@ private fun CollectionHeroNormal(
                 statsText = statsText,
                 accentColor = accentColor,
                 centered = true,
+                onSubtitleClick = onSubtitleClick,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 sharedElementKey = sharedElementKey,
@@ -1009,6 +1026,7 @@ private fun CollectionHeroOverlayContent(
     centered: Boolean,
     onPlayAllClick: (() -> Unit)?,
     onShuffleAllClick: (() -> Unit)? = null,
+    onSubtitleClick: ((String) -> Unit)? = null,
     searchState: CollectionSearchState? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -1027,6 +1045,7 @@ private fun CollectionHeroOverlayContent(
             statsText = statsText,
             accentColor = accentColor,
             centered = centered,
+            onSubtitleClick = onSubtitleClick,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             sharedElementKey = sharedElementKey,
@@ -1202,6 +1221,7 @@ private fun CollectionHeroTexts(
     statsText: String,
     accentColor: Color,
     centered: Boolean,
+    onSubtitleClick: ((String) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
@@ -1236,18 +1256,47 @@ private fun CollectionHeroTexts(
         )
 
         if (subtitle != null) {
-            BasicText(
-                text = subtitle,
-                style = subtitleStyle,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.collectionHeroSharedText(
-                    key = "$sharedElementPrefix-artist-$sharedElementKey",
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    enabled = sharedElementKey != null
-                )
+            val subtitleSharedText = Modifier.collectionHeroSharedText(
+                key = "$sharedElementPrefix-artist-$sharedElementKey",
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                enabled = sharedElementKey != null
             )
+            if (onSubtitleClick != null) {
+                val linkHorizontalPadding = 8.dp
+                val linkVerticalPadding = 3.dp
+                val linkShape = RoundedCornerShape(10.dp)
+                val subtitleInteractionSource = remember { MutableInteractionSource() }
+                Box(
+                    modifier = (if (centered) {
+                        Modifier
+                    } else {
+                        Modifier.offset(x = -linkHorizontalPadding)
+                    })
+                        .clip(linkShape)
+                        .clickable(
+                            interactionSource = subtitleInteractionSource,
+                            indication = ripple(color = FoamTheme.colors.textPrimary)
+                        ) { onSubtitleClick(subtitle) }
+                        .padding(horizontal = linkHorizontalPadding, vertical = linkVerticalPadding)
+                ) {
+                    BasicText(
+                        text = subtitle,
+                        style = subtitleStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = subtitleSharedText
+                    )
+                }
+            } else {
+                BasicText(
+                    text = subtitle,
+                    style = subtitleStyle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = subtitleSharedText
+                )
+            }
         }
         BasicText(
             text = statsText,

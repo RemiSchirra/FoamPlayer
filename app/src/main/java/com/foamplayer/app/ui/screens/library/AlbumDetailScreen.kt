@@ -19,6 +19,8 @@ fun AlbumDetailScreen(
     albumName: String,
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
     onBack: () -> Unit,
+    /** Tap on the hero's artist line: opens the corresponding artist page. */
+    onArtistClick: (String) -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     playerTransitionVisibilityScope: AnimatedVisibilityScope,
@@ -64,6 +66,13 @@ fun AlbumDetailScreen(
         onBack = onBack,
         imageUrl = imageUrl,
         artistName = artistName,
+        // Only tappable when an artist name actually resolves; the hero then
+        // renders the accent-colored line as a link.
+        onArtistClick = if (artistName != null) {
+            { onArtistClick(artistName) }
+        } else {
+            null
+        },
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         sharedElementKey = albumName,

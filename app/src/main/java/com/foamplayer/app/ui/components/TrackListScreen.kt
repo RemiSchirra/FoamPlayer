@@ -145,6 +145,8 @@ fun TrackListScreen(
     /** False when [imageUrl] is a plain image URI (e.g. a playlist cover) instead of an audio file to extract art from. */
     imageIsEmbeddedArt: Boolean = true,
     artistName: String? = null,
+    /** When set, the hero's artist line becomes a tappable link; receives the artist name. */
+    onArtistClick: ((String) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedElementKey: String? = null,
@@ -464,6 +466,7 @@ fun TrackListScreen(
                         onShuffleAllClick = onShuffleAllClick?.let { callback ->
                             { callback(shownTracks.shuffled()) }
                         },
+                        onArtistClick = onArtistClick,
                         searchState = searchState,
                         accentColor = heroAccentColor,
                         onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
@@ -623,6 +626,7 @@ fun TrackListScreen(
                         onShuffleAllClick = onShuffleAllClick?.let { callback ->
                             { callback(shownTracks.shuffled()) }
                         },
+                        onArtistClick = onArtistClick,
                         searchState = searchState,
                         accentColor = heroAccentColor,
                         onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
@@ -821,6 +825,7 @@ private fun TrackListHero(
     imageIsEmbeddedArt: Boolean,
     onPlayAllClick: () -> Unit,
     onShuffleAllClick: (() -> Unit)?,
+    onArtistClick: ((String) -> Unit)?,
     searchState: CollectionSearchState?,
     accentColor: Color,
     onVisibleHeightPx: (Int) -> Unit,
@@ -840,6 +845,7 @@ private fun TrackListHero(
             accentColor = accentColor,
             onPlayAllClick = onPlayAllClick,
             onShuffleAllClick = onShuffleAllClick,
+            onSubtitleClick = onArtistClick,
             searchState = searchState,
             onVisibleHeightPx = onVisibleHeightPx,
             scrollOffsetPx = scrollOffsetPx,
@@ -861,6 +867,7 @@ private fun TrackListHero(
         imageIsEmbeddedArt = imageIsEmbeddedArt,
         onPlayAllClick = onPlayAllClick,
         onShuffleAllClick = onShuffleAllClick,
+        onSubtitleClick = onArtistClick,
         searchState = searchState,
         accentColor = accentColor,
         sharedTransitionScope = sharedTransitionScope,

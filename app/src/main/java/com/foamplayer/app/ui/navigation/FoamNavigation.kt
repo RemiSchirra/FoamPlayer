@@ -1694,6 +1694,12 @@ fun FoamNavHost(
                                                 playTrackFromList(tracks, index, CollectionId.album(albumName))
                                             },
                                             onBack = { navController.popBackStack() },
+                                            onArtistClick = { artist ->
+                                                activeSharedCollection = sharedCollectionTag("artist", artist)
+                                                navController.navigate(
+                                                    Screen.ArtistDetail.createRoute(artist)
+                                                )
+                                            },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
