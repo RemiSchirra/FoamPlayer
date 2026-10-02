@@ -147,7 +147,7 @@ data class AppSettings(
      * after five seconds without user input: the app drops back behind the
      * keyguard ("fast lock"). Only meaningful with [displayOnLockScreen].
      */
-    val fastLockScreenEnabled: Boolean = false,
+    val fastLockScreenEnabled: Boolean = true,
     /** Complete DSP chain state (EQ, tone, balance, volume), serialized by [DspPersistence]. */
     val dspStateSerialized: String = "",
     /** User-saved EQ presets, serialized by [DspPersistence]. */
