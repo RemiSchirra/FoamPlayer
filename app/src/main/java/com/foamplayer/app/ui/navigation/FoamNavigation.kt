@@ -2,6 +2,7 @@ package com.foamplayer.app.ui.navigation
 
 import android.os.Bundle
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -60,10 +61,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NamedNavArgument
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
+import androidx.navigation.compose.composable as navComposable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
@@ -171,6 +175,31 @@ private const val NavScreenFadeDurationMs = 400
 
 /** Settings and browse subscreens slide by a fraction of their width when pushed/popped. */
 private const val SubScreenSlideDivisor = 3
+
+/**
+ * Destination wrapper that applies the status-bar inset INSIDE each destination.
+ *
+ * The inset used to be applied once, around the whole NavHost. The NavHost's
+ * enter/exit fades (graphicsLayer alpha < 1) render each destination into an
+ * offscreen layer sized to the destination's bounds, so anything a screen draws
+ * above its top edge — the immersive hero artwork bleeding under the status bar —
+ * was cropped for the duration of every fade (album <-> artist, etc.) and the
+ * dimmed root backdrop showed through instead. With the padding moved inside, the
+ * fading layer spans the full screen and the bleed survives the transition.
+ * Layout of the screens is unchanged: they still start below the inset.
+ */
+private fun NavGraphBuilder.composable(
+    route: String,
+    arguments: List<NamedNavArgument> = emptyList(),
+    content: @Composable AnimatedContentScope.(NavBackStackEntry) -> Unit
+) {
+    navComposable(route = route, arguments = arguments) { entry ->
+        val contentScope = this
+        Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+            contentScope.content(entry)
+        }
+    }
+}
 
 private fun isSharedElementRoute(route: String?): Boolean {
     if (route == null) return false
@@ -934,7 +963,7 @@ fun FoamNavHost(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             val playerTransitionVisibilityScope = this
-                            Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                            Box(modifier = Modifier.fillMaxSize()) {
                                 NavHost(
                                     modifier = Modifier.fillMaxSize(),
                                     navController = navController,
