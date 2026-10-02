@@ -322,6 +322,14 @@
     <string name="discord_online_art">Fetch cover art online</string>
     <string name="discord_online_art_desc">Look each track up on Spotify (by title and artist) and use its album cover on Discord, falling back to YouTube thumbnails. Track titles and artist names are sent to those services.</string>
 
+    <!-- Lock screen player -->
+    <string name="lock_screen_section">Lock screen</string>
+    <string name="display_on_lock_screen">Display on lock screen</string>
+    <string name="display_on_lock_screen_desc">While a song is playing, waking the phone shows the player instead of the system lock screen. Needs the \"Display over other apps\" permission</string>
+    <string name="lock_screen_overlay_hint">Allow FoamPlayer to \"Display over other apps\" so the player can show over the lock screen</string>
+    <string name="lock_screen_open_permission">GRANT PERMISSION</string>
+    <string name="lock_screen_tap_to_unlock">Tap anywhere to unlock</string>
+
     <!-- Settings import / export -->
     <string name="settings_export">Export</string>
     <string name="settings_export_subtitle">Save settings and data to JSON files</string>

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.foamplayer.app.audio.service.LockScreenPlayerLauncher
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.discord.DiscordTokenStore
 import com.foamplayer.app.data.settings.AppSettings
@@ -59,6 +60,20 @@ class MiscSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setDiscordOnlineArt(enabled)
         }
+    }
+
+    fun setDisplayOnLockScreen(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setDisplayOnLockScreen(enabled)
+        }
+    }
+
+    /** Whether the system lets the app show the lock player over other apps. */
+    fun canDrawOverlays(context: Context): Boolean = LockScreenPlayerLauncher.canDrawOverlays(context)
+
+    /** Opens the system screen granting the "Display over other apps" permission. */
+    fun openOverlaySettings(context: Context) {
+        LockScreenPlayerLauncher.openOverlaySettings(context)
     }
 
     fun startAuthorization(context: Context) {

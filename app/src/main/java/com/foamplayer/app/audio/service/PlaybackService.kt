@@ -1,9 +1,14 @@
 package com.foamplayer.app.audio.service
 
+import android.app.KeyguardManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
@@ -17,6 +22,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.QueuePersistence
 import com.foamplayer.app.audio.engine.RepeatMode
+import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.discord.DiscordPresenceController
 import com.google.common.util.concurrent.Futures
@@ -28,6 +34,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -45,9 +54,14 @@ import javax.inject.Inject
  * Playback resumption: Media3 retires the paused foreground state after 10
  * minutes, and the system always destroys the service (or the whole process).
  * [QueuePersistence] keeps the playing session on disk; when this service is
- * recreated to serve a media button press (Bluetooth headset, car, ...) after
- * that, `onPlaybackResumption` rebuilds the queue exactly where it was — so the
+ * recreated to serve a media button press (Bluetooth, car, ...) after that,
+ * `onPlaybackResumption` rebuilds the queue exactly where it was — so the
  * notification controls recover even after the system killed the session.
+ *
+ * With "display on lock screen" enabled, screen on/off broadcasts bring the
+ * app over the keyguard while a song is playing ([LockScreenPlayerLauncher],
+ * overlay permission). Starting is the ONLY trigger: MainActivity keeps
+ * itself over the keyguard until unlock, so pausing never dismisses it.
  */
 @UnstableApi
 @AndroidEntryPoint
@@ -65,6 +79,9 @@ class PlaybackService : MediaSessionService() {
     @Inject
     lateinit var discordPresenceController: DiscordPresenceController
 
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
+
     private var mediaSession: MediaSession? = null
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -72,9 +89,30 @@ class PlaybackService : MediaSessionService() {
     private val shuffleCommand = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)
     private val repeatCommand = SessionCommand(ACTION_TOGGLE_REPEAT, Bundle.EMPTY)
 
+    /** Cached "display on lock screen" setting, read on the screen-state events. */
+    @Volatile
+    private var displayOnLockScreenEnabled = false
+
+    private val screenStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                // The keyguard state settles a beat after the screen-off/on
+                // broadcasts; a short delay keeps the launch check from racing it.
+                Intent.ACTION_SCREEN_OFF,
+                Intent.ACTION_SCREEN_ON -> serviceScope.launch {
+                    delay(LOCK_ARM_DELAY_MS)
+                    showLockScreenPlayer()
+                }
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         discordPresenceController.start()
+        registerScreenStateReceiver()
+        observeLockScreenSetting()
+
         val callback = object : MediaSession.Callback {
             override fun onConnect(
                 session: MediaSession,
@@ -188,9 +226,47 @@ class PlaybackService : MediaSessionService() {
         return mediaSession
     }
 
+    private fun registerScreenStateReceiver() {
+        ContextCompat.registerReceiver(
+            this,
+            screenStateReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    }
+
+    /** Keeps the cached "display on lock screen" flag in sync with settings. */
+    private fun observeLockScreenSetting() {
+        serviceScope.launch {
+            settingsRepository.settings
+                .map { settings -> settings.displayOnLockScreen }
+                .distinctUntilChanged()
+                .collect { displayOnLockScreenEnabled = it }
+        }
+    }
+
+    /**
+     * The only trigger for the lock-screen display: waking or sleeping the
+     * phone while a song is playing and the device is locked. Once up, the
+     * app stays over the keyguard (MainActivity holds `showWhenLocked` until
+     * unlock), so pausing/resuming never dismisses or re-fires it.
+     */
+    private fun showLockScreenPlayer() {
+        if (!displayOnLockScreenEnabled) return
+        val state = audioEngine.playbackState.value
+        if (!state.isPlaying || !isKeyguardUp()) return
+        LockScreenPlayerLauncher.launch(this)
+    }
+
+    private fun isKeyguardUp(): Boolean =
+        (getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+
     /**
      * Playback resumption state: the engine's own session when the process is
-     * still alive (service retired, queue live), otherwise the DataStore
+     * still alive (service demoted, queue live), otherwise the DataStore
      * snapshot resolved against the library and rebuilt in the engine paused
      * at the saved position.
      */
@@ -233,7 +309,7 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         audioEngine.setOnPlayerSwappedListener(null)
         audioEngine.setOnDisplayPlayerChangedListener(null)
-        discordPresenceController.stop()
+        runCatching { unregisterReceiver(screenStateReceiver) }
         serviceScope.cancel()
         mediaSession?.run {
             release()
@@ -271,6 +347,7 @@ class PlaybackService : MediaSessionService() {
 
     companion object {
         private const val TAG = "PlaybackService"
+        private const val LOCK_ARM_DELAY_MS = 300L
         const val ACTION_TOGGLE_SHUFFLE = "com.foamplayer.app.action.TOGGLE_SHUFFLE"
         const val ACTION_TOGGLE_REPEAT = "com.foamplayer.app.action.TOGGLE_REPEAT"
         const val EXTRA_OPEN_PLAYER = "com.foamplayer.app.extra.OPEN_PLAYER"

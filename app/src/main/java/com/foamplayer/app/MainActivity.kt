@@ -1,8 +1,10 @@
 package com.foamplayer.app
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -44,6 +46,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /** Single activity hosting the whole Compose UI and the media playback session. */
@@ -84,16 +87,64 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Lock-screen display session, started by [PlaybackService] when it
+     * brings the app over the keyguard (screen event + playing) and ended by
+     * an unlock or the queue emptying. Sticky on purpose: pausing the song
+     * must NOT drop the already-shown app back behind the lock screen, and
+     * pressing play from the lock-screen notification (while the app was
+     * never shown) must NOT raise it — the flag only turns on via the
+     * screen-event launch, never from a playback-state change.
+     */
+    private var lockDisplaySessionActive = false
+
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_USER_PRESENT) {
+                lockDisplaySessionActive = false
+                applyShowWhenLocked()
+            }
+        }
+    }
+
+    private fun applyShowWhenLocked() {
+        val show = lockDisplaySessionActive &&
+                settingsViewModel.settings.value.displayOnLockScreen &&
+                playerViewModel.hasCurrentTrack.value
+        setShowWhenLocked(show)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Edge-to-edge so the backdrop can cover the whole screen; Compose re-adds
         // insets where interactive elements need them.
         enableEdgeToEdge()
+        ContextCompat.registerReceiver(
+            this,
+            unlockReceiver,
+            IntentFilter(Intent.ACTION_USER_PRESENT),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         handleIntent(intent)
         // Permissions are requested on onboarding; afterwards they're auto-requested once.
         lifecycleScope.launch {
             settingsViewModel.onboardingCompleted.collect { completed ->
                 if (completed == true) checkAndRequestPermissions()
+            }
+        }
+        // Re-evaluate the keyguard flag when its inputs move: a launched
+        // session with the option off or an emptied queue ends it. Play/pause
+        // while the session is active keeps the flag (applyShowWhenLocked
+        // only reads hasCurrentTrack, not isPlaying).
+        lifecycleScope.launch {
+            combine(
+                settingsViewModel.settings,
+                playerViewModel.hasCurrentTrack
+            ) { settings, hasTrack -> settings to hasTrack }.collect { (_, hasTrack) ->
+                if (!hasTrack) {
+                    lockDisplaySessionActive = false
+                }
+                applyShowWhenLocked()
             }
         }
 
@@ -150,6 +201,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // The service only delivers this intent when starting the lock-screen
+        // display (or a media-notification tap): a screen-event launch opens a
+        // display session; a plain notification tap does not.
+        if (intent.getBooleanExtra(LockDisplayLaunch, false)) {
+            lockDisplaySessionActive = true
+            applyShowWhenLocked()
+        }
         handleIntent(intent)
     }
 
@@ -186,6 +244,9 @@ class MainActivity : AppCompatActivity() {
         startService(Intent(this, PlaybackService::class.java))
     }
 }
+
+/** Extra on the launcher intent marking a lock-screen-display launch. */
+const val LockDisplayLaunch = "com.foamplayer.app.extra.LOCK_DISPLAY_LAUNCH"
 
 /** Root composable: applies theme, accent color and locale, then the nav host. */
 @Composable

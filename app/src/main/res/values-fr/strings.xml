@@ -306,6 +306,14 @@
     <string name="discord_online_art">Récupérer les pochettes en ligne</string>
     <string name="discord_online_art_desc">Recherche chaque titre sur Spotify (par titre et artiste) et utilise sa pochette d\'album sur Discord, avec repli sur les miniatures YouTube. Les titres et noms d\'artiste sont envoyés à ces services.</string>
 
+    <!-- Écran de verrouillage -->
+    <string name="lock_screen_section">Écran de verrouillage</string>
+    <string name="display_on_lock_screen">Afficher sur l\'écran de verrouillage</string>
+    <string name="display_on_lock_screen_desc">Pendant la lecture, le réveil du téléphone affiche le lecteur à la place de l\'écran de verrouillage. Nécessite la permission « Afficher par-dessus les autres applications »</string>
+    <string name="lock_screen_overlay_hint">Autorisez FoamPlayer à « Afficher par-dessus les autres applications » pour que le lecteur s\'affiche sur l\'écran de verrouillage</string>
+    <string name="lock_screen_open_permission">ACCORDER LA PERMISSION</string>
+    <string name="lock_screen_tap_to_unlock">Touchez l\'écran pour déverrouiller</string>
+
     <!-- Paramètres import / export -->
     <string name="settings_export">Exporter</string>
     <string name="settings_export_subtitle">Sauvegarder les réglages et données en fichiers JSON</string>
@@ -315,7 +323,7 @@
     <string name="settings_export_folder_hint">Choisissez où écrire les fichiers JSON</string>
     <string name="settings_export_features">Fonctionnalités à exporter</string>
     <string name="settings_import_files">Fichier JSON</string>
-    <string name="settings_import_files_hint">Choisissez un un fichier de sauvegarde JSON</string>
+    <string name="settings_import_files_hint">Choisissez un fichier de sauvegarde JSON</string>
     <string name="settings_import_features">Fonctionnalités à importer</string>
     <string name="settings_backup_feature_app">Paramètres de l\'application</string>
     <string name="settings_backup_feature_folders">Dossiers de musique</string>

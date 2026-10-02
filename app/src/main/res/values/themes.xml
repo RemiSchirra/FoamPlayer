@@ -13,6 +13,9 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <!-- Opaque pre-Compose frame: the lock-screen handoff must never
+             show other apps through the window before the first draw. -->
+        <item name="android:windowBackground">#FFFAFAFA</item>
         <!-- Customize your theme here. -->
     </style>
 </resources>

@@ -30,18 +30,24 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -61,6 +67,21 @@ fun MiscSettingsScreen(
 
     val isDiscordEnabled = settings.discordPresenceEnabled
     val isLoggedIn = session != null
+
+    // Re-checked whenever the screen comes back to the foreground so
+    // returning from the system permission screen instantly reflects the
+    // (revoked or granted) overlay state.
+    var overlayGranted by remember { mutableStateOf(viewModel.canDrawOverlays(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                overlayGranted = viewModel.canDrawOverlays(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     BackHandler(enabled = authState is DiscordAuthUiState.Waiting) {
         viewModel.cancelAuthorization()
@@ -83,6 +104,53 @@ fun MiscSettingsScreen(
                 .padding(horizontal = FoamDimens.paddingMedium),
             contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
         ) {
+            item {
+                BasicText(
+                    text = stringResource(R.string.lock_screen_section),
+                    style = FoamTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    FoamSwitchItem(
+                        title = stringResource(R.string.display_on_lock_screen),
+                        description = stringResource(R.string.display_on_lock_screen_desc),
+                        checked = settings.displayOnLockScreen,
+                        onCheckedChange = viewModel::setDisplayOnLockScreen
+                    )
+                }
+                AnimatedVisibility(
+                    visible = settings.displayOnLockScreen && !overlayGranted,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = FoamDimens.spacingSmall)
+                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                            .background(FoamTheme.colors.surface)
+                            .padding(FoamDimens.paddingMedium)
+                    ) {
+                        BasicText(
+                            text = stringResource(R.string.lock_screen_overlay_hint),
+                            style = FoamTheme.typography.body
+                        )
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                        DiscordActionButton(
+                            label = stringResource(R.string.lock_screen_open_permission),
+                            onClick = { viewModel.openOverlaySettings(context) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+
             item {
                 BasicText(
                     text = stringResource(R.string.discord_section),

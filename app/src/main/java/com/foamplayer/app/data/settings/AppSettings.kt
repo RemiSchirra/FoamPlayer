@@ -136,6 +136,12 @@ data class AppSettings(
     val discordOnlineArt: Boolean = true,
     /** Resolves a picture for the library's artists from Spotify (Settings > Library scan). */
     val artistImageResolveEnabled: Boolean = false,
+    /**
+     * Shows the app's own player over the lock screen while a song is playing:
+     * waking the phone presents the lock-screen player instead of the system
+     * lock screen (requires the system "Full-screen intent" permission).
+     */
+    val displayOnLockScreen: Boolean = false,
     /** Complete DSP chain state (EQ, tone, balance, volume), serialized by [DspPersistence]. */
     val dspStateSerialized: String = "",
     /** User-saved EQ presets, serialized by [DspPersistence]. */
