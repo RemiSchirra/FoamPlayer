@@ -68,6 +68,12 @@ class MiscSettingsViewModel @Inject constructor(
         }
     }
 
+    fun setFastLockScreenEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setFastLockScreenEnabled(enabled)
+        }
+    }
+
     /** Whether the system lets the app show the lock player over other apps. */
     fun canDrawOverlays(context: Context): Boolean = LockScreenPlayerLauncher.canDrawOverlays(context)
 

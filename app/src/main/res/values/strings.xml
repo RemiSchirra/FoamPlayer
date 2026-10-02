@@ -329,6 +329,8 @@
     <string name="lock_screen_overlay_hint">Allow FoamPlayer to \"Display over other apps\" so the player can show over the lock screen</string>
     <string name="lock_screen_open_permission">GRANT PERMISSION</string>
     <string name="lock_screen_tap_to_unlock">Tap anywhere to unlock</string>
+    <string name="fast_lock_screen">Fast lock</string>
+    <string name="fast_lock_screen_desc">When the lock-screen player is showing, the app drops back after 5 seconds without input</string>
 
     <!-- Settings import / export -->
     <string name="settings_export">Export</string>

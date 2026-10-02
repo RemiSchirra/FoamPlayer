@@ -97,6 +97,7 @@ object BackupJson {
         put("discordOnlineArt", settings.discordOnlineArt)
         put("artistImageResolveEnabled", settings.artistImageResolveEnabled)
         put("displayOnLockScreen", settings.displayOnLockScreen)
+        put("fastLockScreenEnabled", settings.fastLockScreenEnabled)
         put("dspState", settings.dspStateSerialized)
         put("dspUserPresets", settings.dspUserPresets)
         put("deviceAudioConfigs", deviceAudioConfigsToJson(settings.deviceAudioConfigs))
@@ -193,6 +194,7 @@ object BackupJson {
         discordOnlineArt = json.optBoolean("discordOnlineArt", true),
         artistImageResolveEnabled = json.optBoolean("artistImageResolveEnabled", false),
         displayOnLockScreen = json.optBoolean("displayOnLockScreen", false),
+        fastLockScreenEnabled = json.optBoolean("fastLockScreenEnabled", false),
         dspStateSerialized = json.optString("dspState", ""),
         dspUserPresets = json.optString("dspUserPresets", ""),
         deviceAudioConfigs = deviceAudioConfigsFromJson(json.optJSONObject("deviceAudioConfigs"))

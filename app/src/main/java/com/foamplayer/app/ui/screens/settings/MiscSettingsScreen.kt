@@ -148,6 +148,28 @@ fun MiscSettingsScreen(
                         )
                     }
                 }
+                // Fast lock: end the lock-display session after 5s of inactivity;
+                // only meaningful while the lock-screen display itself is on.
+                AnimatedVisibility(
+                    visible = settings.displayOnLockScreen,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = FoamDimens.spacingSmall)
+                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                            .background(FoamTheme.colors.surface)
+                    ) {
+                        FoamSwitchItem(
+                            title = stringResource(R.string.fast_lock_screen),
+                            description = stringResource(R.string.fast_lock_screen_desc),
+                            checked = settings.fastLockScreenEnabled,
+                            onCheckedChange = viewModel::setFastLockScreenEnabled
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 

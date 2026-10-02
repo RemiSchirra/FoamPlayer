@@ -142,6 +142,12 @@ data class AppSettings(
      * lock screen (requires the system "Full-screen intent" permission).
      */
     val displayOnLockScreen: Boolean = false,
+    /**
+     * While the app shows over the lock screen, end the lock-display session
+     * after five seconds without user input: the app drops back behind the
+     * keyguard ("fast lock"). Only meaningful with [displayOnLockScreen].
+     */
+    val fastLockScreenEnabled: Boolean = false,
     /** Complete DSP chain state (EQ, tone, balance, volume), serialized by [DspPersistence]. */
     val dspStateSerialized: String = "",
     /** User-saved EQ presets, serialized by [DspPersistence]. */

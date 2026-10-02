@@ -313,6 +313,8 @@
     <string name="lock_screen_overlay_hint">Autorisez FoamPlayer à « Afficher par-dessus les autres applications » pour que le lecteur s\'affiche sur l\'écran de verrouillage</string>
     <string name="lock_screen_open_permission">ACCORDER LA PERMISSION</string>
     <string name="lock_screen_tap_to_unlock">Touchez l\'écran pour déverrouiller</string>
+    <string name="fast_lock_screen">Verrouillage rapide</string>
+    <string name="fast_lock_screen_desc">Quand le lecteur est affiché sur l\'écran de verrouillage, l\'application repasse derrière après 5 secondes sans interaction</string>
 
     <!-- Paramètres import / export -->
     <string name="settings_export">Exporter</string>

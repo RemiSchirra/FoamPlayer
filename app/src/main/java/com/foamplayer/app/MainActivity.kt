@@ -46,6 +46,8 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -58,6 +60,8 @@ class MainActivity : AppCompatActivity() {
 
     private companion object {
         val TRANSPARENT = android.graphics.Color.TRANSPARENT
+        /** Inactivity after which the lock-display session closes (Fast lock). */
+        const val FAST_LOCK_TIMEOUT_MS = 5_000L
     }
 
     /**
@@ -90,18 +94,23 @@ class MainActivity : AppCompatActivity() {
     /**
      * Lock-screen display session, started by [PlaybackService] when it
      * brings the app over the keyguard (screen event + playing) and ended by
-     * an unlock or the queue emptying. Sticky on purpose: pausing the song
-     * must NOT drop the already-shown app back behind the lock screen, and
-     * pressing play from the lock-screen notification (while the app was
-     * never shown) must NOT raise it — the flag only turns on via the
-     * screen-event launch, never from a playback-state change.
+     * an unlock, the queue emptying, or Fast lock (5s of inactivity).
+     * Sticky on purpose: pausing the song must NOT drop the already-shown
+     * app back behind the lock screen, and pressing play from the lock-screen
+     * notification (while the app was never shown) must NOT raise it — the
+     * flag only turns on via the screen-event launch, never from a
+     * playback-state change.
      */
     private var lockDisplaySessionActive = false
+
+    /** Active Fast lock countdown; null while the timer is not running. */
+    private var fastLockJob: Job? = null
 
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == Intent.ACTION_USER_PRESENT) {
                 lockDisplaySessionActive = false
+                cancelFastLock()
                 applyShowWhenLocked()
             }
         }
@@ -140,11 +149,18 @@ class MainActivity : AppCompatActivity() {
             combine(
                 settingsViewModel.settings,
                 playerViewModel.hasCurrentTrack
-            ) { settings, hasTrack -> settings to hasTrack }.collect { (_, hasTrack) ->
+            ) { settings, hasTrack -> settings to hasTrack }.collect { (settings, hasTrack) ->
                 if (!hasTrack) {
                     lockDisplaySessionActive = false
+                    cancelFastLock()
                 }
                 applyShowWhenLocked()
+                // Fast lock may be toggled mid-session: arm or disarm live.
+                if (lockDisplaySessionActive && settings.fastLockScreenEnabled) {
+                    restartFastLock()
+                } else {
+                    cancelFastLock()
+                }
             }
         }
 
@@ -202,13 +218,50 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // The service only delivers this intent when starting the lock-screen
-        // display (or a media-notification tap): a screen-event launch opens a
-        // display session; a plain notification tap does not.
+        // display (or a warm-start media-notification tap): a screen-event launch
+        // opens a display session; a plain notification tap does not.
         if (intent.getBooleanExtra(LockDisplayLaunch, false)) {
             lockDisplaySessionActive = true
             applyShowWhenLocked()
+            restartFastLock()
         }
         handleIntent(intent)
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        // Every touch/key while the lock-display session is up restarts the
+        // Fast lock countdown, keeping the player visible while the user is
+        // actively interacting.
+        if (lockDisplaySessionActive) restartFastLock()
+    }
+
+    /**
+     * Fast lock: while the app shows over the keyguard, count [FAST_LOCK_TIMEOUT_MS]
+     * of no user input, then drop the task behind the lock screen (the system lock
+     * screen takes over again).
+     */
+    private fun restartFastLock() {
+        if (!settingsViewModel.settings.value.fastLockScreenEnabled) return
+        fastLockJob?.cancel()
+        fastLockJob = lifecycleScope.launch {
+            delay(FAST_LOCK_TIMEOUT_MS)
+            fastLockJob = null
+            endLockDisplaySession()
+        }
+    }
+
+    private fun cancelFastLock() {
+        fastLockJob?.cancel()
+        fastLockJob = null
+    }
+
+    private fun endLockDisplaySession() {
+        lockDisplaySessionActive = false
+        cancelFastLock()
+        applyShowWhenLocked()
+        // Send the task behind the keyguard; the system lock screen is visible again.
+        moveTaskToBack(true)
     }
 
     @OptIn(UnstableApi::class)
@@ -216,6 +269,12 @@ class MainActivity : AppCompatActivity() {
         if (intent?.getBooleanExtra(PlaybackService.EXTRA_OPEN_PLAYER, false) == true) {
             playerViewModel.requestOpenPlayer()
         }
+    }
+
+    override fun onDestroy() {
+        cancelFastLock()
+        runCatching { unregisterReceiver(unlockReceiver) }
+        super.onDestroy()
     }
 
     private fun checkAndRequestPermissions() {
