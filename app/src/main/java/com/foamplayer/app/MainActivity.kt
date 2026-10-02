@@ -85,8 +85,17 @@ class MainActivity : AppCompatActivity() {
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        if (permissions.values.all { it }) {
+    ) {
+        // Media notifications are exempt from POST_NOTIFICATIONS, so a denied
+        // notification permission must NOT keep the playback service -- and
+        // with it the media session and the notification -- from running. Only
+        // the audio read permission gates starting the service; re-check the
+        // live grant state rather than the callback map, which only contains
+        // the permissions this particular launch asked for (e.g. a re-request
+        // of POST_NOTIFICATIONS alone with audio already granted).
+        if (ContextCompat.checkSelfPermission(this, audioReadPermission()) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
             startPlaybackService()
         }
     }
@@ -215,6 +224,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (playerViewModel.hasCurrentTrack.value) {
+            startPlaybackService()
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // The service only delivers this intent when starting the lock-screen
@@ -298,9 +314,15 @@ class MainActivity : AppCompatActivity() {
         else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
 
+    /** The media read permission that gates playback (and thus the service) on this OS level. */
+    private fun audioReadPermission(): String = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> Manifest.permission.READ_MEDIA_AUDIO
+        else -> Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
     @OptIn(UnstableApi::class)
     private fun startPlaybackService() {
-        startService(Intent(this, PlaybackService::class.java))
+        runCatching { startService(Intent(this, PlaybackService::class.java)) }
     }
 }
 
