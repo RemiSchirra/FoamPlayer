@@ -64,9 +64,11 @@ private fun trackComparator(mode: CollectionSortMode): Comparator<TrackEntity> =
             .then(trackByTitle)
     CollectionSortMode.LISTEN_COUNT ->
         compareByDescending(TrackEntity::playCount).then(trackByTitle)
-    CollectionSortMode.CUSTOM, CollectionSortMode.RANDOM ->
-        // CUSTOM keeps the incoming (playlist) order; RANDOM is handled by
-        // the seeded shuffle in [sortedEntriesForDisplay].
+    CollectionSortMode.CUSTOM, CollectionSortMode.RECOMMENDED, CollectionSortMode.RANDOM ->
+        // CUSTOM keeps the incoming (playlist) order; RECOMMENDED keeps the
+        // DAO's ranking (both are order-preserving and short-circuit in
+        // [sortedEntriesForDisplay], so this comparator never actually runs);
+        // RANDOM is handled by the seeded shuffle in [sortedEntriesForDisplay].
         compareBy { 0 }
 }
 
@@ -75,7 +77,9 @@ private fun trackComparator(mode: CollectionSortMode): Comparator<TrackEntity> =
  * years, folders, playlists): [comparatorFor] maps each supported mode to that
  * list's ordering; RANDOM is a seeded shuffle, so Room re-emissions (play-count
  * bumps, score edits) don't reshuffle the list under the user — re-seeding is
- * what produces a new shuffle.
+ * what produces a new shuffle. RECOMMENDED is order-preserving too: it keeps
+ * the incoming (DAO-ranked) order, so a ranked "See all" page shows exactly
+ * what its Home row shows.
  */
 fun <T> List<T>.sortedEntriesForDisplay(
     mode: CollectionSortMode,
@@ -86,6 +90,7 @@ fun <T> List<T>.sortedEntriesForDisplay(
     if (isEmpty()) return this
     return when (mode) {
         CollectionSortMode.CUSTOM -> this
+        CollectionSortMode.RECOMMENDED -> this
         CollectionSortMode.RANDOM -> shuffled(Random(randomSeed))
             .let { if (inverted) it.asReversed() else it }
         else -> sortedWith(comparatorFor(mode))
@@ -95,7 +100,8 @@ fun <T> List<T>.sortedEntriesForDisplay(
 
 /**
  * [rememberSortedList] specialized to track lists: the RANDOM bookkeeping and
- * the track comparators in one call (CUSTOM/RANDOM never reach the comparator).
+ * the track comparators in one call (CUSTOM/RECOMMENDED/RANDOM never reach the
+ * comparator).
  */
 @Composable
 fun rememberSortedTracks(
@@ -108,7 +114,8 @@ fun rememberSortedTracks(
  * Composable sort for any list: draws a fresh RANDOM seed whenever [mode]
  * becomes random (selecting the mode re-shuffles exactly once; list emissions,
  * inverse toggles and recompositions keep the same shuffle) and applies
- * [comparatorFor]'s ordering, reversed when [inverted].
+ * [comparatorFor]'s ordering, reversed when [inverted] (the order-preserving
+ * CUSTOM/RECOMMENDED modes bypass the comparator entirely).
  *
  * Returns instantly with the previous (or incoming) list and computes the
  * ordering on [Dispatchers.Default], so opening a screen never stalls the

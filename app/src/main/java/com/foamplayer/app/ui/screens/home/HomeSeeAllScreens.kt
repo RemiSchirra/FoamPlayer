@@ -61,12 +61,23 @@ private fun Modifier.listRowInset(density: MediaDensity): Modifier =
     padding(horizontal = if (density.isGrid) 0.dp else 16.dp)
 
 /**
+ * Sort modes of the Home recommendation pages: the row's own ranking first
+ * (the default), then the user-facing name/artist orderings, then a seeded
+ * shuffle.
+ */
+private val RecommendedSortOptions = listOf(
+    CollectionSortMode.RECOMMENDED,
+    CollectionSortMode.NAME,
+    CollectionSortMode.RANDOM
+)
+
+/**
  * "See all" page behind the Home "Recommended playlists" row: up to 50
- * playlists in the row's aggregate play/like order. Playlist covers resolve
- * through the automatic cover chain (custom image first, else first-track
- * embedded art), so these rows load both plain image URIs and embedded art
- * directly instead of [CollectionListItem] (whose artwork loader expects
- * embedded art only).
+ * playlists in the row's aggregate play/like order (the default, kept by
+ * [CollectionSortMode.RECOMMENDED]). Playlist covers resolve through the
+ * automatic cover chain (custom image first, else first-track embedded art),
+ * so these rows load both plain image URIs and embedded art directly instead
+ * of [CollectionListItem] (whose artwork loader expects embedded art only).
  */
 @Composable
 fun RecommendedPlaylistsSeeAllScreen(
@@ -74,7 +85,7 @@ fun RecommendedPlaylistsSeeAllScreen(
     onBack: () -> Unit,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
-    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    sortMode: CollectionSortMode = CollectionSortMode.RECOMMENDED,
     onSortChange: ((CollectionSortMode) -> Unit)? = null,
     sortInverted: Boolean = false,
     onSortInvertedChange: ((Boolean) -> Unit)? = null,
@@ -93,8 +104,13 @@ fun RecommendedPlaylistsSeeAllScreen(
         searchedPlaylists,
         sortMode,
         sortInverted
-    ) {
-        caseInsensitiveComparator { it.name }
+    ) { mode ->
+        when (mode) {
+            // RECOMMENDED never reaches the comparator: it keeps the DAO's
+            // ranking in [rememberSortedList].
+            CollectionSortMode.RECOMMENDED -> compareBy { 0 }
+            else -> caseInsensitiveComparator { it.name }
+        }
     }
 
     CollectionListScreen(
@@ -104,7 +120,7 @@ fun RecommendedPlaylistsSeeAllScreen(
         headerIcon = FoamTheme.icons.current.playlists,
         density = density,
         onDensityChange = onDensityChange,
-        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+        sortOptions = RecommendedSortOptions,
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,
@@ -132,7 +148,8 @@ fun RecommendedPlaylistsSeeAllScreen(
 
 /**
  * "See all" page behind the Home "Recommended albums" row: up to 50 albums in
- * the row's aggregate play/like order, mirroring the albums browse screen
+ * the row's aggregate play/like order (the default, kept by
+ * [CollectionSortMode.RECOMMENDED]), mirroring the albums browse screen
  (long-press collection actions and shared elements included).
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -145,7 +162,7 @@ fun RecommendedAlbumsSeeAllScreen(
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
-    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    sortMode: CollectionSortMode = CollectionSortMode.RECOMMENDED,
     onSortChange: ((CollectionSortMode) -> Unit)? = null,
     sortInverted: Boolean = false,
     onSortInvertedChange: ((Boolean) -> Unit)? = null,
@@ -164,6 +181,9 @@ fun RecommendedAlbumsSeeAllScreen(
         sortInverted
     ) { mode ->
         when (mode) {
+            // RECOMMENDED never reaches the comparator: it keeps the DAO's
+            // ranking in [rememberSortedList].
+            CollectionSortMode.RECOMMENDED -> compareBy { 0 }
             CollectionSortMode.ARTIST ->
                 compareBy(String.CASE_INSENSITIVE_ORDER, AlbumRecommendation::artist)
                     .then(compareBy(String.CASE_INSENSITIVE_ORDER, AlbumRecommendation::album))
@@ -177,11 +197,7 @@ fun RecommendedAlbumsSeeAllScreen(
         onBack = onBack,
         density = density,
         onDensityChange = onDensityChange,
-        sortOptions = listOf(
-            CollectionSortMode.NAME,
-            CollectionSortMode.ARTIST,
-            CollectionSortMode.RANDOM
-        ),
+        sortOptions = RecommendedSortOptions,
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,
@@ -325,7 +341,8 @@ fun OldFavoritesSeeAllScreen(
 
 /**
  * "See all" page behind the Home "Favorite artists" row: up to 50 artists by
- * their songs' total plays, mirroring the artists browse screen.
+ * their songs' total plays (the default, kept by
+ * [CollectionSortMode.RECOMMENDED]), mirroring the artists browse screen.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -337,7 +354,7 @@ fun FavoriteArtistsSeeAllScreen(
     activeCollectionId: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
-    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    sortMode: CollectionSortMode = CollectionSortMode.RECOMMENDED,
     onSortChange: ((CollectionSortMode) -> Unit)? = null,
     sortInverted: Boolean = false,
     onSortInvertedChange: ((Boolean) -> Unit)? = null,
@@ -347,8 +364,13 @@ fun FavoriteArtistsSeeAllScreen(
     val artistImages by viewModel.artistImages.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
-    val sortedArtists = rememberSortedList(artists, sortMode, sortInverted) {
-        caseInsensitiveComparator { it.name }
+    val sortedArtists = rememberSortedList(artists, sortMode, sortInverted) { mode ->
+        when (mode) {
+            // RECOMMENDED never reaches the comparator: it keeps the flow's
+            // play-count ranking in [rememberSortedList].
+            CollectionSortMode.RECOMMENDED -> compareBy { 0 }
+            else -> caseInsensitiveComparator { it.name }
+        }
     }
 
     CollectionListScreen(
@@ -357,7 +379,7 @@ fun FavoriteArtistsSeeAllScreen(
         onBack = onBack,
         density = density,
         onDensityChange = onDensityChange,
-        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+        sortOptions = RecommendedSortOptions,
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,

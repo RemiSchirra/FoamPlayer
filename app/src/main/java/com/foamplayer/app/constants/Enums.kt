@@ -151,7 +151,9 @@ enum class MediaListView {
 
 /**
  * Per-view content sorting, chosen from the organisation modal and persisted.
- * [CUSTOM] is only offered where a user-defined order exists.
+ * [CUSTOM] is only offered where a user-defined order exists; [RECOMMENDED]
+ * keeps the source query's own ranking and is likewise only offered on the
+ * ranked Home pages.
  */
 enum class CollectionSortMode(val label: String) {
     CUSTOM("Custom order"),
@@ -165,6 +167,7 @@ enum class CollectionSortMode(val label: String) {
     LISTEN_DATE("By listen date"),
     LISTEN_COUNT("By listen count"),
     RANDOM("By random"),
+    RECOMMENDED("By recommendation"),
 }
 
 /** Sort modes offered for a track list (everything but the playlist-only custom order). */
@@ -184,7 +187,9 @@ val TrackSortOptions: List<CollectionSortMode> =
 
 /**
  * A view's initial sort mode: user-ordered views start in [CollectionSortMode.CUSTOM],
- * see-all pages in their query's order, everything else alphabetically.
+ * the ranked Home see-all pages in [CollectionSortMode.RECOMMENDED] (the source
+ * query's own ranking, so a "See all" shows its row's order), everything else
+ * alphabetically.
  */
 fun MediaListView.defaultSortMode(): CollectionSortMode = when (this) {
     MediaListView.PLAYLISTS,
@@ -193,6 +198,9 @@ fun MediaListView.defaultSortMode(): CollectionSortMode = when (this) {
     MediaListView.HOME_SEE_ALL_RECENT_TRACKS -> CollectionSortMode.LISTEN_DATE
     MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS,
     MediaListView.STATS_SEE_ALL_TRACKS -> CollectionSortMode.LISTEN_COUNT
+    MediaListView.HOME_SEE_ALL_PLAYLISTS,
+    MediaListView.HOME_SEE_ALL_ALBUMS,
+    MediaListView.HOME_SEE_ALL_ARTISTS -> CollectionSortMode.RECOMMENDED
     else -> CollectionSortMode.NAME
 }
 
