@@ -40,7 +40,12 @@ fun PlaylistDetailScreen(
     sortInverted: Boolean = false,
     onSortInvertedChange: ((Boolean) -> Unit)? = null,
     centerTrackRequest: TrackCenterRequest? = null,
-    isPlaying: Boolean = true,
+    // Combined playback-active bit (isPlaying || isPlaybackRequested) of the playing
+    // track, forwarded to the rows' flight-artwork paused shrink. A buffering gap
+    // between prepare() and STATE_READY also reports isPlaying=false, and shrinking
+    // across that gap would let the row art render at a different scale than the
+    // full player's hero mid-flight -- see rememberPausedArtScale.
+    isPlaybackActive: Boolean = true,
     heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     immersiveMode: Boolean = false,
     viewModel: PlaylistDetailViewModel = hiltViewModel()
@@ -140,7 +145,7 @@ fun PlaylistDetailScreen(
         sortInverted = sortInverted,
         onSortInvertedChange = onSortInvertedChange,
         centerTrackRequest = centerTrackRequest,
-        isPlaying = isPlaying,
+        isPlaybackActive = isPlaybackActive,
         heroLayout = heroLayout,
         immersiveMode = immersiveMode,
         editMode = editMode,

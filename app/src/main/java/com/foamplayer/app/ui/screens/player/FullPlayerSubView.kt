@@ -229,9 +229,14 @@ internal fun SharedTransitionScope.SubViewContent(
     track: TrackEntity,
     subViewMode: SubViewMode,
     viewModel: PlayerViewModel,
-    // Deferred: consumed only by the paused-art scale inside MiniPlayerHeader, so a
-    // play/pause flip doesn't recompose this subtree (including LyricsScreen/QueueScreen).
+    // Raw isPlaying: read only by the play/pause button leaf inside MiniPlayerHeader's
+    // caller (see below), so a playback flip doesn't recompose this subtree.
     isPlaying: () -> Boolean,
+    // Combined playback-active bit for the paused-art shrink ONLY (isPlaying ||
+    // isPlaybackRequested): the buffering gap after a play request also reports
+    // isPlaying=false, and shrinking across it scaled the header art down for the
+    // whole load duration of every track tap. See rememberPausedArtScale.
+    isPlaybackActive: () -> Boolean,
     isImmersiveEnabled: Boolean,
     marqueeMode: MarqueeMode,
     headerVisibilityScope: AnimatedVisibilityScope,
@@ -244,7 +249,7 @@ internal fun SharedTransitionScope.SubViewContent(
         Column(modifier = Modifier.fillMaxWidth().then(modifier)) {
             MiniPlayerHeader(
                 track = track,
-                isPlaying = isPlaying,
+                isPlaybackActive = isPlaybackActive,
                 isImmersiveEnabled = isImmersiveEnabled,
                 marqueeMode = marqueeMode,
                 headerVisibilityScope = headerVisibilityScope,
@@ -281,7 +286,7 @@ internal fun SharedTransitionScope.SubViewContent(
 @Composable
 private fun SharedTransitionScope.MiniPlayerHeader(
     track: TrackEntity,
-    isPlaying: () -> Boolean,
+    isPlaybackActive: () -> Boolean,
     isImmersiveEnabled: Boolean,
     marqueeMode: MarqueeMode,
     headerVisibilityScope: AnimatedVisibilityScope,
@@ -296,7 +301,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     val miniRadius = (miniImageSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
 
-    val pausedArtScale by rememberPausedArtScale(isPlaying)
+    val pausedArtScale by rememberPausedArtScale(isPlaybackActive)
 
     // Deferred reads: the transition fraction is evaluated inside the graphicsLayer
     // blocks below, so the subview drag animates the corner radii per frame without

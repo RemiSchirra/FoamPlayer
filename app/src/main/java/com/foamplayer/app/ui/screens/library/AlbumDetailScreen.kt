@@ -30,7 +30,7 @@ fun AlbumDetailScreen(
     initialImageUrl: String? = null,
     initialArtistName: String? = null,
     centerTrackRequest: TrackCenterRequest? = null,
-    isPlaying: Boolean = true,
+    isPlaybackActive: Boolean = true,
     heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     immersiveMode: Boolean = false,
     viewModel: AlbumDetailViewModel = hiltViewModel()
@@ -81,7 +81,7 @@ fun AlbumDetailScreen(
         showTrackNumbers = true,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
         centerTrackRequest = centerTrackRequest,
-        isPlaying = isPlaying,
+        isPlaybackActive = isPlaybackActive,
         heroLayout = heroLayout,
         immersiveMode = immersiveMode
     )

@@ -67,13 +67,18 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /**
-     * Pause INTENT, distinct from "not audibly playing": [isPlaying] goes false
-     * while the player is buffering (e.g. between tracks) even though the user
-     * never pressed pause — playWhenReady stays true through those gaps. The
-     * lock-display session must only close on a real pause request.
+     * Pause INTENT, reactive, distinct from "not audibly playing": [isPlaying] goes
+     * false while the player is buffering (e.g. between tracks) even though the user
+     * never pressed pause — the playWhenReady mirror in [PlaybackState] stays true
+     * through those gaps. The lock-display session must only close on a real pause
+     * request, and the paused-art shrink must only apply to one (the combined
+     * isPlaying || isPlaybackRequested bit feeds rememberPausedArtScale). Synchronous
+     * readers use [isPlaybackRequested.value].
      */
-    val isPlaybackRequested: Boolean
-        get() = audioEngine.player.playWhenReady
+    val isPlaybackRequested: StateFlow<Boolean> = audioEngine.playbackState
+        .map { it.isPlaybackRequested }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // Id of the collection the queue was started from (null = bare track list),
     // highlighted only while the cursor is still inside that collection's own
@@ -150,8 +155,8 @@ class PlayerViewModel @Inject constructor(
     fun addToQueue(track: TrackEntity) = audioEngine.addToQueue(track)
 
     // Long-press collection actions (album/artist/genre/year/folder): queue the
-    // whole collection right after the current track, or append it to the end
-    // of the main queue, keeping the collection's track order.
+    // whole collection right after the current track, or append it to the end of
+    // the main queue, keeping the collection's track order.
     fun playNext(tracks: List<TrackEntity>) = audioEngine.playNextAll(tracks)
     fun addToQueue(tracks: List<TrackEntity>) = audioEngine.addAllToQueue(tracks)
 

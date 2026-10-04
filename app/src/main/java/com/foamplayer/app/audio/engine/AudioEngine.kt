@@ -255,6 +255,11 @@ class AudioEngine @Inject constructor(
             // focus losses freeze the accrual instead of discarding it.
         }
 
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            _playbackState.value =
+                _playbackState.value.copy(isPlaybackRequested = playWhenReady)
+        }
+
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val trackId = mediaItem?.mediaId?.toLongOrNull() ?: return
             applyTrackTransition(trackId, positionMs = 0L, emitSeekEvent = false)
@@ -374,6 +379,11 @@ class AudioEngine @Inject constructor(
             player.shuffleModeEnabled = _playbackState.value.isShuffle
 
             activePlayerField.addListener(playerListener)
+            // Resync the pause-intent mirror to the promoted player: the main
+            // listener was detached while the fade ran, so the secondary's
+            // playWhenReady callbacks never reached the mirror.
+            _playbackState.value =
+                _playbackState.value.copy(isPlaybackRequested = player.playWhenReady)
 
             // No mutation can land mid-fade, so pendingWindowResync is false here.
             scope.launch { adjustWindow() }
@@ -421,7 +431,10 @@ class AudioEngine @Inject constructor(
                 }
             }
 
-            _playbackState.value = _playbackState.value.copy(isPlaying = player.isPlaying)
+            _playbackState.value = _playbackState.value.copy(
+                isPlaying = player.isPlaying,
+                isPlaybackRequested = player.playWhenReady
+            )
 
             // The logical switch may have re-bound the session to the secondary,
             // which has just been released: hand the session back to the primary.
@@ -546,6 +559,8 @@ class AudioEngine @Inject constructor(
             currentTrack = newQueue[clampedStart],
             durationMs = newQueue[clampedStart].duration,
             isPlaying = false,
+            // A rebuilt session waits paused until an explicit play request.
+            isPlaybackRequested = false,
             isShuffle = isShuffle,
             repeatMode = repeatMode,
             queueSourceId = sourceCollectionId,
@@ -1167,9 +1182,8 @@ class AudioEngine @Inject constructor(
             // A newer jump superseded this one.
             if (jumpId != windowJumpId) return@launch
             player.setMediaItems(windowItems, centerIndex - windowStart, 0L)
-            player.prepare()
-            // prepare() resumes leftover playWhenReady; re-assert explicitly.
             if (playAfterPrepare) player.play() else player.pause()
+            player.prepare()
             loadedRange = windowStart..windowEnd
         }
     }
@@ -1251,9 +1265,11 @@ class AudioEngine @Inject constructor(
 
     fun pause() {
         if (fadeEngine.quickFadeEnabled && player.isPlaying) {
-            // Ramp to silence, then pause; the button reacts to the tap instantly.
             fadeEngine.fadeOutAndPause()
-            _playbackState.value = _playbackState.value.copy(isPlaying = false)
+            _playbackState.value = _playbackState.value.copy(
+                isPlaying = false,
+                isPlaybackRequested = false
+            )
         } else {
             player.pause()
         }
@@ -1385,8 +1401,8 @@ class AudioEngine @Inject constructor(
         val items = queue.subList(windowStart, windowEnd + 1).map { it.toMediaItem() }
         loadedRange = windowStart..windowEnd
         player.setMediaItems(items, centerIndex - windowStart, 0L)
-        player.prepare()
         if (forcePlay || !switchStaysPaused()) player.play() else player.pause()
+        player.prepare()
     }
 
     fun seekTo(positionMs: Long) {

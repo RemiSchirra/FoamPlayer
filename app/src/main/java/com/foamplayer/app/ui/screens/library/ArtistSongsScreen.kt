@@ -31,7 +31,7 @@ fun ArtistSongsScreen(
     activeTrackId: Long?,
     onListBackdropArt: (String?, Boolean) -> Unit = { _, _ -> },
     centerTrackRequest: TrackCenterRequest? = null,
-    isPlaying: Boolean = true,
+    isPlaybackActive: Boolean = true,
     heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     immersiveMode: Boolean = false,
     viewModel: ArtistDetailViewModel = hiltViewModel()
@@ -70,7 +70,7 @@ fun ArtistSongsScreen(
         activeTrackId = activeTrackId,
         playerTransitionVisibilityScope = playerTransitionVisibilityScope,
         centerTrackRequest = centerTrackRequest,
-        isPlaying = isPlaying,
+        isPlaybackActive = isPlaybackActive,
         heroLayout = heroLayout,
         immersiveMode = immersiveMode
     )

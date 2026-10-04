@@ -448,7 +448,7 @@ fun GenreTracksScreen(
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
     sharedTrackId: Long? = null,
     centerTrackRequest: TrackCenterRequest? = null,
-    isPlaying: Boolean = true,
+    isPlaybackActive: Boolean = true,
     heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     immersiveMode: Boolean = false,
     viewModel: BrowseViewModel = hiltViewModel()
@@ -503,7 +503,7 @@ fun YearTracksScreen(
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
     sharedTrackId: Long? = null,
     centerTrackRequest: TrackCenterRequest? = null,
-    isPlaying: Boolean = true,
+    isPlaybackActive: Boolean = true,
     heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     immersiveMode: Boolean = false,
     viewModel: BrowseViewModel = hiltViewModel()

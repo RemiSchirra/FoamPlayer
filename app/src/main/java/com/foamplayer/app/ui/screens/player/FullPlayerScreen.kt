@@ -117,9 +117,9 @@ fun FullPlayerScreen(
     val marqueeMode = settings.marqueeMode
 
     // Narrow, equality-gated projections of the playback state -- the same idea as the
-    // ViewModel's narrow projections for the composition roots, kept local. derivedStateOf
-    // only notifies its readers when the projected value actually changes, so unrelated
-    // PlaybackState emissions (play/pause flips, audio-output changes) no longer recompose
+    // ViewModel's narrow projections for the composition roots (FoamApp,
+    // FoamNavHost). Collecting these instead of the whole state keeps emissions like
+    // play/pause flips, audio-output changes) no longer recompose
     // this whole screen: a play/pause press now only invalidates the transport leaves that
     // read it. isPlaying deliberately stays raw -- it is consumed exclusively through the
     // deferred provider below, inside leaf scopes (transport buttons, paused-art scale).
@@ -130,6 +130,14 @@ fun FullPlayerScreen(
     val durationMs by remember { derivedStateOf { state.durationMs } }
     val audioOutputInfo by remember { derivedStateOf { state.audioOutputInfo } }
     val isPlayingProvider = { state.isPlaying }
+    // Combined playback-active bit for the paused-art shrink: isPlaying is false
+    // through the buffering gap between prepare() and STATE_READY even though
+    // playback was just requested, and shrinking across that gap made every track
+    // tap scale the art down for the load duration and back up when ready. A
+    // buffering read must not be a paused read -- see rememberPausedArtScale.
+    // The mini player applies the identical formula, so both ends of the
+    // album-art shared-element pair always render the same scale mid-flight.
+    val isPlaybackActiveProvider = { state.isPlaying || state.isPlaybackRequested }
     val track = currentTrack ?: return
     val queueSize = queue.size
 
@@ -149,7 +157,11 @@ fun FullPlayerScreen(
     
     // Boolean gate only: reading the raw transition fraction here used to re-run this
     // whole screen body on every frame of the subview drag/settle. derivedStateOf
-    // invalidates just once, when the fraction crosses the 0f threshold.
+    // only notifies its readers when the projected value actually changes, so unrelated
+    // PlaybackState emissions (play/pause flips, audio-output changes) no longer recompose
+    // this whole screen: a play/pause press now only invalidates the transport leaves that
+    // read it. isPlaying deliberately stays raw -- it is consumed exclusively through the
+    // deferred provider below, inside leaf scopes (transport buttons, paused-art scale).
     val showSubViewSlider by remember(upTransitionState) {
         derivedStateOf { upTransitionState.progress() > 0f }
     }
@@ -600,6 +612,7 @@ fun FullPlayerScreen(
                             queueIndex = queueIndex,
                             queueEntryIds = queueEntryIds,
                             isPlaying = isPlayingProvider,
+                            isPlaybackActive = isPlaybackActiveProvider,
                             durationMs = durationMs,
                             pagerState = pagerState,
                             density = density,
@@ -637,6 +650,7 @@ fun FullPlayerScreen(
                             subViewMode = subViewMode,
                             viewModel = viewModel,
                             isPlaying = isPlayingProvider,
+                            isPlaybackActive = isPlaybackActiveProvider,
                             isImmersiveEnabled = isImmersiveEnabled,
                             marqueeMode = marqueeMode,
                             headerVisibilityScope = this@AnimatedVisibility,

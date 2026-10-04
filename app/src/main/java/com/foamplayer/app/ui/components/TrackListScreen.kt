@@ -172,8 +172,15 @@ fun TrackListScreen(
     onSortInvertedChange: ((Boolean) -> Unit)? = null,
     /** Dismiss-to-origin-collection scroll request (see [TrackCenterRequest]). */
     centerTrackRequest: TrackCenterRequest? = null,
-    /** Live play/pause bit, feeding the flight artwork's paused shrink when a row of this list is the shared-element target. */
-    isPlaying: Boolean = true,
+    /**
+     * Combined playback-active bit (isPlaying || isPlaybackRequested) of the playing
+     * track, feeding the flight artwork's paused shrink when a row of this list is
+     * the shared-element target. A buffering gap between prepare() and STATE_READY
+     * also reports isPlaying=false, and shrinking across that gap would let the row
+     * art render at a different scale than the full player's hero mid-flight (both
+     * ends must match or the art pops at the hand-off) -- see rememberPausedArtScale.
+     */
+    isPlaybackActive: Boolean = true,
     /** Hero layout resolved from the per-collection settings; Compact keeps the classic header. */
     heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
     /** Immersive player mode: the flight overlay art must fade in like the hero does instead of popping in. */
@@ -265,7 +272,7 @@ fun TrackListScreen(
     // Only the row that can become the shared-element endpoint of the player-dismiss
     // flight needs the paused shrink; one animation is hoisted here and read by that
     // row inside its graphicsLayer, so play/pause flips stay draw-only for the list.
-    val flightPausedArtScale = rememberPausedArtScale(isPlaying)
+    val flightPausedArtScale = rememberPausedArtScale(isPlaybackActive)
 
     // Whether a player-dismiss artwork flight is currently landing on this list's
     // rows (see [rememberPlayerDismissFlightActive]): while the flight is live, the

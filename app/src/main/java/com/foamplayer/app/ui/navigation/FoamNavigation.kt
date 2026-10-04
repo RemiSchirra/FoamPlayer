@@ -184,8 +184,8 @@ private const val SubScreenSlideDivisor = 3
  * offscreen layer sized to the destination's bounds, so anything a screen draws
  * above its top edge — the immersive hero artwork bleeding under the status bar —
  * was cropped for the duration of every fade (album <-> artist, etc.) and the
- * dimmed root backdrop showed through instead. With the padding moved inside, the
- * fading layer spans the full screen and the bleed survives the transition.
+ * dimmed root backdrop showed through instead. With the padding moved inside,
+ * the fading layer spans the full screen and the bleed survives the transition.
  * Layout of the screens is unchanged: they still start below the inset.
  */
 private fun NavGraphBuilder.composable(
@@ -363,6 +363,13 @@ fun FoamNavHost(
     val hasCurrentTrack by playerViewModel.hasCurrentTrack.collectAsState()
     val activeTrackId by playerViewModel.activeTrackId.collectAsState()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
+    // Pause intent (ExoPlayer's playWhenReady mirror): with [isPlaying] it forms the
+    // combined playback-active bit the track-list rows' flight-artwork paused shrink
+    // consumes. A buffering gap between prepare() and STATE_READY also reports
+    // isPlaying=false, and the rows would then render a different scale than the
+    // full player's hero mid-flight (see rememberPausedArtScale).
+    val isPlaybackRequested by playerViewModel.isPlaybackRequested.collectAsState()
+    val isPlaybackActive = isPlaying || isPlaybackRequested
     val playerSettings by playerViewModel.settings.collectAsState()
     val scoreOverrides by playerViewModel.scoreOverrides.collectAsState()
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
@@ -1377,7 +1384,7 @@ fun FoamNavHost(
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
                                             centerTrackRequest = centerTrackRequest,
-                                            isPlaying = isPlaying,
+                                            isPlaybackActive = isPlaybackActive,
                                             heroLayout = heroLayoutFor(CollectionHeroTarget.Default),
                                             immersiveMode = playerSettings.immersiveModeEnabled
                                         )
@@ -1404,7 +1411,7 @@ fun FoamNavHost(
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
                                             centerTrackRequest = centerTrackRequest,
-                                            isPlaying = isPlaying,
+                                            isPlaybackActive = isPlaybackActive,
                                             heroLayout = heroLayoutFor(CollectionHeroTarget.Default),
                                             immersiveMode = playerSettings.immersiveModeEnabled
                                         )
@@ -1699,7 +1706,7 @@ fun FoamNavHost(
                                             activeTrackId = activeTrackId,
                                             onListBackdropArt = onListBackdropArt,
                                             centerTrackRequest = centerTrackRequest,
-                                            isPlaying = isPlaying,
+                                            isPlaybackActive = isPlaybackActive,
                                             heroLayout = heroLayoutFor(CollectionHeroTarget.Artist),
                                             immersiveMode = playerSettings.immersiveModeEnabled
                                         )
@@ -1736,7 +1743,7 @@ fun FoamNavHost(
                                             activeTrackId = activeTrackId,
                                             onListBackdropArt = onListBackdropArt,
                                             centerTrackRequest = centerTrackRequest,
-                                            isPlaying = isPlaying,
+                                            isPlaybackActive = isPlaybackActive,
                                             heroLayout = heroLayoutFor(CollectionHeroTarget.Album),
                                             immersiveMode = playerSettings.immersiveModeEnabled
                                         )
@@ -1777,7 +1784,7 @@ fun FoamNavHost(
                                             sortInverted = sortInvertedFor(MediaListView.PLAYLIST_DETAIL),
                                             onSortInvertedChange = { setSortInverted(MediaListView.PLAYLIST_DETAIL, it) },
                                             centerTrackRequest = centerTrackRequest,
-                                            isPlaying = isPlaying,
+                                            isPlaybackActive = isPlaybackActive,
                                             heroLayout = heroLayoutFor(CollectionHeroTarget.Playlist),
                                             immersiveMode = playerSettings.immersiveModeEnabled
                                         )

@@ -203,7 +203,9 @@ class MainActivity : AppCompatActivity() {
         // the overlay mid-transition with no way back until the next wake.
         lifecycleScope.launch {
             playerViewModel.isPlaying.collect { playing ->
-                if (!playing && lockDisplaySessionActive && !playerViewModel.isPlaybackRequested) {
+                if (!playing && lockDisplaySessionActive &&
+                    !playerViewModel.isPlaybackRequested.value
+                ) {
                     endLockDisplaySession()
                 }
             }

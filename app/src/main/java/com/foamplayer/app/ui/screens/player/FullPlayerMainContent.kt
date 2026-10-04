@@ -88,9 +88,8 @@ internal fun SharedTransitionScope.MainPlayerContent(
     queue: List<TrackEntity>,
     queueIndex: Int,
     queueEntryIds: List<Long>,
-    // Deferred isPlaying: read only by the play/pause button leaf and the paused-art
-    // scale, so a playback flip never re-runs this subtree.
     isPlaying: () -> Boolean,
+    isPlaybackActive: () -> Boolean,
     durationMs: Long,
     pagerState: PagerState,
     density: Density,
@@ -122,7 +121,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
             queue = queue,
             queueIndex = queueIndex,
             queueEntryIds = queueEntryIds,
-            isPlaying = isPlaying,
+            isPlaybackActive = isPlaybackActive,
             pagerState = pagerState,
             density = density,
             screenWidthDp = screenWidthDp,
@@ -184,9 +183,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
     queue: List<TrackEntity>,
     queueIndex: Int,
     queueEntryIds: List<Long>,
-    // Deferred: consumed only via rememberPausedArtScale, whose animation reads it
-    // inside its own scope, so play/pause flips don't recompose the pager pages.
-    isPlaying: () -> Boolean,
+    isPlaybackActive: () -> Boolean,
     pagerState: PagerState,
     density: Density,
     screenWidthDp: Dp,
@@ -220,7 +217,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
     val miniImageSize = 44.dp
     val fullImageSize = screenWidthDp - (PlayerDimens.horizontalPagePadding * 2)
 
-    val pausedArtScale by rememberPausedArtScale(isPlaying)
+    val pausedArtScale by rememberPausedArtScale(isPlaybackActive)
 
     val miniPlayerRounding = FoamTheme.shapes.miniPlayerRounding
     val miniRadius = (miniImageSize / 2) * miniPlayerRounding
@@ -470,7 +467,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 )
                         )
                         MarqueeText(
-                            text = "${track.artist} - ${track.album}",
+                            text = stringResource(R.string.artist_album_separator, track.artist, track.album),
                             style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
                             mode = marqueeMode,
                             modifier = Modifier

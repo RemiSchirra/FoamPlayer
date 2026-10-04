@@ -15,6 +15,13 @@ enum class RepeatMode { NONE, ALL, ONE }
 data class PlaybackState(
     val currentTrack: TrackEntity? = null,
     val isPlaying: Boolean = false,
+    // Pause INTENT (ExoPlayer's playWhenReady, mirrored by the engine): true
+    // while playback was requested even when a buffering gap keeps the stream
+    // from being audibly playing (isPlaying=false between prepare() and
+    // STATE_READY). UI must treat "requested but buffering" as playing, not
+    // paused -- e.g. the paused-art shrink must not trigger across those gaps,
+    // or every tap on a track shrinks the art for the load duration.
+    val isPlaybackRequested: Boolean = false,
     val durationMs: Long = 0L,
     val queue: List<TrackEntity> = emptyList(),
     // Stable per-entry ids allocated by the engine (duplicates possible).
@@ -40,6 +47,7 @@ data class PlaybackState(
         if (other !is PlaybackState) return false
         return currentTrack == other.currentTrack &&
                 isPlaying == other.isPlaying &&
+                isPlaybackRequested == other.isPlaybackRequested &&
                 durationMs == other.durationMs &&
                 queue === other.queue &&
                 queueEntryIds === other.queueEntryIds &&
@@ -55,6 +63,7 @@ data class PlaybackState(
     override fun hashCode(): Int {
         var result = currentTrack?.hashCode() ?: 0
         result = 31 * result + isPlaying.hashCode()
+        result = 31 * result + isPlaybackRequested.hashCode()
         result = 31 * result + durationMs.hashCode()
         result = 31 * result + System.identityHashCode(queue)
         result = 31 * result + System.identityHashCode(queueEntryIds)

@@ -215,15 +215,14 @@ fun MiniPlayer(
     showContainer: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    // Collected here instead of being passed as a parameter: this keeps playback
-    // emissions (play/pause, queue mutations, track changes) from re-running the
-    // whole FoamNavHost body just to forward state into this one composable.
     val playbackState by playbackStateFlow.collectAsState()
     val track = playbackState.currentTrack ?: return
     val queue = playbackState.queue
     val queueEntryIds = playbackState.queueEntryIds
     val currentIndex = playbackState.queueIndex
-    val pausedArtScale by rememberPausedArtScale(playbackState.isPlaying)
+    val pausedArtScale by rememberPausedArtScale(
+        playbackState.isPlaying || playbackState.isPlaybackRequested
+    )
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -620,7 +619,7 @@ fun MiniPlayer(
                                     } else Modifier
                                 )
                                 MarqueeText(
-                                    text = "${pageTrack.artist} - ${pageTrack.album}",
+                                    text = "${pageTrack.artist} • ${pageTrack.format}",
                                     style = FoamTheme.typography.caption,
                                     mode = marqueeMode,
                                     marqueeEnabled = isSettledCurrentTrackPage,
