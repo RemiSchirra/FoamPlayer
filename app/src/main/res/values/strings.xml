@@ -116,6 +116,7 @@
     <string name="stats_subtitle_six_months">Listening over the last 6 months</string>
     <string name="stats_subtitle_year">Listening over the last 12 months</string>
     <string name="stats_subtitle_all">All-time listening</string>
+    <string name="stats_subtitle_from">Listening from %1$s</string>
     <string name="stats_listening_time">Listening time</string>
     <string name="stats_plays">Plays</string>
     <string name="stats_unique_tracks">Unique tracks</string>

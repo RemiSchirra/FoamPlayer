@@ -115,6 +115,7 @@
     <string name="stats_subtitle_six_months">Écoutes des 6 derniers mois</string>
     <string name="stats_subtitle_year">Écoutes des 12 derniers mois</string>
     <string name="stats_subtitle_all">Écoutes depuis toujours</string>
+    <string name="stats_subtitle_from">Écoutes depuis le %1$s</string>
     <string name="stats_listening_time">Temps d\'écoute</string>
     <string name="stats_plays">Écoutes</string>
     <string name="stats_unique_tracks">Titres uniques</string>

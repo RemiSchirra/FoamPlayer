@@ -68,6 +68,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.scanner.ArtistCover
 import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.ScreenTitle
 import com.foamplayer.app.ui.modals.CollectionInfo
 import com.foamplayer.app.ui.modals.CollectionKind
 import com.foamplayer.app.ui.components.FoamGlassCard
@@ -78,8 +79,14 @@ import com.foamplayer.app.ui.components.listRowArtCornerRadius
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 import kotlin.math.roundToInt
+import androidx.compose.ui.platform.LocalLocale
 
 /** Rows of a ranked list shown before its "show more" toggle. */
 private const val CollapsedListSize = 5
@@ -113,16 +120,26 @@ fun StatsScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .padding(top = 16.dp, start = 8.dp, end = 8.dp)
             .padding(bottom = LocalBottomBarClearance.current)
     ) {
-        // ------------------------------------------------------------ header
-        BasicText(text = stringResource(R.string.statistics), style = FoamTheme.typography.titleLarge)
-        BasicText(text = periodSubtitle(selectedPeriod), style = FoamTheme.typography.caption)
+        ScreenTitle(
+            icon = FoamTheme.icons.current.stats,
+            title = stringResource(R.string.statistics),
+            subtitle = {
+                BasicText(
+                    text = periodWindowSubtitle(
+                        period = selectedPeriod,
+                        firstListenEpochDay = state.timeBuckets.firstOrNull()?.startEpochDay
+                    ),
+                    style = FoamTheme.typography.caption
+                )
+            }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ----------------------------------------------------- period chips
+        // period chips
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -283,7 +300,7 @@ fun StatsScreen(
                                 BasicText(
                                     text = stringResource(
                                         R.string.stats_peak_hour,
-                                        String.format(Locale.getDefault(), "%02d:00", peak)
+                                        String.format(LocalLocale.current.platformLocale, "%02d:00", peak)
                                     ),
                                     style = FoamTheme.typography.caption
                                 )
@@ -788,7 +805,30 @@ private fun periodLabel(period: StatsPeriod): String = stringResource(
     }
 )
 
-/** Header subtitle describing the active window. */
+/**
+ * Title description rendered under the screen title: the date the selected
+ * rolling window starts ("Listening from Mar 3"). For all-time there is no
+ * fixed start — the first listen day (first activity-chart bucket, which the
+ * view model zero-fills back to the first listen) stands in; until the stats
+ * have loaded, the generic period description is shown instead.
+ */
+@Composable
+internal fun periodWindowSubtitle(period: StatsPeriod, firstListenEpochDay: Long?): String {
+    val startDay = period.durationMs?.let { windowMs ->
+        Instant.ofEpochMilli(System.currentTimeMillis() - windowMs)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+            .toEpochDay()
+    } ?: firstListenEpochDay
+
+    if (startDay == null) return periodSubtitle(period)
+
+    val startDate = LocalDate.ofEpochDay(startDay)
+        .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+    return stringResource(R.string.stats_subtitle_from, startDate)
+}
+
+/** Generic header subtitle describing the active window (see-all pages). */
 @Composable
 internal fun periodSubtitle(period: StatsPeriod): String = stringResource(
     when (period) {
