@@ -222,7 +222,8 @@ internal fun SharedTransitionScope.TrackHeroPager(
 
     val pausedArtScale by rememberPausedArtScale(isPlaying)
 
-    val miniRadius = (miniImageSize / 2) * FoamTheme.shapes.miniPlayerRounding
+    val miniPlayerRounding = FoamTheme.shapes.miniPlayerRounding
+    val miniRadius = (miniImageSize / 2) * miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
 
     Box(modifier = Modifier.fillMaxWidth()) {
@@ -374,11 +375,26 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 EaseInCubic.transform(rawHeader)
                             }
 
+                            val restRadius = with(density) {
+                                (size.minDimension / 2f * miniPlayerRounding).toDp()
+                            }
                             shape = RoundedCornerShape(
                                 with(density) {
                                     min(
-                                        lerp(start = miniRadius, stop = fullRadius, fraction = outerFraction),
-                                        lerp(start = fullRadius, stop = miniRadius, fraction = headerFraction)
+                                        if (outerFraction < 1f) {
+                                            lerp(
+                                                start = restRadius,
+                                                stop = fullRadius,
+                                                fraction = outerFraction
+                                            )
+                                        } else {
+                                            fullRadius
+                                        },
+                                        lerp(
+                                            start = fullRadius,
+                                            stop = miniRadius,
+                                            fraction = headerFraction
+                                        )
                                     ).toPx()
                                 }
                             )
