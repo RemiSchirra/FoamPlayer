@@ -619,7 +619,7 @@ fun MiniPlayer(
                                     } else Modifier
                                 )
                                 MarqueeText(
-                                    text = "${pageTrack.artist} • ${pageTrack.format}",
+                                    text = "${pageTrack.artist} - ${pageTrack.album}",
                                     style = FoamTheme.typography.caption,
                                     mode = marqueeMode,
                                     marqueeEnabled = isSettledCurrentTrackPage,
