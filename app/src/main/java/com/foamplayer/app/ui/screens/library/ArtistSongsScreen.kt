@@ -72,6 +72,9 @@ fun ArtistSongsScreen(
         centerTrackRequest = centerTrackRequest,
         isPlaybackActive = isPlaybackActive,
         heroLayout = heroLayout,
-        immersiveMode = immersiveMode
+        immersiveMode = immersiveMode,
+        // The single artist's track list is short enough to page through; no
+        // fast scrollbar there (the browse list of artists keeps its own).
+        showScrollbar = false
     )
 }

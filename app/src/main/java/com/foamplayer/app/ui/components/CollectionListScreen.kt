@@ -136,7 +136,9 @@ private class GridMediaContentScope(private val scope: LazyGridScope) : MediaLis
  * floating back/more row are drawn ON TOP of it, while the list itself fades
  * its own pixels transparent across the chrome zone
  * ([collectionListTopFade]) — rows dissolve into the chrome instead of being
- * hard-clipped, on every layout.
+ * hard-clipped, on every layout. Long content also gains the accent fast
+ * scrollbar ([FoamScrollbar]) along the container's end edge unless
+ * [showScrollbar] is false (albums/artists lists opt out).
  */
 @Composable
 fun CollectionListScreen(
@@ -162,6 +164,8 @@ fun CollectionListScreen(
     /** When set, the hero gains a search toggle + filter bar filtering the content lambda's items. */
     searchState: CollectionSearchState? = null,
     heroLayout: CollectionHeroLayout = LocalDefaultCollectionHeroLayout.current,
+    /** Whether the long-content fast scrollbar rides the container's end edge. */
+    showScrollbar: Boolean = true,
     content: MediaListContentScope.() -> Unit
 ) {
     var showOrganisationModal by remember { mutableStateOf(false) }
@@ -274,6 +278,17 @@ fun CollectionListScreen(
                     Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
                 }
             }
+
+            if (showScrollbar) {
+                FoamScrollbar(
+                    state = gridState,
+                    // The thumb's track stays clear of the floating chrome zone
+                    // above and the bottom-bar clearance below.
+                    trackTopPadding = CollectionTopBarRowHeight,
+                    trackBottomPadding = LocalBottomBarClearance.current,
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                )
+            }
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -306,6 +321,17 @@ fun CollectionListScreen(
                 item(key = "collection_bottom_spacer") {
                     Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
                 }
+            }
+
+            if (showScrollbar) {
+                FoamScrollbar(
+                    state = listState,
+                    // The thumb's track stays clear of the floating chrome zone
+                    // above and the bottom-bar clearance below.
+                    trackTopPadding = CollectionTopBarRowHeight,
+                    trackBottomPadding = LocalBottomBarClearance.current,
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                )
             }
         }
 

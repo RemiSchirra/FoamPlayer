@@ -83,6 +83,9 @@ fun AlbumDetailScreen(
         centerTrackRequest = centerTrackRequest,
         isPlaybackActive = isPlaybackActive,
         heroLayout = heroLayout,
-        immersiveMode = immersiveMode
+        immersiveMode = immersiveMode,
+        // The single album's track list is short enough to page through; no
+        // fast scrollbar there (the browse list of albums keeps its own).
+        showScrollbar = false
     )
 }

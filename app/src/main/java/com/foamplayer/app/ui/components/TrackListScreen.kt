@@ -192,7 +192,9 @@ fun TrackListScreen(
     /** Edit-mode removal: a row's swipe-to-dismiss calls this with the swiped track. */
     onRemoveTrack: ((TrackEntity) -> Unit)? = null,
     /** Edit-mode reorder persistence: called with the final displayed order's track ids when a drag settles. */
-    onPersistTrackOrder: ((List<Long>) -> Unit)? = null
+    onPersistTrackOrder: ((List<Long>) -> Unit)? = null,
+    /** Whether the long-content fast scrollbar rides the container's end edge. */
+    showScrollbar: Boolean = true
 ) {
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
@@ -609,6 +611,41 @@ fun TrackListScreen(
                     Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
                 }
             }
+
+            // Fast scrollbar for long track lists: the collection's own accent
+            // (artwork-derived, app-accent fallback). Hosts opting out
+            // ([showScrollbar] == false) and playlist edit mode (where the end
+            // strip must stay free for row interactions) withhold it. The
+            // thumb's track stays clear of the floating chrome zone above and
+            // the bottom-bar clearance below.
+            //
+            // Lifted into the shared-element overlay like the scroll top bar
+            // below (zIndex 0.5f: above the flying artwork at 0f, beneath the
+            // buttons at 1f): the flying hero artwork renders in that overlay
+            // ABOVE all in-place screen content, so a full-width immersive hero
+            // sweeps over the scrollbar mid-flight — hiding it on the open's
+            // last frames (until the overlay empties) and the close's first
+            // frames (until the artwork shrinks away). Lifted, it draws above
+            // the artwork for the whole flight; its alpha mirrors the host
+            // hierarchy's fades, which a lifted layer escapes.
+            if (showScrollbar && !editMode) {
+                FoamScrollbar(
+                    state = gridState,
+                    color = heroAccentColor,
+                    trackTopPadding = CollectionTopBarRowHeight,
+                    trackBottomPadding = LocalBottomBarClearance.current,
+                    alpha = transitionAlpha,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .collectionHeroOverlayLayer(
+                            sharedTransitionScope = sharedTransitionScope,
+                            zIndexInOverlay = 0.5f,
+                            renderInOverlay = animatedVisibilityScope?.let { scope ->
+                                { scope.isNavTransitionInProgress() }
+                            }
+                        )
+                )
+            }
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -748,6 +785,41 @@ fun TrackListScreen(
                 }
 
                 item(key = "list_bottom_spacer") { Spacer(modifier = Modifier.height(LocalBottomBarClearance.current)) }
+            }
+
+            // Fast scrollbar for long track lists: the collection's own accent
+            // (artwork-derived, app-accent fallback). Hosts opting out
+            // ([showScrollbar] == false) and playlist edit mode (where the end
+            // strip must stay free for row interactions) withhold it. The
+            // thumb's track stays clear of the floating chrome zone above and
+            // the bottom-bar clearance below.
+            //
+            // Lifted into the shared-element overlay like the scroll top bar
+            // below (zIndex 0.5f: above the flying artwork at 0f, beneath the
+            // buttons at 1f): the flying hero artwork renders in that overlay
+            // ABOVE all in-place screen content, so a full-width immersive hero
+            // sweeps over the scrollbar mid-flight — hiding it on the open's
+            // last frames (until the overlay empties) and the close's first
+            // frames (until the artwork shrinks away). Lifted, it draws above
+            // the artwork for the whole flight; its alpha mirrors the host
+            // hierarchy's fades, which a lifted layer escapes.
+            if (showScrollbar && !editMode) {
+                FoamScrollbar(
+                    state = listState,
+                    color = heroAccentColor,
+                    trackTopPadding = CollectionTopBarRowHeight,
+                    trackBottomPadding = LocalBottomBarClearance.current,
+                    alpha = transitionAlpha,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .collectionHeroOverlayLayer(
+                            sharedTransitionScope = sharedTransitionScope,
+                            zIndexInOverlay = 0.5f,
+                            renderInOverlay = animatedVisibilityScope?.let { scope ->
+                                { scope.isNavTransitionInProgress() }
+                            }
+                        )
+                )
             }
         }
 
