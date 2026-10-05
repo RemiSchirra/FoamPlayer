@@ -49,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -151,6 +152,7 @@ import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsSearchResultsS
 import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsTrackDetailsModal
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.components.TrackCenterRequest
+import com.foamplayer.app.ui.components.collectionHeroOverlayLayer
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -176,6 +178,20 @@ private const val NavScreenFadeDurationMs = 400
 
 /** Settings and browse subscreens slide by a fraction of their width when pushed/popped. */
 private const val SubScreenSlideDivisor = 3
+
+/**
+ * zIndex of the nav bar while lifted into the shared-element overlay (see
+ * [FoamNavHost]'s bottom-chrome lift): above the flying artwork (0f), texts
+ * (1f) and every screen-lifted chrome layer (0.5f/1f).
+ */
+private const val BottomChromeNavBarOverlayZIndex = 10f
+
+/**
+ * zIndex of the mini player card while lifted: above the lifted nav bar, so
+ * the card keeps its at-rest position on top of the bar (they touch in
+ * ATTACHED mode, where the card sinks into the bar's surface extension).
+ */
+private const val BottomChromeMiniPlayerOverlayZIndex = 11f
 
 /**
  * Destination wrapper that applies the status-bar inset INSIDE each destination.
@@ -664,6 +680,26 @@ fun FoamNavHost(
 
     SharedTransitionLayout {
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")
+
+        val isBottomChromeLiftAllowed = remember { mutableStateOf(true) }
+        LaunchedEffect(Unit) {
+            snapshotFlow {
+                Pair(
+                    playerTransitionState.currentState == playerTransitionState.targetState,
+                    isTransitionActive
+                )
+            }.collect { (statesEqual, sharedTransitionActive) ->
+                when {
+                    !statesEqual -> isBottomChromeLiftAllowed.value = false
+                    !sharedTransitionActive -> isBottomChromeLiftAllowed.value = true
+                }
+            }
+        }
+        val isBottomChromeLifted: () -> Boolean = {
+            isTransitionActive &&
+                    (isBottomChromeLiftAllowed.value ||
+                            (playerTransitionState.targetState && trackListTransitionTrackId != null))
+        }
 
         CompositionLocalProvider(
             LocalTrackFoamModalState provides trackModalState,
@@ -1863,6 +1899,11 @@ fun FoamNavHost(
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
                             .onSizeChanged { navZoneHeightPx = it.height }
+                            .collectionHeroOverlayLayer(
+                                sharedTransitionScope = this@SharedTransitionLayout,
+                                zIndexInOverlay = BottomChromeNavBarOverlayZIndex,
+                                renderInOverlay = isBottomChromeLifted
+                            )
                     ) {
                         when (navigationBarMode) {
                             NavigationBarMode.DOCKED -> Box(
@@ -1938,6 +1979,11 @@ fun FoamNavHost(
                         .fillMaxWidth()
                         .navigationBarsPadding()
                         .padding(bottom = miniPlayerBottomPadding)
+                        .collectionHeroOverlayLayer(
+                            sharedTransitionScope = this@SharedTransitionLayout,
+                            zIndexInOverlay = BottomChromeMiniPlayerOverlayZIndex,
+                            renderInOverlay = isBottomChromeLifted
+                        )
                 ) {
                     transition.AnimatedVisibility(
                         visible = { isFull -> !isFull },
