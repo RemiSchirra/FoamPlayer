@@ -251,7 +251,10 @@ fun BackgroundSettingsScreen(
                             CompactSwitchRow(
                                 title = stringResource(R.string.collections),
                                 checked = forceDynamicInCollections,
-                                onCheckedChange = viewModel::setForceDynamicBackgroundInCollections,
+                                onCheckedChange = {
+                                    animateModeChanges = true
+                                    viewModel.setForceDynamicBackgroundInCollections(it)
+                                },
                             )
                             Box(
                                 modifier = Modifier
@@ -262,7 +265,10 @@ fun BackgroundSettingsScreen(
                             CompactSwitchRow(
                                 title = stringResource(R.string.player),
                                 checked = forceDynamicInPlayer,
-                                onCheckedChange = viewModel::setForceDynamicBackgroundInPlayer,
+                                onCheckedChange = {
+                                    animateModeChanges = true
+                                    viewModel.setForceDynamicBackgroundInPlayer(it)
+                                },
                             )
                         }
                     }
@@ -287,7 +293,7 @@ fun BackgroundSettingsScreen(
             ) {
                 Column {
                     AnimatedVisibility(
-                        visible = mode != BackgroundMode.GRADIENT,
+                        visible = mode != BackgroundMode.GRADIENT || forceDynamicInPlayer || forceDynamicInCollections,
                         enter = modeEnter,
                         exit = modeExit
                     ) {
