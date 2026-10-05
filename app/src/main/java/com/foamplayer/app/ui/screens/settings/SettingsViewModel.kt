@@ -200,6 +200,19 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setNavBarSecondaryEnabled(newEnabled)
     }
 
+    // ---------------------------------------------------- developer tools
+    // Only reachable from the Components Test screen, which is compiled in
+    // solely when BuildConfig.DEV_MODE is set at build time.
+
+    /** Reset onboarding so the first-run flow shows again on next start. */
+    fun resetOnboarding() = setOnboardingCompleted(false)
+
+    /** Clears every track's listening stats (count, date, score) and history. */
+    fun clearAllSongStats() = launch { trackRepository.clearAllPlayStats() }
+
+    /** Fills the library with three years of random listening data. */
+    fun generateRandomStats() = launch { trackRepository.generateRandomPlayStats(years = 3) }
+
     // --------------------------------------------------------------- backups
 
     /** Reachable for the import sheet's feature probe. */

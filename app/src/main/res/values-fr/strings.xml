@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">FoamPlayer</string>
+    <string name="playback_channel_name">Lecture FoamPlayer</string>
     <string name="action_shuffle">Aléatoire</string>
     <string name="action_repeat">Répéter</string>
     <string name="play">Lecture</string>
@@ -106,8 +107,8 @@
     <string name="stats_period_week">1 semaine</string>
     <string name="stats_period_month">1 mois</string>
     <string name="stats_period_three_months">3 mois</string>
-    <string name="stats_period_six_months">6 mois</string>
     <string name="stats_period_year">1 an</string>
+    <string name="stats_period_six_months">6 mois</string>
     <string name="stats_period_all">Tout</string>
     <string name="stats_subtitle_week">Écoutes des 7 derniers jours</string>
     <string name="stats_subtitle_month">Écoutes des 30 derniers jours</string>
@@ -136,11 +137,66 @@
     <string name="bit_perfect_output">Sortie Bit-Perfect</string>
     <string name="bit_perfect_desc">Contourner le rééchantillonneur système pour l\'audio haute résolution sur les DAC USB compatibles</string>
 
+    <!-- Audio : fidélité, appareils, chaîne -->
+    <string name="audio_fidelity_score">Score de fidélité audio</string>
+    <string name="audio_fidelity_desc">Verdict de qualité en direct du chemin de lecture actuel</string>
+    <string name="fidelity_no_playback">Lancez la lecture pour mesurer</string>
+    <string name="direct_volume_control">Contrôle direct du volume</string>
+    <string name="direct_volume_control_desc">Appliquer le volume dans la chaîne DSP en flottant 32 bits, en gardant le chemin de sortie à pleine échelle</string>
+    <string name="output_devices">Appareils de sortie</string>
+    <string name="audio_devices_desc">Mode bit-perfect et fréquence d\'échantillonnage par appareil</string>
+    <string name="no_output_devices">Aucun appareil de sortie détecté</string>
+    <string name="device_active">ACTIF</string>
+    <string name="device_bit_perfect_mode">Mode Bit-Perfect</string>
+    <string name="device_sample_rate_override">Fréquence d\'échantillonnage imposée</string>
+    <string name="audio_pipeline">Chaîne audio</string>
+    <string name="audio_pipeline_desc">Visualiser le chemin de rendu audio en direct</string>
+
+    <!-- Fondus -->
+    <string name="fades">Fondus</string>
+    <string name="crossfade">Enchaînement fondu</string>
+    <string name="crossfade_desc">Fondu de fin de piste vers la suivante</string>
+    <string name="quick_fade">Fondu rapide</string>
+    <string name="quick_fade_desc">Courts fondus à la lecture, en pause, lors des déplacements et des sauts</string>
+
     <string name="lyrics_providers">Fournisseurs</string>
     <string name="lyrics_not_found">Paroles non trouvées</string>
     <string name="resume_auto_scroll">Reprendre le défilement auto</string>
     <string name="search_priority">Priorité de recherche</string>
     <string name="drag_to_reorder_desc">Faites glisser les poignées pour réordonner. Les fournisseurs activés sont parcourus dans l\'ordre.</string>
+
+    <string name="lyrics_manager">Gestion des paroles</string>
+    <string name="lyrics_manager_desc">Rechercher, enregistrer et intégrer des paroles</string>
+    <string name="lyrics_manager_cached">En cache</string>
+    <string name="lyrics_manager_embedded">Intégrées</string>
+    <string name="lyrics_manager_file">Fichier</string>
+    <string name="lyrics_manager_no_lyrics">Sans paroles</string>
+    <string name="lyrics_manager_total">Total</string>
+    <string name="lyrics_manager_search_hint">Rechercher titres, artistes, albums...</string>
+    <string name="lyrics_manager_no_songs">Aucun titre ne correspond</string>
+    <string name="lyrics_manager_scanning">Analyse des paroles…</string>
+    <string name="lyrics_manager_filter_all">Tout</string>
+    <string name="lyrics_manager_delete">Supprimer les paroles</string>
+    <string name="lyrics_manager_deleted">Paroles supprimées</string>
+    <string name="lyrics_manager_deleted_partial">Paroles supprimées (paroles intégrées non supprimables dans ce format)</string>
+    <string name="lyrics_manager_delete_failed">Impossible de supprimer les paroles : %1$s</string>
+    <string name="lyrics_modal_search_prompt">Aucune paroles trouvée, rechercher des paroles ?</string>
+    <string name="lyrics_results_plain">Brutes</string>
+    <string name="lyrics_results_synced">Synchronisées</string>
+    <string name="lyrics_results_word_synced">Mot à mot</string>
+    <string name="lyrics_results_title">Résultats de recherche</string>
+    <string name="lyrics_results_provider">Fournisseur</string>
+    <string name="lyrics_results_save_as_file">Enregistrer en fichier</string>
+    <string name="lyrics_results_embed">Intégrer au fichier</string>
+    <string name="lyrics_results_saved">Paroles enregistrées dans un fichier</string>
+    <string name="lyrics_results_embed_failed">Impossible d\'intégrer : %1$s</string>
+    <string name="lyrics_results_save_failed">Impossible d\'enregistrer : %1$s</string>
+    <string name="lyrics_results_embedded">Paroles intégrées au fichier</string>
+    <string name="lyrics_results_duration_match">Durée correspondante</string>
+    <string name="lyrics_results_expand">Tout afficher</string>
+    <string name="lyrics_results_collapse">Réduire</string>
+    <string name="lyrics_view_readable">Lisible</string>
+    <string name="lyrics_view_raw">Brut</string>
 
     <string name="equalizer_notice">⚠️ Note : Égaliseur actif. Le chemin audio fonctionne en mode haute précision.</string>
 
@@ -195,6 +251,18 @@
     <string name="switches">Interrupteurs</string>
     <string name="sliders">Curseurs</string>
 
+    <!-- Outils développeur (builds devMode uniquement) -->
+    <string name="dev_tools_section">Outils développeur</string>
+    <string name="dev_reset_onboarding">Réinitialiser l\'onboarding</string>
+    <string name="dev_reset_onboarding_title">Réinitialiser l\'onboarding ?</string>
+    <string name="dev_reset_onboarding_message">Le parcours de bienvenue (accueil, permissions, bibliothèque) sera de nouveau affiché au prochain lancement.</string>
+    <string name="dev_clear_song_stats">Effacer les stats des morceaux</string>
+    <string name="dev_clear_song_stats_title">Effacer les stats des morceaux</string>
+    <string name="dev_clear_song_stats_message">Le nombre d\'écoutes, la date de dernière écoute, le score de chaque morceau et l\'historique d\'écoute seront effacés. Cette action est irréversible.</string>
+    <string name="dev_generate_random_data">Générer des données aléatoires</string>
+    <string name="dev_generate_random_data_title">Générer des données aléatoires</string>
+    <string name="dev_generate_random_data_message">Des nombres d\'écoutes, dates (3 dernières années) et scores aléatoires seront générés pour chaque morceau, en remplaçant l\'historique d\'écoute actuel.</string>
+
     <string name="artist_album_separator">%1$s — %2$s</string>
     <string name="artist_format_separator">%1$s • %2$s</string>
 
@@ -238,46 +306,6 @@
     <string name="theme_light">Clair</string>
 
     <string name="language">Langue</string>
-
-    <string name="lyrics_manager">Gestion des paroles</string>
-    <string name="lyrics_manager_desc">Rechercher, enregistrer et intégrer des paroles</string>
-    <string name="lyrics_manager_cached">En cache</string>
-    <string name="lyrics_manager_embedded">Intégrées</string>
-    <string name="lyrics_manager_file">Fichier</string>
-    <string name="lyrics_manager_no_lyrics">Sans paroles</string>
-    <string name="lyrics_manager_total">Total</string>
-    <string name="lyrics_manager_search_hint">Rechercher titres, artistes, albums...</string>
-    <string name="lyrics_manager_no_songs">Aucun titre ne correspond</string>
-    <string name="lyrics_manager_scanning">Analyse des paroles…</string>
-    <string name="lyrics_manager_filter_all">Tout</string>
-    <string name="lyrics_manager_delete">Supprimer les paroles</string>
-    <string name="lyrics_manager_deleted">Paroles supprimées</string>
-    <string name="lyrics_manager_deleted_partial">Paroles supprimées (paroles intégrées non supprimables dans ce format)</string>
-    <string name="lyrics_manager_delete_failed">Impossible de supprimer les paroles : %1$s</string>
-    <string name="lyrics_modal_search_prompt">Aucune paroles trouvée, rechercher des paroles ?</string>
-    <string name="lyrics_results_plain">Brutes</string>
-    <string name="lyrics_results_synced">Synchronisées</string>
-    <string name="lyrics_results_word_synced">Mot à mot</string>
-    <string name="lyrics_results_title">Résultats de recherche</string>
-    <string name="lyrics_results_provider">Fournisseur</string>
-    <string name="lyrics_results_save_as_file">Enregistrer en fichier</string>
-    <string name="lyrics_results_embed">Intégrer au fichier</string>
-    <string name="lyrics_results_saved">Paroles enregistrées dans un fichier</string>
-    <string name="lyrics_results_embed_failed">Impossible d\'intégrer : %1$s</string>
-    <string name="lyrics_results_save_failed">Impossible d\'enregistrer : %1$s</string>
-    <string name="lyrics_results_embedded">Paroles intégrées au fichier</string>
-    <string name="lyrics_results_duration_match">Durée correspondante</string>
-    <string name="lyrics_results_expand">Tout afficher</string>
-    <string name="lyrics_results_collapse">Réduire</string>
-    <string name="lyrics_view_readable">Lisible</string>
-    <string name="lyrics_view_raw">Brut</string>
-
-    <!-- Fondus -->
-    <string name="fades">Fondus</string>
-    <string name="crossfade">Enchaînement fondu</string>
-    <string name="crossfade_desc">Fondu de fin de piste vers la suivante</string>
-    <string name="quick_fade">Fondu rapide</string>
-    <string name="quick_fade_desc">Courts fondus à la lecture, en pause, lors des déplacements et des sauts</string>
 
     <!-- Onboarding -->
     <string name="onboarding_welcome_title">Bienvenue sur FoamPlayer</string>

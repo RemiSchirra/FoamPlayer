@@ -71,6 +71,7 @@ import androidx.navigation.compose.composable as navComposable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.foamplayer.app.BuildConfig
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.CollectionSortMode
@@ -1574,7 +1575,13 @@ fun FoamNavHost(
                                             onNavigateToLibrary = { navController.navigate(Screen.SettingsLibrary.route) },
                                             onNavigateToLyrics = { navController.navigate(Screen.SettingsLyrics.route) },
                                             onNavigateToMisc = { navController.navigate(Screen.SettingsMisc.route) },
-                                            onNavigateToTest = { navController.navigate(Screen.SettingsTest.route) }
+                                            // Compiled in only with devMode=true; the entry
+                                            // disappears from Settings when the flag is off.
+                                            onNavigateToTest = if (BuildConfig.DEV_MODE) {
+                                                { navController.navigate(Screen.SettingsTest.route) }
+                                            } else {
+                                                null
+                                            }
                                         )
                                     }
                                     composable(Screen.SettingsAudio.route) {
@@ -1643,8 +1650,19 @@ fun FoamNavHost(
                                     composable(Screen.SettingsMisc.route) {
                                         MiscSettingsScreen(onBack = { navController.popBackStack() })
                                     }
-                                    composable(Screen.SettingsTest.route) {
-                                        TestSettingsScreen(onBack = { navController.popBackStack() })
+                                    // Developer test screen: registered only with devMode=true.
+                                    if (BuildConfig.DEV_MODE) {
+                                        composable(Screen.SettingsTest.route) {
+                                            TestSettingsScreen(
+                                                onBack = { navController.popBackStack() },
+                                                onOnboardingReset = {
+                                                    // Re-run the first-run flow from a clean stack.
+                                                    navController.navigate(Screen.Onboarding.route) {
+                                                        popUpTo(0) { inclusive = true }
+                                                    }
+                                                }
+                                            )
+                                        }
                                     }
                                     composable(
                                         Screen.ArtistDetail.route,

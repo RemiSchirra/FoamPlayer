@@ -1,5 +1,8 @@
 package com.foamplayer.app.data.repository
 
+import android.util.Log
+import androidx.room.withTransaction
+import com.foamplayer.app.data.db.AppDatabase
 import com.foamplayer.app.data.db.dao.AlbumRecommendation
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.dao.CachedLyricsDao
@@ -12,6 +15,7 @@ import com.foamplayer.app.data.db.dao.TopAlbumStat
 import com.foamplayer.app.data.db.dao.TopTrackStat
 import com.foamplayer.app.data.db.dao.TrackDao
 import com.foamplayer.app.data.db.dao.ArtistPlayRow
+import com.foamplayer.app.data.db.dao.TrackPlayStatsRow
 import com.foamplayer.app.data.db.entities.ListenHistoryEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.scanner.LocalAudioScanner
@@ -29,8 +33,23 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.random.Random
+
+/** One track's generated stats block, staged in memory before the atomic write. */
+private data class TrackStatsUpdate(
+    val trackId: Long,
+    val playCount: Int,
+    val lastPlayedAt: Long?,
+    val score: Int
+)
 
 /**
  * Library data layer: Room access, library scanning and listening-stats
@@ -40,6 +59,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class TrackRepository @Inject constructor(
+    private val db: AppDatabase,
     private val trackDao: TrackDao,
     private val scanner: LocalAudioScanner,
     private val settingsRepository: SettingsRepository,
@@ -207,6 +227,31 @@ class TrackRepository @Inject constructor(
         return trackDao.getAllTracksOnce().associateBy { it.path }
     }
 
+    /**
+     * Re-attaches a file's persisted stats to a freshly scanned entity, KEEPING
+     * the existing row id. INSERT OR REPLACE then updates that same row instead
+     * of deleting + re-inserting it — the latter would re-assign the
+     * autoGenerate id and orphan every listen_history row pointing at the old
+     * id, leaving the stats screens (built on listen_history joins) empty even
+     * though the tracks table still shows the play counts.
+     */
+    private fun mergeStats(
+        scanned: TrackEntity,
+        existing: TrackPlayStatsRow?
+    ): TrackEntity {
+        return if (existing != null) {
+            scanned.copy(
+                id = existing.id,
+                playCount = existing.playCount,
+                lastPlayedAt = existing.lastPlayedAt,
+                score = existing.score,
+                instrumental = existing.instrumental
+            )
+        } else {
+            scanned
+        }
+    }
+
     /** Scans [folders], replacing the library with the results (orphans removed). */
     suspend fun startScan(folders: Set<String>) {
         if (folders.isEmpty()) {
@@ -226,27 +271,29 @@ class TrackRepository @Inject constructor(
         settingsRepository.markScanSeparators(artistSeps, genreSeps)
 
         // insertTracks() replaces rows on conflict, which would wipe the listen
-        // stats and score: re-attach the existing ones to the fresh entities.
+        // stats and score: re-attach the existing ones (with their row id, so
+        // the row is updated in place rather than re-assigned) to the fresh
+        // entities.
         val existingStats = trackDao.getPlayStats().associateBy { it.path }
         val mergedTracks = scannedTracks.map { scanned ->
-            existingStats[scanned.path]?.let {
-                scanned.copy(playCount = it.playCount, lastPlayedAt = it.lastPlayedAt, score = it.score, instrumental = it.instrumental)
-            } ?: scanned
+            mergeStats(scanned, existingStats[scanned.path])
         }
 
-        trackDao.insertTracks(mergedTracks)
-        // Chunked orphan cleanup: a single NOT IN (...) crashes past SQLite's
-        // 999 host-variable limit on API 29.
-        val scannedPathSet = mergedTracks.mapTo(HashSet()) { it.path }
-        val stalePaths = trackDao.getAllTrackPaths().filterNot { it in scannedPathSet }
-        stalePaths.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
-            trackDao.deleteTracksByPaths(chunk)
-        }
+        db.withTransaction {
+            trackDao.insertTracks(mergedTracks)
+            // Chunked orphan cleanup: a single NOT IN (...) crashes past SQLite's
+            // 999 host-variable limit on API 29.
+            val scannedPathSet = mergedTracks.mapTo(HashSet()) { it.path }
+            val stalePaths = trackDao.getAllTrackPaths().filterNot { it in scannedPathSet }
+            stalePaths.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
+                trackDao.deleteTracksByPaths(chunk)
+            }
 
-        val liveTrackIds = trackDao.getAllTrackIds().toHashSet()
-        val orphanedCachedIds = cachedLyricsDao.getCachedTrackIds().filterNot { it in liveTrackIds }
-        orphanedCachedIds.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
-            cachedLyricsDao.deleteByTrackIds(chunk)
+            val liveTrackIds = trackDao.getAllTrackIds().toHashSet()
+            val orphanedCachedIds = cachedLyricsDao.getCachedTrackIds().filterNot { it in liveTrackIds }
+            orphanedCachedIds.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
+                cachedLyricsDao.deleteByTrackIds(chunk)
+            }
         }
 
         _scanStatus.value = ScanStatus.Finished(scannedTracks.size)
@@ -267,9 +314,7 @@ class TrackRepository @Inject constructor(
 
         val existingStats = trackDao.getPlayStats().associateBy { it.path }
         val mergedTracks = scannedTracks.map { scanned ->
-            existingStats[scanned.path]?.let {
-                scanned.copy(playCount = it.playCount, lastPlayedAt = it.lastPlayedAt, score = it.score, instrumental = it.instrumental)
-            } ?: scanned
+            mergeStats(scanned, existingStats[scanned.path])
         }
 
         trackDao.insertTracks(mergedTracks)
@@ -328,9 +373,136 @@ class TrackRepository @Inject constructor(
     fun observeListenedGenreRows(since: Long?): Flow<List<GenrePlayRow>> =
         listenHistoryDao.observeGenrePlayRows(since)
 
+    // ---- Developer tools (only reachable from the DEV_MODE test screen) ----
+
+    /** Clears every track's play count, last-listen date, score and history atomically. */
+    suspend fun clearAllPlayStats() {
+        db.withTransaction {
+            trackDao.resetAllPlayStats()
+            listenHistoryDao.clearAll()
+        }
+    }
+
+    /**
+     * Fills the whole library with random listening stats over the last
+     * [years] years: per-track play count / last-listen date / score, plus one
+     * listen_history row per generated listen so the stats screen's period
+     * analysis and charts are populated too.
+     *
+     * The whole dataset is committed in ONE transaction: either the tracks'
+     * aggregate columns and the full listen history land together, or nothing
+     * changes. (Without that, a cancellation or mid-write error left the
+     * tracks rewritten while the history table — the stats screen's only data
+     * source — stayed cleared, i.e. "stats show nothing".)
+     *
+     * The generator skews toward realism: most tracks get few plays, a handful
+     * become heavy favorites; recent days are busier than older ones; listen
+     * times span the whole day (mornings, afternoons, late night) with an
+     * evening peak.
+     */
+    suspend fun generateRandomPlayStats(years: Int = 3) {
+        val trackIds = trackDao.getAllTrackIds()
+        Log.i(TAG, "generateRandomPlayStats: ${trackIds.size} tracks in library")
+        if (trackIds.isEmpty()) return
+
+        // The generation is CPU-bound; compute everything in memory first, then
+        // commit atomically (see the transaction comment above).
+        withContext(Dispatchers.Default) {
+            val zone = ZoneId.systemDefault()
+            // Year arithmetic must happen on a calendar type: Instant has no
+            // YEARS unit (no calendar context) and throws
+            // UnsupportedTemporalTypeException. LocalDate handles leap years.
+            val today = LocalDate.now(zone)
+            val windowStart = today.minusYears(years.toLong())
+            val windowDays = ChronoUnit.DAYS.between(windowStart, today).coerceAtLeast(1)
+
+            val random = Random.Default
+            val updates = ArrayList<TrackStatsUpdate>(trackIds.size)
+            val listens = ArrayList<ListenHistoryEntity>()
+
+            // Day picker biased toward "now": multiplying two uniform draws
+            // concentrates mass near 1, so 1 - product clusters near zero (today).
+            fun randomRecentDay(): Long {
+                val biased = 1.0 - random.nextDouble() * random.nextDouble()
+                return (biased * windowDays).toLong().coerceIn(0, windowDays - 1)
+            }
+
+            // Hour-of-day picker covering the WHOLE day, weighted like real
+            // listening: an evening peak (17:00-23:00), a solid daytime block
+            // (8:00-16:00) and a sparser night band (0:00-7:00). The previous
+            // 17..23-only window made every generated listen land after 5pm.
+            fun randomListenHour(): Int {
+                return when (random.nextInt(100)) {
+                    in 0 until 15 -> random.nextInt(8) // 0:00-7:59 night
+                    in 15 until 55 -> 8 + random.nextInt(9) // 8:00-16:59 daytime
+                    else -> 17 + random.nextInt(7) // 17:00-23:59 evening peak
+                }
+            }
+
+            trackIds.forEach { trackId ->
+                val plays = when {
+                    random.nextInt(100) < 60 -> random.nextInt(3) // quiet tracks: 0..2
+                    random.nextInt(100) < 85 -> 3 + random.nextInt(10) // regular: 3..12
+                    else -> 15 + random.nextInt(40) // favorites: 15..54
+                }
+                if (plays == 0) {
+                    updates += TrackStatsUpdate(trackId, 0, null, 0)
+                    return@forEach
+                }
+
+                val listenTimestamps = LongArray(plays) {
+                    val day = windowStart.plusDays(randomRecentDay())
+                    LocalDateTime.of(day, LocalTime.of(randomListenHour(), random.nextInt(60)))
+                        .atZone(zone)
+                        .toInstant()
+                        .toEpochMilli()
+                }
+                val lastPlayedAt = listenTimestamps.max()
+                val score = when (random.nextInt(100)) {
+                    in 0 until 55 -> 0
+                    in 55 until 75 -> -1
+                    in 75 until 90 -> 1
+                    else -> 2
+                }
+
+                updates += TrackStatsUpdate(trackId, plays, lastPlayedAt, score)
+                listenTimestamps.forEach { at ->
+                    listens += ListenHistoryEntity(trackId = trackId, listenedAt = at)
+                }
+            }
+
+            // One atomic commit: tracks' aggregate columns + full history.
+            db.withTransaction {
+                updates.forEach { update ->
+                    trackDao.setPlayStats(
+                        update.trackId,
+                        update.playCount,
+                        update.lastPlayedAt,
+                        update.score
+                    )
+                }
+                listenHistoryDao.clearAll()
+                // Chunked inserts: every row binds 3 host variables and the
+                // SQLite shipped on minSdk 29 caps statements at 999 of them.
+                listens.chunked(LISTEN_INSERT_CHUNK).forEach { chunk ->
+                    listenHistoryDao.insertListens(chunk)
+                }
+            }
+            Log.i(TAG, "generateRandomPlayStats: committed ${updates.size} tracks, ${listens.size} listens")
+        }
+    }
+
     private companion object {
+        private const val TAG = "FoamTrackRepository"
+
         /** Bound below SQLite's 999 host-variable limit (API 29) per statement. */
         const val SQL_VARIABLE_CHUNK = 900
+
+        /**
+         * listen_history rows per insertListens statement: 3 host variables per
+         * row (id, trackId, listenedAt) × 300 = 900, safely under the 999 cap.
+         */
+        const val LISTEN_INSERT_CHUNK = 300
 
         /**
          * Neutralizes LIKE's wildcard characters (%, _) and the ESCAPE character

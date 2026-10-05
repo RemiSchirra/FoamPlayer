@@ -107,8 +107,8 @@
     <string name="stats_period_week">1 week</string>
     <string name="stats_period_month">1 month</string>
     <string name="stats_period_three_months">3 months</string>
-    <string name="stats_period_six_months">6 months</string>
     <string name="stats_period_year">1 year</string>
+    <string name="stats_period_six_months">6 months</string>
     <string name="stats_period_all">All time</string>
     <string name="stats_subtitle_week">Listening over the last 7 days</string>
     <string name="stats_subtitle_month">Listening over the last 30 days</string>
@@ -251,6 +251,18 @@
     <string name="switches">Switches</string>
     <string name="sliders">Sliders</string>
 
+    <!-- Developer tools (devMode builds only) -->
+    <string name="dev_tools_section">Developer tools</string>
+    <string name="dev_reset_onboarding">Reset onboarding</string>
+    <string name="dev_reset_onboarding_title">Reset onboarding?</string>
+    <string name="dev_reset_onboarding_message">The welcome flow (welcome, permissions, library) will show again on next launch.</string>
+    <string name="dev_clear_song_stats">Clear song stats</string>
+    <string name="dev_clear_song_stats_title">Clear song stats</string>
+    <string name="dev_clear_song_stats_message">Every track\'s listen count, last-listen date, score and the listening history will be erased. This cannot be undone.</string>
+    <string name="dev_generate_random_data">Generate random data</string>
+    <string name="dev_generate_random_data_title">Generate random data</string>
+    <string name="dev_generate_random_data_message">Random listen counts, dates (last 3 years) and scores will be generated for every track, replacing the current listening history.</string>
+
     <string name="artist_album_separator">%1$s — %2$s</string>
     <string name="artist_format_separator">%1$s • %2$s</string>
 
@@ -340,11 +352,11 @@
     <!-- Settings import / export -->
     <string name="settings_export">Export</string>
     <string name="settings_export_subtitle">Save settings and data to JSON files</string>
-    <string name="settings_import">Import</string>
-    <string name="settings_import_subtitle">Restore settings and data from JSON files</string>
     <string name="settings_export_folder">Export folder</string>
     <string name="settings_export_folder_hint">Choose where the JSON files are written</string>
     <string name="settings_export_features">Features to export</string>
+    <string name="settings_import">Import</string>
+    <string name="settings_import_subtitle">Restore settings and data from JSON files</string>
     <string name="settings_import_files">JSON file</string>
     <string name="settings_import_files_hint">Choose a JSON backup file</string>
     <string name="settings_import_features">Features to import</string>

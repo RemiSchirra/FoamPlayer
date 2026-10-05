@@ -172,6 +172,23 @@ interface TrackDao {
     @Query("UPDATE tracks SET playCount = 0, lastPlayedAt = NULL WHERE id = :trackId")
     suspend fun resetPlayStats(trackId: Long)
 
+    /** Clears every track's listen counters, last-listen date and score. */
+    @Query("UPDATE tracks SET playCount = 0, lastPlayedAt = NULL, score = 0")
+    suspend fun resetAllPlayStats()
+
+    /**
+     * Overwrites one track's whole stats block (count, last-listen date,
+     * score) — the dev "generate random data" tool's per-track write.
+     */
+    @Query("""
+        UPDATE tracks 
+        SET playCount = :playCount, 
+            lastPlayedAt = :lastPlayedAt, 
+            score = :score 
+        WHERE id = :trackId
+    """)
+    suspend fun setPlayStats(trackId: Long, playCount: Int, lastPlayedAt: Long?, score: Int)
+
     @Query("UPDATE tracks SET score = :score WHERE id = :trackId")
     suspend fun setScore(trackId: Long, score: Int)
 
@@ -181,7 +198,14 @@ interface TrackDao {
     @Query("SELECT instrumental FROM tracks WHERE id = :trackId")
     fun observeInstrumental(trackId: Long): Flow<Boolean>
 
-    @Query("SELECT path, playCount, lastPlayedAt, score, instrumental FROM tracks")
+    /**
+     * Includes the row id: the scanner re-attaches it when merging rescanned
+     * files, so INSERT OR REPLACE updates the SAME row instead of deleting and
+     * re-inserting it — which would re-assign the autoGenerate id and orphan
+     * every listen_history row pointing at the old id (the stats screens'
+     * only data source).
+     */
+    @Query("SELECT id, path, playCount, lastPlayedAt, score, instrumental FROM tracks")
     suspend fun getPlayStats(): List<TrackPlayStatsRow>
 
     @Query("""
@@ -218,6 +242,7 @@ data class AlbumRecommendation(
 )
 
 data class TrackPlayStatsRow(
+    val id: Long,
     val path: String,
     val playCount: Int,
     val lastPlayedAt: Long?,

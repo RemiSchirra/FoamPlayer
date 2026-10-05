@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.foamplayer.app.data.db.AppDatabase
 import com.foamplayer.app.data.db.dao.CachedLyricsDao
 import com.foamplayer.app.data.db.dao.ListenHistoryDao
 import com.foamplayer.app.data.db.dao.PlaylistDao
@@ -36,13 +37,21 @@ object RepositoryModule {
     @Provides
     @Singleton
     fun provideTrackRepository(
+        database: AppDatabase,
         trackDao: TrackDao,
         scanner: LocalAudioScanner,
         settingsRepository: SettingsRepository,
         cachedLyricsDao: CachedLyricsDao,
         listenHistoryDao: ListenHistoryDao
     ): TrackRepository {
-        return TrackRepository(trackDao, scanner, settingsRepository, cachedLyricsDao, listenHistoryDao)
+        return TrackRepository(
+            database,
+            trackDao,
+            scanner,
+            settingsRepository,
+            cachedLyricsDao,
+            listenHistoryDao
+        )
     }
 
     @Provides

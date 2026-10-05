@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.BuildConfig
 import com.foamplayer.app.R
 import com.foamplayer.app.data.backup.BackupFeature
 import com.foamplayer.app.ui.modals.BackupLoadingModal
@@ -54,7 +55,7 @@ fun SettingsScreen(
     onNavigateToLibrary: () -> Unit,
     onNavigateToLyrics: () -> Unit,
     onNavigateToMisc: () -> Unit,
-    onNavigateToTest: () -> Unit,
+    onNavigateToTest: (() -> Unit)? = null,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     var openBackupModal by remember { mutableStateOf(BackupModalType.NONE) }
@@ -129,14 +130,17 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
-            item {
-                SettingsCategoryItem(
-                    title = stringResource(R.string.test_components),
-                    subtitle = stringResource(R.string.test_components_subtitle),
-                    icon = Icons.Default.BugReport,
-                    onClick = onNavigateToTest
-                )
-                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            // Developer entry: compiled in only with devMode=true (BuildConfig.DEV_MODE).
+            if (BuildConfig.DEV_MODE && onNavigateToTest != null) {
+                item {
+                    SettingsCategoryItem(
+                        title = stringResource(R.string.test_components),
+                        subtitle = stringResource(R.string.test_components_subtitle),
+                        icon = Icons.Default.BugReport,
+                        onClick = onNavigateToTest
+                    )
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+                }
             }
 
             item {
