@@ -7,6 +7,9 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// set devMode=true in gradle.properties) to compile the developer tests screens
+val devMode: Boolean = providers.gradleProperty("devMode").getOrElse("false").toBoolean()
+
 android {
     namespace = "com.foamplayer.app"
     compileSdk = 36
@@ -22,6 +25,8 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        buildConfigField("boolean", "DEV_MODE", devMode.toString())
     }
 
     splits {
@@ -50,6 +55,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
