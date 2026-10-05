@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// set devMode=true in gradle.properties) to compile the developer tests screens
+// set devMode=true in gradle.properties to compile the developer tests screens
 val devMode: Boolean = providers.gradleProperty("devMode").getOrElse("false").toBoolean()
 
 android {
