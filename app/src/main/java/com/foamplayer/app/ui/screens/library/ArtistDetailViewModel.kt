@@ -59,7 +59,7 @@ class ArtistDetailViewModel @Inject constructor(
                         AlbumSearchResult(
                             album = album,
                             artist = tracks.firstNotNullOfOrNull { it.albumArtist ?: it.artist } ?: artistName,
-                            albumArtPath = tracks.firstNotNullOf { it.albumArtPath }
+                            albumArtPath = tracks.firstNotNullOfOrNull { it.albumArtPath }
                         )
                     }
                     .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.album })
