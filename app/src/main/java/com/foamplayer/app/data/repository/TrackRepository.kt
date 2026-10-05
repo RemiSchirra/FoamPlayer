@@ -155,10 +155,10 @@ class TrackRepository @Inject constructor(
         return trackIds.mapNotNull { byId[it] }
     }
 
-    fun searchTracks(query: String): Flow<List<TrackEntity>> = trackDao.searchTracks(query)
+    fun searchTracks(query: String): Flow<List<TrackEntity>> = trackDao.searchTracks(escapeLike(query))
 
     /** Searches credited artists (the "; " convention split apart), matching filtered. */
-    fun searchArtists(query: String): Flow<List<String>> = trackDao.searchArtists(query).map { rawArtists ->
+    fun searchArtists(query: String): Flow<List<String>> = trackDao.searchArtists(escapeLike(query)).map { rawArtists ->
         rawArtists.flatMap { it.split("; ") }
             .filter { it.contains(query, ignoreCase = true) }
             .distinct()
@@ -166,7 +166,7 @@ class TrackRepository @Inject constructor(
     }
         .flowOn(Dispatchers.Default)
 
-    fun searchAlbums(query: String): Flow<List<AlbumSearchResult>> = trackDao.searchAlbums(query)
+    fun searchAlbums(query: String): Flow<List<AlbumSearchResult>> = trackDao.searchAlbums(escapeLike(query))
 
     fun getTracksByAlbum(album: String): Flow<List<TrackEntity>> = trackDao.getTracksByAlbum(album)
 
@@ -331,5 +331,15 @@ class TrackRepository @Inject constructor(
     private companion object {
         /** Bound below SQLite's 999 host-variable limit (API 29) per statement. */
         const val SQL_VARIABLE_CHUNK = 900
+
+        /**
+         * Neutralizes LIKE's wildcard characters (%, _) and the ESCAPE character
+         * itself, so a typed query such as "0% Angel" or "_" matches literally.
+         * Pairs with the ESCAPE '\' clause in the search* queries.
+         */
+        fun escapeLike(query: String): String =
+            query.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
     }
 }

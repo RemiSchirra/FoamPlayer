@@ -24,10 +24,21 @@ interface TrackDao {
     @Query("SELECT * FROM tracks WHERE id IN (:trackIds)")
     suspend fun getTracksByIds(trackIds: List<Long>): List<TrackEntity>
 
-    @Query("SELECT * FROM tracks WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' OR album LIKE '%' || :query || '%' ORDER BY title ASC")
+    // Search clauses feed a user-typed query into LIKE, so every pattern
+    // carries an ESCAPE '\' clause; TrackRepository escapes \, % and _ first.
+    @Query("""
+        SELECT * FROM tracks 
+        WHERE title LIKE '%' || :query || '%' ESCAPE '\' 
+           OR artist LIKE '%' || :query || '%' ESCAPE '\' 
+           OR album LIKE '%' || :query || '%' ESCAPE '\' 
+        ORDER BY title ASC
+    """)
     fun searchTracks(query: String): Flow<List<TrackEntity>>
 
-    @Query("SELECT DISTINCT artist FROM tracks WHERE artist LIKE '%' || :query || '%'")
+    @Query("""
+        SELECT DISTINCT artist FROM tracks 
+        WHERE artist LIKE '%' || :query || '%' ESCAPE '\'
+    """)
     fun searchArtists(query: String): Flow<List<String>>
 
     @Query("""
@@ -35,9 +46,9 @@ interface TrackDao {
                GROUP_CONCAT(DISTINCT COALESCE(albumArtist, artist)) as artist, 
                MAX(albumArtPath) as albumArtPath 
         FROM tracks 
-        WHERE album LIKE '%' || :query || '%' 
-           OR artist LIKE '%' || :query || '%' 
-           OR albumArtist LIKE '%' || :query || '%'
+        WHERE album LIKE '%' || :query || '%' ESCAPE '\' 
+           OR artist LIKE '%' || :query || '%' ESCAPE '\' 
+           OR albumArtist LIKE '%' || :query || '%' ESCAPE '\' 
         GROUP BY album
     """)
     fun searchAlbums(query: String): Flow<List<AlbumSearchResult>>
@@ -80,7 +91,7 @@ interface TrackDao {
     @Query("""
         SELECT album, 
                GROUP_CONCAT(DISTINCT COALESCE(albumArtist, artist)) as artist, 
-               MAX(albumArtPath) as albumArtPath 
+               MAX(albumArtPath) as albumArtPath
         FROM tracks 
         WHERE artist = :artist 
            OR artist LIKE :artist || '; %' 

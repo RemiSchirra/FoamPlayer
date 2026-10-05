@@ -28,7 +28,12 @@ class PlaylistImporter @Inject constructor(
     private val scanner: LocalAudioScanner,
     private val m3uParser: M3uParser
 ) {
-    /** Matches an .m3u file: path, then filename, then title/artist metadata. */
+    /**
+     * Matches an .m3u file: path, then filename, then title/artist metadata.
+     * Paths are matched through several candidates because M3U authors disagree
+     * about encoding: plain entries keep their literal name ("0%20Angel.mp3"
+     * stays as written) while file:// URIs are percent-decoded once.
+     */
     suspend fun importM3u(m3uUri: String, tracks: List<TrackEntity>): PlaylistMatchResult =
         withContext(Dispatchers.Default) {
             val text = m3uParser.readText(Uri.parse(m3uUri))
@@ -41,12 +46,13 @@ class PlaylistImporter @Inject constructor(
             val missing = mutableListOf<String>()
 
             entries.forEach { entry ->
-                val path = entryPath(entry.path).lowercase()
-                val match = index.matchPath(path)
-                    ?: index.matchBase(baseName(path))
-                    ?: index.matchMetadata(entry.title, entry.artist)
-                if (match != null) {
-                    if (addedIds.add(match.id)) matched += match
+                val match = entryPathCandidates(entry.path).firstNotNullOfOrNull { candidate ->
+                    index.matchPath(candidate.lowercase())
+                        ?: index.matchBase(baseName(candidate).lowercase())
+                }
+                val resolved = match ?: index.matchMetadata(entry.title, entry.artist)
+                if (resolved != null) {
+                    if (addedIds.add(resolved.id)) matched += resolved
                 } else {
                     missing += missingLabel(entry)
                 }
@@ -146,10 +152,24 @@ private fun trackLookupPath(path: String): String {
     return decodeSafely(path.removePrefix("file://"))
 }
 
-/** Normalizes an M3U entry (relative path, file:// URI, backslashes) for comparison. */
-private fun entryPath(raw: String): String {
-    val withoutScheme = if (raw.startsWith("file://", ignoreCase = true)) raw.substring(7) else raw
-    return decodeSafely(withoutScheme.replace('\\', '/')).trimStart('.', '/')
+/**
+ * Path forms tried for one M3U entry, in order:
+ * 1. The literal line with backslashes normalized and dot-slash prefixes
+ *    trimmed — how plain-filesystem playlists reference the file.
+ * 2. The percent-decoded form — how file:// URIs (and tools that wrongly
+ *    URL-encode plain entries) reference it.
+ *
+ * Percent-decoding unconditionally was the bug behind "0%20Angel.mp3" never
+ * matching: the decode rewrote the name to "0 Angel.mp3" while the library
+ * kept the literal percent.
+ */
+private fun entryPathCandidates(raw: String): List<String> {
+    val normalized = raw.replace('\\', '/').trimStart('.', '/')
+    val decoded = decodeSafely(normalized)
+    val forms = ArrayList<String>(2)
+    forms += normalized
+    if (decoded != normalized) forms += decoded
+    return forms
 }
 
 private fun baseName(path: String): String =
@@ -162,5 +182,5 @@ private fun missingLabel(entry: M3uEntry): String =
     when {
         !entry.title.isNullOrBlank() && !entry.artist.isNullOrBlank() -> "${entry.artist} – ${entry.title}"
         !entry.title.isNullOrBlank() -> entry.title!!
-        else -> entryPath(entry.path)
+        else -> entry.path
     }
