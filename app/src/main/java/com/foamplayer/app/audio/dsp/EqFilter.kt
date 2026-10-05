@@ -62,13 +62,28 @@ data class BiquadCoefficients(
 /**
  * Per-channel runtime state of one biquad (transposed direct form II) with
  * its single-sample processing step. Instantiated per (filter, channel) pair
- * by [EqGraph]; rebuilt wholesale when settings change.
+ * by [EqGraph]; coefficients are swapped in place when settings change.
  */
-class BiquadState(private val c: BiquadCoefficients) {
+class BiquadState(private var c: BiquadCoefficients) {
     private var z1 = 0.0
     private var z2 = 0.0
+    private var identity = c == BiquadCoefficients.IDENTITY
+
+    /**
+     * Swaps the coefficients while KEEPING the filter memory (z1/z2), so a
+     * settings change morphs the response without a discontinuity in the
+     * output. Audio thread only.
+     */
+    fun setCoefficients(coefficients: BiquadCoefficients) {
+        c = coefficients
+        identity = coefficients == BiquadCoefficients.IDENTITY
+    }
 
     fun process(x: Float): Float {
+        // Fast path: an identity section with empty memory is a bit-exact no-op.
+        // (Keeping 0 dB sections in the chain keeps the layout stable; this makes
+        // them free. With leftover memory the full path runs and flushes it.)
+        if (identity && z1 == 0.0 && z2 == 0.0) return x
         val y = c.b0 * x + z1
         z1 = c.b1 * x - c.a1 * y + z2
         z2 = c.b2 * x - c.a2 * y

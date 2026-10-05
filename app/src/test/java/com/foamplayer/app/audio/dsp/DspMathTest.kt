@@ -126,9 +126,7 @@ class DspMathTest {
     }
 
     @Test
-    fun `boosts are heard as boosts with no volume reduction`() {
-        // Purely linear chain: no auto headroom anywhere, boosts at any level
-        // leave the output gain untouched.
+    fun `boosts get automatic headroom so peaks cannot exceed full scale`() {
         val boosted = DspState(
             enabled = true,
             graphicEq = GraphicEqSettings(
@@ -138,10 +136,55 @@ class DspMathTest {
         )
         val chain = DspMath.buildChain(boosted, 48_000)
         assertNotNull(chain)
-        // Volume at 100% and preamp at 0: output gain stays unity — true boost.
-        assertTrue(chain!!.outputGainLinear == 1f)
+        // Output gain is lowered by the peak of the response (+6 dB at 20 Hz).
+        assertEquals(6f, chain!!.headroomDb, 0.1f)
+        assertEquals(DspMath.dbToLinear(-chain.headroomDb), chain.outputGainLinear, 1e-6f)
         assertTrue(chain.filters.isNotEmpty())
         assertTrue(!chain.isPassthrough)
+    }
+
+    @Test
+    fun `automatic headroom matches the response peak and can be disabled`() {
+        val state = DspState(
+            enabled = true,
+            parametricEq = ParametricEqSettings(
+                enabled = true,
+                nodes = listOf(ParametricNode(id = 1, frequencyHz = 1000f, gainDb = 6f, q = 1f))
+            )
+        )
+        val chain = DspMath.buildChain(state, 48_000)!!
+        assertEquals(6f, chain.headroomDb, 0.1f)
+        assertEquals(DspMath.dbToLinear(-6f), chain.outputGainLinear, 0.01f)
+        val raw = DspMath.buildChain(state, 48_000, autoHeadroom = false)!!
+        assertTrue(raw.outputGainLinear == 1f)
+    }
+
+    @Test
+    fun `filter layout does not change when a band leaves 0 dB`() {
+        fun chain(second: Float) = DspMath.buildChain(
+            DspState(
+                enabled = true,
+                graphicEq = GraphicEqSettings(
+                    enabled = true,
+                    gainsDb = listOf(6f, second) +
+                            List(GraphicEqSettings.DEFAULT_BAND_COUNT - 2) { 0f }
+                )
+            ),
+            48_000
+        )!!
+        assertEquals(chain(0f).filters.size, chain(3f).filters.size)
+    }
+
+    @Test
+    fun `enabled EQ with every band at 0 dB is still passthrough`() {
+        val state = DspState(
+            enabled = true,
+            graphicEq = GraphicEqSettings(
+                enabled = true,
+                gainsDb = List(GraphicEqSettings.DEFAULT_BAND_COUNT) { 0f }
+            )
+        )
+        assertNull(DspMath.buildChain(state, 48_000))
     }
 
     @Test
@@ -161,33 +204,46 @@ class DspMathTest {
     // ------------------------------------------------------- anti-clip saturation
 
     @Test
-    fun `softClip is bit-exact below full scale`() {
+    fun `softClip is bit-exact up to the knee`() {
         assertTrue(softClip(0.5f) == 0.5f)
         assertTrue(softClip(-0.5f) == -0.5f)
-        assertTrue(softClip(0.9999f) == 0.9999f)
-        assertTrue(softClip(-1f) == -1f)
+        assertTrue(softClip(0.8999f) == 0.8999f)
+        assertTrue(softClip(-SOFT_CLIP_KNEE) == -SOFT_CLIP_KNEE)
+        assertTrue(softClip(SOFT_CLIP_KNEE) == SOFT_CLIP_KNEE)
     }
 
     @Test
     fun `softClip caps the tips of boosted peaks below full scale`() {
-        // Everything a boost pushed past full scale lands in the shoulder and
-        // converges to the ceiling — strictly below full scale, so no
-        // re-quantizer downstream can flat-top or wrap it.
-        assertTrue(softClip(1.001f) in 0.98f..1f)
-        assertTrue(softClip(1.5f) > 0.9f)
-        assertTrue(softClip(5f) > 0.9f)
+        assertTrue(softClip(1.001f) in SOFT_CLIP_KNEE..SOFT_CLIP_CEILING)
+        assertTrue(softClip(1.5f) > 0.95f)
+        assertTrue(softClip(5f) > 0.95f)
         assertTrue(abs(softClip(5f)) <= SOFT_CLIP_CEILING + 1e-6f)
         assertTrue(abs(softClip(-5f)) <= SOFT_CLIP_CEILING + 1e-6f)
         assertTrue(abs(softClip(100f)) <= SOFT_CLIP_CEILING + 1e-6f)
+        assertTrue(abs(softClip(Float.POSITIVE_INFINITY)) < 1f)
     }
 
     @Test
-    fun `softClip is odd-symmetric and continuous at full scale`() {
+    fun `softClip is odd-symmetric and continuous at the knee`() {
         assertTrue(softClip(0.2f) == -softClip(-0.2f))
-        // Continuity at the knee: the first samples past 0 dBFS move only a
-        // hair, so the rounding is smooth instead of a hard cliff.
-        val above = softClip(1.0001f)
-        assertTrue("above=$above", above > 0.999f && above < 1.0002f)
+        assertTrue(softClip(1.7f) == -softClip(-1.7f))
+        // Continuity at the knee: the first samples past it move only a hair.
+        val above = softClip(SOFT_CLIP_KNEE + 0.0001f)
+        assertTrue("above=$above", above > SOFT_CLIP_KNEE && above < SOFT_CLIP_KNEE + 0.00011f)
+    }
+
+    @Test
+    fun `softClip is monotonic so peaks never fold back`() {
+        // Regression: the old shoulder had slope -1 at the knee, so a rising
+        // input produced a FALLING output (peak fold-back = harsh distortion).
+        var previous = softClip(0f)
+        var x = 0.001f
+        while (x < 8f) {
+            val y = softClip(x)
+            assertTrue("not monotonic at x=$x: $previous -> $y", y >= previous)
+            previous = y
+            x += 0.001f
+        }
     }
 
     @Test
@@ -271,7 +327,9 @@ class DspMathTest {
                         gainsDb = List(GraphicEqSettings.DEFAULT_BAND_COUNT) { 6f }
                     )
                 ),
-                48_000
+                48_000,
+                // Headroom off: exercise the anti-clip safety net directly.
+                autoHeadroom = false
             )
         )
         // Peaks a boost pushed past full scale: shaped into the shoulder just
@@ -281,6 +339,37 @@ class DspMathTest {
         assertTrue(hot.all { abs(it) in 0.9f..0.9999f })
         // No sample reaches full scale: int re-quantization can't wrap.
         assertTrue(hot.none { abs(it) >= 1.0f })
+    }
+
+    @Test
+    fun `EqGraph keeps filter memory when only coefficients change`() {
+        val graph = EqGraph()
+        fun chain(bassDb: Float) = DspMath.buildChain(
+            DspState(enabled = true, tone = ToneSettings(bassDb = bassDb)), 48_000,
+            autoHeadroom = false // keep the +12 dB DC gain this test reasons about
+        )
+        graph.updateChain(chain(12f))
+        // Let the low shelf settle on a DC input (DC gain = +12 dB = x3.98).
+        val settle = FloatArray(4_800) { 0.1f }
+        graph.process(settle, settle.size, 1, passthrough = false)
+        assertEquals(0.398f, settle.last(), 0.01f)
+
+        // Nudge the boost by 1 dB: the very next sample must continue from the
+        // settled level (~0.355), not restart from zeroed filter memory (~0.1).
+        graph.updateChain(chain(11f))
+        val next = floatArrayOf(0.1f)
+        graph.process(next, 1, 1, passthrough = false)
+        assertTrue("next=${next[0]}", next[0] > 0.3f && next[0] < 0.42f)
+    }
+
+    @Test
+    fun `EqGraph never emits NaN or full-scale samples`() {
+        val graph = EqGraph()
+        graph.updateChain(DspMath.buildChain(DspState(preampDb = 15f, enabled = true), 48_000))
+        val samples = floatArrayOf(Float.NaN, 0.9f, -0.9f, 0.99f)
+        graph.process(samples, 2, 2, passthrough = false)
+        assertTrue(samples.none { it.isNaN() })
+        assertTrue(samples.all { abs(it) < 1f })
     }
 
     @Test
@@ -295,6 +384,31 @@ class DspMathTest {
         // Balance -0.5: right channel scales by 1 + (-0.5) = 0.5; left stays.
         assertEquals(0.5f, samples[0], 1e-3f)
         assertEquals(0.25f, samples[1], 1e-3f)
+    }
+
+    @Test
+    fun `EqGraph recovers from a NaN input sample`() {
+        val graph = EqGraph()
+        graph.updateChain(
+            DspMath.buildChain(DspState(enabled = true, tone = ToneSettings(bassDb = 6f)), 48_000)
+        )
+        graph.process(floatArrayOf(Float.NaN, 0.1f), 2, 1, passthrough = false)
+        val clean = FloatArray(64) { 0.1f }
+        graph.process(clean, 64, 1, passthrough = false)
+        assertTrue(clean.none { it.isNaN() })
+    }
+
+    @Test
+    fun `EqGraph ramps output gain across the buffer instead of stepping`() {
+        val graph = EqGraph()
+        graph.updateChain(DspMath.buildChain(DspState(enabled = true, preampDb = -6f), 48_000))
+        graph.process(FloatArray(64) { 0.5f }, 64, 1, passthrough = false)
+        graph.updateChain(DspMath.buildChain(DspState(enabled = true, preampDb = -26f), 48_000))
+        val samples = FloatArray(480) { 0.5f }
+        graph.process(samples, 480, 1, passthrough = false)
+        assertTrue("first=${samples.first()}", samples.first() > 0.24f)
+        assertEquals(0.5f * DspMath.dbToLinear(-26f), samples.last(), 1e-3f)
+        for (i in 1 until samples.size) assertTrue(samples[i] <= samples[i - 1])
     }
 
     private fun abs(value: Float): Float = kotlin.math.abs(value)

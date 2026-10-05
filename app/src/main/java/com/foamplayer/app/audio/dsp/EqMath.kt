@@ -9,21 +9,29 @@ import kotlin.math.pow
  * needs, already resolved for one sample rate. Immutable, so the processor can grab
  * a consistent snapshot per buffer even while the UI changes settings.
  *
- * The chain is purely linear (industry-standard EQ semantics): the biquad filters
- * are the only stage that shapes the spectrum, so a frequency boost is exactly the
- * boost the response curve shows — no pre-attenuation, no saturation, no volume
- * reduction anywhere in the path.
+ * The chain is linear: the biquad filters are the only stage that shapes the
+ * spectrum, so the response curve is exactly what the UI shows. To keep boosts from
+ * overshooting full scale (which the anti-clip stage would flat-top into harsh
+ * crackle), [outputGainLinear] includes an automatic headroom attenuation equal to
+ * the peak of the combined EQ response ([headroomDb]).
+ *
+ * The filter list keeps a STABLE LAYOUT: every tone control / graphic band /
+ * parametric node always has a section (identity at 0 dB), so moving a slider off
+ * zero never changes the filter count and the audio graph can keep each biquad's
+ * memory instead of rebuilding zeroed states (which clicks).
  */
 data class DspChain(
     val sampleRate: Int,
     val filters: List<BiquadCoefficients>,
     val outputGainLinear: Float,
     val balance: Float,
-    val stereoWidth: Float
+    val stereoWidth: Float,
+    /** Automatic headroom already folded into [outputGainLinear], in dB (>= 0). */
+    val headroomDb: Float = 0f
 ) {
     /** True when applying this chain leaves samples mathematically untouched. */
     val isPassthrough: Boolean
-        get() = filters.isEmpty() &&
+        get() = filters.all { it == BiquadCoefficients.IDENTITY } &&
                 outputGainLinear == 1f &&
                 balance == 0f &&
                 stereoWidth == 1f
@@ -40,8 +48,13 @@ object DspMath {
     const val RESPONSE_MAX_HZ = 20000f
     const val DEFAULT_RESPONSE_POINTS = 129
 
-    /** Builds the full filter chain for [state] at [sampleRateHz], or null for passthrough. */
-    fun buildChain(state: DspState, sampleRateHz: Int): DspChain? {
+    /**
+     * Builds the full filter chain for [state] at [sampleRateHz], or null for
+     * passthrough. With [autoHeadroom] the output gain is lowered by the peak of the
+     * combined EQ response so boosts cannot push the signal past full scale; pass
+     * false to get the raw chain (e.g. for response curves).
+     */
+    fun buildChain(state: DspState, sampleRateHz: Int, autoHeadroom: Boolean = true): DspChain? {
         if (sampleRateHz <= 0) return null
         val filters = ArrayList<BiquadCoefficients>(16)
         val fs = sampleRateHz.toDouble()
@@ -50,20 +63,18 @@ object DspMath {
             // Tone section: fixed shelves/peak, always in this order.
             filters += toneFilters(fs, state.tone)
 
-            // Graphic EQ: one peaking section per band with a non-zero gain,
-            // computed at the band's actual center for the CURRENT band count.
+            // Graphic EQ: one peaking section per band (identity at 0 dB, so the
+            // layout is stable while sliders move), computed at the band's actual
+            // center for the CURRENT band count.
             val graphic = state.graphicEq
             if (graphic.enabled) {
                 val bandCount = graphic.gainsDb.size
                 val q = GraphicEqSettings.bandQ(bandCount)
                 for (index in 0 until bandCount) {
-                    val gain = graphic.gainsDb[index]
-                    if (gain != 0f) {
-                        filters += BiquadDesigner.peaking(
-                            fs, GraphicEqSettings.bandFrequency(index, bandCount).toDouble(),
-                            gain.toDouble(), q
-                        )
-                    }
+                    filters += BiquadDesigner.peaking(
+                        fs, GraphicEqSettings.bandFrequency(index, bandCount).toDouble(),
+                        graphic.gainsDb[index].toDouble(), q
+                    )
                 }
             }
 
@@ -76,19 +87,41 @@ object DspMath {
             }
         }
 
-        // Purely linear chain: no auto-headroom attenuation before the filters and
-        // no limiter after them — boosting is heard exactly as boosting, the same
-        // way a hardware EQ behaves. The stream encoding's own range (int16/int24/
-        // int32 wrap or float headroom) is the only boundary the signal sees.
-        val outputGainLinear = volumeGainLinear(state) * dbToLinear(state.preampDb)
+        // Automatic headroom: music is mastered close to 0 dBFS, so any boost pushes
+        // peaks past full scale and the anti-clip stage would flat-top them (harsh,
+        // noisy). Lowering the output by the peak of the combined response keeps the
+        // curve shape exactly as shown and nothing can overshoot. The user's own
+        // pre-amp and volume are applied on top, untouched.
+        val headroomDb = if (autoHeadroom) peakBoostDb(filters, fs) else 0f
+        val headroomGain = if (headroomDb > 0f) dbToLinear(-headroomDb) else 1f
+        val outputGainLinear = volumeGainLinear(state) * dbToLinear(state.preampDb) * headroomGain
         val chain = DspChain(
             sampleRate = sampleRateHz,
             filters = filters,
             outputGainLinear = outputGainLinear,
             balance = state.balance.coerceIn(-DspState.MAX_BALANCE, DspState.MAX_BALANCE),
-            stereoWidth = state.stereoWidth.coerceIn(0f, DspState.MAX_STEREO_WIDTH)
+            stereoWidth = state.stereoWidth.coerceIn(0f, DspState.MAX_STEREO_WIDTH),
+            headroomDb = headroomDb
         )
         return if (chain.isPassthrough) null else chain
+    }
+
+    /**
+     * Peak of the cascaded magnitude response in dB over the audible range, or 0
+     * when the chain never boosts (cuts only / identity). Sampled on a fine log
+     * grid; negligible numerical noise above 0 dB is ignored.
+     */
+    private fun peakBoostDb(filters: List<BiquadCoefficients>, fs: Double): Float {
+        if (filters.isEmpty()) return 0f
+        val points = 256
+        var peak = 0.0
+        for (point in 0 until points) {
+            val w = 2.0 * PI * responseFrequencyAt(point, points) / fs
+            var db = 0.0
+            for (filter in filters) db += filter.magnitudeDb(w)
+            if (db > peak) peak = db
+        }
+        return if (peak > 0.01) peak.toFloat() else 0f
     }
 
     /** Direct-volume gain: 0% is mute, 100% is unity, dB scale in between. */
@@ -116,7 +149,8 @@ object DspMath {
         sampleRateHz: Int = 48_000,
         pointCount: Int = DEFAULT_RESPONSE_POINTS
     ): List<Float> {
-        val chain = buildChain(state, sampleRateHz)
+        // The curve shows the EQ shape only; headroom is a gain, not a shape.
+        val chain = buildChain(state, sampleRateHz, autoHeadroom = false)
         val filters = chain?.filters ?: emptyList()
         return (0 until pointCount).map { point ->
             val freq = responseFrequencyAt(point, pointCount)
@@ -203,10 +237,11 @@ object DspMath {
 
     /**
      * The fixed tone controls as biquads: bass low shelf, mid peaking, treble
-     * high shelf — the exact filters [buildChain] inserts, skipped at 0 dB.
+     * high shelf — always three sections (identity at 0 dB) so the chain layout
+     * does not change when a tone slider crosses zero.
      */
     private fun toneFilters(fs: Double, tone: ToneSettings): List<BiquadCoefficients> =
-        ToneBand.entries.mapNotNull { band -> toneFilter(fs, band, tone) }
+        ToneBand.entries.map { band -> toneFilter(fs, band, tone) ?: BiquadCoefficients.IDENTITY }
 
     /** Biquad of one fixed tone control, or null at 0 dB (identity on the audio path). */
     private fun toneFilter(fs: Double, band: ToneBand, tone: ToneSettings): BiquadCoefficients? =

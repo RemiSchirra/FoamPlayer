@@ -125,7 +125,7 @@ class DspAudioProcessor : BaseAudioProcessor() {
             C.ENCODING_PCM_32BIT -> decodePcm32(inputBuffer, frameCount, channelCount)
         }
 
-        // The whole chain, buffer-at-a-time (look-ahead limiter needs context).
+        // The whole chain, buffer-at-a-time.
         graph.process(work, frameCount, channelCount, passthrough = false)
 
         // Re-quantize the work buffer back into the output byte buffer.
@@ -171,7 +171,10 @@ class DspAudioProcessor : BaseAudioProcessor() {
     // ------------------------------------------------------- encode adapters
 
     private fun encodeFloat(out: ByteBuffer, frameCount: Int, channelCount: Int) {
-        for (i in 0 until frameCount * channelCount) out.putFloat(work[i])
+        for (i in 0 until frameCount * channelCount) {
+            val v = work[i]
+            out.putFloat(if (v != v) 0f else v)
+        }
     }
 
     private fun encodePcm16(out: ByteBuffer, frameCount: Int, channelCount: Int) {
@@ -180,10 +183,16 @@ class DspAudioProcessor : BaseAudioProcessor() {
         }
     }
 
+    // The encoders use the SAME scale as the decoders (2^(bits-1)), so an
+    // untouched sample round-trips bit-exact. The old x32767 / x8388607 scale
+    // against a /32768 / /8388608 decode shaved a signal-correlated error of
+    // up to 1 LSB off every sample (a tiny gain error plus distortion).
+
     private fun encodePcm24(out: ByteBuffer, frameCount: Int, channelCount: Int) {
         for (i in 0 until frameCount * channelCount) {
             // float [-1, 1) -> 24-bit little endian, rounded.
-            var value = (work[i] * 8388607f).roundToInt()
+            val v = work[i]
+            var value = if (v != v) 0 else (v * 8388608f).roundToInt()
             value = value.coerceIn(-8388608, 8388607)
             out.put((value and 0xFF).toByte())
             out.put(((value shr 8) and 0xFF).toByte())
@@ -193,8 +202,9 @@ class DspAudioProcessor : BaseAudioProcessor() {
 
     private fun encodePcm32(out: ByteBuffer, frameCount: Int, channelCount: Int) {
         for (i in 0 until frameCount * channelCount) {
-            val value = (work[i] * Int.MAX_VALUE.toFloat()).roundToInt()
-            out.putInt(value.coerceIn(Int.MIN_VALUE, Int.MAX_VALUE))
+            val v = work[i]
+            val value = if (v != v) 0 else (v * 2147483648f).roundToInt()
+            out.putInt(value)
         }
     }
 
@@ -212,7 +222,10 @@ class DspAudioProcessor : BaseAudioProcessor() {
         else -> 2
     }
 
-    private fun quantizeToShort(value: Float): Short =
-        (value * 32767f).roundToInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+    private fun quantizeToShort(value: Float): Short {
+        if (value != value) return 0
+        return (value * 32768f).roundToInt()
+            .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
             .toShort()
+    }
 }
