@@ -101,7 +101,7 @@ class ScanProgressNotifier @Inject constructor(
                 return@collect
             }
             val percent = if (state.total > 0) (state.found * 100 / state.total) else 0
-            notify(ARTIST_NOTIFICATION_ID) {
+            notify(ARTIST_NOTIFICATION_ID, android.R.drawable.stat_sys_download) {
                 setContentTitle(context.getString(R.string.notif_resolve_artists_title))
                     .setContentText(context.getString(R.string.artist_images_found, state.found, state.total))
                     .setProgress(100, percent, state.total == 0)
@@ -110,12 +110,21 @@ class ScanProgressNotifier @Inject constructor(
         }
     }
 
+    /**
+     * Posts a scan-channel notification. [iconRes] picks the small icon: the
+     * static music note by default, or the platform's stock animated download
+     * icon ([android.R.drawable.stat_sys_download]) for the artist image scan.
+     */
     @SuppressLint("MissingPermission")
-    private inline fun notify(id: Int, build: NotificationCompat.Builder.() -> Unit) {
+    private inline fun notify(
+        id: Int,
+        iconRes: Int = R.drawable.ic_music_note,
+        build: NotificationCompat.Builder.() -> Unit
+    ) {
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
         val notification = NotificationCompat.Builder(context, SCAN_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_music_note)
+            .setSmallIcon(iconRes)
             .setColor(ContextCompat.getColor(context, R.color.notification_color))
             .setOnlyAlertOnce(true)
             .setSilent(true)
