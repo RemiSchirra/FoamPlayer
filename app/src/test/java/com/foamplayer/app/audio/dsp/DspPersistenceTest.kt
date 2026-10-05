@@ -34,8 +34,6 @@ class DspPersistenceTest {
             ),
             balance = -0.5f,
             stereoWidth = 1.5f,
-            limiterEnabled = false,
-            autoHeadroom = true,
             directVolumeControl = false,
             volumePercent = 80
         )
@@ -76,7 +74,7 @@ class DspPersistenceTest {
     @Test
     fun `v2 payloads without node colors parse with palette defaults`() {
         // A v2 payload (node format lacks the color and slope fields): one node at 120 Hz.
-        val v2 = "2;1;0;0;0;0;0;0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;1;1:PEAKING:120:3:0.7;-0.5;1;1;1;0;1;80"
+        val v2 = "2;1;0;0;0;0;0;0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;1;1:PEAKING:120:3:0.7;-0.5;1;1;1;0;1;80"
         val restored = DspPersistence.deserialize(v2)
 
         assertTrue(restored.parametricEq.enabled)
@@ -89,7 +87,7 @@ class DspPersistenceTest {
     @Test
     fun `v1 payloads parse on legacy indices without autoHeadroom`() {
         // A v1 payload: nodes empty, balance -0.5, width 1, limiter=1, dvc=1, volume=80
-        // (autoHeadroom did not exist).
+        // (autoHeadroom did not exist). The limiter slot is parsed for alignment and dropped.
         val v1 = "1;1;0;0;0;0;1;6,0,0,0,0,0,0,0,0,0;0;;-0.5;1;1;1;80"
         val restored = DspPersistence.deserialize(v1)
 
@@ -97,10 +95,23 @@ class DspPersistenceTest {
         assertTrue(restored.graphicEq.enabled)
         assertEquals(21, restored.graphicEq.count)
         assertEquals(-0.5f, restored.balance)
-        assertTrue(restored.limiterEnabled)
-        assertTrue(!restored.autoHeadroom)
         assertTrue(restored.directVolumeControl)
         assertEquals(80, restored.volumePercent)
+    }
+
+    @Test
+    fun `legacy limiter and headroom flags are parsed and dropped`() {
+        // A v4 payload keeps the removed limiter/autoHeadroom slots for field
+        // alignment with older app versions, but the values are constants now.
+        val v4 = DspPersistence.serialize(DspState())
+        val parts = v4.split(";")
+        // 4;enabled;preamp;bass;mid;treble;gEnabled;gCount;gains;pEnabled;nodes;
+        // balance;width;limiter;headroom;dvc;volume = 17 fields.
+        assertEquals(17, parts.size)
+        assertEquals("0", parts[13]) // limiter slot (removed switch)
+        assertEquals("0", parts[14]) // auto-headroom slot (removed switch)
+        val restored = DspPersistence.deserialize(v4)
+        assertEquals(DspState(), restored)
     }
 
     @Test

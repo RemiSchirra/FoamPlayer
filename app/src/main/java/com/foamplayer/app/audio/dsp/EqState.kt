@@ -132,6 +132,10 @@ data class ParametricEqSettings(
  * The complete, persisted DSP chain configuration. Everything the audio processor
  * needs to build its float filter graph is derived from this state; [isNeutral]
  * decides whether the processor takes the bit-perfect passthrough fast path.
+ *
+ * The chain is purely linear (industry-standard EQ semantics): no limiter and no
+ * automatic headroom — a boost at any frequency is exactly the boost the curve
+ * shows, with nothing ever attenuating or saturating the signal.
  */
 data class DspState(
     val enabled: Boolean = false,
@@ -141,15 +145,6 @@ data class DspState(
     val parametricEq: ParametricEqSettings = ParametricEqSettings(),
     val balance: Float = 0f,
     val stereoWidth: Float = 1f,
-    /** Peaks limiter: keeps boosts from hard-clipping (Poweramp ships this on). */
-    val limiterEnabled: Boolean = true,
-    /**
-     * Auto headroom: attenuates the whole signal by the EQ's spectral peak before
-     * the filters, guaranteeing zero clipping at the cost of overall loudness.
-     * Off by default — boosting should be heard as boosting; the limiter handles
-     * the peaks instead.
-     */
-    val autoHeadroom: Boolean = false,
     /** Direct volume control: volume is applied in the float DSP, not by AudioFlinger. */
     val directVolumeControl: Boolean = true,
     /** User volume 0..100 (100 = 0 dB, direct-volume path only). */
@@ -163,8 +158,7 @@ data class DspState(
                         graphicEq.isNeutral &&
                         parametricEq.isNeutral &&
                         balance == 0f &&
-                        stereoWidth == 1f &&
-                        !limiterEnabled)
+                        stereoWidth == 1f)
 
     companion object {
         const val MIN_PREAMP_DB = -15f

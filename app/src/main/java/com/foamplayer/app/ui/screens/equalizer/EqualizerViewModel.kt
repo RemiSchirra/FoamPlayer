@@ -14,6 +14,10 @@ import javax.inject.Inject
  * tone/control knobs, graphic bands, parametric nodes, presets and volume all
  * forward straight into [DspEngine], whose publication also feeds the player's
  * audio sink and the audio-path evaluation.
+ *
+ * The chain is purely linear (industry-standard EQ): no limiter and no auto
+ * headroom exist anywhere in the settings or the audio path, so a boost at any
+ * frequency is exactly the boost the response curve shows.
  */
 @HiltViewModel
 class EqualizerViewModel @Inject constructor(
@@ -37,10 +41,6 @@ class EqualizerViewModel @Inject constructor(
     fun setBalance(balance: Float) = dspEngine.setBalance(balance)
 
     fun setStereoWidth(width: Float) = dspEngine.setStereoWidth(width)
-
-    fun setLimiterEnabled(enabled: Boolean) = dspEngine.setLimiterEnabled(enabled)
-
-    fun setAutoHeadroom(enabled: Boolean) = dspEngine.setAutoHeadroom(enabled)
 
     fun setDirectVolumeControl(enabled: Boolean) = dspEngine.setDirectVolumeControl(enabled)
 

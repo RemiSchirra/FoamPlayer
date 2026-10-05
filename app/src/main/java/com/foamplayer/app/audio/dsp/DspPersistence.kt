@@ -9,6 +9,11 @@ package com.foamplayer.app.audio.dsp
  * v2: same without the node color field (nodes read with the palette default).
  * v1: same without the autoHeadroom field (legacy payloads read with it = false).
  *
+ * The limiter and autoHeadroom switches were removed from the app (the chain is
+ * now purely linear); v4 payloads still carry their slots so older backups and
+ * restored settings never break the field alignment — they are parsed and
+ * silently dropped.
+ *
  * Parsing is defensive: any malformed field falls back to the default value, so a
  * bad or older payload can never crash the audio path. Gains lists of any legacy
  * length are trimmed/padded to their declared band count, and the count itself is
@@ -44,8 +49,10 @@ object DspPersistence {
         )
         append(SEP).append(state.balance)
         append(SEP).append(state.stereoWidth)
-        append(SEP).append(if (state.limiterEnabled) "1" else "0")
-        append(SEP).append(if (state.autoHeadroom) "1" else "0")
+        // Removed switches: slots kept so v4 field alignment stays stable across
+        // app versions; the values are written as the new-chain defaults.
+        append(SEP).append("0") // limiter (removed — chain is purely linear)
+        append(SEP).append("0") // auto headroom (removed — chain is purely linear)
         append(SEP).append(if (state.directVolumeControl) "1" else "0")
         append(SEP).append(state.volumePercent)
     }
@@ -67,8 +74,8 @@ object DspPersistence {
             // the autoHeadroom field entirely.
             val balanceIndex = if (isV4) 11 else 10
             val widthIndex = balanceIndex + 1
-            val limiterIndex = balanceIndex + 2
-            val autoHeadroomIndex = if (isV2) balanceIndex + 3 else -1
+            // limiter / autoHeadroom are read for alignment only and dropped —
+            // the new chain has neither a limiter nor auto-headroom.
             val directVolumeIndex = if (isV2) balanceIndex + 4 else balanceIndex + 3
             val volumeIndex = directVolumeIndex + 1
 
@@ -110,10 +117,6 @@ object DspPersistence {
                 stereoWidth = parts.getOrNull(widthIndex)?.toFloatOrNull()?.coerceIn(
                     0f, DspState.MAX_STEREO_WIDTH
                 ) ?: default.stereoWidth,
-                limiterEnabled = parts.getOrNull(limiterIndex)?.toIntOrNull()?.let { it == 1 }
-                    ?: default.limiterEnabled,
-                autoHeadroom = parts.getOrNull(autoHeadroomIndex)?.toIntOrNull()?.let { it == 1 }
-                    ?: default.autoHeadroom,
                 directVolumeControl = parts.getOrNull(directVolumeIndex)?.toIntOrNull()
                     ?.let { it != 0 } ?: true,
                 volumePercent = parts.getOrNull(volumeIndex)?.toIntOrNull()?.coerceIn(

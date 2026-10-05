@@ -110,7 +110,7 @@ class DspMathTest {
     @Test
     fun `graphic response follows gains at any band count`() {
         // 6-band: boost the lowest band, the response must rise toward 20 Hz.
-        val gains6 = listOf(6f, 0f, 0f, 0f, 0f, 0f)
+        val gains6 = listOf(6f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
         val response = DspMath.graphicResponse(gains6, pointCount = 129)
         val lowIndex = DspMath.responseIndexForFrequency(25f, 129).toInt()
         val midIndex = DspMath.responseIndexForFrequency(1000f, 129).toInt()
@@ -126,39 +126,9 @@ class DspMathTest {
     }
 
     @Test
-    fun `limiter keeps output below 1`() {
-        assertTrue(DspMath.limit(0.5f) == 0.5f)
-        assertTrue(abs(DspMath.limit(2f)) <= 1f)
-        assertTrue(abs(DspMath.limit(-2f)) <= 1f)
-    }
-
-    @Test
-    fun `softClip is transparent below the knee and caps at full scale`() {
-        assertTrue(DspMath.softClip(0.5f) == 0.5f)
-        assertTrue(DspMath.softClip(-0.5f) == -0.5f)
-        val clipped = DspMath.softClip(5f)
-        assertTrue("clipped=$clipped", clipped <= 1f && clipped > 0.98f)
-        assertTrue(abs(DspMath.softClip(-5f)) <= 1f)
-    }
-
-    @Test
-    fun `boosted EQ with autoHeadroom yields negative headroom`() {
-        val boosted = DspState(
-            enabled = true,
-            autoHeadroom = true,
-            graphicEq = GraphicEqSettings(
-                enabled = true,
-                gainsDb = listOf(6f) + List(GraphicEqSettings.DEFAULT_BAND_COUNT - 1) { 0f }
-            )
-        )
-        val headroom = DspMath.headroomDb(boosted)
-        assertTrue("headroom=$headroom", headroom < 0f)
-        // The compensation should roughly match the boost (±2 dB for sampling error).
-        assertTrue("headroom=$headroom", headroom > -8f)
-    }
-
-    @Test
-    fun `headroom is off by default so boosts are heard as boosts`() {
+    fun `boosts are heard as boosts with no volume reduction`() {
+        // Purely linear chain: no auto headroom anywhere, boosts at any level
+        // leave the output gain untouched.
         val boosted = DspState(
             enabled = true,
             graphicEq = GraphicEqSettings(
@@ -166,62 +136,58 @@ class DspMathTest {
                 gainsDb = listOf(6f) + List(GraphicEqSettings.DEFAULT_BAND_COUNT - 1) { 0f }
             )
         )
-        assertTrue(DspMath.headroomDb(boosted) == 0f)
         val chain = DspMath.buildChain(boosted, 48_000)
         assertNotNull(chain)
-        assertTrue(chain!!.headroomLinear == 1f)
+        // Volume at 100% and preamp at 0: output gain stays unity — true boost.
+        assertTrue(chain!!.outputGainLinear == 1f)
+        assertTrue(chain.filters.isNotEmpty())
+        assertTrue(!chain.isPassthrough)
     }
 
     @Test
-    fun `cut-only or neutral EQ yields no headroom reduction`() {
-        assertTrue(DspMath.headroomDb(DspState()) == 0f)
-
+    fun `cut-only EQ is passthrough-compatible with output gain untouched`() {
         val cutOnly = DspState(
             enabled = true,
-            autoHeadroom = true,
             graphicEq = GraphicEqSettings(
                 enabled = true,
                 gainsDb = listOf(-6f) + List(GraphicEqSettings.DEFAULT_BAND_COUNT - 1) { 0f }
             )
         )
-        assertTrue(DspMath.headroomDb(cutOnly) == 0f)
+        val chain = DspMath.buildChain(cutOnly, 48_000)
+        assertNotNull(chain)
+        assertTrue(chain!!.outputGainLinear == 1f)
+    }
+
+    // ------------------------------------------------------- anti-clip saturation
+
+    @Test
+    fun `softClip is bit-exact below full scale`() {
+        assertTrue(softClip(0.5f) == 0.5f)
+        assertTrue(softClip(-0.5f) == -0.5f)
+        assertTrue(softClip(0.9999f) == 0.9999f)
+        assertTrue(softClip(-1f) == -1f)
     }
 
     @Test
-    fun `boosted chain with autoHeadroom applies headroom before filters and gain after`() {
-        val boosted = DspState(
-            enabled = true,
-            preampDb = 0f,
-            autoHeadroom = true,
-            graphicEq = GraphicEqSettings(
-                enabled = true,
-                gainsDb = listOf(6f) + List(GraphicEqSettings.DEFAULT_BAND_COUNT - 1) { 0f }
-            )
-        )
-        val chain = DspMath.buildChain(boosted, 48_000)
-        assertNotNull(chain)
-        assertTrue(chain!!.headroomLinear < 1f)
-        // Volume at 100% and preamp at 0: output gain stays unity.
-        assertTrue(chain.outputGainLinear == 1f)
-        // Passthrough is false: the chain actually processes.
-        assertTrue(!chain.isPassthrough)
+    fun `softClip caps the tips of boosted peaks below full scale`() {
+        // Everything a boost pushed past full scale lands in the shoulder and
+        // converges to the ceiling — strictly below full scale, so no
+        // re-quantizer downstream can flat-top or wrap it.
+        assertTrue(softClip(1.001f) in 0.98f..1f)
+        assertTrue(softClip(1.5f) > 0.9f)
+        assertTrue(softClip(5f) > 0.9f)
+        assertTrue(abs(softClip(5f)) <= SOFT_CLIP_CEILING + 1e-6f)
+        assertTrue(abs(softClip(-5f)) <= SOFT_CLIP_CEILING + 1e-6f)
+        assertTrue(abs(softClip(100f)) <= SOFT_CLIP_CEILING + 1e-6f)
     }
 
     @Test
-    fun `limiter defaults on and engages only with DSP enabled`() {
-        assertTrue(DspState().limiterEnabled)
-
-        // DSP off: the limiter must never break the bit-perfect passthrough.
-        val idle = DspState(enabled = false)
-        assertNull(DspMath.buildChain(idle, 48_000))
-
-        // DSP on with a flat EQ: limiter-only processing chain.
-        val flatDsp = DspState(enabled = true)
-        val chain = DspMath.buildChain(flatDsp, 48_000)
-        assertNotNull(chain)
-        assertTrue(chain!!.limiterEnabled)
-        assertTrue(chain.filters.isEmpty())
-        assertTrue(!chain.isPassthrough)
+    fun `softClip is odd-symmetric and continuous at full scale`() {
+        assertTrue(softClip(0.2f) == -softClip(-0.2f))
+        // Continuity at the knee: the first samples past 0 dBFS move only a
+        // hair, so the rounding is smooth instead of a hard cliff.
+        val above = softClip(1.0001f)
+        assertTrue("above=$above", above > 0.999f && above < 1.0002f)
     }
 
     @Test
@@ -287,57 +253,48 @@ class DspMathTest {
         graph.updateChain(DspMath.buildChain(DspState(volumePercent = 50), 48_000))
         val samples = floatArrayOf(1.0f, 1.0f, 1.0f, 1.0f)
         graph.process(samples, 2, 2, passthrough = false)
+        // -30 dB gain stays exact here: the shaped output is far below the
+        // anti-clip knee, so the stage is bit-exact and only the gain applied.
         assertEquals(DspMath.dbToLinear(-30f), samples[0], 1e-3f)
     }
 
     @Test
-    fun `EqGraph limiter never touches the body of the signal`() {
+    fun `EqGraph with a real boost shapes hot peaks into the anti-clip ceiling`() {
         val graph = EqGraph()
-        graph.updateChain(DspMath.buildChain(DspState(enabled = true), 48_000))
-        // Every sample below the knee must pass at unity — loudness is never
-        // reduced by the peak limiter, whatever the program material.
-        val body = FloatArray(256 * 2) { 0.5f }
-        graph.process(body, 256, 2, passthrough = false)
-        assertTrue(body.all { it == 0.5f })
-    }
-
-    @Test
-    fun `EqGraph limiter rounds only the tips of hot peaks`() {
-        val graph = EqGraph()
-        graph.updateChain(DspMath.buildChain(DspState(enabled = true), 48_000))
-        // Boosted signal: peaks land between the knee and the ceiling, the
-        // very first frame is already shaped (no look-ahead priming silence).
+        // A real boost chain (flat DSP is passthrough and bypasses everything).
+        graph.updateChain(
+            DspMath.buildChain(
+                DspState(
+                    enabled = true,
+                    graphicEq = GraphicEqSettings(
+                        enabled = true,
+                        gainsDb = List(GraphicEqSettings.DEFAULT_BAND_COUNT) { 6f }
+                    )
+                ),
+                48_000
+            )
+        )
+        // Peaks a boost pushed past full scale: shaped into the shoulder just
+        // under the ceiling — no flat-tops, no crackle.
         val hot = FloatArray(256 * 2) { 1.5f }
         graph.process(hot, 256, 2, passthrough = false)
-        assertTrue(hot.all { abs(it) in 0.95f..1.0f })
-    }
-
-    @Test
-    fun `EqGraph resetStates keeps peak shaping stateless and intact`() {
-        val graph = EqGraph()
-        graph.updateChain(DspMath.buildChain(DspState(enabled = true), 48_000))
-        val hot = FloatArray(256 * 2) { 1.5f }
-        graph.process(hot, 256, 2, passthrough = false)
-        graph.resetStates()
-        // The peak limiter is stateless: shaping still works after a flush.
-        val again = FloatArray(8) { 1.5f }
-        graph.process(again, 4, 2, passthrough = false)
-        assertTrue(again.all { abs(it) in 0.95f..1.0f })
+        assertTrue(hot.all { abs(it) in 0.9f..0.9999f })
+        // No sample reaches full scale: int re-quantization can't wrap.
+        assertTrue(hot.none { abs(it) >= 1.0f })
     }
 
     @Test
     fun `EqGraph balance attenuates the opposite channel`() {
         val graph = EqGraph()
         graph.updateChain(
-            DspMath.buildChain(
-                DspState(enabled = true, balance = -0.5f, limiterEnabled = false), 48_000
-            )
+            DspMath.buildChain(DspState(enabled = true, balance = -0.5f), 48_000)
         )
-        val samples = floatArrayOf(1.0f, 1.0f)
+        // 0.5 stays under the knee, so balance math is verifiable bit-exact.
+        val samples = floatArrayOf(0.5f, 0.5f)
         graph.process(samples, 1, 2, passthrough = false)
         // Balance -0.5: right channel scales by 1 + (-0.5) = 0.5; left stays.
-        assertEquals(1.0f, samples[0], 1e-3f)
-        assertEquals(0.5f, samples[1], 1e-3f)
+        assertEquals(0.5f, samples[0], 1e-3f)
+        assertEquals(0.25f, samples[1], 1e-3f)
     }
 
     private fun abs(value: Float): Float = kotlin.math.abs(value)

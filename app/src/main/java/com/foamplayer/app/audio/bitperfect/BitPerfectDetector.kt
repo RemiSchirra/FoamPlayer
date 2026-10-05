@@ -103,9 +103,8 @@ class BitPerfectDetector @Inject constructor(
             input, dsp, dspNeutral, directVolume, volumeDb, resampling,
             directCapable, usbDevice, device, mixerRate, isBitPerfect
         )
-        val headroomDb = DspMath.headroomDb(dsp, mixerRate)
         val pipeline = buildPipeline(
-            input, dsp, dspNeutral, directVolume, volumeDb, headroomDb, resampling,
+            input, dsp, dspNeutral, directVolume, volumeDb, resampling,
             directCapable, usbDevice, device, mixerRate, outputSampleRate, outputBitDepth,
             isBitPerfect
         )
@@ -127,7 +126,6 @@ class BitPerfectDetector @Inject constructor(
             isDspNeutral = dspNeutral,
             directVolumeControl = directVolume,
             volumeGainDb = volumeDb,
-            headroomDb = headroomDb,
             isResampling = resampling,
             fidelity = fidelity,
             pipeline = pipeline
@@ -192,24 +190,20 @@ class BitPerfectDetector @Inject constructor(
             maxPoints = 20
         )
 
-        // 3. DSP path (25 pts)
+        // 3. DSP path (25 pts) — the chain is purely linear float processing.
         val dspEngaged = !dspNeutral
-        val limiterOn = dsp.enabled && dsp.limiterEnabled
         val dspPoints = when {
             !dspEngaged -> 25
-            !limiterOn -> 17
-            else -> 12
+            else -> 15
         }
         items += FidelityItem(
             label = "DSP chain",
             status = when {
                 !dspEngaged -> FidelityStatus.PASS
-                !limiterOn -> FidelityStatus.WARN
                 else -> FidelityStatus.WARN
             },
             detail = when {
                 !dspEngaged -> "Transparent (bit-perfect passthrough)"
-                limiterOn -> "Float 32-bit processing + limiter engaged"
                 else -> "Float 32-bit processing (tone/EQ)"
             },
             points = dspPoints,
@@ -276,7 +270,6 @@ class BitPerfectDetector @Inject constructor(
         dspNeutral: Boolean,
         directVolume: Boolean,
         volumeDb: Float,
-        headroomDb: Float,
         resampling: Boolean,
         directCapable: Boolean,
         usbDevice: Boolean,
@@ -325,13 +318,6 @@ class BitPerfectDetector @Inject constructor(
             details = buildList {
                 add(if (directVolume) "32-bit float gain, no quantization" else "AudioFlinger int16 mixing")
                 add("Volume: ${dsp.volumePercent}%")
-                add(
-                    if (headroomDb < -0.05f) {
-                        "Auto headroom %.1f dB (anti-clip)".format(headroomDb)
-                    } else {
-                        "No headroom reduction needed"
-                    }
-                )
             }
         )
 
@@ -401,12 +387,12 @@ class BitPerfectDetector @Inject constructor(
             }
         )
 
-        // 8. Limiter
+        // 8. Output gain (removed limiter stage: the chain is purely linear)
         stages += PipelineStage(
-            name = "Limiter",
-            status = if (dsp.enabled && dsp.limiterEnabled) PipelineStageStatus.ACTIVE else PipelineStageStatus.BYPASSED,
-            headline = if (dsp.enabled && dsp.limiterEnabled) "Engaged (soft knee)" else "Bypassed",
-            details = listOf(if (dsp.enabled && dsp.limiterEnabled) "Prevents clipping above 0 dBFS" else "No peak control")
+            name = "Output",
+            status = PipelineStageStatus.ACTIVE,
+            headline = "Purely linear chain — boosts are heard as boosts",
+            details = listOf("No limiter, no headroom reduction")
         )
 
         // 9. Resampler

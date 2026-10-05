@@ -88,12 +88,15 @@ import kotlin.math.roundToInt
  *    colored nodes) sections — mutually exclusive: enabling one disables the other,
  *  - rotary tone knobs — pre-amp in dB; bass/mid/treble boost-only, reading
  *    0-100% (log-tapered to 0..+12 dB, no negative dB) — and control knobs
- *    (balance, stereo width 0-100% = ×1..×2) with a limiter switch,
+ *    (balance, stereo width 0-100% = ×1..×2),
  *  - direct volume control slider with dB readout.
  *
  * All controls commit on release so a drag never floods the DSP engine with state
  * emissions; the graphs and the mini map render from local working copies in the
  * meantime, so they follow the finger while the engine sees one update.
+ *
+ * The DSP chain is purely linear (industry-standard EQ): the former Limiter and
+ * Auto-headroom switches are gone, boosts are heard exactly as the curve shows.
  */
 @Composable
 fun EqualizerScreen(
@@ -295,7 +298,7 @@ fun EqualizerScreen(
                             ) {
                                 BasicText(
                                     text = "$count bands",
-                                    style = FoamTheme.typography.body.copy(
+                                    style = FoamTheme.typography.caption.copy(
                                         color = if (count == state.graphicEq.count) {
                                             FoamTheme.accentColor
                                         } else {
@@ -1039,21 +1042,6 @@ private fun KnobsSection(
             }
         }
     }
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    DspSwitchRow(
-        title = "Limiter",
-        caption = "Peaks limiter — keeps boosts from hard-clipping",
-        checked = state.limiterEnabled,
-        onChange = { viewModel.setLimiterEnabled(it) }
-    )
-    DspSwitchRow(
-        title = "Auto headroom",
-        caption = "Lower overall level by the EQ boost for zero clipping",
-        checked = state.autoHeadroom,
-        onChange = { viewModel.setAutoHeadroom(it) }
-    )
 }
 
 /**
@@ -1077,34 +1065,6 @@ private fun ToneKnob(
         minValue = 0f,
         maxValue = KNOB_MAX_PERCENT
     )
-}
-
-@Composable
-private fun DspSwitchRow(
-    title: String,
-    caption: String,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            BasicText(text = title, style = FoamTheme.typography.titleMedium)
-            BasicText(text = caption, style = FoamTheme.typography.caption)
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = onChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = FoamTheme.accentColor,
-                checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
-                uncheckedThumbColor = FoamTheme.colors.textSecondary,
-                uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.4f)
-            )
-        )
-    }
 }
 
 @Composable

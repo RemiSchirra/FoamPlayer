@@ -226,10 +226,6 @@ class DspEngine @Inject constructor(
         it.copy(stereoWidth = width.coerceIn(0f, DspState.MAX_STEREO_WIDTH))
     }
 
-    fun setLimiterEnabled(enabled: Boolean) = update { it.copy(limiterEnabled = enabled) }
-
-    fun setAutoHeadroom(enabled: Boolean) = update { it.copy(autoHeadroom = enabled) }
-
     fun setDirectVolumeControl(enabled: Boolean) = update {
         it.copy(directVolumeControl = enabled)
     }

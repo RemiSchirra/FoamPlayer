@@ -9,32 +9,24 @@ import kotlin.math.pow
  * needs, already resolved for one sample rate. Immutable, so the processor can grab
  * a consistent snapshot per buffer even while the UI changes settings.
  *
- * Gain staging (Poweramp-style anti-clip):
- *  1. [headroomLinear] attenuates the signal BEFORE the filters, compensating the
- *     chain's spectral peak so EQ boosts can never push samples past full scale;
- *  2. the filters shape the signal;
- *  3. [outputGainLinear] (direct volume × pre-amp) applies the user gain AFTER the
- *     filters, so a reduced pre-amp can also hand the filters extra headroom;
- *  4. the look-ahead limiter ([limiterEnabled]) scales down only the peaks that
- *     would otherwise exceed full scale.
+ * The chain is purely linear (industry-standard EQ semantics): the biquad filters
+ * are the only stage that shapes the spectrum, so a frequency boost is exactly the
+ * boost the response curve shows — no pre-attenuation, no saturation, no volume
+ * reduction anywhere in the path.
  */
 data class DspChain(
     val sampleRate: Int,
-    val headroomLinear: Float,
     val filters: List<BiquadCoefficients>,
     val outputGainLinear: Float,
     val balance: Float,
-    val stereoWidth: Float,
-    val limiterEnabled: Boolean
+    val stereoWidth: Float
 ) {
     /** True when applying this chain leaves samples mathematically untouched. */
     val isPassthrough: Boolean
         get() = filters.isEmpty() &&
-                headroomLinear == 1f &&
                 outputGainLinear == 1f &&
                 balance == 0f &&
-                stereoWidth == 1f &&
-                !limiterEnabled
+                stereoWidth == 1f
 }
 
 /**
@@ -84,54 +76,20 @@ object DspMath {
             }
         }
 
-        // Anti-clip headroom (OPT-IN): attenuate by the filters' spectral peak so
-        // boosts cannot drive the stream past full scale. Off by default — boosting
-        // should be heard as boosting; the limiter + soft-clip guard handle peaks.
-        val peakDb = filterPeakDb(filters, sampleRateHz)
-        val headroomLinear =
-            if (state.autoHeadroom && peakDb > 0f) dbToLinear(-peakDb) else 1f
-
+        // Purely linear chain: no auto-headroom attenuation before the filters and
+        // no limiter after them — boosting is heard exactly as boosting, the same
+        // way a hardware EQ behaves. The stream encoding's own range (int16/int24/
+        // int32 wrap or float headroom) is the only boundary the signal sees.
         val outputGainLinear = volumeGainLinear(state) * dbToLinear(state.preampDb)
         val chain = DspChain(
             sampleRate = sampleRateHz,
-            headroomLinear = headroomLinear,
             filters = filters,
             outputGainLinear = outputGainLinear,
             balance = state.balance.coerceIn(-DspState.MAX_BALANCE, DspState.MAX_BALANCE),
-            stereoWidth = state.stereoWidth.coerceIn(0f, DspState.MAX_STEREO_WIDTH),
-            limiterEnabled = state.enabled && state.limiterEnabled
+            stereoWidth = state.stereoWidth.coerceIn(0f, DspState.MAX_STEREO_WIDTH)
         )
         return if (chain.isPassthrough) null else chain
     }
-
-    /**
-     * Peak magnitude of the combined [filters] response in dB (≥ 0), sampled across
-     * the audio band. 65 points is plenty for a headroom estimate and keeps the
-     * per-chain-build cost trivial.
-     */
-    fun filterPeakDb(filters: List<BiquadCoefficients>, sampleRateHz: Int): Float {
-        if (filters.isEmpty() || sampleRateHz <= 0) return 0f
-        var peak = 0.0
-        for (point in 0 until HEADROOM_SAMPLE_POINTS) {
-            val freq = responseFrequencyAt(point, HEADROOM_SAMPLE_POINTS)
-            val w = 2.0 * PI * freq / sampleRateHz
-            var db = 0.0
-            for (filter in filters) db += filter.magnitudeDb(w)
-            if (db > peak) peak = db
-        }
-        return peak.toFloat()
-    }
-
-    /**
-     * Headroom the chain would apply for [state], in dB (≤ 0, 0 when transparent).
-     * Used by the pipeline visualization; [sampleRateHz] defaults to 48 kHz, the
-     * same display assumption as the response curves.
-     */
-    fun headroomDb(state: DspState, sampleRateHz: Int = 48_000): Float =
-        buildChain(state, sampleRateHz)?.let { chain ->
-            if (chain.headroomLinear >= 1f) 0f
-            else 20f * log10(chain.headroomLinear.coerceAtLeast(1e-6f))
-        } ?: 0f
 
     /** Direct-volume gain: 0% is mute, 100% is unity, dB scale in between. */
     fun volumeGainLinear(state: DspState): Float {
@@ -366,33 +324,4 @@ object DspMath {
     }
 
     fun dbToLinear(db: Float): Float = 10f.pow(db / 20f)
-
-    /**
-     * Soft limiter: transparent below [KNEE], gently compressing above it so EQ/preamp
-     * boost can never hard-clip. Applied per sample after all other stages when the
-     * user's Limiter switch is on.
-     */
-    fun limit(x: Float): Float {
-        val knee = 0.95f
-        val abs = kotlin.math.abs(x)
-        if (abs <= knee) return x
-        val over = (abs - knee) / (1f - knee)
-        return kotlin.math.sign(x) * (knee + (1f - knee) * kotlin.math.tanh(over))
-    }
-
-    /**
-     * Final anti-hard-clip guard, always active on the processing path (never on the
-     * bit-perfect passthrough): transparent below 98.5% full scale, a very gentle
-     * tanh shoulder above it. This is what turns what used to be harsh digital
-     * clipping on boosts into inaudible soft rounding.
-     */
-    fun softClip(x: Float): Float {
-        val knee = 0.985f
-        val abs = kotlin.math.abs(x)
-        if (abs <= knee) return x
-        val over = (abs - knee) / (1f - knee)
-        return kotlin.math.sign(x) * (knee + (1f - knee) * kotlin.math.tanh(over))
-    }
-
-    private const val HEADROOM_SAMPLE_POINTS = 65
 }
