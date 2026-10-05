@@ -58,12 +58,14 @@ object DspPersistence {
 
             val version = parts.firstOrNull()?.toIntOrNull() ?: 1
             val isV4 = version >= 4
-            val isV3 = version >= 3
             val isV2 = version >= 2
 
-            // Tail field indices depend on the payload version: v4 adds the band
-            // count (index 8) and shifts everything after it; v1 lacks autoHeadroom.
-            val balanceIndex = if (isV4) 13 else 12
+            // Tail field indices depend on the payload version: v4 inserts the
+            // band count at index 7, shifting the gains and every field after
+            // them by one slot (so the tail starts at balance = 11); v1-v3 read
+            // the gains at index 7 and start the tail at balance = 10. v1 lacks
+            // the autoHeadroom field entirely.
+            val balanceIndex = if (isV4) 11 else 10
             val widthIndex = balanceIndex + 1
             val limiterIndex = balanceIndex + 2
             val autoHeadroomIndex = if (isV2) balanceIndex + 3 else -1
@@ -71,8 +73,8 @@ object DspPersistence {
             val volumeIndex = directVolumeIndex + 1
 
             val graphicGains = parseGains(
-                parts.getOrNull(9),
-                if (isV4) parseCount(parts.getOrNull(8)) else GraphicEqSettings.DEFAULT_BAND_COUNT
+                parts.getOrNull(if (isV4) 8 else 7),
+                if (isV4) parseCount(parts.getOrNull(7)) else GraphicEqSettings.DEFAULT_BAND_COUNT
             )
 
             DspState(
@@ -97,8 +99,8 @@ object DspPersistence {
                     gainsDb = graphicGains.first
                 ),
                 parametricEq = ParametricEqSettings(
-                    enabled = parts.getOrNull(10)?.toIntOrNull() == 1,
-                    nodes = parts.getOrNull(11)?.split(NODE)
+                    enabled = parts.getOrNull(if (isV4) 9 else 8)?.toIntOrNull() == 1,
+                    nodes = parts.getOrNull(if (isV4) 10 else 9)?.split(NODE)
                         ?.mapNotNull(::parseNode)
                         .orEmpty()
                 ),
