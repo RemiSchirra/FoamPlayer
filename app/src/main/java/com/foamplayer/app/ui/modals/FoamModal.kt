@@ -94,6 +94,7 @@ fun FoamBottomModal(
     topEdgeMargin: Dp = FoamDimens.paddingLarge,
     horizontalMargin: Dp = FoamDimens.paddingMedium,
     bottomEdgeMargin: Dp = FoamDimens.spacingMedium,
+    liftAboveKeyboard: Boolean = true,
     content: @Composable () -> Unit
 ) {
     // Keep the Dialog mounted while the exit animation plays. currentState only
@@ -133,7 +134,11 @@ fun FoamBottomModal(
             val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             // Lift the sheet above the soft keyboard whenever it is visible
             // (the larger of the two wins so the nav bar is never double-counted).
+            // Sheets hosting another focusable window on top (a name-input dialog)
+            // can opt out: the keyboard belongs to that other window, and padding
+            // for it here would shove this sheet up in lock-step with its typing.
             val imeInset = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+                .takeIf { liftAboveKeyboard } ?: 0.dp
             val bottomSpacing = maxOf(bottomInset, imeInset) + bottomEdgeMargin
 
             val fullPx = with(density) {

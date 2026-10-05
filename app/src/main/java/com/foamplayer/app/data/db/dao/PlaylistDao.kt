@@ -61,6 +61,29 @@ interface PlaylistDao {
     """)
     suspend fun nextOrderIndex(playlistId: Long): Int
 
+    /** Number of tracks in one playlist, for picking a random insertion slot. */
+    @Query("""
+        SELECT COUNT(*) 
+        FROM playlist_track_cross_ref 
+        WHERE playlistId = :playlistId
+    """)
+    suspend fun getTrackCountForPlaylist(playlistId: Long): Int
+
+    /** Pushes every track from [fromIndex] onward one slot down, opening a gap at [fromIndex]. */
+    @Query("""
+        UPDATE playlist_track_cross_ref 
+        SET orderIndex = orderIndex + 1 
+        WHERE playlistId = :playlistId AND orderIndex >= :fromIndex
+    """)
+    suspend fun shiftTrackOrderIndexFrom(playlistId: Long, fromIndex: Int)
+
+    /** Opens a slot at [orderIndex] (later tracks shift down) and inserts the track there. */
+    @Transaction
+    suspend fun insertTrackAtIndex(playlistId: Long, trackId: Long, orderIndex: Int) {
+        shiftTrackOrderIndexFrom(playlistId, orderIndex)
+        addTrackToPlaylist(PlaylistTrackCrossRef(playlistId, trackId, orderIndex))
+    }
+
     @Query("""
         DELETE FROM playlist_track_cross_ref 
         WHERE playlistId = :playlistId AND trackId = :trackId

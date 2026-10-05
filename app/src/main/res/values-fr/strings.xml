@@ -175,6 +175,10 @@
     <string name="add_folder_and_scan">Ajouter le dossier à la bibliothèque et analyser</string>
     <string name="create_with_found_songs">Créer avec les morceaux trouvés</string>
     <string name="scanning_folder">Analyse du dossier…</string>
+    <string name="insert_position_title">Position d\'insertion</string>
+    <string name="insert_at_start">Insérer au début</string>
+    <string name="insert_at_end">Insérer à la fin</string>
+    <string name="insert_at_random">Insérer aléatoirement</string>
     <string name="ok">OK</string>
     <string name="cancel">Annuler</string>
 

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.repository.PlaylistImporter
+import com.foamplayer.app.data.repository.PlaylistInsertPosition
 import com.foamplayer.app.data.repository.PlaylistRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
@@ -87,6 +88,10 @@ class PlaylistsViewModel @Inject constructor(
 
     val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus
 
+    /** Where tracks land inside a playlist when added from the add-to-playlist picker. */
+    private val _addTrackInsertPosition = MutableStateFlow(PlaylistInsertPosition.END)
+    val addTrackInsertPosition: StateFlow<PlaylistInsertPosition> = _addTrackInsertPosition
+
     init {
         viewModelScope.launch {
             playlistRepository.getAllPlaylists().collect { list ->
@@ -109,6 +114,27 @@ class PlaylistsViewModel @Inject constructor(
                 folderUri != null -> createFromFolder(resolvedName, folderUri, imageUri)
                 else -> playlistRepository.createPlaylist(resolvedName, imageUri)
             }
+        }
+    }
+
+    /** Creates an empty playlist (the picker's + button); blank names fall back to "New playlist". */
+    fun createPlaylist(name: String) {
+        viewModelScope.launch {
+            playlistRepository.createPlaylist(
+                name.trim().ifEmpty { context.getString(R.string.new_playlist_fallback) }
+            )
+        }
+    }
+
+    /** Sets where tracks land inside a playlist when added from the add-to-playlist picker. */
+    fun setAddTrackInsertPosition(position: PlaylistInsertPosition) {
+        _addTrackInsertPosition.value = position
+    }
+
+    /** Adds a track to a playlist at the picker's chosen insertion position. */
+    fun addTrackToPlaylist(playlistId: Long, trackId: Long) {
+        viewModelScope.launch {
+            playlistRepository.addTrackToPlaylist(playlistId, trackId, _addTrackInsertPosition.value)
         }
     }
 
@@ -206,12 +232,6 @@ class PlaylistsViewModel @Inject constructor(
     private suspend fun createPlaylistWithTracks(name: String, trackIds: List<Long>, imageUrl: String? = null) {
         val playlistId = playlistRepository.createPlaylist(name, imageUrl)
         trackIds.forEach { trackId ->
-            playlistRepository.appendTrackToPlaylist(playlistId, trackId)
-        }
-    }
-
-    fun addTrackToPlaylist(playlistId: Long, trackId: Long) {
-        viewModelScope.launch {
             playlistRepository.appendTrackToPlaylist(playlistId, trackId)
         }
     }

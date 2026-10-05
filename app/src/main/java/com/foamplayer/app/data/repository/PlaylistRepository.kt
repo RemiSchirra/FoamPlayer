@@ -12,6 +12,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.random.Random
+
+/**
+ * Where a track added from the add-to-playlist picker lands inside the
+ * playlist's order.
+ */
+enum class PlaylistInsertPosition { START, END, RANDOM }
 
 /** Playlist CRUD and ordering, on top of [PlaylistDao]. */
 @Singleton
@@ -77,6 +84,26 @@ class PlaylistRepository @Inject constructor(
 
     suspend fun addTrackToPlaylist(playlistId: Long, trackId: Long, orderIndex: Int) {
         playlistDao.addTrackToPlaylist(PlaylistTrackCrossRef(playlistId, trackId, orderIndex))
+    }
+
+    /**
+     * Adds a track to a playlist at [position]'s slot: start (index 0, later
+     * tracks shift down), end (append), or a uniformly random slot among the
+     * existing order (0..count inclusive, so the track can land anywhere
+     * including both ends).
+     */
+    suspend fun addTrackToPlaylist(playlistId: Long, trackId: Long, position: PlaylistInsertPosition) {
+        when (position) {
+            PlaylistInsertPosition.START ->
+                playlistDao.insertTrackAtIndex(playlistId, trackId, 0)
+            PlaylistInsertPosition.END ->
+                appendTrackToPlaylist(playlistId, trackId)
+            PlaylistInsertPosition.RANDOM -> {
+                val count = playlistDao.getTrackCountForPlaylist(playlistId)
+                val index = if (count == 0) 0 else Random.nextInt(count + 1)
+                playlistDao.insertTrackAtIndex(playlistId, trackId, index)
+            }
+        }
     }
 
     /** Appends a track at the end of a playlist's current order. */

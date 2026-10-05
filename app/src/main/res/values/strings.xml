@@ -231,6 +231,10 @@
     <string name="add_folder_and_scan">Add folder to library &amp; scan</string>
     <string name="create_with_found_songs">Create with found songs</string>
     <string name="scanning_folder">Scanning folder…</string>
+    <string name="insert_position_title">Insert position</string>
+    <string name="insert_at_start">Insert at start</string>
+    <string name="insert_at_end">Insert at end</string>
+    <string name="insert_at_random">Insert at random</string>
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
 

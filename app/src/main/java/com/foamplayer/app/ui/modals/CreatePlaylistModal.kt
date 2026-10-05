@@ -90,7 +90,7 @@ data class MissingSongsUiState(
  *
  * [onCreate] receives the name (picking a source prefills the field with the
  * source's name: the .m3u file name without extension, or the folder name;
- * "New playlist" in the ViewModel if it was left empty), the cover image URI
+ * "New playlist" an empty field creates "New playlist"), the cover image URI
  * if one was picked, plus whichever source URI is set, or null when none is
  * selected.
  */
@@ -606,11 +606,12 @@ fun MissingSongsModal(
 internal fun ModalButton(
     label: String,
     filled: Boolean,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .alpha(if (enabled) 1f else 0.4f)
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))

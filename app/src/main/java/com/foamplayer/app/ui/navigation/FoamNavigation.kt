@@ -335,6 +335,7 @@ fun FoamNavHost(
     val playlistsViewModel: PlaylistsViewModel = hiltViewModel()
     val playlists by playlistsViewModel.playlists.collectAsState()
     val playlistCovers by playlistsViewModel.playlistCovers.collectAsState()
+    val addTrackInsertPosition by playlistsViewModel.addTrackInsertPosition.collectAsState()
 
     val trackModalState = rememberTrackFoamModalState()
     var playlistPickerTrack by remember { mutableStateOf<TrackEntity?>(null) }
@@ -2036,6 +2037,7 @@ fun FoamNavHost(
                 playlists = playlists,
                 playlistCovers = playlistCovers,
                 playlistIdsWithTrack = playlistIdsWithTrack,
+                insertPosition = addTrackInsertPosition,
                 onToggle = { playlist, checked ->
                     playlistPickerTrack?.let { track ->
                         if (checked) {
@@ -2045,6 +2047,8 @@ fun FoamNavHost(
                         }
                     }
                 },
+                onInsertPositionChange = playlistsViewModel::setAddTrackInsertPosition,
+                onCreatePlaylist = { name -> playlistsViewModel.createPlaylist(name) },
                 onDismiss = { playlistPickerTrack = null }
             )
 

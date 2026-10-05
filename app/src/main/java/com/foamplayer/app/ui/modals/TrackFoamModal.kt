@@ -29,8 +29,10 @@ import androidx.compose.material.CheckboxDefaults
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,15 +50,18 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.data.repository.PlaylistInsertPosition
 import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -342,6 +347,15 @@ val LocalTrackFoamModalState = staticCompositionLocalOf<TrackFoamModalState?> { 
  * nulls it to dismiss). [playlistIdsWithTrack] drives the checkbox states and
  * is expected to stay live, so a toggle is reflected as soon as it persists.
  * [onToggle] reports a row's new checked state.
+ *
+ * The header's trailing buttons sit on the title's row, aligned right:
+ * - `+` opens [NewPlaylistDialog], a small name-only creation dialog.
+ * - The sort button opens [InsertPositionDialog] to choose where toggled
+ *   tracks land inside a playlist (start / end / random); the choice feeds
+ *   back through [onInsertPositionChange] and drives [onToggle].
+ * The sheet ignores the soft keyboard ([liftAboveKeyboard] = false): the
+ * keyboard belongs to the name dialog stacked on top, and padding for it here
+ * would shove the playlist list up while typing.
  */
 @Composable
 fun PlaylistPickerModal(
@@ -349,7 +363,10 @@ fun PlaylistPickerModal(
     playlists: List<PlaylistEntity>,
     playlistCovers: Map<Long, PlaylistCover> = emptyMap(),
     playlistIdsWithTrack: Set<Long>,
+    insertPosition: PlaylistInsertPosition,
     onToggle: (PlaylistEntity, Boolean) -> Unit,
+    onInsertPositionChange: (PlaylistInsertPosition) -> Unit,
+    onCreatePlaylist: (String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -361,23 +378,51 @@ fun PlaylistPickerModal(
     }
     val displayTrack = track ?: lastShownTrack
 
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var showInsertPositionDialog by remember { mutableStateOf(false) }
+
     FoamBottomModal(
         visible = track != null,
         onDismissRequest = onDismiss,
+        // The name dialog stacked on this sheet owns the soft keyboard; if this
+        // sheet padded for the IME it would ride up in lock-step with typing.
+        liftAboveKeyboard = false,
         modifier = modifier
     ) {
         if (displayTrack != null) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
             ) {
-                BasicText(
-                    text = "Add to Playlist",
-                    style = FoamTheme.typography.titleMedium,
-                    modifier = Modifier.padding(
-                        horizontal = FoamDimens.paddingSmall,
-                        vertical = FoamDimens.spacingTiny
+                // Title with the header actions trailing on the same row.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = FoamDimens.paddingSmall,
+                            vertical = FoamDimens.spacingTiny
+                        ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BasicText(
+                        text = "Add to Playlist",
+                        style = FoamTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f)
                     )
-                )
+
+                    PickerHeaderButton(
+                        icon = insertPosition.icon,
+                        contentDescription = stringResource(R.string.insert_position_title),
+                        onClick = { showInsertPositionDialog = true }
+                    )
+
+                    Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
+
+                    PickerHeaderButton(
+                        icon = Icons.Rounded.Add,
+                        contentDescription = stringResource(R.string.create_playlist_title),
+                        onClick = { showCreateDialog = true }
+                    )
+                }
 
                 if (playlists.isEmpty()) {
                     BasicText(
@@ -405,6 +450,27 @@ fun PlaylistPickerModal(
                 }
             }
         }
+    }
+
+    if (showCreateDialog) {
+        NewPlaylistDialog(
+            onConfirm = { name ->
+                showCreateDialog = false
+                onCreatePlaylist(name)
+            },
+            onDismiss = { showCreateDialog = false }
+        )
+    }
+
+    if (showInsertPositionDialog) {
+        InsertPositionDialog(
+            current = insertPosition,
+            onSelect = { position ->
+                showInsertPositionDialog = false
+                onInsertPositionChange(position)
+            },
+            onDismiss = { showInsertPositionDialog = false }
+        )
     }
 }
 
