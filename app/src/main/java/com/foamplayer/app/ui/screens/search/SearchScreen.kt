@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -88,6 +89,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
+import com.foamplayer.app.ui.components.FoamScrollbar
 import com.foamplayer.app.ui.modals.CollectionInfo
 import com.foamplayer.app.ui.modals.CollectionKind
 import com.foamplayer.app.ui.components.ListRowArtSize
@@ -204,7 +206,8 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
 /**
  * The search screen: idle state shows browse cards, active search shows
  * history, and a query shows live results across artists, albums, tracks and
- * lyrics (the lyrics scan streams in from the background).
+ * lyrics (the lyrics scan streams in from the background). Long result lists
+ * gain the fast scrollbar ([FoamScrollbar]) along the list's end edge.
  */
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -236,6 +239,7 @@ fun SearchScreen(
     val trackModalState = LocalTrackFoamModalState.current
     val longPressScope = rememberCoroutineScope()
     val imeInsets = WindowInsets.ime
+    val listState = rememberLazyListState()
 
     // A modal's Dialog steals focus while the keyboard is up; close the IME
     // first so the sheet opens at its resting position.
@@ -400,240 +404,254 @@ fun SearchScreen(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            when {
-                // Results while typing
-                query.isNotEmpty() -> {
-                    // Artists Section
-                    if (uiState.artists.isNotEmpty()) {
-                        item(key = "artists_header") {
-                            SectionHeader("Artists")
-                        }
-                        // Content-keyed: results change identity on every keystroke.
-                        items(uiState.artists, key = { "artist_$it" }) { artist ->
-                            val cover = artistImages[artist]
-                            ArtistSearchResultItem(
-                                artist = artist,
-                                imageUrl = cover?.imageUrl,
-                                imageIsEmbeddedArt = cover?.isEmbeddedArt ?: false,
-                                onClick = {
-                                    searchViewModel.addToHistory(artist)
-                                    onArtistClick(
-                                        artist,
-                                        cover?.imageUrl,
-                                        cover?.isEmbeddedArt ?: false
-                                    )
-                                },
-                                onLongClick = { showArtistModal(artist) },
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
-                    }
-
-                    // Albums Section
-                    if (uiState.albums.isNotEmpty()) {
-                        item(key = "albums_header") {
-                            SectionHeader("Albums")
-                        }
-                        items(uiState.albums, key = { "album_${it.album}_${it.artist}" }) { album ->
-                            AlbumSearchResultItem(
-                                album = album,
-                                onClick = {
-                                    searchViewModel.addToHistory(album)
-                                    onAlbumClick(album)
-                                },
-                                onLongClick = { showAlbumModal(album) },
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
-                    }
-
-                    // Tracks Section
-                    if (uiState.tracks.isNotEmpty()) {
-                        item(key = "tracks_header") {
-                            SectionHeader("Tracks")
-                        }
-                        items(uiState.tracks, key = { "track_${it.id}" }) { track ->
-                            TrackListItem(
-                                track = track,
-                                onClick = {
-                                    searchViewModel.addToHistory(track)
-                                    onTrackClick(track)
-                                },
-                                onLongClick = { showTrackModal(track) },
-                                active = track.id == activeTrackId,
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = playerTransitionVisibilityScope,
-                                isSharedTransitionSource = track.id == sharedTrackId
-                            )
-                        }
-                    }
-
-                    // Found in lyrics: the background scan streams matches in
-                    // progressively until it completes.
-                    if (uiState.lyricsMatches.isNotEmpty() || uiState.lyricsSearchInProgress) {
-                        item(key = "lyrics_header") {
-                            SectionHeader(
-                                title = "Found in lyrics",
-                                trailingVisible = uiState.lyricsSearchInProgress,
-                                trailing = {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp,
-                                        color = FoamTheme.accentColor
-                                    )
-                                }
-                            )
-                        }
-                        items(uiState.lyricsMatches, key = { "lyrics_${it.id}" }) { track ->
-                            TrackListItem(
-                                track = track,
-                                onClick = {
-                                    searchViewModel.addToHistory(track)
-                                    onTrackClick(track)
-                                },
-                                onLongClick = { showTrackModal(track) },
-                                active = track.id == activeTrackId,
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = playerTransitionVisibilityScope,
-                                isSharedTransitionSource = track.id == sharedTrackId
-                            )
-                        }
-                    }
-                }
-
-                // Search history while search mode is active but still empty;
-                // stays up after the keyboard closes until the back button ends it
-                searchActive -> {
-                    if (uiState.history.isNotEmpty()) {
-                        item(key = "history_header") {
-                            SectionHeader(
-                                title = "Recent Searches",
-                                modifier = Modifier.animateItem()
-                            )
-                        }
-                        items(
-                            uiState.history,
-                            key = { entry ->
-                                when (entry) {
-                                    is RecentSearch.Track -> "history_track_${entry.track.path}"
-                                    is RecentSearch.Album -> "history_album_${entry.album.album}"
-                                    is RecentSearch.Artist -> "history_artist_${entry.name}"
-                                }
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
+                when {
+                    // Results while typing
+                    query.isNotEmpty() -> {
+                        // Artists Section
+                        if (uiState.artists.isNotEmpty()) {
+                            item(key = "artists_header") {
+                                SectionHeader("Artists")
                             }
-                        ) { entry ->
-                            when (entry) {
-                                is RecentSearch.Track -> TrackListItem(
-                                    track = entry.track,
+                            // Content-keyed: results change identity on every keystroke.
+                            items(uiState.artists, key = { "artist_$it" }) { artist ->
+                                val cover = artistImages[artist]
+                                ArtistSearchResultItem(
+                                    artist = artist,
+                                    imageUrl = cover?.imageUrl,
+                                    imageIsEmbeddedArt = cover?.isEmbeddedArt ?: false,
                                     onClick = {
-                                        searchViewModel.addToHistory(entry.track)
-                                        onTrackClick(entry.track)
+                                        searchViewModel.addToHistory(artist)
+                                        onArtistClick(
+                                            artist,
+                                            cover?.imageUrl,
+                                            cover?.isEmbeddedArt ?: false
+                                        )
                                     },
-                                    onRemove = { searchViewModel.removeFromHistory(entry) },
-                                    onLongClick = { showTrackModal(entry.track) },
-                                    active = entry.track.id == activeTrackId,
+                                    onLongClick = { showArtistModal(artist) },
+                                    sharedTransitionScope = sharedTransitionScope,
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                            }
+                        }
+
+                        // Albums Section
+                        if (uiState.albums.isNotEmpty()) {
+                            item(key = "albums_header") {
+                                SectionHeader("Albums")
+                            }
+                            items(uiState.albums, key = { "album_${it.album}_${it.artist}" }) { album ->
+                                AlbumSearchResultItem(
+                                    album = album,
+                                    onClick = {
+                                        searchViewModel.addToHistory(album)
+                                        onAlbumClick(album)
+                                    },
+                                    onLongClick = { showAlbumModal(album) },
+                                    sharedTransitionScope = sharedTransitionScope,
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                            }
+                        }
+
+                        // Tracks Section
+                        if (uiState.tracks.isNotEmpty()) {
+                            item(key = "tracks_header") {
+                                SectionHeader("Tracks")
+                            }
+                            items(uiState.tracks, key = { "track_${it.id}" }) { track ->
+                                TrackListItem(
+                                    track = track,
+                                    onClick = {
+                                        searchViewModel.addToHistory(track)
+                                        onTrackClick(track)
+                                    },
+                                    onLongClick = { showTrackModal(track) },
+                                    active = track.id == activeTrackId,
                                     sharedTransitionScope = sharedTransitionScope,
                                     animatedVisibilityScope = playerTransitionVisibilityScope,
-                                    isSharedTransitionSource = entry.track.id == sharedTrackId,
+                                    isSharedTransitionSource = track.id == sharedTrackId
+                                )
+                            }
+                        }
+
+                        // Found in lyrics: the background scan streams matches in
+                        // progressively until it completes.
+                        if (uiState.lyricsMatches.isNotEmpty() || uiState.lyricsSearchInProgress) {
+                            item(key = "lyrics_header") {
+                                SectionHeader(
+                                    title = "Found in lyrics",
+                                    trailingVisible = uiState.lyricsSearchInProgress,
+                                    trailing = {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp,
+                                            color = FoamTheme.accentColor
+                                        )
+                                    }
+                                )
+                            }
+                            items(uiState.lyricsMatches, key = { "lyrics_${it.id}" }) { track ->
+                                TrackListItem(
+                                    track = track,
+                                    onClick = {
+                                        searchViewModel.addToHistory(track)
+                                        onTrackClick(track)
+                                    },
+                                    onLongClick = { showTrackModal(track) },
+                                    active = track.id == activeTrackId,
+                                    sharedTransitionScope = sharedTransitionScope,
+                                    animatedVisibilityScope = playerTransitionVisibilityScope,
+                                    isSharedTransitionSource = track.id == sharedTrackId
+                                )
+                            }
+                        }
+                    }
+
+                    // Search history while search mode is active but still empty;
+                    // stays up after the keyboard closes until the back button ends it
+                    searchActive -> {
+                        if (uiState.history.isNotEmpty()) {
+                            item(key = "history_header") {
+                                SectionHeader(
+                                    title = "Recent Searches",
                                     modifier = Modifier.animateItem()
                                 )
-                                is RecentSearch.Album -> SwipeDismissRow(
-                                    onRemove = { searchViewModel.removeFromHistory(entry) },
-                                    // While this entry owns the shared-element flight, keep
-                                    // it free of item-animation / swipe layers (see SwipeDismissRow).
-                                    flightActive = isActiveSharedCollection("album", entry.album.album),
-                                    modifier = if (isActiveSharedCollection("album", entry.album.album)) {
-                                        Modifier
-                                    } else {
-                                        Modifier.animateItem()
+                            }
+                            items(
+                                uiState.history,
+                                key = { entry ->
+                                    when (entry) {
+                                        is RecentSearch.Track -> "history_track_${entry.track.path}"
+                                        is RecentSearch.Album -> "history_album_${entry.album.album}"
+                                        is RecentSearch.Artist -> "history_artist_${entry.name}"
                                     }
-                                ) {
-                                    AlbumSearchResultItem(
-                                        album = entry.album,
-                                        onClick = {
-                                            searchViewModel.addToHistory(entry.album)
-                                            onAlbumClick(entry.album)
-                                        },
-                                        onLongClick = { showAlbumModal(entry.album) },
-                                        sharedTransitionScope = sharedTransitionScope,
-                                        animatedVisibilityScope = animatedVisibilityScope
-                                    )
                                 }
-                                is RecentSearch.Artist -> SwipeDismissRow(
-                                    onRemove = { searchViewModel.removeFromHistory(entry) },
-                                    flightActive = isActiveSharedCollection("artist", entry.name),
-                                    modifier = if (isActiveSharedCollection("artist", entry.name)) {
-                                        Modifier
-                                    } else {
-                                        Modifier.animateItem()
-                                    }
-                                ) {
-                                    val cover = artistImages[entry.name]
-                                    ArtistSearchResultItem(
-                                        artist = entry.name,
-                                        imageUrl = cover?.imageUrl,
-                                        imageIsEmbeddedArt = cover?.isEmbeddedArt ?: false,
+                            ) { entry ->
+                                when (entry) {
+                                    is RecentSearch.Track -> TrackListItem(
+                                        track = entry.track,
                                         onClick = {
-                                            searchViewModel.addToHistory(entry.name)
-                                            onArtistClick(
-                                                entry.name,
-                                                cover?.imageUrl,
-                                                cover?.isEmbeddedArt ?: false
-                                            )
+                                            searchViewModel.addToHistory(entry.track)
+                                            onTrackClick(entry.track)
                                         },
-                                        onLongClick = { showArtistModal(entry.name) },
+                                        onRemove = { searchViewModel.removeFromHistory(entry) },
+                                        onLongClick = { showTrackModal(entry.track) },
+                                        active = entry.track.id == activeTrackId,
                                         sharedTransitionScope = sharedTransitionScope,
-                                        animatedVisibilityScope = animatedVisibilityScope
+                                        animatedVisibilityScope = playerTransitionVisibilityScope,
+                                        isSharedTransitionSource = entry.track.id == sharedTrackId,
+                                        modifier = Modifier.animateItem()
+                                    )
+                                    is RecentSearch.Album -> SwipeDismissRow(
+                                        onRemove = { searchViewModel.removeFromHistory(entry) },
+                                        // While this entry owns the shared-element flight, keep
+                                        // it free of item-animation / swipe layers (see SwipeDismissRow).
+                                        flightActive = isActiveSharedCollection("album", entry.album.album),
+                                        modifier = if (isActiveSharedCollection("album", entry.album.album)) {
+                                            Modifier
+                                        } else {
+                                            Modifier.animateItem()
+                                        }
+                                    ) {
+                                        AlbumSearchResultItem(
+                                            album = entry.album,
+                                            onClick = {
+                                                searchViewModel.addToHistory(entry.album)
+                                                onAlbumClick(entry.album)
+                                            },
+                                            onLongClick = { showAlbumModal(entry.album) },
+                                            sharedTransitionScope = sharedTransitionScope,
+                                            animatedVisibilityScope = animatedVisibilityScope
+                                        )
+                                    }
+                                    is RecentSearch.Artist -> SwipeDismissRow(
+                                        onRemove = { searchViewModel.removeFromHistory(entry) },
+                                        flightActive = isActiveSharedCollection("artist", entry.name),
+                                        modifier = if (isActiveSharedCollection("artist", entry.name)) {
+                                            Modifier
+                                        } else {
+                                            Modifier.animateItem()
+                                        }
+                                    ) {
+                                        val cover = artistImages[entry.name]
+                                        ArtistSearchResultItem(
+                                            artist = entry.name,
+                                            imageUrl = cover?.imageUrl,
+                                            imageIsEmbeddedArt = cover?.isEmbeddedArt ?: false,
+                                            onClick = {
+                                                searchViewModel.addToHistory(entry.name)
+                                                onArtistClick(
+                                                    entry.name,
+                                                    cover?.imageUrl,
+                                                    cover?.isEmbeddedArt ?: false
+                                                )
+                                            },
+                                            onLongClick = { showArtistModal(entry.name) },
+                                            sharedTransitionScope = sharedTransitionScope,
+                                            animatedVisibilityScope = animatedVisibilityScope
+                                        )
+                                    }
+                                }
+                            }
+                            item(key = "history_clear") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .animateItem()
+                                        .clickable { searchViewModel.clearHistory() }
+                                        .padding(vertical = 16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    BasicText(
+                                        text = "Clear search history",
+                                        style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor)
                                     )
                                 }
                             }
                         }
-                        item(key = "history_clear") {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .animateItem()
-                                    .clickable { searchViewModel.clearHistory() }
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                BasicText(
-                                    text = "Clear search history",
-                                    style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor)
+                    }
+
+                    // Idle: browse cards into the library list screens
+                    else -> {
+                        val browseCards = listOf(
+                            BrowseCardData("All tracks", AllTracksCardColor, Icons.Rounded.MusicNote, onBrowseAllTracks),
+                            BrowseCardData("Albums", AlbumCardColor, Icons.Rounded.Album, onBrowseAlbums),
+                            BrowseCardData("Folders", FolderCardColor, Icons.Rounded.Folder, onBrowseFolders),
+                            BrowseCardData("Genres", GenreCardColor, Icons.Rounded.Category, onBrowseGenres),
+                            BrowseCardData("Artists", ArtistCardColor, Icons.Rounded.Person, onBrowseArtists),
+                            BrowseCardData("Years", YearCardColor, Icons.Rounded.CalendarToday, onBrowseYears)
+                        )
+                        browseCards.forEachIndexed { index, card ->
+                            item(key = "browse_card_${card.title}") {
+                                BrowseCardItem(
+                                    card = card,
+                                    modifier = if (index == 0) {
+                                        Modifier.padding(top = 4.dp)
+                                    } else {
+                                        Modifier
+                                    }
                                 )
                             }
                         }
                     }
                 }
 
-                // Idle: browse cards into the library list screens
-                else -> {
-                    val browseCards = listOf(
-                        BrowseCardData("All tracks", AllTracksCardColor, Icons.Rounded.MusicNote, onBrowseAllTracks),
-                        BrowseCardData("Albums", AlbumCardColor, Icons.Rounded.Album, onBrowseAlbums),
-                        BrowseCardData("Folders", FolderCardColor, Icons.Rounded.Folder, onBrowseFolders),
-                        BrowseCardData("Genres", GenreCardColor, Icons.Rounded.Category, onBrowseGenres),
-                        BrowseCardData("Artists", ArtistCardColor, Icons.Rounded.Person, onBrowseArtists),
-                        BrowseCardData("Years", YearCardColor, Icons.Rounded.CalendarToday, onBrowseYears)
-                    )
-                    browseCards.forEachIndexed { index, card ->
-                        item(key = "browse_card_${card.title}") {
-                            BrowseCardItem(
-                                card = card,
-                                modifier = if (index == 0) {
-                                    Modifier.padding(top = 4.dp)
-                                } else {
-                                    Modifier
-                                }
-                            )
-                        }
-                    }
-                }
+                item { Spacer(modifier = Modifier.height(LocalBottomBarClearance.current)) }
             }
 
-            item { Spacer(modifier = Modifier.height(LocalBottomBarClearance.current)) }
+            // Fast scrollbar for long result lists: the app accent (search has
+            // no hero color of its own). It only appears — visually AND as a
+            // touch strip — once the results span at least two viewports, so
+            // short result sets, history and the idle browse cards get none.
+            // The thumb's track stays clear of the bottom-bar clearance below;
+            // nothing floats over the list's top.
+            FoamScrollbar(
+                state = listState,
+                trackBottomPadding = LocalBottomBarClearance.current,
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
         }
     }
 }
