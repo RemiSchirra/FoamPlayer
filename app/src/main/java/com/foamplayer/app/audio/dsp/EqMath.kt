@@ -56,16 +56,7 @@ object DspMath {
 
         if (state.enabled) {
             // Tone section: fixed shelves/peak, always in this order.
-            val tone = state.tone
-            if (tone.bassDb != 0f) {
-                filters += BiquadDesigner.lowShelf(fs, ToneSettings.BASS_SHELF_HZ.toDouble(), tone.bassDb.toDouble())
-            }
-            if (tone.midDb != 0f) {
-                filters += BiquadDesigner.peaking(fs, ToneSettings.MID_PEAK_HZ.toDouble(), tone.midDb.toDouble(), q = 0.9)
-            }
-            if (tone.trebleDb != 0f) {
-                filters += BiquadDesigner.highShelf(fs, ToneSettings.TREBLE_SHELF_HZ.toDouble(), tone.trebleDb.toDouble())
-            }
+            filters += toneFilters(fs, state.tone)
 
             // Graphic EQ: one peaking section per band with a non-zero gain,
             // computed at the band's actual center for the CURRENT band count.
@@ -178,43 +169,22 @@ object DspMath {
         }
     }
 
-    /** Response of only one EQ section (graphic or parametric), for the mode-specific graph. */
+    /**
+     * Response of ONLY one EQ section (graphic or parametric) — no fixed tone
+     * controls. The mini map's main curve: tone contributions are drawn there
+     * as their own separated curves via [toneCurves], so the two never mix.
+     */
     fun sectionResponse(
         state: DspState,
         section: Section,
         sampleRateHz: Int = 48_000,
         pointCount: Int = DEFAULT_RESPONSE_POINTS
-    ): List<Float> {
-        val fs = sampleRateHz.coerceAtLeast(1).toDouble()
-        val filters = ArrayList<BiquadCoefficients>(12)
-        when (section) {
-            Section.GRAPHIC -> {
-                val graphic = state.graphicEq
-                if (graphic.enabled) {
-                    val bandCount = graphic.gainsDb.size
-                    val q = GraphicEqSettings.bandQ(bandCount)
-                    for (index in 0 until bandCount) {
-                        val gain = graphic.gainsDb[index]
-                        if (gain != 0f) {
-                            filters += BiquadDesigner.peaking(
-                                fs, GraphicEqSettings.bandFrequency(index, bandCount).toDouble(),
-                                gain.toDouble(), q
-                            )
-                        }
-                    }
-                }
-            }
-            Section.PARAMETRIC -> {
-                val parametric = state.parametricEq
-                if (parametric.enabled) {
-                    parametric.nodes.forEach { node ->
-                        filters += nodeFilter(fs, node)
-                    }
-                }
-            }
-        }
-        return evaluateResponse(filters, sampleRateHz, pointCount)
-    }
+    ): List<Float> =
+        evaluateResponse(
+            sectionFilters(sampleRateHz.coerceAtLeast(1).toDouble(), state, section),
+            sampleRateHz,
+            pointCount
+        )
 
     /**
      * Response of the graphic EQ alone for [gainsDb] with centers derived from the
@@ -254,6 +224,97 @@ object DspMath {
             pointCount
         )
 
+    /**
+     * Individual response curve of each non-neutral fixed tone control, in
+     * [ToneBand] order — the separated per-tone curves the mini map draws. Bands
+     * at 0 dB are skipped (they are identity filters on the audio path too), so
+     * the returned list only holds tone controls that actually shape the signal.
+     */
+    fun toneCurves(
+        tone: ToneSettings,
+        sampleRateHz: Int = 48_000,
+        pointCount: Int = DEFAULT_RESPONSE_POINTS
+    ): List<Pair<ToneBand, List<Float>>> {
+        val fs = sampleRateHz.coerceAtLeast(1).toDouble()
+        return ToneBand.entries.mapNotNull { band ->
+            toneFilter(fs, band, tone)?.let { filter ->
+                band to evaluateResponse(listOf(filter), sampleRateHz, pointCount)
+            }
+        }
+    }
+
+    /**
+     * The fixed tone controls as biquads: bass low shelf, mid peaking, treble
+     * high shelf — the exact filters [buildChain] inserts, skipped at 0 dB.
+     */
+    private fun toneFilters(fs: Double, tone: ToneSettings): List<BiquadCoefficients> =
+        ToneBand.entries.mapNotNull { band -> toneFilter(fs, band, tone) }
+
+    /** Biquad of one fixed tone control, or null at 0 dB (identity on the audio path). */
+    private fun toneFilter(fs: Double, band: ToneBand, tone: ToneSettings): BiquadCoefficients? =
+        when (band) {
+            ToneBand.BASS ->
+                if (tone.bassDb != 0f) {
+                    BiquadDesigner.lowShelf(
+                        fs, ToneSettings.BASS_SHELF_HZ.toDouble(), tone.bassDb.toDouble()
+                    )
+                } else {
+                    null
+                }
+            ToneBand.MID ->
+                if (tone.midDb != 0f) {
+                    BiquadDesigner.peaking(
+                        fs, ToneSettings.MID_PEAK_HZ.toDouble(), tone.midDb.toDouble(), q = 0.9
+                    )
+                } else {
+                    null
+                }
+            ToneBand.TREBLE ->
+                if (tone.trebleDb != 0f) {
+                    BiquadDesigner.highShelf(
+                        fs, ToneSettings.TREBLE_SHELF_HZ.toDouble(), tone.trebleDb.toDouble()
+                    )
+                } else {
+                    null
+                }
+        }
+
+    /** Biquads of one switchable EQ section; empty when that section is off. */
+    private fun sectionFilters(
+        fs: Double,
+        state: DspState,
+        section: Section
+    ): List<BiquadCoefficients> {
+        val filters = ArrayList<BiquadCoefficients>(12)
+        when (section) {
+            Section.GRAPHIC -> {
+                val graphic = state.graphicEq
+                if (graphic.enabled) {
+                    val bandCount = graphic.gainsDb.size
+                    val q = GraphicEqSettings.bandQ(bandCount)
+                    for (index in 0 until bandCount) {
+                        val gain = graphic.gainsDb[index]
+                        if (gain != 0f) {
+                            filters += BiquadDesigner.peaking(
+                                fs, GraphicEqSettings.bandFrequency(index, bandCount).toDouble(),
+                                gain.toDouble(), q
+                            )
+                        }
+                    }
+                }
+            }
+            Section.PARAMETRIC -> {
+                val parametric = state.parametricEq
+                if (parametric.enabled) {
+                    parametric.nodes.forEach { node ->
+                        filters += nodeFilter(fs, node)
+                    }
+                }
+            }
+        }
+        return filters
+    }
+
     private fun nodeFilter(fs: Double, node: ParametricNode): BiquadCoefficients = when (node.type) {
         FilterType.PEAKING -> BiquadDesigner.peaking(
             fs, node.frequencyHz.toDouble(), node.gainDb.toDouble(), node.q.toDouble()
@@ -284,6 +345,9 @@ object DspMath {
     }
 
     enum class Section { GRAPHIC, PARAMETRIC }
+
+    /** The fixed tone controls, identified for per-tone response curves. */
+    enum class ToneBand { BASS, MID, TREBLE }
 
     /** Log-frequency of response point [index] out of [pointCount]. */
     fun responseFrequencyAt(index: Int, pointCount: Int): Float {

@@ -546,11 +546,14 @@ fun GraphicEqStrip(
 /**
  * Compact frequency-response overview of the active EQ section only — never both
  * at once. In parametric mode it draws the per-node curves in the node's own
- * color plus their combined curve in the accent color; in graphic mode (with
- * [showViewport]) it draws the graphic section's response and a translucent
- * white overlay marking the section of the 20 Hz..20 kHz axis currently visible
- * in the scrollable fader strip. Dragging the map slides the strip; a tap
- * centers the viewport.
+ * color plus their combined curve in the accent color; every non-neutral fixed
+ * tone control is additionally drawn as its own separated curve in [toneCurves]
+ * (bass red, mid amber, treble blue) wherever the active section is drawn, so
+ * the tone knobs' contribution stays visible even with both EQ sections off. In
+ * graphic mode (with [showViewport]) it draws the graphic section's response and
+ * a translucent white overlay marking the section of the 20 Hz..20 kHz axis
+ * currently visible in the scrollable fader strip. Dragging the map slides the
+ * strip; a tap centers the viewport.
  */
 @Composable
 fun EqMiniMap(
@@ -558,6 +561,7 @@ fun EqMiniMap(
     nodes: List<ParametricNode>,
     active: Boolean,
     modifier: Modifier = Modifier,
+    toneCurves: List<Pair<DspMath.ToneBand, List<Float>>> = emptyList(),
     showViewport: Boolean = false,
     scrollState: ScrollState? = null,
     stripViewportWidthPx: Int = 0,
@@ -618,6 +622,15 @@ fun EqMiniMap(
 
         val lineColor = if (active) accent else dimColor
 
+        // Separated per-tone curves (bass / mid / treble), under everything.
+        toneCurves.forEach { (band, curve) ->
+            drawCurve(
+                points = curve,
+                color = toneBandColor(band).copy(alpha = if (active) 0.9f else 0.4f),
+                strokeWidth = 1.5.dp.toPx()
+            )
+        }
+
         drawCurve(
             points = combinedCurve,
             color = lineColor,
@@ -672,6 +685,17 @@ fun EqMiniMap(
             )
         }
     }
+}
+
+/**
+ * Color of a tone band's separated mini-map curve: warm red for bass, amber for
+ * mid, light blue for treble — the same hues the parametric node palette uses,
+ * so all secondary curves read with one visual language.
+ */
+private fun toneBandColor(band: DspMath.ToneBand): Color = when (band) {
+    DspMath.ToneBand.BASS -> Color(0xFFE57373)
+    DspMath.ToneBand.MID -> Color(0xFFFFD54F)
+    DspMath.ToneBand.TREBLE -> Color(0xFF4FC3F7)
 }
 
 /** Visible response span of the strip in px: (bandCount - 1) fader gaps. */

@@ -73,20 +73,22 @@ import com.foamplayer.app.ui.components.onSeekBarReleased
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.ln
+import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
  * Poweramp-style Equalizer & DSP screen:
- *  - power toggle + combined-response mini map with a translucent white viewport
- *    overlay that scrolls the graphic EQ (and per-node colored curves in
- *    parametric mode),
+ *  - power toggle + response mini map with a translucent white viewport overlay
+ *    that scrolls the graphic EQ (per-node colored curves in parametric mode,
+ *    separated bass/mid/treble tone curves in both modes),
  *  - a presets entry card opening a FoamModal with response previews for every
  *    preset, plus create/delete of user presets,
  *  - Graphic (21 horizontally scrollable band faders) / Parametric (draggable
  *    colored nodes) sections — mutually exclusive: enabling one disables the other,
- *  - rotary tone knobs (pre-amp, bass, mid, treble) and control knobs (balance,
- *    stereo width) with a limiter switch,
+ *  - rotary tone knobs — pre-amp in dB; bass/mid/treble boost-only, reading
+ *    0-100% (log-tapered to 0..+12 dB, no negative dB) — and control knobs
+ *    (balance, stereo width 0-100% = ×1..×2) with a limiter switch,
  *  - direct volume control slider with dB readout.
  *
  * All controls commit on release so a drag never floods the DSP engine with state
@@ -130,16 +132,30 @@ fun EqualizerScreen(
     LaunchedEffect(state.graphicEq.gainsDb) { workingGains = state.graphicEq.gainsDb }
     LaunchedEffect(state.parametricEq.nodes) { workingNodes = state.parametricEq.nodes }
 
-    // Live curve of the ACTIVE section only for the mini map (never both at once).
+    // Live mini-map curve: ONLY the active EQ section — tone never mixes into it,
+    // its shelves are drawn as their own separated curves alongside (see
+    // [toneCurves]). The section under edit renders from the working copies
+    // (graphic gains / parametric nodes) so a drag is visible immediately; the
+    // graphic preview stays visible even while its section is toggled off,
+    // matching the always-editable fader strip.
     val miniMapCurve = remember(selectedSection, state, workingGains, workingNodes) {
         when (selectedSection) {
-            DspMath.Section.GRAPHIC -> DspMath.graphicResponse(workingGains)
+            DspMath.Section.GRAPHIC -> DspMath.sectionResponse(
+                state.copy(
+                    graphicEq = state.graphicEq.copy(enabled = true, gainsDb = workingGains)
+                ),
+                DspMath.Section.GRAPHIC
+            )
             DspMath.Section.PARAMETRIC -> DspMath.sectionResponse(
                 state.copy(parametricEq = state.parametricEq.copy(nodes = workingNodes)),
                 DspMath.Section.PARAMETRIC
             )
         }
     }
+
+    // Separated per-tone curves: bass, mid and treble each drawn in their own
+    // color next to the section curve — overlays, never summed into it.
+    val toneCurves = remember(state.tone) { DspMath.toneCurves(state.tone) }
 
     // Band selector state: which count chip is active in the strip header.
     var showBandPicker by remember { mutableStateOf(false) }
@@ -199,6 +215,7 @@ fun EqualizerScreen(
                         combinedCurve = miniMapCurve,
                         nodes = if (selectedSection == DspMath.Section.PARAMETRIC) workingNodes else emptyList(),
                         active = state.enabled,
+                        toneCurves = toneCurves,
                         showViewport = selectedSection == DspMath.Section.GRAPHIC,
                         scrollState = stripScrollState,
                         stripViewportWidthPx = stripViewportWidthPx,
@@ -213,8 +230,8 @@ fun EqualizerScreen(
 
                 Column(horizontalAlignment = Alignment.End) {
                     MiniMapValue("PRE-AMP", formatDb(state.preampDb))
-                    MiniMapValue("BASS", formatDb(state.tone.bassDb))
-                    MiniMapValue("TREBLE", formatDb(state.tone.trebleDb))
+                    MiniMapValue("BASS", formatTonePercent(state.tone.bassDb))
+                    MiniMapValue("TREBLE", formatTonePercent(state.tone.trebleDb))
                 }
             }
         }
@@ -555,8 +572,8 @@ private fun PresetsEntryCard(
 
 /**
  * Preset browser in a bottom sheet: every preset gets a live response preview
- * (combined curve in accent, per-node curves in their colors). Built-ins can
- * only be applied; user presets can also be deleted.
+ * (section curve in accent, per-node and per-tone curves in their colors).
+ * Built-ins can only be applied; user presets can also be deleted.
  */
 @Composable
 private fun PresetsModal(
@@ -633,9 +650,17 @@ private fun PresetRow(
     onApply: () -> Unit,
     onDelete: () -> Unit
 ) {
-    // One combined-response sample per preset, computed once per modal content.
+    // One response sample per preset, computed once per modal content: the
+    // preset's own EQ section only — its tone (if any) is drawn separately.
     val previewState = remember(preset) { preset.previewState() }
-    val previewCurve = remember(previewState) { DspMath.combinedResponse(previewState) }
+    val previewSection = when (preset.kind) {
+        PresetKind.PARAMETRIC -> DspMath.Section.PARAMETRIC
+        else -> DspMath.Section.GRAPHIC
+    }
+    val previewCurve = remember(previewState, previewSection) {
+        DspMath.sectionResponse(previewState, previewSection)
+    }
+    val previewToneCurves = remember(previewState) { DspMath.toneCurves(previewState.tone) }
 
     Row(
         modifier = Modifier
@@ -650,6 +675,7 @@ private fun PresetRow(
             combinedCurve = previewCurve,
             nodes = previewState.parametricEq.nodes,
             active = true,
+            toneCurves = previewToneCurves,
             modifier = Modifier
                 .width(72.dp)
                 .height(36.dp)
@@ -971,29 +997,20 @@ private fun KnobsSection(
         Column {
             SectionCaption("TONE")
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                KnobControl(
-                    value = state.tone.bassDb,
-                    onValueChange = { viewModel.setBassDb(it) },
+                ToneKnob(
                     label = "BASS",
-                    valueText = { formatDb(it) },
-                    minValue = ToneSettings.MIN_DB,
-                    maxValue = ToneSettings.MAX_DB
+                    db = state.tone.bassDb,
+                    onDbChange = { viewModel.setBassDb(it) }
                 )
-                KnobControl(
-                    value = state.tone.midDb,
-                    onValueChange = { viewModel.setMidDb(it) },
+                ToneKnob(
                     label = "MID",
-                    valueText = { formatDb(it) },
-                    minValue = ToneSettings.MIN_DB,
-                    maxValue = ToneSettings.MAX_DB
+                    db = state.tone.midDb,
+                    onDbChange = { viewModel.setMidDb(it) }
                 )
-                KnobControl(
-                    value = state.tone.trebleDb,
-                    onValueChange = { viewModel.setTrebleDb(it) },
+                ToneKnob(
                     label = "TREBLE",
-                    valueText = { formatDb(it) },
-                    minValue = ToneSettings.MIN_DB,
-                    maxValue = ToneSettings.MAX_DB
+                    db = state.tone.trebleDb,
+                    onDbChange = { viewModel.setTrebleDb(it) }
                 )
             }
         }
@@ -1010,13 +1027,14 @@ private fun KnobsSection(
                     maxValue = DspState.MAX_BALANCE
                 )
                 KnobControl(
-                    value = state.stereoWidth,
-                    onValueChange = { viewModel.setStereoWidth(it) },
+                    value = stereoWidthToPercent(state.stereoWidth),
+                    onValueChange = { percent ->
+                        viewModel.setStereoWidth(stereoPercentToWidth(percent))
+                    },
                     label = "STEREO",
-                    valueText = { "×%.1f".format(it) },
+                    valueText = { formatPercent(it) },
                     minValue = 0f,
-                    maxValue = DspState.MAX_STEREO_WIDTH,
-                    defaultValue = 1f
+                    maxValue = KNOB_MAX_PERCENT
                 )
             }
         }
@@ -1035,6 +1053,29 @@ private fun KnobsSection(
         caption = "Lower overall level by the EQ boost for zero clipping",
         checked = state.autoHeadroom,
         onChange = { viewModel.setAutoHeadroom(it) }
+    )
+}
+
+/**
+ * Boost-only tone knob (bass / mid / treble): reads 0-100% instead of dB.
+ * 0% is 0 dB (neutral, needle at the arc's start), 100% is the full +12 dB
+ * boost; the percent is log-tapered into dB by [tonePercentToDb] so the
+ * commonly used small boosts get most of the knob's travel. Double-tap snaps
+ * back to 0% / 0 dB.
+ */
+@Composable
+private fun ToneKnob(
+    label: String,
+    db: Float,
+    onDbChange: (Float) -> Unit
+) {
+    KnobControl(
+        value = toneDbToPercent(db),
+        onValueChange = { percent -> onDbChange(tonePercentToDb(percent)) },
+        label = label,
+        valueText = { formatPercent(it) },
+        minValue = 0f,
+        maxValue = KNOB_MAX_PERCENT
     )
 }
 
@@ -1216,9 +1257,46 @@ private fun SavePresetModal(
     }
 }
 
+// ---------------------------------------------------- tone/stereo knob maps
+
+/** Every percent-style knob reads 0..[KNOB_MAX_PERCENT]. */
+private const val KNOB_MAX_PERCENT = 100f
+
+/**
+ * Log-tapered percent → dB for the tone knobs: dB = MAX · log10(1 + 9·x) with
+ * x = percent/100. 0% maps to 0 dB (neutral) and 100% to [ToneSettings.MAX_DB];
+ * the curve rises fast at first (10% ≈ 3.3 dB, 25% ≈ 6.1 dB, 50% ≈ 8.9 dB) so
+ * fine control lives in the small-boost region and no negative dB exists
+ * anywhere on the dial.
+ */
+private fun tonePercentToDb(percent: Float): Float {
+    val x = (percent / KNOB_MAX_PERCENT).coerceIn(0f, 1f)
+    return ToneSettings.MAX_DB * log10(1f + 9f * x)
+}
+
+/** Inverse of [tonePercentToDb], clamped to the knob's 0-100% range. */
+private fun toneDbToPercent(db: Float): Float {
+    val clamped = db.coerceIn(0f, ToneSettings.MAX_DB)
+    val x = ((10.0.pow((clamped / ToneSettings.MAX_DB).toDouble()) - 1.0) / 9.0).toFloat()
+    return x * KNOB_MAX_PERCENT
+}
+
+/** Stereo width knob: 0% = ×1 (normal), 100% = [DspState.MAX_STEREO_WIDTH]. */
+private fun stereoPercentToWidth(percent: Float): Float =
+    1f + (percent / KNOB_MAX_PERCENT).coerceIn(0f, 1f)
+
+/** Inverse of [stereoPercentToWidth], clamped to the knob's 0-100% range. */
+private fun stereoWidthToPercent(width: Float): Float =
+    (width - 1f).coerceIn(0f, 1f) * KNOB_MAX_PERCENT
+
 // ------------------------------------------------------------------- format
 
 private fun formatDb(db: Float): String = "%+.1f dB".format(db)
+
+private fun formatPercent(percent: Float): String = "%.0f%%".format(percent)
+
+/** Mini-map readout for the tone knobs: boost percent of [ToneSettings.MAX_DB]. */
+private fun formatTonePercent(db: Float): String = formatPercent(toneDbToPercent(db))
 
 private fun formatBalance(balance: Float): String = when {
     balance == 0f -> "CENTER"
