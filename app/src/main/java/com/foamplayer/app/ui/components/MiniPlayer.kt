@@ -220,9 +220,6 @@ fun MiniPlayer(
     val queue = playbackState.queue
     val queueEntryIds = playbackState.queueEntryIds
     val currentIndex = playbackState.queueIndex
-    val pausedArtScale by rememberPausedArtScale(
-        playbackState.isPlaying || playbackState.isPlaybackRequested
-    )
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -473,6 +470,17 @@ fun MiniPlayer(
         if (enterExitState == EnterExitState.Visible) 0f else 1f
     }
 
+    // The full player hero's current paused shrink (see rememberPausedArtScale). This
+    // slot itself rests at scale 1f -- a play/pause flip must NOT animate the mini
+    // player's art -- but during a shared-element flight THIS layer is what the
+    // overlay renders, so it has to depart at the hero's current paused scale and
+    // relax to 1f as it lands (blended on animatedArtElevationFraction in the
+    // graphicsLayer below), or a close flight taken while paused pops the art 3%
+    // at hand-off.
+    val heroPausedArtScale by rememberPausedArtScale(
+        playbackState.isPlaying || playbackState.isPlaybackRequested
+    )
+
     val containerPadding = NavBarDimens.MiniPlayerContainerPadding
     val containerRadius = miniImageRadius + containerPadding
 
@@ -568,21 +576,30 @@ fun MiniPlayer(
                                     // animation draw-only (a .clip() here recomposed the whole
                                     // mini player per transition frame and allocated a fresh
                                     // shape each time).
-                    .graphicsLayer {
-                        shape = RoundedCornerShape(animatedCornerRadius)
-                        clip = true
-                        scaleX = pausedArtScale
-                        scaleY = pausedArtScale
-                        // Only while this art is the shared-element morph's renderer;
-                        // gated off in immersive so the fading sharedArtFlightAlpha above
-                        // never coexists with a shadow a layer's own alpha cannot fade.
-                        shadowElevation = if (!isImmersiveEnabled && useSharedElements && isSettledCurrentTrackPage) {
-                            PlayerDimens.fullPlayerArtElevation.toPx() * animatedArtElevationFraction
-                        } else {
-                            0f
-                        }
-                    }
-                    .background(FoamTheme.colors.surface),
+                                    .graphicsLayer {
+                                        shape = RoundedCornerShape(animatedCornerRadius)
+                                        clip = true
+                                        // Play/pause shrink is the full player hero's rest look
+                                        // ONLY -- this slot rests at 1f. But mid-flight this
+                                        // layer renders the shared-element overlay, so it must
+                                        // depart at the hero's CURRENT paused scale (flight
+                                        // fraction 1) and ease to this slot's unscaled rest
+                                        // (fraction 0) along the same curve as the shadow below,
+                                        // or a paused close flight pops 3% the frame it starts.
+                                        val scale =
+                                            1f + (heroPausedArtScale - 1f) * animatedArtElevationFraction
+                                        scaleX = scale
+                                        scaleY = scale
+                                        // Only while this art is the shared-element morph's renderer;
+                                        // gated off in immersive so the fading sharedArtFlightAlpha above
+                                        // never coexists with a shadow a layer's own alpha cannot fade.
+                                        shadowElevation = if (!isImmersiveEnabled && useSharedElements && isSettledCurrentTrackPage) {
+                                            PlayerDimens.fullPlayerArtElevation.toPx() * animatedArtElevationFraction
+                                        } else {
+                                            0f
+                                        }
+                                    }
+                                    .background(FoamTheme.colors.surface),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (pageTrack.albumArtPath != null) {

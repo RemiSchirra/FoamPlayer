@@ -47,7 +47,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.times
 import androidx.compose.ui.util.lerp as lerpFloat
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
@@ -232,10 +231,10 @@ internal fun SharedTransitionScope.SubViewContent(
     // Raw isPlaying: read only by the play/pause button leaf inside MiniPlayerHeader's
     // caller (see below), so a playback flip doesn't recompose this subtree.
     isPlaying: () -> Boolean,
-    // Combined playback-active bit for the paused-art shrink ONLY (isPlaying ||
-    // isPlaybackRequested): the buffering gap after a play request also reports
-    // isPlaying=false, and shrinking across it scaled the header art down for the
-    // whole load duration of every track tap. See rememberPausedArtScale.
+    // Current paused shrink of the full player hero (isPlaying || isPlaybackRequested
+    // feeds rememberPausedArtScale): the subview header does NOT shrink at rest on
+    // play/pause, but mid-flight this header's art IS what the shared-element overlay
+    // renders, so it departs at the hero's current paused scale and relaxes to 1f.
     isPlaybackActive: () -> Boolean,
     isImmersiveEnabled: Boolean,
     marqueeMode: MarqueeMode,
@@ -301,7 +300,13 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     val miniRadius = (miniImageSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
 
-    val pausedArtScale by rememberPausedArtScale(isPlaybackActive)
+    // The full player hero's current paused shrink (see rememberPausedArtScale). This
+    // header rests at scale 1f -- a play/pause flip must NOT animate this header's art
+    // -- but mid-flight this header's art IS what the shared-element overlay renders,
+    // so it departs at the hero's CURRENT paused scale and relaxes to 1f along the
+    // same eased flight fraction the shadow below rides, or an up-morph taken while
+    // paused pops the art 3% at hand-off.
+    val heroPausedArtScale by rememberPausedArtScale(isPlaybackActive)
 
     // Deferred reads: the transition fraction is evaluated inside the graphicsLayer
     // blocks below, so the subview drag animates the corner radii per frame without
@@ -352,6 +357,20 @@ private fun SharedTransitionScope.MiniPlayerHeader(
             fullArtElevationPx * (1f - fraction)
         }
     }
+    // Paused-shrink departure, eased by the same flight fraction as the shadow: the
+    // hero-end (fraction 0 toward this slot) renders the hero's paused scale, this
+    // slot's own rest (fraction 1) is unscaled 1f.
+    val imageScalePx = remember(heroPausedArtScale, upTransitionState) {
+        {
+            val raw = upTransitionState.progress().coerceIn(0f, 1f)
+            val fraction = if (upTransitionState.targetState) {
+                EaseOutCubic.transform(raw)
+            } else {
+                EaseInCubic.transform(raw)
+            }
+            1f + (heroPausedArtScale - 1f) * (1f - fraction)
+        }
+    }
     // The container is not a shared element (it only slides/fades with the header), so its
     // rounding stays fixed at the resting art-radius + padding relationship -- the same
     // formula as the bottom mini player's container -- instead of chasing the animated
@@ -397,8 +416,8 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                             shape = RoundedCornerShape(imageRadiusPx())
                             clip = true
                             alpha = headerArtAlpha()
-                            scaleX = pausedArtScale
-                            scaleY = pausedArtScale
+                            scaleX = imageScalePx()
+                            scaleY = imageScalePx()
                             // Classic player only: in immersive the headerArtAlpha above
                             // fades this art, and a layer's own alpha does not fade its
                             // RenderNode shadow, so the shadow is kept out of that path.

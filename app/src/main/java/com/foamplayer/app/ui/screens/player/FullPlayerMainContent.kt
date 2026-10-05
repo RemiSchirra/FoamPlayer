@@ -223,6 +223,33 @@ internal fun SharedTransitionScope.TrackHeroPager(
     val miniRadius = (miniImageSize / 2) * miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
 
+    // Paused-shrink departure/arrival: the endpoints of the art's shared-element pairs
+    // (mini player, subview header) rest UNSCALED -- only this hero shrinks on
+    // play/pause. During a flight the overlay renders the entering endpoint's layer,
+    // so that layer must depart at THIS hero's current paused scale and relax to the
+    // endpoint's own rest 1f along the settled fraction. The hero side mirrors it:
+    // easing from the endpoint's 1f rest at flight start to its paused rest at settle,
+    // along the same fraction its drop shadow rides -- otherwise a paused hero pops
+    // 3% against the unscaled endpoint (mini/header) on the open's first frame, or
+    // snaps from 0.97 to 1f the instant a close flight hands the overlay over.
+    val heroRestFraction = remember(playerTransitionState, upTransitionState) {
+        {
+            val rawOuter = playerTransitionState.progress().coerceIn(0f, 1f)
+            val outerFraction = if (playerTransitionState.targetState) {
+                EaseOutCubic.transform(rawOuter)
+            } else {
+                EaseInCubic.transform(rawOuter)
+            }
+            val rawHeader = upTransitionState.progress().coerceIn(0f, 1f)
+            val headerFraction = if (upTransitionState.targetState) {
+                EaseOutCubic.transform(rawHeader)
+            } else {
+                EaseInCubic.transform(rawHeader)
+            }
+            (outerFraction * (1f - headerFraction)).coerceIn(0f, 1f)
+        }
+    }
+
     Box(modifier = Modifier.fillMaxWidth()) {
         HorizontalPager(
             state = pagerState,
@@ -396,8 +423,14 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 }
                             )
                             clip = true
-                            scaleX = pausedArtScale
-                            scaleY = pausedArtScale
+                            // The paused shrink eases in/out with the flight: at rest the
+                            // hero shows its own paused look (heroRestFraction 1), and while
+                            // flying it tracks the unscaled endpoint the overlay departs
+                            // from (fraction 0), so both ends of the pair render the same
+                            // scale the moment the gesture starts. See
+                            // rememberPausedArtScale for the endpoint-side mirror.
+                            scaleX = pausedArtScale + (1f - pausedArtScale) * (1f - heroRestFraction())
+                            scaleY = pausedArtScale + (1f - pausedArtScale) * (1f - heroRestFraction())
                             shadowElevation = if (!immersive) {
                                 with(density) {
                                     PlayerDimens.fullPlayerArtElevation.toPx()
