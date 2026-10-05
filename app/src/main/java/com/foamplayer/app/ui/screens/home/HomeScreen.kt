@@ -74,7 +74,9 @@ private val ImageMimeTypes = arrayOf("image/*")
  * Cards also join the app's shared-element transitions: track cards morph
  * into the full player's artwork when their track starts with auto-open on
  * (keyed on [sharedTrackId]), and album/playlist cards animate into the
- * matching detail screen's header.
+ * matching detail screen's header. When recommendation rows reorder, their
+ * cards glide to the new slot instead of popping (except any card currently
+ * mid shared-element flight, which skips placement animation).
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -178,6 +180,7 @@ fun HomeScreen(
                 key = { it.playlistId }
             ) { playlist ->
                 val cover = playlistCovers[playlist.playlistId]
+                val inFlight = isActiveSharedCollection("playlist", "${playlist.playlistId}")
                 HomeRowCard(
                     title = playlist.name,
                     imageUrl = cover?.imageUrl ?: playlist.imageUrl,
@@ -197,11 +200,14 @@ fun HomeScreen(
                     // Only the clicked card flies: shared keys are gated on the
                     // nav root's active-collection tag so albums/playlists that
                     // merely share the screen with the tapped card stay put.
-                    sharedArtKey = "playlist-art-${playlist.playlistId}"
-                        .takeIf { isActiveSharedCollection("playlist", "${playlist.playlistId}") },
-                    sharedTitleKey = "playlist-title-${playlist.playlistId}"
-                        .takeIf { isActiveSharedCollection("playlist", "${playlist.playlistId}") },
-                    flightHeroTarget = CollectionHeroTarget.Playlist
+                    sharedArtKey = "playlist-art-${playlist.playlistId}".takeIf { inFlight },
+                    sharedTitleKey = "playlist-title-${playlist.playlistId}".takeIf { inFlight },
+                    flightHeroTarget = CollectionHeroTarget.Playlist,
+                    // Cards glide to their new slot when recommendations reorder --
+                    // except the one mid-flight into the collection header, which
+                    // must not also be driven by lazy placement animations.
+                    modifier = Modifier
+                        .let { if (inFlight) it else it.animateItem() }
                 )
             }
         }
@@ -213,6 +219,7 @@ fun HomeScreen(
                 onSeeAllClick = onSeeAllAlbums,
                 key = { it.album }
             ) { album ->
+                val inFlight = isActiveSharedCollection("album", album.album)
                 HomeRowCard(
                     title = album.album,
                     imageUrl = album.albumArtPath,
@@ -232,11 +239,11 @@ fun HomeScreen(
                     },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
-                    sharedArtKey = "album-art-${album.album}"
-                        .takeIf { isActiveSharedCollection("album", album.album) },
-                    sharedTitleKey = "album-title-${album.album}"
-                        .takeIf { isActiveSharedCollection("album", album.album) },
-                    flightHeroTarget = CollectionHeroTarget.Album
+                    sharedArtKey = "album-art-${album.album}".takeIf { inFlight },
+                    sharedTitleKey = "album-title-${album.album}".takeIf { inFlight },
+                    flightHeroTarget = CollectionHeroTarget.Album,
+                    modifier = Modifier
+                        .let { if (inFlight) it else it.animateItem() }
                 )
             }
         }
@@ -248,6 +255,7 @@ fun HomeScreen(
                 onSeeAllClick = onSeeAllRecent,
                 key = { it.id }
             ) { track ->
+                val inPlayerFlight = track.id == sharedTrackId
                 HomeRowCard(
                     title = track.title,
                     imageUrl = track.albumArtPath,
@@ -256,9 +264,11 @@ fun HomeScreen(
                     onLongClick = { trackModalState?.show(track) },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = playerTransitionVisibilityScope,
-                    sharedArtKey = "album_art_${track.id}".takeIf { track.id == sharedTrackId },
-                    sharedTitleKey = "track_title_${track.id}".takeIf { track.id == sharedTrackId },
-                    sharedInPlayerTransition = true
+                    sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
+                    sharedTitleKey = "track_title_${track.id}".takeIf { inPlayerFlight },
+                    sharedInPlayerTransition = true,
+                    modifier = Modifier
+                        .let { if (inPlayerFlight) it else it.animateItem() }
                 )
             }
         }
@@ -270,6 +280,7 @@ fun HomeScreen(
                 onSeeAllClick = onSeeAllFavorites,
                 key = { it.id }
             ) { track ->
+                val inPlayerFlight = track.id == sharedTrackId
                 HomeRowCard(
                     title = track.title,
                     imageUrl = track.albumArtPath,
@@ -278,9 +289,11 @@ fun HomeScreen(
                     onLongClick = { trackModalState?.show(track) },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = playerTransitionVisibilityScope,
-                    sharedArtKey = "album_art_${track.id}".takeIf { track.id == sharedTrackId },
-                    sharedTitleKey = "track_title_${track.id}".takeIf { track.id == sharedTrackId },
-                    sharedInPlayerTransition = true
+                    sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
+                    sharedTitleKey = "track_title_${track.id}".takeIf { inPlayerFlight },
+                    sharedInPlayerTransition = true,
+                    modifier = Modifier
+                        .let { if (inPlayerFlight) it else it.animateItem() }
                 )
             }
         }
@@ -292,6 +305,7 @@ fun HomeScreen(
                 onSeeAllClick = onSeeAllArtists,
                 key = { it.name }
             ) { artist ->
+                val inFlight = isActiveSharedCollection("artist", artist.name)
                 HomeRowCard(
                     title = artist.name,
                     imageUrl = artistImages[artist.name]?.imageUrl,
@@ -324,11 +338,11 @@ fun HomeScreen(
                     },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
-                    sharedArtKey = "artist-art-${artist.name}"
-                        .takeIf { isActiveSharedCollection("artist", artist.name) },
-                    sharedTitleKey = "artist-title-${artist.name}"
-                        .takeIf { isActiveSharedCollection("artist", artist.name) },
-                    flightHeroTarget = CollectionHeroTarget.Artist
+                    sharedArtKey = "artist-art-${artist.name}".takeIf { inFlight },
+                    sharedTitleKey = "artist-title-${artist.name}".takeIf { inFlight },
+                    flightHeroTarget = CollectionHeroTarget.Artist,
+                    modifier = Modifier
+                        .let { if (inFlight) it else it.animateItem() }
                 )
             }
         }

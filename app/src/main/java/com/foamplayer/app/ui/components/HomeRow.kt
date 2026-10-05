@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -85,7 +86,10 @@ private val HomeRowHeaderSpacing = 4.dp
  * stay graceful.
  *
  * Callers compose each card out of the shared [HomeRowCard] so every row's
- * items look identical.
+ * items look identical. [itemContent] runs in [LazyItemScope] so cards can
+ * opt into placement animations with Modifier.animateItem() -- recommendations
+ * reorder as listening data refreshes, and the cards glide instead of popping.
+ * Placement animation only takes effect when a [key] is given.
  */
 @Composable
 fun <T> HomeRow(
@@ -94,7 +98,7 @@ fun <T> HomeRow(
     modifier: Modifier = Modifier,
     onSeeAllClick: (() -> Unit)? = null,
     key: ((item: T) -> Any)? = null,
-    itemContent: @Composable (item: T) -> Unit
+    itemContent: @Composable LazyItemScope.(item: T) -> Unit
 ) {
     if (items.isEmpty()) return
 
