@@ -1052,7 +1052,7 @@ fun FoamNavHost(
                                     },
                                     sizeTransform = { SizeTransform(clip = false) }
                                 ) {
-                                    composable(Screen.Onboarding.route) {
+                                    navComposable(Screen.Onboarding.route) {
                                         OnboardingScreen(
                                             onFinish = {
                                                 navController.navigate(Screen.Home.route) {
