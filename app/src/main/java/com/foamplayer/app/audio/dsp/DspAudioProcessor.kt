@@ -30,6 +30,9 @@ import kotlin.math.roundToInt
  * PCM. Any other encoding — and any channel count above stereo — is copied through
  * untouched.
  */
+/** Share of the EQ's peak boost removed as static gain. Raise for quieter/cleaner, lower for louder. */
+private const val HEADROOM_FRACTION = 0.5f
+
 @UnstableApi
 class DspAudioProcessor : BaseAudioProcessor() {
 
@@ -85,7 +88,9 @@ class DspAudioProcessor : BaseAudioProcessor() {
         // sample rate, so coefficients are always correct for the stream.
         if (state !== configuredState || sampleRate != (configuredChain?.sampleRate ?: -1)) {
             configuredState = state
-            configuredChain = DspMath.buildChain(state, sampleRate)
+            // Static headroom = half of the EQ peak boost (constant gain: no noise, no
+            // volume switching); EqGraph's limiter handles the remaining peaks.
+            configuredChain = DspMath.buildChain(state, sampleRate, headroomFraction = HEADROOM_FRACTION)
             graph.updateChain(configuredChain)
         }
 

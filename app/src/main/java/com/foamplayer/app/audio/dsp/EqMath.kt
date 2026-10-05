@@ -54,7 +54,15 @@ object DspMath {
      * combined EQ response so boosts cannot push the signal past full scale; pass
      * false to get the raw chain (e.g. for response curves).
      */
-    fun buildChain(state: DspState, sampleRateHz: Int, autoHeadroom: Boolean = true): DspChain? {
+    fun buildChain(
+        state: DspState,
+        sampleRateHz: Int,
+        autoHeadroom: Boolean = true,
+        // Fraction of the EQ peak boost removed as static gain (1 = all of it, 0 = none).
+        // Real music rarely hits the worst-case peak, so < 1 keeps more loudness; the
+        // limiter in EqGraph absorbs what is left.
+        headroomFraction: Float = 1f
+    ): DspChain? {
         if (sampleRateHz <= 0) return null
         val filters = ArrayList<BiquadCoefficients>(16)
         val fs = sampleRateHz.toDouble()
@@ -92,7 +100,7 @@ object DspMath {
         // noisy). Lowering the output by the peak of the combined response keeps the
         // curve shape exactly as shown and nothing can overshoot. The user's own
         // pre-amp and volume are applied on top, untouched.
-        val headroomDb = if (autoHeadroom) peakBoostDb(filters, fs) else 0f
+        val headroomDb = if (autoHeadroom) peakBoostDb(filters, fs) * headroomFraction.coerceIn(0f, 1f) else 0f
         val headroomGain = if (headroomDb > 0f) dbToLinear(-headroomDb) else 1f
         val outputGainLinear = volumeGainLinear(state) * dbToLinear(state.preampDb) * headroomGain
         val chain = DspChain(

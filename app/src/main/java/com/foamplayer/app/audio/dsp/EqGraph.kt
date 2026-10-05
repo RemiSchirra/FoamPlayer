@@ -2,6 +2,7 @@ package com.foamplayer.app.audio.dsp
 
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.sign
 import kotlin.math.tanh
 
@@ -16,6 +17,13 @@ const val SOFT_CLIP_KNEE = 0.9f
  * int16/int24/int32 re-quantization can never wrap or flat-top.
  */
 const val SOFT_CLIP_CEILING = 0.999f
+
+/** Level the peak limiter keeps peaks under (≈ -0.18 dBFS). */
+const val LIMITER_CEILING = 0.98f
+
+/** Limiter attack/release (seconds). Slow release avoids modulating bass waveforms. */
+const val LIMITER_ATTACK_S = 0.0005f
+const val LIMITER_RELEASE_S = 0.4f
 
 /**
  * Anti-clip saturation for the float processing path.
@@ -57,6 +65,9 @@ fun softClip(x: Float): Float {
  *  2. balance / M-S stereo width,
  *  3. output gain (direct volume × pre-amp × automatic EQ headroom), ramped
  *     linearly across each buffer when it changes (no zipper noise),
+ *  3b. smooth linked peak limiter (fast attack, slow release): only acts on the
+ *     residual peaks the static headroom did not absorb; gain reduction is smooth
+ *     so it does not crackle,
  *  4. anti-clip saturation — bit-exact up to the knee ([SOFT_CLIP_KNEE]); only the
  *     tips of peaks above it get gently rounded (monotonically) into the
  *     ceiling, so the output can never hard-clip into crackle.
@@ -86,6 +97,9 @@ class EqGraph {
     private var appliedGain = 1f
     private var gainInitialized = false
 
+    // Peak limiter gain reduction (1 = none). Audio thread only.
+    private var limiterGain = 1f
+
     /** Publishes a new chain snapshot; adopted at the next processed buffer. */
     fun updateChain(chain: DspChain?) {
         chainRef.set(chain)
@@ -95,6 +109,7 @@ class EqGraph {
     fun resetStates() {
         for (state in nodeStates) state?.reset()
         gainInitialized = false
+        limiterGain = 1f
     }
 
     /**
@@ -116,6 +131,7 @@ class EqGraph {
             // passthrough snapshot: samples untouched, unity gain
             appliedGain = 1f
             gainInitialized = true
+            limiterGain = 1f
             return
         }
 
@@ -134,6 +150,10 @@ class EqGraph {
         val gainStep = (targetGain - startGain) / frameCount
         var gain = startGain
         appliedGain = targetGain
+
+        val fs = chain.sampleRate.toFloat()
+        val attackCoeff = 1f - exp(-1f / (LIMITER_ATTACK_S * fs))
+        val releaseCoeff = 1f - exp(-1f / (LIMITER_RELEASE_S * fs))
         gainInitialized = true
 
         for (i in 0 until frameCount) {
@@ -177,6 +197,20 @@ class EqGraph {
             gain += gainStep
             if (gain != 1f) {
                 for (c in 0 until channelCount) frame[c] *= gain
+            }
+
+            // Linked peak limiter: smooth gain reduction instead of clipping.
+            var peak = 0f
+            for (c in 0 until channelCount) peak = maxOf(peak, abs(frame[c]))
+            val needed = if (peak > LIMITER_CEILING) LIMITER_CEILING / peak else 1f
+            limiterGain = if (needed < limiterGain) {
+                limiterGain + (needed - limiterGain) * attackCoeff
+            } else {
+                limiterGain + (1f - limiterGain) * releaseCoeff
+            }
+            if (limiterGain > 0.9999f) limiterGain = 1f
+            if (limiterGain < 1f) {
+                for (c in 0 until channelCount) frame[c] *= limiterGain
             }
 
             for (c in 0 until channelCount) samples[base + c] = frame[c]
