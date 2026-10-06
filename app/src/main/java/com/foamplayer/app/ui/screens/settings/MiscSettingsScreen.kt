@@ -2,6 +2,9 @@ package com.foamplayer.app.ui.screens.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -68,6 +71,10 @@ fun MiscSettingsScreen(
     val isDiscordEnabled = settings.discordPresenceEnabled
     val isLoggedIn = session != null
 
+    // Animate show/hide only once the user has flipped a switch; on first
+    // composition (and while settings load) sections appear/disappear instantly.
+    var animateChanges by remember { mutableStateOf(false) }
+
     // Re-checked whenever the screen comes back to the foreground so
     // returning from the system permission screen instantly reflects the
     // (revoked or granted) overlay state.
@@ -121,13 +128,15 @@ fun MiscSettingsScreen(
                         title = stringResource(R.string.display_on_lock_screen),
                         description = stringResource(R.string.display_on_lock_screen_desc),
                         checked = settings.displayOnLockScreen,
-                        onCheckedChange = viewModel::setDisplayOnLockScreen
+                        onCheckedChange = {
+                            animateChanges = true
+                            viewModel.setDisplayOnLockScreen(it)
+                        }
                     )
                 }
-                AnimatedVisibility(
+                SettingsExpandVisibility(
                     visible = settings.displayOnLockScreen && !overlayGranted,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
+                    animate = animateChanges
                 ) {
                     Column(
                         modifier = Modifier
@@ -150,10 +159,9 @@ fun MiscSettingsScreen(
                 }
                 // Fast lock: end the lock-display session after 5s of inactivity;
                 // only meaningful while the lock-screen display itself is on.
-                AnimatedVisibility(
+                SettingsExpandVisibility(
                     visible = settings.displayOnLockScreen,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
+                    animate = animateChanges
                 ) {
                     Box(
                         modifier = Modifier
@@ -166,7 +174,10 @@ fun MiscSettingsScreen(
                             title = stringResource(R.string.fast_lock_screen),
                             description = stringResource(R.string.fast_lock_screen_desc),
                             checked = settings.fastLockScreenEnabled,
-                            onCheckedChange = viewModel::setFastLockScreenEnabled
+                            onCheckedChange = {
+                                animateChanges = true
+                                viewModel.setFastLockScreenEnabled(it)
+                            }
                         )
                     }
                 }
@@ -190,17 +201,19 @@ fun MiscSettingsScreen(
                         title = stringResource(R.string.discord_presence),
                         description = stringResource(R.string.discord_presence_desc),
                         checked = isDiscordEnabled,
-                        onCheckedChange = viewModel::setDiscordPresenceEnabled
+                        onCheckedChange = {
+                            animateChanges = true
+                            viewModel.setDiscordPresenceEnabled(it)
+                        }
                     )
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
             }
 
             item {
-                AnimatedVisibility(
+                SettingsExpandVisibility(
                     visible = isDiscordEnabled,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
+                    animate = animateChanges
                 ) {
                     Column {
                         Box(
@@ -307,10 +320,9 @@ fun MiscSettingsScreen(
             }
 
             item {
-                AnimatedVisibility(
+                SettingsExpandVisibility(
                     visible = isDiscordEnabled,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
+                    animate = animateChanges
                 ) {
                     Box(
                         modifier = Modifier
@@ -330,6 +342,22 @@ fun MiscSettingsScreen(
             }
         }
     }
+}
+
+@Composable
+private fun SettingsExpandVisibility(
+    visible: Boolean,
+    animate: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable AnimatedVisibilityScope.() -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = if (animate) fadeIn() + expandVertically() else EnterTransition.None,
+        exit = if (animate) fadeOut() + shrinkVertically() else ExitTransition.None,
+        content = content
+    )
 }
 
 @Composable
