@@ -773,13 +773,15 @@ internal fun PlaybackProgressSlider(
                 waveform = waveform,
                 targetWaveform = morphTargetWaveform,
                 trackChangeProgress = trackChangeProgress,
-                modifier = sliderModifier
+                modifier = sliderModifier,
+                inactiveColor = FoamTheme.accentColor.copy(alpha = 0.4f)
             )
         } else {
             FoamSlider(
                 value = { dragValue ?: seekBarProgress.progress },
                 onValueChange = onSliderValueChange,
-                modifier = sliderModifier
+                modifier = sliderModifier,
+                inactiveColor = FoamTheme.accentColor.copy(alpha = 0.4f)
             )
         }
         Spacer(modifier = Modifier.height(labelSpacing))
