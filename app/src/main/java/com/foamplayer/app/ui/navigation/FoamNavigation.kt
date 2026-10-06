@@ -53,6 +53,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -154,6 +155,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.components.TrackCenterRequest
 import com.foamplayer.app.ui.components.collectionHeroOverlayLayer
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
@@ -215,13 +217,24 @@ private fun NavGraphBuilder.composable(
     // background BEFORE the status-bar padding makes the page cover the status
     // bar zone too, so it slides/fades as one surface instead of leaving the
     // root backdrop visible behind the status bar during the transition.
-    val paintsStatusBar = isSettingsRoute(route)
+    // The layer is also flattened offscreen so the NavHost fade applies to the
+    // background and the items as ONE bitmap; otherwise each is blended at the
+    // fade alpha on its own and the items read as fading in after the background.
+    val isSettings = isSettingsRoute(route)
     navComposable(route = route, arguments = arguments) { entry ->
         val contentScope = this
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (paintsStatusBar) Modifier.background(FoamTheme.colors.background) else Modifier)
+                .then(
+                    if (isSettings) {
+                        Modifier
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                            .background(FoamTheme.colors.background)
+                    } else {
+                        Modifier
+                    }
+                )
                 .statusBarsPadding()
         ) {
             contentScope.content(entry)
@@ -721,8 +734,16 @@ fun FoamNavHost(
         ) {
             Box(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
 
-                // App-wide dynamic album-art backdrop
-                val backgroundEnabled = backgroundMode == BackgroundMode.DYNAMIC && !isSettingsRoute(currentRoute)
+                var settingsBackdropHidden by remember { mutableStateOf(isSettingsRoute(currentRoute)) }
+                LaunchedEffect(currentRoute) {
+                    if (isSettingsRoute(currentRoute)) {
+                        delay(NavScreenFadeDurationMs.toLong())
+                        settingsBackdropHidden = true
+                    } else {
+                        settingsBackdropHidden = false
+                    }
+                }
+                val backgroundEnabled = backgroundMode == BackgroundMode.DYNAMIC && !settingsBackdropHidden
                 val onBackgroundTransition = if (backgroundEnabled) {
                     rememberAnimatedBackground(
                         enabled = true,
@@ -749,7 +770,7 @@ fun FoamNavHost(
                 // below paints over them once opaque, and keeping them composed
                 // underneath makes every fade crossfade over the custom image /
                 // gradient instead of dropping to the bare background color.
-                if (!isSettingsRoute(currentRoute) && backgroundMode != BackgroundMode.DYNAMIC) {
+                if (!settingsBackdropHidden && backgroundMode != BackgroundMode.DYNAMIC) {
                     when (backgroundMode) {
                         BackgroundMode.CUSTOM -> CustomImageBackground(
                             imageUri = playerSettings.customBackgroundUri,
