@@ -14,9 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -41,6 +38,8 @@ import com.foamplayer.app.ui.modals.CollectionInfo
 import com.foamplayer.app.ui.modals.CollectionKind
 import com.foamplayer.app.ui.components.HomeRow
 import com.foamplayer.app.ui.components.HomeRowCard
+import com.foamplayer.app.ui.components.MediaArtKind
+import com.foamplayer.app.ui.components.MediaArtKindScope
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.components.HomeRowCardSmallWidth
@@ -80,6 +79,10 @@ private val ImageMimeTypes = arrayOf("image/*")
  * matching detail screen's header. When recommendation rows reorder, their
  * cards glide to the new slot instead of popping (except any card currently
  * mid shared-element flight, which skips placement animation).
+ *
+ * Each card row scopes its artwork kind ([MediaArtKindScope]): album cards
+ * load their covers under the album disc, artist cards their portraits under
+ * the person icon — no per-card parameter threading.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -216,40 +219,40 @@ fun HomeScreen(
         }
 
         item(key = "home_row_albums") {
-            HomeRow(
-                title = stringResource(R.string.home_row_recommended_albums),
-                items = albums.take(HomeRowItemCount),
-                onSeeAllClick = onSeeAllAlbums,
-                key = { it.album }
-            ) { album ->
-                val inFlight = isActiveSharedCollection("album", album.album)
-                HomeRowCard(
-                    title = album.album,
-                    imageUrl = album.albumArtPath,
-                    onClick = { onAlbumClick(album) },
-                    onLongClick = {
-                        longPressScope.launch {
-                            collectionModalState?.show(
-                                CollectionInfo(
-                                    title = album.album,
-                                    artist = album.artist,
-                                    imageUrl = album.albumArtPath,
-                                    kind = CollectionKind.Album,
-                                    tracks = viewModel.tracksForAlbum(album.album)
+            MediaArtKindScope(MediaArtKind.ALBUM) {
+                HomeRow(
+                    title = stringResource(R.string.home_row_recommended_albums),
+                    items = albums.take(HomeRowItemCount),
+                    onSeeAllClick = onSeeAllAlbums,
+                    key = { it.album }
+                ) { album ->
+                    val inFlight = isActiveSharedCollection("album", album.album)
+                    HomeRowCard(
+                        title = album.album,
+                        imageUrl = album.albumArtPath,
+                        onClick = { onAlbumClick(album) },
+                        onLongClick = {
+                            longPressScope.launch {
+                                collectionModalState?.show(
+                                    CollectionInfo(
+                                        title = album.album,
+                                        artist = album.artist,
+                                        imageUrl = album.albumArtPath,
+                                        kind = CollectionKind.Album,
+                                        tracks = viewModel.tracksForAlbum(album.album)
+                                    )
                                 )
-                            )
-                        }
-                    },
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    sharedArtKey = "album-art-${album.album}".takeIf { inFlight },
-                    sharedTitleKey = "album-title-${album.album}".takeIf { inFlight },
-                    flightHeroTarget = CollectionHeroTarget.Album,
-                    // Album cards load their cover under the album disc.
-                    placeholderIcon = Icons.Rounded.Album,
-                    modifier = Modifier
-                        .let { if (inFlight) it else it.animateItem() }
-                )
+                            }
+                        },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        sharedArtKey = "album-art-${album.album}".takeIf { inFlight },
+                        sharedTitleKey = "album-title-${album.album}".takeIf { inFlight },
+                        flightHeroTarget = CollectionHeroTarget.Album,
+                        modifier = Modifier
+                            .let { if (inFlight) it else it.animateItem() }
+                    )
+                }
             }
         }
 
@@ -304,53 +307,53 @@ fun HomeScreen(
         }
 
         item(key = "home_row_artists") {
-            HomeRow(
-                title = stringResource(R.string.home_row_favorite_artists),
-                items = artists.take(HomeRowItemCount),
-                onSeeAllClick = onSeeAllArtists,
-                key = { it.name }
-            ) { artist ->
-                val inFlight = isActiveSharedCollection("artist", artist.name)
-                HomeRowCard(
-                    title = artist.name,
-                    imageUrl = artistImages[artist.name]?.imageUrl,
-                    imageIsEmbeddedArt = artistImages[artist.name]?.isEmbeddedArt ?: false,
-                    width = HomeRowCardSmallWidth,
-                    round = true,
-                    onClick = {
-                        val cover = artistImages[artist.name]
-                        onArtistClick(
-                            artist.name,
-                            cover?.imageUrl,
-                            cover?.isEmbeddedArt ?: false
-                        )
-                    },
-                    onLongClick = {
-                        longPressScope.launch {
-                            collectionModalState?.show(
-                                CollectionInfo(
-                                    title = artist.name,
-                                    // Either a Spotify cache file (plain) or an
-                                    // audio file (embedded art): the flag routes
-                                    // the modal header to the right Coil model.
-                                    imageUrl = artistImages[artist.name]?.imageUrl,
-                                    imageIsEmbeddedArt = artistImages[artist.name]?.isEmbeddedArt ?: false,
-                                    kind = CollectionKind.Artist,
-                                    tracks = viewModel.tracksForArtist(artist.name)
-                                )
+            MediaArtKindScope(MediaArtKind.ARTIST) {
+                HomeRow(
+                    title = stringResource(R.string.home_row_favorite_artists),
+                    items = artists.take(HomeRowItemCount),
+                    onSeeAllClick = onSeeAllArtists,
+                    key = { it.name }
+                ) { artist ->
+                    val inFlight = isActiveSharedCollection("artist", artist.name)
+                    HomeRowCard(
+                        title = artist.name,
+                        imageUrl = artistImages[artist.name]?.imageUrl,
+                        imageIsEmbeddedArt = artistImages[artist.name]?.isEmbeddedArt ?: false,
+                        width = HomeRowCardSmallWidth,
+                        round = true,
+                        onClick = {
+                            val cover = artistImages[artist.name]
+                            onArtistClick(
+                                artist.name,
+                                cover?.imageUrl,
+                                cover?.isEmbeddedArt ?: false
                             )
-                        }
-                    },
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    sharedArtKey = "artist-art-${artist.name}".takeIf { inFlight },
-                    sharedTitleKey = "artist-title-${artist.name}".takeIf { inFlight },
-                    flightHeroTarget = CollectionHeroTarget.Artist,
-                    // Artist cards load their portrait under the person icon.
-                    placeholderIcon = Icons.Rounded.Person,
-                    modifier = Modifier
-                        .let { if (inFlight) it else it.animateItem() }
-                )
+                        },
+                        onLongClick = {
+                            longPressScope.launch {
+                                collectionModalState?.show(
+                                    CollectionInfo(
+                                        title = artist.name,
+                                        // Either a Spotify cache file (plain) or an
+                                        // audio file (embedded art): the flag routes
+                                        // the modal header to the right Coil model.
+                                        imageUrl = artistImages[artist.name]?.imageUrl,
+                                        imageIsEmbeddedArt = artistImages[artist.name]?.isEmbeddedArt ?: false,
+                                        kind = CollectionKind.Artist,
+                                        tracks = viewModel.tracksForArtist(artist.name)
+                                    )
+                                )
+                            }
+                        },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        sharedArtKey = "artist-art-${artist.name}".takeIf { inFlight },
+                        sharedTitleKey = "artist-title-${artist.name}".takeIf { inFlight },
+                        flightHeroTarget = CollectionHeroTarget.Artist,
+                        modifier = Modifier
+                            .let { if (inFlight) it else it.animateItem() }
+                    )
+                }
             }
         }
     }

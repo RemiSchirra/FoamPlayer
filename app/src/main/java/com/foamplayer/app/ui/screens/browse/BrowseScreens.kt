@@ -8,11 +8,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Folder
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -38,6 +36,8 @@ import com.foamplayer.app.ui.modals.CollectionInfo
 import com.foamplayer.app.ui.modals.CollectionKind
 import com.foamplayer.app.ui.components.CollectionListItem
 import com.foamplayer.app.ui.components.CollectionListScreen
+import com.foamplayer.app.ui.components.MediaArtKind
+import com.foamplayer.app.ui.components.MediaArtKindScope
 import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.TrackCenterRequest
@@ -60,6 +60,11 @@ import kotlinx.coroutines.withContext
 private fun Modifier.listRowInset(density: MediaDensity): Modifier =
     padding(horizontal = if (density.isGrid) 0.dp else 16.dp)
 
+/**
+ * Album/artist browse screens: each screen scopes its artwork kind once
+ * ([MediaArtKindScope]) so every row's cover/portrait loads under the
+ * collection's own placeholder icon — no per-row parameter threading.
+ */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AlbumsBrowseScreen(
@@ -102,56 +107,56 @@ fun AlbumsBrowseScreen(
         }
     }
 
-    CollectionListScreen(
-        title = "Albums",
-        itemCount = sortedAlbums.size,
-        onBack = onBack,
-        density = density,
-        onDensityChange = onDensityChange,
-        sortOptions = listOf(
-            CollectionSortMode.NAME,
-            CollectionSortMode.ARTIST,
-            CollectionSortMode.RANDOM
-        ),
-        currentSort = sortMode,
-        onSortChange = onSortChange,
-        sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange,
-        searchState = searchState
-    ) {
-        items(sortedAlbums, key = { "browse_album_${it.album}" }) { album ->
-            Box(modifier = Modifier.listRowInset(density)) {
-                CollectionListItem(
-                    title = album.album,
-                    subtitle = album.artist,
-                    imageUrl = album.albumArtPath,
-                    onClick = { onAlbumClick(album) },
-                    active = CollectionId.album(album.album) == activeCollectionId,
-                    density = density,
-                    onLongClick = {
-                        longPressScope.launch {
-                            collectionModalState?.show(
-                                CollectionInfo(
-                                    title = album.album,
-                                    artist = album.artist,
-                                    imageUrl = album.albumArtPath,
-                                    kind = CollectionKind.Album,
-                                    tracks = viewModel.tracksForAlbum(album.album)
+    MediaArtKindScope(MediaArtKind.ALBUM) {
+        CollectionListScreen(
+            title = "Albums",
+            itemCount = sortedAlbums.size,
+            onBack = onBack,
+            density = density,
+            onDensityChange = onDensityChange,
+            sortOptions = listOf(
+                CollectionSortMode.NAME,
+                CollectionSortMode.ARTIST,
+                CollectionSortMode.RANDOM
+            ),
+            currentSort = sortMode,
+            onSortChange = onSortChange,
+            sortInverted = sortInverted,
+            onSortInvertedChange = onSortInvertedChange,
+            searchState = searchState
+        ) {
+            items(sortedAlbums, key = { "browse_album_${it.album}" }) { album ->
+                Box(modifier = Modifier.listRowInset(density)) {
+                    CollectionListItem(
+                        title = album.album,
+                        subtitle = album.artist,
+                        imageUrl = album.albumArtPath,
+                        onClick = { onAlbumClick(album) },
+                        active = CollectionId.album(album.album) == activeCollectionId,
+                        density = density,
+                        onLongClick = {
+                            longPressScope.launch {
+                                collectionModalState?.show(
+                                    CollectionInfo(
+                                        title = album.album,
+                                        artist = album.artist,
+                                        imageUrl = album.albumArtPath,
+                                        kind = CollectionKind.Album,
+                                        tracks = viewModel.tracksForAlbum(album.album)
+                                    )
                                 )
-                            )
-                        }
-                    },
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    // Only the clicked row flies (see LocalActiveSharedCollection).
-                    sharedElementKey = album.album
-                        .takeIf { isActiveSharedCollection("album", album.album) },
-                    immersiveFlightHero = LocalCollectionHeroLayoutLookup
-                        .current(CollectionHeroTarget.Album)
-                        .isImmersive,
-                    // Album rows load their cover under the album disc.
-                    placeholderIcon = Icons.Rounded.Album
-                )
+                            }
+                        },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        // Only the clicked row flies (see LocalActiveSharedCollection).
+                        sharedElementKey = album.album
+                            .takeIf { isActiveSharedCollection("album", album.album) },
+                        immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                            .current(CollectionHeroTarget.Album)
+                            .isImmersive
+                    )
+                }
             }
         }
     }
@@ -189,62 +194,62 @@ fun ArtistsBrowseScreen(
         caseInsensitiveComparator { it }
     }
 
-    CollectionListScreen(
-        title = "Artists",
-        itemCount = sortedArtists.size,
-        onBack = onBack,
-        density = density,
-        onDensityChange = onDensityChange,
-        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
-        currentSort = sortMode,
-        onSortChange = onSortChange,
-        sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange,
-        searchState = searchState
-    ) {
-        items(sortedArtists, key = { "browse_artist_$it" }) { artist ->
-            Box(modifier = Modifier.listRowInset(density)) {
-                CollectionListItem(
-                    title = artist,
-                    subtitle = null,
-                    imageUrl = artistImages[artist]?.imageUrl,
-                    imageIsEmbeddedArt = artistImages[artist]?.isEmbeddedArt ?: false,
-                    onClick = {
-                        artistImages[artist]?.let { cover ->
-                            onArtistClick(artist, cover.imageUrl, cover.isEmbeddedArt)
-                        } ?: onArtistClick(artist, null, false)
-                    },
-                    active = CollectionId.artist(artist) == activeCollectionId,
-                    density = density,
-                    onLongClick = {
-                        longPressScope.launch {
-                            collectionModalState?.show(
-                                CollectionInfo(
-                                    title = artist,
-                                    // Either a Spotify cache file (plain) or an
-                                    // audio file (embedded art): the flag routes
-                                    // the modal header to the right Coil model.
-                                    imageUrl = artistImages[artist]?.imageUrl,
-                                    imageIsEmbeddedArt = artistImages[artist]?.isEmbeddedArt ?: false,
-                                    kind = CollectionKind.Artist,
-                                    tracks = viewModel.tracksForArtist(artist)
+    MediaArtKindScope(MediaArtKind.ARTIST) {
+        CollectionListScreen(
+            title = "Artists",
+            itemCount = sortedArtists.size,
+            onBack = onBack,
+            density = density,
+            onDensityChange = onDensityChange,
+            sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+            currentSort = sortMode,
+            onSortChange = onSortChange,
+            sortInverted = sortInverted,
+            onSortInvertedChange = onSortInvertedChange,
+            searchState = searchState
+        ) {
+            items(sortedArtists, key = { "browse_artist_$it" }) { artist ->
+                Box(modifier = Modifier.listRowInset(density)) {
+                    CollectionListItem(
+                        title = artist,
+                        subtitle = null,
+                        imageUrl = artistImages[artist]?.imageUrl,
+                        imageIsEmbeddedArt = artistImages[artist]?.isEmbeddedArt ?: false,
+                        onClick = {
+                            artistImages[artist]?.let { cover ->
+                                onArtistClick(artist, cover.imageUrl, cover.isEmbeddedArt)
+                            } ?: onArtistClick(artist, null, false)
+                        },
+                        active = CollectionId.artist(artist) == activeCollectionId,
+                        density = density,
+                        onLongClick = {
+                            longPressScope.launch {
+                                collectionModalState?.show(
+                                    CollectionInfo(
+                                        title = artist,
+                                        // Either a Spotify cache file (plain) or an
+                                        // audio file (embedded art): the flag routes
+                                        // the modal header to the right Coil model.
+                                        imageUrl = artistImages[artist]?.imageUrl,
+                                        imageIsEmbeddedArt = artistImages[artist]?.isEmbeddedArt ?: false,
+                                        kind = CollectionKind.Artist,
+                                        tracks = viewModel.tracksForArtist(artist)
+                                    )
                                 )
-                            )
-                        }
-                    },
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    // Only the clicked row flies (see LocalActiveSharedCollection).
-                    sharedElementKey = artist.takeIf { isActiveSharedCollection("artist", artist) },
-                    sharedElementPrefix = "artist",
-                    immersiveFlightHero = LocalCollectionHeroLayoutLookup
-                        .current(CollectionHeroTarget.Artist)
-                        .isImmersive,
-                    // Artist rows load their portrait under the person icon.
-                    placeholderIcon = Icons.Rounded.Person,
-                    // Artist rows render fully round on every screen.
-                    fullyRoundedArtwork = true
-                )
+                            }
+                        },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        // Only the clicked row flies (see LocalActiveSharedCollection).
+                        sharedElementKey = artist.takeIf { isActiveSharedCollection("artist", artist) },
+                        sharedElementPrefix = "artist",
+                        immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                            .current(CollectionHeroTarget.Artist)
+                            .isImmersive,
+                        // Artist rows render fully round on every screen.
+                        fullyRoundedArtwork = true
+                    )
+                }
             }
         }
     }
@@ -745,63 +750,61 @@ fun CollectionArtistsScreen(
         caseInsensitiveComparator { it.name }
     }
 
-    CollectionListScreen(
-        title = collectionMembersTitle(kind, key),
-        subtitle = "Artists",
-        itemCount = sortedRows.size,
-        onBack = onBack,
-        density = density,
-        onDensityChange = onDensityChange,
-        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
-        currentSort = sortMode,
-        onSortChange = onSortChange,
-        sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange,
-        searchState = searchState
-    ) {
-        items(sortedRows, key = { "artists_in_${kind}_${it.name}" }) { row ->
-            Box(modifier = Modifier.listRowInset(density)) {
-                CollectionListItem(
-                    title = row.name,
-                    subtitle = if (row.albumCount == 1) "1 album" else "${row.albumCount} albums",
-                    imageUrl = artistImages[row.name]?.imageUrl,
-                    imageIsEmbeddedArt = artistImages[row.name]?.isEmbeddedArt ?: false,
-                    onClick = {
-                        val cover = artistImages[row.name]
-                        onArtistClick(row.name, cover?.imageUrl, cover?.isEmbeddedArt ?: false)
-                    },
-                    active = CollectionId.artist(row.name) == activeCollectionId,
-                    density = density,
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    // Only the clicked row flies (see LocalActiveSharedCollection).
-                    sharedElementKey = row.name
-                        .takeIf { isActiveSharedCollection("artist", row.name) },
-                    sharedElementPrefix = "artist",
-                    immersiveFlightHero = LocalCollectionHeroLayoutLookup
-                        .current(CollectionHeroTarget.Artist)
-                        .isImmersive,
-                    // Artist rows load their portrait under the person icon.
-                    placeholderIcon = Icons.Rounded.Person,
-                    // Artist rows render fully round on every screen.
-                    fullyRoundedArtwork = true
-                )
+    MediaArtKindScope(MediaArtKind.ARTIST) {
+        CollectionListScreen(
+            title = collectionMembersTitle(kind, key),
+            subtitle = "Artists",
+            itemCount = sortedRows.size,
+            onBack = onBack,
+            density = density,
+            onDensityChange = onDensityChange,
+            sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+            currentSort = sortMode,
+            onSortChange = onSortChange,
+            sortInverted = sortInverted,
+            onSortInvertedChange = onSortInvertedChange,
+            searchState = searchState
+        ) {
+            items(sortedRows, key = { "artists_in_${kind}_${it.name}" }) { row ->
+                Box(modifier = Modifier.listRowInset(density)) {
+                    CollectionListItem(
+                        title = row.name,
+                        subtitle = if (row.albumCount == 1) "1 album" else "${row.albumCount} albums",
+                        imageUrl = artistImages[row.name]?.imageUrl,
+                        imageIsEmbeddedArt = artistImages[row.name]?.isEmbeddedArt ?: false,
+                        onClick = {
+                            val cover = artistImages[row.name]
+                            onArtistClick(row.name, cover?.imageUrl, cover?.isEmbeddedArt ?: false)
+                        },
+                        active = CollectionId.artist(row.name) == activeCollectionId,
+                        density = density,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        // Only the clicked row flies (see LocalActiveSharedCollection).
+                        sharedElementKey = row.name
+                            .takeIf { isActiveSharedCollection("artist", row.name) },
+                        sharedElementPrefix = "artist",
+                        immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                            .current(CollectionHeroTarget.Artist)
+                            .isImmersive,
+                        // Artist rows render fully round on every screen.
+                        fullyRoundedArtwork = true
+                    )
+                }
             }
         }
 
         if (artistRows.isEmpty()) {
-            item(key = "artists_in_empty") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    BasicText(
-                        text = "No artists found",
-                        style = FoamTheme.typography.body
-                    )
-                }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                BasicText(
+                    text = "No artists found",
+                    style = FoamTheme.typography.body
+                )
             }
         }
     }
@@ -854,52 +857,50 @@ fun CollectionAlbumsScreen(
         }
     }
 
-    CollectionListScreen(
-        title = collectionMembersTitle(kind, key),
-        subtitle = "Albums",
-        itemCount = sortedRows.size,
-        onBack = onBack,
-        density = density,
-        onDensityChange = onDensityChange,
-        sortOptions = listOf(
-            CollectionSortMode.NAME,
-            CollectionSortMode.ARTIST,
-            CollectionSortMode.RANDOM
-        ),
-        currentSort = sortMode,
-        onSortChange = onSortChange,
-        sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange,
-        searchState = searchState
-    ) {
-        items(sortedRows, key = { "albums_in_${kind}_${it.album}" }) { entry ->
-            Box(modifier = Modifier.listRowInset(density)) {
-                CollectionListItem(
-                    title = entry.album,
-                    subtitle = entry.artist,
-                    imageUrl = entry.albumArtPath,
-                    onClick = { onAlbumClick(entry) },
-                    active = CollectionId.album(entry.album) == activeCollectionId,
-                    density = density,
-                    // Album rows load their cover under the album disc.
-                    placeholderIcon = Icons.Rounded.Album
-                )
+    MediaArtKindScope(MediaArtKind.ALBUM) {
+        CollectionListScreen(
+            title = collectionMembersTitle(kind, key),
+            subtitle = "Albums",
+            itemCount = sortedRows.size,
+            onBack = onBack,
+            density = density,
+            onDensityChange = onDensityChange,
+            sortOptions = listOf(
+                CollectionSortMode.NAME,
+                CollectionSortMode.ARTIST,
+                CollectionSortMode.RANDOM
+            ),
+            currentSort = sortMode,
+            onSortChange = onSortChange,
+            sortInverted = sortInverted,
+            onSortInvertedChange = onSortInvertedChange,
+            searchState = searchState
+        ) {
+            items(sortedRows, key = { "albums_in_${kind}_${it.album}" }) { entry ->
+                Box(modifier = Modifier.listRowInset(density)) {
+                    CollectionListItem(
+                        title = entry.album,
+                        subtitle = entry.artist,
+                        imageUrl = entry.albumArtPath,
+                        onClick = { onAlbumClick(entry) },
+                        active = CollectionId.album(entry.album) == activeCollectionId,
+                        density = density
+                    )
+                }
             }
         }
 
         if (albumRows.isEmpty()) {
-            item(key = "albums_in_empty") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    BasicText(
-                        text = "No albums found",
-                        style = FoamTheme.typography.body
-                    )
-                }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                BasicText(
+                    text = "No albums found",
+                    style = FoamTheme.typography.body
+                )
             }
         }
     }

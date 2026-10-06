@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.Icon
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
@@ -55,7 +54,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -196,9 +194,7 @@ fun TrackListScreen(
     /** Edit-mode reorder persistence: called with the final displayed order's track ids when a drag settles. */
     onPersistTrackOrder: ((List<Long>) -> Unit)? = null,
     /** Whether the long-content fast scrollbar rides the container's end edge. */
-    showScrollbar: Boolean = true,
-    /** Icon shown in the hero's artwork while its image loads (the album disc on album pages). */
-    heroPlaceholderIcon: ImageVector = Icons.Rounded.MusicNote
+    showScrollbar: Boolean = true
 ) {
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
@@ -445,9 +441,6 @@ fun TrackListScreen(
                 animatedVisibilityScope = animatedVisibilityScope,
                 sharedElementKey = sharedElementKey,
                 sharedElementPrefix = sharedElementPrefix,
-                // The host's collection-kind placeholder (the album disc on
-                // album pages) rides along so the loading look matches.
-                placeholderIcon = heroPlaceholderIcon,
                 modifier = Modifier.align(Alignment.TopStart)
             )
         }
@@ -485,7 +478,6 @@ fun TrackListScreen(
                         onArtistClick = onArtistClick,
                         searchState = searchState,
                         accentColor = heroAccentColor,
-                        placeholderIcon = heroPlaceholderIcon,
                         onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
                         scrollOffsetPx = heroScrollOffsetPx,
                         transitionAlpha = transitionAlpha,
@@ -681,7 +673,6 @@ fun TrackListScreen(
                         onArtistClick = onArtistClick,
                         searchState = searchState,
                         accentColor = heroAccentColor,
-                        placeholderIcon = heroPlaceholderIcon,
                         onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
                         scrollOffsetPx = heroScrollOffsetPx,
                         transitionAlpha = transitionAlpha,
@@ -917,7 +908,6 @@ private fun TrackListHero(
     onArtistClick: ((String) -> Unit)?,
     searchState: CollectionSearchState?,
     accentColor: Color,
-    placeholderIcon: ImageVector,
     onVisibleHeightPx: (Int) -> Unit,
     scrollOffsetPx: () -> Int,
     transitionAlpha: () -> Float,
@@ -963,8 +953,7 @@ private fun TrackListHero(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         sharedElementKey = sharedElementKey,
-        sharedElementPrefix = sharedElementPrefix,
-        placeholderIcon = placeholderIcon
+        sharedElementPrefix = sharedElementPrefix
     )
 }
 

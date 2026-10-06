@@ -90,6 +90,8 @@ import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
 import com.foamplayer.app.ui.components.FoamScrollbar
+import com.foamplayer.app.ui.components.MediaArtKind
+import com.foamplayer.app.ui.components.MediaArtKindScope
 import com.foamplayer.app.ui.modals.CollectionInfo
 import com.foamplayer.app.ui.modals.CollectionKind
 import com.foamplayer.app.ui.components.ListRowArtSize
@@ -750,8 +752,8 @@ private fun SearchFilterChip(
  *
  * The portrait loads either a plain file (Spotify picture) or an audio file's
  * embedded art ([imageIsEmbeddedArt]) — the automatic first-track fallback.
- * While the portrait loads, the person icon shows through instead of the
- * generic music note.
+ * The row scopes itself to [MediaArtKind.ARTIST], so its portrait loads under
+ * the person placeholder without callers passing anything.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -805,26 +807,27 @@ fun ArtistSearchResultItem(
             contentAlignment = Alignment.Center
         ) {
             if (imageUrl != null) {
-                val context = LocalContext.current
-                val artRequest = remember(imageUrl, imageIsEmbeddedArt) {
-                    ImageRequest.Builder(context)
-                        .data(
-                            if (imageIsEmbeddedArt) {
-                                EmbeddedAlbumArt(imageUrl.toUri())
-                            } else {
-                                imageUrl
-                            }
-                        )
-                        .size(AlbumArtRequestSize)
-                        .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
-                        .build()
+                MediaArtKindScope(MediaArtKind.ARTIST) {
+                    val context = LocalContext.current
+                    val artRequest = remember(imageUrl, imageIsEmbeddedArt) {
+                        ImageRequest.Builder(context)
+                            .data(
+                                if (imageIsEmbeddedArt) {
+                                    EmbeddedAlbumArt(imageUrl.toUri())
+                                } else {
+                                    imageUrl
+                                }
+                            )
+                            .size(AlbumArtRequestSize)
+                            .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
+                            .build()
+                    }
+                    AlbumArtImage(
+                        model = artRequest,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
-                AlbumArtImage(
-                    model = artRequest,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    placeholderIcon = Icons.Rounded.Person
-                )
             } else {
                 BasicText(
                     text = artist.take(1).uppercase(),
@@ -863,8 +866,8 @@ fun ArtistSearchResultItem(
 /**
  * One album result row: square art (or initial) plus album and artist lines.
  * Joins the shared-element flight into the album detail hero when clicked.
- * While the cover loads, the album disc shows through instead of the generic
- * music note.
+ * The row scopes itself to [MediaArtKind.ALBUM], so its cover loads under the
+ * album disc placeholder without callers passing anything.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -915,20 +918,21 @@ fun AlbumSearchResultItem(
             contentAlignment = Alignment.Center
         ) {
             if (album.albumArtPath != null) {
-                val context = LocalContext.current
-                val albumArtRequest = remember(album.albumArtPath) {
-                    ImageRequest.Builder(context)
-                        .data(EmbeddedAlbumArt(album.albumArtPath.toUri()))
-                        .size(AlbumArtRequestSize)
-                        .memoryCacheKey(albumArtMemoryCacheKey(album.albumArtPath))
-                        .build()
+                MediaArtKindScope(MediaArtKind.ALBUM) {
+                    val context = LocalContext.current
+                    val albumArtRequest = remember(album.albumArtPath) {
+                        ImageRequest.Builder(context)
+                            .data(EmbeddedAlbumArt(album.albumArtPath.toUri()))
+                            .size(AlbumArtRequestSize)
+                            .memoryCacheKey(albumArtMemoryCacheKey(album.albumArtPath))
+                            .build()
+                    }
+                    AlbumArtImage(
+                        model = albumArtRequest,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
-                AlbumArtImage(
-                    model = albumArtRequest,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    placeholderIcon = Icons.Rounded.Album
-                )
             } else {
                 BasicText(
                     text = album.album.take(1).uppercase(),

@@ -8,14 +8,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -33,12 +37,61 @@ import kotlinx.coroutines.launch
 private const val AlbumArtFadeInDurationMs = 200
 
 /**
+ * What an artwork surface depicts. Drives the placeholder icon shown while
+ * the image loads: the music note for generic/track art, the album disc for
+ * albums, a person for artists. Adding a collection kind means adding one
+ * enum value and one mapping arm -- no component or call-site churn.
+ */
+enum class MediaArtKind {
+    /** Generic or track artwork: the default music note. */
+    TRACK,
+
+    /** Album covers: the disc. */
+    ALBUM,
+
+    /** Artist portraits: the person. */
+    ARTIST
+}
+
+/** Placeholder icon shown while artwork of [kind] loads. */
+fun mediaArtPlaceholderIcon(kind: MediaArtKind): ImageVector = when (kind) {
+    MediaArtKind.TRACK -> Icons.Rounded.MusicNote
+    MediaArtKind.ALBUM -> Icons.Rounded.Album
+    MediaArtKind.ARTIST -> Icons.Rounded.Person
+}
+
+/**
+ * Placeholder kind inherited by every [AlbumArtImage] below this point in the
+ * composition; defaults to the music note. Screens and sections set it once
+ * through [MediaArtKindScope] instead of threading placeholder icons through
+ * every component between them and the image.
+ */
+val LocalMediaArtKind = staticCompositionLocalOf { MediaArtKind.TRACK }
+
+/**
+ * Overrides the placeholder kind of every [AlbumArtImage] composed inside
+ * [content] (inner scopes override outer ones). Screens hosting one collection
+ * kind wrap themselves once -- an artist page scopes itself to
+ * [MediaArtKind.ARTIST] and re-scopes only its album grid to
+ * [MediaArtKind.ALBUM] -- while mixed surfaces (search results, home cards)
+ * wrap each self-describing item.
+ */
+@Composable
+fun MediaArtKindScope(
+    kind: MediaArtKind,
+    content: @Composable () -> Unit
+) {
+    CompositionLocalProvider(LocalMediaArtKind provides kind, content = content)
+}
+
+/**
  * Album artwork with a placeholder icon and a fade-in for real loads.
  *
- * While the artwork loads, [placeholderIcon] shows through: the music note by
- * default, or the collection's own icon for surfaces whose kind is known --
- * the album disc for albums, a person for artists -- so the placeholder reads
- * as the collection rather than a generic track.
+ * While the artwork loads, the placeholder resolved from [placeholderKind]
+ * (or the surrounding [LocalMediaArtKind] scope when null) shows through: the
+ * music note by default, or the collection's own icon on surfaces whose kind
+ * is known -- the album disc for albums, a person for artists -- so the
+ * placeholder reads as the collection rather than a generic track.
  *
  * Coil emits [AsyncImagePainter.State.Loading] for EVERY request -- memory-cache
  * hits included -- before delivering the result (RealImageLoader calls the
@@ -74,7 +127,7 @@ fun AlbumArtImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     placeholderSize: Dp = 20.dp,
-    placeholderIcon: ImageVector = Icons.Rounded.MusicNote
+    placeholderKind: MediaArtKind? = null
 ) {
     // Parked at 1f; only a running fade writes frames into it.
     val alphaState = remember(model) { mutableFloatStateOf(1f) }
@@ -84,6 +137,8 @@ fun AlbumArtImage(
     // draw-only, then drop the layer entirely once the art rests at full alpha.
     var fadeActive by remember(model) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    // Explicit kinds win; otherwise the surrounding MediaArtKindScope decides.
+    val placeholderIcon = mediaArtPlaceholderIcon(placeholderKind ?: LocalMediaArtKind.current)
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         if (showPlaceholder) {

@@ -29,8 +29,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.ripple
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -164,10 +162,9 @@ fun <T> HomeRow(
  * image URIs. [round] clips the artwork into a full circle (artists) instead
  * of the app's rounded-square album shape. [width] sizes the card: large for
  * albums/playlists, small for tracks and artists. [onLongClick] opens the
- * item's actions modal (track / collection / playlist).
- * [placeholderIcon] shows while the cover loads: the music note by default,
- * or the row's own icon on album/artist cards (the album disc, a person) so
- * the loading look matches the collection.
+ * item's actions modal (track / collection / playlist). The loading placeholder
+ * resolves from the surrounding [LocalMediaArtKind] scope, so each Home row
+ * scopes its own kind once.
  *
  * When [sharedArtKey]/[sharedTitleKey] and both transition scopes are given,
  * the artwork and title join the app's shared-element transitions:
@@ -192,7 +189,6 @@ fun HomeRowCard(
     width: Dp = HomeRowCardWidth,
     imageIsEmbeddedArt: Boolean = true,
     icon: ImageVector? = null,
-    placeholderIcon: ImageVector = Icons.Rounded.MusicNote,
     round: Boolean = false,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -294,8 +290,7 @@ fun HomeRowCard(
                     model = artRequest,
                     contentDescription = title,
                     modifier = Modifier.fillMaxSize(),
-                    placeholderSize = 32.dp,
-                    placeholderIcon = placeholderIcon
+                    placeholderSize = 32.dp
                 )
             } else if (icon != null) {
                 Icon(

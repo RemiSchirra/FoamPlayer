@@ -25,8 +25,6 @@ import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
-import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -64,6 +62,9 @@ import com.foamplayer.app.ui.components.CollectionSearchImmersiveTopClearance
 import com.foamplayer.app.ui.components.CollectionSearchState
 import com.foamplayer.app.ui.components.CollectionTopBarRowHeight
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
+import com.foamplayer.app.ui.components.LocalMediaArtKind
+import com.foamplayer.app.ui.components.MediaArtKind
+import com.foamplayer.app.ui.components.MediaArtKindScope
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.components.collectionHeroOverlayLayer
 import com.foamplayer.app.ui.components.collectionListTopFade
@@ -237,142 +238,144 @@ fun ArtistDetailScreen(
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (heroLayout.isImmersive) {
-            // Artwork layer only: bleeds under the status bar behind the grid.
-            // The overlay block (title/play pill) is the grid's own
-            // [CollectionHeroImmersiveHeader] item, so it fades with this
-            // screen's transitions exactly like the compact/normal heroes and
-            // takes taps directly.
-            CollectionHero(
-                layout = heroLayout,
-                title = artistName,
-                subtitle = null,
-                statsText = "${tracks.size} Tracks",
-                imageUrl = heroImageUrl,
-                imageIsEmbeddedArt = heroImageIsEmbeddedArt,
-                onPlayAllClick = null,
-                accentColor = accentColor,
-                transitionAlpha = transitionAlpha,
-                scrollOffsetPx = heroScrollOffsetPx,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                sharedElementKey = artistName,
-                sharedElementPrefix = "artist",
-                // The artist page loads its portrait under the person icon,
-                // not the generic music note.
-                placeholderIcon = Icons.Rounded.Person,
-                modifier = Modifier.align(Alignment.TopStart),
-                // The artist image is fully round at its sources; the immersive
-                // hero morphs that circle to its own square (radius 0) look
-                // during the flight.
-                fullyRoundedArtwork = true
-            )
-        }
-
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(ArtistAlbumGridColumns),
-            modifier = Modifier
-                .fillMaxSize()
-                .collectionListTopFade()
-                .then(gridTopObserver),
-            state = gridState,
-            contentPadding = PaddingValues(
-                start = 10.dp,
-                top = if (heroLayout.isImmersive) 0.dp else CollectionTopBarRowHeight,
-                end = 10.dp,
-                bottom = collectionSearchOpenBottomPadding(searchState)
-            )
-        ) {
-            item(key = "artist_header", span = { GridItemSpan(maxLineSpan) }) {
-                ArtistHero(
-                    heroLayout = heroLayout,
+        // The whole page depicts the artist: the hero portrait (and any artwork
+        // reusing it) loads under the person placeholder. The albums grid
+        // re-scopes itself below.
+        MediaArtKindScope(MediaArtKind.ARTIST) {
+            if (heroLayout.isImmersive) {
+                // Artwork layer only: bleeds under the status bar behind the grid.
+                // The overlay block (title/play pill) is the grid's own
+                // [CollectionHeroImmersiveHeader] item, so it fades with this
+                // screen's transitions exactly like the compact/normal heroes and
+                // takes taps directly.
+                CollectionHero(
+                    layout = heroLayout,
                     title = artistName,
+                    subtitle = null,
+                    statsText = "${tracks.size} Tracks",
                     imageUrl = heroImageUrl,
                     imageIsEmbeddedArt = heroImageIsEmbeddedArt,
-                    trackCount = tracks.size,
+                    onPlayAllClick = null,
                     accentColor = accentColor,
-                    onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
-                    onShuffleAllClick = {
-                        if (tracks.isNotEmpty()) onTrackClick(tracks.shuffled(), 0)
-                    },
-                    searchState = searchState,
-                    onVisibleHeightPx = { heroVisibleHeightPx = it },
-                    scrollOffsetPx = heroScrollOffsetPx,
                     transitionAlpha = transitionAlpha,
+                    scrollOffsetPx = heroScrollOffsetPx,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
-                    sharedElementKey = artistName
+                    sharedElementKey = artistName,
+                    sharedElementPrefix = "artist",
+                    modifier = Modifier.align(Alignment.TopStart),
+                    // The artist image is fully round at its sources; the immersive
+                    // hero morphs that circle to its own square (radius 0) look
+                    // during the flight.
+                    fullyRoundedArtwork = true
                 )
             }
 
-            if (shownTopTracks.isNotEmpty()) {
-                item(key = "artist_top_tracks_header", span = { GridItemSpan(maxLineSpan) }) {
-                    ArtistSectionHeader(
-                        title = if (searchActive) "Tracks" else "Top Tracks",
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(ArtistAlbumGridColumns),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .collectionListTopFade()
+                    .then(gridTopObserver),
+                state = gridState,
+                contentPadding = PaddingValues(
+                    start = 10.dp,
+                    top = if (heroLayout.isImmersive) 0.dp else CollectionTopBarRowHeight,
+                    end = 10.dp,
+                    bottom = collectionSearchOpenBottomPadding(searchState)
+                )
+            ) {
+                item(key = "artist_header", span = { GridItemSpan(maxLineSpan) }) {
+                    ArtistHero(
+                        heroLayout = heroLayout,
+                        title = artistName,
+                        imageUrl = heroImageUrl,
+                        imageIsEmbeddedArt = heroImageIsEmbeddedArt,
+                        trackCount = tracks.size,
                         accentColor = accentColor,
-                        showArrow = !searchActive,
-                        onClick = if (searchActive) null else onAllSongsClick
-                    )
-                }
-
-                gridItems(
-                    shownTopTracks,
-                    key = { "artist_top_${it.id}" },
-                    span = { GridItemSpan(maxLineSpan) }
-                ) { track ->
-                    TrackListItem(
-                        track = track,
-                        onClick = {
-                            // The clicked track settles the search session: the bar
-                            // closes (query cleared, keyboard hidden) as playback
-                            // starts, while the queue still hands over the search
-                            // context (the artist's full track list, indexed from it).
-                            searchState.close()
-                            val index = tracks.indexOfFirst { it.id == track.id }
-                            if (index >= 0) onTrackClick(tracks, index)
+                        onPlayAllClick = { if (tracks.isNotEmpty()) onTrackClick(tracks, 0) },
+                        onShuffleAllClick = {
+                            if (tracks.isNotEmpty()) onTrackClick(tracks.shuffled(), 0)
                         },
-                        active = track.id == activeTrackId,
-                        density = MediaDensity.ROW_NORMAL
-                    )
-                }
-            }
-
-            if (shownAlbums.isNotEmpty()) {
-                item(key = "artist_albums_header", span = { GridItemSpan(maxLineSpan) }) {
-                    ArtistSectionHeader(
-                        title = "Albums",
-                        accentColor = accentColor,
-                        showArrow = false
-                    )
-                }
-
-                gridItems(shownAlbums, key = { "artist_album_${it.album}" }) { album ->
-                    CollectionListItem(
-                        title = album.album,
-                        subtitle = album.artist,
-                        imageUrl = album.albumArtPath,
-                        onClick = { onAlbumClick(album) },
-                        active = CollectionId.album(album.album) == activeCollectionId,
-                        density = MediaDensity.GRID_NORMAL,
+                        searchState = searchState,
+                        onVisibleHeightPx = { heroVisibleHeightPx = it },
+                        scrollOffsetPx = heroScrollOffsetPx,
+                        transitionAlpha = transitionAlpha,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
-                        // Only an album the user taps flies (into the album
-                        // detail hero): gating on the nav root's tag keeps the
-                        // albums from pairing with their twins on the source
-                        // screen while THIS page opens.
-                        sharedElementKey = album.album
-                            .takeIf { isActiveSharedCollection("album", album.album) },
-                        immersiveFlightHero = LocalCollectionHeroLayoutLookup
-                            .current(CollectionHeroTarget.Album)
-                            .isImmersive,
-                        // Album rows load their cover under the album disc.
-                        placeholderIcon = Icons.Rounded.Album
+                        sharedElementKey = artistName
                     )
                 }
-            }
 
-            item(key = "artist_albums_spacer", span = { GridItemSpan(maxLineSpan) }) {
-                Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
+                if (shownTopTracks.isNotEmpty()) {
+                    item(key = "artist_top_tracks_header", span = { GridItemSpan(maxLineSpan) }) {
+                        ArtistSectionHeader(
+                            title = if (searchActive) "Tracks" else "Top Tracks",
+                            accentColor = accentColor,
+                            showArrow = !searchActive,
+                            onClick = if (searchActive) null else onAllSongsClick
+                        )
+                    }
+
+                    gridItems(
+                        shownTopTracks,
+                        key = { "artist_top_${it.id}" },
+                        span = { GridItemSpan(maxLineSpan) }
+                    ) { track ->
+                        TrackListItem(
+                            track = track,
+                            onClick = {
+                                // The clicked track settles the search session: the bar
+                                // closes (query cleared, keyboard hidden) as playback
+                                // starts, while the queue still hands over the search
+                                // context (the artist's full track list, indexed from it).
+                                searchState.close()
+                                val index = tracks.indexOfFirst { it.id == track.id }
+                                if (index >= 0) onTrackClick(tracks, index)
+                            },
+                            active = track.id == activeTrackId,
+                            density = MediaDensity.ROW_NORMAL
+                        )
+                    }
+                }
+
+                if (shownAlbums.isNotEmpty()) {
+                    item(key = "artist_albums_header", span = { GridItemSpan(maxLineSpan) }) {
+                        ArtistSectionHeader(
+                            title = "Albums",
+                            accentColor = accentColor,
+                            showArrow = false
+                        )
+                    }
+
+                    gridItems(shownAlbums, key = { "artist_album_${it.album}" }) { album ->
+                        MediaArtKindScope(MediaArtKind.ALBUM) {
+                            CollectionListItem(
+                                title = album.album,
+                                subtitle = album.artist,
+                                imageUrl = album.albumArtPath,
+                                onClick = { onAlbumClick(album) },
+                                active = CollectionId.album(album.album) == activeCollectionId,
+                                density = MediaDensity.GRID_NORMAL,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                // Only an album the user taps flies (into the album
+                                // detail hero): gating on the nav root's tag keeps the
+                                // albums from pairing with their twins on the source
+                                // screen while THIS page opens.
+                                sharedElementKey = album.album
+                                    .takeIf { isActiveSharedCollection("album", album.album) },
+                                immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                                    .current(CollectionHeroTarget.Album)
+                                    .isImmersive
+                            )
+                        }
+                    }
+                }
+
+                item(key = "artist_albums_spacer", span = { GridItemSpan(maxLineSpan) }) {
+                    Spacer(modifier = Modifier.height(LocalBottomBarClearance.current))
+                }
             }
         }
 
@@ -496,9 +499,6 @@ private fun ArtistHero(
         animatedVisibilityScope = animatedVisibilityScope,
         sharedElementKey = sharedElementKey,
         sharedElementPrefix = "artist",
-        // The artist page loads its portrait under the person icon, not the
-        // generic music note.
-        placeholderIcon = Icons.Rounded.Person,
         // Non-immersive artist heroes rest on the same full circle as the
         // source rows; the flight keeps circle -> circle (no radius pop).
         fullyRoundedArtwork = true

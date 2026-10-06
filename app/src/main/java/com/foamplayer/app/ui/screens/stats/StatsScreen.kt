@@ -29,7 +29,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -69,6 +68,8 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.scanner.ArtistCover
 import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.MediaArtKind
+import com.foamplayer.app.ui.components.MediaArtKindScope
 import com.foamplayer.app.ui.components.ScreenTitle
 import com.foamplayer.app.ui.modals.CollectionInfo
 import com.foamplayer.app.ui.modals.CollectionKind
@@ -625,8 +626,9 @@ internal fun TopTrackRow(
 /**
  * Ranked artist row: picture (or monogram disc), name, listening time. Opens
  * the artist page. The picture is either a Spotify cache file or the artist's
- * first track with embedded art ([cover] says which). While the portrait
- * loads, the person icon shows through instead of the generic music note.
+ * first track with embedded art ([cover] says which). The row scopes its
+ * artwork to [MediaArtKind.ARTIST], so the portrait loads under the person
+ * placeholder.
  */
 @Composable
 internal fun TopArtistRow(
@@ -656,13 +658,14 @@ internal fun TopArtistRow(
                         .size(AlbumArtRequestSize)
                         .build()
                 }
-                AlbumArtImage(
-                    model = artRequest,
-                    contentDescription = artist.name,
-                    modifier = Modifier.fillMaxSize(),
-                    placeholderSize = 20.dp,
-                    placeholderIcon = Icons.Rounded.Person
-                )
+                MediaArtKindScope(MediaArtKind.ARTIST) {
+                    AlbumArtImage(
+                        model = artRequest,
+                        contentDescription = artist.name,
+                        modifier = Modifier.fillMaxSize(),
+                        placeholderSize = 20.dp
+                    )
+                }
             } else {
                 BasicText(
                     text = artist.name.take(1).uppercase(),
@@ -681,8 +684,8 @@ internal fun TopArtistRow(
 
 /**
  * Ranked album row: artwork, album/artist, play count. Opens the album page.
- * While the cover loads, the album disc shows through instead of the generic
- * music note.
+ * The row scopes its artwork to [MediaArtKind.ALBUM], so the cover loads
+ * under the album disc placeholder.
  */
 @Composable
 internal fun TopAlbumRow(
@@ -699,13 +702,14 @@ internal fun TopAlbumRow(
         artworkContent = {
             val model = albumArtModel(entry.albumArtPath)
             if (model != null) {
-                AlbumArtImage(
-                    model = model,
-                    contentDescription = entry.album,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    placeholderIcon = Icons.Rounded.Album
-                )
+                MediaArtKindScope(MediaArtKind.ALBUM) {
+                    AlbumArtImage(
+                        model = model,
+                        contentDescription = entry.album,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
             } else {
                 BasicText(
                     text = entry.album.take(1).uppercase(),

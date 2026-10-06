@@ -48,7 +48,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
 import androidx.compose.material.ripple
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -625,7 +624,6 @@ fun CollectionHero(
     imageIsEmbeddedArt: Boolean = true,
     fullyRoundedArtwork: Boolean = false,
     icon: ImageVector? = null,
-    placeholderIcon: ImageVector = Icons.Rounded.MusicNote,
     searchState: CollectionSearchState? = null,
     onShuffleAllClick: (() -> Unit)? = null,
     /** Tap on the subtitle line; receives the subtitle text (null = not tappable). */
@@ -647,7 +645,6 @@ fun CollectionHero(
             imageIsEmbeddedArt = imageIsEmbeddedArt,
             fullyRoundedArtwork = fullyRoundedArtwork,
             icon = icon,
-            placeholderIcon = placeholderIcon,
             onPlayAllClick = onPlayAllClick,
             onShuffleAllClick = onShuffleAllClick,
             onSubtitleClick = onSubtitleClick,
@@ -667,7 +664,6 @@ fun CollectionHero(
             imageIsEmbeddedArt = imageIsEmbeddedArt,
             fullyRoundedArtwork = fullyRoundedArtwork,
             icon = icon,
-            placeholderIcon = placeholderIcon,
             onPlayAllClick = onPlayAllClick,
             onShuffleAllClick = onShuffleAllClick,
             onSubtitleClick = onSubtitleClick,
@@ -687,7 +683,6 @@ fun CollectionHero(
                 imageIsEmbeddedArt = imageIsEmbeddedArt,
                 fullyRoundedArtwork = fullyRoundedArtwork,
                 icon = icon,
-                placeholderIcon = placeholderIcon,
                 accentColor = accentColor,
                 transitionAlpha = transitionAlpha,
                 scrollOffsetPx = scrollOffsetPx,
@@ -719,7 +714,6 @@ private fun CollectionHeroCompact(
     imageIsEmbeddedArt: Boolean,
     fullyRoundedArtwork: Boolean,
     icon: ImageVector?,
-    placeholderIcon: ImageVector,
     onPlayAllClick: (() -> Unit)?,
     onShuffleAllClick: (() -> Unit)?,
     onSubtitleClick: ((String) -> Unit)?,
@@ -756,8 +750,7 @@ private fun CollectionHeroCompact(
                     title = title,
                     imageUrl = imageUrl,
                     imageIsEmbeddedArt = imageIsEmbeddedArt,
-                    icon = icon,
-                    placeholderIcon = placeholderIcon
+                    icon = icon
                 )
             }
 
@@ -836,7 +829,6 @@ private fun CollectionHeroNormal(
     imageIsEmbeddedArt: Boolean,
     fullyRoundedArtwork: Boolean,
     icon: ImageVector?,
-    placeholderIcon: ImageVector,
     onPlayAllClick: (() -> Unit)?,
     onShuffleAllClick: (() -> Unit)?,
     onSubtitleClick: ((String) -> Unit)?,
@@ -870,8 +862,7 @@ private fun CollectionHeroNormal(
                 title = title,
                 imageUrl = imageUrl,
                 imageIsEmbeddedArt = imageIsEmbeddedArt,
-                icon = icon,
-                placeholderIcon = placeholderIcon
+                icon = icon
             )
         }
 
@@ -938,7 +929,6 @@ private fun CollectionHeroImmersiveArtwork(
     imageIsEmbeddedArt: Boolean,
     fullyRoundedArtwork: Boolean,
     icon: ImageVector?,
-    placeholderIcon: ImageVector,
     accentColor: Color,
     transitionAlpha: (() -> Float)?,
     scrollOffsetPx: (() -> Int)?,
@@ -1020,8 +1010,7 @@ private fun CollectionHeroImmersiveArtwork(
                 title = title,
                 imageUrl = imageUrl,
                 imageIsEmbeddedArt = imageIsEmbeddedArt,
-                icon = icon,
-                placeholderIcon = placeholderIcon
+                icon = icon
             )
         }
 
@@ -1158,8 +1147,9 @@ private fun Modifier.reportHeroSearchBarTop(searchState: CollectionSearchState?)
 /**
  * Artwork fill: embedded/plain image, collection icon, or the title's initial.
  *
- * While the image loads, [placeholderIcon] shows through the artwork surface
- * (the music note, or the collection's own icon on album/artist pages).
+ * While the image loads, the placeholder resolved from the surrounding
+ * [LocalMediaArtKind] scope shows through the artwork surface (the music
+ * note, or the collection's own icon on album/artist pages).
  *
  * When the image CHANGES in place (e.g. a playlist reordered so its automatic
  * first-track cover picks a different track), the old image keeps rendering on
@@ -1172,8 +1162,7 @@ private fun CollectionHeroArtworkContent(
     title: String,
     imageUrl: String?,
     imageIsEmbeddedArt: Boolean,
-    icon: ImageVector?,
-    placeholderIcon: ImageVector
+    icon: ImageVector?
 ) {
     val context = LocalContext.current
     if (imageUrl != null) {
@@ -1199,8 +1188,7 @@ private fun CollectionHeroArtworkContent(
                 displayed.first,
                 displayed.second,
                 context,
-                Modifier.fillMaxSize(),
-                placeholderIcon
+                Modifier.fillMaxSize()
             )
         } else {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -1208,8 +1196,7 @@ private fun CollectionHeroArtworkContent(
                     displayed.first,
                     displayed.second,
                     context,
-                    Modifier.fillMaxSize(),
-                    placeholderIcon
+                    Modifier.fillMaxSize()
                 )
                 CollectionHeroArtworkImage(
                     fadingArt.first,
@@ -1217,8 +1204,7 @@ private fun CollectionHeroArtworkContent(
                     context,
                     Modifier
                         .fillMaxSize()
-                        .graphicsLayer { alpha = fade.value },
-                    placeholderIcon
+                        .graphicsLayer { alpha = fade.value }
                 )
             }
         }
@@ -1243,8 +1229,7 @@ private fun CollectionHeroArtworkImage(
     imageUrl: String,
     imageIsEmbeddedArt: Boolean,
     context: Context,
-    modifier: Modifier,
-    placeholderIcon: ImageVector
+    modifier: Modifier
 ) {
     val heroArtRequest = remember(imageUrl, imageIsEmbeddedArt) {
         val data = if (imageIsEmbeddedArt) {
@@ -1263,8 +1248,7 @@ private fun CollectionHeroArtworkImage(
         model = heroArtRequest,
         contentDescription = null,
         modifier = modifier,
-        placeholderSize = 40.dp,
-        placeholderIcon = placeholderIcon
+        placeholderSize = 40.dp
     )
 }
 
