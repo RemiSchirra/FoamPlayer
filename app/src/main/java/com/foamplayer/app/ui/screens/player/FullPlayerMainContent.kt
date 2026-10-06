@@ -61,19 +61,23 @@ import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.PreviousAction
-import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
-import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.TrackScoreHeart
 import com.foamplayer.app.ui.components.FoamSlider
+import com.foamplayer.app.ui.components.WaveformSeekBar
 import com.foamplayer.app.ui.components.onSeekBarReleased
+import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
+import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
+import com.foamplayer.app.ui.utils.WaveformState
 import com.foamplayer.app.ui.utils.pressShrink
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
+import com.foamplayer.app.ui.utils.rememberWaveform
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
@@ -103,6 +107,16 @@ internal fun SharedTransitionScope.MainPlayerContent(
     upTransitionState: SeekableTransitionState<Boolean>,
     seekBarProgress: SeekBarProgressState,
     isAnimateSeekBarEnabled: Boolean,
+    seekBarStyle: SeekBarStyle,
+    // The waveform envelope morph (waveform seek bar only, both null otherwise): the
+    // track the bars are anchored on when it is NOT the playing one (pinned at trigger
+    // time, carried across re-aims), and the track being changed to -- both resolved by
+    // FullPlayerScreen through the process-wide WaveformCache, with the 0f..1f blend
+    // driver (the pager's swipe fraction while the finger is down, the swap tween's
+    // blend otherwise) as a draw-phase read.
+    morphFromWaveform: WaveformState?,
+    morphTargetWaveform: WaveformState?,
+    envelopeMorphProgress: () -> Float,
     marqueeMode: MarqueeMode,
     scoreOverrides: Map<Long, Int>,
     onSetScore: (Long, Int) -> Unit,
@@ -142,6 +156,10 @@ internal fun SharedTransitionScope.MainPlayerContent(
 
         Spacer(modifier = Modifier.weight(1f))
 
+        // The neighbors a Next/Previous press swaps the waveform's envelope toward;
+        // null when the style isn't waveform or the queue edge is reached.
+        val isWaveformSeek = seekBarStyle == SeekBarStyle.WAVEFORM
+
         PlaybackControls(
             track = track,
             isPlaying = isPlaying,
@@ -149,12 +167,19 @@ internal fun SharedTransitionScope.MainPlayerContent(
             outerVisibilityScope = outerVisibilityScope,
             seekBarProgress = seekBarProgress,
             isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+            seekBarStyle = seekBarStyle,
+            morphFromWaveform = morphFromWaveform,
+            morphTargetWaveform = morphTargetWaveform,
+            envelopeMorphProgress = envelopeMorphProgress,
             onSeek = { positionMs -> viewModel.seekTo(positionMs) },
             onPrevious = {
                 when (
                     seekBarProgress.onPreviousPressed(
                         animated = isAnimateSeekBarEnabled,
-                        positionMs = viewModel.positionMs.value
+                        positionMs = viewModel.positionMs.value,
+                        morphTargetPage = if (isWaveformSeek) (queueIndex - 1).takeIf { it >= 0 } else null,
+                        fromBlend = envelopeMorphProgress(),
+                        fromPageIndex = queueIndex
                     )
                 ) {
                     PreviousAction.RESTART_CURRENT -> viewModel.seekTo(0L)
@@ -163,7 +188,12 @@ internal fun SharedTransitionScope.MainPlayerContent(
             },
             onPlayPause = { if (isPlaying()) viewModel.pause() else viewModel.play() },
             onNext = {
-                seekBarProgress.onNextPressed(animated = isAnimateSeekBarEnabled)
+                seekBarProgress.onNextPressed(
+                    animated = isAnimateSeekBarEnabled,
+                    morphTargetPage = if (isWaveformSeek) (queueIndex + 1).takeIf { it < queue.size } else null,
+                    fromBlend = envelopeMorphProgress(),
+                    fromPageIndex = queueIndex
+                )
                 viewModel.next()
             }
         )
@@ -227,7 +257,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
     // (mini player, subview header) rest UNSCALED -- only this hero shrinks on
     // play/pause. During a flight the overlay renders the entering endpoint's layer,
     // so that layer must depart at THIS hero's current paused scale and relax to the
-    // endpoint's own rest 1f along the settled fraction. The hero side mirrors it:
+    // endpoint's own rest 1f along the blend fraction. The hero side mirrors it:
     // easing from the endpoint's 1f rest at flight start to its paused rest at settle,
     // along the same fraction its drop shadow rides -- otherwise a paused hero pops
     // 3% against the unscaled endpoint (mini/header) on the open's first frame, or
@@ -570,6 +600,10 @@ internal fun SharedTransitionScope.PlaybackControls(
     outerVisibilityScope: AnimatedVisibilityScope,
     seekBarProgress: SeekBarProgressState,
     isAnimateSeekBarEnabled: Boolean,
+    seekBarStyle: SeekBarStyle,
+    morphFromWaveform: WaveformState?,
+    morphTargetWaveform: WaveformState?,
+    envelopeMorphProgress: () -> Float,
     onSeek: (Long) -> Unit,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
@@ -583,6 +617,11 @@ internal fun SharedTransitionScope.PlaybackControls(
             durationMs = durationMs,
             seekBarProgress = seekBarProgress,
             isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+            seekBarStyle = seekBarStyle,
+            track = track,
+            morphFromWaveform = morphFromWaveform,
+            morphTargetWaveform = morphTargetWaveform,
+            trackChangeProgress = envelopeMorphProgress,
             onSeek = onSeek
         )
         Spacer(modifier = Modifier.height(PlayerDimens.controlsSpacing))
@@ -673,12 +712,32 @@ internal fun SharedTransitionScope.PlayPauseButton(
     }
 }
 
+/**
+ * Progress bar + elapsed/remaining labels. [seekBarStyle] picks the rendering:
+ * the classic [FoamSlider] track, or the full player's [WaveformSeekBar] whose
+ * bars trace the audio's amplitude envelope (see [rememberWaveform] for the
+ * data source). Both share the same drag-to-seek contract and release callback.
+ *
+ * In waveform mode the track change MORPHS the envelope instead of hard-swapping
+ * it: [morphTargetWaveform] carries the track being changed to (resolved +
+ * prefetched by FullPlayerScreen through the process-wide WaveformCache) and
+ * [trackChangeProgress] drives the blend -- the hero pager's own swipe fraction
+ * while the finger is down (the bars follow the swipe continuously), the swap
+ * tween's blend otherwise (release, transport buttons, flip catch-ups). Both
+ * drivers are draw-phase reads. [morphFromWaveform] anchors the bars on a track
+ * other than the playing one when one is pinned at trigger time.
+ */
 @Composable
 internal fun PlaybackProgressSlider(
     durationMs: Long,
     seekBarProgress: SeekBarProgressState,
     isAnimateSeekBarEnabled: Boolean,
     onSeek: (Long) -> Unit,
+    seekBarStyle: SeekBarStyle = SeekBarStyle.NORMAL,
+    track: TrackEntity? = null,
+    morphFromWaveform: WaveformState? = null,
+    morphTargetWaveform: WaveformState? = null,
+    trackChangeProgress: () -> Float = { 0f },
     modifier: Modifier = Modifier,
     labelSpacing: Dp = PlayerDimens.seekBarLabelSpacing
 ) {
@@ -686,25 +745,43 @@ internal fun PlaybackProgressSlider(
         var dragValue by remember { mutableStateOf<Float?>(null) }
         val currentOnSeek by rememberUpdatedState(onSeek)
 
-        FoamSlider(
-            value = { dragValue ?: seekBarProgress.progress },
-            onValueChange = { new ->
-                // A fresh manual drag always wins over any settle tween in flight.
-                seekBarProgress.onDragging()
-                dragValue = new
-            },
-            modifier = Modifier.onSeekBarReleased {
-                val released = dragValue
-                dragValue = null
-                if (released != null) {
-                    currentOnSeek((released * durationMs).toLong())
-                    seekBarProgress.onSeekDragFinished(
-                        animated = isAnimateSeekBarEnabled,
-                        releasedAt = released
-                    )
-                }
+        val onSliderValueChange: (Float) -> Unit = { new ->
+            // A fresh manual drag always wins over any settle tween in flight.
+            seekBarProgress.onDragging()
+            dragValue = new
+        }
+        val sliderModifier = Modifier.onSeekBarReleased {
+            val released = dragValue
+            dragValue = null
+            if (released != null) {
+                currentOnSeek((released * durationMs).toLong())
+                seekBarProgress.onSeekDragFinished(
+                    animated = isAnimateSeekBarEnabled,
+                    releasedAt = released
+                )
             }
-        )
+        }
+
+        if (seekBarStyle == SeekBarStyle.WAVEFORM) {
+            // The waveform is fetched (and cached process-wide) only in waveform mode.
+            // morphFromWaveform anchors the bars elsewhere while a swap is in flight;
+            // at rest the bars trace the playing track's own envelope.
+            val waveform = morphFromWaveform ?: track?.let { rememberWaveform(it.path, it.duration) }
+            WaveformSeekBar(
+                value = { dragValue ?: seekBarProgress.progress },
+                onValueChange = onSliderValueChange,
+                waveform = waveform,
+                targetWaveform = morphTargetWaveform,
+                trackChangeProgress = trackChangeProgress,
+                modifier = sliderModifier
+            )
+        } else {
+            FoamSlider(
+                value = { dragValue ?: seekBarProgress.progress },
+                onValueChange = onSliderValueChange,
+                modifier = sliderModifier
+            )
+        }
         Spacer(modifier = Modifier.height(labelSpacing))
         val labelStyle = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

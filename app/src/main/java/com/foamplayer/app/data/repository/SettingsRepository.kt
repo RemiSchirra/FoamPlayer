@@ -41,6 +41,7 @@ import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.SearchHistoryEntry
+import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
 import java.io.IOException
 import javax.inject.Inject
@@ -92,6 +93,7 @@ class SettingsRepository @Inject constructor(
     suspend fun setAccentColor(color: Int) = update { it.copy(accentColor = color) }
     suspend fun setImmersiveModeEnabled(enabled: Boolean) = update { it.copy(immersiveModeEnabled = enabled) }
     suspend fun setAnimateSeekBarEnabled(enabled: Boolean) = update { it.copy(animateSeekBarEnabled = enabled) }
+    suspend fun setSeekBarStyle(style: SeekBarStyle) = update { it.copy(seekBarStyle = style) }
     suspend fun setAutoOpenPlayerEnabled(enabled: Boolean) = update { it.copy(autoOpenPlayerEnabled = enabled) }
     suspend fun setAnimatedCoverEnabled(enabled: Boolean) = update { it.copy(animatedCoverEnabled = enabled) }
     suspend fun setAnimatedCoverAllowMobileData(enabled: Boolean) = update {
@@ -292,6 +294,9 @@ class SettingsRepository @Inject constructor(
         accentColor = this[Keys.ACCENT_COLOR] ?: AppSettings.DEFAULT_ACCENT_COLOR,
         immersiveModeEnabled = this[Keys.IMMERSIVE_MODE] ?: AppSettings().immersiveModeEnabled,
         animateSeekBarEnabled = this[Keys.ANIMATE_SEEK_BAR] ?: AppSettings().animateSeekBarEnabled,
+        seekBarStyle = this[Keys.SEEK_BAR_STYLE]
+            ?.let { runCatching { SeekBarStyle.valueOf(it) }.getOrNull() }
+            ?: AppSettings().seekBarStyle,
         autoOpenPlayerEnabled = this[Keys.AUTO_OPEN_PLAYER] ?: AppSettings().autoOpenPlayerEnabled,
         animatedCoverEnabled = this[Keys.ANIMATED_COVER_ENABLED] ?: AppSettings().animatedCoverEnabled,
         animatedCoverAllowMobileData = this[Keys.ANIMATED_COVER_ALLOW_MOBILE_DATA]
@@ -384,6 +389,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.ACCENT_COLOR] = settings.accentColor
         this[Keys.IMMERSIVE_MODE] = settings.immersiveModeEnabled
         this[Keys.ANIMATE_SEEK_BAR] = settings.animateSeekBarEnabled
+        this[Keys.SEEK_BAR_STYLE] = settings.seekBarStyle.name
         this[Keys.AUTO_OPEN_PLAYER] = settings.autoOpenPlayerEnabled
         this[Keys.ANIMATED_COVER_ENABLED] = settings.animatedCoverEnabled
         this[Keys.ANIMATED_COVER_ALLOW_MOBILE_DATA] = settings.animatedCoverAllowMobileData
@@ -449,6 +455,7 @@ class SettingsRepository @Inject constructor(
         val ACCENT_COLOR = intPreferencesKey("accent_color")
         val IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
         val ANIMATE_SEEK_BAR = booleanPreferencesKey("animate_seek_bar")
+        val SEEK_BAR_STYLE = stringPreferencesKey("seek_bar_style")
         val AUTO_OPEN_PLAYER = booleanPreferencesKey("auto_open_player")
         val ANIMATED_COVER_ENABLED = booleanPreferencesKey("animated_cover_enabled")
         val ANIMATED_COVER_ALLOW_MOBILE_DATA = booleanPreferencesKey("animated_cover_allow_mobile_data")

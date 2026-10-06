@@ -20,6 +20,7 @@ import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -81,6 +82,7 @@ class SettingsViewModel @Inject constructor(
     fun setAccentColor(color: Int) = launch { settingsRepository.setAccentColor(color) }
     fun setImmersiveModeEnabled(enabled: Boolean) = launch { settingsRepository.setImmersiveModeEnabled(enabled) }
     fun setAnimateSeekBarEnabled(enabled: Boolean) = launch { settingsRepository.setAnimateSeekBarEnabled(enabled) }
+    fun setSeekBarStyle(style: SeekBarStyle) = launch { settingsRepository.setSeekBarStyle(style) }
     fun setAutoOpenPlayerEnabled(enabled: Boolean) = launch { settingsRepository.setAutoOpenPlayerEnabled(enabled) }
     fun setAnimatedCoverEnabled(enabled: Boolean) = launch { settingsRepository.setAnimatedCoverEnabled(enabled) }
     fun setAnimatedCoverAllowMobileData(enabled: Boolean) = launch {

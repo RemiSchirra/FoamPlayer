@@ -34,6 +34,12 @@ enum class MarqueeMode(val label: String) {
     INFINITE("Infinite")
 }
 
+/** Visual style of the full player's seek bar. */
+enum class SeekBarStyle(val label: String) {
+    NORMAL("Normal"),
+    WAVEFORM("Waveform")
+}
+
 /** Which color palette the UI renders with; FOLLOW_SYSTEM resolves per system dark mode. */
 enum class ThemeMode(val label: String) {
     FOLLOW_SYSTEM("Follow system"),
@@ -84,6 +90,8 @@ data class AppSettings(
     val accentColor: Int = DEFAULT_ACCENT_COLOR,
     val immersiveModeEnabled: Boolean = true,
     val animateSeekBarEnabled: Boolean = false,
+    /** Visual style of the full player's seek bar (the mini player keeps the classic bar). */
+    val seekBarStyle: SeekBarStyle = SeekBarStyle.NORMAL,
     val autoOpenPlayerEnabled: Boolean = false,
     /** Animated (canvas) album cover in the immersive full player; the sub-toggle allows mobile data. */
     val animatedCoverEnabled: Boolean = false,

@@ -290,6 +290,10 @@
     <string name="immersive_mode_desc">La pochette d\'album remplit tout l\'écran</string>
     <string name="animate_seek_bar">Animer la barre de progression</string>
     <string name="animate_seek_bar_desc">Mouvement fluide de la barre de progression</string>
+    <string name="seek_bar_style">Style de barre de progression</string>
+    <string name="seek_bar_style_desc">Apparence de la barre du lecteur complet</string>
+    <string name="seek_bar_style_normal">Normale</string>
+    <string name="seek_bar_style_waveform">Forme d\'onde</string>
     <string name="mini_player">Mini lecteur</string>
     <string name="full_player">Lecteur complet</string>
     <string name="square">Carré</string>

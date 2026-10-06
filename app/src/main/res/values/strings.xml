@@ -290,6 +290,10 @@
     <string name="immersive_mode_desc">Album art fills the entire screen</string>
     <string name="animate_seek_bar">Animate Seek Bar</string>
     <string name="animate_seek_bar_desc">Smooth progress bar movement</string>
+    <string name="seek_bar_style">Seek Bar Style</string>
+    <string name="seek_bar_style_desc">Look of the full player\'s progress bar</string>
+    <string name="seek_bar_style_normal">Normal</string>
+    <string name="seek_bar_style_waveform">Waveform</string>
     <string name="mini_player">Mini Player</string>
     <string name="full_player">Full Player</string>
     <string name="square">Square</string>

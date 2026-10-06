@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.FoamEnumItem
 import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
@@ -47,6 +48,7 @@ fun PlayerSettingsScreen(
     val settings by viewModel.settings.collectAsState()
     val isImmersiveEnabled = settings.immersiveModeEnabled
     val isAnimateSeekBarEnabled = settings.animateSeekBarEnabled
+    val seekBarStyle = settings.seekBarStyle
     val isAutoOpenPlayerEnabled = settings.autoOpenPlayerEnabled
     val isAnimatedCoverEnabled = settings.animatedCoverEnabled
     val isAnimatedCoverAllowMobileData = settings.animatedCoverAllowMobileData
@@ -176,6 +178,20 @@ fun PlayerSettingsScreen(
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                FoamEnumItem(
+                    title = stringResource(R.string.seek_bar_style),
+                    description = stringResource(R.string.seek_bar_style_desc),
+                    options = SeekBarStyle.entries.toTypedArray(),
+                    selectedOption = seekBarStyle,
+                    onOptionSelected = { viewModel.setSeekBarStyle(it) },
+                    getLabel = { style ->
+                        when (style) {
+                            SeekBarStyle.NORMAL -> stringResource(R.string.seek_bar_style_normal)
+                            SeekBarStyle.WAVEFORM -> stringResource(R.string.seek_bar_style_waveform)
+                        }
+                    }
+                )
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                 FoamEnumItem(
                     title = "Text animation",

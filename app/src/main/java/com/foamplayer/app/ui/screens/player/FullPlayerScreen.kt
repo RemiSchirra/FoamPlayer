@@ -63,12 +63,16 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.rememberSeekBarProgressState
 import com.foamplayer.app.ui.modals.PlayerAudioInfoModal
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
+import com.foamplayer.app.ui.utils.WaveformCache
+import com.foamplayer.app.ui.utils.WaveformState
+import com.foamplayer.app.ui.utils.rememberWaveform
 import kotlin.math.abs
 
 /**
@@ -123,6 +127,27 @@ fun FullPlayerScreen(
     val isAnimatedCoverEnabled = isImmersiveEnabled && settings.animatedCoverEnabled
     val allowMobileDataForCanvas = settings.animatedCoverAllowMobileData
     val marqueeMode = settings.marqueeMode
+    // Seek bar rendering (full player only; the mini player keeps the classic bar).
+    val seekBarStyle = settings.seekBarStyle
+
+    // Waveform bars always settle track changes with an animation (they recede on
+    // the swipe commit instead of snapping -- see SeekBarProgressState); the classic
+    // bar only does so when the "animate seek bar" setting is on. Continuous
+    // swipe-follow of the bars stays tied to the setting alone (see liveProgress).
+    val settleSeekBarAnimated = isAnimateSeekBarEnabled || seekBarStyle == SeekBarStyle.WAVEFORM
+
+    // ── Waveform envelope morph (waveform seek bar only) ─────────────────────────
+    // Track changes morph the bars between the two tracks' amplitude envelopes
+    // instead of hard-swapping them. The swap's pinned pages live in
+    // [SeekBarProgressState] (shared with the mask settle's hold/settle lifecycle);
+    // this screen resolves the pinned envelopes through the process-wide cache and
+    // hands the blend driver to the waveform. While the finger is down the blend is
+    // the hero pager's own swipe fraction (progressive; raw "animate seek bar" setting
+    // on), and at RELEASE a tween takes the blend over -- committing swipes tween on
+    // up to 1, spring-backs tween back down to 0 -- so the morph always terminates
+    // with an animation instead of snapping or coasting on the pager's fling.
+    val isWaveformSeek = seekBarStyle == SeekBarStyle.WAVEFORM
+    val isProgressiveEnvelope = isWaveformSeek && isAnimateSeekBarEnabled
 
     // Narrow, equality-gated projections of the playback state -- the same idea as the
     // ViewModel's narrow projections for the composition roots (FoamApp,
@@ -386,6 +411,62 @@ fun FullPlayerScreen(
         }
     )
 
+    // Live proxies for the envelope's collectors and draw-phase provider below (the
+    // queue/track can change mid-gesture; a stale closure must not pin a stale page).
+    val latestQueueIndex = rememberUpdatedState(queueIndex)
+    val latestQueueSize = rememberUpdatedState(queueSize)
+    val latestQueue = rememberUpdatedState(queue)
+
+    // The two envelopes the waveform renders while a swap is in flight: where the bars
+    // are anchored (null = the playing track's own envelope, pinned at trigger time)
+    // and where the swap is heading. Resolving here kicks off any missing extraction in
+    // the process-wide cache; the states' own snapshot fields carry the progressive
+    // fill from there.
+    val envelopeTargetPage = seekBarProgress.envelopeTargetPage
+    val envelopeFromPage = seekBarProgress.envelopeFromPage
+    val morphFromWaveform: WaveformState? = if (!isWaveformSeek) {
+        null
+    } else {
+        val fromTrack = envelopeFromPage?.let { page -> queue.getOrNull(page) } ?: track
+        rememberWaveform(fromTrack.path, fromTrack.duration)
+    }
+    val morphTargetWaveform: WaveformState? = if (!isWaveformSeek) {
+        null
+    } else {
+        envelopeTargetPage
+            ?.let { page -> queue.getOrNull(page) }
+            ?.let { rememberWaveform(it.path, it.duration) }
+    }
+
+    // Blend driver handed to the waveform (draw-phase read: each frame of the swap
+    // invalidates just the bars' drawing). A swap tween owns the blend whenever one is
+    // running (release, transport buttons, flip catch-ups); otherwise the blend is the
+    // hero pager's own fraction from the anchor page toward the pinned target, so the
+    // bars follow the finger 1:1 (programmatic pager syncs sweep the same formula,
+    // morphing like a fast swipe). Once the playing index has reached the pinned target
+    // the swap is over as far as rendering goes: the plain current-envelope rendering at
+    // blend 0 is pixel-identical to the held swap.
+    val latestQueueIndexForEnvelope = latestQueueIndex
+    val envelopeMorphProgress = remember(seekBarProgress) {
+        {
+            val targetPage = seekBarProgress.envelopeTargetPage
+            when {
+                targetPage == null -> 0f
+                seekBarProgress.isEnvelopeTweenActive -> seekBarProgress.envelopeTweenBlend
+                else -> {
+                    val playingPage = latestQueueIndexForEnvelope.value
+                    val originPage = seekBarProgress.envelopeFromPage ?: playingPage
+                    if (originPage == targetPage) {
+                        0f
+                    } else {
+                        val absolute = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                        abs((absolute - originPage) / (targetPage - originPage)).coerceIn(0f, 1f)
+                    }
+                }
+            }
+        }
+    }
+
     fun isMainPagerVisible() = !upTransitionState.currentState
 
     val context = LocalContext.current
@@ -398,6 +479,20 @@ fun FullPlayerScreen(
                 pathsToKeep.forEach { path ->
                     AlbumArtPaletteCache.ensure(scope = this, context = context, path = path)
                 }
+            }
+    }
+
+    // Waveform neighbor prefetch (waveform seek bar only): keeps the tracks adjacent
+    // to the pager's window extracted in the process-wide cache, so a track-change
+    // morph has both envelopes ready the moment a swipe starts or a transport button
+    // is pressed -- the same window the palette prefetch above keeps hot.
+    LaunchedEffect(pagerState, isWaveformSeek) {
+        if (!isWaveformSeek) return@LaunchedEffect
+        snapshotFlow { pagerState.currentPage }
+            .collect { currentPage ->
+                listOf(currentPage - 1, currentPage, currentPage + 1)
+                    .mapNotNull { page -> latestQueue.value.getOrNull(page) }
+                    .forEach { WaveformCache.ensure(context, it.path, it.duration) }
             }
     }
 
@@ -428,12 +523,80 @@ fun FullPlayerScreen(
         pagerState = pagerState,
         currentQueueIndex = queueIndex,
         currentQueueSize = queueSize,
-        isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+        isAnimateSeekBarEnabled = settleSeekBarAnimated,
+        isWaveformSeek = isWaveformSeek,
+        envelopeMorphProgress = envelopeMorphProgress,
         seekBarProgress = seekBarProgress
     )
 
-    val latestQueueIndex = rememberUpdatedState(queueIndex)
-    val latestQueueSize = rememberUpdatedState(queueSize)
+    // Progressive envelope latch (raw "animate seek bar" setting only): while the
+    // finger is DOWN a real hero-pager GESTURE carries the blend from the moment it
+    // resolves a direction -- the pinned neighbor follows the drag direction (the
+    // pager's predicted target first, the offset-derived neighbor otherwise), so the
+    // bars start morphing with the finger instead of waiting for the commit. Crossing
+    // back through the playing page re-anchors on the playing track's envelope; a
+    // chained swipe that rests on the previously pinned page carries that envelope
+    // forward instead -- both keep the morph continuous at the re-pin. Programmatic
+    // pager syncs never drag, so they never pin anything. At RELEASE the blend is
+    // handed to a tween: a commit takes it on up to 1 (see onTrackChangeCommitted),
+    // a spring-back takes it back down to 0 via settleSwipeEnvelopeBack -- the pager's
+    // own fling never decides the morph's ending, and nothing snaps.
+    if (isProgressiveEnvelope) {
+        val isPagerDragged by pagerState.interactionSource.collectIsDraggedAsState()
+        LaunchedEffect(pagerState) {
+            snapshotFlow {
+                Triple(isPagerDragged, pagerState.targetPage, pagerState.currentPageOffsetFraction)
+            }.collect { (dragging, targetPage, offsetFraction) ->
+                val playingPage = latestQueueIndex.value
+                if (dragging) {
+                    val dragNeighbor = when {
+                        offsetFraction > 0f -> pagerState.currentPage + 1
+                        offsetFraction < 0f -> pagerState.currentPage - 1
+                        else -> null
+                    }
+                    val pinned =
+                        if (targetPage != playingPage && targetPage in 0 until latestQueueSize.value) {
+                            targetPage
+                        } else {
+                            dragNeighbor
+                        }
+                    if (pinned != null && pinned != playingPage && pinned in 0 until latestQueueSize.value) {
+                        // Where the shown envelope should anchor at the re-pin: crossing
+                        // back through the playing page anchors on it (the blend reads 0
+                        // there), while a swipe resting on/near the previous pinned
+                        // target carries that envelope forward.
+                        val absolute = pagerState.currentPage + offsetFraction
+                        val fromPage =
+                            if (abs(absolute - pinned) <= abs(absolute - playingPage)) {
+                                seekBarProgress.envelopeTargetPage
+                            } else {
+                                null
+                            }
+                        seekBarProgress.onSwipeEnvelopeTarget(pinned, fromPage)
+                    }
+                } else if (targetPage == playingPage) {
+                    // Released short of a commit: hand the currently-rendered blend to
+                    // an unwind tween instead of clearing the pin outright -- clearing
+                    // here would collapse the blend formula to 0 on the spot and snap
+                    // the bars to the playing track's envelope.
+                    seekBarProgress.settleSwipeEnvelopeBack(envelopeMorphProgress())
+                }
+            }
+        }
+    }
+
+    // Every playing-index change settles (or starts) the envelope swap: a swap whose
+    // pinned target is where the track LANDED resolves (an in-flight tween finishes
+    // first and then clears), one that lands back on its anchor unwinds, one that
+    // lands past the committed page re-aims (see onPlayingIndexChanged), and an
+    // unprompted one-page move (natural advance, queue pick) gets a catch-up morph
+    // from the previously playing track's envelope.
+    var previousQueueIndex by remember { mutableStateOf(queueIndex) }
+    LaunchedEffect(queueIndex) {
+        seekBarProgress.onPlayingIndexChanged(queueIndex, previousQueueIndex)
+        previousQueueIndex = queueIndex
+    }
+
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
@@ -448,6 +611,12 @@ fun FullPlayerScreen(
                         settledPage,
                         forward = settledPage > latestQueueIndex.value
                     )
+                } else if (settledPage == latestQueueIndex.value) {
+                    // The pager settled back onto the playing page: a committed change
+                    // never landed (a re-grabbed fling pulled back). A finger-driven
+                    // swap has already been unwound by the release tween above; a swap
+                    // tween morphs the bars back down to the playing track's envelope.
+                    seekBarProgress.revertTrackChangeEnvelope()
                 }
             }
     }
@@ -631,7 +800,11 @@ fun FullPlayerScreen(
                             playerTransitionState = playerTransitionState,
                             upTransitionState = upTransitionState,
                             seekBarProgress = seekBarProgress,
-                            isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                            isAnimateSeekBarEnabled = settleSeekBarAnimated,
+                            seekBarStyle = seekBarStyle,
+                            morphFromWaveform = morphFromWaveform,
+                            morphTargetWaveform = morphTargetWaveform,
+                            envelopeMorphProgress = envelopeMorphProgress,
                             marqueeMode = marqueeMode,
                             scoreOverrides = scoreOverrides,
                             onSetScore = viewModel::setTrackScore,
@@ -724,8 +897,15 @@ fun FullPlayerScreen(
                             onClick = {
                                 when (
                                     seekBarProgress.onPreviousPressed(
-                                        animated = isAnimateSeekBarEnabled,
-                                        positionMs = viewModel.positionMs.value
+                                        animated = settleSeekBarAnimated,
+                                        positionMs = viewModel.positionMs.value,
+                                        morphTargetPage = if (isWaveformSeek) {
+                                            (queueIndex - 1).takeIf { it >= 0 }
+                                        } else {
+                                            null
+                                        },
+                                        fromBlend = envelopeMorphProgress(),
+                                        fromPageIndex = queueIndex
                                     )
                                 ) {
                                     PreviousAction.RESTART_CURRENT -> viewModel.seekTo(0L)
@@ -745,7 +925,16 @@ fun FullPlayerScreen(
                             contentDescription = stringResource(R.string.next),
                             progress = subControlsProgress,
                             onClick = {
-                                seekBarProgress.onNextPressed(animated = isAnimateSeekBarEnabled)
+                                seekBarProgress.onNextPressed(
+                                    animated = settleSeekBarAnimated,
+                                    morphTargetPage = if (isWaveformSeek) {
+                                        (queueIndex + 1).takeIf { it < queueSize }
+                                    } else {
+                                        null
+                                    },
+                                    fromBlend = envelopeMorphProgress(),
+                                    fromPageIndex = queueIndex
+                                )
                                 viewModel.next()
                             }
                         )
@@ -757,8 +946,13 @@ fun FullPlayerScreen(
                 PlaybackProgressSlider(
                     durationMs = durationMs,
                     seekBarProgress = seekBarProgress,
-                    isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                    isAnimateSeekBarEnabled = settleSeekBarAnimated,
                     onSeek = { positionMs -> viewModel.seekTo(positionMs) },
+                    seekBarStyle = seekBarStyle,
+                    track = track,
+                    morphFromWaveform = morphFromWaveform,
+                    morphTargetWaveform = morphTargetWaveform,
+                    trackChangeProgress = envelopeMorphProgress,
                     labelSpacing = 2.dp,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -792,11 +986,15 @@ private fun TrackChangeCommitEffect(
     currentQueueIndex: Int,
     currentQueueSize: Int,
     isAnimateSeekBarEnabled: Boolean,
+    isWaveformSeek: Boolean,
+    envelopeMorphProgress: () -> Float,
     seekBarProgress: SeekBarProgressState
 ) {
     val latestQueueIndex by rememberUpdatedState(currentQueueIndex)
     val latestQueueSize by rememberUpdatedState(currentQueueSize)
     val latestIsAnimateSeekBarEnabled by rememberUpdatedState(isAnimateSeekBarEnabled)
+    val latestIsWaveformSeek by rememberUpdatedState(isWaveformSeek)
+    val latestEnvelopeMorphProgress by rememberUpdatedState(envelopeMorphProgress)
 
     val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
 
@@ -807,7 +1005,18 @@ private fun TrackChangeCommitEffect(
                     targetPage in 0 until latestQueueSize &&
                     targetPage != latestQueueIndex
                 ) {
-                    seekBarProgress.onTrackChangeCommitted(animated = latestIsAnimateSeekBarEnabled)
+                    // Release terminating on a NEW track: the envelope swap tweens on
+                    // up to blend 1 from wherever the pager fraction left it (a
+                    // progressive swipe) or from 0 (a non-progressive bar), in the same
+                    // motion as the mask's settle tween. fromPageIndex pins the
+                    // trigger-time playing page so the engine's later flip cannot swap
+                    // the from-envelope underneath the tween.
+                    seekBarProgress.onTrackChangeCommitted(
+                        animated = latestIsAnimateSeekBarEnabled,
+                        morphTargetPage = if (latestIsWaveformSeek) targetPage else null,
+                        fromBlend = latestEnvelopeMorphProgress(),
+                        fromPageIndex = latestQueueIndex
+                    )
                 }
             }
     }

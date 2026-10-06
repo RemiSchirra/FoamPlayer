@@ -24,6 +24,7 @@ import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.SearchHistoryEntry
+import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
 import org.json.JSONArray
 import org.json.JSONObject
@@ -57,6 +58,7 @@ object BackupJson {
         put("accentColor", settings.accentColor)
         put("immersiveModeEnabled", settings.immersiveModeEnabled)
         put("animateSeekBarEnabled", settings.animateSeekBarEnabled)
+        put("seekBarStyle", settings.seekBarStyle.name)
         put("autoOpenPlayerEnabled", settings.autoOpenPlayerEnabled)
         put("animatedCoverEnabled", settings.animatedCoverEnabled)
         put("animatedCoverAllowMobileData", settings.animatedCoverAllowMobileData)
@@ -129,6 +131,7 @@ object BackupJson {
         accentColor = json.optInt("accentColor", AppSettings.DEFAULT_ACCENT_COLOR),
         immersiveModeEnabled = json.optBoolean("immersiveModeEnabled", true),
         animateSeekBarEnabled = json.optBoolean("animateSeekBarEnabled", false),
+        seekBarStyle = decodeEnum(json.optString("seekBarStyle"), SeekBarStyle.NORMAL),
         autoOpenPlayerEnabled = json.optBoolean("autoOpenPlayerEnabled", false),
         animatedCoverEnabled = json.optBoolean("animatedCoverEnabled", false),
         animatedCoverAllowMobileData = json.optBoolean("animatedCoverAllowMobileData", false),
