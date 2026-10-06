@@ -85,6 +85,11 @@ fun NavBarSettingsScreen(
     var displayedSecondaryOrder by remember { mutableStateOf(settings.navBarSecondaryOrder) }
     var draggedSection by remember { mutableStateOf<NavBarSection?>(null) }
 
+    // Placement animations are enabled only once the user starts dragging. Until
+    // then, the order swap from the default value to the loaded settings (and any
+    // later external sync) must not animate when the screen opens.
+    var animatePlacement by remember { mutableStateOf(false) }
+
     LaunchedEffect(settings.navBarPrimaryOrder) {
         if (draggedSection != NavBarSection.PRIMARY) {
             displayedPrimaryOrder = settings.navBarPrimaryOrder
@@ -214,7 +219,11 @@ fun NavBarSettingsScreen(
                     onEnabledChange = { viewModel.setNavBarPrimaryItemEnabled(item, it) },
                     lazyListState = lazyListState,
                     dragDropListState = dragDropListState,
-                    onDragStart = { draggedSection = it },
+                    animatePlacement = animatePlacement,
+                    onDragStart = {
+                        animatePlacement = true
+                        draggedSection = it
+                    },
                     onDragEnd = {
                         dragDropListState.onDragEnd()
                         persistDraggedOrder()
@@ -248,7 +257,11 @@ fun NavBarSettingsScreen(
                     onEnabledChange = { viewModel.setNavBarSecondaryItemEnabled(item, it) },
                     lazyListState = lazyListState,
                     dragDropListState = dragDropListState,
-                    onDragStart = { draggedSection = it },
+                    animatePlacement = animatePlacement,
+                    onDragStart = {
+                        animatePlacement = true
+                        draggedSection = it
+                    },
                     onDragEnd = {
                         dragDropListState.onDragEnd()
                         persistDraggedOrder()
@@ -303,6 +316,7 @@ private fun LazyItemScope.NavBarDraggableItem(
     onEnabledChange: (Boolean) -> Unit,
     lazyListState: LazyListState,
     dragDropListState: DragDropListState,
+    animatePlacement: Boolean,
     onDragStart: (NavBarSection) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit
@@ -331,7 +345,7 @@ private fun LazyItemScope.NavBarDraggableItem(
     Column(
         modifier = Modifier
             .padding(horizontal = FoamDimens.paddingMedium)
-            .let { if (isDragging) it else it.animateItem() }
+            .let { if (isDragging || !animatePlacement) it else it.animateItem() }
             .zIndex(if (isDragging) 1f else 0f)
             .graphicsLayer {
                 translationY = if (isDragging) {
@@ -392,16 +406,16 @@ private fun NavBarSettingsItem(
                 tint = if (isEnabled) FoamTheme.colors.textSecondary else FoamTheme.colors.textSecondary.copy(alpha = 0.6f)
             )
             Spacer(modifier = Modifier.width(FoamDimens.spacingMedium))
-                Icon(
-                    imageVector = when (item) {
-                        NavBarItem.HOME -> FoamTheme.icons.current.home
-                        NavBarItem.PLAYLISTS -> FoamTheme.icons.current.playlists
-                        NavBarItem.SEARCH -> FoamTheme.icons.current.search
-                        NavBarItem.STATS -> FoamTheme.icons.current.stats
-                        NavBarItem.EQUALIZER -> FoamTheme.icons.current.equalizer
-                        NavBarItem.SETTINGS -> FoamTheme.icons.current.settings
-                        NavBarItem.MORE -> FoamTheme.icons.current.more
-                    },
+            Icon(
+                imageVector = when (item) {
+                    NavBarItem.HOME -> FoamTheme.icons.current.home
+                    NavBarItem.PLAYLISTS -> FoamTheme.icons.current.playlists
+                    NavBarItem.SEARCH -> FoamTheme.icons.current.search
+                    NavBarItem.STATS -> FoamTheme.icons.current.stats
+                    NavBarItem.EQUALIZER -> FoamTheme.icons.current.equalizer
+                    NavBarItem.SETTINGS -> FoamTheme.icons.current.settings
+                    NavBarItem.MORE -> FoamTheme.icons.current.more
+                },
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
                 tint = if (isEnabled) FoamTheme.accentColor else FoamTheme.colors.textSecondary.copy(alpha = 0.6f)
