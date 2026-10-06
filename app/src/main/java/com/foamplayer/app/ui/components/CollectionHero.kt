@@ -48,6 +48,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
 import androidx.compose.material.ripple
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -275,8 +276,7 @@ private const val SearchOpenScrollDurationMs = 300
  * (feed it into the lazy container's [androidx.compose.foundation.layout.PaddingValues]):
  * the keyboard's own inset keeps the filtered rows visible above the open
  * keyboard, and a screen-fraction reserve gives even a handful of rows enough
- * scroll range for [CollectionSearchScrollToBarEffect] to bring the bar to the
- * screen top — a short list otherwise has no scrollable range at all, so the
+ * scroll range for [CollectionSearchScrollToBarEffect] to bring the bar to the screen top — a short list otherwise has no scrollable range at all, so the
  * scroll here would silently do nothing.
  *
  * The value ANIMATES on both edges: growing when the bar opens (the rows part
@@ -323,7 +323,7 @@ fun collectionSearchOpenBottomPadding(searchState: CollectionSearchState?): Dp {
  * The anchor is the search bar's own container top when the hero reports one
  * ([CollectionSearchState.searchBarTopYInRootPx] — the compact hero, whose bar
  * spans the hero's full width below the artwork + details row), otherwise the
- * shuffle/play/search button row ([CollectionSearchState.buttonRowTopYInRootPx]
+ * button row ([CollectionSearchState.buttonRowTopYInRootPx]
  * — Normal and the immersive heroes, whose bar hangs right under that row).
  *
  * [listTopYInRootPx] supplies the lazy container's own root-space top y and
@@ -625,6 +625,7 @@ fun CollectionHero(
     imageIsEmbeddedArt: Boolean = true,
     fullyRoundedArtwork: Boolean = false,
     icon: ImageVector? = null,
+    placeholderIcon: ImageVector = Icons.Rounded.MusicNote,
     searchState: CollectionSearchState? = null,
     onShuffleAllClick: (() -> Unit)? = null,
     /** Tap on the subtitle line; receives the subtitle text (null = not tappable). */
@@ -646,6 +647,7 @@ fun CollectionHero(
             imageIsEmbeddedArt = imageIsEmbeddedArt,
             fullyRoundedArtwork = fullyRoundedArtwork,
             icon = icon,
+            placeholderIcon = placeholderIcon,
             onPlayAllClick = onPlayAllClick,
             onShuffleAllClick = onShuffleAllClick,
             onSubtitleClick = onSubtitleClick,
@@ -665,6 +667,7 @@ fun CollectionHero(
             imageIsEmbeddedArt = imageIsEmbeddedArt,
             fullyRoundedArtwork = fullyRoundedArtwork,
             icon = icon,
+            placeholderIcon = placeholderIcon,
             onPlayAllClick = onPlayAllClick,
             onShuffleAllClick = onShuffleAllClick,
             onSubtitleClick = onSubtitleClick,
@@ -684,6 +687,7 @@ fun CollectionHero(
                 imageIsEmbeddedArt = imageIsEmbeddedArt,
                 fullyRoundedArtwork = fullyRoundedArtwork,
                 icon = icon,
+                placeholderIcon = placeholderIcon,
                 accentColor = accentColor,
                 transitionAlpha = transitionAlpha,
                 scrollOffsetPx = scrollOffsetPx,
@@ -715,6 +719,7 @@ private fun CollectionHeroCompact(
     imageIsEmbeddedArt: Boolean,
     fullyRoundedArtwork: Boolean,
     icon: ImageVector?,
+    placeholderIcon: ImageVector,
     onPlayAllClick: (() -> Unit)?,
     onShuffleAllClick: (() -> Unit)?,
     onSubtitleClick: ((String) -> Unit)?,
@@ -751,7 +756,8 @@ private fun CollectionHeroCompact(
                     title = title,
                     imageUrl = imageUrl,
                     imageIsEmbeddedArt = imageIsEmbeddedArt,
-                    icon = icon
+                    icon = icon,
+                    placeholderIcon = placeholderIcon
                 )
             }
 
@@ -830,6 +836,7 @@ private fun CollectionHeroNormal(
     imageIsEmbeddedArt: Boolean,
     fullyRoundedArtwork: Boolean,
     icon: ImageVector?,
+    placeholderIcon: ImageVector,
     onPlayAllClick: (() -> Unit)?,
     onShuffleAllClick: (() -> Unit)?,
     onSubtitleClick: ((String) -> Unit)?,
@@ -863,7 +870,8 @@ private fun CollectionHeroNormal(
                 title = title,
                 imageUrl = imageUrl,
                 imageIsEmbeddedArt = imageIsEmbeddedArt,
-                icon = icon
+                icon = icon,
+                placeholderIcon = placeholderIcon
             )
         }
 
@@ -930,6 +938,7 @@ private fun CollectionHeroImmersiveArtwork(
     imageIsEmbeddedArt: Boolean,
     fullyRoundedArtwork: Boolean,
     icon: ImageVector?,
+    placeholderIcon: ImageVector,
     accentColor: Color,
     transitionAlpha: (() -> Float)?,
     scrollOffsetPx: (() -> Int)?,
@@ -1011,7 +1020,8 @@ private fun CollectionHeroImmersiveArtwork(
                 title = title,
                 imageUrl = imageUrl,
                 imageIsEmbeddedArt = imageIsEmbeddedArt,
-                icon = icon
+                icon = icon,
+                placeholderIcon = placeholderIcon
             )
         }
 
@@ -1148,6 +1158,9 @@ private fun Modifier.reportHeroSearchBarTop(searchState: CollectionSearchState?)
 /**
  * Artwork fill: embedded/plain image, collection icon, or the title's initial.
  *
+ * While the image loads, [placeholderIcon] shows through the artwork surface
+ * (the music note, or the collection's own icon on album/artist pages).
+ *
  * When the image CHANGES in place (e.g. a playlist reordered so its automatic
  * first-track cover picks a different track), the old image keeps rendering on
  * a top layer whose alpha tweens to 0 while the new image draws beneath it —
@@ -1159,7 +1172,8 @@ private fun CollectionHeroArtworkContent(
     title: String,
     imageUrl: String?,
     imageIsEmbeddedArt: Boolean,
-    icon: ImageVector?
+    icon: ImageVector?,
+    placeholderIcon: ImageVector
 ) {
     val context = LocalContext.current
     if (imageUrl != null) {
@@ -1185,7 +1199,8 @@ private fun CollectionHeroArtworkContent(
                 displayed.first,
                 displayed.second,
                 context,
-                Modifier.fillMaxSize()
+                Modifier.fillMaxSize(),
+                placeholderIcon
             )
         } else {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -1193,7 +1208,8 @@ private fun CollectionHeroArtworkContent(
                     displayed.first,
                     displayed.second,
                     context,
-                    Modifier.fillMaxSize()
+                    Modifier.fillMaxSize(),
+                    placeholderIcon
                 )
                 CollectionHeroArtworkImage(
                     fadingArt.first,
@@ -1201,7 +1217,8 @@ private fun CollectionHeroArtworkContent(
                     context,
                     Modifier
                         .fillMaxSize()
-                        .graphicsLayer { alpha = fade.value }
+                        .graphicsLayer { alpha = fade.value },
+                    placeholderIcon
                 )
             }
         }
@@ -1226,7 +1243,8 @@ private fun CollectionHeroArtworkImage(
     imageUrl: String,
     imageIsEmbeddedArt: Boolean,
     context: Context,
-    modifier: Modifier
+    modifier: Modifier,
+    placeholderIcon: ImageVector
 ) {
     val heroArtRequest = remember(imageUrl, imageIsEmbeddedArt) {
         val data = if (imageIsEmbeddedArt) {
@@ -1246,6 +1264,7 @@ private fun CollectionHeroArtworkImage(
         contentDescription = null,
         modifier = modifier,
         placeholderSize = 40.dp,
+        placeholderIcon = placeholderIcon
     )
 }
 
@@ -1849,9 +1868,9 @@ fun CollectionScrollTopBar(
  * chrome zone at its top (list-local 0..[CollectionScrollTopBarZoneHeight]):
  * rows scrolling full-bleed under the chrome dissolve into it instead of just
  * being dimmed by the chrome's (deliberately subtle) gradient scrim — the same
- * alpha-fade look the immersive heroes' artwork has at its bottom edge. At
- * rest nothing is drawn inside the fade zone (the compact/normal lists' top
- * content padding covers it), so resting heroes are unaffected.
+ * alpha-fade look the immersive heroes' artwork has at its bottom edge. At rest
+ * nothing is drawn inside the fade zone (the compact/normal lists' top content
+ * padding covers it), so resting heroes are unaffected.
  *
  * Draw-phase only — an offscreen layer plus a DstIn mask — so scrolling costs
  * no recompositions. The offscreen layer is REQUIRED: without it the DstIn

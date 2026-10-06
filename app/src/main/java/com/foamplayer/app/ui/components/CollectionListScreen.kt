@@ -33,6 +33,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -233,6 +234,9 @@ fun CollectionListScreen(
                 statsText = "$itemCount items",
                 imageUrl = headerImageUrl,
                 icon = headerIcon,
+                // The header icon (the collection's category) doubles as the
+                // image-loading placeholder when the hero has a cover.
+                placeholderIcon = headerIcon ?: Icons.Rounded.MusicNote,
                 onPlayAllClick = null,
                 scrollOffsetPx = heroScrollOffsetPx,
                 modifier = Modifier.align(Alignment.TopStart)
@@ -426,6 +430,9 @@ private fun CollectionListHero(
         statsText = "$itemCount items",
         imageUrl = imageUrl,
         icon = icon,
+        // The collection's category icon (when known) also loads as the
+        // image placeholder while a cover resolves.
+        placeholderIcon = icon ?: Icons.Rounded.MusicNote,
         searchState = searchState,
         onPlayAllClick = null
     )
@@ -456,6 +463,10 @@ private fun CollectionListHero(
  * landing radius all follow the circle, so a round source row lands on a round
  * hero (or morphs to the immersive hero's square with the radius riding the
  * flight) instead of popping between a circle and the album rounding.
+ *
+ * [placeholderIcon] shows while the row's cover loads: the music note by
+ * default, or the collection's own icon on album/artist rows (the album disc,
+ * a person) so the loading look matches the collection.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -469,6 +480,7 @@ fun CollectionListItem(
     imageUrl: String? = null,
     imageIsEmbeddedArt: Boolean = true,
     icon: ImageVector? = null,
+    placeholderIcon: ImageVector = Icons.Rounded.MusicNote,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -577,6 +589,7 @@ fun CollectionListItem(
                     imageUrl,
                     imageIsEmbeddedArt,
                     icon,
+                    placeholderIcon,
                     placeholderSize = 32.dp
                 )
             },
@@ -602,6 +615,7 @@ fun CollectionListItem(
                 imageUrl,
                 imageIsEmbeddedArt,
                 icon,
+                placeholderIcon,
                 placeholderSize = 20.dp
             )
         },
@@ -622,6 +636,7 @@ private fun CollectionArtwork(
     imageUrl: String?,
     imageIsEmbeddedArt: Boolean,
     icon: ImageVector?,
+    placeholderIcon: ImageVector,
     placeholderSize: Dp
 ) {
     val context = LocalContext.current
@@ -641,7 +656,8 @@ private fun CollectionArtwork(
             model = albumArtRequest,
             contentDescription = "Album Art",
             modifier = Modifier.fillMaxSize(),
-            placeholderSize = placeholderSize
+            placeholderSize = placeholderSize,
+            placeholderIcon = placeholderIcon
         )
     } else if (icon != null) {
         Icon(

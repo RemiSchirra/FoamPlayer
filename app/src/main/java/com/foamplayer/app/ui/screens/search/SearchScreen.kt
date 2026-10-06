@@ -370,7 +370,7 @@ fun SearchScreen(
                     selected = filters.allEnabled,
                     modifier = Modifier.weight(1f),
                     onClick = { searchViewModel.setAllFiltersEnabled(!filters.allEnabled) },
-                    onLongClick = { searchViewModel.setAllFiltersEnabled(!filters.allEnabled) }
+                    onLongClick = { searchViewModel.soloSearchFilter(SearchFilter.ARTISTS) }
                 )
                 SearchFilterChip(
                     label = "Artists",
@@ -750,6 +750,8 @@ private fun SearchFilterChip(
  *
  * The portrait loads either a plain file (Spotify picture) or an audio file's
  * embedded art ([imageIsEmbeddedArt]) — the automatic first-track fallback.
+ * While the portrait loads, the person icon shows through instead of the
+ * generic music note.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -820,7 +822,8 @@ fun ArtistSearchResultItem(
                 AlbumArtImage(
                     model = artRequest,
                     contentDescription = null,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    placeholderIcon = Icons.Rounded.Person
                 )
             } else {
                 BasicText(
@@ -860,6 +863,8 @@ fun ArtistSearchResultItem(
 /**
  * One album result row: square art (or initial) plus album and artist lines.
  * Joins the shared-element flight into the album detail hero when clicked.
+ * While the cover loads, the album disc shows through instead of the generic
+ * music note.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -921,7 +926,8 @@ fun AlbumSearchResultItem(
                 AlbumArtImage(
                     model = albumArtRequest,
                     contentDescription = null,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    placeholderIcon = Icons.Rounded.Album
                 )
             } else {
                 BasicText(

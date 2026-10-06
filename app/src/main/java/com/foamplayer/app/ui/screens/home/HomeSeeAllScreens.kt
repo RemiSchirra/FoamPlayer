@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -233,7 +236,9 @@ fun RecommendedAlbumsSeeAllScreen(
                         .takeIf { isActiveSharedCollection("album", album.album) },
                     immersiveFlightHero = LocalCollectionHeroLayoutLookup
                         .current(CollectionHeroTarget.Album)
-                        .isImmersive
+                        .isImmersive,
+                    // Album rows load their cover under the album disc.
+                    placeholderIcon = Icons.Rounded.Album
                 )
             }
         }
@@ -422,6 +427,8 @@ fun FavoriteArtistsSeeAllScreen(
                     immersiveFlightHero = LocalCollectionHeroLayoutLookup
                         .current(CollectionHeroTarget.Artist)
                         .isImmersive,
+                    // Artist rows load their portrait under the person icon.
+                    placeholderIcon = Icons.Rounded.Person,
                     // Artist rows render fully round on every screen.
                     fullyRoundedArtwork = true
                 )

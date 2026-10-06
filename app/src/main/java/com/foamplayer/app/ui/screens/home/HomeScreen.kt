@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -242,6 +245,8 @@ fun HomeScreen(
                     sharedArtKey = "album-art-${album.album}".takeIf { inFlight },
                     sharedTitleKey = "album-title-${album.album}".takeIf { inFlight },
                     flightHeroTarget = CollectionHeroTarget.Album,
+                    // Album cards load their cover under the album disc.
+                    placeholderIcon = Icons.Rounded.Album,
                     modifier = Modifier
                         .let { if (inFlight) it else it.animateItem() }
                 )
@@ -341,6 +346,8 @@ fun HomeScreen(
                     sharedArtKey = "artist-art-${artist.name}".takeIf { inFlight },
                     sharedTitleKey = "artist-title-${artist.name}".takeIf { inFlight },
                     flightHeroTarget = CollectionHeroTarget.Artist,
+                    // Artist cards load their portrait under the person icon.
+                    placeholderIcon = Icons.Rounded.Person,
                     modifier = Modifier
                         .let { if (inFlight) it else it.animateItem() }
                 )

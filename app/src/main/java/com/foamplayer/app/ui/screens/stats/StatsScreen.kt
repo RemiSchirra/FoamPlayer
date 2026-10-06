@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -624,7 +625,8 @@ internal fun TopTrackRow(
 /**
  * Ranked artist row: picture (or monogram disc), name, listening time. Opens
  * the artist page. The picture is either a Spotify cache file or the artist's
- * first track with embedded art ([cover] says which).
+ * first track with embedded art ([cover] says which). While the portrait
+ * loads, the person icon shows through instead of the generic music note.
  */
 @Composable
 internal fun TopArtistRow(
@@ -658,7 +660,8 @@ internal fun TopArtistRow(
                     model = artRequest,
                     contentDescription = artist.name,
                     modifier = Modifier.fillMaxSize(),
-                    placeholderSize = 20.dp
+                    placeholderSize = 20.dp,
+                    placeholderIcon = Icons.Rounded.Person
                 )
             } else {
                 BasicText(
@@ -676,7 +679,11 @@ internal fun TopArtistRow(
     )
 }
 
-/** Ranked album row: artwork, album/artist, play count. Opens the album page. */
+/**
+ * Ranked album row: artwork, album/artist, play count. Opens the album page.
+ * While the cover loads, the album disc shows through instead of the generic
+ * music note.
+ */
 @Composable
 internal fun TopAlbumRow(
     entry: TopAlbumStat,
@@ -696,7 +703,8 @@ internal fun TopAlbumRow(
                     model = model,
                     contentDescription = entry.album,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    placeholderIcon = Icons.Rounded.Album
                 )
             } else {
                 BasicText(

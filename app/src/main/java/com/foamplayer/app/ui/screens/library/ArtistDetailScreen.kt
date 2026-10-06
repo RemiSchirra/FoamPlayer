@@ -25,6 +25,8 @@ import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -223,8 +225,8 @@ fun ArtistDetailScreen(
     // grid is brought up so the bar opens at the screen top — below the floating
     // back row, which covers the grid top on every hero layout (the grid
     // scrolls full-bleed beneath it). The open bottom padding keeps the bar
-    // reachable even when the artist has only a handful of rows (no scroll
-    // range otherwise) and the rows visible above the keyboard.
+    // reachable even when the artist has only a handful of rows (no scroll range
+    // otherwise) and the rows visible above the keyboard.
     CollectionSearchScrollToBarEffect(
         searchState = searchState,
         listState = null,
@@ -256,6 +258,9 @@ fun ArtistDetailScreen(
                 animatedVisibilityScope = animatedVisibilityScope,
                 sharedElementKey = artistName,
                 sharedElementPrefix = "artist",
+                // The artist page loads its portrait under the person icon,
+                // not the generic music note.
+                placeholderIcon = Icons.Rounded.Person,
                 modifier = Modifier.align(Alignment.TopStart),
                 // The artist image is fully round at its sources; the immersive
                 // hero morphs that circle to its own square (radius 0) look
@@ -359,7 +364,9 @@ fun ArtistDetailScreen(
                             .takeIf { isActiveSharedCollection("album", album.album) },
                         immersiveFlightHero = LocalCollectionHeroLayoutLookup
                             .current(CollectionHeroTarget.Album)
-                            .isImmersive
+                            .isImmersive,
+                        // Album rows load their cover under the album disc.
+                        placeholderIcon = Icons.Rounded.Album
                     )
                 }
             }
@@ -489,6 +496,9 @@ private fun ArtistHero(
         animatedVisibilityScope = animatedVisibilityScope,
         sharedElementKey = sharedElementKey,
         sharedElementPrefix = "artist",
+        // The artist page loads its portrait under the person icon, not the
+        // generic music note.
+        placeholderIcon = Icons.Rounded.Person,
         // Non-immersive artist heroes rest on the same full circle as the
         // source rows; the flight keeps circle -> circle (no radius pop).
         fullyRoundedArtwork = true

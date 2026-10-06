@@ -3,6 +3,8 @@ package com.foamplayer.app.ui.screens.library
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -86,6 +88,8 @@ fun AlbumDetailScreen(
         immersiveMode = immersiveMode,
         // The single album's track list is short enough to page through; no
         // fast scrollbar there (the browse list of albums keeps its own).
-        showScrollbar = false
+        showScrollbar = false,
+        // The hero's artwork loads under the album disc, not the generic note.
+        heroPlaceholderIcon = Icons.Rounded.Album
     )
 }

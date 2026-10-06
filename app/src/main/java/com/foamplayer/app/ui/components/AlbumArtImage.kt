@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -32,7 +33,12 @@ import kotlinx.coroutines.launch
 private const val AlbumArtFadeInDurationMs = 200
 
 /**
- * Album artwork with a music-note placeholder and a fade-in for real loads.
+ * Album artwork with a placeholder icon and a fade-in for real loads.
+ *
+ * While the artwork loads, [placeholderIcon] shows through: the music note by
+ * default, or the collection's own icon for surfaces whose kind is known --
+ * the album disc for albums, a person for artists -- so the placeholder reads
+ * as the collection rather than a generic track.
  *
  * Coil emits [AsyncImagePainter.State.Loading] for EVERY request -- memory-cache
  * hits included -- before delivering the result (RealImageLoader calls the
@@ -41,13 +47,13 @@ private const val AlbumArtFadeInDurationMs = 200
  * to full alpha synchronously inside the same composition pass, so shared
  * element flights (row -> album header) and revisited list rows draw the image
  * on their very first frame with no placeholder flash and no fade. Only a
- * genuine load (disk / embedded art decode) shows the note and fades the
- * decoded image in over 200ms when it arrives.
+ * genuine load (disk / embedded art decode) shows the placeholder and fades
+ * the decoded image in over 200ms when it arrives.
  *
- * The note sits BEHIND the image and is removed on success, so the fade runs
- * cleanly over the artwork surface; on error the note stays visible. Every
- * state is keyed on the model so recycled lazy-list rows reset for their new
- * item instead of inheriting the previous item's fade state.
+ * The placeholder sits BEHIND the image and is removed on success, so the fade
+ * runs cleanly over the artwork surface; on error the placeholder stays
+ * visible. Every state is keyed on the model so recycled lazy-list rows reset
+ * for their new item instead of inheriting the previous item's fade state.
  *
  * Scroll-cost notes (this composable is on every media-list row):
  *  - The Loading branch only writes state it is actually CHANGING. Coil fires
@@ -67,7 +73,8 @@ fun AlbumArtImage(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
-    placeholderSize: Dp = 20.dp
+    placeholderSize: Dp = 20.dp,
+    placeholderIcon: ImageVector = Icons.Rounded.MusicNote
 ) {
     // Parked at 1f; only a running fade writes frames into it.
     val alphaState = remember(model) { mutableFloatStateOf(1f) }
@@ -81,7 +88,7 @@ fun AlbumArtImage(
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         if (showPlaceholder) {
             Icon(
-                imageVector = Icons.Rounded.MusicNote,
+                imageVector = placeholderIcon,
                 contentDescription = null,
                 tint = FoamTheme.colors.textSecondary,
                 modifier = Modifier.size(placeholderSize)

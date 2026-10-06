@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -146,7 +148,9 @@ fun AlbumsBrowseScreen(
                         .takeIf { isActiveSharedCollection("album", album.album) },
                     immersiveFlightHero = LocalCollectionHeroLayoutLookup
                         .current(CollectionHeroTarget.Album)
-                        .isImmersive
+                        .isImmersive,
+                    // Album rows load their cover under the album disc.
+                    placeholderIcon = Icons.Rounded.Album
                 )
             }
         }
@@ -236,6 +240,8 @@ fun ArtistsBrowseScreen(
                     immersiveFlightHero = LocalCollectionHeroLayoutLookup
                         .current(CollectionHeroTarget.Artist)
                         .isImmersive,
+                    // Artist rows load their portrait under the person icon.
+                    placeholderIcon = Icons.Rounded.Person,
                     // Artist rows render fully round on every screen.
                     fullyRoundedArtwork = true
                 )
@@ -775,6 +781,8 @@ fun CollectionArtistsScreen(
                     immersiveFlightHero = LocalCollectionHeroLayoutLookup
                         .current(CollectionHeroTarget.Artist)
                         .isImmersive,
+                    // Artist rows load their portrait under the person icon.
+                    placeholderIcon = Icons.Rounded.Person,
                     // Artist rows render fully round on every screen.
                     fullyRoundedArtwork = true
                 )
@@ -872,7 +880,9 @@ fun CollectionAlbumsScreen(
                     imageUrl = entry.albumArtPath,
                     onClick = { onAlbumClick(entry) },
                     active = CollectionId.album(entry.album) == activeCollectionId,
-                    density = density
+                    density = density,
+                    // Album rows load their cover under the album disc.
+                    placeholderIcon = Icons.Rounded.Album
                 )
             }
         }
