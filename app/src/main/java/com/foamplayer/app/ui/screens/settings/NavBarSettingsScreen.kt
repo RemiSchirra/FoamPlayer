@@ -63,13 +63,13 @@ private enum class NavBarSection { PRIMARY, SECONDARY }
  *   0      – mode enum item
  *   1      – transparency item
  *   2      – "Main bar" section header
- *   3..8   – main bar items (5 screen items + the MORE toggle marker)
- *   9      – "Second bar" section header
- *   10..15 – second bar items (6: the screen items + Stats)
- *   16     – bottom spacer
+ *   3..9   – main bar items (6 screen items + the MORE toggle marker)
+ *   10     – "Second bar" section header
+ *   11..16 – second bar items (6: the screen items + Stats)
+ *   17     – bottom spacer
  */
 private const val PRIMARY_SECTION_START = 3
-private const val SECONDARY_SECTION_START = 10
+private const val SECONDARY_SECTION_START = 11
 private val PRIMARY_SECTION_RANGE = PRIMARY_SECTION_START until SECONDARY_SECTION_START - 1
 private val SECONDARY_SECTION_RANGE = SECONDARY_SECTION_START until SECONDARY_SECTION_START + 6
 

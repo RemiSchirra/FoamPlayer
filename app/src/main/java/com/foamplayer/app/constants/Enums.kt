@@ -528,12 +528,30 @@ val AllNavBarScreenItems = DefaultNavBarScreenItems + NavBarItem.STATS
 /** Default layout of the second bar: the screen items, with Stats last. */
 val DefaultNavBarSecondaryOrder = DefaultNavBarScreenItems + NavBarItem.STATS
 
-/** Default layout of the main bar: the screen items, with the "more" toggle last. */
-val DefaultNavBarPrimaryOrder = DefaultNavBarScreenItems + NavBarItem.MORE
+/** Default layout of the main bar: every placeable item, with the "more" toggle last. */
+val DefaultNavBarPrimaryOrder = AllNavBarScreenItems + NavBarItem.MORE
 
 /**
- * Parses a stored, comma-separated [NavBarItem] order string, appending unknown
- * or missing entries in their default position so every [allowed] item appears exactly once.
+ * Completes [order] so it contains every [allowed] item exactly once, appending
+ * missing entries in their default position. Newly-added entries slot in before
+ * a trailing [NavBarItem.MORE] marker so the main bar's expand toggle keeps its
+ * default last position (the case of stored layouts written before an item
+ * existed, e.g. the Stats migration); everywhere else they are appended at the end.
+ */
+fun completeNavBarItemOrder(order: List<NavBarItem>, allowed: List<NavBarItem>): List<NavBarItem> {
+    val parsed = order.filter { it in allowed }.distinct()
+    val missing = allowed.filterNot { it in parsed }
+    if (missing.isEmpty()) return parsed
+    return if (parsed.lastOrNull() == NavBarItem.MORE) {
+        parsed.dropLast(1) + missing + NavBarItem.MORE
+    } else {
+        parsed + missing
+    }
+}
+
+/**
+ * Parses a stored, comma-separated [NavBarItem] order string, completing it with
+ * [completeNavBarItemOrder] so every [allowed] item appears exactly once.
  */
 fun deserializeNavBarItemOrder(orderStr: String?, allowed: List<NavBarItem>): List<NavBarItem> {
     if (orderStr.isNullOrBlank()) return allowed
@@ -544,7 +562,7 @@ fun deserializeNavBarItemOrder(orderStr: String?, allowed: List<NavBarItem>): Li
             .mapNotNull { name -> allowed.find { it.name == name.trim() } }
             .distinct()
 
-    return parsed + allowed.filterNot { it in parsed }
+    return completeNavBarItemOrder(parsed, allowed)
 }
 
 /**

@@ -18,6 +18,7 @@ import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.PreferredLyricsProvider
+import com.foamplayer.app.constants.completeNavBarItemOrder
 import com.foamplayer.app.constants.defaultSortMode
 
 /** The complete, validated set of user-configurable application preferences. */
@@ -229,9 +230,9 @@ data class AppSettings(
             gradientStops = gradientStops.sanitizedGradientStops(),
             artistSeparators = artistSeparators.normalizedSeparators(),
             genreSeparators = genreSeparators.normalizedSeparators(),
-            navBarPrimaryOrder = normalizedNavBarOrder(navBarPrimaryOrder, DefaultNavBarPrimaryOrder),
+            navBarPrimaryOrder = completeNavBarItemOrder(navBarPrimaryOrder, DefaultNavBarPrimaryOrder),
             navBarPrimaryEnabled = finalPrimaryEnabled,
-            navBarSecondaryOrder = normalizedNavBarOrder(navBarSecondaryOrder, DefaultNavBarSecondaryOrder),
+            navBarSecondaryOrder = completeNavBarItemOrder(navBarSecondaryOrder, DefaultNavBarSecondaryOrder),
             navBarSecondaryEnabled = secondaryEnabled
         )
     }
@@ -286,10 +287,4 @@ private fun List<GradientStop>.sanitizedGradientStops(): List<GradientStop> {
         .distinct()
         .take(AppSettings.MAX_GRADIENT_STOPS)
     return cleaned.ifEmpty { AppSettings.DefaultGradientStops }
-}
-
-/** Completes a stored nav-bar order so it contains every [allowed] item exactly once. */
-private fun normalizedNavBarOrder(order: List<NavBarItem>, allowed: List<NavBarItem>): List<NavBarItem> {
-    val parsed = order.filter { it in allowed }.distinct()
-    return parsed + allowed.filterNot { it in parsed }
 }
