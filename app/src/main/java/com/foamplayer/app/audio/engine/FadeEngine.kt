@@ -112,6 +112,11 @@ class FadeEngine @Inject constructor(
     private var rampStartedAtNanos: Long = 0L
     private var activeFadeIsCrossfade: Boolean = false
 
+    // Target of the running crossfade, kept so it can be completed early (see completeCrossfadeNow).
+    private var crossfadeTargetIndex: Int = -1
+    private var crossfadeTargetTrackId: Long = -1L
+    private var crossfadeTargetPositionMs: Long = 0L
+
     // Ramp progress at which the logical switch fires; 0 for quick fades, 0.5 for auto.
     private var switchAtT: Float = 0f
     private var logicalSwitchFired: Boolean = false
@@ -196,6 +201,9 @@ class FadeEngine @Inject constructor(
 
         isFading = true
         activeFadeIsCrossfade = true
+        crossfadeTargetIndex = targetQueueIndex
+        crossfadeTargetTrackId = targetTrackId
+        crossfadeTargetPositionMs = targetPositionMs
         rampDurationMs = durationMs
         rampStartedAtNanos = System.nanoTime()
         secondary = newPlayer
@@ -345,6 +353,21 @@ class FadeEngine @Inject constructor(
         fadeJob?.cancel()
         fadeJob = null
         restoreAfterAbort(h, switchHadFired)
+    }
+
+    /** True while a crossfade (not a quick fade-in/out) is running. */
+    val isCrossfading: Boolean get() = isFading && activeFadeIsCrossfade
+
+    /**
+     * Jumps to the end of a running crossfade: promotes the incoming stream and releases the
+     * outgoing one. Volumes are left where the ramp put them, so there's no audible jump;
+     * the caller owns restoring the base volume afterwards. Returns true if a crossfade
+     * was completed.
+     */
+    fun completeCrossfadeNow(): Boolean {
+        if (!isCrossfading) return false
+        finishCrossfadeNow(crossfadeTargetIndex, crossfadeTargetTrackId, crossfadeTargetPositionMs)
+        return true
     }
 
     // ----------------------------------------------------------------- swap

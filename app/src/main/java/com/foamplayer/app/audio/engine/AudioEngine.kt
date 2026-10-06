@@ -1264,7 +1264,12 @@ class AudioEngine @Inject constructor(
     }
 
     fun pause() {
+        // Mid-crossfade, `player` is still the outgoing stream while the UI already shows
+        // the incoming one: settle on the incoming stream first, then pause it.
+        val settledCrossfade = fadeEngine.completeCrossfadeNow()
+
         if (fadeEngine.quickFadeEnabled && player.isPlaying) {
+            // fadeOutAndPause() starts from player.volume, i.e. the ramp's current value.
             fadeEngine.fadeOutAndPause()
             _playbackState.value = _playbackState.value.copy(
                 isPlaying = false,
@@ -1272,6 +1277,8 @@ class AudioEngine @Inject constructor(
             )
         } else {
             player.pause()
+            // The promoted player may still carry a partial ramp volume.
+            if (settledCrossfade) player.volume = fadeHost.playerBaseVolume()
         }
     }
 
