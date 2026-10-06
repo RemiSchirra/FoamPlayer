@@ -210,9 +210,20 @@ private fun NavGraphBuilder.composable(
     arguments: List<NamedNavArgument> = emptyList(),
     content: @Composable AnimatedContentScope.(NavBackStackEntry) -> Unit
 ) {
+    // Settings pages are opaque and sit on the plain theme background (the root
+    // art/custom/gradient layers are hidden on settings routes). Painting that
+    // background BEFORE the status-bar padding makes the page cover the status
+    // bar zone too, so it slides/fades as one surface instead of leaving the
+    // root backdrop visible behind the status bar during the transition.
+    val paintsStatusBar = isSettingsRoute(route)
     navComposable(route = route, arguments = arguments) { entry ->
         val contentScope = this
-        Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (paintsStatusBar) Modifier.background(FoamTheme.colors.background) else Modifier)
+                .statusBarsPadding()
+        ) {
             contentScope.content(entry)
         }
     }
