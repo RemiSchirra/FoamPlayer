@@ -946,13 +946,9 @@ fun FullPlayerScreen(
                 PlaybackProgressSlider(
                     durationMs = durationMs,
                     seekBarProgress = seekBarProgress,
-                    isAnimateSeekBarEnabled = settleSeekBarAnimated,
+                    isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                     onSeek = { positionMs -> viewModel.seekTo(positionMs) },
-                    seekBarStyle = seekBarStyle,
-                    track = track,
-                    morphFromWaveform = morphFromWaveform,
-                    morphTargetWaveform = morphTargetWaveform,
-                    trackChangeProgress = envelopeMorphProgress,
+                    seekBarStyle = SeekBarStyle.NORMAL,
                     labelSpacing = 2.dp,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
