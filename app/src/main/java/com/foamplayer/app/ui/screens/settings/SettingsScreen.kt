@@ -39,6 +39,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.BuildConfig
 import com.foamplayer.app.R
 import com.foamplayer.app.data.backup.BackupFeature
+import com.foamplayer.app.ui.components.ScreenTitle
 import com.foamplayer.app.ui.modals.BackupLoadingModal
 import com.foamplayer.app.ui.modals.BackupModalType
 import com.foamplayer.app.ui.modals.BackupResultModal
@@ -69,16 +70,27 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(FoamTheme.colors.background)
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.settings),
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
+        Box(
+            modifier = Modifier.padding(
+                top = FoamDimens.paddingMedium,
+                start = FoamDimens.paddingSmall,
+                end = FoamDimens.paddingSmall
+            )
+        ) {
+            ScreenTitle(
+                icon = FoamTheme.icons.current.settings,
+                title = stringResource(R.string.settings)
+            )
+        }
 
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
-            contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
+            contentPadding = PaddingValues(
+                top = FoamDimens.paddingMedium,
+                bottom = LocalBottomBarClearance.current
+            )
         ) {
             item {
                 SettingsCategoryItem(
