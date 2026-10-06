@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -35,6 +36,9 @@ import com.foamplayer.app.ui.utils.WaveformState
 import kotlinx.coroutines.delay
 import kotlin.math.max
 import kotlin.math.pow
+
+/** Duration of the grow / release tween while the bar is being pressed or dragged. */
+private const val GROW_TWEEN_MS = 200
 
 /** Duration of the glide between the shape on screen and a newly available envelope. */
 private const val ENVELOPE_SETTLE_MS = 350
@@ -135,14 +139,20 @@ fun WaveformSeekBar(
     barWidth: Dp = 3.dp,
     barSpacing: Dp = 3.dp,
     trackHeight: Dp = 28.dp,
-    growFactor: Float = 1.8f,
+    growFactor: Float = 1.5f,
     isDragging: Boolean = false
 ) {
     val currentOnValueChange by rememberUpdatedState(onValueChange)
 
-    // Bars grow taller while the user drags the bar, like FoamSlider's track.
+    // The bar tracks its own press state, so the grow works even when the host does
+    // not forward [isDragging]; the parameter still forces it on when set.
+    var isPressed by remember { mutableStateOf(false) }
+
+    // Bars grow taller while the user presses/drags the bar, like FoamSlider's
+    // track, and tween back to normal on release.
     val animatedTrackHeight by animateDpAsState(
-        targetValue = if (isDragging) trackHeight * growFactor else trackHeight,
+        targetValue = if (isDragging || isPressed) trackHeight * growFactor else trackHeight,
+        animationSpec = tween(GROW_TWEEN_MS, easing = FastOutSlowInEasing),
         label = "waveformTrackHeight"
     )
 
@@ -193,16 +203,22 @@ fun WaveformSeekBar(
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    val width = size.width
-                    if (width > 0) {
-                        currentOnValueChange((down.position.x / width).coerceIn(0f, 1f))
-                    }
-                    down.consume()
-                    drag(down.id) { change ->
+                    isPressed = true
+                    try {
+                        val width = size.width
                         if (width > 0) {
-                            currentOnValueChange((change.position.x / width).coerceIn(0f, 1f))
+                            currentOnValueChange((down.position.x / width).coerceIn(0f, 1f))
                         }
-                        if (change.pressed) change.consume()
+                        down.consume()
+                        drag(down.id) { change ->
+                            if (width > 0) {
+                                currentOnValueChange((change.position.x / width).coerceIn(0f, 1f))
+                            }
+                            if (change.pressed) change.consume()
+                        }
+                    } finally {
+                        // Also runs when the gesture is cancelled.
+                        isPressed = false
                     }
                 }
             },
@@ -211,7 +227,9 @@ fun WaveformSeekBar(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(animatedTrackHeight)
+                // requiredHeight: the 32dp container would otherwise clamp the grown
+                // height back down; the bars overflow it (centered) instead.
+                .requiredHeight(animatedTrackHeight)
                 .drawBehind {
                     val width = size.width
                     if (width <= 0f) return@drawBehind
