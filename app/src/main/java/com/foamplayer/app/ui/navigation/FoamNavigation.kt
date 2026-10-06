@@ -888,7 +888,7 @@ fun FoamNavHost(
                         forceDynamic = forceDynamicBackgroundInPlayer,
                         canvasUrl = fullPlayerBackdropState.canvasUrl,
                         canvasPlaying = fullPlayerBackdropState.canvasPlaying,
-                        canvasSwipeFraction = fullPlayerBackdropState.canvasSwipeFraction,
+                        canvasAnchor = fullPlayerBackdropState.canvasAnchor,
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer { alpha = playerBackdropAlpha() }

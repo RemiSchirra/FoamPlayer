@@ -47,6 +47,12 @@ import com.foamplayer.app.ui.theme.FoamTheme
 
 
 /**
+ * Which layer of the backdrop's front/back art pair belongs to the track that owns the
+ * animated canvas. [NONE] = the canvas' track is not part of the pair (or no canvas).
+ */
+enum class CanvasAnchor { NONE, FRONT, BACK }
+
+/**
  * Backdrop state written by [FullPlayerScreen] and read by the root-level backdrop host in
  * FoamNavigation. The full player's new modes (custom image / gradient) reuse the same
  * treatment as the dynamic art: the full player's backdrop is deliberately rendered at the
@@ -69,8 +75,13 @@ class FullPlayerBackdropState {
     var canvasUrl by mutableStateOf<String?>(null)
     /** False while the video is hidden (subview up / player closing): playback pauses, frame stays. */
     var canvasPlaying by mutableStateOf(false)
-    /** Draw-phase pager-drag fade: 0 = canvas fully visible, 1 = faded out (page fully swiped). */
-    var canvasSwipeFraction: () -> Float = { 0f }
+    /**
+     * Slot of the canvas' track in the front/back pair, published together with the art
+     * paths so both always describe the same pager snapshot. The canvas is never faded by
+     * the swipe: it stays at full opacity as the bottom layer and the other page fades in
+     * on top of it.
+     */
+    var canvasAnchor by mutableStateOf(CanvasAnchor.NONE)
     var crossfadeFraction: () -> Float = { 0f }
     var subViewBlurProgress: () -> Float = { 0f }
 }
@@ -191,15 +202,15 @@ internal fun DynamicAlbumArtBackground(
             val backRequest = remember(backArtPath, backArtIsEmbedded) {
                 artRequest(backArtPath, backArtIsEmbedded)
             }
-                AsyncImage(
-                    model = backRequest,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .performantBlur(blur)
-                        .graphicsLayer { alpha = crossfadeFraction() },
-                    contentScale = ContentScale.Crop,
-                )
+            AsyncImage(
+                model = backRequest,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .performantBlur(blur)
+                    .graphicsLayer { alpha = crossfadeFraction() },
+                contentScale = ContentScale.Crop,
+            )
         }
         Box(
             modifier = Modifier
@@ -330,7 +341,7 @@ internal fun AlbumArtBackdrop(
     forceDynamic: Boolean = false,
     canvasUrl: String? = null,
     canvasPlaying: Boolean = false,
-    canvasSwipeFraction: () -> Float = { 0f }
+    canvasAnchor: CanvasAnchor = CanvasAnchor.NONE
 ) {
     if (immersive) {
         ImmersiveAlbumArtBackdrop(
@@ -343,7 +354,7 @@ internal fun AlbumArtBackdrop(
             foregroundModifier = foregroundModifier,
             canvasUrl = canvasUrl,
             canvasPlaying = canvasPlaying,
-            canvasSwipeFraction = canvasSwipeFraction
+            canvasAnchor = canvasAnchor
         )
         return
     }
@@ -429,7 +440,7 @@ private fun ImmersiveAlbumArtBackdrop(
     foregroundModifier: Modifier = Modifier,
     canvasUrl: String? = null,
     canvasPlaying: Boolean = false,
-    canvasSwipeFraction: () -> Float = { 0f }
+    canvasAnchor: CanvasAnchor = CanvasAnchor.NONE
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val sharpArtHeight = maxHeight * 0.55f
@@ -447,29 +458,18 @@ private fun ImmersiveAlbumArtBackdrop(
                 .height(sharpArtHeight)
                 .then(foregroundModifier)
         ) {
-            AlbumArtImagePair(
+            CanvasAwareArtPair(
                 frontArtPath = frontArtPath,
                 backArtPath = backArtPath,
                 crossfadeFraction = crossfadeFraction,
+                canvasUrl = canvasUrl,
+                canvasPlaying = canvasPlaying,
+                canvasAnchor = canvasAnchor,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer { alpha = 1f - subViewProgress() }
                     .fadeIntoBlur()
-            ) {
-                // Drawn inside the sharp pair's layer so it inherits the exact
-                // same subview fade and blur-blend mask as the static art; the
-                // swipe fraction fades it out in lock-step with a horizontal
-                // page drag, like the artwork crossfade underneath.
-                if (canvasUrl != null) {
-                    AnimatedCanvasArt(
-                        url = canvasUrl,
-                        playing = canvasPlaying,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { alpha = 1f - canvasSwipeFraction() }
-                    )
-                }
-            }
+            )
         }
         BackdropGradient(modifier = Modifier.padding(bottom = bottomFadeInset))
     }
@@ -523,8 +523,7 @@ private fun AlbumArtImagePair(
     frontArtPath: String?,
     backArtPath: String?,
     crossfadeFraction: () -> Float,
-    modifier: Modifier,
-    canvas: (@Composable () -> Unit)? = null
+    modifier: Modifier
 ) {
     val context = LocalContext.current
     fun request(path: String) = ImageRequest.Builder(context)
@@ -552,6 +551,79 @@ private fun AlbumArtImagePair(
                 contentScale = ContentScale.Crop
             )
         }
-        canvas?.invoke()
+    }
+}
+
+/**
+ * The sharp art pair with the animated canvas.
+ *
+ * Layer order is always: bottom art, canvas, top art. The canvas' track is the BOTTOM
+ * layer (art + video, video at full opacity) and the other page is the TOP layer that
+ * fades in over it -- a plain crossfade where the video is never dimmed, so neither the
+ * static art of the canvas' track nor a second image can show through it:
+ *  - canvas track is the front page (swiping forward): bottom = front, top = back,
+ *    top alpha = crossfadeFraction (0 -> 1);
+ *  - canvas track is the back page (swiping backward): bottom = back, top = front,
+ *    top alpha = 1 - crossfadeFraction (the front page is the incoming one).
+ * Same picture the plain front/back pair produces, only the canvas stays in a fixed
+ * place of the tree (never re-parented, so the player is never rebuilt mid-swipe).
+ * When the canvas' track is not in the pair ([CanvasAnchor.NONE]) the video is hidden
+ * and the pair renders as usual.
+ */
+@Composable
+private fun CanvasAwareArtPair(
+    frontArtPath: String?,
+    backArtPath: String?,
+    crossfadeFraction: () -> Float,
+    canvasUrl: String?,
+    canvasPlaying: Boolean,
+    canvasAnchor: CanvasAnchor,
+    modifier: Modifier
+) {
+    val context = LocalContext.current
+    fun request(path: String) = ImageRequest.Builder(context)
+        .data(EmbeddedAlbumArt(path.toUri()))
+        .size(AlbumArtRequestSize)
+        .crossfade(false)
+        .build()
+
+    val canvasIsBack = canvasUrl != null && canvasAnchor == CanvasAnchor.BACK
+    val bottomPath = if (canvasIsBack) backArtPath else frontArtPath
+    val topPath = if (canvasIsBack) frontArtPath else backArtPath
+
+    Box(modifier = modifier) {
+        if (bottomPath != null) {
+            val bottomRequest = remember(bottomPath) { request(bottomPath) }
+            AsyncImage(
+                model = bottomRequest,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+        if (canvasUrl != null) {
+            val canvasVisible = canvasAnchor != CanvasAnchor.NONE
+            AnimatedCanvasArt(
+                url = canvasUrl,
+                playing = canvasPlaying,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = if (canvasVisible) 1f else 0f }
+            )
+        }
+        if (topPath != null && topPath != bottomPath) {
+            val topRequest = remember(topPath) { request(topPath) }
+            AsyncImage(
+                model = topRequest,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val fraction = crossfadeFraction()
+                        alpha = if (canvasIsBack) 1f - fraction else fraction
+                    },
+                contentScale = ContentScale.Crop
+            )
+        }
     }
 }

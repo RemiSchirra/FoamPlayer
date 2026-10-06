@@ -76,6 +76,14 @@ import kotlin.math.abs
  * root reads [heroArtCenterY] (root coordinates) and pairs it with the flight target
  * (mini player art or the origin collection's centered row) to size the swipe.
  */
+/** A resolved animated canvas and the queue entry it belongs to. */
+private data class AnimatedCoverOwner(val entryId: Long, val url: String)
+
+/** Plain holder (not snapshot state): the canvas shown last, kept while its page is still settled. */
+private class AnimatedCoverCarry {
+    var owner: AnimatedCoverOwner? = null
+}
+
 class PlayerFlightGeometryState {
     var heroArtCenterY: Float by mutableFloatStateOf(Float.NaN)
 }
@@ -218,31 +226,23 @@ fun FullPlayerScreen(
     }
 
     // Animated canvas resolution: only for the immersive player, only while the
-    // feature setting is on. Keyed on the track so a pager skip cancels any
-    // in-flight fetch and resolves the new track's canvas instead; null keeps
-    // the video layer out of composition entirely (zero overhead when off).
-    // The resolved url is stored WITH the track id it belongs to and is gated on
-    // the current track id here, in composition: the LaunchedEffect below clears
-    // the old url only after this frame's apply, and the SideEffect further down
-    // publishes a composition-time snapshot of the url -- without the gate, the
-    // first frame after a swipe commit pairs the STALE url with a reset swipe
-    // fraction (back to 0), flashing the old video at full opacity for exactly
-    // one frame instead of staying faded out until the new canvas resolves.
-    var animatedCoverForTrack by remember { mutableStateOf<Pair<Long, String?>?>(null) }
-    LaunchedEffect(track.id, isAnimatedCoverEnabled, allowMobileDataForCanvas) {
-        // Cut any previous track's video at once: the backdrop's static-art
-        // crossfade takes over while the new canvas resolves, then fades in.
-        animatedCoverForTrack = null
-        if (isAnimatedCoverEnabled) {
-            val url = viewModel
-                .resolveAnimatedCover(track, allowMobileDataForCanvas)
-                ?.preferredAnimationUrl
-            animatedCoverForTrack = track.id to url
+    // feature setting is on. Keyed on the queue entry so a pager skip cancels any
+    // in-flight fetch and resolves the new track's canvas instead. The result is stored
+    // WITH the queue entry it belongs to and is never cleared when the track changes:
+    // which canvas is actually shown (and for how long the previous one is kept) is
+    // decided further down, once the pager exists.
+    val currentEntryId = queueEntryIds.getOrNull(queueIndex)
+    var resolvedCover by remember { mutableStateOf<AnimatedCoverOwner?>(null) }
+    LaunchedEffect(track.id, currentEntryId, isAnimatedCoverEnabled, allowMobileDataForCanvas) {
+        if (!isAnimatedCoverEnabled || currentEntryId == null) {
+            resolvedCover = null
+            return@LaunchedEffect
         }
+        val url = viewModel
+            .resolveAnimatedCover(track, allowMobileDataForCanvas)
+            ?.preferredAnimationUrl
+        resolvedCover = url?.let { AnimatedCoverOwner(currentEntryId, it) }
     }
-    val currentAnimatedCoverUrl = animatedCoverForTrack
-        ?.takeIf { it.first == track.id }
-        ?.second
     // Playback gate: pauses only at the rest endpoints -- player fully closed
     // to the mini player, or subview fully open. Transitions (subview drag,
     // player close flight) keep playing; the surrounding layers fade the video
@@ -345,6 +345,29 @@ fun FullPlayerScreen(
         initialPage = queueIndex.coerceAtLeast(0),
         pageCount = { queue.size }
     )
+
+    val idlePage by remember {
+        derivedStateOf { if (pagerState.isScrollInProgress) -1 else pagerState.currentPage }
+    }
+    val coverCarry = remember { AnimatedCoverCarry() }
+    val animatedCover: AnimatedCoverOwner? = if (!isAnimatedCoverEnabled) {
+        null
+    } else {
+        val resolved = resolvedCover
+        if (resolved != null &&
+            resolved.entryId == currentEntryId &&
+            idlePage == queueIndex.coerceAtLeast(0)
+        ) {
+            resolved
+        } else {
+            coverCarry.owner?.takeIf { carried ->
+                idlePage == -1 || queueEntryIds.indexOf(carried.entryId) == idlePage
+            }
+        }
+    }
+    val animatedCoverIndex = animatedCover
+        ?.let { queueEntryIds.indexOf(it.entryId) }
+        ?: -1
 
     val seekBarProgress = rememberSeekBarProgressState(
         positionMsFlow = viewModel.positionMs,
@@ -554,36 +577,19 @@ fun FullPlayerScreen(
                         queue.getOrNull(backdropIndexB)?.albumArtPath
                     }
                 backdropState.immersive = isImmersiveEnabled
-                backdropState.canvasUrl = currentAnimatedCoverUrl
+                backdropState.canvasUrl = animatedCover?.url
                 backdropState.canvasPlaying = isCanvasPlaying
-                backdropState.canvasSwipeFraction = {
-                    // Distance of the pager from the playing track's page,
-                    // direction-agnostic: the canvas fades out while the page
-                    // drags either way and returns when the drag settles back.
-                    val anchor = queueIndex.coerceAtLeast(0)
-                    val offset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    abs(offset - anchor).coerceIn(0f, 1f)
+                backdropState.canvasAnchor = when {
+                    animatedCover == null || isProgrammaticCrossfadeActive -> CanvasAnchor.NONE
+                    animatedCoverIndex == backdropIndexA -> CanvasAnchor.FRONT
+                    animatedCoverIndex == backdropIndexB -> CanvasAnchor.BACK
+                    else -> CanvasAnchor.NONE
                 }
+                coverCarry.owner = animatedCover
                 backdropState.crossfadeFraction = {
                     if (programmaticBackdropToPath != null && programmaticBackdropCrossfade.value < 1f) {
                         programmaticBackdropCrossfade.value
                     } else {
-                        // Anchor the fraction to backdropIndexA -- the exact index that
-                        // produced the frontArtPath written by THIS SideEffect run -- rather
-                        // than to absoluteOffset.toInt(). The lambda is read during the host's
-                        // draw phase, which can observe a pager offset one tick fresher than
-                        // the composition that produced the paths (the settle tick of an
-                        // animateScrollToPage routinely lands after that frame's composition).
-                        // With toInt(), such a tick wraps the fraction against stale paths:
-                        // going next, offset N+1 against paths (N, N+1) wraps 1f -> 0f and
-                        // flashes the previous track at the end of the animation; going
-                        // previous, offset N-ε against resting paths (N, N+1) jumps to ~1f and
-                        // flashes the next track at the start. Anchored to backdropIndexA the
-                        // stale pairing renders coherently instead: offset N+1 -> fraction 1f
-                        // (back layer = the new track, fully covering the front), offset N-ε ->
-                        // fraction 0f (front layer = the current track). Whenever the paths are
-                        // fresh, backdropIndexA == floor(absoluteOffset), so this is identical
-                        // to the toInt() math.
                         val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
                         (absoluteOffset - backdropIndexA).coerceIn(0f, 1f)
                     }

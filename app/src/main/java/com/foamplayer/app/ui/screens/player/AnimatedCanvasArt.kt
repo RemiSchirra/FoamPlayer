@@ -43,12 +43,9 @@ fun AnimatedCanvasArt(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    // Keyed on the url: a new canvas must start fully faded OUT on the very first
-    // frame it composes. A LaunchedEffect(url) reset runs only after that frame's
-    // apply, leaving a one-frame window where the previous animation's 1f alpha
-    // renders over the new (still preparing) video -- a full-opacity flash.
-    var hasFirstFrame by remember(url) { mutableStateOf(false) }
     val fadeIn = remember(url) { Animatable(0f) }
+    var firstFrameUrl by remember { mutableStateOf<String?>(null) }
+    val hasFirstFrame = firstFrameUrl == url
     var attachedTextureView by remember { mutableStateOf<TextureView?>(null) }
 
     val player = remember {
@@ -57,7 +54,10 @@ fun AnimatedCanvasArt(
             repeatMode = Player.REPEAT_MODE_ONE
             addListener(object : Player.Listener {
                 override fun onRenderedFirstFrame() {
-                    hasFirstFrame = true
+                    firstFrameUrl = this@apply.currentMediaItem
+                        ?.localConfiguration
+                        ?.uri
+                        ?.toString()
                 }
             })
         }
