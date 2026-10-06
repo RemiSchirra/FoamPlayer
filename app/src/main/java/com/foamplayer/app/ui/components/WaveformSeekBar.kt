@@ -240,7 +240,10 @@ fun WaveformSeekBar(
                     // N bars + (N-1) gaps span at most the track's width.
                     val barCount = ((width + gapPx) / period).toInt().coerceAtLeast(1)
 
-                    val minBarHeightPx = 2.dp.toPx()
+                    // The minimum scales with the grow animation too, so near-silent
+                    // bars grow along with the rest instead of staying at barWidth.
+                    val growRatio = (size.height / trackHeight.toPx()).coerceAtLeast(1f)
+                    val minBarHeightPx = barWidthPx * growRatio
                     val maxBarHeightPx = size.height
                     val centerY = size.height / 2f
                     val cornerRadius = CornerRadius(barWidthPx / 2f)
