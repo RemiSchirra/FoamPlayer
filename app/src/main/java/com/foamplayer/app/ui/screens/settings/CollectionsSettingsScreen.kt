@@ -117,11 +117,12 @@ fun CollectionsSettingsScreen(
     }
 }
 
+@Composable
 private fun collectionHeroTargetLabel(target: CollectionHeroTarget): String = when (target) {
-    CollectionHeroTarget.Default -> "Default"
-    CollectionHeroTarget.Artist -> "Artist"
-    CollectionHeroTarget.Album -> "Album"
-    CollectionHeroTarget.Playlist -> "Playlist"
+    CollectionHeroTarget.Default -> stringResource(R.string.kind_default)
+    CollectionHeroTarget.Artist -> stringResource(R.string.kind_artist)
+    CollectionHeroTarget.Album -> stringResource(R.string.kind_album)
+    CollectionHeroTarget.Playlist -> stringResource(R.string.kind_playlist)
 }
 
 /**

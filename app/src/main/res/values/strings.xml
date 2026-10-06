@@ -63,7 +63,6 @@
     <string name="artist_images_clear_cache">CLEAR CACHE</string>
 
     <string name="no_audio_detected">No audio files detected.\nGo to Settings to add folders and scan your library.</string>
-    <string name="search_library">Search Library</string>
     <string name="search_hint">Search tracks, artists, albums...</string>
     <string name="clear_search_history">Clear search history</string>
 
@@ -99,6 +98,8 @@
     <string name="navbar_second_bar">Second Bar</string>
     <string name="navbar_second_bar_desc">Shown above the main bar when you tap More</string>
     <string name="navbar_item_more">More</string>
+    <string name="expand_navigation">Expand navigation</string>
+    <string name="collapse_navigation">Collapse navigation</string>
 
     <!-- Stats screen -->
     <string name="stats_loading">Loading your listening stats…</string>
@@ -198,8 +199,6 @@
     <string name="lyrics_view_readable">Readable</string>
     <string name="lyrics_view_raw">Raw</string>
 
-    <string name="equalizer_notice">⚠️ Notice: Equalizer active. Audio path is operating in high-precision mode.</string>
-
     <string name="audio_library">Audio Library</string>
     <string name="albums">Albums</string>
     <string name="play_all">Play All</string>
@@ -218,7 +217,6 @@
     <string name="save">Save</string>
     <string name="edit">Edit</string>
     <string name="more_options">More options</string>
-    <string name="more_options_placeholder">Nothing here yet</string>
     <string name="new_playlist_fallback">New playlist</string>
     <string name="playlist_name_value">Playlist: %1$s</string>
     <string name="from_m3u_playlist">From M3U playlist</string>
@@ -373,4 +371,183 @@
     <string name="settings_backup_done">Backup complete</string>
     <string name="settings_backup_failed">Backup failed</string>
     <string name="settings_backup_importing">Importing backup…</string>
+
+    <!-- Browse / library sections -->
+    <string name="artists">Artists</string>
+    <string name="genres">Genres</string>
+    <string name="years">Years</string>
+    <string name="tracks">Tracks</string>
+    <string name="all_tracks">All Tracks</string>
+    <string name="folders">Folders</string>
+    <string name="no_tracks_found">No tracks found</string>
+    <string name="no_artists_found">No artists found</string>
+    <string name="no_albums_found">No albums found</string>
+    <plurals name="track_count">
+        <item quantity="one">%1$d track</item>
+        <item quantity="other">%1$d tracks</item>
+    </plurals>
+    <plurals name="album_count">
+        <item quantity="one">%1$d album</item>
+        <item quantity="other">%1$d albums</item>
+    </plurals>
+    <plurals name="items_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <plurals name="channels_count">
+        <item quantity="one">%1$d channel</item>
+        <item quantity="other">%1$d channels</item>
+    </plurals>
+
+    <!-- Collection kinds & hero targets -->
+    <string name="kind_default">Default</string>
+    <string name="kind_album">Album</string>
+    <string name="kind_artist">Artist</string>
+    <string name="kind_genre">Genre</string>
+    <string name="kind_year">Year</string>
+    <string name="kind_folder">Folder</string>
+    <string name="kind_playlist">Playlist</string>
+
+    <!-- Search -->
+    <string name="filter_all">All</string>
+    <string name="found_in_lyrics">Found in lyrics</string>
+    <string name="recent_searches">Recent Searches</string>
+    <string name="clear">Clear</string>
+    <string name="close_search">Close search</string>
+
+    <!-- Modals: shared details labels -->
+    <string name="details">Details</string>
+    <string name="see_artist">See Artist</string>
+    <string name="see_album">See Album</string>
+    <string name="see_albums">See Albums</string>
+    <string name="add_to_playlist">Add to Playlist</string>
+    <string name="reset_listen_stats">Reset listen stats</string>
+    <string name="details_collection">Collection</string>
+    <string name="details_playlist">Playlist</string>
+    <string name="details_name">Name</string>
+    <string name="details_type">Type</string>
+    <string name="details_tracks">Tracks</string>
+    <string name="details_duration">Duration</string>
+    <string name="details_created">Created</string>
+    <string name="details_location">Location</string>
+    <string name="details_path">Path</string>
+    <string name="details_stats">Stats</string>
+    <string name="details_tags">Tags</string>
+    <string name="details_file">File</string>
+    <string name="details_listens">Listens</string>
+    <string name="details_last_played">Last played</string>
+    <string name="details_track_number">Track number</string>
+    <string name="details_disc_number">Disc number</string>
+    <string name="details_year">Year</string>
+    <string name="details_genre">Genre</string>
+    <string name="details_artist">Artist</string>
+    <string name="details_album_artist">Album artist</string>
+    <string name="details_album">Album</string>
+    <string name="details_composer">Composer</string>
+    <string name="details_file_path">File path</string>
+    <string name="details_format">Format</string>
+    <string name="instrumental">Instrumental</string>
+    <string name="embedded_in_file">Embedded in file</string>
+    <string name="embedded_in_files">Embedded in files</string>
+    <string name="channels_mono">Mono</string>
+    <string name="channels_stereo">Stereo</string>
+
+    <!-- Sorting / organisation modal -->
+    <string name="sorting">Sorting</string>
+    <string name="organisation">Organisation</string>
+    <string name="inverse">Inverse</string>
+
+    <!-- Lyrics settings additions -->
+    <string name="lyrics_sources">Lyrics sources</string>
+    <string name="lyrics_providers_title">Lyrics Providers</string>
+    <string name="lyrics_providers_desc">Enable and reorder providers</string>
+    <string name="display">Display</string>
+    <string name="manager">Manager</string>
+    <string name="blur_inactive_lines">Blur inactive lines</string>
+    <string name="mark_song_instrumental">Mark song as instrumental?</string>
+
+    <!-- Player settings additions -->
+    <string name="animated_cover">Animated Album Cover</string>
+    <string name="animated_cover_desc">Animated artwork in the immersive player</string>
+    <string name="animated_cover_mobile_data">Allow Mobile Data</string>
+    <string name="animated_cover_mobile_data_desc">Load animated covers on mobile data, not Wi-Fi only</string>
+    <string name="marquee_title">Text animation</string>
+    <string name="marquee_desc">Scrolling effect for long titles in the full player</string>
+
+    <!-- Background settings additions -->
+    <string name="app_color_intensity">App Color Intensity</string>
+    <string name="player_color_intensity">Player Color Intensity</string>
+    <string name="gradient_point">Point %1$d</string>
+
+    <!-- Audio settings additions -->
+    <string name="mode_bit_perfect">BIT-PERFECT</string>
+    <string name="mode_mixed">MIXED</string>
+    <string name="duration_seconds" translatable="false">%1$d s</string>
+    <string name="duration_seconds_decimal" translatable="false">%1$.1f s</string>
+    <string name="device_max_rate">up to %1$s</string>
+    <string name="device_direct">direct</string>
+    <string name="rate_auto">Auto</string>
+    <string name="nothing_playing">Nothing playing</string>
+    <string name="pipeline_no_playback">Start playback to inspect the live audio path.</string>
+    <string name="pipeline_bypass">BYPASS</string>
+    <string name="pipeline_warn">WARN</string>
+
+    <!-- Equalizer -->
+    <string name="enable_dsp">Enable DSP</string>
+    <string name="disable_dsp">Disable DSP</string>
+    <string name="eq_bit_perfect_passthrough">Bit-perfect passthrough</string>
+    <string name="eq_float_processing">32-bit float processing</string>
+    <string name="eq_frequency_response">FREQUENCY RESPONSE</string>
+    <string name="eq_preamp">PRE-AMP</string>
+    <string name="eq_bass">BASS</string>
+    <string name="eq_mid">MID</string>
+    <string name="eq_treble">TREBLE</string>
+    <string name="eq_tone">TONE</string>
+    <string name="eq_controls">CONTROLS</string>
+    <string name="eq_balance">BALANCE</string>
+    <string name="eq_stereo">STEREO</string>
+    <string name="eq_color">COLOR</string>
+    <string name="eq_node">NODE</string>
+    <string name="eq_node_id">NODE %1$d</string>
+    <string name="eq_freq">FREQ</string>
+    <string name="eq_gain">GAIN</string>
+    <string name="eq_q">Q</string>
+    <string name="eq_presets">Presets</string>
+    <string name="eq_preset_custom_hint">Custom · tap to browse &amp; save</string>
+    <string name="eq_view_all">VIEW ALL</string>
+    <string name="eq_presets_desc">A preset drives either the graphic or the parametric EQ</string>
+    <string name="eq_save_as_new">Save current as new preset</string>
+    <string name="eq_preset_kind_parametric">PARAMETRIC</string>
+    <string name="eq_preset_kind_graphic">GRAPHIC</string>
+    <string name="eq_preset_built_in">built-in</string>
+    <string name="eq_preset_user">user</string>
+    <string name="eq_delete_preset">Delete preset %1$s</string>
+    <string name="eq_delete_node">Delete node</string>
+    <string name="eq_add_node">Add parametric node</string>
+    <string name="eq_node_limit">Node limit reached</string>
+    <string name="eq_volume">Volume</string>
+    <string name="eq_volume_desc">Direct volume control (32-bit float)</string>
+    <string name="eq_volume_readout">%1$d%% · %2$.1f dB</string>
+    <string name="eq_mute">Mute</string>
+    <string name="eq_full_scale">Full scale</string>
+    <string name="eq_save_preset_title">Save Preset</string>
+    <string name="eq_preset_name_hint">Preset name</string>
+    <string name="eq_bands">%1$d bands</string>
+    <string name="eq_bands_caps">%1$d BANDS</string>
+    <string name="eq_graphic_title">%1$d-band graphic equalizer</string>
+    <string name="eq_parametric_title">Parametric equalizer · %1$d/%2$d nodes</string>
+    <string name="eq_balance_center">CENTER</string>
+    <string name="eq_balance_left">L %.0f%%</string>
+    <string name="eq_balance_right">R %.0f%%</string>
+
+    <!-- Component test screen (devMode builds only) -->
+    <string name="test_switch">Test Switch</string>
+    <string name="test_switch_desc">Demonstration of the flat switch component</string>
+    <string name="test_slider_continuous">Continuous Slider</string>
+    <string name="test_slider_snapped">Snapped Slider</string>
+    <string name="test_slider_step">Step %1$d</string>
+
+    <!-- Misc UI -->
+    <string name="playlist">Playlist</string>
+    <string name="max_selection_limit_reached">Max selection limit reached</string>
 </resources>

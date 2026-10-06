@@ -34,11 +34,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.core.net.toUri
+import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
@@ -58,6 +60,18 @@ enum class CollectionKind(val displayName: String) {
     Year("Year"),
     Folder("Folder")
 }
+
+/** Localized label of a [CollectionKind] ("Album", "Artist", ...). */
+@Composable
+fun CollectionKind.label(): String = stringResource(
+    when (this) {
+        CollectionKind.Album -> R.string.kind_album
+        CollectionKind.Artist -> R.string.kind_artist
+        CollectionKind.Genre -> R.string.kind_genre
+        CollectionKind.Year -> R.string.kind_year
+        CollectionKind.Folder -> R.string.kind_folder
+    }
+)
 
 /**
  * The collection shown in [CollectionFoamModal] / [CollectionDetailsModal].
@@ -255,13 +269,13 @@ fun CollectionFoamModal(
                             ) {
                                 ModalActionButton(
                                     icon = FoamTheme.icons.current.next,
-                                    label = "Next",
+                                    label = stringResource(R.string.next),
                                     onClick = { perform(onPlayNext) },
                                     modifier = Modifier.weight(1f)
                                 )
                                 ModalActionButton(
                                     icon = FoamTheme.icons.current.queue,
-                                    label = "Queue",
+                                    label = stringResource(R.string.queue),
                                     onClick = { perform(onAddToQueue) },
                                     modifier = Modifier.weight(1f)
                                 )
@@ -278,10 +292,12 @@ fun CollectionFoamModal(
                             val navAlbums = remember(displayCollection) {
                                 displayCollection.tracks.distinctCollectionAlbums()
                             }
+                            val navLabels = rememberNavRowLabels()
                             val navigationRows = collectionNavigationRows(
                                 collection = displayCollection,
                                 artistNames = navArtistNames,
                                 albums = navAlbums,
+                                labels = navLabels,
                                 perform = { action ->
                                     state.dismiss()
                                     action()
@@ -316,7 +332,7 @@ fun CollectionFoamModal(
                                     .background(FoamTheme.colors.surfaceVariant)
                             ) {
                                 ModalRowButton(
-                                    label = "Details",
+                                    label = stringResource(R.string.details),
                                     onClick = { showDetails = true }
                                 )
                             }
@@ -452,7 +468,7 @@ private fun CollectionModalHeader(
                 }
                 AsyncImage(
                     model = artRequest,
-                    contentDescription = "Album Art",
+                    contentDescription = stringResource(R.string.album_art),
                     modifier = Modifier.size(64.dp),
                     contentScale = ContentScale.Crop
                 )
@@ -501,26 +517,26 @@ private fun CollectionDetailsContent(
 ) {
     val totalDurationMs = collection.tracks.sumOf { it.duration }
 
-    DetailsSection(title = "Collection", accentColor = accentColor) {
-        DetailRow("Type", collection.kind?.displayName)
-        DetailRow("Artist", collection.artist)
-        DetailRow("Tracks", collection.tracks.size.takeIf { it > 0 }?.toString())
+    DetailsSection(title = stringResource(R.string.details_collection), accentColor = accentColor) {
+        DetailRow(stringResource(R.string.details_type), collection.kind?.let { with(it) { label() } })
+        DetailRow(stringResource(R.string.details_artist), collection.artist)
+        DetailRow(stringResource(R.string.details_tracks), collection.tracks.size.takeIf { it > 0 }?.toString())
         DetailRow(
-            "Duration",
+            stringResource(R.string.details_duration),
             totalDurationMs.takeIf { it > 0 }?.let { TimeUtils.formatDurationLong(it) }
         )
         if (collection.kind == CollectionKind.Album) {
             DetailRow(
-                "Album art",
-                if (collection.imageUrl != null) "Embedded in files" else null
+                stringResource(R.string.album_art),
+                if (collection.imageUrl != null) stringResource(R.string.embedded_in_files) else null
             )
         }
     }
 
     if (collection.location != null) {
-        DetailsSection(title = "Location", accentColor = accentColor) {
+        DetailsSection(title = stringResource(R.string.details_location), accentColor = accentColor) {
             DetailStackedValue(
-                label = "Path",
+                label = stringResource(R.string.details_path),
                 value = simplifiedDisplayPath(collection.location),
                 accentColor = accentColor
             )
@@ -552,6 +568,7 @@ private fun collectionNavigationRows(
     collection: CollectionInfo,
     artistNames: List<String>,
     albums: List<CollectionAlbumEntry>,
+    labels: NavRowLabels,
     perform: (() -> Unit) -> Unit,
     onSeeArtist: (String) -> Unit,
     onSeeAlbum: (String, String?, String?) -> Unit,
@@ -560,7 +577,7 @@ private fun collectionNavigationRows(
 ): List<CollectionModalNavRow> = when (collection.kind) {
     // The artist detail screen IS the artist's album list.
     CollectionKind.Artist -> listOf(
-        CollectionModalNavRow("See Albums") { perform { onSeeArtist(collection.title) } }
+        CollectionModalNavRow(labels.seeAlbums) { perform { onSeeArtist(collection.title) } }
     )
     else -> buildList {
         when (collection.kind) {
@@ -570,7 +587,7 @@ private fun collectionNavigationRows(
                 collection.artist?.split("; ")
                     ?.firstOrNull { it.isNotBlank() }
                     ?.let { name ->
-                        add(CollectionModalNavRow("See Artist") { perform { onSeeArtist(name) } })
+                        add(CollectionModalNavRow(labels.seeArtist) { perform { onSeeArtist(name) } })
                     }
             }
             else -> {
@@ -579,10 +596,10 @@ private fun collectionNavigationRows(
 
                 when {
                     artistNames.size == 1 -> add(
-                        CollectionModalNavRow("See Artist") { perform { onSeeArtist(artistNames.first()) } }
+                        CollectionModalNavRow(labels.seeArtist) { perform { onSeeArtist(artistNames.first()) } }
                     )
                     artistNames.size > 1 && sourceKind != null -> add(
-                        CollectionModalNavRow("See Artist") { perform { onSeeArtistList(sourceKind, sourceKey) } }
+                        CollectionModalNavRow(labels.seeArtist) { perform { onSeeArtistList(sourceKind, sourceKey) } }
                     )
                 }
 
@@ -590,19 +607,33 @@ private fun collectionNavigationRows(
                     albums.size == 1 -> {
                         val entry = albums.first()
                         add(
-                            CollectionModalNavRow("See Album") {
+                            CollectionModalNavRow(labels.seeAlbum) {
                                 perform { onSeeAlbum(entry.album, entry.albumArtPath, entry.artist) }
                             }
                         )
                     }
                     albums.size > 1 && sourceKind != null -> add(
-                        CollectionModalNavRow("See Album") { perform { onSeeAlbumList(sourceKind, sourceKey) } }
+                        CollectionModalNavRow(labels.seeAlbum) { perform { onSeeAlbumList(sourceKind, sourceKey) } }
                     )
                 }
             }
         }
     }
 }
+
+/** Pre-resolved labels of the collection modal's navigation rows. */
+private data class NavRowLabels(
+    val seeArtist: String,
+    val seeAlbum: String,
+    val seeAlbums: String
+)
+
+@Composable
+private fun rememberNavRowLabels(): NavRowLabels = NavRowLabels(
+    seeArtist = stringResource(R.string.see_artist),
+    seeAlbum = stringResource(R.string.see_album),
+    seeAlbums = stringResource(R.string.see_albums)
+)
 
 /** Where the "artists-in / albums-in" list screens re-resolve this collection's tracks from. */
 private fun CollectionInfo.listSourceKey(): String = when (kind) {

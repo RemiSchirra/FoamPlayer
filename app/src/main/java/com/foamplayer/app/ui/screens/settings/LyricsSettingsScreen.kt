@@ -78,7 +78,7 @@ fun LyricsSettingsScreen(
                 .padding(horizontal = FoamDimens.paddingMedium)
                 .padding(bottom = LocalBottomBarClearance.current)
         ) {
-            BasicText(text = "Lyrics sources", style = FoamTheme.typography.titleMedium)
+            BasicText(text = stringResource(R.string.lyrics_sources), style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
             LyricsSourcesList(
@@ -90,7 +90,7 @@ fun LyricsSettingsScreen(
 
             Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
 
-            BasicText(text = "Providers", style = FoamTheme.typography.titleMedium)
+            BasicText(text = stringResource(R.string.lyrics_providers), style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
             Box(
@@ -100,15 +100,15 @@ fun LyricsSettingsScreen(
                     .background(FoamTheme.colors.surface)
             ) {
                 FoamNavigationButton(
-                    title = "Lyrics Providers",
-                    description = "Enable and reorder providers",
+                    title = stringResource(R.string.lyrics_providers_title),
+                    description = stringResource(R.string.lyrics_providers_desc),
                     onClick = { showProvidersModal = true }
                 )
             }
 
             Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
 
-            BasicText(text = "Display", style = FoamTheme.typography.titleMedium)
+            BasicText(text = stringResource(R.string.display), style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
             Box(
@@ -118,7 +118,7 @@ fun LyricsSettingsScreen(
                     .background(FoamTheme.colors.surface)
             ) {
                 FoamSwitchItem(
-                    title = "Blur inactive lines",
+                    title = stringResource(R.string.blur_inactive_lines),
                     description = null,
                     checked = settings.lyricsLineBlur,
                     onCheckedChange = viewModel::setLyricsLineBlur
@@ -127,7 +127,7 @@ fun LyricsSettingsScreen(
 
             Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
 
-            BasicText(text = "Manager", style = FoamTheme.typography.titleMedium)
+            BasicText(text = stringResource(R.string.manager), style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
             Box(

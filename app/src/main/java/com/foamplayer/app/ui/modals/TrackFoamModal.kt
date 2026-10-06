@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -76,6 +77,39 @@ import java.util.Locale
 
 // Hoisted: this was compiled inside simplifiedDisplayPath on every composition pass.
 private val StoragePrefixRegex = Regex("^/storage/emulated/\\d+/")
+
+/**
+ * Pre-resolved localized channel labels, built once per composition. The
+ * mono/stereo words resolve eagerly; multi-channel counts resolve per call
+ * (plural selection needs the actual channel count, so it is read at render
+ * time from the hosting composable's context).
+ */
+internal class ChannelLabels(
+    val mono: String,
+    val stereo: String,
+    private val context: android.content.Context
+) {
+    fun count(n: Int): String = context.resources.getQuantityString(R.plurals.channels_count, n, n)
+}
+
+@Composable
+internal fun rememberChannelLabels(): ChannelLabels {
+    val context = LocalContext.current
+    return remember(context) {
+        ChannelLabels(
+            mono = context.getString(R.string.channels_mono),
+            stereo = context.getString(R.string.channels_stereo),
+            context = context
+        )
+    }
+}
+
+/** Localized channel layout label ("Mono" / "Stereo" / "N channels"). */
+private fun formatChannels(channels: Int, labels: ChannelLabels): String = when (channels) {
+    1 -> labels.mono
+    2 -> labels.stereo
+    else -> labels.count(channels)
+}
 
 /**
  * Holds the track currently shown in a [TrackFoamModal]. A screen owns one of
@@ -228,7 +262,10 @@ fun TrackFoamModal(
                         if (isDetails) {
                             // Pure formatting over the track; the modal recomposes per
                             // animation frame while the dynamic accent animates.
-                            val trackSummary = remember(displayTrack) { audioSummaryText(displayTrack) }
+                            val channelLabels = rememberChannelLabels()
+                            val trackSummary = remember(displayTrack, channelLabels) {
+                                audioSummaryText(displayTrack, channelLabels)
+                            }
                             BasicText(
                                 text = trackSummary,
                                 style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
@@ -249,7 +286,7 @@ fun TrackFoamModal(
                                     .background(FoamTheme.colors.surfaceVariant)
                             ) {
                                 ModalRowButton(
-                                    label = "Lyrics",
+                                    label = stringResource(R.string.lyrics),
                                     onClick = { onOpenLyrics(displayTrack) }
                                 )
                             }
@@ -275,19 +312,19 @@ fun TrackFoamModal(
                             ) {
                                 ModalActionButton(
                                     icon = FoamTheme.icons.current.next,
-                                    label = "Next",
+                                    label = stringResource(R.string.next),
                                     onClick = { perform(onPlayNext) },
                                     modifier = Modifier.weight(1f)
                                 )
                                 ModalActionButton(
                                     icon = FoamTheme.icons.current.queue,
-                                    label = "Queue",
+                                    label = stringResource(R.string.queue),
                                     onClick = { perform(onAddToQueue) },
                                     modifier = Modifier.weight(1f)
                                 )
                                 ModalActionButton(
                                     icon = FoamTheme.icons.current.playlists,
-                                    label = "Playlist",
+                                    label = stringResource(R.string.playlist),
                                     onClick = { perform(onAddToPlaylist) },
                                     modifier = Modifier.weight(1f)
                                 )
@@ -300,12 +337,12 @@ fun TrackFoamModal(
                                     .background(FoamTheme.colors.surfaceVariant)
                             ) {
                                 ModalRowButton(
-                                    label = "See Artist",
+                                    label = stringResource(R.string.see_artist),
                                     onClick = { perform(onSeeArtist) }
                                 )
                                 ModalSectionDivider()
                                 ModalRowButton(
-                                    label = "See Album",
+                                    label = stringResource(R.string.see_album),
                                     onClick = { perform(onSeeAlbum) }
                                 )
                             }
@@ -317,7 +354,7 @@ fun TrackFoamModal(
                                     .background(FoamTheme.colors.surfaceVariant)
                             ) {
                                 ModalRowButton(
-                                    label = "Details",
+                                    label = stringResource(R.string.details),
                                     onClick = { showDetails = true }
                                 )
                             }
@@ -404,7 +441,7 @@ fun PlaylistPickerModal(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     BasicText(
-                        text = "Add to Playlist",
+                        text = stringResource(R.string.add_to_playlist),
                         style = FoamTheme.typography.titleMedium,
                         modifier = Modifier.weight(1f)
                     )
@@ -426,7 +463,7 @@ fun PlaylistPickerModal(
 
                 if (playlists.isEmpty()) {
                     BasicText(
-                        text = "No playlists created yet.",
+                        text = stringResource(R.string.no_playlists_yet),
                         style = FoamTheme.typography.body,
                         modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
                     )
@@ -610,7 +647,7 @@ private fun TrackModalHeader(
                 }
                 AsyncImage(
                     model = albumArtRequest,
-                    contentDescription = "Album Art",
+                    contentDescription = stringResource(R.string.album_art),
                     modifier = Modifier.size(64.dp),
                     contentScale = ContentScale.Crop
                 )
@@ -791,8 +828,9 @@ fun TrackDetailsModal(
                     onSetScore = { onSetScore(displayTrack.id, it) }
                 )
 
+                val channelLabels = rememberChannelLabels()
                 BasicText(
-                    text = remember(displayTrack) { audioSummaryText(displayTrack) },
+                    text = remember(displayTrack, channelLabels) { audioSummaryText(displayTrack, channelLabels) },
                     style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
                     modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
                 )
@@ -819,7 +857,7 @@ private fun TrackDetailsContent(
     val hasStats = track.playCount > 0 || track.lastPlayedAt != null
 
     DetailsSection(
-        title = "Stats",
+        title = stringResource(R.string.details_stats),
         accentColor = accentColor,
         trailing = {
             if (hasStats) {
@@ -827,44 +865,45 @@ private fun TrackDetailsContent(
             }
         }
     ) {
-        DetailRow("Listens", track.playCount.takeIf { it > 0 }?.toString())
+        DetailRow(stringResource(R.string.details_listens), track.playCount.takeIf { it > 0 }?.toString())
         DetailRow(
-            "Last played",
+            stringResource(R.string.details_last_played),
             track.lastPlayedAt?.let { TimeUtils.formatDateTime(it) }
         )
     }
 
-    DetailsSection(title = "Tags", accentColor = accentColor) {
-        DetailRow("Track number", track.trackNumber?.toString())
-        DetailRow("Disc number", track.discNumber?.toString())
-        DetailRow("Year", track.year?.toString())
-        DetailRow("Genre", track.genre)
-        DetailRow("Artist", track.artist)
-        DetailRow("Album artist", track.albumArtist)
-        DetailRow("Album", track.album)
-        DetailRow("Composer", track.composer)
+    DetailsSection(title = stringResource(R.string.details_tags), accentColor = accentColor) {
+        DetailRow(stringResource(R.string.details_track_number), track.trackNumber?.toString())
+        DetailRow(stringResource(R.string.details_disc_number), track.discNumber?.toString())
+        DetailRow(stringResource(R.string.details_year), track.year?.toString())
+        DetailRow(stringResource(R.string.details_genre), track.genre)
+        DetailRow(stringResource(R.string.details_artist), track.artist)
+        DetailRow(stringResource(R.string.details_album_artist), track.albumArtist)
+        DetailRow(stringResource(R.string.details_album), track.album)
+        DetailRow(stringResource(R.string.details_composer), track.composer)
         DetailCheckboxRow(
-            label = "Instrumental",
+            label = stringResource(R.string.instrumental),
             checked = track.instrumental,
             onCheckedChange = onSetInstrumental
         )
     }
 
-    DetailsSection(title = "File", accentColor = accentColor) {
-        DetailStackedValue("File path", simplifiedDisplayPath(track.path), accentColor)
-        DetailRow("Format", track.format)
+    DetailsSection(title = stringResource(R.string.details_file), accentColor = accentColor) {
+        DetailStackedValue(stringResource(R.string.details_file_path), simplifiedDisplayPath(track.path), accentColor)
+        DetailRow(stringResource(R.string.details_format), track.format)
         DetailRow(
-            "Album art",
-            if (track.albumArtPath != null) "Embedded in file" else null
+            stringResource(R.string.album_art),
+            if (track.albumArtPath != null) stringResource(R.string.embedded_in_file) else null
         )
     }
 }
 
-private fun audioSummaryText(track: TrackEntity): String = listOf(
+/** One-line technical summary of a track; [labels] carries the localized channel words. */
+internal fun audioSummaryText(track: TrackEntity, labels: ChannelLabels): String = listOf(
     TimeUtils.formatDurationLong(track.duration),
     formatSampleRate(track.sampleRate),
     "${track.bitDepth} bit",
-    channelsLabel(track.channels),
+    formatChannels(track.channels, labels),
     track.bitrate.takeIf { it > 0 }?.let { "$it kbps" },
     formatFileSize(track.size).takeIf { track.size > 0 }
 ).filterNotNull().joinToString("  ·  ")
@@ -893,7 +932,7 @@ internal fun ModalBackButton(onBack: () -> Unit) {
         )
         Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
         BasicText(
-            text = "Back",
+            text = stringResource(R.string.back),
             style = FoamTheme.typography.titleMedium
         )
     }
@@ -951,7 +990,7 @@ private fun TrackStatsResetButton(onClick: () -> Unit) {
     ) {
         Icon(
             imageVector = Icons.Filled.Close,
-            contentDescription = "Reset listen stats",
+            contentDescription = stringResource(R.string.reset_listen_stats),
             tint = FoamTheme.colors.textSecondary,
             modifier = Modifier.size(FoamDimens.iconSmall)
         )
@@ -989,8 +1028,8 @@ private fun DetailCheckboxRow(
         Checkbox(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            // 20dp = the checkbox's own drawn size; drops its 48dp built-in touch
-            // padding so the row height matches the other detail rows.
+            // 20dp = the checkbox's own drawn size; drops its 48dp built-in
+            // touch padding so the row height matches the other detail rows.
             modifier = Modifier.size(20.dp),
             colors = CheckboxDefaults.colors(
                 checkedColor = FoamTheme.accentColor,
@@ -1047,12 +1086,6 @@ internal fun DetailStackedValue(
             style = FoamTheme.typography.monospace.copy(color = accentColor)
         )
     }
-}
-
-private fun channelsLabel(channels: Int): String = when (channels) {
-    1 -> "Mono"
-    2 -> "Stereo"
-    else -> "$channels channels"
 }
 
 private fun formatSampleRate(hz: Int): String {

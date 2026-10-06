@@ -47,10 +47,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.request.ImageRequest
 import androidx.core.net.toUri
+import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
@@ -220,6 +223,8 @@ fun CollectionListScreen(
     // visible), while the immersive heroes bleed under it on purpose.
     val heroTopPadding = if (heroLayout.isImmersive) 0.dp else CollectionTopBarRowHeight
 
+    val itemsCountText = pluralStringResource(R.plurals.items_count, itemCount, itemCount)
+
     Box(modifier = modifier.fillMaxSize()) {
         if (heroLayout.isImmersive) {
             // Artwork layer only: bleeds under the status bar behind the list.
@@ -230,7 +235,7 @@ fun CollectionListScreen(
                 layout = heroLayout,
                 title = title,
                 subtitle = subtitle,
-                statsText = "$itemCount items",
+                statsText = itemsCountText,
                 imageUrl = headerImageUrl,
                 icon = headerIcon,
                 onPlayAllClick = null,
@@ -353,7 +358,7 @@ fun CollectionListScreen(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.back),
                     tint = FoamTheme.colors.textPrimary,
                     modifier = Modifier
                         .size(32.dp)
@@ -364,7 +369,7 @@ fun CollectionListScreen(
                 if (onDensityChange != null) {
                     Spacer(modifier = Modifier.weight(1f))
                     OrganisationMenuButton(
-                        contentDescription = "Organisation",
+                        contentDescription = stringResource(R.string.organisation),
                         onClick = { showOrganisationModal = true }
                     )
                 }
@@ -406,12 +411,14 @@ private fun CollectionListHero(
     onVisibleHeightPx: (Int) -> Unit,
     scrollOffsetPx: () -> Int
 ) {
+    val itemsCountText = pluralStringResource(R.plurals.items_count, itemCount, itemCount)
+
     if (heroLayout.isImmersive) {
         CollectionHeroImmersiveHeader(
             layout = heroLayout,
             title = title,
             subtitle = subtitle,
-            statsText = "$itemCount items",
+            statsText = itemsCountText,
             searchState = searchState,
             onVisibleHeightPx = onVisibleHeightPx,
             scrollOffsetPx = scrollOffsetPx
@@ -423,7 +430,7 @@ private fun CollectionListHero(
         layout = heroLayout,
         title = title,
         subtitle = subtitle,
-        statsText = "$itemCount items",
+        statsText = itemsCountText,
         imageUrl = imageUrl,
         icon = icon,
         searchState = searchState,
@@ -643,7 +650,7 @@ private fun CollectionArtwork(
         }
         AlbumArtImage(
             model = albumArtRequest,
-            contentDescription = "Album Art",
+            contentDescription = stringResource(R.string.album_art),
             modifier = Modifier.fillMaxSize(),
             placeholderSize = placeholderSize
         )

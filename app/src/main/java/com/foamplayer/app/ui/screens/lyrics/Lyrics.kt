@@ -114,6 +114,7 @@ import com.foamplayer.app.lyrics.LYRICS_NOT_FOUND
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.foamplayer.app.R
 import com.foamplayer.app.constants.LyricsAnimationStyle
 import com.foamplayer.app.constants.LyricsClickKey
 import com.foamplayer.app.constants.LyricsLineBlurKey
@@ -565,13 +566,14 @@ fun Lyrics(
 
     val maxSelectionLimit = 5
 
+    val maxSelectionMessage = stringResource(R.string.max_selection_limit_reached)
+
     LaunchedEffect(showMaxSelectionToast) {
         if (showMaxSelectionToast) {
             Toast
                 .makeText(
                     context,
-                    //context.getString(R.string.max_selection_limit, maxSelectionLimit),
-                    "Max Selection Limit Reached",
+                    maxSelectionMessage,
                     Toast.LENGTH_SHORT,
                 ).show()
             showMaxSelectionToast = false
@@ -760,7 +762,7 @@ fun Lyrics(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "Lyrics not found",
+                    text = stringResource(R.string.lyrics_not_found),
                     fontSize = 20.sp,
                     color = FoamTheme.colors.textSecondary,
                     textAlign = TextAlign.Center,
@@ -1228,7 +1230,7 @@ fun Lyrics(
                                                                     } else {
                                                                         nextText
                                                                             ?.firstOrNull()
-                                                                    }
+                                                                        }
                                                                 val neighbor = if (lineIsRtl) prevText else nextText
                                                                 currEdge != null && neighborEdge != null && neighbor != null &&
                                                                         (currEdge.code < 0x3000 || neighborEdge.code < 0x3000) &&
@@ -1498,7 +1500,9 @@ fun Lyrics(
                                                         val wordEndMs = (word.endTime * 1000).toLong()
                                                         val wordDuration = wordEndMs - wordStartMs
 
-                                                        val isWordActive = isActiveLine && currentPlaybackPosition in wordStartMs..wordEndMs
+                                                        val isWordActive =
+                                                            isActiveLine && currentPlaybackPosition >= wordStartMs &&
+                                                                    currentPlaybackPosition <= wordEndMs
                                                         val hasWordPassed = isActiveLine && currentPlaybackPosition > wordEndMs
 
                                                         val fillProgress =
@@ -1649,7 +1653,7 @@ fun Lyrics(
                                                     isRtl = lineIsRtl,
                                                     0.0f to lyricsBaseColor,
                                                     (fillProgress * 0.95f).coerceIn(0f, 1f) to lyricsBaseColor,
-                                                    fillProgress to lyricsBaseColor.copy(alpha = 0.9f),
+                                                    fillProgress to lyricsBaseColor,
                                                     (fillProgress + 0.02f).coerceIn(0f, 1f) to lyricsBaseColor.copy(alpha = 0.5f),
                                                     (fillProgress + 0.08f).coerceIn(0f, 1f) to lyricsBaseColor.copy(alpha = 0.35f),
                                                     1.0f to lyricsBaseColor.copy(alpha = 0.35f),
@@ -1714,7 +1718,7 @@ fun Lyrics(
                                                     if (isWordActive && wordDuration > 0) {
                                                         val timeElapsed = currentPlaybackPosition - wordStartMs
                                                         val linearProgress =
-                                                            (timeElapsed.toFloat() / wordDuration.toFloat()).coerceIn(
+                                                            (timeElapsed.toFloat() / wordDuration).coerceIn(
                                                                 0f,
                                                                 1f,
                                                             )
@@ -1724,11 +1728,11 @@ fun Lyrics(
                                                         val breatheCycleDuration = wordDuration.toFloat().coerceIn(400f, 2000f)
                                                         val breathePhase = (timeElapsed % breatheCycleDuration) / breatheCycleDuration
                                                         val breatheEffect =
-                                                            (
-                                                                    sin(
-                                                                        breathePhase * Math.PI.toFloat(),
-                                                                    ) * 0.05f
-                                                                    ).coerceIn(0f, 0.05f)
+                                                                (
+                                                                        sin(
+                                                                            breathePhase * Math.PI.toFloat(),
+                                                                        ) * 0.05f
+                                                                        ).coerceIn(0f, 0.05f)
 
                                                         val glowIntensity = (fillProgress + breatheEffect).coerceIn(0f, 1.0f)
 
@@ -2066,7 +2070,7 @@ fun Lyrics(
                                                     targetValue = 1f,
                                                     animationSpec =
                                                         spring(
-                                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
                                                             stiffness = Spring.StiffnessMedium,
                                                         ),
                                                 )
@@ -2432,7 +2436,7 @@ fun Lyrics(
                         modifier = Modifier.size(18.dp),
                     )
                     Text(
-                        text = "Resume auto-scroll",
+                        text = stringResource(R.string.resume_auto_scroll),
                         color = FoamTheme.colors.textPrimary,
                         style = FoamTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,

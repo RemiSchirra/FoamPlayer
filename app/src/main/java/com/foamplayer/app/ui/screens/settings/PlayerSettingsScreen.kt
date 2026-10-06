@@ -60,6 +60,10 @@ fun PlayerSettingsScreen(
     val enterTransition = if (animateChanges) expandVertically() + fadeIn() else EnterTransition.None
     val exitTransition = if (animateChanges) shrinkVertically() + fadeOut() else ExitTransition.None
 
+    // Slider min/max labels ("Square"/"Circle") resolve once per composition.
+    val roundingMin = stringResource(R.string.square)
+    val roundingMax = stringResource(R.string.circle)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -89,7 +93,7 @@ fun PlayerSettingsScreen(
                     ) {
                         FoamSwitchItem(
                             title = stringResource(R.string.auto_open_player),
-                            description = "Open player screen when a track starts",
+                            description = stringResource(R.string.auto_open_player_desc),
                             checked = isAutoOpenPlayerEnabled,
                             onCheckedChange = { viewModel.setAutoOpenPlayerEnabled(it) }
                         )
@@ -113,7 +117,7 @@ fun PlayerSettingsScreen(
                         Column {
                             FoamSwitchItem(
                                 title = stringResource(R.string.immersive_mode),
-                                description = "Album art fills the entire screen",
+                                description = stringResource(R.string.immersive_mode_desc),
                                 checked = isImmersiveEnabled,
                                 onCheckedChange = {
                                     animateChanges = true
@@ -128,7 +132,7 @@ fun PlayerSettingsScreen(
                             )
                             FoamSwitchItem(
                                 title = stringResource(R.string.animate_seek_bar),
-                                description = "Smooth progress bar movement",
+                                description = stringResource(R.string.animate_seek_bar_desc),
                                 checked = isAnimateSeekBarEnabled,
                                 onCheckedChange = { viewModel.setAnimateSeekBarEnabled(it) }
                             )
@@ -145,8 +149,8 @@ fun PlayerSettingsScreen(
                                             .background(FoamTheme.colors.borderOverlay)
                                     )
                                     FoamSwitchItem(
-                                        title = "Animated Album Cover",
-                                        description = "Animated artwork in the immersive player",
+                                        title = stringResource(R.string.animated_cover),
+                                        description = stringResource(R.string.animated_cover_desc),
                                         checked = isAnimatedCoverEnabled,
                                         onCheckedChange = {
                                             animateChanges = true
@@ -166,8 +170,8 @@ fun PlayerSettingsScreen(
                                                     .background(FoamTheme.colors.borderOverlay)
                                             )
                                             FoamSwitchItem(
-                                                title = "Allow Mobile Data",
-                                                description = "Load animated covers on mobile data, not Wi-Fi only",
+                                                title = stringResource(R.string.animated_cover_mobile_data),
+                                                description = stringResource(R.string.animated_cover_mobile_data_desc),
                                                 checked = isAnimatedCoverAllowMobileData,
                                                 onCheckedChange = { viewModel.setAnimatedCoverAllowMobileData(it) }
                                             )
@@ -194,8 +198,8 @@ fun PlayerSettingsScreen(
                 )
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                 FoamEnumItem(
-                    title = "Text animation",
-                    description = "Scrolling effect for long titles in the full player",
+                    title = stringResource(R.string.marquee_title),
+                    description = stringResource(R.string.marquee_desc),
                     options = MarqueeMode.entries.toTypedArray(),
                     selectedOption = marqueeMode,
                     onOptionSelected = { viewModel.setMarqueeMode(it) },
@@ -226,7 +230,7 @@ fun PlayerSettingsScreen(
                                 steps = 9,
                                 valueRange = 0f..100f,
                                 formatValue = { "${it.roundToInt()}%" },
-                                minMaxDisplay = "Square" to "Circle"
+                                minMaxDisplay = roundingMin to roundingMax
                             )
                             Box(
                                 modifier = Modifier
@@ -243,7 +247,7 @@ fun PlayerSettingsScreen(
                                 steps = 9,
                                 valueRange = 0f..100f,
                                 formatValue = { "${it.roundToInt()}%" },
-                                minMaxDisplay = "Square" to "Circle"
+                                minMaxDisplay = roundingMin to roundingMax
                             )
                         }
                     }

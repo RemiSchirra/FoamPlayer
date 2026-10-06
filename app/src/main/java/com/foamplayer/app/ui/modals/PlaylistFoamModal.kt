@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -196,7 +197,7 @@ fun PlaylistFoamModal(
                                     .background(FoamTheme.colors.surfaceVariant)
                             ) {
                                 ModalRowButton(
-                                    label = "Details",
+                                    label = stringResource(R.string.details),
                                     onClick = { showDetails = true }
                                 )
                             }
@@ -208,7 +209,7 @@ fun PlaylistFoamModal(
                                     .background(FoamTheme.colors.surfaceVariant)
                             ) {
                                 ModalRowButton(
-                                    label = "Delete",
+                                    label = stringResource(R.string.delete),
                                     onClick = { perform(onDelete) }
                                 )
                             }
@@ -348,13 +349,13 @@ private fun PlaylistDetailsContent(
     playlist: PlaylistEntity,
     stats: PlaylistModalStats?
 ) {
-    DetailsSection(title = "Playlist", accentColor = FoamTheme.accentColor) {
-        DetailRow("Name", playlist.name)
-        DetailRow("Tracks", stats?.trackCount?.toString())
+    DetailsSection(title = stringResource(R.string.details_playlist), accentColor = FoamTheme.accentColor) {
+        DetailRow(stringResource(R.string.details_name), playlist.name)
+        DetailRow(stringResource(R.string.details_tracks), stats?.trackCount?.toString())
         DetailRow(
-            "Duration",
+            stringResource(R.string.details_duration),
             stats?.totalDurationMs?.takeIf { it > 0 }?.let { TimeUtils.formatDurationLong(it) }
         )
-        DetailRow("Created", TimeUtils.formatDateTime(playlist.createdAt))
+        DetailRow(stringResource(R.string.details_created), TimeUtils.formatDateTime(playlist.createdAt))
     }
 }

@@ -28,8 +28,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -69,7 +71,7 @@ fun DensityOrganisationModal(
                         .clip(RoundedCornerShape(FoamDimens.itemRounding))
                         .background(FoamTheme.colors.surfaceVariant)
                 ) {
-                    ModalGroupTitle(label = "Sorting")
+                    ModalGroupTitle(label = stringResource(R.string.sorting))
 
                     sortOptions.forEachIndexed { index, option ->
                         ModalSectionDivider()
@@ -95,7 +97,7 @@ fun DensityOrganisationModal(
                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
                     .background(FoamTheme.colors.surfaceVariant)
             ) {
-                ModalGroupTitle(label = "Organisation")
+                ModalGroupTitle(label = stringResource(R.string.organisation))
 
                 MediaDensity.entries.forEachIndexed { index, option ->
                     ModalSectionDivider()
@@ -179,7 +181,7 @@ private fun SortInverseCheckboxRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         BasicText(
-            text = "Inverse",
+            text = stringResource(R.string.inverse),
             style = FoamTheme.typography.body,
             modifier = Modifier.weight(1f)
         )

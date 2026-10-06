@@ -41,9 +41,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.MediaDensity
@@ -252,7 +255,7 @@ fun ArtistDetailScreen(
                     layout = heroLayout,
                     title = artistName,
                     subtitle = null,
-                    statsText = "${tracks.size} Tracks",
+                    statsText = pluralTrackCount(tracks.size),
                     imageUrl = heroImageUrl,
                     imageIsEmbeddedArt = heroImageIsEmbeddedArt,
                     onPlayAllClick = null,
@@ -310,7 +313,8 @@ fun ArtistDetailScreen(
                 if (shownTopTracks.isNotEmpty()) {
                     item(key = "artist_top_tracks_header", span = { GridItemSpan(maxLineSpan) }) {
                         ArtistSectionHeader(
-                            title = if (searchActive) "Tracks" else "Top Tracks",
+                            title = if (searchActive) stringResource(R.string.tracks)
+                            else stringResource(R.string.stats_top_tracks),
                             accentColor = accentColor,
                             showArrow = !searchActive,
                             onClick = if (searchActive) null else onAllSongsClick
@@ -342,7 +346,7 @@ fun ArtistDetailScreen(
                 if (shownAlbums.isNotEmpty()) {
                     item(key = "artist_albums_header", span = { GridItemSpan(maxLineSpan) }) {
                         ArtistSectionHeader(
-                            title = "Albums",
+                            title = stringResource(R.string.albums),
                             accentColor = accentColor,
                             showArrow = false
                         )
@@ -419,7 +423,7 @@ fun ArtistDetailScreen(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.back),
                     tint = FoamTheme.colors.textPrimary,
                     modifier = Modifier
                         .size(32.dp)
@@ -468,7 +472,7 @@ private fun ArtistHero(
             layout = heroLayout,
             title = title,
             subtitle = null,
-            statsText = "$trackCount Tracks",
+            statsText = pluralTrackCount(trackCount),
             accentColor = accentColor,
             onPlayAllClick = onPlayAllClick,
             onShuffleAllClick = onShuffleAllClick,
@@ -488,7 +492,7 @@ private fun ArtistHero(
         layout = heroLayout,
         title = title,
         subtitle = null,
-        statsText = "$trackCount Tracks",
+        statsText = pluralTrackCount(trackCount),
         imageUrl = imageUrl,
         imageIsEmbeddedArt = imageIsEmbeddedArt,
         onPlayAllClick = onPlayAllClick,
@@ -504,6 +508,11 @@ private fun ArtistHero(
         fullyRoundedArtwork = true
     )
 }
+
+/** Localized "N tracks" subtitle from the [track_count] plurals. */
+@Composable
+private fun pluralTrackCount(count: Int): String =
+    pluralStringResource(R.plurals.track_count, count = count, count)
 
 /**
  * Section header row: title on the left, and when [showArrow] a right-pointing
@@ -532,7 +541,7 @@ private fun ArtistSectionHeader(
         if (showArrow) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                contentDescription = "See all",
+                contentDescription = stringResource(R.string.home_see_all),
                 tint = accentColor,
                 modifier = Modifier
                     .size(24.dp)

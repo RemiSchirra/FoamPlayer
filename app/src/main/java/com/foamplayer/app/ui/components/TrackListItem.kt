@@ -51,10 +51,12 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.request.ImageRequest
 import androidx.core.net.toUri
+import com.foamplayer.app.R
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
@@ -455,7 +457,7 @@ fun TrackListItem(
                     }
                     AlbumArtImage(
                         model = albumArtRequest,
-                        contentDescription = "Album Art",
+                        contentDescription = stringResource(R.string.album_art),
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -555,7 +557,7 @@ private fun TrackGridArtwork(track: TrackEntity) {
         }
         AlbumArtImage(
             model = albumArtRequest,
-            contentDescription = "Album Art",
+            contentDescription = stringResource(R.string.album_art),
             modifier = Modifier.fillMaxSize(),
             placeholderSize = 32.dp
         )

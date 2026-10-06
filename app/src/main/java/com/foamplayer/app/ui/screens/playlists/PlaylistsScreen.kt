@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -613,6 +614,8 @@ private fun PlaylistItemRow(
         label = "playlistArtworkElevation"
     )
 
+    val trackCountText = pluralStringResource(R.plurals.track_count, trackCount, trackCount)
+
     @Composable
     fun Modifier.sharedArtworkModifier(): Modifier {
         if (!isActiveCollection) {
@@ -722,7 +725,7 @@ private fun PlaylistItemRow(
                 }
             },
             title = playlist.name,
-            subtitle = "$trackCount tracks",
+            subtitle = trackCountText,
             highlightBackground = highlightBackground,
             titleModifier = Modifier.sharedTitle()
         )
@@ -736,7 +739,7 @@ private fun PlaylistItemRow(
             artworkElevation = staticArtElevation,
             artworkContent = { PlaylistArtwork() },
             title = playlist.name,
-            subtitle = "$trackCount tracks",
+            subtitle = trackCountText,
             density = density,
             highlightBackground = highlightBackground,
             titleModifier = Modifier.sharedTitle(),

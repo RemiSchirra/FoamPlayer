@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -453,6 +454,7 @@ private fun HomePlaylistRow(
 ) {
     val context = LocalContext.current
     val coverImageUrl = cover?.imageUrl
+    val trackCountText = pluralStringResource(R.plurals.track_count, playlist.trackCount, playlist.trackCount)
 
     @Composable
     fun PlaylistArtwork() {
@@ -496,7 +498,7 @@ private fun HomePlaylistRow(
             artworkModifier = artworkModifier,
             artworkContent = { PlaylistArtwork() },
             title = playlist.name,
-            subtitle = "${playlist.trackCount} tracks"
+            subtitle = trackCountText
         )
     } else {
         MediaListRow(
@@ -506,7 +508,7 @@ private fun HomePlaylistRow(
             artworkModifier = artworkModifier,
             artworkContent = { PlaylistArtwork() },
             title = playlist.name,
-            subtitle = "${playlist.trackCount} tracks",
+            subtitle = trackCountText,
             density = density
         )
     }

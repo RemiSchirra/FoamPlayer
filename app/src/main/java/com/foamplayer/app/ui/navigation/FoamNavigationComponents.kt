@@ -54,11 +54,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.times
+import com.foamplayer.app.R
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -604,7 +606,9 @@ private fun FoamNavigationItems(
         if (item == NavBarItem.MORE) {
             FoamNavItem(
                 icon = FoamTheme.icons.current.more,
-                contentDescription = if (expandFraction > 0.5f) "Collapse navigation" else "Expand navigation",
+                contentDescription = stringResource(
+                    if (expandFraction > 0.5f) R.string.collapse_navigation else R.string.expand_navigation
+                ),
                 selected = false,
                 enabled = itemEnabled,
                 iconModifier = Modifier.rotate(expandFraction * 90f),

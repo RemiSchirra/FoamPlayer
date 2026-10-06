@@ -21,8 +21,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.CollectionSortMode
@@ -109,7 +112,7 @@ fun AlbumsBrowseScreen(
 
     MediaArtKindScope(MediaArtKind.ALBUM) {
         CollectionListScreen(
-            title = "Albums",
+            title = stringResource(R.string.albums),
             itemCount = sortedAlbums.size,
             onBack = onBack,
             density = density,
@@ -196,7 +199,7 @@ fun ArtistsBrowseScreen(
 
     MediaArtKindScope(MediaArtKind.ARTIST) {
         CollectionListScreen(
-            title = "Artists",
+            title = stringResource(R.string.artists),
             itemCount = sortedArtists.size,
             onBack = onBack,
             density = density,
@@ -284,7 +287,7 @@ fun GenresBrowseScreen(
     }
 
     CollectionListScreen(
-        title = "Genres",
+        title = stringResource(R.string.genres),
         itemCount = sortedGenres.size,
         onBack = onBack,
         headerIcon = Icons.Rounded.Category,
@@ -357,7 +360,7 @@ fun YearsBrowseScreen(
     }
 
     CollectionListScreen(
-        title = "Years",
+        title = stringResource(R.string.years),
         itemCount = sortedYears.size,
         onBack = onBack,
         headerIcon = Icons.Rounded.CalendarToday,
@@ -419,7 +422,7 @@ fun AllTracksBrowseScreen(
     val sortedTracks = rememberSortedTracks(tracks, sortMode, sortInverted)
 
     TrackListScreen(
-        title = "All Tracks",
+        title = stringResource(R.string.all_tracks),
         tracks = sortedTracks,
         onTrackClick = onTrackClick,
         onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
@@ -578,10 +581,11 @@ fun FolderBrowseScreen(
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
 
+    val foldersFallback = stringResource(R.string.folders)
     val title = path
         ?.substringAfterLast('/')
         ?.ifEmpty { path.substringAfterLast(':') }
-        ?: "Folders"
+        ?: foldersFallback
 
     val folders = content?.folders.orEmpty()
     val searchState = rememberCollectionSearchState()
@@ -615,10 +619,11 @@ fun FolderBrowseScreen(
         searchState = searchState
     ) {
         items(sortedFolders, key = { "browse_folder_${it.path}" }) { folder ->
+            val folderSubtitle = pluralTrackCount(folder.trackCount)
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
                     title = folder.name,
-                    subtitle = "${folder.trackCount} tracks",
+                    subtitle = folderSubtitle,
                     icon = Icons.Rounded.Folder,
                     onClick = {
                         // Build the destination's listing from this screen's
@@ -633,7 +638,7 @@ fun FolderBrowseScreen(
                             collectionModalState?.show(
                                 CollectionInfo(
                                     title = folder.name,
-                                    subtitle = "${folder.trackCount} tracks",
+                                    subtitle = folderSubtitle,
                                     icon = Icons.Rounded.Folder,
                                     kind = CollectionKind.Folder,
                                     tracks = viewModel.tracksForFolder(folder.path),
@@ -669,7 +674,7 @@ fun FolderBrowseScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     BasicText(
-                        text = "No tracks found",
+                        text = stringResource(R.string.no_tracks_found),
                         style = FoamTheme.typography.body
                     )
                 }
@@ -677,6 +682,11 @@ fun FolderBrowseScreen(
         }
     }
 }
+
+/** Localized "N tracks" subtitle from the [track_count] plurals. */
+@Composable
+internal fun pluralTrackCount(count: Int): String =
+    pluralStringResource(R.plurals.track_count, count = count, count)
 
 /** One row of [CollectionArtistsScreen]: an artist plus how many of the source collection's albums it appears on. */
 private data class CollectionArtistRow(
@@ -753,7 +763,7 @@ fun CollectionArtistsScreen(
     MediaArtKindScope(MediaArtKind.ARTIST) {
         CollectionListScreen(
             title = collectionMembersTitle(kind, key),
-            subtitle = "Artists",
+            subtitle = stringResource(R.string.artists),
             itemCount = sortedRows.size,
             onBack = onBack,
             density = density,
@@ -769,7 +779,7 @@ fun CollectionArtistsScreen(
                 Box(modifier = Modifier.listRowInset(density)) {
                     CollectionListItem(
                         title = row.name,
-                        subtitle = if (row.albumCount == 1) "1 album" else "${row.albumCount} albums",
+                        subtitle = pluralAlbumCount(row.albumCount),
                         imageUrl = artistImages[row.name]?.imageUrl,
                         imageIsEmbeddedArt = artistImages[row.name]?.isEmbeddedArt ?: false,
                         onClick = {
@@ -802,13 +812,18 @@ fun CollectionArtistsScreen(
                 contentAlignment = Alignment.Center
             ) {
                 BasicText(
-                    text = "No artists found",
+                    text = stringResource(R.string.no_artists_found),
                     style = FoamTheme.typography.body
                 )
             }
         }
     }
 }
+
+/** Localized "N albums" subtitle from the [album_count] plurals. */
+@Composable
+private fun pluralAlbumCount(count: Int): String =
+    pluralStringResource(R.plurals.album_count, count = count, count)
 
 /**
  * List of the albums held by one source collection (folder, genre or year),
@@ -860,7 +875,7 @@ fun CollectionAlbumsScreen(
     MediaArtKindScope(MediaArtKind.ALBUM) {
         CollectionListScreen(
             title = collectionMembersTitle(kind, key),
-            subtitle = "Albums",
+            subtitle = stringResource(R.string.albums),
             itemCount = sortedRows.size,
             onBack = onBack,
             density = density,
@@ -898,7 +913,7 @@ fun CollectionAlbumsScreen(
                 contentAlignment = Alignment.Center
             ) {
                 BasicText(
-                    text = "No albums found",
+                    text = stringResource(R.string.no_albums_found),
                     style = FoamTheme.typography.body
                 )
             }

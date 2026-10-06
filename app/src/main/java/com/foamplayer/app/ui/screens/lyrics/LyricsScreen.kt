@@ -27,9 +27,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.lyrics.LYRICS_NOT_FOUND
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -107,7 +109,7 @@ fun LyricsScreen(
                     LyricsViewState.INSTRUMENTAL -> {
                         Icon(
                             imageVector = Icons.Filled.MusicNote,
-                            contentDescription = "Instrumental",
+                            contentDescription = stringResource(R.string.instrumental),
                             tint = FoamTheme.colors.textPrimary.copy(alpha = 0.6f),
                             modifier = Modifier.size(72.dp)
                         )
@@ -116,14 +118,14 @@ fun LyricsScreen(
                     LyricsViewState.NO_LYRICS -> {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "Lyrics not found",
+                                text = stringResource(R.string.lyrics_not_found),
                                 style = FoamTheme.typography.titleMedium,
                                 color = FoamTheme.colors.textPrimary.copy(alpha = 0.6f),
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Mark song as instrumental?",
+                                text = stringResource(R.string.mark_song_instrumental),
                                 style = FoamTheme.typography.body,
                                 color = FoamTheme.accentColor,
                                 textAlign = TextAlign.Center,

@@ -176,7 +176,7 @@ fun LyricsEnhanced(
     // 60fps position feed for per-syllable highlighting and renders extra composables per
     // line (translation, phonetic, accompaniment). On top of that, a GPU blur effect on the
     // non-active lines is one of the most expensive things Compose can draw and gets
-    // recomputed as the highlighted line changes during playback. The user's choice
+    // recomposed as the highlighted line changes during playback. The user's choice
     // (Settings > Lyrics > Display, persisted via LyricsLineBlurKey) arrives through
     // lyricsLineBlurOverride; this false is only the fallback for callers that don't wire
     // the setting, so word-synced lyrics never pay for blur by default.
@@ -572,6 +572,8 @@ fun LyricsEnhanced(
             )
         }
 
+    val noLyricsText = stringResource(R.string.lyrics_not_found)
+
     Box(
         contentAlignment = Alignment.TopCenter,
         modifier =
@@ -595,7 +597,7 @@ fun LyricsEnhanced(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Lyrics not found",
+                        text = noLyricsText,
                         style = FoamTheme.typography.titleMedium,
                         color = textColor.copy(alpha = 0.6f),
                         textAlign = TextAlign.Center,
@@ -609,7 +611,7 @@ fun LyricsEnhanced(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Lyrics not found",
+                        text = noLyricsText,
                         style = FoamTheme.typography.titleMedium,
                         color = textColor.copy(alpha = 0.6f),
                         textAlign = TextAlign.Center,
@@ -623,7 +625,7 @@ fun LyricsEnhanced(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Lyrics not found",
+                        text = noLyricsText,
                         style = FoamTheme.typography.titleMedium,
                         color = textColor.copy(alpha = 0.6f),
                         textAlign = TextAlign.Center,

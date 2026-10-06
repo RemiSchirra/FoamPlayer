@@ -83,6 +83,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -96,6 +97,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import coil.request.ImageRequest
+import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
@@ -1371,6 +1373,7 @@ private fun CollectionHeroPlayButton(
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val playLabel = stringResource(R.string.play)
     BoxWithConstraints(modifier = modifier) {
         // The pill's chrome around the label: 48dp horizontal padding + 20dp
         // icon + 8dp gap.
@@ -1378,8 +1381,8 @@ private fun CollectionHeroPlayButton(
         val labelStyle = FoamTheme.typography.titleMedium
         val density = LocalDensity.current
         val textMeasurer = rememberTextMeasurer()
-        val labelWidth = remember(textMeasurer, labelStyle, density) {
-            with(density) { textMeasurer.measure("Play", labelStyle).size.width.toDp() }
+        val labelWidth = remember(textMeasurer, labelStyle, density, playLabel) {
+            with(density) { textMeasurer.measure(playLabel, labelStyle).size.width.toDp() }
         }
         val showLabel = maxWidth >= labelChromeWidth + labelWidth
 
@@ -1397,7 +1400,7 @@ private fun CollectionHeroPlayButton(
                     if (showLabel) {
                         Modifier
                     } else {
-                        Modifier.semantics { contentDescription = "Play" }
+                        Modifier.semantics { contentDescription = playLabel }
                     }
                 )
                 .padding(
@@ -1418,7 +1421,7 @@ private fun CollectionHeroPlayButton(
                 if (showLabel) {
                     Spacer(modifier = Modifier.width(8.dp))
                     BasicText(
-                        text = "Play",
+                        text = playLabel,
                         style = labelStyle.copy(color = FoamTheme.colors.background)
                     )
                 }
@@ -1449,7 +1452,7 @@ private fun CollectionHeroShuffleButton(
     ) {
         Icon(
             imageVector = Icons.Rounded.Shuffle,
-            contentDescription = "Shuffle",
+            contentDescription = stringResource(R.string.action_shuffle),
             tint = FoamTheme.colors.textPrimary,
             modifier = Modifier.size(24.dp)
         )
@@ -1489,7 +1492,9 @@ private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
                 } else {
                     FoamTheme.icons.current.search
                 },
-                contentDescription = if (open) "Close search" else "Search",
+                contentDescription = stringResource(
+                    if (open) R.string.close_search else R.string.search
+                ),
                 tint = FoamTheme.colors.textPrimary,
                 modifier = Modifier.size(24.dp)
             )

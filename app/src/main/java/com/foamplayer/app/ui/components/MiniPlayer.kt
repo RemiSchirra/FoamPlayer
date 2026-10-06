@@ -46,10 +46,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.times
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.foamplayer.app.R
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
@@ -126,7 +128,7 @@ private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
     ) {
         Icon(
             imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
-            contentDescription = if (isPlaying) "Pause" else "Play",
+            contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
             tint = FoamTheme.colors.background,
             modifier = Modifier.size(20.dp)
         )
@@ -611,7 +613,7 @@ fun MiniPlayer(
                                     }
                                     AsyncImage(
                                         model = albumArtRequest,
-                                        contentDescription = "Album Art",
+                                        contentDescription = stringResource(R.string.album_art),
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
                                     )

@@ -118,8 +118,8 @@ fun TestSettingsScreen(
                         .background(FoamTheme.colors.surface)
                 ) {
                     FoamSwitchItem(
-                        title = "Test Switch",
-                        description = "Demonstration of the flat switch component",
+                        title = stringResource(R.string.test_switch),
+                        description = stringResource(R.string.test_switch_desc),
                         checked = switchState,
                         onCheckedChange = { switchState = it }
                     )
@@ -139,7 +139,7 @@ fun TestSettingsScreen(
                 ) {
                     Column {
                         FoamSliderItem(
-                            title = "Continuous Slider",
+                            title = stringResource(R.string.test_slider_continuous),
                             value = sliderValue,
                             onValueChange = { sliderValue = it },
                             valueDisplay = "${(sliderValue * 100).toInt()}%"
@@ -151,11 +151,11 @@ fun TestSettingsScreen(
                                 .background(FoamTheme.colors.borderOverlay)
                         )
                         FoamSliderItem(
-                            title = "Snapped Slider",
+                            title = stringResource(R.string.test_slider_snapped),
                             value = snappedSliderValue,
                             onValueChange = { snappedSliderValue = it },
                             steps = 4,
-                            valueDisplay = "Step ${(snappedSliderValue * 5).toInt()}",
+                            valueDisplay = stringResource(R.string.test_slider_step, (snappedSliderValue * 5).toInt()),
                             minMaxDisplay = "0" to "5"
                         )
                     }

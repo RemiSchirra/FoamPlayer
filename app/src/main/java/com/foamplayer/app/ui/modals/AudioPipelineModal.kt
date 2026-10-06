@@ -24,10 +24,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.audio.bitperfect.AudioOutputInfo
 import com.foamplayer.app.audio.pipeline.PipelineStage
 import com.foamplayer.app.audio.pipeline.PipelineStageStatus
@@ -73,12 +75,13 @@ fun AudioPipelineContent(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         BasicText(
-            text = "Audio Pipeline",
+            text = stringResource(R.string.audio_pipeline),
             style = FoamTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
         )
 
         BasicText(
-            text = currentTrack?.let { "${it.title} · ${it.format}" } ?: "Nothing playing",
+            text = currentTrack?.let { "${it.title} · ${it.format}" }
+                ?: stringResource(R.string.nothing_playing),
             style = FoamTheme.typography.caption
         )
 
@@ -87,7 +90,7 @@ fun AudioPipelineContent(
         val stages = outputInfo?.pipeline?.stages
         if (stages.isNullOrEmpty()) {
             BasicText(
-                text = "Start playback to inspect the live audio path.",
+                text = stringResource(R.string.pipeline_no_playback),
                 style = FoamTheme.typography.body
             )
         } else {
@@ -173,9 +176,9 @@ private fun PipelineStageRow(
 @Composable
 private fun StageBadge(status: PipelineStageStatus) {
     val (label, color) = when (status) {
-        PipelineStageStatus.ACTIVE -> "ACTIVE" to FoamTheme.colors.bitPerfectActive
-        PipelineStageStatus.BYPASSED -> "BYPASS" to FoamTheme.colors.textSecondary
-        PipelineStageStatus.WARN -> "WARN" to FoamTheme.colors.bitPerfectInactive
+        PipelineStageStatus.ACTIVE -> stringResource(R.string.device_active) to FoamTheme.colors.bitPerfectActive
+        PipelineStageStatus.BYPASSED -> stringResource(R.string.pipeline_bypass) to FoamTheme.colors.textSecondary
+        PipelineStageStatus.WARN -> stringResource(R.string.pipeline_warn) to FoamTheme.colors.bitPerfectInactive
     }
     Box(
         modifier = Modifier

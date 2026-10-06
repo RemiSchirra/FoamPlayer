@@ -77,11 +77,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.request.ImageRequest
+import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -118,7 +120,7 @@ import kotlinx.coroutines.launch
 
 // Colors of the browse cards shown when the search bar is idle (unfocused, empty query).
 private data class BrowseCardData(
-    val title: String,
+    val titleRes: Int,
     val color: Color,
     val icon: ImageVector,
     val onClick: () -> Unit
@@ -186,7 +188,7 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
                 modifier = Modifier.size(44.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
-            BasicText(text = card.title, style = FoamTheme.typography.titleMedium)
+            BasicText(text = stringResource(card.titleRes), style = FoamTheme.typography.titleMedium)
         }
         Icon(
             imageVector = card.icon,
@@ -321,7 +323,7 @@ fun SearchScreen(
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
                     BasicText(
-                        text = "Search tracks, artists, albums...",
+                        text = stringResource(R.string.search_hint),
                         style = FoamTheme.typography.titleMedium.copy(
                             color = FoamTheme.colors.textSecondary
                         )
@@ -344,7 +346,7 @@ fun SearchScreen(
             val clearInteractionSource = remember { MutableInteractionSource() }
             Icon(
                 imageVector = Icons.Rounded.Close,
-                contentDescription = "Clear",
+                contentDescription = stringResource(R.string.clear),
                 tint = FoamTheme.colors.textSecondary,
                 modifier = Modifier
                     .size(32.dp)
@@ -368,35 +370,35 @@ fun SearchScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 SearchFilterChip(
-                    label = "All",
+                    label = stringResource(R.string.filter_all),
                     selected = filters.allEnabled,
                     modifier = Modifier.weight(1f),
                     onClick = { searchViewModel.setAllFiltersEnabled(!filters.allEnabled) },
                     onLongClick = { searchViewModel.soloSearchFilter(SearchFilter.ARTISTS) }
                 )
                 SearchFilterChip(
-                    label = "Artists",
+                    label = stringResource(R.string.artists),
                     selected = filters.artists,
                     modifier = Modifier.weight(1f),
                     onClick = { searchViewModel.setArtistsFilterEnabled(!filters.artists) },
                     onLongClick = { searchViewModel.soloSearchFilter(SearchFilter.ARTISTS) }
                 )
                 SearchFilterChip(
-                    label = "Albums",
+                    label = stringResource(R.string.albums),
                     selected = filters.albums,
                     modifier = Modifier.weight(1f),
                     onClick = { searchViewModel.setAlbumsFilterEnabled(!filters.albums) },
                     onLongClick = { searchViewModel.soloSearchFilter(SearchFilter.ALBUMS) }
                 )
                 SearchFilterChip(
-                    label = "Tracks",
+                    label = stringResource(R.string.tracks),
                     selected = filters.tracks,
                     modifier = Modifier.weight(1f),
                     onClick = { searchViewModel.setTracksFilterEnabled(!filters.tracks) },
                     onLongClick = { searchViewModel.soloSearchFilter(SearchFilter.TRACKS) }
                 )
                 SearchFilterChip(
-                    label = "Lyrics",
+                    label = stringResource(R.string.lyrics),
                     selected = filters.lyrics,
                     modifier = Modifier.weight(1f),
                     onClick = { searchViewModel.setLyricsFilterEnabled(!filters.lyrics) },
@@ -414,7 +416,7 @@ fun SearchScreen(
                         // Artists Section
                         if (uiState.artists.isNotEmpty()) {
                             item(key = "artists_header") {
-                                SectionHeader("Artists")
+                                SectionHeader(stringResource(R.string.artists))
                             }
                             // Content-keyed: results change identity on every keystroke.
                             items(uiState.artists, key = { "artist_$it" }) { artist ->
@@ -441,7 +443,7 @@ fun SearchScreen(
                         // Albums Section
                         if (uiState.albums.isNotEmpty()) {
                             item(key = "albums_header") {
-                                SectionHeader("Albums")
+                                SectionHeader(stringResource(R.string.albums))
                             }
                             items(uiState.albums, key = { "album_${it.album}_${it.artist}" }) { album ->
                                 AlbumSearchResultItem(
@@ -460,7 +462,7 @@ fun SearchScreen(
                         // Tracks Section
                         if (uiState.tracks.isNotEmpty()) {
                             item(key = "tracks_header") {
-                                SectionHeader("Tracks")
+                                SectionHeader(stringResource(R.string.tracks))
                             }
                             items(uiState.tracks, key = { "track_${it.id}" }) { track ->
                                 TrackListItem(
@@ -483,7 +485,7 @@ fun SearchScreen(
                         if (uiState.lyricsMatches.isNotEmpty() || uiState.lyricsSearchInProgress) {
                             item(key = "lyrics_header") {
                                 SectionHeader(
-                                    title = "Found in lyrics",
+                                    title = stringResource(R.string.found_in_lyrics),
                                     trailingVisible = uiState.lyricsSearchInProgress,
                                     trailing = {
                                         CircularProgressIndicator(
@@ -517,7 +519,7 @@ fun SearchScreen(
                         if (uiState.history.isNotEmpty()) {
                             item(key = "history_header") {
                                 SectionHeader(
-                                    title = "Recent Searches",
+                                    title = stringResource(R.string.recent_searches),
                                     modifier = Modifier.animateItem()
                                 )
                             }
@@ -607,7 +609,7 @@ fun SearchScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     BasicText(
-                                        text = "Clear search history",
+                                        text = stringResource(R.string.clear_search_history),
                                         style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor)
                                     )
                                 }
@@ -618,15 +620,15 @@ fun SearchScreen(
                     // Idle: browse cards into the library list screens
                     else -> {
                         val browseCards = listOf(
-                            BrowseCardData("All tracks", AllTracksCardColor, Icons.Rounded.MusicNote, onBrowseAllTracks),
-                            BrowseCardData("Albums", AlbumCardColor, Icons.Rounded.Album, onBrowseAlbums),
-                            BrowseCardData("Folders", FolderCardColor, Icons.Rounded.Folder, onBrowseFolders),
-                            BrowseCardData("Genres", GenreCardColor, Icons.Rounded.Category, onBrowseGenres),
-                            BrowseCardData("Artists", ArtistCardColor, Icons.Rounded.Person, onBrowseArtists),
-                            BrowseCardData("Years", YearCardColor, Icons.Rounded.CalendarToday, onBrowseYears)
+                            BrowseCardData(R.string.all_tracks, AllTracksCardColor, Icons.Rounded.MusicNote, onBrowseAllTracks),
+                            BrowseCardData(R.string.albums, AlbumCardColor, Icons.Rounded.Album, onBrowseAlbums),
+                            BrowseCardData(R.string.folders, FolderCardColor, Icons.Rounded.Folder, onBrowseFolders),
+                            BrowseCardData(R.string.genres, GenreCardColor, Icons.Rounded.Category, onBrowseGenres),
+                            BrowseCardData(R.string.artists, ArtistCardColor, Icons.Rounded.Person, onBrowseArtists),
+                            BrowseCardData(R.string.years, YearCardColor, Icons.Rounded.CalendarToday, onBrowseYears)
                         )
                         browseCards.forEachIndexed { index, card ->
-                            item(key = "browse_card_${card.title}") {
+                            item(key = "browse_card_${card.titleRes}") {
                                 BrowseCardItem(
                                     card = card,
                                     modifier = if (index == 0) {

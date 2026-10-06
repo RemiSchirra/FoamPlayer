@@ -49,10 +49,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.audio.dsp.DspMath
 import com.foamplayer.app.audio.dsp.DspPreset
 import com.foamplayer.app.audio.dsp.DspState
@@ -63,13 +65,13 @@ import com.foamplayer.app.audio.dsp.ParametricEqSettings
 import com.foamplayer.app.audio.dsp.ParametricNode
 import com.foamplayer.app.audio.dsp.PresetKind
 import com.foamplayer.app.audio.dsp.ToneSettings
-import com.foamplayer.app.ui.modals.FoamBottomModal
 import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.components.KnobControl
 import com.foamplayer.app.ui.components.ScreenTitle
 import com.foamplayer.app.ui.components.VerticalSlider
 import com.foamplayer.app.ui.components.onSeekBarReleased
+import com.foamplayer.app.ui.modals.FoamBottomModal
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.ln
@@ -176,12 +178,12 @@ fun EqualizerScreen(
         // ------------------------------------------------------------ header
         ScreenTitle(
             icon = Icons.Rounded.Equalizer,
-            title = "Equalizer & DSP",
+            title = stringResource(R.string.equalizer_dsp),
             subtitle = {
                 BasicText(
                     text = when {
-                        state.isNeutral -> "Bit-perfect passthrough"
-                        else -> "32-bit float processing"
+                        state.isNeutral -> stringResource(R.string.eq_bit_perfect_passthrough)
+                        else -> stringResource(R.string.eq_float_processing)
                     },
                     style = FoamTheme.typography.caption.copy(
                         color = if (state.isNeutral) {
@@ -207,7 +209,7 @@ fun EqualizerScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     BasicText(
-                        text = "FREQUENCY RESPONSE",
+                        text = stringResource(R.string.eq_frequency_response),
                         style = FoamTheme.typography.caption.copy(
                             color = FoamTheme.colors.textSecondary,
                             fontWeight = FontWeight.Bold
@@ -232,9 +234,9 @@ fun EqualizerScreen(
                 Spacer(modifier = Modifier.width(16.dp))
 
                 Column(horizontalAlignment = Alignment.End) {
-                    MiniMapValue("PRE-AMP", formatDb(state.preampDb))
-                    MiniMapValue("BASS", formatTonePercent(state.tone.bassDb))
-                    MiniMapValue("TREBLE", formatTonePercent(state.tone.trebleDb))
+                    MiniMapValue(stringResource(R.string.eq_preamp), formatDb(state.preampDb))
+                    MiniMapValue(stringResource(R.string.eq_bass), formatTonePercent(state.tone.bassDb))
+                    MiniMapValue(stringResource(R.string.eq_treble), formatTonePercent(state.tone.trebleDb))
                 }
             }
         }
@@ -257,9 +259,12 @@ fun EqualizerScreen(
         ) {
             BasicText(
                 text = when (selectedSection) {
-                    DspMath.Section.GRAPHIC -> "${state.graphicEq.count}-band graphic equalizer"
-                    DspMath.Section.PARAMETRIC ->
-                        "Parametric equalizer · ${workingNodes.size}/${ParametricEqSettings.MAX_NODES} nodes"
+                    DspMath.Section.GRAPHIC -> stringResource(R.string.eq_graphic_title, state.graphicEq.count)
+                    DspMath.Section.PARAMETRIC -> stringResource(
+                        R.string.eq_parametric_title,
+                        workingNodes.size,
+                        ParametricEqSettings.MAX_NODES
+                    )
                 },
                 style = FoamTheme.typography.caption,
                 modifier = Modifier.weight(1f)
@@ -277,7 +282,7 @@ fun EqualizerScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             BasicText(
-                                text = "${state.graphicEq.count} BANDS",
+                                text = stringResource(R.string.eq_bands_caps, state.graphicEq.count),
                                 style = FoamTheme.typography.caption.copy(
                                     color = FoamTheme.accentColor,
                                     fontWeight = FontWeight.Bold
@@ -297,7 +302,7 @@ fun EqualizerScreen(
                                 }
                             ) {
                                 BasicText(
-                                    text = "$count bands",
+                                    text = stringResource(R.string.eq_bands, count),
                                     style = FoamTheme.typography.caption.copy(
                                         color = if (count == state.graphicEq.count) {
                                             FoamTheme.accentColor
@@ -343,7 +348,7 @@ fun EqualizerScreen(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         BasicText(
-                            text = "NODE",
+                            text = stringResource(R.string.eq_node),
                             style = FoamTheme.typography.caption.copy(
                                 color = FoamTheme.accentColor,
                                 fontWeight = FontWeight.Bold
@@ -377,7 +382,7 @@ fun EqualizerScreen(
                 value = state.preampDb,
                 onCommit = { viewModel.setPreampDb(it) },
                 valueRange = DspState.MIN_PREAMP_DB..DspState.MAX_PREAMP_DB,
-                label = "PRE-AMP",
+                label = stringResource(R.string.eq_preamp),
                 valueText = { formatDb(it) },
                 modifier = Modifier
                     .width(56.dp)
@@ -499,7 +504,9 @@ private fun PowerButton(
     ) {
         Icon(
             imageVector = Icons.Rounded.PowerSettingsNew,
-            contentDescription = if (enabled) "Disable DSP" else "Enable DSP",
+            contentDescription = stringResource(
+                if (enabled) R.string.disable_dsp else R.string.enable_dsp
+            ),
             tint = if (enabled) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
             modifier = Modifier.size(24.dp)
         )
@@ -556,14 +563,14 @@ private fun PresetsEntryCard(
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                BasicText(text = "Presets", style = FoamTheme.typography.titleMedium)
+                BasicText(text = stringResource(R.string.eq_presets), style = FoamTheme.typography.titleMedium)
                 BasicText(
-                    text = currentPresetName ?: "Custom · tap to browse & save",
+                    text = currentPresetName ?: stringResource(R.string.eq_preset_custom_hint),
                     style = FoamTheme.typography.caption
                 )
             }
             BasicText(
-                text = "VIEW ALL",
+                text = stringResource(R.string.eq_view_all),
                 style = FoamTheme.typography.caption.copy(
                     color = FoamTheme.accentColor,
                     fontWeight = FontWeight.Bold
@@ -593,10 +600,10 @@ private fun PresetsModal(
         onDismissRequest = onDismiss
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            BasicText(text = "Presets", style = FoamTheme.typography.titleMedium)
+            BasicText(text = stringResource(R.string.eq_presets), style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(4.dp))
             BasicText(
-                text = "A preset drives either the graphic or the parametric EQ",
+                text = stringResource(R.string.eq_presets_desc),
                 style = FoamTheme.typography.caption
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -632,7 +639,7 @@ private fun PresetsModal(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     BasicText(
-                        text = "Save current as new preset",
+                        text = stringResource(R.string.eq_save_as_new),
                         style = FoamTheme.typography.caption.copy(
                             color = FoamTheme.accentColor,
                             fontWeight = FontWeight.Bold
@@ -665,6 +672,15 @@ private fun PresetRow(
     }
     val previewToneCurves = remember(previewState) { DspMath.toneCurves(previewState.tone) }
 
+    val kindLabel = stringResource(
+        if (preset.kind == PresetKind.PARAMETRIC) R.string.eq_preset_kind_parametric
+        else R.string.eq_preset_kind_graphic
+    )
+    val originLabel = stringResource(
+        if (preset.isBuiltIn) R.string.eq_preset_built_in else R.string.eq_preset_user
+    )
+    val deletePresetDescription = stringResource(R.string.eq_delete_preset, preset.name)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -695,11 +711,7 @@ private fun PresetRow(
                 )
             )
             BasicText(
-                text = if (preset.isBuiltIn) {
-                    "${if (preset.kind == PresetKind.PARAMETRIC) "PARAMETRIC" else "GRAPHIC"} · built-in"
-                } else {
-                    "${if (preset.kind == PresetKind.PARAMETRIC) "PARAMETRIC" else "GRAPHIC"} · user"
-                },
+                text = "$kindLabel · $originLabel",
                 style = FoamTheme.typography.caption.copy(
                     color = if (preset.kind == PresetKind.PARAMETRIC) {
                         FoamTheme.accentColor
@@ -721,7 +733,7 @@ private fun PresetRow(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.DeleteOutline,
-                    contentDescription = "Delete preset ${preset.name}",
+                    contentDescription = deletePresetDescription,
                     tint = FoamTheme.colors.textSecondary,
                     modifier = Modifier.size(18.dp)
                 )
@@ -739,7 +751,7 @@ private fun SectionPowerToggle(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         BasicText(
-            text = if (enabled) "ON" else "OFF",
+            text = stringResource(if (enabled) R.string.on else R.string.off),
             style = FoamTheme.typography.caption.copy(
                 color = if (enabled) FoamTheme.accentColor else FoamTheme.colors.textSecondary,
                 fontWeight = FontWeight.Bold
@@ -781,7 +793,7 @@ private fun ParametricNodeEditor(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 BasicText(
-                    text = "NODE ${node.id}",
+                    text = stringResource(R.string.eq_node_id, node.id),
                     style = FoamTheme.typography.caption.copy(
                         color = FoamTheme.accentColor,
                         fontWeight = FontWeight.Bold
@@ -798,7 +810,7 @@ private fun ParametricNodeEditor(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.DeleteOutline,
-                        contentDescription = "Delete node",
+                        contentDescription = stringResource(R.string.eq_delete_node),
                         tint = FoamTheme.colors.textPrimary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -841,7 +853,7 @@ private fun ParametricNodeEditor(
             Spacer(modifier = Modifier.height(12.dp))
 
             NodeSlider(
-                label = "FREQ",
+                label = stringResource(R.string.eq_freq),
                 valueText = frequencyDisplay(node.frequencyHz),
                 value = frequencyToNormalized(node.frequencyHz),
                 onCommit = { normalized ->
@@ -851,7 +863,7 @@ private fun ParametricNodeEditor(
 
             if (node.type.gainAdjustable) {
                 NodeSlider(
-                    label = "GAIN",
+                    label = stringResource(R.string.eq_gain),
                     valueText = formatDb(node.gainDb),
                     value = (node.gainDb - ParametricNode.MIN_GAIN_DB) /
                             (ParametricNode.MAX_GAIN_DB - ParametricNode.MIN_GAIN_DB),
@@ -867,7 +879,7 @@ private fun ParametricNodeEditor(
             }
 
             NodeSlider(
-                label = "Q",
+                label = stringResource(R.string.eq_q),
                 valueText = "%.2f".format(node.q),
                 value = (node.q - ParametricNode.MIN_Q) / (ParametricNode.MAX_Q - ParametricNode.MIN_Q),
                 onCommit = { normalized ->
@@ -896,7 +908,7 @@ private fun NodeColorPicker(
         verticalAlignment = Alignment.CenterVertically
     ) {
         BasicText(
-            text = "COLOR",
+            text = stringResource(R.string.eq_color),
             style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
         )
         NodeColorPalette.forEach { colorArgb ->
@@ -976,7 +988,7 @@ private fun AddNodeRow(
         )
         Spacer(modifier = Modifier.width(6.dp))
         BasicText(
-            text = if (canAdd) "Add parametric node" else "Node limit reached",
+            text = stringResource(if (canAdd) R.string.eq_add_node else R.string.eq_node_limit),
             style = FoamTheme.typography.caption.copy(
                 color = if (canAdd) FoamTheme.accentColor else FoamTheme.colors.textSecondary
             )
@@ -991,6 +1003,17 @@ private fun KnobsSection(
     state: DspState,
     viewModel: EqualizerViewModel
 ) {
+    // Balance readout labels are plain resources: resolve them once so the
+    // non-composable valueText lambda can format the live value with them.
+    val balanceCenter = stringResource(R.string.eq_balance_center)
+    val balanceLeft = stringResource(R.string.eq_balance_left)
+    val balanceRight = stringResource(R.string.eq_balance_right)
+    fun balanceText(balance: Float): String = when {
+        balance == 0f -> balanceCenter
+        balance < 0f -> balanceLeft.format(-balance * 100)
+        else -> balanceRight.format(balance * 100)
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -998,20 +1021,20 @@ private fun KnobsSection(
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Column {
-            SectionCaption("TONE")
+            SectionCaption(stringResource(R.string.eq_tone))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ToneKnob(
-                    label = "BASS",
+                    label = stringResource(R.string.eq_bass),
                     db = state.tone.bassDb,
                     onDbChange = { viewModel.setBassDb(it) }
                 )
                 ToneKnob(
-                    label = "MID",
+                    label = stringResource(R.string.eq_mid),
                     db = state.tone.midDb,
                     onDbChange = { viewModel.setMidDb(it) }
                 )
                 ToneKnob(
-                    label = "TREBLE",
+                    label = stringResource(R.string.eq_treble),
                     db = state.tone.trebleDb,
                     onDbChange = { viewModel.setTrebleDb(it) }
                 )
@@ -1019,13 +1042,13 @@ private fun KnobsSection(
         }
 
         Column {
-            SectionCaption("CONTROLS")
+            SectionCaption(stringResource(R.string.eq_controls))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 KnobControl(
                     value = state.balance,
                     onValueChange = { viewModel.setBalance(it) },
-                    label = "BALANCE",
-                    valueText = { formatBalance(it) },
+                    label = stringResource(R.string.eq_balance),
+                    valueText = { balanceText(it) },
                     minValue = -DspState.MAX_BALANCE,
                     maxValue = DspState.MAX_BALANCE
                 )
@@ -1034,7 +1057,7 @@ private fun KnobsSection(
                     onValueChange = { percent ->
                         viewModel.setStereoWidth(stereoPercentToWidth(percent))
                     },
-                    label = "STEREO",
+                    label = stringResource(R.string.eq_stereo),
                     valueText = { formatPercent(it) },
                     minValue = 0f,
                     maxValue = KNOB_MAX_PERCENT
@@ -1108,14 +1131,15 @@ private fun VolumeSection(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    BasicText(text = "Volume", style = FoamTheme.typography.titleMedium)
+                    BasicText(text = stringResource(R.string.eq_volume), style = FoamTheme.typography.titleMedium)
                     BasicText(
-                        text = "Direct volume control (32-bit float)",
+                        text = stringResource(R.string.eq_volume_desc),
                         style = FoamTheme.typography.caption
                     )
                 }
                 BasicText(
-                    text = "%d%% · %.1f dB".format(
+                    text = stringResource(
+                        R.string.eq_volume_readout,
                         state.volumePercent,
                         DspMath.volumePercentToDb(state.volumePercent)
                     ),
@@ -1143,8 +1167,8 @@ private fun VolumeSection(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                BasicText(text = "Mute", style = FoamTheme.typography.caption)
-                BasicText(text = "Full scale", style = FoamTheme.typography.caption)
+                BasicText(text = stringResource(R.string.eq_mute), style = FoamTheme.typography.caption)
+                BasicText(text = stringResource(R.string.eq_full_scale), style = FoamTheme.typography.caption)
             }
         }
     }
@@ -1167,12 +1191,17 @@ private fun SavePresetModal(
         onDismissRequest = onDismiss
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            BasicText(text = "Save Preset", style = FoamTheme.typography.titleMedium)
+            BasicText(text = stringResource(R.string.eq_save_preset_title), style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
             TextField(
                 value = name,
                 onValueChange = { name = it },
-                placeholder = { BasicText(text = "Preset name", style = FoamTheme.typography.body) },
+                placeholder = {
+                    BasicText(
+                        text = stringResource(R.string.eq_preset_name_hint),
+                        style = FoamTheme.typography.body
+                    )
+                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.textFieldColors(
@@ -1194,7 +1223,7 @@ private fun SavePresetModal(
                         .clickable(onClick = onDismiss)
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
-                    BasicText(text = "Cancel", style = FoamTheme.typography.body)
+                    BasicText(text = stringResource(R.string.cancel), style = FoamTheme.typography.body)
                 }
                 Box(
                     modifier = Modifier
@@ -1204,7 +1233,7 @@ private fun SavePresetModal(
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     BasicText(
-                        text = "Save",
+                        text = stringResource(R.string.save),
                         style = FoamTheme.typography.body.copy(
                             color = FoamTheme.colors.background,
                             fontWeight = FontWeight.Bold
@@ -1257,12 +1286,6 @@ private fun formatPercent(percent: Float): String = "%.0f%%".format(percent)
 
 /** Mini-map readout for the tone knobs: boost percent of [ToneSettings.MAX_DB]. */
 private fun formatTonePercent(db: Float): String = formatPercent(toneDbToPercent(db))
-
-private fun formatBalance(balance: Float): String = when {
-    balance == 0f -> "CENTER"
-    balance < 0f -> "L %.0f%%".format(-balance * 100)
-    else -> "R %.0f%%".format(balance * 100)
-}
 
 internal fun frequencyDisplay(hz: Float): String =
     if (hz >= 1000f) "%.1f kHz".format(hz / 1000f) else "%.0f Hz".format(hz)

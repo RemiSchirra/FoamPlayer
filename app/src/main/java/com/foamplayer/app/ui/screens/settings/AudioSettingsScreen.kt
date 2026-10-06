@@ -46,6 +46,7 @@ import com.foamplayer.app.ui.modals.AudioPipelineModal
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -68,6 +69,9 @@ fun AudioSettingsScreen(
     val dspState by viewModel.dspState.collectAsState()
 
     var showPipelineModal by rememberSaveable { mutableStateOf(false) }
+
+    val secondsTemplate = stringResource(R.string.duration_seconds)
+    val secondsDecimalTemplate = stringResource(R.string.duration_seconds_decimal)
 
     Column(
         modifier = Modifier
@@ -155,8 +159,8 @@ fun AudioSettingsScreen(
                             onValueChangeFinished = { viewModel.setNormalFadeSeconds(it) },
                             steps = 14, // integer seconds 0..15
                             valueRange = 0f..15f,
-                            formatValue = { "${it.roundToInt()} s" },
-                            minMaxDisplay = "0 s" to "15 s"
+                            formatValue = { String.format(Locale.getDefault(), secondsTemplate, it.roundToInt()) },
+                            minMaxDisplay = formatSeconds(secondsTemplate, 0) to formatSeconds(secondsTemplate, 15)
                         )
                         SectionDivider()
                         FoamSliderStateItem(
@@ -166,8 +170,10 @@ fun AudioSettingsScreen(
                             onValueChangeFinished = { viewModel.setQuickFadeSeconds(it) },
                             steps = 9, // 0.1 s increments 0..1
                             valueRange = 0f..1f,
-                            formatValue = { String.format("%.1f s", it) },
-                            minMaxDisplay = "0 s" to "1 s"
+                            formatValue = {
+                                formatSecondsDecimal(secondsDecimalTemplate, it)
+                            },
+                            minMaxDisplay = formatSeconds(secondsTemplate, 0) to formatSeconds(secondsTemplate, 1)
                         )
                     }
                 }
@@ -237,6 +243,14 @@ fun AudioSettingsScreen(
     )
 }
 
+/** "5 s" from the localized [template] ("%1$d s"). */
+private fun formatSeconds(template: String, seconds: Int): String =
+    String.format(Locale.getDefault(), template, seconds)
+
+/** "0.5 s" from the localized decimal [template] ("%1$.1f s"). */
+private fun formatSecondsDecimal(template: String, seconds: Float): String =
+    String.format(Locale.getDefault(), template, seconds)
+
 // ---------------------------------------------------------------- shared bits
 
 @Composable
@@ -253,6 +267,9 @@ private fun SectionDivider() {
 
 @Composable
 private fun OutputSummaryRow(outputInfo: AudioOutputInfo?) {
+    val bitPerfectLabel = stringResource(R.string.mode_bit_perfect)
+    val mixedLabel = stringResource(R.string.mode_mixed)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -290,7 +307,7 @@ private fun OutputSummaryRow(outputInfo: AudioOutputInfo?) {
         }
         Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
         BasicText(
-            text = if (outputInfo?.isBitPerfectMode == true) "BIT-PERFECT" else "MIXED",
+            text = if (outputInfo?.isBitPerfectMode == true) bitPerfectLabel else mixedLabel,
             style = FoamTheme.typography.caption.copy(
                 color = if (outputInfo?.isBitPerfectMode == true) {
                     FoamTheme.colors.bitPerfectActive
@@ -302,5 +319,3 @@ private fun OutputSummaryRow(outputInfo: AudioOutputInfo?) {
         )
     }
 }
-
-// --------------------------------------------------------- device config

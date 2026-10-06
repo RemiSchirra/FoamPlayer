@@ -29,10 +29,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -99,7 +101,7 @@ fun QueueScreen(
         if (showTitle) {
             Spacer(modifier = Modifier.height(16.dp))
             BasicText(
-                text = "Up Next (${displayedItems.size} tracks)",
+                text = stringResource(R.string.up_next, displayedItems.size),
                 style = FoamTheme.typography.titleLarge
             )
             Spacer(modifier = Modifier.height(16.dp))

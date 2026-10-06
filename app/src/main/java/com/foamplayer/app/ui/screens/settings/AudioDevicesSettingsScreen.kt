@@ -130,6 +130,16 @@ private fun DeviceConfigCard(
 ) {
     var expanded by rememberSaveable(device.id) { mutableStateOf(false) }
 
+    // Device capability caption: "<type> · up to <rate>" + optional " · direct".
+    val autoLabel = stringResource(R.string.rate_auto)
+    val maxRateTemplate = stringResource(R.string.device_max_rate)
+    val directLabel = stringResource(R.string.device_direct)
+    val capabilityCaption = listOf(
+        device.typeLabel,
+        maxRateTemplate.replace("%1\$s", formatRate(device.maxSupportedSampleRate, autoLabel)),
+        directLabel.takeIf { device.supportsDirectPlayback }
+    ).filterNotNull().joinToString(" · ")
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -172,8 +182,7 @@ private fun DeviceConfigCard(
                             )
                         )
                         BasicText(
-                            text = "${device.typeLabel} · up to ${formatRate(device.maxSupportedSampleRate)}" +
-                                    if (device.supportsDirectPlayback) " · direct" else "",
+                            text = capabilityCaption,
                             style = FoamTheme.typography.caption
                         )
                     }
@@ -275,7 +284,7 @@ private fun DeviceConfigCard(
                                     )
                             ) {
                                 BasicText(
-                                    text = formatRate(rate),
+                                    text = formatRate(rate, autoLabel),
                                     style = FoamTheme.typography.caption.copy(
                                         color = if (selected) FoamTheme.colors.background
                                         else FoamTheme.colors.textPrimary,
@@ -291,8 +300,8 @@ private fun DeviceConfigCard(
     }
 }
 
-private fun formatRate(rate: Int): String = when (rate) {
-    0 -> "Auto"
+private fun formatRate(rate: Int, autoLabel: String): String = when (rate) {
+    0 -> autoLabel
     44_100 -> "44.1 kHz"
     192_000 -> "192 kHz"
     else -> "${rate / 1000} kHz"

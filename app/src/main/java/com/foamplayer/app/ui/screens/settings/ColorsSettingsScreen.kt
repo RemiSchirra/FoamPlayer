@@ -132,7 +132,7 @@ fun ColorsSettingsScreen(
                 ) {
                     FoamSwitchItem(
                         title = stringResource(R.string.automatic_color),
-                        description = "Extract accent color from album art",
+                        description = stringResource(R.string.automatic_color_desc),
                         checked = isAutomaticColorEnabled,
                         onCheckedChange = {
                             animatePalette = true

@@ -57,8 +57,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import androidx.compose.ui.platform.LocalContext
 import com.foamplayer.app.constants.CollectionHeroLayout
@@ -199,6 +201,7 @@ fun TrackListScreen(
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
     val trackCount = tracks.size
+    val statsText = stringResource(R.string.track_count_duration, trackCount, durationText)
     val context = LocalContext.current
     var showOrganisationModal by remember { mutableStateOf(false) }
 
@@ -430,7 +433,7 @@ fun TrackListScreen(
                 layout = heroLayout,
                 title = title,
                 subtitle = artistName,
-                statsText = "$trackCount Tracks • $durationText",
+                statsText = statsText,
                 imageUrl = imageUrl,
                 imageIsEmbeddedArt = imageIsEmbeddedArt,
                 onPlayAllClick = null,
@@ -468,7 +471,7 @@ fun TrackListScreen(
                         heroLayout = heroLayout,
                         title = title,
                         artistName = artistName,
-                        statsText = "$trackCount Tracks • $durationText",
+                        statsText = statsText,
                         imageUrl = imageUrl,
                         imageIsEmbeddedArt = imageIsEmbeddedArt,
                         onPlayAllClick = onPlayAllClick,
@@ -663,7 +666,7 @@ fun TrackListScreen(
                         heroLayout = heroLayout,
                         title = title,
                         artistName = artistName,
-                        statsText = "$trackCount Tracks • $durationText",
+                        statsText = statsText,
                         imageUrl = imageUrl,
                         imageIsEmbeddedArt = imageIsEmbeddedArt,
                         onPlayAllClick = onPlayAllClick,
@@ -975,7 +978,7 @@ private fun TrackListTopBarRow(
     ) {
         Icon(
             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-            contentDescription = "Back",
+            contentDescription = stringResource(R.string.back),
             tint = FoamTheme.colors.textPrimary,
             modifier = Modifier
                 .size(32.dp)
@@ -1006,7 +1009,7 @@ private fun TrackListTopBarRow(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Edit,
-                    contentDescription = "Edit",
+                    contentDescription = stringResource(R.string.edit),
                     tint = if (editMode) accentColor else FoamTheme.colors.textPrimary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -1019,7 +1022,7 @@ private fun TrackListTopBarRow(
 
         if (onDensityChange != null) {
             OrganisationMenuButton(
-                contentDescription = "Organisation",
+                contentDescription = stringResource(R.string.organisation),
                 onClick = onOpenOrganisation
             )
         }

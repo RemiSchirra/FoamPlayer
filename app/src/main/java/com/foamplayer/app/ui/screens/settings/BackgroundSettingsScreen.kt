@@ -126,6 +126,12 @@ fun BackgroundSettingsScreen(
         if (uri != null) viewModel.setCustomBackgroundUri(uri.toString())
     }
 
+    // Slider min/max labels resolve from resources ("None"/"Max", "Dim"/"Vivid").
+    val intensityMin = stringResource(R.string.none)
+    val intensityMax = stringResource(R.string.max)
+    val colorMin = stringResource(R.string.dim)
+    val colorMax = stringResource(R.string.vivid)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -278,7 +284,7 @@ fun BackgroundSettingsScreen(
             Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
 
             BasicText(
-                text = "Appearance",
+                text = stringResource(R.string.appearance),
                 style = FoamTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
             )
@@ -307,7 +313,7 @@ fun BackgroundSettingsScreen(
                                 steps = 9,
                                 valueRange = 0f..100f,
                                 formatValue = { "${it.roundToInt()}%" },
-                                minMaxDisplay = "None" to "Max",
+                                minMaxDisplay = intensityMin to intensityMax,
                             )
                             Box(
                                 modifier = Modifier
@@ -318,7 +324,7 @@ fun BackgroundSettingsScreen(
                         }
                     }
                     FoamSliderStateItem(
-                        title = "App Color Intensity",
+                        title = stringResource(R.string.app_color_intensity),
                         initialValue = settings.appBackgroundIntensity.toFloat(),
                         onValueChangeFinished = {
                             viewModel.setAppBackgroundIntensity(it.roundToInt())
@@ -326,7 +332,7 @@ fun BackgroundSettingsScreen(
                         steps = 9,
                         valueRange = 0f..100f,
                         formatValue = { "${it.roundToInt()}%" },
-                        minMaxDisplay = "Dim" to "Vivid",
+                        minMaxDisplay = colorMin to colorMax,
                     )
                     Box(
                         modifier = Modifier
@@ -335,7 +341,7 @@ fun BackgroundSettingsScreen(
                             .background(FoamTheme.colors.borderOverlay)
                     )
                     FoamSliderStateItem(
-                        title = "Player Color Intensity",
+                        title = stringResource(R.string.player_color_intensity),
                         initialValue = settings.playerBackgroundIntensity.toFloat(),
                         onValueChangeFinished = {
                             viewModel.setPlayerBackgroundIntensity(it.roundToInt())
@@ -343,7 +349,7 @@ fun BackgroundSettingsScreen(
                         steps = 9,
                         valueRange = 0f..100f,
                         formatValue = { "${it.roundToInt()}%" },
-                        minMaxDisplay = "Dim" to "Vivid",
+                        minMaxDisplay = colorMin to colorMax,
                     )
                 }
             }
@@ -599,7 +605,9 @@ private fun GradientEditor(
 
     var editingStopIndex by remember { mutableStateOf<Int?>(null) }
     var pickerStop by remember { mutableStateOf(AppSettings.DefaultGradientStops.first()) }
-    var pickerLabel by remember { mutableStateOf("Point 1") }
+    // The point number of the color picker's current target ("Point %1$d"
+    // resolves from resources at render time).
+    var pickerPointNumber by remember { mutableIntStateOf(1) }
     var pickerSession by remember { mutableIntStateOf(0) }
 
     fun addStop() {
@@ -625,7 +633,7 @@ private fun GradientEditor(
         val index = rowStates.indexOf(row)
         if (index < 0) return
         val removed = localStops.getOrNull(index) ?: return
-        exitingRows = exitingRows + ExitingStopRow(row, removed, "Point ${index + 1}", index)
+        exitingRows = exitingRows + ExitingStopRow(row, removed, index + 1, index)
         row.visibleState.targetState = false
 
         val remaining = localStops.filterIndexed { i, _ -> i != index }
@@ -674,12 +682,12 @@ private fun GradientEditor(
                 val entries = buildList<StopListEntry> {
                     localStops.forEachIndexed { index, stop ->
                         val row = rowStates.getOrNull(index) ?: return@forEachIndexed
-                        add(StopListEntry(row, stop, "Point ${index + 1}", index > 0, index))
+                        add(StopListEntry(row, stop, index + 1, index > 0, index))
                     }
                     exitingRows.asReversed().forEach { exiting ->
                         add(
                             exiting.slot.coerceAtMost(size),
-                            StopListEntry(exiting.row, exiting.stop, exiting.label, exiting.slot > 0, null)
+                            StopListEntry(exiting.row, exiting.stop, exiting.pointNumber, exiting.slot > 0, null)
                         )
                     }
                 }
@@ -713,7 +721,7 @@ private fun GradientEditor(
                                     )
                                 }
                                 StopRow(
-                                    label = entry.label,
+                                    label = stringResource(R.string.gradient_point, entry.pointNumber),
                                     stop = entry.stop,
                                     // A leaving row keeps its cross so it doesn't
                                     // flicker while it fades out.
@@ -722,7 +730,7 @@ private fun GradientEditor(
                                     enabled = entry.liveIndex != null,
                                     onEdit = {
                                         val index = entry.liveIndex ?: return@StopRow
-                                        pickerLabel = entry.label
+                                        pickerPointNumber = entry.pointNumber
                                         pickerStop = entry.stop
                                         pickerSession++
                                         editingStopIndex = index
@@ -755,7 +763,7 @@ private fun GradientEditor(
         GradientColorPickerModal(
             visible = editingStopIndex != null,
             session = pickerSession,
-            label = pickerLabel,
+            label = stringResource(R.string.gradient_point, pickerPointNumber),
             initialArgb = pickerStop.argb,
             onConfirm = { argb ->
                 val index = editingStopIndex
@@ -782,13 +790,13 @@ private class StopRowState(animateIn: Boolean) {
 }
 
 /**
- * A row the user removed. It keeps the stop and label it had and is spliced
- * back into the list at [slot] until its exit animation ends.
+ * A row the user removed. It keeps the stop and point number it had and is
+ * spliced back into the list at [slot] until its exit animation ends.
  */
 private class ExitingStopRow(
     val row: StopRowState,
     val stop: GradientStop,
-    val label: String,
+    val pointNumber: Int,
     val slot: Int
 )
 
@@ -796,7 +804,7 @@ private class ExitingStopRow(
 private class StopListEntry(
     val row: StopRowState,
     val stop: GradientStop,
-    val label: String,
+    val pointNumber: Int,
     val showSeparator: Boolean,
     /** Position in the live stop list; null while the row is animating out. */
     val liveIndex: Int?
