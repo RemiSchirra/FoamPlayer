@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">FoamPlayer</string>
+    <string name="app_name" translatable="false">FoamPlayer</string>
     <string name="playback_channel_name">FoamPlayer Playback</string>
     <string name="action_shuffle">Shuffle</string>
     <string name="action_repeat">Repeat</string>
@@ -45,7 +45,7 @@
     <string name="start_scan">START SCAN</string>
     <string name="scanning_caps">SCANNING</string>
     <string name="scanning_status">Scanning: %1$s (%2$d%%)</string>
-    <string name="scan_finishing">Finishing the scan…</string>
+    <string name="scan_finishing">End of the scan…</string>
     <string name="scan_finished">Scan finished: %1$d tracks found</string>
     <string name="scan_notification_channel_name">Library and artist scans</string>
     <string name="scan_notification_channel_desc">Progress of the music library scan and artist image resolution</string>
@@ -63,7 +63,7 @@
     <string name="artist_images_clear_cache">CLEAR CACHE</string>
 
     <string name="no_audio_detected">No audio files detected.\nGo to Settings to add folders and scan your library.</string>
-    <string name="search_hint">Search tracks, artists, albums...</string>
+    <string name="search_hint">Search</string>
     <string name="clear_search_history">Clear search history</string>
 
     <string name="appearance">Appearance</string>
@@ -102,9 +102,9 @@
     <string name="collapse_navigation">Collapse navigation</string>
 
     <!-- Stats screen -->
-    <string name="stats_loading">Loading your listening stats…</string>
+    <string name="stats_loading">Loading listening stats…</string>
     <string name="stats_empty_title">Nothing here yet</string>
-    <string name="stats_empty_body">Play some music and your listening stats will appear here.</string>
+    <string name="stats_empty_body">Play some music and listening stats will appear here.</string>
     <string name="stats_period_week">1 week</string>
     <string name="stats_period_month">1 month</string>
     <string name="stats_period_three_months">3 months</string>
@@ -140,12 +140,12 @@
 
     <!-- Audio settings: fidelity, devices, pipeline -->
     <string name="audio_fidelity_score">Audio Fidelity Score</string>
-    <string name="audio_fidelity_desc">Live quality verdict of the current playback path</string>
+    <string name="audio_fidelity_desc">Quality verdict of the current playback</string>
     <string name="fidelity_no_playback">Start playback to measure</string>
     <string name="direct_volume_control">Direct Volume Control</string>
     <string name="direct_volume_control_desc">Apply volume in the 32-bit float DSP chain, keeping the output path full scale</string>
     <string name="output_devices">Output Devices</string>
-    <string name="audio_devices_desc">Per-device bit-perfect mode and sample rate</string>
+    <string name="audio_devices_desc">Per-device audio settings</string>
     <string name="no_output_devices">No output device detected</string>
     <string name="device_active">ACTIVE</string>
     <string name="device_bit_perfect_mode">Bit-Perfect Mode</string>
@@ -311,7 +311,7 @@
 
     <!-- Onboarding -->
     <string name="onboarding_welcome_title">Welcome to FoamPlayer</string>
-    <string name="onboarding_welcome_subtitle">A flat, bit-perfect music player built around your library. Let\'s set it up in three quick steps.</string>
+    <string name="onboarding_welcome_subtitle">A bit-perfect music player built around your library.</string>
     <string name="onboarding_permissions_title">Permissions</string>
     <string name="onboarding_permissions_subtitle">FoamPlayer needs two permissions to read your music and show playback controls.</string>
     <string name="onboarding_permission_audio_title">Audio access</string>
@@ -353,9 +353,9 @@
 
     <!-- Settings import / export -->
     <string name="settings_export">Export</string>
-    <string name="settings_export_subtitle">Save settings and data to JSON files</string>
+    <string name="settings_export_subtitle">Save settings and data to JSON file</string>
     <string name="settings_export_folder">Export folder</string>
-    <string name="settings_export_folder_hint">Choose where the JSON files are written</string>
+    <string name="settings_export_folder_hint">Choose where the JSON backup is written</string>
     <string name="settings_export_features">Features to export</string>
     <string name="settings_import">Import</string>
     <string name="settings_import_subtitle">Restore settings and data from JSON files</string>
