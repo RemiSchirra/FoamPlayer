@@ -39,6 +39,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -187,7 +188,7 @@ fun FullPlayerScreen(
 
     val upTransitionState = remember { SeekableTransitionState(false) }
     val upTransition = rememberTransition(upTransitionState, label = "UpTransition")
-    
+
     // Boolean gate only: reading the raw transition fraction here used to re-run this
     // whole screen body on every frame of the subview drag/settle. derivedStateOf
     // only notifies its readers when the projected value actually changes, so unrelated
@@ -624,6 +625,13 @@ fun FullPlayerScreen(
     val programmaticBackdropCrossfade = remember { Animatable(1f) }
     var programmaticBackdropFromPath by remember { mutableStateOf<String?>(null) }
     var programmaticBackdropToPath by remember { mutableStateOf<String?>(null) }
+    // Generation of the programmatic-crossfade run that owns fromPath/toPath. A
+    // restarted effect (rapid next/previous presses) cancels the previous run, and the
+    // cancelled run's finally can execute AFTER the new run has already published its
+    // own paths -- without this guard that stale finally wipes them and silently kills
+    // the new fade (the lambda falls back to the pager fraction and the pair snaps
+    // with no crossfade).
+    var backdropFadeGeneration by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(queueIndex) {
         if (!isMainPagerVisible() &&
@@ -633,6 +641,7 @@ fun FullPlayerScreen(
             val fromPath = queue.getOrNull(pagerState.currentPage)?.albumArtPath
             val toPath = queue.getOrNull(queueIndex)?.albumArtPath
             if (fromPath != toPath) {
+                val generation = ++backdropFadeGeneration
                 programmaticBackdropFromPath = fromPath
                 programmaticBackdropToPath = toPath
                 programmaticBackdropCrossfade.snapTo(0f)
@@ -643,9 +652,12 @@ fun FullPlayerScreen(
                     // player leaving composition) must not leave the crossfade "active" with
                     // fromPath frozen into frontArtPath; clearing the programmatic paths hands
                     // control straight back to the pager-driven state. Plain state writes run
-                    // in a cancelled coroutine's finally block without suspension.
-                    programmaticBackdropFromPath = null
-                    programmaticBackdropToPath = null
+                    // in a cancelled coroutine's finally block without suspension -- but only
+                    // when THIS run still owns the paths (see backdropFadeGeneration).
+                    if (generation == backdropFadeGeneration) {
+                        programmaticBackdropFromPath = null
+                        programmaticBackdropToPath = null
+                    }
                 }
             }
         }
@@ -723,6 +735,20 @@ fun FullPlayerScreen(
                     programmaticBackdropToPath != null && programmaticBackdropCrossfade.value < 1f
                 }
             }
+            // Composition-phase read of that gate. The SideEffect below runs in the apply
+            // phase, where state reads are UNTRACKED -- without this read, the paths written
+            // inside the crossfade's LaunchedEffect invalidated nothing, so the publication
+            // never switched onto the programmatic pair when the fade started and never
+            // handed back to the settled pager pair when it completed. From the subview this
+            // mattered twice over: next/previous SNAP the hidden pager once (no sweep to
+            // re-trigger the SideEffect mid-fade like a visible pager's swipe does), so once
+            // the fade finished and cleared its paths, nothing ever re-ran the SideEffect --
+            // the backdrop stayed published with front = the OLD track's art and the stored
+            // fraction lambda falling back to the pager offset against the already-snapped
+            // page (0 == the old art) until an unrelated recomposition, e.g. a play/pause
+            // flip, corrected it. The boolean flips exactly twice per crossfade, so this
+            // costs two recompositions of this scope per fade.
+            val programmaticCrossfadeActive = isProgrammaticCrossfadeActive
 
             // The blurred backdrop itself is hosted at the very root of the hierarchy (see
             // FoamNavigation and FullPlayerBackdropState): the same fillMaxSize box as the
@@ -732,13 +758,13 @@ fun FullPlayerScreen(
             // never draws a stale frame.
             SideEffect {
                 backdropState.frontArtPath =
-                    if (isProgrammaticCrossfadeActive) {
+                    if (programmaticCrossfadeActive) {
                         programmaticBackdropFromPath
                     } else {
                         queue.getOrNull(backdropIndexA)?.albumArtPath
                     }
                 backdropState.backArtPath =
-                    if (isProgrammaticCrossfadeActive) {
+                    if (programmaticCrossfadeActive) {
                         programmaticBackdropToPath
                     } else if (playerTransitionState.currentState != playerTransitionState.targetState) {
                         null
@@ -749,20 +775,31 @@ fun FullPlayerScreen(
                 backdropState.canvasUrl = animatedCover?.url
                 backdropState.canvasPlaying = isCanvasPlaying
                 backdropState.canvasAnchor = when {
-                    animatedCover == null || isProgrammaticCrossfadeActive -> CanvasAnchor.NONE
+                    animatedCover == null || programmaticCrossfadeActive -> CanvasAnchor.NONE
                     animatedCoverIndex == backdropIndexA -> CanvasAnchor.FRONT
                     animatedCoverIndex == backdropIndexB -> CanvasAnchor.BACK
                     else -> CanvasAnchor.NONE
                 }
                 coverCarry.owner = animatedCover
-                backdropState.crossfadeFraction = {
-                    if (programmaticBackdropToPath != null && programmaticBackdropCrossfade.value < 1f) {
-                        programmaticBackdropCrossfade.value
+                // The fraction lambda is FROZEN to the mode that was current when THIS
+                // SideEffect published the art pair. The backdrop host (FoamNavigation)
+                // applies a publication one frame after this SideEffect runs, so a lambda
+                // re-checking the live paths collapsed to the pager fraction (0) on
+                // exactly that lag frame -- right after the tween hit 1f and the finally
+                // cleared the paths, while frontArtPath still pointed at the OLD track's
+                // art -- flashing the old art for a frame right before the swap landed.
+                // Baking the branch in here keeps the pair and its fraction consistent
+                // through the lag frame; the derived gate above re-runs this SideEffect
+                // at the fade's start and end, so the mode still flips where it must.
+                backdropState.crossfadeFraction =
+                    if (programmaticCrossfadeActive) {
+                        { programmaticBackdropCrossfade.value }
                     } else {
-                        val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                        (absoluteOffset - backdropIndexA).coerceIn(0f, 1f)
+                        {
+                            val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                            (absoluteOffset - backdropIndexA).coerceIn(0f, 1f)
+                        }
                     }
-                }
                 backdropState.subViewBlurProgress = subViewBlurProgressProvider
             }
 
