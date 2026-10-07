@@ -781,23 +781,19 @@ fun FullPlayerScreen(
                     else -> CanvasAnchor.NONE
                 }
                 coverCarry.owner = animatedCover
-                // The fraction lambda is FROZEN to the mode that was current when THIS
-                // SideEffect published the art pair. The backdrop host (FoamNavigation)
-                // applies a publication one frame after this SideEffect runs, so a lambda
-                // re-checking the live paths collapsed to the pager fraction (0) on
-                // exactly that lag frame -- right after the tween hit 1f and the finally
-                // cleared the paths, while frontArtPath still pointed at the OLD track's
-                // art -- flashing the old art for a frame right before the swap landed.
-                // Baking the branch in here keeps the pair and its fraction consistent
-                // through the lag frame; the derived gate above re-runs this SideEffect
-                // at the fade's start and end, so the mode still flips where it must.
+
                 backdropState.crossfadeFraction =
                     if (programmaticCrossfadeActive) {
                         { programmaticBackdropCrossfade.value }
                     } else {
                         {
-                            val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                            (absoluteOffset - backdropIndexA).coerceIn(0f, 1f)
+                            if (upTransitionState.currentState) {
+                                0f
+                            } else {
+                                val absoluteOffset =
+                                    pagerState.currentPage + pagerState.currentPageOffsetFraction
+                                (absoluteOffset - backdropIndexA).coerceIn(0f, 1f)
+                            }
                         }
                     }
                 backdropState.subViewBlurProgress = subViewBlurProgressProvider

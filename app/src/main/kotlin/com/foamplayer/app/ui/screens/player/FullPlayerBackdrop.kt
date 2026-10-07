@@ -82,8 +82,8 @@ class FullPlayerBackdropState {
      * on top of it.
      */
     var canvasAnchor by mutableStateOf(CanvasAnchor.NONE)
-    var crossfadeFraction: () -> Float = { 0f }
-    var subViewBlurProgress: () -> Float = { 0f }
+    var crossfadeFraction by mutableStateOf({ 0f })
+    var subViewBlurProgress by mutableStateOf({ 0f })
 }
 
 /**
