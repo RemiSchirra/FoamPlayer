@@ -105,6 +105,15 @@ for some features (see more).
 
 ## Architecture
 
+FoamPlayer is an Android app written in Kotlin, split into a main `:app` module and small library modules that isolate every online integration (lyrics, canvas, Spotify, Discord).
+
+- **UI / Design** — Jetpack Compose.
+- **Audio engine** — Media3/ExoPlayer + custom DSP chain, bit-perfect.
+- **Data & Storage** — Room + DataStore.
+- **Network** — Ktor (lyrics, canvas, Spotify, Discord).
+
+More details in [docs/architecture.md](docs/architecture.md).
+
 ## Contribution
 
 ## Credits
