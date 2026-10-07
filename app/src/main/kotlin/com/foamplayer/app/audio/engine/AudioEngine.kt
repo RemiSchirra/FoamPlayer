@@ -1808,7 +1808,11 @@ class AudioEngine @Inject constructor(
                 // Listen accounting rides the same tick, so background playback
                 // counts identically to foreground playback.
                 tickListenCount(displayPlayer, position)
-                if (displayPlayer.isPlaying) {
+                // While a fade runs the incoming player may still be preparing (isPlaying
+                // false) right after its logical switch; keep ticking per frame so its
+                // position is published the moment audio starts, instead of waiting out
+                // the slow paused poll (which left lyrics projecting from a stale value).
+                if (displayPlayer.isPlaying || fadeEngine.isFading) {
                     if (_positionMs.subscriptionCount.value > 0) {
                         // UI listening: per-frame ticks keep the seek bar smooth.
                         // Bounded (see awaitFrame): Choreographer stops ticking

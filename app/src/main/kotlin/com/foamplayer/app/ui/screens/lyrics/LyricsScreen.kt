@@ -22,6 +22,7 @@ import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -135,6 +136,9 @@ fun LyricsScreen(
                     }
 
                     LyricsViewState.CONTENT -> {
+                        LaunchedEffect(viewModel) {
+                            viewModel.currentPositionMs.collect { }
+                        }
                         LyricsEnhanced(
                             sliderPositionProvider = { null },
                             lyricsSyncOffset = 0,

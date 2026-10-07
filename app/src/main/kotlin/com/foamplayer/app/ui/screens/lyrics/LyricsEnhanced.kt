@@ -133,15 +133,17 @@ private const val LYRIC_FOCUS_TOP_GUARD_RATIO = 0.18f
 private const val LYRIC_FOCUS_BOTTOM_GUARD_RATIO = 0.24f
 private const val LYRIC_FOCUS_MIN_SCROLL_PX = 6
 private const val LYRIC_FOCUS_ANIMATED_DISTANCE = 12
-private const val SMOOTH_PLAYBACK_MAX_FORWARD_DRIFT_MS = 80L
+private const val SMOOTH_PLAYBACK_HARD_SNAP_MS = 250.0
+// Fraction of the (raw - projected) error absorbed per frame. The anchor is re-based every
+// frame, so the correction persists and per-frame noise averages out (~1s to absorb a
+// constant offset at 60fps).
+private const val SMOOTH_PLAYBACK_SLEW = 0.05
 // AudioEngine.positionMs now ticks every rendered frame while playing (see
 // startProgressTracker), so under normal playback `rawPosition` should already sit
 // within a frame or two of the interpolated `projectedPosition` below -- there's no
 // longer a ~200ms staircase to tolerate. This just needs enough headroom to absorb
 // ordinary frame jitter (a dropped frame, a GC pause) without treating it as a real
 // desync, while still reacting quickly to genuine ones (track transitions, stalls).
-private const val SMOOTH_PLAYBACK_MAX_BACKWARD_DRIFT_MS = 150L
-private const val SMOOTH_PLAYBACK_DRIFT_CORRECTION = 0.55f
 private const val LYRIC_FOCUS_SCROLL_DURATION_MS = 520
 private const val LYRIC_FOCUS_POLL_INTERVAL_MS = 120L
 private const val MIN_KARAOKE_SYLLABLE_DURATION_MS = 1
@@ -336,7 +338,7 @@ fun LyricsEnhanced(
             return@LaunchedEffect
         }
         var wasSliderActive = false
-        var anchorPlayerPositionMs = latestCurrentPositionMs.value().coerceAtLeast(0L)
+        var anchorPlayerPositionMs = latestCurrentPositionMs.value().coerceAtLeast(0L).toDouble()
         var anchorFrameNanos = 0L
         while (isActive) {
             val sliderPosition = latestSliderPositionProvider.value()
@@ -348,7 +350,7 @@ fun LyricsEnhanced(
 
             val rawPosition = (sliderPosition ?: latestCurrentPositionMs.value()).coerceAtLeast(0L)
             if (sliderPosition != null || !latestIsPlaying.value || animationsDisabled) {
-                anchorPlayerPositionMs = rawPosition
+                anchorPlayerPositionMs = rawPosition.toDouble()
                 anchorFrameNanos = 0L
                 if (playbackPositionMs.longValue != rawPosition) {
                     playbackPositionMs.longValue = rawPosition
@@ -362,29 +364,25 @@ fun LyricsEnhanced(
                 val frameNanos = withFrameNanos { frameTimeNanos -> frameTimeNanos }
                 if (anchorFrameNanos == 0L) {
                     anchorFrameNanos = frameNanos
-                    anchorPlayerPositionMs = rawPosition
+                    anchorPlayerPositionMs = rawPosition.toDouble()
                 }
 
-                val elapsedMs = ((frameNanos - anchorFrameNanos) / 1_000_000f)
-                val projectedPosition = anchorPlayerPositionMs + elapsedMs.roundToLong()
+                // Treat rawPosition as a noisy measurement of the audio clock and keep
+                // a smooth locally-projected clock that is slewed toward it.
+                val elapsedMs = (frameNanos - anchorFrameNanos) / 1_000_000.0
+                val projectedPosition = anchorPlayerPositionMs + elapsedMs
                 val driftMs = rawPosition - projectedPosition
-                val nextPosition =
-                    when {
-                        driftMs > SMOOTH_PLAYBACK_MAX_FORWARD_DRIFT_MS ||
-                                driftMs < -SMOOTH_PLAYBACK_MAX_BACKWARD_DRIFT_MS -> {
-                            anchorPlayerPositionMs = rawPosition
-                            anchorFrameNanos = frameNanos
-                            rawPosition
-                        }
 
-                        driftMs != 0L -> {
-                            projectedPosition + (driftMs * SMOOTH_PLAYBACK_DRIFT_CORRECTION).roundToLong()
-                        }
+                anchorPlayerPositionMs =
+                    if (abs(driftMs) > SMOOTH_PLAYBACK_HARD_SNAP_MS) {
+                        // Real discontinuity: seek, track change, long stall.
+                        rawPosition.toDouble()
+                    } else {
+                        projectedPosition + driftMs * SMOOTH_PLAYBACK_SLEW
+                    }
+                anchorFrameNanos = frameNanos
 
-                        else -> {
-                            projectedPosition
-                        }
-                    }.coerceAtLeast(0L)
+                val nextPosition = anchorPlayerPositionMs.roundToLong().coerceAtLeast(0L)
 
                 if (playbackPositionMs.longValue != nextPosition) {
                     playbackPositionMs.longValue = nextPosition
