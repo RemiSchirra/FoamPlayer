@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="assets/logo.png" width="240" height="240" alt="YumaPlayer Icon" style="border-radius: 28px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);" />
+  <img src="assets/logo.png" width="240" height="240" alt="FoamPlayer Icon" style="border-radius: 28px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);" />
 
   <h1>FoamPlayer</h1>
 
@@ -9,12 +9,13 @@
   </p>
 
   <p align="center">
+  <a href="#-about"><b>About</b></a> •
   <a href="#-key-features"><b>Features</b></a> •
-  <a href="#-showcase"><b>Showcase</b></a> •
-  <a href="#️-architecture--documentation"><b>Architecture</b></a> •
-  <a href="#-download--installation"><b>Download</b></a> •
-  <a href="#-contributing"><b>Contributing</b></a> •
-  <a href="#-support-the-project"><b>Support</b></a>
+  <a href="#showcase"><b>Showcase</b></a> •
+  <a href="#architecture"><b>Architecture</b></a> •
+  <a href="#contribution"><b>Contributing</b></a> •
+  <a href="#credits"><b>Credits</b></a> •
+  <a href="#legal-mentions"><b>Legal</b></a>
   </p>
 </div>
 
@@ -117,5 +118,8 @@ More details in [docs/architecture.md](docs/architecture.md).
 ## Contribution
 
 ## Credits
+FoamPlayer is built thanks to multiple existing open source projects:
+* **[ArchiveTune](https://github.com/rukamori/ArchiveTune)** : for the lyrics and canvas providers.
+* **[Accompanist lyrics](https://github.com/6xingyv/accompanist-lyrics-core)** : for the lyrics display engine.
 
 ## Legal mentions
