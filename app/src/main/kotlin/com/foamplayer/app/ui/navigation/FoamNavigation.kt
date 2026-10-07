@@ -12,7 +12,7 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseInOut
-import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
@@ -900,7 +900,12 @@ fun FoamNavHost(
                 // the classic art treatment ("force dynamic background in player").
                 val fullPlayerBackdropState = remember { FullPlayerBackdropState() }
                 val playerBackdropAlpha = {
-                    EaseInOutCubic.transform(playerTransitionState.progress().coerceIn(0f, 1f))
+                    val progress = playerTransitionState.progress().coerceIn(0f, 1f)
+                    if (playerTransitionState.targetState) {
+                        EaseOutCubic.transform(progress)
+                    } else {
+                        EaseInCubic.transform(progress)
+                    }
                 }
                 if (playerTransitionState.currentState ||
                     playerTransitionState.targetState
