@@ -162,6 +162,7 @@ private fun LyricsSourcesList(
 ) {
     var displayedOrder by remember { mutableStateOf(order) }
     var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
+    var hasDragged by remember { mutableStateOf(false) }
 
     LaunchedEffect(order) {
         if (dragOriginIndex == null) {
@@ -194,7 +195,7 @@ private fun LyricsSourcesList(
 
             Column(
                 modifier = Modifier
-                    .let { if (isDragging) it else it.animateItem() }
+                    .let { if (isDragging || !hasDragged) it else it.animateItem() }
                     .zIndex(if (isDragging) 1f else 0f)
                     .graphicsLayer {
                         translationY = if (isDragging) {
@@ -216,6 +217,7 @@ private fun LyricsSourcesList(
                     dragHandleModifier = Modifier.pointerInput(source.name) {
                         detectDragGestures(
                             onDragStart = {
+                                hasDragged = true
                                 dragOriginIndex = currentIndex.value
                                 dragDropListState.onDragStart(currentIndex.value)
                             },
