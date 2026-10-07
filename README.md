@@ -11,9 +11,9 @@
   <p align="center">
   <a href="#-about"><b>About</b></a> •
   <a href="#-key-features"><b>Features</b></a> •
-  <a href="#showcase"><b>Showcase</b></a> •
+  <a href="#-showcase"><b>Showcase</b></a> •
   <a href="#architecture"><b>Architecture</b></a> •
-  <a href="#contribution"><b>Contributing</b></a> •
+  <a href="#contributing"><b>Contributing</b></a> •
   <a href="#credits"><b>Credits</b></a> •
   <a href="#legal-mentions"><b>Legal</b></a>
   </p>
@@ -55,7 +55,7 @@ for some features (see more).
 
 ---
 
-## Showcase
+## 📸 Showcase
 <div align="center">
   <table>
     <tr>
@@ -115,11 +115,13 @@ FoamPlayer is an Android app written in Kotlin, split into a main `:app` module 
 
 More details in [docs/architecture.md](docs/architecture.md).
 
-## Contribution
+## Contributing
+Feel free to contribute to the project, either if it's developing new features, fixing bug or making new translations.
 
 ## Credits
 FoamPlayer is built thanks to multiple existing open source projects:
 * **[ArchiveTune](https://github.com/rukamori/ArchiveTune)** : for the lyrics and canvas providers.
 * **[Accompanist lyrics](https://github.com/6xingyv/accompanist-lyrics-core)** : for the lyrics display engine.
 
-## Legal mentions
+## License & Legal mentions
+FoamPlayer is free software licensed under the **GNU General Public License v3.0 (GPLv3)**. See [LICENSE](LICENSE) for details.
