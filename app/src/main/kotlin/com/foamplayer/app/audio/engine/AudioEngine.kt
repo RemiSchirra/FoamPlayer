@@ -47,6 +47,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
+import kotlin.math.roundToLong
 import kotlin.random.Random
 
 /**
@@ -220,11 +222,24 @@ class AudioEngine @Inject constructor(
         private const val AUXILIARY_QUEUE_LENGTH = PlaybackState.AUXILIARY_QUEUE_LENGTH
         // Position poll rate when playing with no position collectors (background).
         private const val POSITION_POLL_SLOW_INTERVAL_MS = 250L
-        // Position poll rate while paused.
-        private const val PAUSED_POLL_INTERVAL_MS = 200L
+        // Position poll rate while paused. Short on purpose: this is also the
+        // worst-case latency for the tracker to notice a play/pause flip or an
+        // external (notification/session) seek. Anything longer makes the first
+        // frames after a play press run on the frozen paused clock and then jump.
+        private const val PAUSED_POLL_INTERVAL_MS = 50L
         // Cap on waiting for a Choreographer frame; the wait itself becomes the
         // background poll cadence when no frames are delivered.
         private const val FRAME_WAIT_TIMEOUT_MS = POSITION_POLL_SLOW_INTERVAL_MS
+        // Dead-reckoning tuning for the published position clock. The underlying
+        // ExoPlayer clock quantizes (AudioTrack timestamps step ~16-30ms); the
+        // progress tracker anchors on fresh samples and advances the clock per
+        // frame from the anchor, absorbing POSITION_ERROR_SLEW of each sample's
+        // residual error so quantization is smeared across frames instead of
+        // stepping the karaoke fill / seek bar. POSITION_SNAP_MS bounds the slew:
+        // anything wider is a real discontinuity (seek, track change, external
+        // seek) and re-anchors immediately instead of crawling across it.
+        private const val POSITION_SNAP_MS = 120.0
+        private const val POSITION_ERROR_SLEW = 0.25
         // Forward position jumps larger than this are seeks/jumps (or frames
         // missed while the process was frozen), not played audio: they don't
         // count toward the listen threshold.
@@ -344,8 +359,12 @@ class AudioEngine @Inject constructor(
             )
 
             // The incoming player's live position is what's shown, so an ongoing
-            // fade doesn't reset the seek bar to 0.
-            val positionMs = fadeEngine.displayPlayer?.currentPosition ?: 0L
+            // fade doesn't reset the seek bar to 0. Media3 reports the PROSPECTIVE
+            // position (the fade's target) until a fresh secondary renders, so this
+            // is the seek target for a quick-fade seek and 0 for a track change —
+            // no stale read to paper over.
+            val displayPlayer = fadeEngine.displayPlayer
+            val positionMs = (displayPlayer ?: player).currentPosition
             _positionMs.value = positionMs
             _seekEvents.tryEmit(positionMs)
 
@@ -355,9 +374,7 @@ class AudioEngine @Inject constructor(
             // The notification follows the in-app switch instead of waiting for
             // the swap: re-bind the session to the incoming stream at the fade's
             // switch point.
-            onDisplayPlayerChangedListener?.invoke(
-                fadeEngine.displayPlayer ?: activePlayerField
-            )
+            onDisplayPlayerChangedListener?.invoke(displayPlayer ?: activePlayerField)
         }
 
         override fun onCrossfadeSwapped(targetQueueIndex: Int, targetPositionMs: Long) {
@@ -1424,14 +1441,21 @@ class AudioEngine @Inject constructor(
         val duration = player.duration
         val tailRoom = duration > 0L && duration != C.TIME_UNSET &&
                 (duration - positionMs) > fadeEngine.quickFadeDurationMs * 2
-        if (fadeEngine.quickFadeEnabled && player.isPlaying && tailRoom &&
-            fadeEngine.startCrossfade(
-                _playbackState.value.queueIndex,
-                positionMs,
-                fadeEngine.quickFadeDurationMs
-            )
-        ) {
-            return
+        if (fadeEngine.quickFadeEnabled && player.isPlaying && tailRoom) {
+            // A same-track crossfade smooths the audio underneath the jump. While
+            // the freshly built secondary primes, Media3 reports the PROSPECTIVE
+            // position (the seek target), so the tracker re-anchors on the target
+            // and keeps dead-reckoning from it — the fill animates from the new
+            // position through the priming window, and the slew re-converges the
+            // moment the secondary renders. No extra state needed here.
+            if (fadeEngine.startCrossfade(
+                    _playbackState.value.queueIndex,
+                    positionMs,
+                    fadeEngine.quickFadeDurationMs
+                )
+            ) {
+                return
+            }
         }
 
         player.seekTo(positionMs)
@@ -1790,39 +1814,106 @@ class AudioEngine @Inject constructor(
     private fun startProgressTracker() {
         progressJob?.cancel()
         progressJob = scope.launch {
-            var lastEmitted = Long.MIN_VALUE
+            var lastPublishedMs = Long.MIN_VALUE
+            var lastSampleMs = -1L
+            var anchorMs = 0.0
+            var anchorNanos = 0L
             while (true) {
                 // Before the fade's logical switch the outgoing player is shown;
                 // after it, the incoming one — the UI ticks through the whole fade.
                 val displayPlayer = fadeEngine.displayPlayer ?: player
-                val position = displayPlayer.currentPosition
-                // Skip redundant emissions while paused/between gaps.
-                if (position != lastEmitted) {
-                    lastEmitted = position
-                    _positionMs.value = position
-                }
-                // Auto-crossfade arming is always evaluated on the real primary.
-                if (player.isPlaying) {
-                    maybeStartTrackCrossfade()
-                }
-                // Listen accounting rides the same tick, so background playback
-                // counts identically to foreground playback.
-                tickListenCount(displayPlayer, position)
-                // While a fade runs the incoming player may still be preparing (isPlaying
-                // false) right after its logical switch; keep ticking per frame so its
-                // position is published the moment audio starts, instead of waiting out
-                // the slow paused poll (which left lyrics projecting from a stale value).
-                if (displayPlayer.isPlaying || fadeEngine.isFading) {
-                    if (_positionMs.subscriptionCount.value > 0) {
-                        // UI listening: per-frame ticks keep the seek bar smooth.
-                        // Bounded (see awaitFrame): Choreographer stops ticking
-                        // while the app is backgrounded.
-                        awaitFrame()
-                    } else {
-                        delay(POSITION_POLL_SLOW_INTERVAL_MS)
+                val sampleMs = displayPlayer.currentPosition.coerceAtLeast(0L)
+                val audible = displayPlayer.isPlaying || fadeEngine.isFading
+
+                // Settled pause: nothing is audible anymore and the clock has stopped
+                // moving — the only state where the position can change without frames
+                // being produced is a notification/external seek. Freeze the published
+                // clock where the user last saw it: publishing the raw sample 1:1 here
+                // can step it BACKWARD by the last quantization gap (the projection
+                // runs a frame or two ahead of the frozen player clock at ramp end),
+                // and that backward step at the end of a pause fade-out WAS the pause
+                // flicker. max() makes the freeze monotonic; a real external seek is
+                // handled by the fresh-sample path below (its residual exceeds the
+                // snap bound) and follows the raw clock in whichever direction.
+                if (!audible && sampleMs == lastSampleMs) {
+                    val publishedMs = maxOf(sampleMs, lastPublishedMs)
+                    if (publishedMs != lastPublishedMs) {
+                        lastPublishedMs = publishedMs
+                        _positionMs.value = publishedMs
                     }
+                    anchorMs = sampleMs.toDouble()
+                    anchorNanos = 0L
+                    lastSampleMs = sampleMs
+                    delay(PAUSED_POLL_INTERVAL_MS)
+                    continue
+                }
+
+                if (sampleMs != lastSampleMs) {
+                    // Fresh engine sample. Re-anchor gradually: the ExoPlayer clock
+                    // quantizes (AudioTrack timestamps step ~16-30ms) and can hold a
+                    // few frames while a crossfade secondary primes, so re-anchoring
+                    // to each sample 1:1 steps the karaoke fill / seek bar. Keep
+                    // POSITION_ERROR_SLEW of the residual error in the anchor — it
+                    // decays over the next few samples — and snap on real
+                    // discontinuities (seek, track change, external seek) instead of
+                    // slewing across them. No anchorNanos==0 special case: after a
+                    // settled pause the anchor sits at the frozen sample, and the
+                    // first post-play sample is within one poll interval of it, so
+                    // slewing resumes the clock from where the user last saw it
+                    // instead of jumping it forward by the whole pause gap.
+                    val elapsedMs =
+                        if (anchorNanos == 0L) 0.0 else (System.nanoTime() - anchorNanos) / 1_000_000.0
+                    val errorMs = sampleMs - (anchorMs + elapsedMs)
+                    anchorMs =
+                        if (abs(errorMs) > POSITION_SNAP_MS) {
+                            sampleMs.toDouble()
+                        } else {
+                            anchorMs + elapsedMs + errorMs * POSITION_ERROR_SLEW
+                        }
+                    anchorNanos = System.nanoTime()
+                    lastSampleMs = sampleMs
+                } else if (!audible) {
+                    // Not audible but the sample moved since the last pause frame:
+                    // external seek while paused — the raw clock is the only truth.
+                    anchorMs = sampleMs.toDouble()
+                    anchorNanos = 0L
+                    lastSampleMs = sampleMs
+                }
+                // Audible with a frozen sample (quantization gap, or a crossfade
+                // secondary priming after a seek — Media3 reports the PROSPECTIVE
+                // position there): keep dead-reckoning from the anchor with NO
+                // frame budget. While anything is audible the clock is genuinely
+                // advancing; the projection from the target IS where the incoming
+                // stream will be, so the fill animates from the new position
+                // through the whole priming window, and the slew re-converges the
+                // moment fresh samples resume.
+
+                val projectedMs =
+                    (if (anchorNanos == 0L) {
+                        anchorMs
+                    } else {
+                        anchorMs + (System.nanoTime() - anchorNanos) / 1_000_000.0
+                    }).roundToLong().coerceAtLeast(0L)
+                if (projectedMs != lastPublishedMs) {
+                    lastPublishedMs = projectedMs
+                    _positionMs.value = projectedMs
+                }
+
+                // Per-frame while anything can be heard — active playback, or a
+                // fade whose incoming player is still priming (isPlaying false
+                // right after the logical switch). Ticking was previously gated
+                // on _positionMs.subscriptionCount, so the moment no collector
+                // was attached (screen transitions, transient recomposes) the
+                // published position fell back to a 250ms staircase — the drift/
+                // flicker seen in lyrics and seek bar around seeks and pauses
+                // with audio fades on. Choreographer stops delivering frames in
+                // the background and awaitFrame falls back to the slow poll
+                // cadence then, so this stays cheap off-screen.
+                if (audible) {
+                    awaitFrame()
                 } else {
-                    // While paused, keep position in sync (catches external seeks).
+                    // While paused, keep position in sync (catches external seeks
+                    // and the next play) at the short poll cadence.
                     delay(PAUSED_POLL_INTERVAL_MS)
                 }
             }
