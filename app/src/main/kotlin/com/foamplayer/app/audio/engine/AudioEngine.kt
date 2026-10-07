@@ -1899,6 +1899,16 @@ class AudioEngine @Inject constructor(
                     _positionMs.value = projectedMs
                 }
 
+                // Auto-crossfade arming rides the same tick: this is what starts the
+                // fade between songs near a track's end. Gated on the REAL primary,
+                // not the display player — mid-fade the display player is a priming
+                // secondary whose clock can't answer for the primary's queue edge.
+                // Re-evaluated every tick so a skipped/unreadable next track falls
+                // back to the natural transition on the next pass.
+                if (player.isPlaying) {
+                    maybeStartTrackCrossfade()
+                }
+
                 // Per-frame while anything can be heard — active playback, or a
                 // fade whose incoming player is still priming (isPlaying false
                 // right after the logical switch). Ticking was previously gated
