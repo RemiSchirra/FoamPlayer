@@ -31,7 +31,7 @@ media3Session = "1.11.1"
 mockitoCore = "5.24.0"
 mockitoKotlin = "6.4.0"
 navigationCompose = "2.9.8"
-room = "2.8.4"
+room = "2.8.5"
 palette = "1.0.0"
 kuromoji = "0.9.0"
 
