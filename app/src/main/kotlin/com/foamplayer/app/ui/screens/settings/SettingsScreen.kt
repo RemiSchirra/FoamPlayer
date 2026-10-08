@@ -35,12 +35,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.BuildConfig
 import com.foamplayer.app.R
 import com.foamplayer.app.data.backup.BackupFeature
-import com.foamplayer.app.ui.components.ScreenTitle
 import com.foamplayer.app.ui.modals.BackupLoadingModal
 import com.foamplayer.app.ui.modals.BackupModalType
 import com.foamplayer.app.ui.modals.BackupResultModal

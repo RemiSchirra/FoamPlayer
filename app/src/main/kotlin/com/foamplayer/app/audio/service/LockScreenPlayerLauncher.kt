@@ -3,7 +3,6 @@ package com.foamplayer.app.audio.service
 import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.provider.Settings
 import androidx.media3.common.util.UnstableApi
 import com.foamplayer.app.MainActivity

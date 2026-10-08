@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foamplayer.app.ui.theme.FoamTheme
-import kotlin.math.min
 
 /** Maximum number of x-axis labels drawn under a chart, whatever the slot count. */
 private const val MaxVisibleLabels = 6

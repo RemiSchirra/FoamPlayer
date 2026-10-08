@@ -4,7 +4,6 @@ import android.content.Context
 import android.media.AudioManager
 import com.foamplayer.app.audio.bitperfect.BitPerfectDetector
 import com.foamplayer.app.audio.device.OutputDeviceManager
-import com.foamplayer.app.audio.dsp.DspEngine
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

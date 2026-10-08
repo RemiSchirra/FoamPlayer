@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -44,7 +43,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
@@ -52,9 +50,6 @@ import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
-import com.foamplayer.app.ui.components.AlbumArtImage
-import com.foamplayer.app.ui.components.AlbumArtRequestSize
-import com.foamplayer.app.ui.components.AlbumArtShape
 import com.foamplayer.app.ui.components.CollectionHero
 import com.foamplayer.app.ui.components.CollectionHeroImmersiveHeader
 import com.foamplayer.app.ui.components.CollectionId
@@ -65,7 +60,6 @@ import com.foamplayer.app.ui.components.CollectionSearchImmersiveTopClearance
 import com.foamplayer.app.ui.components.CollectionSearchState
 import com.foamplayer.app.ui.components.CollectionTopBarRowHeight
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
-import com.foamplayer.app.ui.components.LocalMediaArtKind
 import com.foamplayer.app.ui.components.MediaArtKind
 import com.foamplayer.app.ui.components.MediaArtKindScope
 import com.foamplayer.app.ui.components.TrackListItem

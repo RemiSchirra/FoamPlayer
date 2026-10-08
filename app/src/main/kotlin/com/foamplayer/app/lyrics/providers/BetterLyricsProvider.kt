@@ -1,7 +1,6 @@
 package com.foamplayer.app.lyrics.providers
 
 import android.content.Context
-import android.util.Log
 import com.foamplayer.app.lyrics.LyricsProvider
 import com.foamplayer.betterlyrics.BetterLyrics
 

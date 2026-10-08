@@ -16,7 +16,6 @@ import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
-import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.BackgroundMode

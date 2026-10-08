@@ -4,7 +4,6 @@ import android.media.AudioManager
 import com.foamplayer.app.audio.device.DeviceAudioConfig
 import com.foamplayer.app.audio.device.DeviceBitPerfectMode
 import com.foamplayer.app.audio.device.OutputDeviceManager
-import com.foamplayer.app.audio.dsp.DspMath
 import com.foamplayer.app.audio.dsp.DspState
 import com.foamplayer.app.audio.fidelity.FidelityItem
 import com.foamplayer.app.audio.fidelity.FidelityScore
