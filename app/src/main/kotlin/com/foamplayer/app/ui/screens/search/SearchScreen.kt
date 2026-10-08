@@ -63,6 +63,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,7 +78,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
@@ -106,6 +110,7 @@ import com.foamplayer.app.ui.components.albumArtCornerRadius
 import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
+import com.foamplayer.app.ui.navigation.LocalSearchFocusRequest
 import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
@@ -212,6 +217,11 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
  * history, and a query shows live results across artists, albums, tracks and
  * lyrics (the lyrics scan streams in from the background). Long result lists
  * gain the fast scrollbar ([FoamScrollbar]) along the list's end edge.
+ *
+ * A tap on the nav bar's search icon lands here pre-focused: the pending
+ * [LocalSearchFocusRequest] puts the bar in its active state (history, focused
+ * field, keyboard up, caret at the end of any retained query) on arrival,
+ * while a long press on the icon opens the screen idle with its browse cards.
  */
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -236,8 +246,17 @@ fun SearchScreen(
     val uiState by searchViewModel.uiState.collectAsState()
     val artistImages by searchViewModel.artistImages.collectAsState()
     var searchActive by rememberSaveable { mutableStateOf(false) }
+    // TextFieldValue (not a bare String) so the caret position is under our
+    // control: the String overload rebuilds its internal TextFieldValue with a
+    // zero selection on every external text change, so a programmatic focus
+    // grab always dropped the cursor at the very start of retained text.
+    var textFieldValue by rememberSaveable(
+        stateSaver = TextFieldValue.Saver
+    ) { mutableStateOf(TextFieldValue("")) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val searchFocusRequest = LocalSearchFocusRequest.current
     val density = LocalDensity.current
     val collectionModalState = LocalCollectionFoamModalState.current
     val trackModalState = LocalTrackFoamModalState.current
@@ -298,6 +317,35 @@ fun SearchScreen(
         if (imeTargetBottom == 0) focusManager.clearFocus()
     }
 
+    // A nav-bar search tap raised this before navigating: land in the active
+    // state (history, focused bar, keyboard up) instead of the idle cards.
+    // Declared after the ime-target effect above so the focus grab always runs
+    // after that effect's initial clearFocus on the same frame. Re-running
+    // while already on the screen (search icon tapped again) re-focuses and
+    // re-parks the caret at the end of the query.
+    LaunchedEffect(searchFocusRequest.isPending) {
+        if (!searchFocusRequest.isPending) return@LaunchedEffect
+        searchActive = true
+        // Park the caret at the END of any retained query: a programmatic focus
+        // grab would otherwise leave it at index 0, i.e. before the text.
+        textFieldValue = textFieldValue.copy(selection = TextRange(textFieldValue.text.length))
+        // Let the field's focus node settle before grabbing it, then raise the IME.
+        withFrameNanos { }
+        runCatching { focusRequester.requestFocus() }
+        keyboardController?.show()
+        searchFocusRequest.consume()
+    }
+
+    // Keep the field in sync with query changes made OUTSIDE typing (the clear
+    // button, screen restore): the caret parks at the end of the replaced text.
+    // Writing during composition (not a LaunchedEffect) means the very first
+    // frame on re-entry already renders the restored text. While typing, the
+    // ViewModel query mirrors the field synchronously, so this is a no-op and
+    // the IME's composing region is never clobbered.
+    if (textFieldValue.text != query) {
+        textFieldValue = TextFieldValue(query, selection = TextRange(query.length))
+    }
+
     BackHandler(enabled = searchActive && query.isEmpty()) {
         searchActive = false
         focusManager.clearFocus()
@@ -330,9 +378,10 @@ fun SearchScreen(
                     )
                 }
                 BasicTextField(
-                    value = query,
-                    onValueChange = {
-                        searchViewModel.search(it)
+                    value = textFieldValue,
+                    onValueChange = { value ->
+                        textFieldValue = value
+                        searchViewModel.search(value.text)
                     },
                     textStyle = FoamTheme.typography.titleMedium,
                     cursorBrush = SolidColor(FoamTheme.accentColor),

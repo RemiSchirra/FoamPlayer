@@ -399,6 +399,11 @@ fun FoamNavHost(
 
     val collectionModalState = rememberCollectionFoamModalState()
 
+    // Pending "open the search screen focused" request: raised by the nav bar's
+    // search icon tap, honored + consumed by SearchScreen. Any other nav-bar
+    // tap cancels it, so a stale request can never re-open the keyboard later.
+    val searchFocusRequest = remember { SearchFocusRequest() }
+
     // Narrow projections instead of the whole PlaybackState: collecting the full
     // state here would re-run this body on every playback emission.
     val activeCollectionId by playerViewModel.activeCollectionId.collectAsState()
@@ -730,7 +735,8 @@ fun FoamNavHost(
             LocalCollectionFoamModalState provides collectionModalState,
             LocalBottomBarClearance provides bottomBarClearance,
             LocalCollectionHeroLayoutLookup provides heroLayoutFor,
-            LocalActiveSharedCollection provides activeSharedCollection
+            LocalActiveSharedCollection provides activeSharedCollection,
+            LocalSearchFocusRequest provides searchFocusRequest
         ) {
             Box(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
 
@@ -999,6 +1005,9 @@ fun FoamNavHost(
                 val handleNavBarNavigation: (String) -> Unit = { route ->
                     isNavBarExpanded = false
                     activeSharedCollection = null
+                    // Only the search icon's tap raises the focused-search request just
+                    // before landing here; any other destination cancels a stale one.
+                    if (route != Screen.Search.route) searchFocusRequest.consume()
                     if (playerTransitionState.currentState || playerTransitionState.targetState) {
                         animatePlayerTransition(open = false)
                     }

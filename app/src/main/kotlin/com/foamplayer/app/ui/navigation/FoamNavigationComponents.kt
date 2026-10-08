@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -126,6 +127,32 @@ fun sharedCollectionTag(kind: String, key: String): String = "$kind:$key"
 @Composable
 fun isActiveSharedCollection(kind: String, key: String): Boolean =
     LocalActiveSharedCollection.current == sharedCollectionTag(kind, key)
+
+/**
+ * Pending request for the search screen to open in its active state -- search
+ * bar focused, keyboard up, history shown -- instead of the idle browse cards.
+ * A normal tap on the nav bar's search icon raises it (both bar rows); a long
+ * press on the icon navigates WITHOUT raising it, keeping the browse cards.
+ * [com.foamplayer.app.ui.screens.search.SearchScreen] consumes the request once
+ * honored, so returning to the screen later never re-raises the keyboard on its
+ * own.
+ */
+class SearchFocusRequest {
+    var isPending: Boolean by mutableStateOf(false)
+        private set
+
+    /** Raises the request; honored by the next [Screen.Search] composition. */
+    fun request() {
+        isPending = true
+    }
+
+    /** Called by the search screen after honoring the request. */
+    fun consume() {
+        isPending = false
+    }
+}
+
+val LocalSearchFocusRequest = compositionLocalOf { SearchFocusRequest() }
 
 /**
  * Single source of truth for nav-bar / mini-player geometry.
@@ -427,7 +454,9 @@ private fun NavItemVisual(
  * The touch target is a fixed [NavBarDimens.ItemHitTargetSize] square, centered
  * inside its slot, so it grows past the glyph without ever extending the bar.
  * The node is clipped to a [CircleShape] *before* becoming clickable: the ripple
- * is bounded by that circle and stays rounded.
+ * is bounded by that circle and stays rounded. An optional [onLongClick] turns
+ * the item into a combined click target (currently only the search item, whose
+ * long press keeps the plain browse-card entry point).
  */
 @Composable
 private fun FoamNavItem(
@@ -438,17 +467,20 @@ private fun FoamNavItem(
     iconModifier: Modifier = Modifier,
     hitPadding: Dp = NavBarDimens.ItemHitTargetPadding,
     enabled: Boolean = true,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
             .clip(CircleShape)
-            .clickable(
+            .combinedClickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = FoamTheme.colors.textPrimary),
-                enabled = enabled
-            ) { onClick() }
+                enabled = enabled,
+                onLongClick = onLongClick,
+                onClick = onClick
+            )
             .padding(hitPadding),
         contentAlignment = Alignment.Center
     ) {
@@ -596,6 +628,7 @@ private fun FoamNavigationItems(
     modifier: Modifier = Modifier
 ) {
     val effectiveEnabled = if (showExpandToggle) primaryEnabled + NavBarItem.MORE else primaryEnabled
+    val searchFocusRequest = LocalSearchFocusRequest.current
 
     NavBarSlotRow(
         order = items,
@@ -617,13 +650,25 @@ private fun FoamNavigationItems(
         } else {
             val screen = item.targetScreen()
             val selected = isScreenSelected(currentRoute, isPlayerOpen, screen)
+            // The search item splits its gestures: a tap raises the focused-search
+            // request (bar focused, keyboard up) before navigating, while a long
+            // press navigates without it, landing on the idle browse cards.
+            val isSearch = item == NavBarItem.SEARCH
 
             FoamNavItem(
                 icon = item.icon(),
                 contentDescription = screen.title,
                 selected = selected,
                 enabled = itemEnabled,
-                onClick = { onNavigate(screen.route) }
+                onLongClick = if (isSearch) {
+                    { onNavigate(screen.route) }
+                } else {
+                    null
+                },
+                onClick = {
+                    if (isSearch) searchFocusRequest.request()
+                    onNavigate(screen.route)
+                }
             )
         }
     }
@@ -660,6 +705,8 @@ private fun FoamNavExtraRow(
     modifier: Modifier = Modifier
 ) {
     if (expandFraction <= 0f) return
+
+    val searchFocusRequest = LocalSearchFocusRequest.current
 
     Box(
         modifier = modifier
@@ -699,16 +746,28 @@ private fun FoamNavExtraRow(
         ) { item, itemEnabled ->
             if (itemEnabled) {
                 val screen = item.targetScreen()
+                // Same search gesture split as the main row: tap opens the screen
+                // with its bar focused, long press keeps the browse-card entry.
+                val isSearch = item == NavBarItem.SEARCH
                 Box(
                     modifier = Modifier
                         // requiredSize, not size: the slot box is only as tall as the
                         // row, and the target must overflow it to reach 48dp.
                         .requiredSize(NavBarDimens.ItemHitTargetSize)
                         .clip(CircleShape)
-                        .clickable(
+                        .combinedClickable(
                             interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple(color = FoamTheme.colors.textPrimary)
-                        ) { onNavigate(screen.route) }
+                            indication = ripple(color = FoamTheme.colors.textPrimary),
+                            onLongClick = if (isSearch) {
+                                { onNavigate(screen.route) }
+                            } else {
+                                null
+                            },
+                            onClick = {
+                                if (isSearch) searchFocusRequest.request()
+                                onNavigate(screen.route)
+                            }
+                        )
                         .semantics { contentDescription = screen.title }
                 )
             }
