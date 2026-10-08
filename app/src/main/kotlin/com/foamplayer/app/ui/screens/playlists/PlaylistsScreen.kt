@@ -50,6 +50,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -109,7 +110,9 @@ import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
+import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlinx.coroutines.launch
 
 private val textFlightFadeSpec = tween<Float>(
     durationMillis = SharedElementTransitionDurationMs,
@@ -135,7 +138,8 @@ fun PlaylistsScreen(
     onSortChange: ((CollectionSortMode) -> Unit)? = null,
     sortInverted: Boolean = false,
     onSortInvertedChange: ((Boolean) -> Unit)? = null,
-    viewModel: PlaylistsViewModel = hiltViewModel()
+    viewModel: PlaylistsViewModel = hiltViewModel(),
+    playerViewModel: PlayerViewModel = hiltViewModel()
 ) {
     val playlists by viewModel.playlists.collectAsState()
     val trackCounts by viewModel.trackCounts.collectAsState()
@@ -232,6 +236,8 @@ fun PlaylistsScreen(
             modalStats = PlaylistModalStats(id, count, durationMs)
         }
     }
+
+    val longPressScope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -407,7 +413,6 @@ fun PlaylistsScreen(
                             // lazy-item placement/fade animations.
                             .let { if (isDragging || inFlight) it else it.animateItem() }
                             .zIndex(if (isDragging) 1f else 0f)
-                            // Only add a render layer while a drag is lifting the item.
                             .then(
                                 if (isDragging || liftScale != 1f) {
                                     Modifier.graphicsLayer {
@@ -476,6 +481,16 @@ fun PlaylistsScreen(
 
     PlaylistFoamModal(
         state = playlistModalState,
+        onPlayNext = { playlist ->
+            longPressScope.launch {
+                playerViewModel.playNext(viewModel.playlistTracks(playlist.playlistId))
+            }
+        },
+        onAddToQueue = { playlist ->
+            longPressScope.launch {
+                playerViewModel.addToQueue(viewModel.playlistTracks(playlist.playlistId))
+            }
+        },
         stats = modalStats,
         cover = playlistModalState.playlist?.let { playlistCovers[it.playlistId] },
         onEditImage = { playlist ->
@@ -655,6 +670,7 @@ private fun PlaylistItemRow(
     @Composable
     fun PlaylistArtwork() {
         if (coverImageUrl != null) {
+            val context = LocalContext.current
             val isEmbedded = cover?.isEmbeddedArt ?: false
             val coverRequest = remember(coverImageUrl, isEmbedded) {
                 ImageRequest.Builder(context)

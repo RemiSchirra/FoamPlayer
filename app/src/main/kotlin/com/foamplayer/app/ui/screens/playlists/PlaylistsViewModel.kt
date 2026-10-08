@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.PlaylistEntity
+import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.PlaylistImporter
 import com.foamplayer.app.data.repository.PlaylistInsertPosition
 import com.foamplayer.app.data.repository.PlaylistRepository
@@ -168,6 +169,10 @@ class PlaylistsViewModel @Inject constructor(
         val tracks = playlistRepository.getTracksForPlaylistOnce(playlistId).firstOrNull().orEmpty()
         return tracks.size to tracks.sumOf { it.duration }
     }
+
+    /** Tracks of a playlist in its custom order; feeds the modal's Next/Queue actions. */
+    suspend fun playlistTracks(playlistId: Long): List<TrackEntity> =
+        playlistRepository.getTracksForPlaylistOnce(playlistId).firstOrNull().orEmpty()
 
     /** Dismisses the missing-songs report; a pending folder playlist is created with the songs found so far. */
     fun dismissMissingSongs() {

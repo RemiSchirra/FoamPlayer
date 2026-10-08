@@ -36,7 +36,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -91,17 +90,24 @@ fun rememberPlaylistFoamModalState(): PlaylistFoamModalState = remember { Playli
  *
  * The header carries the two edit entry points — a pencil chip on top of the
  * cover (opens a file selector to change the image) and a pencil to the right
- * of the name (opens the rename sheet). The actions page holds a Details row
- * plus a Delete row at the end; the details page shows the playlist's
- * metadata with a push-style slide, the header persisting across the switch.
- * Delete dismisses this sheet; the host is expected to then show the
- * confirmation sheet ([DeletePlaylistConfirmModal]) before actually deleting.
+ * of the name (opens the rename sheet). The actions page holds the queue
+ * actions ("Next" = queue the playlist right after the current track, "Queue"
+ * = append it to the end of the main queue), then a Details row plus a Delete
+ * row at the end; the details page shows the playlist's metadata with a
+ * push-style slide, the header persisting across the switch. Delete dismisses
+ * this sheet; the host is expected to then show the confirmation sheet
+ * ([DeletePlaylistConfirmModal]) before actually deleting.
+ *
+ * The queue actions receive the playlist entity; the host resolves the
+ * playlist's tracks (and no-ops for an empty playlist).
  *
  * Every action dismisses the sheet before invoking its callback.
  */
 @Composable
 fun PlaylistFoamModal(
     state: PlaylistFoamModalState,
+    onPlayNext: (PlaylistEntity) -> Unit = {},
+    onAddToQueue: (PlaylistEntity) -> Unit = {},
     onEditImage: (PlaylistEntity) -> Unit = {},
     onEditName: (PlaylistEntity) -> Unit = {},
     onDelete: (PlaylistEntity) -> Unit = {},
@@ -190,6 +196,30 @@ fun PlaylistFoamModal(
                                 ModalBackButton(onBack = { showDetails = false })
                             }
                         } else {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .padding(
+                                        horizontal = FoamDimens.paddingSmall,
+                                        vertical = FoamDimens.spacingTiny
+                                    )
+                            ) {
+                                ModalActionButton(
+                                    icon = FoamTheme.icons.current.next,
+                                    label = stringResource(R.string.next),
+                                    onClick = { perform(onPlayNext) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                ModalActionButton(
+                                    icon = FoamTheme.icons.current.queue,
+                                    label = stringResource(R.string.queue),
+                                    onClick = { perform(onAddToQueue) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()

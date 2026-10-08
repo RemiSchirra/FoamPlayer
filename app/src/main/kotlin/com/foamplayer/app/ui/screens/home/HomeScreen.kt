@@ -53,6 +53,7 @@ import com.foamplayer.app.ui.modals.PlaylistModalStats
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 import com.foamplayer.app.ui.modals.RenamePlaylistModal
 import com.foamplayer.app.ui.modals.rememberPlaylistFoamModalState
+import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
 
@@ -70,8 +71,9 @@ private val ImageMimeTypes = arrayOf("image/*")
  *
  * Long-pressing a card opens the item's corresponding actions modal: the
  * track modal for songs (hosted at the nav root), the collection modal for
- * albums and artists, and the playlist modal for playlists (hosted here,
- * with the same edit/rename/delete wiring as the playlists screen).
+ * albums and artists (also hosted at the nav root), and the playlist modal
+ * (hosted here, with the same edit/rename/delete wiring as the playlists
+ * screen).
  *
  * Cards also join the app's shared-element transitions: track cards morph
  * into the full player's artwork when their track starts with auto-open on
@@ -96,6 +98,7 @@ fun HomeScreen(
     onSeeAllRecent: () -> Unit,
     onSeeAllFavorites: () -> Unit,
     onSeeAllArtists: () -> Unit,
+    playerViewModel: PlayerViewModel = hiltViewModel(),
     playlistsViewModel: PlaylistsViewModel = hiltViewModel(),
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -360,6 +363,16 @@ fun HomeScreen(
 
     PlaylistFoamModal(
         state = playlistModalState,
+        onPlayNext = { playlist ->
+            longPressScope.launch {
+                playerViewModel.playNext(playlistsViewModel.playlistTracks(playlist.playlistId))
+            }
+        },
+        onAddToQueue = { playlist ->
+            longPressScope.launch {
+                playerViewModel.addToQueue(playlistsViewModel.playlistTracks(playlist.playlistId))
+            }
+        },
         stats = modalStats,
         cover = playlistModalState.playlist?.let { playlistCovers[it.playlistId] },
         onEditImage = { playlist ->
