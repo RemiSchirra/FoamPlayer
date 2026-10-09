@@ -3,6 +3,7 @@ package com.foamplayer.app.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -61,6 +62,48 @@ fun mediaArtPlaceholderIcon(kind: MediaArtKind): ImageVector = when (kind) {
 }
 
 /**
+ * Fraction of the artwork surface the no-art music note spans (see
+ * [NoAlbumArtPlaceholder]). A proportion of the CURRENT bounds, not a fixed
+ * dp value: shared-element flights re-measure the drawn side's content at the
+ * interpolated bounds every frame, so the note scales with the flying artwork
+ * instead of holding one endpoint's dp size.
+ */
+private const val NoAlbumArtNoteFraction = 0.7f
+
+/**
+ * Image-like placeholder for artwork surfaces that have NO artwork at all --
+ * as opposed to [AlbumArtImage]'s placeholder, which only covers the window
+ * while real artwork loads.
+ *
+ * The music note is laid out at [NoAlbumArtNoteFraction] of the CURRENT
+ * bounds, not at a fixed dp size. That is what makes it behave like an image
+ * rather than an icon: shared-element flights (44dp mini slot <-> 48dp subview
+ * header <-> full-screen hero) re-measure the becoming-visible side's content
+ * at the interpolated bounds every frame, so a bounds-fraction note scales
+ * continuously with the flying artwork. A fixed-dp icon cannot do that --
+ * it kept the size computed for the resting endpoint and snapped the moment
+ * a flight started or ended. The baked-in surfaceVariant background also
+ * makes every endpoint's rest look identical, so the slot's shade no longer
+ * flips when a transition's [placeholderColor] hands over at settle.
+ */
+@Composable
+fun NoAlbumArtPlaceholder(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(FoamTheme.colors.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = mediaArtPlaceholderIcon(MediaArtKind.TRACK),
+            contentDescription = null,
+            tint = FoamTheme.colors.textSecondary,
+            modifier = Modifier.fillMaxSize(NoAlbumArtNoteFraction)
+        )
+    }
+}
+
+/**
  * Placeholder kind inherited by every [AlbumArtImage] below this point in the
  * composition; defaults to the music note. Screens and sections set it once
  * through [MediaArtKindScope] instead of threading placeholder icons through
@@ -97,7 +140,7 @@ fun MediaArtKindScope(
  * hits included -- before delivering the result (RealImageLoader calls the
  * target's onStart unconditionally), so the fade is gated on the RESULT's data
  * source rather than on Loading: a [DataSource.MEMORY_CACHE] result snaps back
- * to full alpha synchronously inside the same composition pass, so shared
+ * to full alpha 1f synchronously inside the same composition pass, so shared
  * element flights (row -> album header) and revisited list rows draw the image
  * on their very first frame with no placeholder flash and no fade. Only a
  * genuine load (disk / embedded art decode) shows the placeholder and fades

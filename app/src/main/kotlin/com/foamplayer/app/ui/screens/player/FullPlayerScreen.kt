@@ -442,7 +442,7 @@ fun FullPlayerScreen(
     // Blend driver handed to the waveform (draw-phase read: each frame of the swap
     // invalidates just the bars' drawing). A swap tween owns the blend whenever one is
     // running (release, transport buttons, flip catch-ups); otherwise the blend is the
-    // hero pager's own fraction from the anchor page toward the pinned target, so the
+    // pager's own fraction from the anchor page toward the pinned target, so the
     // bars follow the finger 1:1 (programmatic pager syncs sweep the same formula,
     // morphing like a fast swipe). Once the playing index has reached the pinned target
     // the swap is over as far as rendering goes: the plain current-envelope rendering at
@@ -510,7 +510,15 @@ fun FullPlayerScreen(
                 pageCount = queue.size
             ) { page -> queue.getOrNull(page)?.albumArtPath }
         }.collect { interpolatedColor ->
-            viewModel.setDynamicAccentColor(interpolatedColor)
+            // An artless page (or one whose palette extraction is still in flight)
+            // yields no color. Keeping the last accent instead of dropping it avoids
+            // flashing the static default mid-swipe and snapping back the next
+            // frame a colored page re-enters the interpolation. The player's own
+            // DisposableEffect below still clears the dynamic accent on dispose,
+            // so dismissal re-resolves through the static path as before.
+            if (interpolatedColor != null) {
+                viewModel.setDynamicAccentColor(interpolatedColor)
+            }
         }
     }
 

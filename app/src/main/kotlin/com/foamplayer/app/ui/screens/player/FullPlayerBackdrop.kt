@@ -42,6 +42,7 @@ import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
 import com.foamplayer.app.ui.components.buildGradientImage
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -533,6 +534,12 @@ private fun AlbumArtImagePair(
         .build()
 
     Box(modifier = modifier) {
+        // A track with no artwork has no blurred layer either; a flat placeholder-surface
+        // field keeps the sharp no-art region (see CanvasAwareArtPair) dissolving into a
+        // matching shade instead of into the bare background color.
+        if (frontArtPath == null && backArtPath == null) {
+            Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.surfaceVariant))
+        }
         if (frontArtPath != null) {
             val frontRequest = remember(frontArtPath) { request(frontArtPath) }
             AsyncImage(
@@ -569,6 +576,11 @@ private fun AlbumArtImagePair(
  * place of the tree (never re-parented, so the player is never rebuilt mid-swipe).
  * When the canvas' track is not in the pair ([CanvasAnchor.NONE]) the video is hidden
  * and the pair renders as usual.
+ *
+ * An empty bottom slot (the current track has no artwork) renders the image-like
+ * no-art placeholder instead -- in immersive this sharp region IS the visible art
+ * (the hero's own layer is alpha-faded to 0 at rest-open), so without it an artless
+ * track would show nothing at all in the art area.
  */
 @Composable
 private fun CanvasAwareArtPair(
@@ -600,6 +612,8 @@ private fun CanvasAwareArtPair(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
+        } else {
+            NoAlbumArtPlaceholder(modifier = Modifier.fillMaxSize())
         }
         if (canvasUrl != null) {
             val canvasVisible = canvasAnchor != CanvasAnchor.NONE

@@ -461,10 +461,7 @@ fun TrackListItem(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    BasicText(
-                        text = track.format,
-                        style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor)
-                    )
+                    NoAlbumArtPlaceholder()
                 }
             },
             title = track.title,
@@ -562,10 +559,7 @@ private fun TrackGridArtwork(track: TrackEntity) {
             placeholderSize = 32.dp
         )
     } else {
-        BasicText(
-            text = track.format,
-            style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor)
-        )
+        NoAlbumArtPlaceholder()
     }
 }
 

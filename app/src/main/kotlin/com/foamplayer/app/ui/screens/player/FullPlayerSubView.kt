@@ -54,6 +54,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.components.MarqueeText
+import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -70,7 +71,7 @@ internal enum class SubViewMode(val labelRes: Int) {
  * Isolated on purpose, twice over:
  *  - FoamTheme.accentColor changes every frame of a horizontal swipe (it's driven by
  *    viewModel.setDynamicAccentColor, fired every drag frame). Reading it here -- one
- *    leaf per entry -- instead of inline in SubViewSelectorRow's own body confines that
+ *    leaf per entry -- instead of inline in SubViewSelectorItem's own body confines that
  *    per-frame recomposition to just the selected item's icon, rather than the whole
  *    row (and the row's caller).
  *  - The selection tint tracks the subview transition fraction, which changes every
@@ -175,8 +176,8 @@ internal fun SubViewSelectorRow(
 
 /**
  * Pill between the lyrics and queue selector icons showing the playing track's
- * audio format and bitrate; opens the audio-info modal. Deferred-`progress`
- * pattern like the transport buttons: the subview transition fraction is read
+ * audio format and bitrate; opens the audio-info modal. Deferred-`progress` pattern
+ * like the transport buttons: the subview transition fraction is read
  * inside graphicsLayer (redraw-only) and the clickable is gated through a
  * derivedStateOf, so drag frames don't recompose the chip. The alpha runs
  * INVERSE to that of the transport cluster, which fades into this chip's exact
@@ -302,9 +303,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     // The full player hero's current paused shrink (see rememberPausedArtScale). This
     // header rests at scale 1f -- a play/pause flip must NOT animate this header's art
     // -- but mid-flight this header's art IS what the shared-element overlay renders,
-    // so it departs at the hero's CURRENT paused scale and relaxes to 1f along the
-    // same eased flight fraction the shadow below rides, or an up-morph taken while
-    // paused pops the art 3% at hand-off.
+    // so it departs at the hero's CURRENT paused scale and relaxes to 1f.
     val heroPausedArtScale by rememberPausedArtScale(isPlaybackActive)
 
     // Deferred reads: the transition fraction is evaluated inside the graphicsLayer
@@ -337,7 +336,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     }
     // Shadow elevation for the art during the up-morph. While the bounds animation is
     // active, the shared-element overlay renders ONLY the target entry's content
-    // (SharedElementEntry.shouldRenderAtAll) -- on the open swipe that is THIS header's
+    // (SharedElementEntry.shouldRenderAtAll) -- on the up-swipe that is THIS header's
     // art, not the hero's -- so the full player's shadow has to live here too, or it
     // drops the frame the morph takes over. The elevation starts at the hero's full
     // value (the interpolated bounds begin at the hero's full-size art) and fades to
@@ -428,9 +427,18 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                         }
                         .background(FoamTheme.colors.surfaceVariant)
                 ) {
-                    headerTrack.albumArtPath?.let { path ->
-                        AsyncImage(model = EmbeddedAlbumArt(path.toUri()),
-                            contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    if (headerTrack.albumArtPath != null) {
+                        AsyncImage(
+                            model = EmbeddedAlbumArt(headerTrack.albumArtPath.toUri()),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        // No art at all: the image-like music-note placeholder. It fills
+                        // this 48dp slot the same way real artwork fills it, so the
+                        // up/down subview morph renders the identical look at both ends.
+                        NoAlbumArtPlaceholder()
                     }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
@@ -505,7 +513,7 @@ internal fun MiniPlayPauseButton(
  * Same deferred-`progress` pattern as MiniPlayPauseButton: alpha lives inside the
  * graphicsLayer block (redraws without recomposing) and clicks are gated on the
  * cluster actually being visible; the caller hands this the same memoized lambda
- * instance so the whole cluster is skipped most frames.
+ * instance so the cluster is skipped most frames.
  */
 @Composable
 internal fun MiniTransportButton(

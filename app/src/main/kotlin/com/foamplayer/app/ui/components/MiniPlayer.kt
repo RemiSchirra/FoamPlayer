@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -74,20 +73,6 @@ import kotlinx.coroutines.flow.StateFlow
  * identical, so nothing pops).
  */
 private data class PendingJump(val viaPage: Int, val targetIndex: Int)
-
-/**
- * Format fallback shown when a track has no album art. Deliberately a leaf: it is the
- * only thing here that reads the per-frame [FoamTheme.accentColor] directly, so accent
- * animation frames invalidates just this text, not the pager page around it.
- */
-@Composable
-private fun FormatFallbackLabel(format: String, modifier: Modifier = Modifier) {
-    BasicText(
-        text = format.take(3),
-        style = FoamTheme.typography.caption.copy(color = FoamTheme.accentColor),
-        modifier = modifier
-    )
-}
 
 /**
  * Play/pause button. Deliberately a leaf: the accent background changes every frame
@@ -251,7 +236,7 @@ fun MiniPlayer(
 
     // Same live computation the FoamSlider below already had -- read lazily every
     // time `.progress` is accessed, so it stays live while dragging/swiping and is
-    // only overridden by a settle tween after a release/track change.
+    // only overridden by a settle tween after a release/transport-button track change.
     val seekBarProgress = rememberSeekBarProgressState(
         positionMsFlow = positionMsFlow,
         liveProgress = { livePositionMs ->
@@ -316,7 +301,11 @@ fun MiniPlayer(
                 }
             }
         }.collect { interpolatedColor ->
-            onColorChange(interpolatedColor)
+            // An artless page (or one whose palette extraction is still in flight)
+            // yields no color. Keeping the last accent instead of dropping it avoids
+            // flashing the static default mid-swipe and snapping back the next
+            // frame a colored page re-enters the interpolation.
+            if (interpolatedColor != null) onColorChange(interpolatedColor)
         }
     }
 
@@ -611,7 +600,11 @@ fun MiniPlayer(
                                         contentScale = ContentScale.Crop
                                     )
                                 } else {
-                                    FormatFallbackLabel(format = pageTrack.format)
+                                    // No art at all: the image-like music-note placeholder.
+                                    // It fills this slot like real artwork would and scales with
+                                    // the shared-element flight instead of snapping between
+                                    // endpoint sizes.
+                                    NoAlbumArtPlaceholder()
                                 }
                             }
 

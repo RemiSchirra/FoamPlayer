@@ -64,6 +64,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.TrackScoreHeart
@@ -205,7 +206,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
 
 /**
  * Renders the album art + title/artist for the current queue, and drives the transition
- * between them and the mini header when swiping up.
+ * between them and the mini player / subview header when swiping.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -342,6 +343,12 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
+                        } else {
+                            // No art at all: the image-like music-note placeholder, filling
+                            // this page's art box the same way the mini player's slot and the
+                            // subview header do, so shared-element flights land on the exact
+                            // same look on every surface.
+                            NoAlbumArtPlaceholder()
                         }
                     }
                 }
@@ -500,6 +507,10 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
+                    } else {
+                        // No art at all: the image-like music-note placeholder, exactly
+                        // like the mini player's slot and this page's underlying art box.
+                        NoAlbumArtPlaceholder()
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
