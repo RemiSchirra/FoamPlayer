@@ -131,6 +131,14 @@ fun PlaylistFoamModal(
     val displayStats = stats
         ?: lastStats?.takeIf { it.playlistId == displayPlaylist?.playlistId }
 
+    var lastCover by remember { mutableStateOf<Pair<Long, PlaylistCover>?>(null) }
+    SideEffect {
+        val shown = state.playlist
+        if (shown != null && cover != null) lastCover = shown.playlistId to cover
+    }
+    val displayCover = cover
+        ?: lastCover?.takeIf { it.first == displayPlaylist?.playlistId }?.second
+
     // Details is a second page of the SAME sheet (one Dialog window), so the
     // header can persist across the switch. Reset when the sheet closes or
     // changes playlist.
@@ -160,7 +168,7 @@ fun PlaylistFoamModal(
             ) {
                 PlaylistModalHeader(
                     playlist = displayPlaylist,
-                    cover = cover,
+                    cover = displayCover,
                     onEditImage = { perform(onEditImage) },
                     onEditName = { perform(onEditName) }
                 )
