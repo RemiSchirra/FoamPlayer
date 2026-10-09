@@ -30,6 +30,7 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /** Width of the touch strip hosting the thumb, overlaid on the container's end edge. */
@@ -67,10 +68,16 @@ private const val ScrollbarThumbLengthScale = 0.5f
  * Pressing the strip thickens the thumb (thickness and emphasis both tween —
  * never a snap); dragging it scrolls the list proportionally: one pixel of
  * thumb travel equals the same share of the content, so the thumb tracks the
- * finger exactly while covering the whole collection. Plain taps fall through
- * to the rows underneath (the down is never consumed) — only an actual drag
- * inside the strip is captured. While the content isn't long enough nothing
- * is consumed either, so the strip is fully transparent to the list.
+ * finger exactly while covering the whole collection. The scroll lands as a
+ * DIRECT jump to the target item ([LazyListState.requestScrollToItem] /
+ * [LazyGridState.requestScrollToItem]) rather than a raw incremental delta —
+ * a long throw never composes or measures the items it passes over, and the
+ * (many) drag events between two frames collapse into a single remeasure —
+ * which is what keeps far scrollbar drags on huge collections jank-free.
+ * Plain taps fall through to the rows underneath (the down is never consumed)
+ * — only an actual drag inside the strip is captured. While the content isn't
+ * long enough nothing is consumed either, so the strip is fully transparent
+ * to the list.
  *
  * The thumb's drawn position and the drag scroll both read the lazy state
  * during the draw/gesture phases, so scrolling never recomposes the host.
@@ -112,7 +119,9 @@ fun FoamScrollbar(
     FoamScrollbarCore(
         listLayoutInfo = { state.layoutInfo },
         gridLayoutInfo = null,
-        onThumbDrag = { state.dispatchRawDelta(it) },
+        onThumbScrollTo = { itemIndex, offsetInItem ->
+            state.requestScrollToItem(itemIndex, offsetInItem)
+        },
         color = color,
         thickness = thickness,
         pressedThickness = pressedThickness,
@@ -152,7 +161,9 @@ fun FoamScrollbar(
     FoamScrollbarCore(
         listLayoutInfo = null,
         gridLayoutInfo = { state.layoutInfo },
-        onThumbDrag = { state.dispatchRawDelta(it) },
+        onThumbScrollTo = { itemIndex, offsetInItem ->
+            state.requestScrollToItem(itemIndex, offsetInItem)
+        },
         color = color,
         thickness = thickness,
         pressedThickness = pressedThickness,
@@ -166,8 +177,13 @@ fun FoamScrollbar(
 }
 
 /**
- * Geometry snapshot the thumb and its drag mapping are derived from, computed
- * from whichever lazy layout is currently hosting the content. All px.
+ * Geometry snapshot the thumb, its drag mapping and the direct-jump mapping
+ * are derived from, computed from whichever lazy layout is currently hosting
+ * the content. All px. The structural fields ([headerPx], [itemPx],
+ * [rowCountTotal], [trailerTopPx], [totalItemsCount], [columns]) mirror the
+ * hosts' uniform list shape (hero header + uniform rows + bottom spacer) and
+ * turn a content-space scroll offset into a concrete (item index, offset
+ * within item) jump target — see [jumpTarget].
  */
 private class ScrollbarGeometry(
     /** Content-space scroll position of the viewport's top edge. */
@@ -175,8 +191,40 @@ private class ScrollbarGeometry(
     /** Total scrollable distance: content height (paddings included) minus container height. */
     val scrollExtentPx: Float,
     /** Height of the lazy container itself (viewport minus its content paddings). */
-    val viewportPx: Float
-)
+    val viewportPx: Float,
+    /** Full height of the leading edge item (the hero header, index 0). */
+    val headerPx: Float,
+    /** Height of one uniform item (row) between the edge items. */
+    val itemPx: Float,
+    /** Items per grid row; 1 for lists (a grid scrolls by rows, not by cells). */
+    val columns: Int,
+    /** Number of uniform items between the leading and trailing edge items. */
+    val rowCountTotal: Int,
+    /** Content-space top of the trailing edge item (the bottom spacer). */
+    val trailerTopPx: Float,
+    /** Total item count, for targeting the trailing edge item. */
+    val totalItemsCount: Int
+) {
+    /**
+     * Maps a content-space scroll offset to the (item index, offset within
+     * that item) pair a direct requestScrollToItem jump needs: offsets inside
+     * the leading edge item target index 0, offsets past the last uniform row
+     * target the trailing edge item, everything in between targets the row
+     * under the offset with the within-row remainder as the item offset. For
+     * grids the index is the target row's FIRST item (a grid can only scroll
+     * by whole rows — every cell of a row shares its offset.y).
+     */
+    fun jumpTarget(targetPx: Float): Pair<Int, Int> {
+        val offset = targetPx.coerceIn(0f, scrollExtentPx)
+        if (offset >= trailerTopPx) {
+            return totalItemsCount - 1 to (offset - trailerTopPx).roundToInt()
+        }
+        if (offset < headerPx) return 0 to offset.roundToInt()
+        val rowFloat = (offset - headerPx) / itemPx
+        val row = rowFloat.toInt().coerceIn(0, rowCountTotal - 1)
+        return 1 + row * columns to ((rowFloat - row) * itemPx).roundToInt()
+    }
+}
 
 /**
  * Remembered per-host measurements feeding the thumb geometry: the hero
@@ -203,7 +251,7 @@ private class ScrollbarSamples {
 private fun FoamScrollbarCore(
     listLayoutInfo: (() -> LazyListLayoutInfo)?,
     gridLayoutInfo: (() -> LazyGridLayoutInfo)?,
-    onThumbDrag: (Float) -> Unit,
+    onThumbScrollTo: (itemIndex: Int, offsetInItem: Int) -> Unit,
     color: Color,
     thickness: Dp,
     pressedThickness: Dp,
@@ -220,7 +268,7 @@ private fun FoamScrollbarCore(
     // pointerInput below never restarts.
     val currentListLayoutInfo by rememberUpdatedState(listLayoutInfo)
     val currentGridLayoutInfo by rememberUpdatedState(gridLayoutInfo)
-    val currentOnThumbDrag by rememberUpdatedState(onThumbDrag)
+    val currentOnThumbScrollTo by rememberUpdatedState(onThumbScrollTo)
     // Stable across recompositions: sampled in place by the geometry lambda.
     val samples = remember { ScrollbarSamples() }
 
@@ -271,9 +319,11 @@ private fun FoamScrollbarCore(
                             val track = size.height.toFloat()
                             val thumbHeight = geo.thumbHeightPx(track, minThumbHeight.toPx())
                             val travel = (track - thumbHeight).coerceAtLeast(1f)
-                            // 1px of thumb travel == the same share of content,
-                            // so the thumb tracks the finger 1:1 end to end.
-                            currentOnThumbDrag(dy * (geo.scrollExtentPx / travel))
+                            val targetOffset =
+                                ((geo.scrollOffsetPx / geo.scrollExtentPx * travel + dy)
+                                    .coerceIn(0f, travel)) / travel * geo.scrollExtentPx
+                            val (itemIndex, offsetInItem) = geo.jumpTarget(targetOffset)
+                            currentOnThumbScrollTo(itemIndex, offsetInItem)
                         }
                     } finally {
                         pressed = false
@@ -366,7 +416,17 @@ private fun LazyListLayoutInfo.toScrollbarGeometry(
         samples.headerPx + (first.index - 1) * itemPx
     }
     val scrollOffset = firstContentTop - (first.offset - viewportStartOffset)
-    return ScrollbarGeometry(scrollOffset, extent, container)
+    return ScrollbarGeometry(
+        scrollOffsetPx = scrollOffset,
+        scrollExtentPx = extent,
+        viewportPx = container,
+        headerPx = samples.headerPx,
+        itemPx = itemPx,
+        columns = 1,
+        rowCountTotal = rowCountTotal,
+        trailerTopPx = samples.headerPx + rowCountTotal * itemPx,
+        totalItemsCount = totalItemsCount
+    )
 }
 
 /** Grid counterpart of [LazyListLayoutInfo.toScrollbarGeometry] (cells on the y axis). */
@@ -383,11 +443,18 @@ private fun LazyGridLayoutInfo.toScrollbarGeometry(
 
     var rowSum = 0
     var rowCount = 0
+    var columns = 1
+    var firstDataRowY = Float.NaN
     for (item in visible) {
         when {
             item.index == 0 -> samples.headerPx = item.size.height.toFloat()
             item.index == totalItemsCount - 1 -> samples.trailerPx = item.size.height.toFloat()
             else -> {
+                if (firstDataRowY.isNaN()) {
+                    firstDataRowY = item.offset.y.toFloat()
+                } else if (item.offset.y.toFloat() == firstDataRowY) {
+                    columns++
+                }
                 rowSum += item.size.height
                 rowCount++
             }
@@ -409,5 +476,15 @@ private fun LazyGridLayoutInfo.toScrollbarGeometry(
         samples.headerPx + (first.index - 1) * itemPx
     }
     val scrollOffset = firstContentTop - (first.offset.y - viewportStartOffset)
-    return ScrollbarGeometry(scrollOffset, extent, container)
+    return ScrollbarGeometry(
+        scrollOffsetPx = scrollOffset,
+        scrollExtentPx = extent,
+        viewportPx = container,
+        headerPx = samples.headerPx,
+        itemPx = itemPx,
+        columns = columns,
+        rowCountTotal = rowCountTotal,
+        trailerTopPx = samples.headerPx + rowCountTotal * itemPx,
+        totalItemsCount = totalItemsCount
+    )
 }
