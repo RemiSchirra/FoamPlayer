@@ -195,12 +195,12 @@ class PlayerViewModel @Inject constructor(
 
     // Track scores (-1 dislike / 0 not noted / 1 like / 2 super like): the in-memory
     // queue entities go stale the moment a score is written to the DB, so the UI
-    // overlays this id→score map on top of the entity values.
-    private val _scoreOverrides = MutableStateFlow<Map<Long, Int>>(emptyMap())
-    val scoreOverrides: StateFlow<Map<Long, Int>> = _scoreOverrides.asStateFlow()
+    // overlays a shared id→score map on top of the entity values. The map is owned
+    // by [TrackRepository] because the media-notification service writes scores too —
+    // its toggle must be reflected in this UI instantly, and vice versa.
+    val scoreOverrides: StateFlow<Map<Long, Int>> = trackRepository.scoreOverrides
 
     fun setTrackScore(trackId: Long, score: Int) {
-        _scoreOverrides.value = _scoreOverrides.value + (trackId to score)
         viewModelScope.launch { trackRepository.setScore(trackId, score) }
     }
 

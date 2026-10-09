@@ -142,6 +142,7 @@ import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.LyricsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.MiscSettingsScreen
 import com.foamplayer.app.ui.screens.settings.NavBarSettingsScreen
+import com.foamplayer.app.ui.screens.settings.NotificationSettingsScreen
 import com.foamplayer.app.ui.screens.settings.PlayerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.SettingsScreen
 import com.foamplayer.app.ui.screens.settings.TestSettingsScreen
@@ -1729,7 +1730,15 @@ fun FoamNavHost(
                                         )
                                     }
                                     composable(Screen.SettingsMisc.route) {
-                                        MiscSettingsScreen(onBack = { navController.popBackStack() })
+                                        MiscSettingsScreen(
+                                            onBack = { navController.popBackStack() },
+                                            onNavigateToNotification = {
+                                                navController.navigate(Screen.SettingsNotification.route)
+                                            }
+                                        )
+                                    }
+                                    composable(Screen.SettingsNotification.route) {
+                                        NotificationSettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     // Developer test screen: registered only with devMode=true.
                                     if (BuildConfig.DEV_MODE) {

@@ -341,6 +341,22 @@
     <string name="discord_online_art">Fetch cover art online</string>
     <string name="discord_online_art_desc">Look each track up on Spotify (by title and artist) and use its album cover on Discord, falling back to YouTube thumbnails. Track titles and artist names are sent to those services.</string>
 
+    <!-- Notification buttons -->
+    <string name="notification_entry">Notification</string>
+    <string name="notification_entry_desc">Buttons of the playback notification</string>
+    <string name="notification_section">Notification</string>
+    <string name="notification_buttons_title">Notification buttons</string>
+    <string name="notification_buttons_desc">Choose the two extra buttons of the playback notification. Previous, play/pause and next are fixed.</string>
+    <string name="notification_button_left">Left button</string>
+    <string name="notification_button_left_desc">Extra button left of Previous</string>
+    <string name="notification_button_right">Right button</string>
+    <string name="notification_button_right_desc">Extra button right of Next</string>
+    <string name="notification_button_none">None</string>
+    <string name="notification_button_repeat">Repeat</string>
+    <string name="notification_button_shuffle">Shuffle</string>
+    <string name="notification_button_close">Close</string>
+    <string name="notification_button_score">Score</string>
+
     <!-- Lock screen player -->
     <string name="lock_screen_section">Lock screen</string>
     <string name="display_on_lock_screen">Display on lock screen</string>

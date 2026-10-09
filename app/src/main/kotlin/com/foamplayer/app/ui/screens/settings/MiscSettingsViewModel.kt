@@ -9,6 +9,7 @@ import com.foamplayer.app.audio.service.LockScreenPlayerLauncher
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.discord.DiscordTokenStore
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.app.data.settings.NotificationExtraButton
 import com.foamplayer.discord.DiscordApi
 import com.foamplayer.discord.DiscordAuthCoordinator
 import com.foamplayer.discord.DiscordAuthorizationSession
@@ -71,6 +72,18 @@ class MiscSettingsViewModel @Inject constructor(
     fun setFastLockScreenEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setFastLockScreenEnabled(enabled)
+        }
+    }
+
+    fun setNotificationButtonLeft(button: NotificationExtraButton) {
+        viewModelScope.launch {
+            settingsRepository.setNotificationButtonLeft(button)
+        }
+    }
+
+    fun setNotificationButtonRight(button: NotificationExtraButton) {
+        viewModelScope.launch {
+            settingsRepository.setNotificationButtonRight(button)
         }
     }
 

@@ -6,6 +6,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -32,6 +34,12 @@ import com.foamplayer.app.ui.theme.FoamTheme
  * Settings row exposing one enum's options as side-by-side selectable chips.
  * The selected chip fills with the accent color; [getLabel]/[getIcon] render
  * each option's appearance.
+ *
+ * Chips live in a [FlowRow]: when a line runs out of horizontal room the whole
+ * option moves to the next line instead of its label folding — every label is
+ * clamped to a single line, and items of the same line still share the width
+ * evenly (FlowRow weights are per-line), so the classic full-width look is
+ * kept whenever everything fits.
  */
 @Composable
 fun <T : Enum<T>> FoamEnumItem(
@@ -52,11 +60,12 @@ fun <T : Enum<T>> FoamEnumItem(
             }
         }
         Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-        Row(
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = FoamDimens.paddingMedium),
-            horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
+            horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall),
+            verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
         ) {
             options.forEach { option ->
                 val isSelected = option == selectedOption
@@ -64,7 +73,7 @@ fun <T : Enum<T>> FoamEnumItem(
 
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(1f, fill = false)
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
                         .background(
                             if (isSelected) FoamTheme.accentColor
@@ -76,7 +85,10 @@ fun <T : Enum<T>> FoamEnumItem(
                             role = Role.RadioButton,
                             onClick = { onOptionSelected(option) }
                         )
-                        .padding(vertical = FoamDimens.paddingMedium),
+                        // Generous horizontal breathing room so the text never
+                        // touches the rounded edge; tighter vertical padding so
+                        // the chip row stays compact.
+                        .padding(horizontal = 14.dp, vertical = FoamDimens.spacingSmall),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(
@@ -94,6 +106,7 @@ fun <T : Enum<T>> FoamEnumItem(
                         }
                         BasicText(
                             text = getLabel(option),
+                            maxLines = 1,
                             style = FoamTheme.typography.body.copy(
                                 color = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal

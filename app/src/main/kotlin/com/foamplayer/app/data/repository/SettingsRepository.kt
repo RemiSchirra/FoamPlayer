@@ -38,6 +38,7 @@ import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.data.settings.NotificationExtraButton
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
@@ -256,6 +257,16 @@ class SettingsRepository @Inject constructor(
         it.copy(fastLockScreenEnabled = enabled)
     }
 
+    /** Sets the left configurable playback-notification button. */
+    suspend fun setNotificationButtonLeft(button: NotificationExtraButton) = update {
+        it.copy(notificationButtonLeft = button)
+    }
+
+    /** Sets the right configurable playback-notification button. */
+    suspend fun setNotificationButtonRight(button: NotificationExtraButton) = update {
+        it.copy(notificationButtonRight = button)
+    }
+
     /** Persists the whole DSP chain state (EQ, tone, balance, volume). */
     suspend fun setDspState(state: DspState) = update {
         it.copy(dspStateSerialized = DspPersistence.serialize(state))
@@ -366,6 +377,12 @@ class SettingsRepository @Inject constructor(
         artistImageResolveEnabled = this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] ?: AppSettings().artistImageResolveEnabled,
         displayOnLockScreen = this[Keys.DISPLAY_ON_LOCK_SCREEN] ?: AppSettings().displayOnLockScreen,
         fastLockScreenEnabled = this[Keys.FAST_LOCK_SCREEN_ENABLED] ?: AppSettings().fastLockScreenEnabled,
+        notificationButtonLeft = this[Keys.NOTIFICATION_BUTTON_LEFT]
+            ?.let { runCatching { NotificationExtraButton.valueOf(it) }.getOrNull() }
+            ?: AppSettings().notificationButtonLeft,
+        notificationButtonRight = this[Keys.NOTIFICATION_BUTTON_RIGHT]
+            ?.let { runCatching { NotificationExtraButton.valueOf(it) }.getOrNull() }
+            ?: AppSettings().notificationButtonRight,
         dspStateSerialized = this[Keys.DSP_STATE].orEmpty(),
         dspUserPresets = this[Keys.DSP_USER_PRESETS].orEmpty(),
         deviceAudioConfigs = deserializeDeviceAudioConfigs(this[Keys.DEVICE_AUDIO_CONFIGS])
@@ -430,6 +447,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] = settings.artistImageResolveEnabled
         this[Keys.DISPLAY_ON_LOCK_SCREEN] = settings.displayOnLockScreen
         this[Keys.FAST_LOCK_SCREEN_ENABLED] = settings.fastLockScreenEnabled
+        this[Keys.NOTIFICATION_BUTTON_LEFT] = settings.notificationButtonLeft.name
+        this[Keys.NOTIFICATION_BUTTON_RIGHT] = settings.notificationButtonRight.name
         this[Keys.DSP_STATE] = settings.dspStateSerialized
         this[Keys.DSP_USER_PRESETS] = settings.dspUserPresets
         this[Keys.DEVICE_AUDIO_CONFIGS] = serializeDeviceAudioConfigs(settings.deviceAudioConfigs)
@@ -498,6 +517,8 @@ class SettingsRepository @Inject constructor(
         val ARTIST_IMAGE_RESOLVE_ENABLED = booleanPreferencesKey("artist_image_resolve_enabled")
         val DISPLAY_ON_LOCK_SCREEN = booleanPreferencesKey("display_on_lock_screen")
         val FAST_LOCK_SCREEN_ENABLED = booleanPreferencesKey("fast_lock_screen_enabled")
+        val NOTIFICATION_BUTTON_LEFT = stringPreferencesKey("notification_button_left")
+        val NOTIFICATION_BUTTON_RIGHT = stringPreferencesKey("notification_button_right")
         val DSP_STATE = stringPreferencesKey("dsp_state")
         val DSP_USER_PRESETS = stringPreferencesKey("dsp_user_presets")
         val DEVICE_AUDIO_CONFIGS = stringPreferencesKey("device_audio_configs")

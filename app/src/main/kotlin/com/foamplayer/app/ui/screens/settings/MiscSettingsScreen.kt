@@ -31,6 +31,7 @@ import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -52,6 +53,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.foamplayer.app.R
+import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
@@ -61,6 +63,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun MiscSettingsScreen(
     onBack: () -> Unit,
+    onNavigateToNotification: () -> Unit,
     viewModel: MiscSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
@@ -111,6 +114,23 @@ fun MiscSettingsScreen(
                 .padding(horizontal = FoamDimens.paddingMedium),
             contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
         ) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    FoamNavigationButton(
+                        title = stringResource(R.string.notification_entry),
+                        description = stringResource(R.string.notification_entry_desc),
+                        onClick = onNavigateToNotification
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+            }
+
             item {
                 BasicText(
                     text = stringResource(R.string.lock_screen_section),

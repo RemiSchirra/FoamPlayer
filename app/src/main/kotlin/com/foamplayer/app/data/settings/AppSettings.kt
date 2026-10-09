@@ -157,6 +157,10 @@ data class AppSettings(
      * keyguard ("fast lock"). Only meaningful with [displayOnLockScreen].
      */
     val fastLockScreenEnabled: Boolean = true,
+    /** First of the two configurable playback-notification buttons (left of Previous). */
+    val notificationButtonLeft: NotificationExtraButton = NotificationExtraButton.SHUFFLE,
+    /** Second configurable playback-notification button (right of Next). */
+    val notificationButtonRight: NotificationExtraButton = NotificationExtraButton.REPEAT,
     /** Complete DSP chain state (EQ, tone, balance, volume), serialized by [DspPersistence]. */
     val dspStateSerialized: String = "",
     /** User-saved EQ presets, serialized by [DspPersistence]. */

@@ -69,6 +69,16 @@ class TrackRepository @Inject constructor(
     private val _scanStatus = MutableStateFlow<ScanStatus>(ScanStatus.Idle)
     val scanStatus: StateFlow<ScanStatus> = _scanStatus.asStateFlow()
 
+    // Track scores (-1 dislike / 0 not noted / 1 like / 2 super like): the engine's
+    // in-memory queue entities go stale the moment a score hits the DB, and TWO
+    // surfaces write scores (the app UI and the media-notification service).
+    // This id→score overlay is the shared source of truth both write through
+    // [setScore] and both readers (the player UI's heart, the notification icon
+    // cache) observe, so a score changed on one surface is instantly visible on
+    // the other.
+    private val _scoreOverrides = MutableStateFlow<Map<Long, Int>>(emptyMap())
+    val scoreOverrides: StateFlow<Map<Long, Int>> = _scoreOverrides.asStateFlow()
+
     // Warm process-lifetime shared flows (replay 1): browse ViewModels are
     // per-navigation-destination, so without these every screen open would pay
     // a cold Room round-trip. Aggregation runs off the main thread.
@@ -336,8 +346,15 @@ class TrackRepository @Inject constructor(
         listenHistoryDao.deleteByTrackId(trackId)
     }
 
-    /** Stores the user score (-1 dislike / 0 not noted / 1 like / 2 super like). */
-    suspend fun setScore(trackId: Long, score: Int) = trackDao.setScore(trackId, score)
+    /**
+     * Stores the user score (-1 dislike / 0 not noted / 1 like / 2 super like).
+     * The overlay map is updated BEFORE the DB write so every reader sees the
+     * new score on the very next frame, without waiting for Room.
+     */
+    suspend fun setScore(trackId: Long, score: Int) {
+        _scoreOverrides.value = _scoreOverrides.value + (trackId to score)
+        trackDao.setScore(trackId, score)
+    }
 
     /** Stores the user-set instrumental flag (lyrics view shows a music note instead). */
     suspend fun setInstrumental(trackId: Long, instrumental: Boolean) =
@@ -381,6 +398,7 @@ class TrackRepository @Inject constructor(
             trackDao.resetAllPlayStats()
             listenHistoryDao.clearAll()
         }
+        _scoreOverrides.value = emptyMap()
     }
 
     /**
@@ -488,6 +506,9 @@ class TrackRepository @Inject constructor(
                     listenHistoryDao.insertListens(chunk)
                 }
             }
+            // The dev tool rewrote every score behind the overlay's back: drop
+            // the stale overrides so readers fall back to the fresh DB values.
+            _scoreOverrides.value = emptyMap()
             Log.i(TAG, "generateRandomPlayStats: committed ${updates.size} tracks, ${listens.size} listens")
         }
     }

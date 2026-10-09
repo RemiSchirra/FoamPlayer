@@ -22,6 +22,7 @@ import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.data.settings.NotificationExtraButton
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
@@ -99,6 +100,8 @@ object BackupJson {
         put("artistImageResolveEnabled", settings.artistImageResolveEnabled)
         put("displayOnLockScreen", settings.displayOnLockScreen)
         put("fastLockScreenEnabled", settings.fastLockScreenEnabled)
+        put("notificationButtonLeft", settings.notificationButtonLeft.name)
+        put("notificationButtonRight", settings.notificationButtonRight.name)
         put("dspState", settings.dspStateSerialized)
         put("dspUserPresets", settings.dspUserPresets)
         put("deviceAudioConfigs", deviceAudioConfigsToJson(settings.deviceAudioConfigs))
@@ -197,6 +200,14 @@ object BackupJson {
         artistImageResolveEnabled = json.optBoolean("artistImageResolveEnabled", false),
         displayOnLockScreen = json.optBoolean("displayOnLockScreen", false),
         fastLockScreenEnabled = json.optBoolean("fastLockScreenEnabled", true),
+        notificationButtonLeft = decodeEnum(
+            json.optString("notificationButtonLeft"),
+            NotificationExtraButton.SHUFFLE
+        ),
+        notificationButtonRight = decodeEnum(
+            json.optString("notificationButtonRight"),
+            NotificationExtraButton.REPEAT
+        ),
         dspStateSerialized = json.optString("dspState", ""),
         dspUserPresets = json.optString("dspUserPresets", ""),
         deviceAudioConfigs = deviceAudioConfigsFromJson(json.optJSONObject("deviceAudioConfigs"))

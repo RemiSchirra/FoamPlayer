@@ -340,6 +340,22 @@
     <string name="discord_online_art">Récupérer les pochettes en ligne</string>
     <string name="discord_online_art_desc">Recherche chaque titre sur Spotify (par titre et artiste) et utilise sa pochette d\'album sur Discord, avec repli sur les miniatures YouTube. Les titres et noms d\'artiste sont envoyés à ces services.</string>
 
+    <!-- Boutons de notification -->
+    <string name="notification_entry">Notification</string>
+    <string name="notification_entry_desc">Boutons de la notification de lecture</string>
+    <string name="notification_section">Notification</string>
+    <string name="notification_buttons_title">Boutons de notification</string>
+    <string name="notification_buttons_desc">Choisissez les deux boutons supplémentaires de la notification de lecture. Précédent, lecture/pause et suivant sont fixes.</string>
+    <string name="notification_button_left">Bouton gauche</string>
+    <string name="notification_button_left_desc">Bouton supplémentaire à gauche de Précédent</string>
+    <string name="notification_button_right">Bouton droit</string>
+    <string name="notification_button_right_desc">Bouton supplémentaire à droite de Suivant</string>
+    <string name="notification_button_none">Aucun</string>
+    <string name="notification_button_repeat">Répéter</string>
+    <string name="notification_button_shuffle">Aléatoire</string>
+    <string name="notification_button_close">Fermer</string>
+    <string name="notification_button_score">Score</string>
+
     <!-- Écran de verrouillage -->
     <string name="lock_screen_section">Écran de verrouillage</string>
     <string name="display_on_lock_screen">Afficher sur l\'écran de verrouillage</string>
