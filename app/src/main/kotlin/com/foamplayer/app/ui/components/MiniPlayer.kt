@@ -156,17 +156,12 @@ private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
 private fun MiniPlayerProgressSlider(
     seekBarProgress: SeekBarProgressState,
     isAnimateSeekBarEnabled: Boolean,
-    isBitPerfectMode: Boolean,
     onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var dragValue by remember { mutableStateOf<Float?>(null) }
     val currentOnSeek by rememberUpdatedState(onSeek)
-    val activeColor = if (isBitPerfectMode) {
-        FoamTheme.colors.bitPerfectActive
-    } else {
-        FoamTheme.accentColor
-    }
+    val activeColor = FoamTheme.accentColor
 
     FoamSlider(
         value = { dragValue ?: seekBarProgress.progress },
@@ -669,7 +664,6 @@ fun MiniPlayer(
                 MiniPlayerProgressSlider(
                     seekBarProgress = seekBarProgress,
                     isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
-                    isBitPerfectMode = playbackState.audioOutputInfo?.isBitPerfectMode == true,
                     onSeek = onSeek,
                     modifier = Modifier.height(NavBarDimens.MiniPlayerSliderHeight)
                 )
