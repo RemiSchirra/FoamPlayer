@@ -94,7 +94,6 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import coil.request.ImageRequest
 import com.foamplayer.app.R
@@ -244,13 +243,13 @@ class CollectionSearchState {
      * Closes the search bar. The query is deliberately NOT cleared here: at
      * this instant the field is still composed (its exit animation is pending),
      * and resetting it while it might still hold focus would restart its IME
-     * connection, briefly re-showing a keyboard the user had already dismissed
-     * (the hide -> show -> hide flicker). The query is cleared instead when the
-     * field leaves composition AFTER this close (see [CollectionHeroSearchBar]);
-     * until then [matches] already ignores it via the closed-[open]
-     * short-circuit, so the rows restore immediately. A disposal from the
-     * header scrolling out of the lazy viewport (bar still open) keeps the
-     * query, so the filter survives the scroll round-trip.
+     * connection, which re-shows the keyboard for a frame right after the hide
+     * request went out (the hide -> show -> hide flicker). The query is cleared
+     * instead when the field leaves composition AFTER this close (see
+     * [CollectionHeroSearchBar]); until then [matches] already ignores it via
+     * the closed-[open] short-circuit, so the rows restore immediately. A
+     * disposal from the header scrolling out of the lazy viewport (bar still
+     * open) keeps the query, so the filter survives the scroll round-trip.
      */
     fun close() {
         open = false
@@ -1158,6 +1157,10 @@ private fun Modifier.reportHeroSearchBarTop(searchState: CollectionSearchState?)
  * a top layer whose alpha tweens to 0 while the new image draws beneath it —
  * a crossfade instead of a pop through the placeholder. First compositions
  * (nav flights) render the single image directly: no extra layer, no fade.
+ *
+ * The no-art letter fallback rides [NoAlbumArtLetter]: a bounds-fraction
+ * monogram that scales with the flying artwork during shared-element flights
+ * instead of popping between the row's and the hero's fixed sizes.
  */
 @Composable
 private fun CollectionHeroArtworkContent(
@@ -1218,10 +1221,7 @@ private fun CollectionHeroArtworkContent(
             modifier = Modifier.size(48.dp)
         )
     } else {
-        BasicText(
-            text = title.take(1).uppercase(),
-            style = FoamTheme.typography.titleLarge.copy(fontSize = 48.sp)
-        )
+        NoAlbumArtLetter(title = title)
     }
 }
 

@@ -98,6 +98,7 @@ import com.foamplayer.app.ui.components.AlbumArtShape
 import com.foamplayer.app.ui.components.FoamScrollbar
 import com.foamplayer.app.ui.components.MediaArtKind
 import com.foamplayer.app.ui.components.MediaArtKindScope
+import com.foamplayer.app.ui.components.NoAlbumArtLetter
 import com.foamplayer.app.ui.modals.CollectionInfo
 import com.foamplayer.app.ui.modals.CollectionKind
 import com.foamplayer.app.ui.components.ListRowArtSize
@@ -880,10 +881,7 @@ fun ArtistSearchResultItem(
                     )
                 }
             } else {
-                BasicText(
-                    text = artist.take(1).uppercase(),
-                    style = FoamTheme.typography.caption
-                )
+                NoAlbumArtLetter(title = artist)
             }
         }
         Spacer(modifier = Modifier.width(12.dp))
@@ -985,10 +983,7 @@ fun AlbumSearchResultItem(
                     )
                 }
             } else {
-                BasicText(
-                    text = album.album.take(1).uppercase(),
-                    style = FoamTheme.typography.caption
-                )
+                NoAlbumArtLetter(title = album.album)
             }
         }
         Spacer(modifier = Modifier.width(12.dp))

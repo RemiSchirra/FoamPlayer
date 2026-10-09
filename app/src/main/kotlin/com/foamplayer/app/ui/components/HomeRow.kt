@@ -300,10 +300,7 @@ fun HomeRowCard(
                     modifier = Modifier.size(24.dp)
                 )
             } else {
-                BasicText(
-                    text = title.take(1).uppercase(),
-                    style = FoamTheme.typography.titleLarge.copy(fontSize = 32.sp)
-                )
+                NoAlbumArtLetter(title = title)
             }
         }
 

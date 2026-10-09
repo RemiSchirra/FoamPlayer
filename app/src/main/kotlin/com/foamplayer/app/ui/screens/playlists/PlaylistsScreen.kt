@@ -82,6 +82,7 @@ import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.AlbumArtShape
 import com.foamplayer.app.ui.components.CollectionId
+import com.foamplayer.app.ui.components.NoAlbumArtLetter
 import com.foamplayer.app.ui.modals.DensityOrganisationModal
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.MediaGridCell
@@ -694,10 +695,7 @@ private fun PlaylistItemRow(
                 placeholderSize = if (density.isGrid) 32.dp else 20.dp
             )
         } else {
-            BasicText(
-                text = playlist.name.take(1).uppercase(),
-                style = FoamTheme.typography.titleMedium
-            )
+            NoAlbumArtLetter(title = playlist.name)
         }
     }
 

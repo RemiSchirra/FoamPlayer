@@ -23,16 +23,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.decode.DataSource
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
+import kotlin.math.min
 
 /** Duration of the fade-in a freshly decoded album art gets over its placeholder. */
 private const val AlbumArtFadeInDurationMs = 200
@@ -101,6 +108,74 @@ fun NoAlbumArtPlaceholder(modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxSize(NoAlbumArtNoteFraction)
         )
     }
+}
+
+/**
+ * Fraction of the artwork surface the no-art title initial (the letter
+ * monogram) spans, see [NoAlbumArtLetter]. Matches the compact hero's
+ * historic 48sp-in-120dp look, so hero endpoints keep their rest size; the
+ * [NoAlbumArtLetterMaxSize] cap keeps wide surfaces (full-width normal and
+ * immersive heroes) at that same 48sp instead of a screen-filling glyph.
+ */
+private const val NoAlbumArtLetterFraction = 0.4f
+
+/** Upper sp bound of the no-art letter, see [NoAlbumArtLetter]. */
+private val NoAlbumArtLetterMaxSize = 48.sp
+
+/**
+ * The letter monogram shown on artwork surfaces that have NO artwork: the
+ * collection title's initial, centered on the surface (the caller draws the
+ * surfaceVariant background behind it).
+ *
+ * The glyph is drawn in the DRAW PHASE at [NoAlbumArtLetterFraction] of the
+ * surface's CURRENT min dimension, capped at [NoAlbumArtLetterMaxSize]. Sizing
+ * from current bounds is what makes it behave like an image rather than a
+ * fixed-sp text: shared-element flights (row <-> detail hero) re-render the
+ * drawn side's content against the interpolated bounds every frame, so a
+ * bounds-fraction letter scales continuously with the flying artwork surface.
+ * A fixed-sp BasicText cannot do that -- it held one endpoint's sp size for
+ * the whole flight and popped to the other endpoint's size the instant a
+ * flight started or settled (the letter visibly jumping while its surface
+ * flew correctly). The 48sp cap reproduces the compact hero's historic
+ * monogram exactly and stops normal/immersive heroes (much wider than
+ * 120dp) from growing a giant glyph; every surface <= 120dp across renders
+ * at exactly 40% of its own size, so all flight endpoints agree at settle.
+ */
+@Composable
+fun NoAlbumArtLetter(
+    title: String,
+    modifier: Modifier = Modifier,
+    color: Color = FoamTheme.colors.textPrimary
+) {
+    val textMeasurer = rememberTextMeasurer()
+    val baseStyle = FoamTheme.typography.titleLarge
+    val letter = remember(title) { title.take(1).uppercase() }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .drawBehind {
+                val fontSizePx = min(
+                    size.minDimension * NoAlbumArtLetterFraction,
+                    NoAlbumArtLetterMaxSize.toPx()
+                )
+                val layout = textMeasurer.measure(
+                    text = letter,
+                    style = baseStyle.copy(
+                        fontSize = fontSizePx.toSp(),
+                        color = color
+                    ),
+                    maxLines = 1
+                )
+                drawText(
+                    textLayoutResult = layout,
+                    topLeft = Offset(
+                        x = (size.width - layout.size.width) / 2f,
+                        y = (size.height - layout.size.height) / 2f
+                    )
+                )
+            }
+    )
 }
 
 /**

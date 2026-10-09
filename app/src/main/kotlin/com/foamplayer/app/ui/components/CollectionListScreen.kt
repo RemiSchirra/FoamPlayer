@@ -625,7 +625,13 @@ fun CollectionListItem(
     )
 }
 
-/** Artwork content shared by CollectionListItem's row and grid renderings: image, icon or letter fallback. */
+/**
+ * Artwork content shared by CollectionListItem's row and grid renderings:
+ * image, icon or the title's initial. The letter fallback rides
+ * [NoAlbumArtLetter]: a bounds-fraction monogram that scales with the flying
+ * artwork during the shared-element flight into the detail hero instead of
+ * popping between this row's and the hero's fixed sizes.
+ */
 @Composable
 private fun CollectionArtwork(
     title: String,
@@ -661,9 +667,6 @@ private fun CollectionArtwork(
             modifier = Modifier.size(24.dp)
         )
     } else {
-        BasicText(
-            text = title.take(1).uppercase(),
-            style = FoamTheme.typography.titleMedium
-        )
+        NoAlbumArtLetter(title = title)
     }
 }
