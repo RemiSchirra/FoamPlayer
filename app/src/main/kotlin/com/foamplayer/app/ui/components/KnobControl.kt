@@ -20,11 +20,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -45,6 +48,12 @@ private const val ARC_SWEEP_DEG = 270f
  * covered center would make the needle jump erratically. A double tap snaps
  * back to [defaultValue].
  *
+ * The knob also acts as a detent around [defaultValue]: while the finger-tracked
+ * value is within [snapFraction] of the range from the default, the knob sits
+ * exactly on [defaultValue] and a haptic tick is played when entering that zone.
+ * The finger-tracked value is kept separately from the displayed one, so the
+ * detent never desyncs the needle from the finger once it leaves the zone.
+ *
  * Every rotation step is committed straight through [onValueChange] so the knob
  * and the DSP engine update in realtime while dragging; persistence is debounced
  * engine-side, so a drag cannot flood DataStore. [sensitivity] scales the
@@ -62,7 +71,9 @@ fun KnobControl(
     minValue: Float = -1f,
     maxValue: Float = 1f,
     defaultValue: Float = 0f,
-    sensitivity: Float = 1f
+    sensitivity: Float = 1f,
+    /** Fraction of the range around [defaultValue] where the knob snaps to it. 0f disables snapping. */
+    snapFraction: Float = 0.04f
 ) {
     // Manual drag tracking: detectDragGestures exposes no interaction source, so
     // the dragged state flips on gesture start/end to drive the label readout.
@@ -73,6 +84,13 @@ fun KnobControl(
     // always picked up; shown only while dragging, then the hoisted value —
     // kept current by the realtime commits below — takes over again.
     var dragValue by remember { mutableFloatStateOf(value) }
+
+    // Finger-tracked value, never snapped. dragValue (displayed + committed) is
+    // derived from it, so the default-value detent doesn't desync the needle
+    // from the finger's rotation.
+    var rawValue by remember { mutableFloatStateOf(value) }
+
+    val haptic = LocalHapticFeedback.current
 
     // pointerInput survives recomposition, so the gesture lambdas must read the
     // value and callback through these to never act on stale captures.
@@ -96,7 +114,7 @@ fun KnobControl(
             modifier = Modifier
                 .padding(top = 4.dp)
                 .size(size)
-                .pointerInput(minValue, maxValue, sensitivity) {
+                .pointerInput(minValue, maxValue, sensitivity, defaultValue, snapFraction) {
                     // PointerInputScope.size in px; the Dp `size` param is shadowed.
                     val center = Offset(this.size.width / 2f, this.size.height / 2f)
                     // Touches closer than this to the center are ignored: the
@@ -104,11 +122,19 @@ fun KnobControl(
                     // center would make the needle jump erratically.
                     val deadZoneRadius = minOf(this.size.width, this.size.height) * 0.2f
                     val range = maxValue - minValue
+                    val snapRange = range * snapFraction
+                    // Whether the finger-tracked value was inside the snap zone on
+                    // the previous step, so the haptic tick fires only on entry.
+                    var wasSnapped = false
 
                     detectDragGestures(
                         onDragStart = {
                             isDragging = true
-                            dragValue = latestValue.coerceIn(minValue, maxValue)
+                            rawValue = latestValue.coerceIn(minValue, maxValue)
+                            dragValue = rawValue
+                            // Starting on the default must not buzz on the first move.
+                            wasSnapped = snapRange > 0f &&
+                                    abs(rawValue - defaultValue) <= snapRange
                         },
                         onDrag = { change, _ ->
                             change.consume()
@@ -120,8 +146,21 @@ fun KnobControl(
                             )
                             if (rotation != null && range > 0f) {
                                 val delta = rotation / ARC_SWEEP_DEG * range * sensitivity
-                                dragValue = (dragValue + delta).coerceIn(minValue, maxValue)
-                                latestOnValueChange(dragValue)
+                                rawValue = (rawValue + delta).coerceIn(minValue, maxValue)
+
+                                val inSnapZone = snapRange > 0f &&
+                                        abs(rawValue - defaultValue) <= snapRange
+                                if (inSnapZone && !wasSnapped) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                                wasSnapped = inSnapZone
+
+                                val newValue = if (inSnapZone) defaultValue else rawValue
+                                // Skip redundant commits while parked on the detent.
+                                if (newValue != dragValue) {
+                                    dragValue = newValue
+                                    latestOnValueChange(newValue)
+                                }
                             }
                         },
                         onDragEnd = { isDragging = false },
@@ -131,7 +170,9 @@ fun KnobControl(
                 .pointerInput(minValue, maxValue, defaultValue) {
                     detectTapGestures(
                         onDoubleTap = {
+                            rawValue = defaultValue
                             dragValue = defaultValue
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             latestOnValueChange(defaultValue)
                         }
                     )
@@ -153,7 +194,7 @@ fun KnobControl(
             )
 
             val fraction = (((if (isDragging) dragValue else value) - minValue) /
-                (maxValue - minValue)).coerceIn(0f, 1f)
+                    (maxValue - minValue)).coerceIn(0f, 1f)
 
             drawArc(
                 color = accent,
