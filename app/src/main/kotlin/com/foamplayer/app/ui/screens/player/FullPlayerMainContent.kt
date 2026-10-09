@@ -34,6 +34,7 @@ import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -545,10 +546,12 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    TrackScoreHeart(
-                        score = scoreOverrides[track.id] ?: track.score,
-                        onSetScore = { value -> onSetScore(track.id, value) }
-                    )
+                    key(track.id) {
+                        TrackScoreHeart(
+                            score = scoreOverrides[track.id] ?: track.score,
+                            onSetScore = { value -> onSetScore(track.id, value) }
+                        )
+                    }
                     TrackMoreButton(track = track, refresh = viewModel::freshTrack)
                 }
             }
