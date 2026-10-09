@@ -43,10 +43,10 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -79,13 +79,13 @@ private val NavBarShadowRadius = 6.dp
 private const val NavBarShadowStrength = 0.35f
 
 /**
- * Slide animation used when nav-bar items change slot (reorder / add / remove
- * from the navigation-bar settings).
+ * Shared 250ms tween for all nav-bar slot motion: item fade/scale on enable/disable,
+ * slot-center slides on reorder, and the floating pill's hugging width bounds.
  */
-private val NavBarSlotAnimation = tween<Dp>(durationMillis = NavBarSlotAnimMillis, easing = FastOutSlowInEasing)
+private val NavBarSlotAnimation = tween<Float>(durationMillis = NavBarSlotAnimMillis, easing = FastOutSlowInEasing)
 
-/** Fade/scale animation played when a nav-bar item is enabled or disabled. */
-private val NavBarSlotFadeAnimation = tween<Float>(durationMillis = NavBarSlotAnimMillis, easing = FastOutSlowInEasing)
+/** The [NavBarSlotAnimation] timing for Dp values (the floating pill's width). */
+private val NavBarSlotDpAnimation = tween<Dp>(durationMillis = NavBarSlotAnimMillis, easing = FastOutSlowInEasing)
 
 /**
  * Bottom strip of the screen -- nav-bar zone plus floating mini player card, system
@@ -234,7 +234,7 @@ object NavBarDimens {
      */
     val ItemHitTargetSize = 48.dp
 
-    /** Padding around [ItemIconSize] that produces [ItemHitTargetSize]. */
+    /** Padding around [ItemIconSize] that produces [ItemHitTargetPadding]. */
     val ItemHitTargetPadding = (ItemHitTargetSize - ItemIconSize) / 2
 
     val RowHorizontalPadding = 8.dp
@@ -532,10 +532,16 @@ private fun isScreenSelected(currentRoute: String?, isPlayerOpen: Boolean, scree
  *   while the other items slide closed.
  * - **Reorder**: enabled items slide to their new slots.
  *
- * Icons are placed at an animated *center* offset with a fixed-width box, so a
- * slot-count change re-targets the centers smoothly instead of resizing the boxes
- * (which would teleport every icon by half the slot-width delta).
- * Disabled items are not clickable.
+ * Items are placed at an animated *center fraction* of the row -- a Float, not a
+ * Dp -- with the fixed-width box at `x = fraction * rowWidth - itemWidth / 2`.
+ * Animating the fraction instead of an absolute offset keeps every icon GLUED to
+ * the row's live width: the floating pill's width moves every frame while the
+ * extra row expands (and while it re-hugs its items after a settings toggle), and
+ * an animated Dp would chase that per-frame-moving target with its own tween,
+ * visibly lagging behind the surface. With a stable fraction the position is a
+ * pure function of the current width, so width-driven motion is tracked exactly,
+ * while discrete slot changes still slide through the fraction's own
+ * [NavBarSlotAnimation]. Disabled items are not clickable.
  */
 @Composable
 private fun NavBarSlotRow(
@@ -547,7 +553,7 @@ private fun NavBarSlotRow(
 ) {
     BoxWithConstraints(modifier = modifier) {
         val enabledList = order.filter { it in enabledItems }
-        val slotWidth = if (enabledList.isEmpty()) maxWidth else maxWidth / enabledList.size
+        val slotCount = enabledList.size
 
         order.forEach { item ->
             key(item) {
@@ -558,27 +564,27 @@ private fun NavBarSlotRow(
                 // enter/exit fade+scale runs the same way.
                 val visibility by animateFloatAsState(
                     targetValue = if (isEnabled) 1f else 0f,
-                    animationSpec = NavBarSlotFadeAnimation,
+                    animationSpec = NavBarSlotAnimation,
                     label = "navSlotVisibility_${item.name}"
                 )
 
-                // Frozen position for disabled items (invisible while they fade out).
-                val lastX = remember { mutableStateOf(0.dp) }
-                val x: Dp = if (isEnabled && slotIndex >= 0) {
-                    // key(isEnabled) restarts the position state on (re-)enter, so the
+                // Frozen fraction for disabled items (invisible while they fade out).
+                val lastFraction = remember { mutableStateOf(0f) }
+                val centerFraction: Float = if (isEnabled && slotIndex >= 0) {
+                    // key(isEnabled) restarts the fraction state on (re-)enter, so the
                     // item appears at its slot instead of sliding in from an old spot;
-                    // while it stays enabled, layout changes slide it around.
+                    // while it stays enabled, slot changes slide it around.
                     key(isEnabled) {
-                        val animatedX by animateDpAsState(
-                            targetValue = slotWidth * (slotIndex + 0.5f) - itemWidth / 2,
+                        val animatedFraction by animateFloatAsState(
+                            targetValue = (slotIndex + 0.5f) / slotCount,
                             animationSpec = NavBarSlotAnimation,
-                            label = "navSlotX_${item.name}"
+                            label = "navSlotFraction_${item.name}"
                         )
-                        SideEffect { lastX.value = animatedX }
-                        animatedX
+                        SideEffect { lastFraction.value = animatedFraction }
+                        animatedFraction
                     }
                 } else {
-                    lastX.value
+                    lastFraction.value
                 }
 
                 Box(
@@ -586,7 +592,7 @@ private fun NavBarSlotRow(
                         // offset OUTSIDE graphicsLayer: the layer's transform origin
                         // (its center) must be the icon's own center, otherwise every
                         // item but the first scales around the row's left edge.
-                        .offset(x = x)
+                        .offset(x = maxWidth * centerFraction - itemWidth / 2)
                         .graphicsLayer {
                             alpha = visibility
                             val scale = 0.4f + 0.6f * visibility
@@ -863,7 +869,18 @@ fun FoamNavigationBar(
 }
 
 /**
- * Floating navigation bar
+ * Floating navigation bar.
+ *
+ * In the standalone floating mode (not [attachedToMiniPlayer]) the pill HUGS its
+ * items instead of stretching across the screen: every enabled item contributes one
+ * [NavBarDimens.ItemHitTargetSize] slot plus the rows' shared horizontal padding, so
+ * the icons stay packed and the pill shrinks around them rather than spacing them
+ * out. While the extra row expands, the width interpolates to the LARGER row's width
+ * in lock-step with the row's own growth ([expandFraction] drives both), so a busier
+ * second row widens the pill smoothly -- and a roomier one doesn't shrink it.
+ *
+ * ATTACHED keeps the full-width pill: its drawn surface extension doubles as the
+ * mini player card's container and must keep spanning the card.
  */
 @Composable
 internal fun FloatingNavigationBar(
@@ -905,11 +922,50 @@ internal fun FloatingNavigationBar(
 
     // Fixed collapsed footprint (pill + its margins): the content above never
     // resizes when the extra row folds. The pill grows upwards as an overlay.
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(NavBarDimens.FloatingRowHeight + NavBarDimens.FloatingBarMargin * 2)
     ) {
+        // Widest the pill's drawn surface may get: the zone minus the pill's own
+        // outer horizontal margins. Rows denser than this compress their slots
+        // instead of pushing the pill past the screen edges.
+        val maxSurfaceWidth = maxWidth - NavBarDimens.FloatingBarMargin * 2
+
+        // Standalone floating pill: wrap the items instead of stretching across the
+        // screen. One [NavBarDimens.ItemHitTargetSize] slot per enabled item plus the
+        // rows' shared horizontal padding, sized for the LARGER of the two rows. Both
+        // bounds animate with the shared slot timing (toggling items in the settings
+        // never snaps the pill), and the collapsed->expanded interpolation rides
+        // [expandFraction], so the width grows exactly in step with the extra row it
+        // makes room for -- wider only when the second row holds more items than the
+        // first.
+        val pillSurfaceWidth: Dp? = if (!attachedToMiniPlayer) {
+            val effectivePrimaryEnabled =
+                if (secondaryEnabled.isNotEmpty()) primaryEnabled + NavBarItem.MORE else primaryEnabled
+            val primaryCount = primaryItems.count { it in effectivePrimaryEnabled }.coerceAtLeast(1)
+            val secondaryCount = secondaryItems.count { it in secondaryEnabled }
+
+            fun rowWidth(itemCount: Int): Dp =
+                NavBarDimens.ItemHitTargetSize * itemCount +
+                        NavBarDimens.RowHorizontalPadding * 2
+
+            val collapsedWidth by animateDpAsState(
+                targetValue = rowWidth(primaryCount),
+                animationSpec = NavBarSlotDpAnimation,
+                label = "NavBarPillCollapsedWidth"
+            )
+            val expandedWidth by animateDpAsState(
+                targetValue = rowWidth(maxOf(primaryCount, secondaryCount)),
+                animationSpec = NavBarSlotDpAnimation,
+                label = "NavBarPillExpandedWidth"
+            )
+            (collapsedWidth + (expandedWidth - collapsedWidth) * expandFraction.coerceIn(0f, 1f))
+                .coerceAtMost(maxSurfaceWidth)
+        } else {
+            null
+        }
+
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -917,6 +973,9 @@ internal fun FloatingNavigationBar(
                     start = NavBarDimens.FloatingBarMargin,
                     end = NavBarDimens.FloatingBarMargin,
                     bottom = NavBarDimens.FloatingBarMargin
+                )
+                .then(
+                    pillSurfaceWidth?.let { Modifier.width(it) } ?: Modifier
                 )
                 .requiredHeight(
                     NavBarDimens.FloatingRowHeight +
