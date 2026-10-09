@@ -2,7 +2,9 @@ package com.foamplayer.app.ui.screens.settings
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +25,9 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.Switch
 import androidx.compose.material.SwitchDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -98,12 +103,31 @@ fun LyricsSettingsScreen(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
                     .background(FoamTheme.colors.surface)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = { showProvidersModal = true }
+                    )
+                    .padding(FoamDimens.paddingMedium)
             ) {
-                FoamNavigationButton(
-                    title = stringResource(R.string.lyrics_providers_title),
-                    description = stringResource(R.string.lyrics_providers_desc),
-                    onClick = { showProvidersModal = true }
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        BasicText(
+                            text = stringResource(R.string.lyrics_providers_title),
+                            style = FoamTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
+                        BasicText(
+                            text = stringResource(R.string.lyrics_providers_desc),
+                            style = FoamTheme.typography.body
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Rounded.ExpandMore,
+                        contentDescription = null,
+                        tint = FoamTheme.colors.textSecondary
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
