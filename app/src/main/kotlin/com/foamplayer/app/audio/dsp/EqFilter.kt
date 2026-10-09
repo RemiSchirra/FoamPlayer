@@ -189,34 +189,39 @@ object BiquadDesigner {
         return normalize(b0, b1, b2, a0, a1, a2)
     }
 
-    /** First-order low pass with the -3 dB point at [frequencyHz]. */
+    /**
+     * First-order low pass with the -3 dB point at [frequencyHz], via the
+     * bilinear transform of H(s) = 1 / (1 + s/wc): the exact discrete
+     * equivalent, 0 dB at DC and -3 dB at the cutoff.
+     */
     fun firstOrderLowPass(sampleRate: Double, frequencyHz: Double): BiquadCoefficients {
         if (!valid(sampleRate, frequencyHz)) return BiquadCoefficients.IDENTITY
         val w0 = 2.0 * PI * frequencyHz / sampleRate
-        val cosW0 = cos(w0)
         val tanHalf = kotlin.math.tan(w0 / 2.0)
         val denom = 1.0 + tanHalf
 
         val b0 = tanHalf / denom
         val b1 = tanHalf / denom
         val b2 = 0.0
-        val a1 = (cosW0 - 1.0) / denom
+        val a1 = (tanHalf - 1.0) / denom
         val a2 = 0.0
         return BiquadCoefficients(b0, b1, b2, a1, a2)
     }
 
-    /** First-order high pass with the -3 dB point at [frequencyHz]. */
+    /**
+     * First-order high pass with the -3 dB point at [frequencyHz], the mirror
+     * of [firstOrderLowPass]: 0 dB at Nyquist, blocks DC.
+     */
     fun firstOrderHighPass(sampleRate: Double, frequencyHz: Double): BiquadCoefficients {
         if (!valid(sampleRate, frequencyHz)) return BiquadCoefficients.IDENTITY
         val w0 = 2.0 * PI * frequencyHz / sampleRate
-        val cosW0 = cos(w0)
         val tanHalf = kotlin.math.tan(w0 / 2.0)
         val denom = 1.0 + tanHalf
 
         val b0 = 1.0 / denom
         val b1 = -1.0 / denom
         val b2 = 0.0
-        val a1 = (cosW0 - 1.0) / denom
+        val a1 = (tanHalf - 1.0) / denom
         val a2 = 0.0
         return BiquadCoefficients(b0, b1, b2, a1, a2)
     }

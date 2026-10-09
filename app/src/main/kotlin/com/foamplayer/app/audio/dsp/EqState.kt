@@ -73,7 +73,7 @@ data class GraphicEqSettings(
          */
         fun bandQ(count: Int): Double {
             val n = count.coerceIn(MIN_BAND_COUNT, MAX_BAND_COUNT)
-            return 1.41 * (DEFAULT_BAND_COUNT.toDouble() / n).pow(0.32)
+            return 1.41 * (n.toDouble() / DEFAULT_BAND_COUNT).pow(0.32)
         }
     }
 }

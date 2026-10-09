@@ -332,6 +332,17 @@ class DspMathTest {
                 autoHeadroom = false
             )
         )
+        // Warm the graph to steady state before asserting, with the SAME
+        // channel count as the measured buffer (a channel change rebuilds the
+        // biquad states and restarts the transient). A 1.5 DC step into 21
+        // cascaded peaking sections rings for ~1000+ samples (band-0 time
+        // constant: tau = 2Q/w0 at 20 Hz ~ 22 ms ~ 1070 samples at 48 kHz),
+        // and the limiter's 0.4 s release keeps gain reduction latched far
+        // longer than one 256-frame buffer. Asserting on a cold graph measures
+        // that transient, not the anti-clip shoulder under test.
+        val warm = FloatArray(24_000 * 2) { 1.5f } // 0.5 s of 2ch at 48 kHz
+        graph.process(warm, 24_000, 2, passthrough = false)
+
         // Peaks a boost pushed past full scale: shaped into the shoulder just
         // under the ceiling — no flat-tops, no crackle.
         val hot = FloatArray(256 * 2) { 1.5f }

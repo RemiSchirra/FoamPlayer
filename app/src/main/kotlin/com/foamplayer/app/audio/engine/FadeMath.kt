@@ -12,17 +12,19 @@ object FadeMath {
 
     /**
      * Gain of the outgoing stream at crossfade progress [t] in [0, 1]:
-     * an equal-power cosine curve, 1 -> 0.
+     * an equal-power cosine curve, 1 -> 0. Clamped to [0, 1] because Float
+     * cannot represent pi/2 exactly (cos of the nearest Float is a hair
+     * below zero), and a negative player volume is meaningless.
      */
     fun fadeOutGain(t: Float): Float =
-        cos(t.coerceIn(0f, 1f) * (PI.toFloat() / 2f))
+        cos(t.coerceIn(0f, 1f) * (PI.toFloat() / 2f)).coerceIn(0f, 1f)
 
     /**
      * Gain of the incoming stream at crossfade progress [t] in [0, 1]:
-     * an equal-power sine curve, 0 -> 1.
+     * an equal-power sine curve, 0 -> 1, clamped to [0, 1] like [fadeOutGain].
      */
     fun fadeInGain(t: Float): Float =
-        sin(t.coerceIn(0f, 1f) * (PI.toFloat() / 2f))
+        sin(t.coerceIn(0f, 1f) * (PI.toFloat() / 2f)).coerceIn(0f, 1f)
 
     /**
      * Combined loudness of an ideal equal-power crossfade at progress [t]:
@@ -38,10 +40,11 @@ object FadeMath {
     /**
      * Playback time that must remain before a track's natural end for the
      * crossfade to the next track to START: the user's normal fade, clamped
-     * to half the track so short tracks fade over at most half of themselves.
+     * to half the track (odd durations round up to the next whole millisecond)
+     * so short tracks fade over at most half of themselves.
      */
     fun crossfadeStartThresholdMs(normalFadeMs: Long, trackDurationMs: Long): Long =
-        if (trackDurationMs <= 0L) 0L else normalFadeMs.coerceAtMost(trackDurationMs / 2)
+        if (trackDurationMs <= 0L) 0L else normalFadeMs.coerceAtMost((trackDurationMs + 1) / 2)
 
     /**
      * Whether the auto-crossfade should fire right now, given the track's
@@ -57,9 +60,11 @@ object FadeMath {
 
     /**
      * Actual fade length used for a transition: the user's setting clamped to
-     * half the track, so a 40 s track fades for at most 20 s and a 4 s track
-     * for at most 2 s.
+     * half the track (odd durations round up, exactly like
+     * [crossfadeStartThresholdMs] so a triggered fade always ends at the
+     * track's natural end), so a 40 s track fades for at most 20 s and a 4 s
+     * track for at most 2 s.
      */
     fun clampedFadeDurationMs(normalFadeMs: Long, trackDurationMs: Long): Long =
-        if (trackDurationMs <= 0L) 0L else normalFadeMs.coerceAtMost(trackDurationMs / 2)
+        if (trackDurationMs <= 0L) 0L else normalFadeMs.coerceAtMost((trackDurationMs + 1) / 2)
 }
