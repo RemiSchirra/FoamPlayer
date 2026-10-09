@@ -656,13 +656,13 @@ private fun FoamNavigationItems(
                 contentDescription = screen.title,
                 selected = selected,
                 enabled = itemEnabled,
-                onLongClick = if (isSearch) {
-                    { onNavigate(screen.route) }
-                } else {
-                    null
+                onLongClick = {
+                    if (isSearch)
+                        searchFocusRequest.request()
+                    onNavigate(screen.route)
+
                 },
                 onClick = {
-                    if (isSearch) searchFocusRequest.request()
                     onNavigate(screen.route)
                 }
             )
