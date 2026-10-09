@@ -240,6 +240,12 @@ class AudioEngine @Inject constructor(
         // seek) and re-anchors immediately instead of crawling across it.
         private const val POSITION_SNAP_MS = 120.0
         private const val POSITION_ERROR_SLEW = 0.25
+        // Max wait for a fade's incoming stream clock to start moving after it reports
+        // isPlaying, before the tracker resumes dead-reckoning on its own.
+        private const val SETTLE_TIMEOUT_MS = 300L
+        // Largest backward correction (ms) the published position absorbs by holding
+        // still instead of stepping back.
+        private const val MONOTONIC_HOLD_MAX_MS = 60L
         // Forward position jumps larger than this are seeks/jumps (or frames
         // missed while the process was frozen), not played audio: they don't
         // count toward the listen threshold.
@@ -1444,10 +1450,9 @@ class AudioEngine @Inject constructor(
         if (fadeEngine.quickFadeEnabled && player.isPlaying && tailRoom) {
             // A same-track crossfade smooths the audio underneath the jump. While
             // the freshly built secondary primes, Media3 reports the PROSPECTIVE
-            // position (the seek target), so the tracker re-anchors on the target
-            // and keeps dead-reckoning from it — the fill animates from the new
-            // position through the priming window, and the slew re-converges the
-            // moment the secondary renders. No extra state needed here.
+            // position (the seek target); the progress tracker holds the published
+            // position there until the secondary actually renders, then resumes
+            // from it. No extra state needed here.
             if (fadeEngine.startCrossfade(
                     _playbackState.value.queueIndex,
                     positionMs,
@@ -1818,12 +1823,29 @@ class AudioEngine @Inject constructor(
             var lastSampleMs = -1L
             var anchorMs = 0.0
             var anchorNanos = 0L
+            var wasPriming = false
+            // Non-zero while waiting for the incoming stream's clock to really start moving.
+            var settlingSinceNanos = 0L
             while (true) {
                 // Before the fade's logical switch the outgoing player is shown;
                 // after it, the incoming one — the UI ticks through the whole fade.
                 val displayPlayer = fadeEngine.displayPlayer ?: player
                 val sampleMs = displayPlayer.currentPosition.coerceAtLeast(0L)
                 val audible = displayPlayer.isPlaying || fadeEngine.isFading
+                // The fade's incoming player is "priming" from the logical switch until it
+                // actually renders audio: it reports the PROSPECTIVE position (the seek
+                // target / 0) and that clock does NOT advance, because the stream isn't
+                // playing yet. Projecting forward from it makes the published position run
+                // ahead of what will really be heard; when the secondary starts, its first
+                // real samples sit behind the projection and the tracker pulls the clock
+                // back (snap or slew) — the "plays ~0.1s then drifts back" glitch after a
+                // quick-fade seek. So hold the published position at the target until the
+                // incoming player is really playing.
+                val priming = fadeEngine.displayPlayer != null && !displayPlayer.isPlaying
+                // True on the ticks where the published position may legitimately step
+                // backward (seek, track change, new anchor). Everywhere else a small
+                // correction must never move it back: see the monotonic guard below.
+                var allowBackward = false
 
                 // Settled pause: nothing is audible anymore and the clock has stopped
                 // moving — the only state where the position can change without frames
@@ -1844,11 +1866,55 @@ class AudioEngine @Inject constructor(
                     anchorMs = sampleMs.toDouble()
                     anchorNanos = 0L
                     lastSampleMs = sampleMs
+                    settlingSinceNanos = 0L
                     delay(PAUSED_POLL_INTERVAL_MS)
                     continue
                 }
 
-                if (sampleMs != lastSampleMs) {
+                if (priming) {
+                    // Hold at the incoming stream's start position (no dead-reckoning).
+                    allowBackward = true
+                    anchorMs = sampleMs.toDouble()
+                    anchorNanos = 0L
+                    lastSampleMs = sampleMs
+                    wasPriming = true
+                } else if (wasPriming) {
+                    // isPlaying just flipped true, but that only means READY + playWhenReady:
+                    // the audio sink needs a little longer before sound (and the position
+                    // clock) really starts. Keep holding until the clock actually moves —
+                    // dead-reckoning from this instant would run ahead of the audio by the
+                    // sink's startup latency and be pulled back afterwards (the small, rare
+                    // drift).
+                    wasPriming = false
+                    allowBackward = true
+                    settlingSinceNanos = System.nanoTime()
+                    anchorMs = sampleMs.toDouble()
+                    anchorNanos = 0L
+                    lastSampleMs = sampleMs
+                } else if (settlingSinceNanos != 0L) {
+                    if (sampleMs != lastSampleMs) {
+                        val jumpMs = abs(sampleMs - anchorMs)
+                        anchorMs = sampleMs.toDouble()
+                        lastSampleMs = sampleMs
+                        if (jumpMs > POSITION_SNAP_MS) {
+                            // A new discontinuity (another seek while still waiting): re-anchor
+                            // on it and keep waiting for the clock to really start.
+                            allowBackward = true
+                            anchorNanos = 0L
+                            settlingSinceNanos = System.nanoTime()
+                        } else {
+                            // First real movement: anchor exactly on it (no slew) and resume.
+                            anchorNanos = System.nanoTime()
+                            settlingSinceNanos = 0L
+                        }
+                    } else if ((System.nanoTime() - settlingSinceNanos) / 1_000_000L >
+                        SETTLE_TIMEOUT_MS
+                    ) {
+                        // Clock never moved (very slow start): stop waiting, resume from the anchor.
+                        anchorNanos = System.nanoTime()
+                        settlingSinceNanos = 0L
+                    }
+                } else if (sampleMs != lastSampleMs) {
                     // Fresh engine sample. Re-anchor gradually: the ExoPlayer clock
                     // quantizes (AudioTrack timestamps step ~16-30ms) and can hold a
                     // few frames while a crossfade secondary primes, so re-anchoring
@@ -1864,36 +1930,62 @@ class AudioEngine @Inject constructor(
                     val elapsedMs =
                         if (anchorNanos == 0L) 0.0 else (System.nanoTime() - anchorNanos) / 1_000_000.0
                     val errorMs = sampleMs - (anchorMs + elapsedMs)
+                    val snapped = abs(errorMs) > POSITION_SNAP_MS
+                    if (snapped) allowBackward = true
                     anchorMs =
-                        if (abs(errorMs) > POSITION_SNAP_MS) {
+                        if (snapped) {
                             sampleMs.toDouble()
                         } else {
                             anchorMs + elapsedMs + errorMs * POSITION_ERROR_SLEW
                         }
-                    anchorNanos = System.nanoTime()
+                    if (snapped && audible) {
+                        // Seek / track change / external seek while playing: the player's
+                        // clock sits at the jump target until the stream has been flushed,
+                        // re-buffered and the audio sink restarted — a window that can be
+                        // shorter than a frame or longer than 100 ms. Dead-reckoning through
+                        // it runs ahead of the audio and gets pulled back afterwards, so hold
+                        // at the target until the clock really moves (see settling below).
+                        anchorNanos = 0L
+                        settlingSinceNanos = System.nanoTime()
+                    } else {
+                        anchorNanos = System.nanoTime()
+                    }
                     lastSampleMs = sampleMs
                 } else if (!audible) {
                     // Not audible but the sample moved since the last pause frame:
                     // external seek while paused — the raw clock is the only truth.
+                    allowBackward = true
                     anchorMs = sampleMs.toDouble()
                     anchorNanos = 0L
                     lastSampleMs = sampleMs
                 }
-                // Audible with a frozen sample (quantization gap, or a crossfade
-                // secondary priming after a seek — Media3 reports the PROSPECTIVE
-                // position there): keep dead-reckoning from the anchor with NO
-                // frame budget. While anything is audible the clock is genuinely
-                // advancing; the projection from the target IS where the incoming
-                // stream will be, so the fill animates from the new position
-                // through the whole priming window, and the slew re-converges the
-                // moment fresh samples resume.
+                // Audible with a frozen sample (quantization gap while really playing):
+                // keep dead-reckoning from the anchor with NO frame budget. A priming
+                // crossfade secondary is handled above and does NOT dead-reckon: its
+                // clock is frozen at the target until it renders.
 
-                val projectedMs =
+                val rawProjectedMs =
                     (if (anchorNanos == 0L) {
                         anchorMs
                     } else {
                         anchorMs + (System.nanoTime() - anchorNanos) / 1_000_000.0
                     }).roundToLong().coerceAtLeast(0L)
+                // Monotonic guard. Absorbing a fresh sample's residual error (quantized
+                // AudioTrack timestamps, a small clock correction when the sink starts)
+                // can put the projection a few ms BEHIND what was already published; the
+                // fill / focus line then steps back and runs forward again — the
+                // "backward then forward" flicker. For small deficits hold the published
+                // value instead: the clock simply pauses until the projection catches up.
+                // Real discontinuities (allowBackward) and large gaps still go back.
+                val deficitMs = lastPublishedMs - rawProjectedMs
+                val projectedMs =
+                    if (!allowBackward && lastPublishedMs != Long.MIN_VALUE &&
+                        deficitMs in 1..MONOTONIC_HOLD_MAX_MS
+                    ) {
+                        lastPublishedMs
+                    } else {
+                        rawProjectedMs
+                    }
                 if (projectedMs != lastPublishedMs) {
                     lastPublishedMs = projectedMs
                     _positionMs.value = projectedMs
