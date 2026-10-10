@@ -39,7 +39,7 @@ val DarkFoamColors = FoamColors(
     bitPerfectActive = Color(0xFF00E676),
     bitPerfectInactive = Color(0xFFFFB300),
     textPrimary = Color(0xFFE0E0E0),
-    textSecondary = Color(0xFF9E9E9E),
+    textSecondary = Color(0x99FFFFFF),
     borderOverlay = Color(0xFF333333)
 )
 
@@ -50,7 +50,7 @@ val LightFoamColors = FoamColors(
     bitPerfectActive = Color(0xFF00A344),
     bitPerfectInactive = Color(0xFFB26A00),
     textPrimary = Color(0xFF1C1C1C),
-    textSecondary = Color(0xFF6B6B6B),
+    textSecondary = Color(0x99000000),
     borderOverlay = Color(0xFFC9C9C9)
 )
 
