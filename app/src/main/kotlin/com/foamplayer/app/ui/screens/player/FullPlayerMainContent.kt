@@ -803,7 +803,8 @@ internal fun PlaybackProgressSlider(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             ElapsedTimeLabel(
                 durationMs = durationMs,
-                progress = { dragValue ?: seekBarProgress.progress },
+                dragValue = { dragValue },
+                positionMs = { seekBarProgress.positionMs },
                 style = labelStyle
             )
             BasicText(text = TimeUtils.formatDurationCompact(durationMs), style = labelStyle)
@@ -814,20 +815,29 @@ internal fun PlaybackProgressSlider(
 /**
  * Isolated so the per-frame position state is only observed here: [derivedStateOf]
  * re-formats the label only when the displayed second actually changes, so position
- * ticks neither recompose this label nor its siblings. [progress] is the same value
- * the bar renders (drag position while dragging, engine position otherwise), so the
- * label tracks a drag in realtime and only touches the audio engine's position again
- * once the seek commits.
+ * ticks neither recompose this label nor its siblings. [dragValue] is the bar's own
+ * drag position (null while not dragging), so a manual seek drag still previews the
+ * target time in realtime.
+ *
+ * At rest the label reads the ENGINE position ([SeekBarProgressState.positionMs]),
+ * NOT the value the bar renders: with the animated seek bar a track-change swipe
+ * scales the bar's progress down with the pager offset and then tweens/holds it to
+ * 0 -- a visual animation of the bar only. The timer keeps counting the real
+ * playback position through that (and only jumps when the track actually flips),
+ * so it is fed the raw engine position instead of the bar's progress.
  */
 @Composable
 private fun ElapsedTimeLabel(
     durationMs: Long,
-    progress: () -> Float,
+    dragValue: () -> Float?,
+    positionMs: () -> Long,
     style: androidx.compose.ui.text.TextStyle
 ) {
     val elapsedText by remember(durationMs) {
         derivedStateOf {
-            TimeUtils.formatDurationCompact((progress() * durationMs).toLong())
+            val drag = dragValue()
+            val ms = if (drag != null) (drag * durationMs).toLong() else positionMs()
+            TimeUtils.formatDurationCompact(ms)
         }
     }
     BasicText(text = elapsedText, style = style)

@@ -108,8 +108,7 @@ enum class PreviousAction {
  *
  * The blend DRIVER while the finger is down is the host's (FullPlayerScreen derives it
  * from the hero pager's fraction toward [envelopeTargetPage], so the bars follow the
- * swipe 1:1 -- that is the "progressive" behavior of the raw "animate seek bar"
- * setting). At RELEASE the blend is handed over to a tween, the same takeover the
+ * swipe 1:1 -- that is the "progressive" behavior of the raw "animate seek bar" setting). At RELEASE the blend is handed over to a tween, the same takeover the
  * mask's settle performs: committing swipes tween on up to 1 from wherever the
  * fraction left the bars, spring-backs tween back down to 0
  * ([settleSwipeEnvelopeBack]) -- neither terminates instantly, and neither stays
@@ -133,6 +132,9 @@ enum class PreviousAction {
  *  - Pass `liveProgress` in [rememberSeekBarProgressState]: the same 0f..1f
  *    computation you already had.
  *  - Render `seekBarProgress.progress` instead of the old locally-computed value.
+ *  - Anything that must NOT follow the bar's visual animation (the full player's
+ *    elapsed-time label) reads [SeekBarProgressState.positionMs] instead -- the raw
+ *    engine position, untouched by the settle tween and the pager-offset scaling.
  *  - Call [onDragging] from the slider's onValueChange (before forwarding the seek),
  *    [onSeekDragFinished] from the [onSeekBarReleased] modifier (FoamSlider has no
  *    onValueChangeFinished hook, so release is detected separately -- see below),
@@ -206,6 +208,17 @@ class SeekBarProgressState internal constructor(
     /** What the slider should actually render this frame. */
     val progress: Float
         get() = if (overrideActive) overrideAnimatable.value else getLiveProgress()
+
+    /**
+     * The engine position snapshot the live progress is computed from. Consumers that
+     * must NOT follow the bar's visual animation -- the settle tween override, or
+     * animated mode's pager-offset scaling -- read this instead of [progress]: the
+     * full player's elapsed-time label, so the timer keeps ticking the actual
+     * playback position while a track-change swipe recedes the bar and only jumps
+     * when the track actually flips.
+     */
+    val positionMs: Long
+        get() = currentPositionState.value
 
     /**
      * Call this at the top of the slider's onValueChange, before forwarding the new
