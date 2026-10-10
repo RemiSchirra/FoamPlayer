@@ -175,6 +175,15 @@ class PlayerGestureController(
 
         when (direction) {
             GestureDirection.UP -> {
+                if (dismissSetupJob?.isActive == true) {
+                    dismissSetupJob?.cancel()
+                    dismissSetupJob = null
+                    dismissSetupActive = false
+                    dismissSetupPhase = DismissSetupPhase.None
+                    onDismissGestureCancelled?.invoke()
+                }
+                collapsePressPreload()
+
                 val upTarget = if (upTransitionState.currentState != upTransitionState.targetState) {
                     upTransitionState.targetState
                 } else {
@@ -294,6 +303,7 @@ class PlayerGestureController(
      */
     fun onDismissPressStarted() {
         if (onDismissGestureStart == null) return
+        if (upTransitionState.currentState || upTransitionState.targetState) return
         // Only at full rest: a running flight or an already-seeking state must not
         // be touched by a mere press.
         if (!(playerTransitionState.currentState && playerTransitionState.targetState)) return
