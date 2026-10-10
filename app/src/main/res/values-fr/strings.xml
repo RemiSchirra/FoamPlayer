@@ -260,9 +260,6 @@
     <string name="dev_generate_random_data_title">Générer des données aléatoires</string>
     <string name="dev_generate_random_data_message">Des nombres d\'écoutes, dates (3 dernières années) et scores aléatoires seront générés pour chaque morceau, en remplaçant l\'historique d\'écoute actuel.</string>
 
-    <string name="artist_album_separator">%1$s — %2$s</string>
-    <string name="artist_format_separator">%1$s • %2$s</string>
-
     <string name="dynamic_background">Arrière-plan dynamique</string>
     <string name="dynamic_background_desc">Extraire les couleurs de la pochette pour l\'arrière-plan</string>
     <string name="background_mode_custom">Image personnalisée</string>

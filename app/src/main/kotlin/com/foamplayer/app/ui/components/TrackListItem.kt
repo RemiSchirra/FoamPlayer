@@ -240,7 +240,7 @@ fun TrackListItem(
                 artworkModifier = gridArtworkModifier,
                 artworkContent = { TrackGridArtwork(track) },
                 title = track.title,
-                subtitle = "${track.artist} • ${track.album}",
+                subtitle = stringResource(R.string.artist_album_separator, track.artist, track.album),
                 highlightBackground = animatedBackgroundColor,
                 artworkElevation = artworkElevation,
                 titleModifier = Modifier.rowSharedText(
@@ -465,7 +465,7 @@ fun TrackListItem(
                 }
             },
             title = track.title,
-            subtitle = "${track.artist} • ${track.album}",
+            subtitle = stringResource(R.string.artist_album_separator, track.artist, track.album),
             density = density,
             tertiaryText = if (density == MediaDensity.ROW_BIG) {
                 "${TimeUtils.formatDurationCompact(track.duration)} • ${track.format}"

@@ -624,7 +624,7 @@ fun MiniPlayer(
                                     } else Modifier
                                 )
                                 MarqueeText(
-                                    text = "${pageTrack.artist} - ${pageTrack.album}",
+                                    text = stringResource(R.string.artist_album_separator, pageTrack.artist, pageTrack.album),
                                     style = FoamTheme.typography.caption,
                                     mode = marqueeMode,
                                     marqueeEnabled = isSettledCurrentTrackPage,

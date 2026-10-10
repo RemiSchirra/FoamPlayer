@@ -450,7 +450,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                         modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_title_header_${headerTrack.id}"), animatedVisibilityScope = headerVisibilityScope)
                     )
                     MarqueeText(
-                        text = "${headerTrack.artist} - ${headerTrack.album}",
+                        text = stringResource(R.string.artist_album_separator, headerTrack.artist, headerTrack.album),
                         style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary),
                         mode = marqueeMode,
                         modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_artist_header_${headerTrack.id}"), animatedVisibilityScope = headerVisibilityScope)

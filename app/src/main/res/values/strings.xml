@@ -261,8 +261,8 @@
     <string name="dev_generate_random_data_title">Generate random data</string>
     <string name="dev_generate_random_data_message">Random listen counts, dates (last 3 years) and scores will be generated for every track, replacing the current listening history.</string>
 
-    <string name="artist_album_separator">%1$s — %2$s</string>
-    <string name="artist_format_separator">%1$s • %2$s</string>
+    <string name="artist_album_separator" translatable="false">%1$s - %2$s</string>
+    <string name="artist_format_separator" translatable="false">%1$s • %2$s</string>
 
     <string name="dynamic_background">Dynamic Background</string>
     <string name="dynamic_background_desc">Extract colors from track art for background</string>
