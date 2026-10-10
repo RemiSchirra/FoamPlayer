@@ -41,14 +41,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,6 +84,7 @@ import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.settings.BackgroundMode
+import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.ui.modals.CollectionFoamModal
 import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
@@ -196,6 +200,36 @@ private const val BottomChromeNavBarOverlayZIndex = 10f
 private const val BottomChromeMiniPlayerOverlayZIndex = 11f
 
 /**
+ * Live-preview overrides pushed by the background settings screen while it is
+ * open. Every field is null = "use the persisted setting"; the app-wide backdrop
+ * layers ([rememberAnimatedBackground], [StaticBackgroundLayers]) read them
+ * inside their own recompose scopes, so per-frame edits (gradient dots mid-drag,
+ * blur / intensity sliders mid-drag) redraw only the backdrop and never the
+ * navigation tree — the settings themselves stay commit-on-release.
+ *
+ * Cleared when the settings screen leaves composition, handing control back to
+ * the persisted values.
+ */
+@Stable
+class BackgroundSettingsPreviewState {
+    var mode by mutableStateOf<BackgroundMode?>(null)
+    var gradientStops by mutableStateOf<List<GradientStop>?>(null)
+    var backgroundBlur by mutableStateOf<Int?>(null)
+    var appBackgroundIntensity by mutableStateOf<Int?>(null)
+
+    /** Drops every override; the persisted settings drive the layers again. */
+    fun clear() {
+        mode = null
+        gradientStops = null
+        backgroundBlur = null
+        appBackgroundIntensity = null
+    }
+}
+
+/** Provided by [FoamNavHost]; the background settings screen pushes into it. */
+val LocalBackgroundSettingsPreview = staticCompositionLocalOf { BackgroundSettingsPreviewState() }
+
+/**
  * Destination wrapper that applies the status-bar inset INSIDE each destination.
  *
  * The inset used to be applied once, around the whole NavHost. The NavHost's
@@ -220,14 +254,20 @@ private fun NavGraphBuilder.composable(
     // The layer is also flattened offscreen so the NavHost fade applies to the
     // background and the items as ONE bitmap; otherwise each is blended at the
     // fade alpha on its own and the items read as fading in after the background.
+    //
+    // EXCEPTION — the background settings page: it is the one place where the
+    // backdrop layers must stay visible (they ARE the live preview of the
+    // parameters being edited), so it gets no opaque surface; its content
+    // composes straight over whatever the root backdrop draws.
     val isSettings = isSettingsRoute(route)
+    val paintsOpaqueSurface = isSettings && !isBackgroundSettingsRoute(route)
     navComposable(route = route, arguments = arguments) { entry ->
         val contentScope = this
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (isSettings) {
+                    if (paintsOpaqueSurface) {
                         Modifier
                             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                             .background(FoamTheme.colors.background)
@@ -255,6 +295,10 @@ private fun isSharedElementRoute(route: String?): Boolean {
 private fun isSettingsRoute(route: String?): Boolean {
     return route != null && (route == Screen.Settings.route || route.startsWith("settings/"))
 }
+
+/** The one settings page that previews the backdrop layers live. */
+private fun isBackgroundSettingsRoute(route: String?): Boolean =
+    route == Screen.SettingsBackground.route
 
 /** Stats overview and its see-all pages slide like the settings stack. */
 private fun isStatsRoute(route: String?): Boolean =
@@ -296,13 +340,19 @@ private data class ListBackdropArt(val path: String, val isEmbeddedArt: Boolean)
 /**
  * App-wide animated album-art backdrop. Returns a setter
  * (front, back, fraction) whose frames draw without recomposing the caller.
+ *
+ * Blur and app intensity come from the persisted settings, overridden per frame
+ * by [preview] while the background settings screen edits them — the reads
+ * happen inside this function's own recompose scope, so slider drags never
+ * invalidate [FoamNavHost]'s body.
  */
 @Composable
 private fun rememberAnimatedBackground(
     enabled: Boolean,
     initialFrontArtPath: () -> String?,
-    blur: Dp,
-    intensity: Float,
+    persistedBlur: Int,
+    persistedAppIntensity: Int,
+    preview: BackgroundSettingsPreviewState,
     modifier: Modifier = Modifier
 ): (frontArtPath: String?, backArtPath: String?, fraction: Float) -> Unit {
     var frontArtPath by remember { mutableStateOf(initialFrontArtPath()) }
@@ -314,8 +364,8 @@ private fun rememberAnimatedBackground(
             frontArtPath = frontArtPath,
             backArtPath = backArtPath,
             crossfadeFraction = { crossfadeFraction.value },
-            blur = blur,
-            intensity = intensity,
+            blur = (preview.backgroundBlur ?: persistedBlur).dp,
+            intensity = (preview.appBackgroundIntensity ?: persistedAppIntensity) / 100f,
             modifier = modifier,
         )
     }
@@ -326,6 +376,38 @@ private fun rememberAnimatedBackground(
             backArtPath = back
             crossfadeFraction.value = fraction
         }
+    }
+}
+
+/**
+ * The user-configured static backdrop layers (custom blurred image / gradient)
+ * for the non-dynamic modes, with the background settings page's live overrides
+ * applied. Reads [preview] INSIDE this scope so per-frame edits (gradient dots,
+ * sliders) recompose only this layer, never the navigation tree.
+ */
+@Composable
+private fun StaticBackgroundLayers(
+    mode: BackgroundMode,
+    customBackgroundUri: String?,
+    persistedGradientStops: List<GradientStop>,
+    persistedBackgroundBlur: Int,
+    persistedAppIntensity: Int,
+    preview: BackgroundSettingsPreviewState,
+    modifier: Modifier = Modifier
+) {
+    when (mode) {
+        BackgroundMode.CUSTOM -> CustomImageBackground(
+            imageUri = customBackgroundUri,
+            blur = (preview.backgroundBlur ?: persistedBackgroundBlur).dp,
+            intensity = (preview.appBackgroundIntensity ?: persistedAppIntensity) / 100f,
+            modifier = modifier
+        )
+        BackgroundMode.GRADIENT -> GradientBackground(
+            stops = preview.gradientStops ?: persistedGradientStops,
+            intensity = (preview.appBackgroundIntensity ?: persistedAppIntensity) / 100f,
+            modifier = modifier
+        )
+        BackgroundMode.DYNAMIC -> Unit
     }
 }
 
@@ -404,6 +486,11 @@ fun FoamNavHost(
     // tap cancels it, so a stale request can never re-open the keyboard later.
     val searchFocusRequest = remember { SearchFocusRequest() }
 
+    // Live-preview overrides pushed by the background settings screen while it
+    // is open (see [BackgroundSettingsPreviewState]); owned here so the layers
+    // below survive across screen visits and are cleared by the screen itself.
+    val backgroundSettingsPreview = remember { BackgroundSettingsPreviewState() }
+
     // Narrow projections instead of the whole PlaybackState: collecting the full
     // state here would re-run this body on every playback emission.
     val activeCollectionId by playerViewModel.activeCollectionId.collectAsState()
@@ -421,7 +508,10 @@ fun FoamNavHost(
     val scoreOverrides by playerViewModel.scoreOverrides.collectAsState()
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
     val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
-    val backgroundMode = playerSettings.backgroundMode
+    // The preview's mode (last tap on the background settings page) leads the
+    // persisted value by the DataStore round-trip, so the layers switch on the
+    // tap itself. Null = use the persisted mode.
+    val backgroundMode = backgroundSettingsPreview.mode ?: playerSettings.backgroundMode
     val forceDynamicBackgroundInCollections = playerSettings.forceDynamicBackgroundInCollections
     val forceDynamicBackgroundInPlayer = playerSettings.forceDynamicBackgroundInPlayer
     val navigationBarMode = playerSettings.navigationBarMode
@@ -736,13 +826,18 @@ fun FoamNavHost(
             LocalBottomBarClearance provides bottomBarClearance,
             LocalCollectionHeroLayoutLookup provides heroLayoutFor,
             LocalActiveSharedCollection provides activeSharedCollection,
-            LocalSearchFocusRequest provides searchFocusRequest
+            LocalSearchFocusRequest provides searchFocusRequest,
+            LocalBackgroundSettingsPreview provides backgroundSettingsPreview
         ) {
             Box(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
 
+                // Settings pages hide the backdrop layers (they sit on the plain
+                // theme background) — after the nav fade, so the outgoing screen
+                // dissolves over the still-drawn backdrop. The background settings
+                // page is the exception: the layers ARE its live preview.
                 var settingsBackdropHidden by remember { mutableStateOf(isSettingsRoute(currentRoute)) }
                 LaunchedEffect(currentRoute) {
-                    if (isSettingsRoute(currentRoute)) {
+                    if (isSettingsRoute(currentRoute) && !isBackgroundSettingsRoute(currentRoute)) {
                         delay(NavScreenFadeDurationMs.toLong())
                         settingsBackdropHidden = true
                     } else {
@@ -754,43 +849,49 @@ fun FoamNavHost(
                     rememberAnimatedBackground(
                         enabled = true,
                         initialFrontArtPath = { playerViewModel.playbackState.value.currentTrack?.albumArtPath },
-                        blur = playerSettings.backgroundBlur.dp,
-                        intensity = playerSettings.appBackgroundIntensity / 100f,
+                        persistedBlur = playerSettings.backgroundBlur,
+                        persistedAppIntensity = playerSettings.appBackgroundIntensity,
+                        preview = backgroundSettingsPreview,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
                     remember { { _: String?, _: String?, _: Float -> } }
                 }
 
+                // While the background settings page previews the art backdrop, the
+                // current track's art must keep feeding it even with the player
+                // closed — normally only the open player drives this collector and
+                // the visible mini player covers the rest. rememberUpdatedState
+                // keeps the read inside the collector fresh across route changes.
+                val feedArtToBackground by rememberUpdatedState(
+                    playerTransitionState.targetState || isBackgroundSettingsRoute(currentRoute)
+                )
                 LaunchedEffect(onBackgroundTransition) {
                     playerViewModel.currentAlbumArtPath.collect { path ->
-                        if (path != null && playerTransitionState.targetState) {
+                        if (path != null && feedArtToBackground) {
                             onBackgroundTransition(path, null, 0f)
                         }
                     }
                 }
 
                 // The user-configured static layers (custom blurred image / gradient):
-                // same dim as the dynamic art, hidden on settings pages like the art.
+                // same dim as the dynamic art, hidden on settings pages like the art —
+                // EXCEPT the background settings page, where they are the live
+                // preview of the parameters being edited.
                 // They are never suppressed on detail pages: the collection backdrop
                 // below paints over them once opaque, and keeping them composed
                 // underneath makes every fade crossfade over the custom image /
                 // gradient instead of dropping to the bare background color.
                 if (!settingsBackdropHidden && backgroundMode != BackgroundMode.DYNAMIC) {
-                    when (backgroundMode) {
-                        BackgroundMode.CUSTOM -> CustomImageBackground(
-                            imageUri = playerSettings.customBackgroundUri,
-                            blur = playerSettings.backgroundBlur.dp,
-                            intensity = playerSettings.appBackgroundIntensity / 100f,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        BackgroundMode.GRADIENT -> GradientBackground(
-                            stops = playerSettings.gradientStops,
-                            intensity = playerSettings.appBackgroundIntensity / 100f,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        BackgroundMode.DYNAMIC -> Unit
-                    }
+                    StaticBackgroundLayers(
+                        mode = backgroundMode,
+                        customBackgroundUri = playerSettings.customBackgroundUri,
+                        persistedGradientStops = playerSettings.gradientStops,
+                        persistedBackgroundBlur = playerSettings.backgroundBlur,
+                        persistedAppIntensity = playerSettings.appBackgroundIntensity,
+                        preview = backgroundSettingsPreview,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
 
                 // Full-bleed backdrop for the detail list screens (album/playlist/artist),

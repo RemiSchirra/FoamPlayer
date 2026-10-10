@@ -248,17 +248,24 @@ fun SettingsCategoryItem(
     }
 }
 
+/**
+ * The standard settings page header: title, optional back button and trailing
+ * slot, on a band of the plain theme background. [transparent] opts out of the
+ * background band for pages that sit over the root backdrop layers instead
+ * (the background settings screen, whose backdrop is its live preview).
+ */
 @Composable
 fun SettingsHeader(
     title: String,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null
+    trailing: (@Composable () -> Unit)? = null,
+    transparent: Boolean = false
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(FoamTheme.colors.background)
+            .then(if (transparent) Modifier else Modifier.background(FoamTheme.colors.background))
             .padding(vertical = FoamDimens.paddingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {

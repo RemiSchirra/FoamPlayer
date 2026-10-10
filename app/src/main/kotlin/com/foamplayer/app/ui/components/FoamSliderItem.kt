@@ -100,6 +100,11 @@ fun FoamSliderItem(
  * Self-contained variant of [FoamSliderItem] for the commit-on-release settings
  * pattern: the drag value lives in this row's own composition scope, so dragging
  * recomposes only this row instead of the whole screen.
+ *
+ * [onValueChange] observes every drag frame, BEFORE the commit-on-release write:
+ * callers that render a live preview of the value (e.g. the background settings
+ * screen feeding the app-wide backdrop) use it to update the preview without
+ * round-tripping through DataStore on each pointer event.
  */
 @Composable
 fun FoamSliderStateItem(
@@ -111,7 +116,8 @@ fun FoamSliderStateItem(
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     description: String? = null,
     minMaxDisplay: Pair<String, String>? = null,
-    formatValue: (Float) -> String = { it.roundToInt().toString() }
+    formatValue: (Float) -> String = { it.roundToInt().toString() },
+    onValueChange: ((Float) -> Unit)? = null
 ) {
     var localValue by remember { mutableFloatStateOf(initialValue) }
     // Re-sync when the underlying setting changes from elsewhere (e.g. a
@@ -121,7 +127,10 @@ fun FoamSliderStateItem(
     FoamSliderItem(
         title = title,
         value = localValue,
-        onValueChange = { localValue = it },
+        onValueChange = {
+            localValue = it
+            onValueChange?.invoke(it)
+        },
         onValueChangeFinished = { onValueChangeFinished(localValue) },
         valueDisplay = formatValue(localValue),
         modifier = modifier,

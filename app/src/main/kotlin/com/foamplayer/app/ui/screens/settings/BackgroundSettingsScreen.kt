@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -81,6 +82,7 @@ import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.buildGradientImage
 import com.foamplayer.app.ui.modals.DefaultStopPalette
 import com.foamplayer.app.ui.modals.GradientColorPickerModal
+import com.foamplayer.app.ui.navigation.LocalBackgroundSettingsPreview
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -132,14 +134,29 @@ fun BackgroundSettingsScreen(
     val colorMin = stringResource(R.string.dim)
     val colorMax = stringResource(R.string.vivid)
 
+    // Live-preview overrides for the app-wide backdrop layers (owned by the
+    // navigation root, provided through [LocalBackgroundSettingsPreview]): the
+    // screen pushes every parameter it edits into it — mode taps, gradient dots
+    // mid-drag, blur / app-intensity sliders mid-drag — so the backdrop behind
+    // the page reacts in real time, while the persisted settings keep the usual
+    // commit-on-release cadence. Cleared on leave, so every other screen sees
+    // only the persisted values.
+    val backgroundPreview = LocalBackgroundSettingsPreview.current
+    DisposableEffect(Unit) {
+        onDispose { backgroundPreview.clear() }
+    }
+
+    // No opaque root background on this page: it composes straight over the
+    // root backdrop layers, which ARE its live preview of the edited
+    // parameters (the nav wrapper gives only this route a transparent surface).
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
     ) {
         SettingsHeader(
             title = stringResource(R.string.background),
             onBack = onBack,
+            transparent = true,
             modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
         )
 
@@ -178,6 +195,9 @@ fun BackgroundSettingsScreen(
                             isSelected = modeOption == mode,
                             onSelect = {
                                 animateModeChanges = true
+                                // Lead the persisted value by the DataStore
+                                // round-trip: the backdrop switches on the tap.
+                                backgroundPreview.mode = modeOption
                                 viewModel.setBackgroundMode(modeOption)
                             }
                         )
@@ -212,7 +232,10 @@ fun BackgroundSettingsScreen(
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                     GradientEditor(
                         stops = settings.gradientStops,
-                        onChange = viewModel::setGradientStops
+                        onChange = viewModel::setGradientStops,
+                        // Per-frame feed of the dots being dragged, so the root
+                        // gradient backdrop tracks them in real time.
+                        onPreviewStops = { backgroundPreview.gradientStops = it }
                     )
                 }
             }
@@ -310,6 +333,10 @@ fun BackgroundSettingsScreen(
                                 onValueChangeFinished = {
                                     viewModel.setBackgroundBlur(it.roundToInt())
                                 },
+                                // Live preview: blur applies to the backdrop on
+                                // every drag frame; persistence stays
+                                // commit-on-release.
+                                onValueChange = { backgroundPreview.backgroundBlur = it.roundToInt() },
                                 steps = 9,
                                 valueRange = 0f..100f,
                                 formatValue = { "${it.roundToInt()}%" },
@@ -329,6 +356,7 @@ fun BackgroundSettingsScreen(
                         onValueChangeFinished = {
                             viewModel.setAppBackgroundIntensity(it.roundToInt())
                         },
+                        onValueChange = { backgroundPreview.appBackgroundIntensity = it.roundToInt() },
                         steps = 9,
                         valueRange = 0f..100f,
                         formatValue = { "${it.roundToInt()}%" },
@@ -575,11 +603,16 @@ private fun CustomImageSection(
  * written when an edit completes -- drag release, color confirm, add or remove.
  * Persisting per drag frame would round-trip through DataStore on each pointer
  * event, which both lags the dots behind the finger and floods the disk.
+ *
+ * [onPreviewStops] receives the live stop list on every edit frame (drags
+ * included), feeding the root gradient backdrop so it tracks the dots in
+ * real time.
  */
 @Composable
 private fun GradientEditor(
     stops: List<GradientStop>,
-    onChange: (List<GradientStop>) -> Unit
+    onChange: (List<GradientStop>) -> Unit,
+    onPreviewStops: (List<GradientStop>) -> Unit
 ) {
     var localStops by remember { mutableStateOf(stops) }
 
@@ -623,6 +656,7 @@ private fun GradientEditor(
         val newColor = DefaultStopPalette.firstOrNull { it !in usedColors }
             ?: last.argb
         localStops = localStops + GradientStop(newOffset, newColor, newX)
+        onPreviewStops(localStops)
         rowStates = rowStates + StopRowState(animateIn = true)
         onChange(localStops)
     }
@@ -644,6 +678,7 @@ private fun GradientEditor(
             localStops = remaining
             rowStates = rowStates.filterIndexed { i, _ -> i != index }
         }
+        onPreviewStops(localStops)
         onChange(localStops)
     }
 
@@ -656,9 +691,11 @@ private fun GradientEditor(
             GradientPreview(
                 stops = localStops,
                 onDrag = { index, x, y ->
-                    localStops = localStops.mapIndexed { i, s ->
+                    val updated = localStops.mapIndexed { i, s ->
                         if (i == index) s.copy(offset = y, x = x) else s
                     }
+                    localStops = updated
+                    onPreviewStops(updated)
                 },
                 onDragEnd = { onChange(localStops) },
                 modifier = Modifier
@@ -771,6 +808,7 @@ private fun GradientEditor(
                     localStops = localStops.mapIndexed { i, s ->
                         if (i == index) s.copy(argb = argb) else s
                     }
+                    onPreviewStops(localStops)
                     onChange(localStops)
                 }
                 editingStopIndex = null
