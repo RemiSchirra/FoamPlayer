@@ -52,15 +52,15 @@ import kotlin.math.roundToLong
 import kotlin.random.Random
 
 /**
- * Owns the ExoPlayer instance, the queue and playback state. All audio flows
- * through the [DspEngine]'s processor (a byte-for-byte passthrough when the
- * DSP state is neutral, which keeps output bit-perfect).
+ * Owns the ExoPlayer, the queue and the playback state.
  *
- * The player loads a small window of the queue around the current track
- * ([adjustWindow] extends/trims it as playback moves). Crossfades build a
- * secondary player that is promoted here at the swap — see [FadeEngine] — so
- * [player] always points at the audible stream, and [onPlayerSwappedListener]
- * re-binds the MediaSession to it.
+ * Only a window of the queue around the current track is loaded into the player
+ * ([loadedRange]); [adjustWindow] extends and trims it as playback moves. Crossfades run on a
+ * secondary player owned by [FadeEngine] and promoted at the swap, so [player] always
+ * points at the audible stream.
+ *
+ * Audio goes through the [DspEngine] processor, a byte-for-byte passthrough (bit-perfect)
+ * when the DSP state is neutral.
  */
 @Singleton
 @OptIn(UnstableApi::class)
@@ -74,13 +74,12 @@ class AudioEngine @Inject constructor(
     private val fadeEngine: FadeEngine,
     private val queuePersistence: QueuePersistence
 ) {
-    /** The active player; replaced at each crossfade swap. */
+    /** The active player. Replaced at each crossfade swap. */
     val player: ExoPlayer
         get() = activePlayerField
 
     private var activePlayerField: ExoPlayer = buildPlayer()
 
-    /** Builds the primary player with the DSP processor in its audio sink. */
     private fun buildPlayer(): ExoPlayer {
         val renderersFactory = object : DefaultRenderersFactory(context) {
             override fun buildAudioSink(
@@ -90,7 +89,6 @@ class AudioEngine @Inject constructor(
             ): AudioSink? =
                 DefaultAudioSink.Builder(context)
                     .setAudioProcessors(arrayOf(dspEngine.processor))
-                    // Float-capable AudioTrack for float-decoded sources.
                     .setEnableFloatOutput(enableFloatOutput)
                     .build()
         }
@@ -102,158 +100,114 @@ class AudioEngine @Inject constructor(
     private val _playbackState = MutableStateFlow(PlaybackState())
     val playbackState: StateFlow<PlaybackState> = _playbackState
 
-    // Position ticks every frame; kept out of playbackState so its collectors
-    // don't recompose on every tick.
+    /** Playback position, updated every frame. Separate from [playbackState] to avoid recomposing its collectors. */
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs
 
-    // Emitted on explicit seeks only, not frame ticks.
+    /** Emits the new position on explicit seeks and track switches (not on frame ticks). */
     private val _seekEvents = MutableSharedFlow<Long>(
         extraBufferCapacity = 4,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     val seekEvents: SharedFlow<Long> = _seekEvents.asSharedFlow()
 
-    // Invoked after a crossfade promoted a new player (set by PlaybackService).
     private var onPlayerSwappedListener: (() -> Unit)? = null
-
-    // Invoked whenever the player representing "now playing" changes mid-crossfade:
-    // the logical switch hands the session over to the incoming stream at the fade's
-    // switch point (halfway through the automatic crossfade), an abort hands it back
-    // to the outgoing one. Lets the notification switch songs together with the
-    // in-app UI instead of waiting for the swap.
     private var onDisplayPlayerChangedListener: ((Player) -> Unit)? = null
 
-    // Session audio attributes, re-applied (with focus handling) at every swap:
-    // crossfade secondaries are built WITHOUT focus handling.
+    /** Crossfade secondaries are built without focus handling; it is re-applied at each swap. */
     private val mediaAudioAttributes: AudioAttributes = AudioAttributes.Builder()
         .setUsage(C.USAGE_MEDIA)
         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
         .build()
 
-    // DSP mirror of the active player, when it was once a crossfade secondary.
+    /** DSP mirror of the active player when it was promoted from a crossfade secondary. */
     private var activeMirrorField: DspAudioProcessor? = null
 
     private var progressJob: Job? = null
 
-    // Queue indices loaded into the player (player index 0 == loadedRange.first).
-    // Stale while pendingWindowResync is set: don't seek or patch against it.
+    /** Queue indices loaded in the player (player index 0 == `loadedRange.first`). Stale while [pendingWindowResync] is set. */
     private var loadedRange: IntRange = IntRange.EMPTY
 
-    // Set when a queue move invalidated the timeline; rebuild is deferred to the
-    // next skip/transition so it can't race a tap's seek.
+    /** Set when a queue move invalidated the timeline. The rebuild waits for the next skip or transition so it can't race a tap's seek. */
     private var pendingWindowResync: Boolean = false
 
-    // Crossfade secondary's window, committed to loadedRange when the swap promotes it.
+    /** Window of the in-flight crossfade, committed to [loadedRange] at the swap. */
     private var pendingFadeWindowStart: Int? = null
     private var pendingFadeWindowEnd: Int? = null
 
-    // In-flight "jump to a fresh window" job; superseded by newer jumps.
     private var windowJumpJob: Job? = null
 
-    // Generation counter: only the newest window jump may write the timeline.
+    /** Only the newest window jump may write the timeline. */
     private var windowJumpId: Long = 0L
 
-    // Serializes adjustWindow() so rapid skips can't overlap player mutations.
     private val windowAdjustMutex = Mutex()
 
-    // Monotonic allocator for queue entry ids.
     private var nextEntryId: Long = 0L
 
     private fun allocateEntryId(): Long = nextEntryId++
 
-    // Library snapshot used to draw random auxiliary tracks from.
     private var allTracks: List<TrackEntity> = emptyList()
 
-    // True while a refill is running; prevents duplicate appends.
     private var refillScheduled: Boolean = false
 
-    // A track counts as listened once [listenedElapsedMs] — forward playback
-    // accumulated in the progress tracker — reaches listenedThresholdPercent of
-    // its duration. [pendingListenTrackId] marks the current occurrence and is
-    // cleared once counted, so a pause/resume or seek never counts twice.
-    // Driven by the player's POSITION rather than a wall-clock timer: timers
-    // stall in Doze and while the process is frozen, and a quick-fade seek
-    // restarts them — both silently lose listens during background playback.
+    /**
+     * Listen accounting: a track counts as listened once [listenedElapsedMs] (forward playback
+     * accumulated by [tickListenCount]) reaches the configured share of its duration.
+     * [pendingListenTrackId] is cleared once counted, so pauses and seeks never count twice.
+     * It is position-driven rather than timer-driven: timers stall in Doze.
+     */
     private var pendingListenTrackId: Long? = null
     private var listenedElapsedMs: Long = 0L
 
-    // Player position at the previous accumulation tick; -1 until the first
-    // tick of an occurrence (its delta is dropped).
+    /** Position at the previous accumulation tick, -1 until the first tick of an occurrence. */
     private var lastListenedPositionMs: Long = -1L
 
-    // Occurrence state stashed when a crossfade hands counting to the incoming
-    // track, restored if that fade aborts and the outgoing track resumes.
+    /** (trackId, elapsed) of the outgoing occurrence, restored if a crossfade aborts. */
     private var stashedListenOccurrence: Pair<Long, Long>? = null
 
-    // True once THIS process has written a resumption snapshot; guards clear()
-    // so the first (empty-queue) emission on process start never wipes the
-    // snapshot a previous process wrote (it is what a media button resumes from).
+    /** Guards `clear()` so an empty queue at process start never wipes the previous process's resumption snapshot. */
     private var hasSessionSaved: Boolean = false
 
     @Volatile
     private var listenedThresholdPercent: Int = AppSettings.DEFAULT_LISTENED_THRESHOLD_PERCENT
 
-    // Latest settings snapshot, read when evaluating the audio output path.
     @Volatile
     private var latestSettings: AppSettings = AppSettings()
 
-    // Last published AudioOutputInfo, to avoid re-emitting identical values.
     private var lastAudioOutputInfo: AudioOutputInfo? = null
 
-    // Consecutive failed loads; past the cap, playback stops instead of racing
-    // through a dead queue.
     private var consecutiveLoadErrors: Int = 0
 
-    // Track ids that failed to load; navigation skips over them in both directions.
+    /** Tracks that failed to load. Navigation skips them in both directions. */
     private val failedTrackIds = mutableSetOf<Long>()
 
-    // Per-track latch for the auto-crossfade trigger.
+    /** Latch so the auto-crossfade triggers once per track. */
     private var crossfadeArmedForTrackId: Long? = null
 
     companion object {
-        // Tracks kept loaded on each side of the current track.
+        /** Tracks kept loaded on each side of the current one. */
         private const val WINDOW_RADIUS = 15
-        // Tracks fetched (or trimmed) per window shift.
+        /** Tracks added or removed per window shift. */
         private const val CHUNK_SIZE = 10
-        // Extend the window when playback is this close to either edge.
+        /** The window is extended when playback gets this close to an edge. */
         private const val EDGE_TRIGGER_MARGIN = 5
-        // Auxiliary (random) tracks always kept after the main queue.
         private const val AUXILIARY_QUEUE_LENGTH = PlaybackState.AUXILIARY_QUEUE_LENGTH
-        // Position poll rate when playing with no position collectors (background).
+        /** Poll interval when no frames are delivered (background). */
         private const val POSITION_POLL_SLOW_INTERVAL_MS = 250L
-        // Position poll rate while paused. Short on purpose: this is also the
-        // worst-case latency for the tracker to notice a play/pause flip or an
-        // external (notification/session) seek. Anything longer makes the first
-        // frames after a play press run on the frozen paused clock and then jump.
+        /** Poll interval while paused; bounds the latency to notice a play or an external seek. */
         private const val PAUSED_POLL_INTERVAL_MS = 50L
-        // Cap on waiting for a Choreographer frame; the wait itself becomes the
-        // background poll cadence when no frames are delivered.
         private const val FRAME_WAIT_TIMEOUT_MS = POSITION_POLL_SLOW_INTERVAL_MS
-        // Dead-reckoning tuning for the published position clock. The underlying
-        // ExoPlayer clock quantizes (AudioTrack timestamps step ~16-30ms); the
-        // progress tracker anchors on fresh samples and advances the clock per
-        // frame from the anchor, absorbing POSITION_ERROR_SLEW of each sample's
-        // residual error so quantization is smeared across frames instead of
-        // stepping the karaoke fill / seek bar. POSITION_SNAP_MS bounds the slew:
-        // anything wider is a real discontinuity (seek, track change, external
-        // seek) and re-anchors immediately instead of crawling across it.
+        /** Residual error beyond which a position sample is a discontinuity and re-anchors immediately. */
         private const val POSITION_SNAP_MS = 120.0
+        /** Share of each sample's residual error absorbed by the dead-reckoning anchor. */
         private const val POSITION_ERROR_SLEW = 0.25
-        // Max wait for a fade's incoming stream clock to start moving after it reports
-        // isPlaying, before the tracker resumes dead-reckoning on its own.
+        /** Max wait for a stream clock to start moving before dead-reckoning resumes anyway. */
         private const val SETTLE_TIMEOUT_MS = 300L
-        // Largest backward correction (ms) the published position absorbs by holding
-        // still instead of stepping back.
+        /** Largest backward correction absorbed by holding the position instead of stepping back. */
         private const val MONOTONIC_HOLD_MAX_MS = 60L
-        // Forward position jumps larger than this are seeks/jumps (or frames
-        // missed while the process was frozen), not played audio: they don't
-        // count toward the listen threshold.
+        /** Larger forward jumps are seeks, not played audio, and don't count as listened. */
         private const val MAX_LISTENED_TICK_GAP_MS = 2_000L
-        // Max unreadable tracks skipped in a row before playback gives up.
         private const val MAX_CONSECUTIVE_LOAD_ERRORS = 10
-        // Persistence: initial write delay collapsing queue-mutation bursts, and
-        // the cadence the saved position is refreshed while playing.
         private const val PERSIST_DEBOUNCE_MS = 1_000L
         private const val POSITION_SAVE_INTERVAL_MS = 15_000L
     }
@@ -271,9 +225,6 @@ class AudioEngine @Inject constructor(
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _playbackState.value = _playbackState.value.copy(isPlaying = isPlaying)
-            // Listen accounting needs no play-state hook: the progress tracker
-            // accumulates only while a stream is audibly playing, so pauses and
-            // focus losses freeze the accrual instead of discarding it.
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -287,17 +238,14 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    /** The [FadeEngine.Host] bridge: answers fade-time questions, reacts at fade moments. */
     private val fadeHost = object : FadeEngine.Host {
         override val primaryPlayer: ExoPlayer
             get() = activePlayerField
 
         override fun replacePrimaryPlayer(newPlayer: ExoPlayer, newMirror: DspAudioProcessor?) {
-            // The previous mirror retires with its player; the new one stays registered.
             activeMirrorField?.let { dspEngine.removeMirrorProcessor(it) }
             activeMirrorField = newMirror
             activePlayerField = newPlayer
-            // Focus handling transfers to the promoted player.
             newPlayer.setAudioAttributes(mediaAudioAttributes, /* handleAudioFocus = */ true)
             onPlayerSwappedListener?.invoke()
         }
@@ -325,28 +273,24 @@ class AudioEngine @Inject constructor(
             targetQueueIndex: Int,
             targetTrackId: Long
         ) {
-            // The fade's window IS the fresh timeline; resolve any pending resync.
+            // The fade window is a fresh timeline, which resolves any pending resync.
             windowJumpId++
             windowJumpJob?.cancel()
             pendingWindowResync = false
             pendingFadeWindowStart = windowStart
             pendingFadeWindowEnd = windowEnd
 
-            // Listen counting hands over to the incoming track, exactly like a
-            // natural transition would; the outgoing occurrence is stashed so
-            // an aborted fade can resume its accrued progress.
+            // Listen counting moves to the incoming track; the outgoing progress is stashed in case the fade aborts.
             val outgoingId = pendingListenTrackId
             if (outgoingId != null && outgoingId != targetTrackId) {
                 stashedListenOccurrence = outgoingId to listenedElapsedMs
             }
             beginListenOccurrence(targetTrackId)
 
-            // Detach the main listener so its events don't touch queue state mid-fade.
             activePlayerField.removeListener(playerListener)
         }
 
         override fun onCrossfadeLogicalSwitch(targetQueueIndex: Int, targetTrackId: Long) {
-            // Publish the UI-facing switch now, while the outgoing stream fades out.
             val queue = _playbackState.value.queue
             val track = queue.getOrNull(targetQueueIndex) ?: return
 
@@ -364,11 +308,7 @@ class AudioEngine @Inject constructor(
                 } else flags
             )
 
-            // The incoming player's live position is what's shown, so an ongoing
-            // fade doesn't reset the seek bar to 0. Media3 reports the PROSPECTIVE
-            // position (the fade's target) until a fresh secondary renders, so this
-            // is the seek target for a quick-fade seek and 0 for a track change —
-            // no stale read to paper over.
+            // Media3 reports the prospective position (the fade target) until the secondary renders.
             val displayPlayer = fadeEngine.displayPlayer
             val positionMs = (displayPlayer ?: player).currentPosition
             _positionMs.value = positionMs
@@ -377,9 +317,6 @@ class AudioEngine @Inject constructor(
             recomputeAudioOutputInfo()
             if (wasAuxiliary) scheduleAuxiliaryRefill()
 
-            // The notification follows the in-app switch instead of waiting for
-            // the swap: re-bind the session to the incoming stream at the fade's
-            // switch point.
             onDisplayPlayerChangedListener?.invoke(displayPlayer ?: activePlayerField)
         }
 
@@ -390,10 +327,9 @@ class AudioEngine @Inject constructor(
             }
             pendingFadeWindowStart = null
             pendingFadeWindowEnd = null
-            // The fade completed: the outgoing occurrence is gone for good.
             stashedListenOccurrence = null
 
-            // Re-apply session modes: toggles landing mid-fade would otherwise be lost.
+            // Session modes toggled mid-fade would otherwise be lost.
             player.repeatMode = when (_playbackState.value.repeatMode) {
                 RepeatMode.NONE -> Player.REPEAT_MODE_OFF
                 RepeatMode.ALL -> Player.REPEAT_MODE_ALL
@@ -402,13 +338,9 @@ class AudioEngine @Inject constructor(
             player.shuffleModeEnabled = _playbackState.value.isShuffle
 
             activePlayerField.addListener(playerListener)
-            // Resync the pause-intent mirror to the promoted player: the main
-            // listener was detached while the fade ran, so the secondary's
-            // playWhenReady callbacks never reached the mirror.
             _playbackState.value =
                 _playbackState.value.copy(isPlaybackRequested = player.playWhenReady)
 
-            // No mutation can land mid-fade, so pendingWindowResync is false here.
             scope.launch { adjustWindow() }
         }
 
@@ -417,12 +349,10 @@ class AudioEngine @Inject constructor(
             pendingFadeWindowEnd = null
             crossfadeArmedForTrackId = null
 
-            // Re-attach the main listener (idempotent; remove first rules out dupes).
             activePlayerField.removeListener(playerListener)
             activePlayerField.addListener(playerListener)
 
             if (logicalSwitchHadFired) {
-                // Revert the UI to the outgoing stream, which is still playing.
                 val trackId = player.currentMediaItem?.mediaId?.toLongOrNull()
                 val index = trackId?.let { resolveExactQueueIndex(it) }
                 val track = index?.let { _playbackState.value.queue.getOrNull(it) }
@@ -438,9 +368,6 @@ class AudioEngine @Inject constructor(
                 recomputeAudioOutputInfo()
             }
 
-            // The incoming track never became current: restore the outgoing
-            // occurrence's stashed progress, so its listen still lands once
-            // enough of it has played in total.
             val trackId = player.currentMediaItem?.mediaId?.toLongOrNull()
             val stash = stashedListenOccurrence
             stashedListenOccurrence = null
@@ -459,13 +386,11 @@ class AudioEngine @Inject constructor(
                 isPlaybackRequested = player.playWhenReady
             )
 
-            // The logical switch may have re-bound the session to the secondary,
-            // which has just been released: hand the session back to the primary.
+            // The session may have been bound to the secondary, which is now released.
             onDisplayPlayerChangedListener?.invoke(activePlayerField)
         }
 
         override fun onFadeTargetError(targetTrackId: Long) {
-            // Restore the single old stream, then run the error-advance path.
             fadeEngine.cancel()
             handleTrackError(error = null, failedTrackId = targetTrackId, syncCursorToPlayer = false)
         }
@@ -487,11 +412,8 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Suspends until the next frame is rendered (no Compose frame clock in this
-     * scope), giving up after [FRAME_WAIT_TIMEOUT_MS]. Choreographer stops
-     * delivering frames while the app is backgrounded or the screen is off — an
-     * unbounded wait froze this whole loop there, killing position updates,
-     * crossfade arming and listen counting during background playback.
+     * Suspends until the next frame, or [FRAME_WAIT_TIMEOUT_MS] at most. Choreographer delivers
+     * no frames in the background, so an unbounded wait would freeze the progress loop.
      */
     private suspend fun awaitFrame() {
         withTimeoutOrNull(FRAME_WAIT_TIMEOUT_MS) {
@@ -507,7 +429,6 @@ class AudioEngine @Inject constructor(
         MediaItem.Builder()
             .setUri(path.toUri())
             .setMediaId(id.toString())
-            // Media data used by the notification
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(title)
@@ -517,36 +438,25 @@ class AudioEngine @Inject constructor(
             )
             .build()
 
-    /** Re-bind hook for the MediaSession (set by [PlaybackService]). */
+    /** Called after a crossfade promoted a new player, so the MediaSession can re-bind. */
     fun setOnPlayerSwappedListener(listener: (() -> Unit)?) {
         onPlayerSwappedListener = listener
     }
 
     /**
-     * Mid-crossfade re-bind hook for the MediaSession (set by [PlaybackService]).
-     *
-     * Invoked with the player the session should advertise as "now playing":
-     * the incoming secondary at the fade's logical switch (so the notification
-     * switches songs together with the in-app UI instead of trailing it by the
-     * fade's second half), the outgoing primary after an abort.
+     * Called with the player the session should present as "now playing": the incoming
+     * secondary at a crossfade's logical switch, the outgoing primary on abort.
      */
     fun setOnDisplayPlayerChangedListener(listener: ((Player) -> Unit)?) {
         onDisplayPlayerChangedListener = listener
     }
 
-    /**
-     * Media items for [tracks]; the resumption path hands these back to Media3
-     * for the session so the platform sees the same timeline the engine built.
-     */
+    /** Media items for [tracks], matching the timeline the engine builds. */
     fun mediaItemsFor(tracks: List<TrackEntity>): List<MediaItem> = tracks.map { it.toMediaItem() }
 
     /**
-     * Rebuilds a paused session from a resumption snapshot: the full main queue
-     * plus a redrawn auxiliary pool goes on the timeline, the cursor lands on
-     * [startIndex] and the prepared stream waits (PAUSED) at [positionMs].
-     * Playback is NOT started here — the triggering event (a media button play
-     * or a session chip) decides that. Returns the media items of the built
-     * timeline so the caller can hand the identical list back to Media3.
+     * Rebuilds a paused session from a resumption snapshot, positioned at [startIndex] / [positionMs].
+     * Does not start playback. Returns the timeline's media items.
      */
     fun restoreQueue(
         tracks: List<TrackEntity>,
@@ -568,7 +478,6 @@ class AudioEngine @Inject constructor(
         val clampedStart = startIndex.coerceIn(0, tracks.lastIndex)
         val restoredPosition = positionMs.coerceAtLeast(0L)
 
-        // Ids for the main queue, then the auxiliary queue.
         val entryIds = List(tracks.size) { allocateEntryId() } +
                 List(AUXILIARY_QUEUE_LENGTH) { allocateEntryId() }
         val newQueue = tracks + drawAuxiliaryTracks(emptySet(), AUXILIARY_QUEUE_LENGTH)
@@ -582,7 +491,6 @@ class AudioEngine @Inject constructor(
             currentTrack = newQueue[clampedStart],
             durationMs = newQueue[clampedStart].duration,
             isPlaying = false,
-            // A rebuilt session waits paused until an explicit play request.
             isPlaybackRequested = false,
             isShuffle = isShuffle,
             repeatMode = repeatMode,
@@ -602,9 +510,7 @@ class AudioEngine @Inject constructor(
         }
         player.shuffleModeEnabled = isShuffle
 
-        // The whole queue goes on the timeline (adjustWindow trims the overhang
-        // back as playback proceeds); prepared and PAUSED at the saved position —
-        // the resumption flow decides when to press play.
+        // The whole queue is loaded here; adjustWindow() trims it as playback proceeds.
         loadedRange = newQueue.indices
         val items = newQueue.map { it.toMediaItem() }
         player.setMediaItems(items, clampedStart, restoredPosition)
@@ -617,17 +523,11 @@ class AudioEngine @Inject constructor(
         return items
     }
 
-    /**
-     * True when a gesture skip should leave the player paused: a current track
-     * exists and playback wasn't requested. Manual picks start playback regardless.
-     */
+    /** True when a gesture skip must not un-pause the session. Manual picks always play. */
     private fun switchStaysPaused(): Boolean =
         _playbackState.value.currentTrack != null && !player.playWhenReady
 
-    /**
-     * Bookkeeping for a track becoming current — shared by the natural
-     * transition and the crossfade swap so queue advance is identical.
-     */
+    /** Bookkeeping for a track becoming current. Shared by natural transitions and crossfade swaps. */
     private fun applyTrackTransition(
         trackId: Long,
         positionMs: Long,
@@ -636,16 +536,12 @@ class AudioEngine @Inject constructor(
     ) {
         val currentQueue = _playbackState.value.queue
 
-        // New play occurrence: restart listen accounting from zero. The count
-        // itself lands in the progress tracker once enough of the track has
-        // actually played — no isPlaying check needed here.
         beginListenOccurrence(trackId)
 
-        // Duplicates possible (aux pool): use the player's timeline position.
         val index = resolveExactQueueIndex(trackId) ?: fallbackIndex ?: return
         val track = currentQueue[index]
 
-        // A played auxiliary track becomes a main track, then the pool refills.
+        // A played auxiliary track becomes a main track.
         val flags = _playbackState.value.auxiliaryFlags
         val wasAuxiliary = flags.getOrNull(index) == true
 
@@ -661,7 +557,6 @@ class AudioEngine @Inject constructor(
         if (emitSeekEvent) _seekEvents.tryEmit(positionMs)
         crossfadeArmedForTrackId = null
 
-        // The new format may hit the output path differently: re-evaluate.
         recomputeAudioOutputInfo()
 
         if (pendingWindowResync) {
@@ -676,16 +571,12 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    /**
-     * Error handling for a failed track — shared by the natural error path and
-     * a fade whose target failed. Never breaks the transition: it skips onward.
-     */
+    /** Skips past a track that failed to load, giving up after [MAX_CONSECUTIVE_LOAD_ERRORS] in a row. */
     private fun handleTrackError(
         error: PlaybackException?,
         failedTrackId: Long?,
         syncCursorToPlayer: Boolean
     ) {
-        // Remember the pause intent; only re-request playback after the error if it was playing.
         val resumeAfterError = player.playWhenReady
         val trackId = failedTrackId
             ?: player.currentMediaItem?.mediaId?.toLongOrNull()
@@ -709,7 +600,6 @@ class AudioEngine @Inject constructor(
 
         consecutiveLoadErrors++
         if (consecutiveLoadErrors > MAX_CONSECUTIVE_LOAD_ERRORS) {
-            // Too many dead tracks in a row (e.g. a deleted folder): stop.
             Log.w("AudioEngine", "Too many consecutive load errors; stopping playback")
             consecutiveLoadErrors = 0
             player.pause()
@@ -722,9 +612,7 @@ class AudioEngine @Inject constructor(
                 _playbackState.value.queueIndex + 1 in queue.indices
         if (!canAdvance) return
 
-        // After an error the player sits in STATE_IDLE: the new item must be
-        // prepared (and playback re-requested) explicitly. No crossfade here:
-        // the old player is dead and fading into the same item would double-play it.
+        // No crossfade: the failed player is dead and fading into the same item would double-play it.
         advanceToNext(useFade = false)
         if (player.playbackState == Player.STATE_IDLE) {
             player.prepare()
@@ -732,7 +620,7 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    /** Re-evaluates the audio output path and publishes changes to [PlaybackState.audioOutputInfo]. */
+    /** Re-evaluates the output path and publishes it to [PlaybackState.audioOutputInfo] when it changed. */
     private fun recomputeAudioOutputInfo() {
         val track = _playbackState.value.currentTrack
         if (track == null) {
@@ -760,11 +648,9 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    /** Observes DSP state, output device and settings; re-evaluates the audio path on change. */
     private fun startAudioPathObservers() {
         outputDeviceManager.start()
 
-        // Media attributes: routing + focus handling, unset by default construction.
         player.setAudioAttributes(mediaAudioAttributes, /* handleAudioFocus = */ true)
 
         scope.launch {
@@ -781,9 +667,8 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Direct volume control : gain is applied in the float DSP
-     * chain with the AudioTrack at full scale — no AudioFlinger re-quantization.
-     * Skipped during a fade; the ramp re-reads the base volume itself.
+     * With direct volume control the gain is applied in the float DSP chain and the AudioTrack
+     * stays at full scale. Skipped during a fade, which reads the base volume itself.
      */
     private fun applyVolumePath(state: DspState) {
         if (fadeEngine.isFading) return
@@ -794,7 +679,6 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    /** Starts a fresh listen occurrence for [trackId] (a new play). */
     private fun beginListenOccurrence(trackId: Long) {
         pendingListenTrackId = trackId
         listenedElapsedMs = 0L
@@ -808,9 +692,7 @@ class AudioEngine @Inject constructor(
         stashedListenOccurrence = null
     }
 
-    /**
-     * Playback time after which [trackId] counts as listened (user-configured % of duration).
-     */
+    /** Playback time after which [trackId] counts as listened. */
     private fun listenThresholdMs(trackId: Long): Long {
         val percent = listenedThresholdPercent
         if (percent <= 0) return 0L
@@ -822,13 +704,9 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Accumulates [positionMs] toward the listen threshold of the pending
-     * occurrence; called from the progress tracker, which is why background
-     * playback counts exactly like foreground playback. Only forward motion
-     * actually played counts: pauses freeze the position (zero delta), a
-     * backward seek replays (re-accumulates), and a forward jump — or a gap
-     * wider than [MAX_LISTENED_TICK_GAP_MS] — adds nothing. The listen lands
-     * the moment accrued playback reaches [listenThresholdMs].
+     * Accumulates played time toward the listen threshold of the pending occurrence.
+     * Only forward motion counts: pauses add nothing, a backward seek replays, and a forward
+     * jump or a gap over [MAX_LISTENED_TICK_GAP_MS] adds nothing.
      */
     private fun tickListenCount(displayPlayer: Player, positionMs: Long) {
         val pendingId = pendingListenTrackId ?: return
@@ -857,7 +735,6 @@ class AudioEngine @Inject constructor(
         scope.launch {
             settingsRepository.settings.collect { settings ->
                 listenedThresholdPercent = settings.listenedThresholdPercent
-                // Bit-perfect switch / per-device configs feed the path evaluation.
                 val configChanged = latestSettings.bitPerfectEnabled != settings.bitPerfectEnabled ||
                         latestSettings.deviceAudioConfigs != settings.deviceAudioConfigs
                 latestSettings = settings
@@ -868,13 +745,11 @@ class AudioEngine @Inject constructor(
 
     private fun observeLibraryForAuxiliaryRefill() {
         scope.launch {
-            // One-shot snapshot + refresh on completed scans; the live Flow would
-            // re-run the O(library) refill on every stat-only row write.
+            // Snapshot refreshed on completed scans: the live Flow would re-run the refill on every row write.
             allTracks = trackRepository.getAllTracksOnce()
             trackRepository.scanStatus.collect { status ->
                 if (status is ScanStatus.Finished) {
                     allTracks = trackRepository.getAllTracksOnce()
-                    // The library changed; refresh the auxiliary pool from it.
                     if (_playbackState.value.queue.isNotEmpty()) {
                         refillAuxiliary()
                     }
@@ -884,10 +759,9 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Persists the playing session for resumption. The first write collapses
-     * queue-mutation bursts; while playing, the saved position keeps refreshing
-     * so a killed process resumes near the mark. A queue that empties clears
-     * THIS process's snapshot (a previous process's snapshot is preserved).
+     * Persists the session for resumption: debounced on queue changes, then refreshed every
+     * [POSITION_SAVE_INTERVAL_MS] while playing. An emptied queue clears only a snapshot
+     * written by this process.
      */
     private fun observeSessionForPersistence() {
         scope.launch {
@@ -934,8 +808,8 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Starts a fresh queue at [startIndex] and plays it (manual pick).
-     * [sourceCollectionId], when set, marks the queue as started from that collection.
+     * Replaces the queue with [tracks] and plays from [startIndex].
+     * [sourceCollectionId] marks the collection the queue was started from.
      */
     fun setQueue(tracks: List<TrackEntity>, startIndex: Int = 0, sourceCollectionId: String? = null) {
         fadeEngine.cancel()
@@ -963,7 +837,6 @@ class AudioEngine @Inject constructor(
 
         val clampedStart = startIndex.coerceIn(0, tracks.lastIndex)
 
-        // Ids for the main queue, then the auxiliary queue.
         val entryIds = List(tracks.size) { allocateEntryId() } +
                 List(AUXILIARY_QUEUE_LENGTH) { allocateEntryId() }
         val newQueue = tracks + drawAuxiliaryTracks(emptySet(), AUXILIARY_QUEUE_LENGTH)
@@ -982,12 +855,12 @@ class AudioEngine @Inject constructor(
         loadWindowAndPlay(newQueue, clampedStart, forcePlay = true)
     }
 
-    /** Inserts [track] after the current track; with no queue, starts a fresh one. */
+    /** Inserts [track] after the current one. Starts a new queue if empty. */
     fun playNext(track: TrackEntity) {
         insertTrack(track, _playbackState.value.queueIndex + 1)
     }
 
-    /** Appends [track] at the end of the MAIN queue, never behind the auxiliary pool. */
+    /** Appends [track] to the main queue, ahead of the auxiliary pool. */
     fun addToQueue(track: TrackEntity) {
         val current = _playbackState.value
         var index = current.queue.size
@@ -997,7 +870,7 @@ class AudioEngine @Inject constructor(
         insertTrack(track, index)
     }
 
-    /** Inserts [tracks] after the current track, keeping order; fresh queue when empty. */
+    /** Inserts [tracks] after the current one, in order. Starts a new queue if empty. */
     fun playNextAll(tracks: List<TrackEntity>) {
         if (tracks.isEmpty()) return
         val current = _playbackState.value
@@ -1008,7 +881,7 @@ class AudioEngine @Inject constructor(
         insertTracks(tracks, current.queueIndex + 1)
     }
 
-    /** Appends [tracks] to the MAIN queue, keeping order (same boundary rule as [addToQueue]). */
+    /** Appends [tracks] to the main queue, ahead of the auxiliary pool. */
     fun addAllToQueue(tracks: List<TrackEntity>) {
         if (tracks.isEmpty()) return
         val current = _playbackState.value
@@ -1024,9 +897,8 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Plays [tracks] from a list pick: keeps played history, drops upcoming
-     * main-queue tracks, queues [tracks] in their place and jumps to [startIndex].
-     * The auxiliary pool is left untouched. Manual pick: playback always starts.
+     * Plays [tracks] from a list pick: keeps played history, replaces the upcoming main-queue
+     * tracks with [tracks] and jumps to [startIndex]. The auxiliary pool is kept.
      */
     fun playListReplacingUpcoming(
         tracks: List<TrackEntity>,
@@ -1044,7 +916,6 @@ class AudioEngine @Inject constructor(
         fadeEngine.cancel()
 
         val flags = current.auxiliaryFlags
-        // Only the upcoming main-queue section in front of the pool gets dropped.
         var auxStart = current.queue.size
         while (auxStart > current.queueIndex + 1 && flags.getOrNull(auxStart - 1) == true) {
             auxStart--
@@ -1062,7 +933,6 @@ class AudioEngine @Inject constructor(
             auxiliaryFlags = flags.take(keptCount) + List(tracks.size) { false } +
                     flags.subList(auxStart, flags.size),
             queueSourceId = sourceCollectionId,
-            // Kept history entries are past occurrences and never highlighted.
             queueSourceFlags = List(keptCount) { false } +
                     List(tracks.size) { sourceCollectionId != null } +
                     List(current.queue.size - auxStart) { false }
@@ -1071,9 +941,9 @@ class AudioEngine @Inject constructor(
         jumpWindowTo(keptCount + startIndex.coerceIn(0, tracks.lastIndex), forcePlay = true)
     }
 
-    /** Shared implementation for [playNext]/[addToQueue]; patches the timeline in place. */
+    /** Inserts [track] at [requestedIndex] and patches the loaded timeline in place. */
     private fun insertTrack(track: TrackEntity, requestedIndex: Int) {
-        // A queue mutation shifts the indices a fade captured: cancel first.
+        // Queue mutations shift the indices a fade captured.
         fadeEngine.cancel()
 
         val current = _playbackState.value
@@ -1100,7 +970,6 @@ class AudioEngine @Inject constructor(
             add(insertIndex.coerceAtMost(size), false)
         }
 
-        // Keep the cursor on the same track: inserts at/before it shift later indices.
         val newQueueIndex =
             if (insertIndex <= current.queueIndex) current.queueIndex + 1 else current.queueIndex
 
@@ -1121,11 +990,11 @@ class AudioEngine @Inject constructor(
                 player.addMediaItem(insertIndex - window.first, track.toMediaItem())
                 loadedRange = window.first..(window.last + 1)
             }
-            // Past the window: adjustWindow() loads it as playback approaches.
+            // Past the window: adjustWindow() loads it when playback gets close.
         }
     }
 
-    /** Bulk variant of [insertTrack]; one state publish and one addMediaItems call. */
+    /** Bulk variant of [insertTrack]. */
     private fun insertTracks(tracks: List<TrackEntity>, requestedIndex: Int) {
         if (tracks.isEmpty()) return
 
@@ -1176,13 +1045,12 @@ class AudioEngine @Inject constructor(
                 player.addMediaItems(insertIndex - window.first, tracks.map { it.toMediaItem() })
                 loadedRange = window.first..(window.last + count)
             }
-            // Past the window: adjustWindow() loads the items as playback approaches.
         }
     }
 
     /**
-     * Loads a window of tracks around [centerIndex] and starts playback; the
-     * rest loads lazily via [adjustWindow]. [forcePlay] marks a manual pick.
+     * Loads a window around [centerIndex] and starts playback. The rest is loaded lazily by
+     * [adjustWindow]. [forcePlay] marks a manual pick.
      */
     private fun loadWindowAndPlay(
         tracks: List<TrackEntity>,
@@ -1191,7 +1059,6 @@ class AudioEngine @Inject constructor(
     ) {
         windowJumpJob?.cancel()
         val jumpId = ++windowJumpId
-        // This jump writes the fresh timeline, resolving any deferred resync.
         pendingWindowResync = false
         val playAfterPrepare = forcePlay || !switchStaysPaused()
 
@@ -1202,7 +1069,6 @@ class AudioEngine @Inject constructor(
             val windowItems = withContext(Dispatchers.Default) {
                 tracks.subList(windowStart, windowEnd + 1).map { it.toMediaItem() }
             }
-            // A newer jump superseded this one.
             if (jumpId != windowJumpId) return@launch
             player.setMediaItems(windowItems, centerIndex - windowStart, 0L)
             if (playAfterPrepare) player.play() else player.pause()
@@ -1211,7 +1077,7 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    /** Extends/trims the loaded window. No-op while a jump runs or a resync is pending. */
+    /** Extends the loaded window near its edges and unloads media far from it. No-op during a jump or a pending resync. */
     private suspend fun adjustWindow() {
         if (windowJumpJob?.isActive == true) return
         if (pendingWindowResync) return
@@ -1224,7 +1090,6 @@ class AudioEngine @Inject constructor(
             var start = loadedRange.first
             var end = loadedRange.last
 
-            // Extend ahead
             if (end < tracks.lastIndex && end - currentIndex < EDGE_TRIGGER_MARGIN) {
                 val newEnd = (end + CHUNK_SIZE).coerceAtMost(tracks.lastIndex)
                 val chunk = withContext(Dispatchers.Default) {
@@ -1235,7 +1100,6 @@ class AudioEngine @Inject constructor(
                 end = newEnd
             }
 
-            // Extend behind
             if (start > 0 && currentIndex - start < EDGE_TRIGGER_MARGIN) {
                 val newStart = (start - CHUNK_SIZE).coerceAtLeast(0)
                 val chunk = withContext(Dispatchers.Default) {
@@ -1246,7 +1110,6 @@ class AudioEngine @Inject constructor(
                 start = newStart
             }
 
-            // Unload media too far from the window
             val overhang = WINDOW_RADIUS + CHUNK_SIZE
             if (currentIndex - start > overhang) {
                 val newStart = currentIndex - WINDOW_RADIUS
@@ -1268,31 +1131,26 @@ class AudioEngine @Inject constructor(
     }
 
     fun play() {
-        // Cancel any in-flight quick fade (e.g. a fade-out-to-pause the user reversed).
         fadeEngine.cancel()
 
-        // After a playback error the player stays in STATE_IDLE; prepare again.
         if (player.playbackState == Player.STATE_IDLE) {
             player.prepare()
         }
         if (fadeEngine.quickFadeEnabled && !player.isPlaying) {
-            // Ramp up from silence: no click at the resume point.
             fadeEngine.fadeIn()
             player.play()
         } else {
             player.play()
         }
-        // Publish last so the button reacts to the tap immediately.
+        // Published last so the button reacts to the tap immediately.
         _playbackState.value = _playbackState.value.copy(isPlaying = true)
     }
 
     fun pause() {
-        // Mid-crossfade, `player` is still the outgoing stream while the UI already shows
-        // the incoming one: settle on the incoming stream first, then pause it.
+        // Mid-crossfade, `player` is still the outgoing stream while the UI shows the incoming one.
         val settledCrossfade = fadeEngine.completeCrossfadeNow()
 
         if (fadeEngine.quickFadeEnabled && player.isPlaying) {
-            // fadeOutAndPause() starts from player.volume, i.e. the ramp's current value.
             fadeEngine.fadeOutAndPause()
             _playbackState.value = _playbackState.value.copy(
                 isPlaying = false,
@@ -1300,7 +1158,6 @@ class AudioEngine @Inject constructor(
             )
         } else {
             player.pause()
-            // The promoted player may still carry a partial ramp volume.
             if (settledCrossfade) player.volume = fadeHost.playerBaseVolume()
         }
     }
@@ -1318,7 +1175,7 @@ class AudioEngine @Inject constructor(
                 // TODO: Make this an app parameter.
                 val targetQueueIndex = player.previousMediaItemIndex + loadedRange.first
                 val targetId = state.queue.getOrNull(targetQueueIndex)?.id
-                // Paused skips never crossfade: there's no audible stream to fade from.
+                // Paused skips never crossfade: there is no audible stream to fade from.
                 if (fadeEngine.quickFadeEnabled && player.isPlaying && targetId != null &&
                     targetId !in failedTrackIds &&
                     fadeEngine.startCrossfade(
@@ -1332,7 +1189,6 @@ class AudioEngine @Inject constructor(
                 player.seekToPreviousMediaItem()
                 skipBackwardOverFailedTracks()
             } else {
-                // Rewind the current track: crossfade to its own start when possible.
                 if (fadeEngine.quickFadeEnabled && player.isPlaying &&
                     fadeEngine.startCrossfade(
                         state.queueIndex,
@@ -1347,7 +1203,6 @@ class AudioEngine @Inject constructor(
         } else if (loadedRange.first > 0) {
             val queue = state.queue
             var previousIndex = loadedRange.first - 1
-            // Never land back on a track that already failed to load.
             while (previousIndex >= 0 && queue[previousIndex].id in failedTrackIds) {
                 previousIndex--
             }
@@ -1366,7 +1221,6 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    /** After a backward seek, keeps moving back past tracks that failed to load. */
     private fun skipBackwardOverFailedTracks() {
         var guard = 0
         while (guard++ < MAX_CONSECUTIVE_LOAD_ERRORS) {
@@ -1378,8 +1232,8 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Gesture skip: jumps to [index] without un-pausing a paused session.
-     * Skips over known-failed tracks in the skip direction.
+     * Gesture skip to [index]. Doesn't un-pause a paused session and steps over known-failed
+     * tracks in the skip direction.
      */
     fun skipToIndex(index: Int, forward: Boolean = true) {
         val queue = _playbackState.value.queue
@@ -1416,7 +1270,7 @@ class AudioEngine @Inject constructor(
         jumpWindowTo(target)
     }
 
-    /** Synchronously rebuilds the window around [centerIndex] and plays it, overriding any jump. */
+    /** Synchronously rebuilds the window around [centerIndex], superseding any in-flight jump. */
     private fun jumpWindowTo(centerIndex: Int, forcePlay: Boolean = false) {
         val queue = _playbackState.value.queue
         if (centerIndex !in queue.indices) return
@@ -1427,7 +1281,6 @@ class AudioEngine @Inject constructor(
 
         val windowStart = (centerIndex - WINDOW_RADIUS).coerceAtLeast(0)
         val windowEnd = (centerIndex + WINDOW_RADIUS).coerceAtMost(queue.lastIndex)
-        // Deliberately synchronous: must atomically override in-flight jumps.
         val items = queue.subList(windowStart, windowEnd + 1).map { it.toMediaItem() }
         loadedRange = windowStart..windowEnd
         player.setMediaItems(items, centerIndex - windowStart, 0L)
@@ -1438,9 +1291,7 @@ class AudioEngine @Inject constructor(
     fun seekTo(positionMs: Long) {
         fadeEngine.cancel()
 
-        // The seek bar jumps immediately; a same-track crossfade smooths the
-        // audio underneath. Only the dedicated position flow is updated here to
-        // avoid recomposing playbackState collectors per drag pixel.
+        // Only the position flow is updated: playbackState collectors shouldn't recompose per drag pixel.
         _positionMs.value = positionMs
         _seekEvents.tryEmit(positionMs)
 
@@ -1448,11 +1299,7 @@ class AudioEngine @Inject constructor(
         val tailRoom = duration > 0L && duration != C.TIME_UNSET &&
                 (duration - positionMs) > fadeEngine.quickFadeDurationMs * 2
         if (fadeEngine.quickFadeEnabled && player.isPlaying && tailRoom) {
-            // A same-track crossfade smooths the audio underneath the jump. While
-            // the freshly built secondary primes, Media3 reports the PROSPECTIVE
-            // position (the seek target); the progress tracker holds the published
-            // position there until the secondary actually renders, then resumes
-            // from it. No extra state needed here.
+            // Same-track crossfade; the progress tracker holds the position at the target until the secondary renders.
             if (fadeEngine.startCrossfade(
                     _playbackState.value.queueIndex,
                     positionMs,
@@ -1466,14 +1313,13 @@ class AudioEngine @Inject constructor(
         player.seekTo(positionMs)
     }
 
-    /** Advances to the next item, crossfading when [useFade] and quick fades are on. */
+    /** Advances to the next item, crossfading when [useFade] and quick fades are enabled. */
     private fun advanceToNext(useFade: Boolean) {
         val state = _playbackState.value
         if (player.hasNextMediaItem()) {
             if (useFade) {
                 val targetQueueIndex = player.nextMediaItemIndex + loadedRange.first
                 val targetId = state.queue.getOrNull(targetQueueIndex)?.id
-                // Paused skips seek instead and stay paused.
                 if (fadeEngine.quickFadeEnabled && player.isPlaying && targetId != null &&
                     targetId !in failedTrackIds &&
                     fadeEngine.startCrossfade(targetQueueIndex, 0L, fadeEngine.quickFadeDurationMs)
@@ -1498,7 +1344,6 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    /** Resolves an entry id to its current index (derived from live state, never stale). */
     private fun entryIndexOf(entryId: Long): Int =
         _playbackState.value.queueEntryIds.indexOf(entryId)
 
@@ -1508,10 +1353,7 @@ class AudioEngine @Inject constructor(
             .filter { (_, t) -> t.id == trackId }
             .map { (i, _) -> i }
 
-    /**
-     * Manual pick from the queue screen: moves the entry next, jumps to it and
-     * starts playback — even over a paused session.
-     */
+    /** Manual pick from the queue screen: moves the entry next and plays it, even over a paused session. */
     fun playQueueEntry(entryId: Long) {
         val fromIndex = entryIndexOf(entryId)
         if (fromIndex == -1) return
@@ -1523,7 +1365,7 @@ class AudioEngine @Inject constructor(
         player.play()
     }
 
-    /** Moves an entry to [toUpcomingPosition], relative to the current cursor. */
+    /** Moves an entry to [toUpcomingPosition], counted from the track after the current one. */
     fun moveQueueEntry(entryId: Long, toUpcomingPosition: Int) {
         val fromIndex = entryIndexOf(entryId)
         if (fromIndex == -1) return
@@ -1534,7 +1376,6 @@ class AudioEngine @Inject constructor(
         moveQueueItem(fromIndex, toIndex)
     }
 
-    /** Removes the occurrence identified by [entryId]. */
     fun removeQueueEntry(entryId: Long) {
         val index = entryIndexOf(entryId)
         if (index == -1) return
@@ -1560,7 +1401,6 @@ class AudioEngine @Inject constructor(
             add(toIndex, removeAt(fromIndex))
         }
 
-        // Flags and entry ids move with their item.
         val newEntryIds = current.queueEntryIds.toMutableList().apply {
             if (fromIndex < size) add(toIndex, removeAt(fromIndex))
         }
@@ -1591,8 +1431,8 @@ class AudioEngine @Inject constructor(
             queueSourceFlags = normalizeQueueSourceFlags(newSourceFlags, newQueue.size)
         )
 
+        // Moving an item across the window edge can't be patched in place: rebuild lazily.
         if (fromLoaded != toLoaded) {
-            // Defer the rebuild and invalidate in-flight jumps.
             windowJumpId++
             windowJumpJob?.cancel()
             pendingWindowResync = true
@@ -1621,7 +1461,6 @@ class AudioEngine @Inject constructor(
             index < loadedRange.first -> {
                 loadedRange = (loadedRange.first - 1)..<loadedRange.last
             }
-            // index > loadedRange.last: nothing loaded needs to shift
         }
 
         val newQueue = currentQueue.toMutableList().apply {
@@ -1669,7 +1508,7 @@ class AudioEngine @Inject constructor(
         _playbackState.value = _playbackState.value.copy(isShuffle = newShuffle)
     }
 
-    /** Cycles repeat mode NONE -> ALL -> ONE. */
+    /** Cycles repeat mode: NONE -> ALL -> ONE. */
     fun toggleRepeat() {
         val nextMode = when (_playbackState.value.repeatMode) {
             RepeatMode.NONE -> RepeatMode.ALL
@@ -1684,7 +1523,7 @@ class AudioEngine @Inject constructor(
         _playbackState.value = _playbackState.value.copy(repeatMode = nextMode)
     }
 
-    /** Exact queue index of the playing track via timeline position; nearest-occurrence fallback. */
+    /** Queue index of the playing track from the player's timeline position, falling back to the nearest occurrence. */
     private fun resolveExactQueueIndex(trackId: Long): Int? {
         val queue = _playbackState.value.queue
         if (queue.isEmpty() || loadedRange == IntRange.EMPTY) return resolveQueueIndex(trackId)
@@ -1704,7 +1543,7 @@ class AudioEngine @Inject constructor(
         val playerIndex = player.currentMediaItemIndex + loadedRange.first
         if (playerIndex in queue.indices && queue[playerIndex].id == trackId) return playerIndex
 
-        return candidates.minByOrNull { kotlin.math.abs(it - playerIndex) }
+        return candidates.minByOrNull { abs(it - playerIndex) }
     }
 
     private fun normalizeEntryIds(entryIds: List<Long>, queueSize: Int): List<Long> =
@@ -1716,7 +1555,6 @@ class AudioEngine @Inject constructor(
     private fun normalizeQueueSourceFlags(flags: List<Boolean>, queueSize: Int): List<Boolean> =
         if (flags.size == queueSize) flags else List(queueSize) { false }
 
-    /** True when the full auxiliary pool sits after [queueIndex] (counts flags). */
     private fun hasFullAuxiliaryPool(flags: List<Boolean>, queueIndex: Int): Boolean {
         var count = 0
         for (i in (queueIndex + 1)..flags.lastIndex) {
@@ -1725,11 +1563,10 @@ class AudioEngine @Inject constructor(
         return count >= AUXILIARY_QUEUE_LENGTH
     }
 
-    /** Ids already queued after (or at) [queueIndex], for duplicate-aware drawing. */
     private fun upcomingTrackIds(queue: List<TrackEntity>, queueIndex: Int): Set<Long> =
         queue.drop(queueIndex + 1).mapTo(HashSet()) { it.id }
 
-    /** Picks up to [count] random tracks, preferring ids not already queued up next. */
+    /** Draws [count] random tracks, preferring ids not in [existing]. Repeats only when the library is exhausted. */
     private fun drawAuxiliaryTracks(existing: Collection<Long>, count: Int): List<TrackEntity> {
         val pool = allTracks
         if (pool.isEmpty() || count <= 0) return emptyList()
@@ -1740,7 +1577,6 @@ class AudioEngine @Inject constructor(
             draws += if (fresh.isNotEmpty()) {
                 fresh[Random.nextInt(fresh.size)]
             } else {
-                // Everything is already queued, allow repeats
                 pool[Random.nextInt(pool.size)]
             }
         }
@@ -1759,7 +1595,7 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    /** Tops up the auxiliary pool after the upcoming section (append-only). */
+    /** Appends random tracks so the auxiliary pool after the current track is full. */
     private fun refillAuxiliary() {
         val current = _playbackState.value
         val flags = current.auxiliaryFlags
@@ -1782,9 +1618,9 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Auto-crossfade at a natural track transition, armed by the progress
-     * tracker near the track's end. Skipped for repeat-one, queue end and
-     * known-broken next tracks.
+     * Starts the automatic crossfade into the next track when the current one nears its end.
+     * Skipped for repeat-one, at the queue end, and when the next track failed to load.
+     * Re-evaluated on every progress tick.
      */
     private fun maybeStartTrackCrossfade() {
         if (fadeEngine.isFading) return
@@ -1810,12 +1646,22 @@ class AudioEngine @Inject constructor(
             targetQueueIndex = nextIndex,
             targetPositionMs = 0L,
             durationMs = FadeMath.clampedFadeDurationMs(normalFadeMs, duration),
-            // The UI switches at the ramp's midpoint, matching how far the
-            // incoming stream has already played into itself.
             switchAtT = 0.5f
         )
     }
 
+    /**
+     * Publishes [positionMs] once per frame and arms the auto-crossfade.
+     *
+     * The ExoPlayer clock is quantized (AudioTrack timestamps step ~16-30 ms), so the published
+     * position is dead-reckoned from an anchor that absorbs [POSITION_ERROR_SLEW] of each fresh
+     * sample's error. Errors above [POSITION_SNAP_MS] are discontinuities and re-anchor at once.
+     *
+     * While a stream is priming (fade switch, seek, buffering) its clock sits frozen at the
+     * target, so the position is held there and dead-reckoning resumes only once the clock
+     * really moves. Small backward corrections are held rather than published, so the position
+     * never visibly steps back.
+     */
     private fun startProgressTracker() {
         progressJob?.cancel()
         progressJob = scope.launch {
@@ -1824,51 +1670,22 @@ class AudioEngine @Inject constructor(
             var anchorMs = 0.0
             var anchorNanos = 0L
             var wasPriming = false
-            // Non-zero while waiting for the incoming stream's clock to really start moving.
+            // Non-zero while waiting for the incoming clock to start moving.
             var settlingSinceNanos = 0L
             while (true) {
-                // Before the fade's logical switch the outgoing player is shown;
-                // after it, the incoming one — the UI ticks through the whole fade.
                 val displayPlayer = fadeEngine.displayPlayer ?: player
                 val sampleMs = displayPlayer.currentPosition.coerceAtLeast(0L)
                 val audible = displayPlayer.isPlaying || fadeEngine.isFading
-                // The fade's incoming player is "priming" from the logical switch until it
-                // actually renders audio: it reports the PROSPECTIVE position (the seek
-                // target / 0) and that clock does NOT advance, because the stream isn't
-                // playing yet. Projecting forward from it makes the published position run
-                // ahead of what will really be heard; when the secondary starts, its first
-                // real samples sit behind the projection and the tracker pulls the clock
-                // back (snap or slew) — the "plays ~0.1s then drifts back" glitch after a
-                // quick-fade seek. So hold the published position at the target until the
-                // incoming player is really playing.
-                //
-                // The same hold applies to a plain (no-fade) seek / track load: the primary
-                // sits in BUFFERING with playback requested while the stream is flushed and
-                // re-buffered, then READY with a clock still frozen at the target while the
-                // audio sink restarts. That loading time must NOT be dead-reckoned through
-                // either, or the lyrics start running at the seek and get pulled back when
-                // the audio really starts. Treating it as priming reuses the same
-                // hold -> settle -> resume path.
                 val loading = fadeEngine.displayPlayer == null &&
                         displayPlayer.playWhenReady &&
                         displayPlayer.playbackState == Player.STATE_BUFFERING
                 val priming = loading ||
                         (fadeEngine.displayPlayer != null && !displayPlayer.isPlaying)
-                // True on the ticks where the published position may legitimately step
-                // backward (seek, track change, new anchor). Everywhere else a small
-                // correction must never move it back: see the monotonic guard below.
+                // True on ticks where the position may legitimately step backward.
                 var allowBackward = false
 
-                // Settled pause: nothing is audible anymore and the clock has stopped
-                // moving — the only state where the position can change without frames
-                // being produced is a notification/external seek. Freeze the published
-                // clock where the user last saw it: publishing the raw sample 1:1 here
-                // can step it BACKWARD by the last quantization gap (the projection
-                // runs a frame or two ahead of the frozen player clock at ramp end),
-                // and that backward step at the end of a pause fade-out WAS the pause
-                // flicker. max() makes the freeze monotonic; a real external seek is
-                // handled by the fresh-sample path below (its residual exceeds the
-                // snap bound) and follows the raw clock in whichever direction.
+                // Settled pause: freeze the published clock. Publishing the raw sample here
+                // could step it backward at the end of a pause fade-out.
                 if (!audible && !loading && sampleMs == lastSampleMs) {
                     val publishedMs = maxOf(sampleMs, lastPublishedMs)
                     if (publishedMs != lastPublishedMs) {
@@ -1884,19 +1701,14 @@ class AudioEngine @Inject constructor(
                 }
 
                 if (priming) {
-                    // Hold at the incoming stream's start position (no dead-reckoning).
                     allowBackward = true
                     anchorMs = sampleMs.toDouble()
                     anchorNanos = 0L
                     lastSampleMs = sampleMs
                     wasPriming = true
                 } else if (wasPriming) {
-                    // isPlaying just flipped true, but that only means READY + playWhenReady:
-                    // the audio sink needs a little longer before sound (and the position
-                    // clock) really starts. Keep holding until the clock actually moves —
-                    // dead-reckoning from this instant would run ahead of the audio by the
-                    // sink's startup latency and be pulled back afterwards (the small, rare
-                    // drift).
+                    // isPlaying only means READY + playWhenReady: the sink needs longer before
+                    // the clock really starts. Keep holding until it moves.
                     wasPriming = false
                     allowBackward = true
                     settlingSinceNanos = System.nanoTime()
@@ -1909,36 +1721,22 @@ class AudioEngine @Inject constructor(
                         anchorMs = sampleMs.toDouble()
                         lastSampleMs = sampleMs
                         if (jumpMs > POSITION_SNAP_MS) {
-                            // A new discontinuity (another seek while still waiting): re-anchor
-                            // on it and keep waiting for the clock to really start.
+                            // Another seek while settling: re-anchor and keep waiting.
                             allowBackward = true
                             anchorNanos = 0L
                             settlingSinceNanos = System.nanoTime()
                         } else {
-                            // First real movement: anchor exactly on it (no slew) and resume.
                             anchorNanos = System.nanoTime()
                             settlingSinceNanos = 0L
                         }
                     } else if ((System.nanoTime() - settlingSinceNanos) / 1_000_000L >
                         SETTLE_TIMEOUT_MS
                     ) {
-                        // Clock never moved (very slow start): stop waiting, resume from the anchor.
                         anchorNanos = System.nanoTime()
                         settlingSinceNanos = 0L
                     }
                 } else if (sampleMs != lastSampleMs) {
-                    // Fresh engine sample. Re-anchor gradually: the ExoPlayer clock
-                    // quantizes (AudioTrack timestamps step ~16-30ms) and can hold a
-                    // few frames while a crossfade secondary primes, so re-anchoring
-                    // to each sample 1:1 steps the karaoke fill / seek bar. Keep
-                    // POSITION_ERROR_SLEW of the residual error in the anchor — it
-                    // decays over the next few samples — and snap on real
-                    // discontinuities (seek, track change, external seek) instead of
-                    // slewing across them. No anchorNanos==0 special case: after a
-                    // settled pause the anchor sits at the frozen sample, and the
-                    // first post-play sample is within one poll interval of it, so
-                    // slewing resumes the clock from where the user last saw it
-                    // instead of jumping it forward by the whole pause gap.
+                    // Fresh sample: slew the anchor toward it, or snap on a discontinuity.
                     val elapsedMs =
                         if (anchorNanos == 0L) 0.0 else (System.nanoTime() - anchorNanos) / 1_000_000.0
                     val errorMs = sampleMs - (anchorMs + elapsedMs)
@@ -1951,35 +1749,23 @@ class AudioEngine @Inject constructor(
                             anchorMs + elapsedMs + errorMs * POSITION_ERROR_SLEW
                         }
                     if (snapped && audible) {
-                        // Seek / track change / external seek while playing: the player's
-                        // clock sits at the jump target until the stream has been flushed,
-                        // re-buffered and the audio sink restarted — a window that can be
-                        // shorter than a frame or longer than 100 ms. Dead-reckoning through
-                        // it runs ahead of the audio and gets pulled back afterwards, so hold
-                        // at the target until the clock really moves (see settling below).
+                        // Seek while playing: hold at the target until the clock moves.
                         anchorNanos = 0L
                         settlingSinceNanos = System.nanoTime()
                     } else {
-                        // Only dead-reckon while something is audible. A sample that moved
-                        // while NOT audible (seek during BUFFERING, paused seek) used to arm
-                        // the projection here; once isPlaying flipped true with the player
-                        // clock still frozen at the target, the position ran off by itself
-                        // for the whole loading time and was pulled back afterwards.
+                        // Dead-reckon only while audible, otherwise the position would run
+                        // ahead of a frozen clock and be pulled back later.
                         anchorNanos = if (audible) System.nanoTime() else 0L
                     }
                     lastSampleMs = sampleMs
                 } else if (!audible) {
-                    // Not audible but the sample moved since the last pause frame:
-                    // external seek while paused — the raw clock is the only truth.
+                    // The sample moved while paused: external seek, the raw clock is the truth.
                     allowBackward = true
                     anchorMs = sampleMs.toDouble()
                     anchorNanos = 0L
                     lastSampleMs = sampleMs
                 }
-                // Audible with a frozen sample (quantization gap while really playing):
-                // keep dead-reckoning from the anchor with NO frame budget. A priming
-                // crossfade secondary is handled above and does NOT dead-reckon: its
-                // clock is frozen at the target until it renders.
+                // Audible with a frozen sample (quantization gap): keep dead-reckoning from the anchor.
 
                 val rawProjectedMs =
                     (if (anchorNanos == 0L) {
@@ -1987,13 +1773,7 @@ class AudioEngine @Inject constructor(
                     } else {
                         anchorMs + (System.nanoTime() - anchorNanos) / 1_000_000.0
                     }).roundToLong().coerceAtLeast(0L)
-                // Monotonic guard. Absorbing a fresh sample's residual error (quantized
-                // AudioTrack timestamps, a small clock correction when the sink starts)
-                // can put the projection a few ms BEHIND what was already published; the
-                // fill / focus line then steps back and runs forward again — the
-                // "backward then forward" flicker. For small deficits hold the published
-                // value instead: the clock simply pauses until the projection catches up.
-                // Real discontinuities (allowBackward) and large gaps still go back.
+                // Monotonic guard: hold the published value on small backward corrections.
                 val deficitMs = lastPublishedMs - rawProjectedMs
                 val projectedMs =
                     if (!allowBackward && lastPublishedMs != Long.MIN_VALUE &&
@@ -2008,31 +1788,15 @@ class AudioEngine @Inject constructor(
                     _positionMs.value = projectedMs
                 }
 
-                // Auto-crossfade arming rides the same tick: this is what starts the
-                // fade between songs near a track's end. Gated on the REAL primary,
-                // not the display player — mid-fade the display player is a priming
-                // secondary whose clock can't answer for the primary's queue edge.
-                // Re-evaluated every tick so a skipped/unreadable next track falls
-                // back to the natural transition on the next pass.
+                // Gated on the real primary: mid-fade the display player is a priming secondary.
                 if (player.isPlaying) {
                     maybeStartTrackCrossfade()
                 }
 
-                // Per-frame while anything can be heard — active playback, or a
-                // fade whose incoming player is still priming (isPlaying false
-                // right after the logical switch). Ticking was previously gated
-                // on _positionMs.subscriptionCount, so the moment no collector
-                // was attached (screen transitions, transient recomposes) the
-                // published position fell back to a 250ms staircase — the drift/
-                // flicker seen in lyrics and seek bar around seeks and pauses
-                // with audio fades on. Choreographer stops delivering frames in
-                // the background and awaitFrame falls back to the slow poll
-                // cadence then, so this stays cheap off-screen.
+                // Per frame while audible. awaitFrame() falls back to a slow poll in the background.
                 if (audible) {
                     awaitFrame()
                 } else {
-                    // While paused, keep position in sync (catches external seeks
-                    // and the next play) at the short poll cadence.
                     delay(PAUSED_POLL_INTERVAL_MS)
                 }
             }
