@@ -20,6 +20,7 @@ import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.constants.completeNavBarItemOrder
 import com.foamplayer.app.constants.defaultSortMode
+import kotlin.math.pow
 
 /** The complete, validated set of user-configurable application preferences. */
 enum class FoamIconStyle(val label: String) {
@@ -102,6 +103,10 @@ data class AppSettings(
     val customBackgroundUri: String? = null,
     /** Color anchors of the gradient background ([BackgroundMode.GRADIENT]); 1..4 stops. */
     val gradientStops: List<GradientStop> = DefaultGradientStops,
+    /**
+     * Background blur slider value, 0..100. A perceptual scale rather than a dp
+     * radius: the backdrop layers render it through [backgroundBlurRadiusDp].
+     */
     val backgroundBlur: Int = DEFAULT_BACKGROUND_BLUR,
     val appBackgroundIntensity: Int = DEFAULT_APP_BACKGROUND_INTENSITY,
     val playerBackgroundIntensity: Int = DEFAULT_PLAYER_BACKGROUND_INTENSITY,
@@ -260,6 +265,40 @@ data class AppSettings(
         const val MIN_BACKGROUND_BLUR = 0
         const val MAX_BACKGROUND_BLUR = 100
         const val DEFAULT_BACKGROUND_BLUR = 20
+
+        /** Gaussian radius, in dp, the backdrop layers render at 100% blur. */
+        const val BACKGROUND_BLUR_MAX_DP = 100f
+
+        /**
+         * Exponent of the blur slider's percent->radius curve: the rendered
+         * radius is [BACKGROUND_BLUR_MAX_DP] * (percent/100) ^ this. Above 1 it
+         * bends the curve toward the bottom of the scale, giving the subtle
+         * radii finer slider steps than the linear 1% = 1dp map. Tuned so the
+         * curve stays VISIBLE at the low end: 10% ≈ 5dp (a squared curve's 1dp
+         * there read as "no blur at all"), 20% ≈ 12dp, 50% ≈ 41dp, 90% ≈ 87dp.
+         */
+        private const val BACKGROUND_BLUR_CURVE_EXPONENT = 1.3f
+
+        /**
+         * Maps the stored background-blur percentage (0..100, the slider's
+         * value) to the Gaussian radius, in dp, the backdrop layers render with.
+         *
+         * A power curve through the origin rather than linear: the visual
+         * distance between two radii is not proportional to their difference —
+         * the first few dp carry the whole sharp-to-blurred transition, while
+         * anything past ~60dp only marginally deepens an already-destroyed
+         * image. The [BACKGROUND_BLUR_CURVE_EXPONENT] exponent spends more of
+         * the slider on the subtle end (10% ≈ 5dp, 20% ≈ 12dp, 50% ≈ 41dp)
+         * without a floor radius: 0 is a hard zero (no blur modifier at all)
+         * and the first few percent are a genuine near-sharp whisper rather
+         * than a dead zone.
+         */
+        fun backgroundBlurRadiusDp(blurPercent: Int): Float {
+            if (blurPercent <= MIN_BACKGROUND_BLUR) return 0f
+            val t = blurPercent.coerceAtMost(MAX_BACKGROUND_BLUR) / 100f
+            return BACKGROUND_BLUR_MAX_DP * t.pow(BACKGROUND_BLUR_CURVE_EXPONENT)
+        }
+
         const val MIN_DYNAMIC_BACKGROUND_INTENSITY = 0
         const val MAX_DYNAMIC_BACKGROUND_INTENSITY = 100
         const val DEFAULT_APP_BACKGROUND_INTENSITY = 50

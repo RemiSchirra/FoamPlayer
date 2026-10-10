@@ -83,6 +83,7 @@ import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.ui.modals.CollectionFoamModal
@@ -198,6 +199,15 @@ private const val BottomChromeNavBarOverlayZIndex = 10f
  * ATTACHED mode, where the card sinks into the bar's surface extension).
  */
 private const val BottomChromeMiniPlayerOverlayZIndex = 11f
+
+/**
+ * The stored background-blur percentage rendered as an actual Gaussian radius:
+ * the slider value is perceptual (see [AppSettings.backgroundBlurRadiusDp]), so
+ * every backdrop layer converts it through that mapping instead of treating
+ * percent as dp.
+ */
+private fun backgroundBlurRadius(blurPercent: Int): Dp =
+    AppSettings.backgroundBlurRadiusDp(blurPercent).dp
 
 /**
  * Live-preview overrides pushed by the background settings screen while it is
@@ -364,7 +374,7 @@ private fun rememberAnimatedBackground(
             frontArtPath = frontArtPath,
             backArtPath = backArtPath,
             crossfadeFraction = { crossfadeFraction.value },
-            blur = (preview.backgroundBlur ?: persistedBlur).dp,
+            blur = backgroundBlurRadius(preview.backgroundBlur ?: persistedBlur),
             intensity = (preview.appBackgroundIntensity ?: persistedAppIntensity) / 100f,
             modifier = modifier,
         )
@@ -398,7 +408,7 @@ private fun StaticBackgroundLayers(
     when (mode) {
         BackgroundMode.CUSTOM -> CustomImageBackground(
             imageUri = customBackgroundUri,
-            blur = (preview.backgroundBlur ?: persistedBackgroundBlur).dp,
+            blur = backgroundBlurRadius(preview.backgroundBlur ?: persistedBackgroundBlur),
             intensity = (preview.appBackgroundIntensity ?: persistedAppIntensity) / 100f,
             modifier = modifier
         )
@@ -984,7 +994,7 @@ fun FoamNavHost(
                         backArtPath = listCrossfadeTo?.path,
                         backArtIsEmbedded = listCrossfadeTo?.isEmbeddedArt ?: true,
                         crossfadeFraction = { listCrossfade.value },
-                        blur = playerSettings.backgroundBlur.dp,
+                        blur = backgroundBlurRadius(playerSettings.backgroundBlur),
                         intensity = playerSettings.appBackgroundIntensity / 100f,
                         modifier = Modifier
                             .fillMaxSize()
@@ -1026,7 +1036,7 @@ fun FoamNavHost(
                         backgroundMode = backgroundMode,
                         customBackgroundUri = playerSettings.customBackgroundUri,
                         gradientStops = playerSettings.gradientStops,
-                        backgroundBlur = playerSettings.backgroundBlur.dp,
+                        backgroundBlur = backgroundBlurRadius(playerSettings.backgroundBlur),
                         intensity = playerSettings.playerBackgroundIntensity / 100f,
                         bottomFadeInset = playerBackdropFadeInset,
                         forceDynamic = forceDynamicBackgroundInPlayer,
