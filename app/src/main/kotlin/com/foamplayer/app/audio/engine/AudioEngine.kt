@@ -1841,7 +1841,19 @@ class AudioEngine @Inject constructor(
                 // back (snap or slew) — the "plays ~0.1s then drifts back" glitch after a
                 // quick-fade seek. So hold the published position at the target until the
                 // incoming player is really playing.
-                val priming = fadeEngine.displayPlayer != null && !displayPlayer.isPlaying
+                //
+                // The same hold applies to a plain (no-fade) seek / track load: the primary
+                // sits in BUFFERING with playback requested while the stream is flushed and
+                // re-buffered, then READY with a clock still frozen at the target while the
+                // audio sink restarts. That loading time must NOT be dead-reckoned through
+                // either, or the lyrics start running at the seek and get pulled back when
+                // the audio really starts. Treating it as priming reuses the same
+                // hold -> settle -> resume path.
+                val loading = fadeEngine.displayPlayer == null &&
+                        displayPlayer.playWhenReady &&
+                        displayPlayer.playbackState == Player.STATE_BUFFERING
+                val priming = loading ||
+                        (fadeEngine.displayPlayer != null && !displayPlayer.isPlaying)
                 // True on the ticks where the published position may legitimately step
                 // backward (seek, track change, new anchor). Everywhere else a small
                 // correction must never move it back: see the monotonic guard below.
@@ -1857,7 +1869,7 @@ class AudioEngine @Inject constructor(
                 // flicker. max() makes the freeze monotonic; a real external seek is
                 // handled by the fresh-sample path below (its residual exceeds the
                 // snap bound) and follows the raw clock in whichever direction.
-                if (!audible && sampleMs == lastSampleMs) {
+                if (!audible && !loading && sampleMs == lastSampleMs) {
                     val publishedMs = maxOf(sampleMs, lastPublishedMs)
                     if (publishedMs != lastPublishedMs) {
                         lastPublishedMs = publishedMs
@@ -1948,7 +1960,12 @@ class AudioEngine @Inject constructor(
                         anchorNanos = 0L
                         settlingSinceNanos = System.nanoTime()
                     } else {
-                        anchorNanos = System.nanoTime()
+                        // Only dead-reckon while something is audible. A sample that moved
+                        // while NOT audible (seek during BUFFERING, paused seek) used to arm
+                        // the projection here; once isPlaying flipped true with the player
+                        // clock still frozen at the target, the position ran off by itself
+                        // for the whole loading time and was pulled back afterwards.
+                        anchorNanos = if (audible) System.nanoTime() else 0L
                     }
                     lastSampleMs = sampleMs
                 } else if (!audible) {
