@@ -1,6 +1,7 @@
 package com.foamplayer.app
 
 import android.Manifest
+import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -114,19 +115,51 @@ class MainActivity : AppCompatActivity() {
      *
      * Playing from the lock-screen notification NEVER opens a session (no
      * screen event happens), and a screen-off does not close one.
+     *
+     * Closing the session must restore the surface the user had before the
+     * screen locked -- exactly like the system lock screen does. Two rules
+     * make that work:
+     *  - the keyguard flag alone ("drop back") is done by clearing
+     *    show-when-locked: the keyguard covers the app again, no task
+     *    bookkeeping is touched;
+     *  - when the user's own foreground app before the lock was NOT this one
+     *    ([leftAppByUser]), the task is REMOVED ([finishAndRemoveTask]) so the
+     *    unlock (or the next look at the phone) returns to that app.
+     *    moveTaskToBack must never be used here: while the keyguard is up it
+     *    parks the LAUNCHER behind it, so unlocking afterwards landed on the
+     *    home screen instead of the previously open app.
      */
     private var lockDisplaySessionActive = false
+
+    /**
+     * Whether the user's foreground app before the screen locked was something
+     * other than this one: true after they navigated away by choice
+     * ([onUserLeaveHint] -- home, recents, another app; screen-off does NOT
+     * call it), false while the app is the surface they were using. Decides
+     * whether ending the lock-display session removes the task (their app
+     * comes back) or keeps it (the app is what they were using).
+     */
+    private var leftAppByUser = false
+
+    /** Marks the resume that follows a lock-display launch (not a user entry). */
+    private var lockLaunchInFlight = false
 
     /** Active Fast lock countdown; null while the timer is not running. */
     private var fastLockJob: Job? = null
 
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == Intent.ACTION_USER_PRESENT) {
-                lockDisplaySessionActive = false
-                cancelFastLock()
-                applyShowWhenLocked()
-            }
+            if (intent.action != Intent.ACTION_USER_PRESENT) return
+            val sessionWasActive = lockDisplaySessionActive
+            lockDisplaySessionActive = false
+            cancelFastLock()
+            applyShowWhenLocked()
+            // Unlocking hands the screen back to whatever the user was doing
+            // before the lock-display session: when that was another app (the
+            // player was a glanceable overlay, like the system lock screen),
+            // remove the task so the unlock lands there instead of leaving the
+            // player in front.
+            if (sessionWasActive && leftAppByUser) dismissLockDisplayTask()
         }
     }
 
@@ -137,8 +170,42 @@ class MainActivity : AppCompatActivity() {
         setShowWhenLocked(show)
     }
 
+    /** True while the keyguard is showing (device locked). */
+    private fun isDeviceLocked(): Boolean =
+        (getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+
+    /**
+     * Removes this task without an animation, restoring the system's previous
+     * top task behind it (the user's app, or the keyguard itself when still
+     * locked). Never use moveTaskToBack for this: behind a keyguard it resumes
+     * the launcher, so the next unlock landed on the home screen.
+     */
+    private fun dismissLockDisplayTask() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, 0)
+        } else {
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+        }
+        finishAndRemoveTask()
+    }
+
     /** Common path for a screen-event launch: opens (or re-arms) the session. */
     private fun onLockDisplayLaunch() {
+        // The service checks the keyguard BEFORE starting this activity, but
+        // the intent is delivered later: a cold start (the service reviving
+        // the process) or a warm onNewIntent can land a beat after the user
+        // dismissed the keyguard. With no session up, such a delivery would
+        // put the app in front of whatever the user is doing -- drop the task
+        // so their app comes back (this is what used to read as "the app
+        // closes to the home page while we're already unlocked"). With a
+        // session up, the player was already showing (a screen-off keeps it)
+        // and the delivery is only a re-arm.
+        if (!isDeviceLocked()) {
+            if (!lockDisplaySessionActive && leftAppByUser) dismissLockDisplayTask()
+            return
+        }
+        lockLaunchInFlight = true
         lockDisplaySessionActive = true
         applyShowWhenLocked()
         restartFastLock()
@@ -162,6 +229,10 @@ class MainActivity : AppCompatActivity() {
         // only covers the warm start.
         handleIntent(intent)
         if (intent?.getBooleanExtra(LockDisplayLaunch, false) == true) {
+            // A cold start with the launch extra is always service-initiated:
+            // this activity did not exist, so the user's foreground app before
+            // the screen locked was something else.
+            leftAppByUser = true
             onLockDisplayLaunch()
         }
         // Permissions are requested on onboarding; afterwards they're auto-requested once.
@@ -180,8 +251,7 @@ class MainActivity : AppCompatActivity() {
                 playerViewModel.hasCurrentTrack
             ) { settings, hasTrack -> settings to hasTrack }.collect { (settings, hasTrack) ->
                 if (!hasTrack) {
-                    lockDisplaySessionActive = false
-                    cancelFastLock()
+                    endLockDisplaySession()
                 } else if (lockDisplaySessionActive && !settings.displayOnLockScreen) {
                     // The display option was switched off mid-session.
                     endLockDisplaySession()
@@ -269,6 +339,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        when {
+            // The resume of a lock-display launch: the system brought the app
+            // forward, the user did not choose it -- keep [leftAppByUser] as-is.
+            lockLaunchInFlight -> lockLaunchInFlight = false
+            // A resume while the keyguard is up is the lock-display surface
+            // becoming visible again (a wake of an ongoing session): no user
+            // entry, keep the flag. Any other resume is the user entering the
+            // app by choice (icon, notification, recents): the app is their
+            // foreground surface again.
+            !isDeviceLocked() -> leftAppByUser = false
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // The user navigated away by choice (home, recents, another app).
+        // Screen-off/keyguard does NOT call this, so the flag cleanly splits
+        // "the user left the app" from "the system covered the app".
+        leftAppByUser = true
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // The service only delivers this intent when starting the lock-screen
@@ -309,11 +402,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun endLockDisplaySession() {
+        val sessionWasActive = lockDisplaySessionActive
         lockDisplaySessionActive = false
         cancelFastLock()
         applyShowWhenLocked()
-        // Send the task behind the keyguard; the system lock screen is visible again.
-        moveTaskToBack(true)
+        // Clearing show-when-locked is enough for the system lock screen to
+        // take over. When the user's own foreground app before the lock was
+        // something else, the task is removed as well so the next unlock lands
+        // in THAT app instead of leaving this one in front (and instead of
+        // parking the launcher, which is what moveTaskToBack did).
+        if (sessionWasActive && leftAppByUser && isDeviceLocked()) {
+            dismissLockDisplayTask()
+        }
     }
 
     @OptIn(UnstableApi::class)
