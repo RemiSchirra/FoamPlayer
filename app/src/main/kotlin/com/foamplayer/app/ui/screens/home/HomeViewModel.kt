@@ -13,12 +13,15 @@ import com.foamplayer.app.data.scanner.ArtistCoverProvider
 import com.foamplayer.app.data.scanner.PlaylistCover
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -104,6 +107,30 @@ class HomeViewModel @Inject constructor(
         artistCoverProvider.coversFlow(favoriteArtists.map { artists -> artists.map { it.name } })
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
+    /** Library snapshot backing the "Start playing" grid. */
+    private var libraryTracks: List<TrackEntity> = emptyList()
+
+    private val _randomTracks = MutableStateFlow<List<TrackEntity>>(emptyList())
+
+    /** The "Start playing" grid: six random songs, repicked by [reshuffleRandomTracks]. */
+    val randomTracks: StateFlow<List<TrackEntity>> = _randomTracks.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            trackRepository.getAllTracks().collect { tracks ->
+                libraryTracks = tracks
+                // First load seeds the grid; later library changes don't
+                // silently replace the songs the user is looking at.
+                if (_randomTracks.value.isEmpty()) reshuffleRandomTracks()
+            }
+        }
+    }
+
+    /** Repicks the grid's six songs from the whole library. */
+    fun reshuffleRandomTracks() {
+        _randomTracks.value = libraryTracks.shuffled().take(StartPlayingTrackCount)
+    }
+
     /** One album's tracks in disc/track order. */
     suspend fun tracksForAlbum(album: String): List<TrackEntity> =
         trackRepository.getTracksByAlbum(album).first()
@@ -118,5 +145,8 @@ class HomeViewModel @Inject constructor(
     companion object {
         /** Listens older than this count as "long-standing" for the Old favorites row (14 days). */
         private const val OldFavoritesCutoffMs = 14L * 24 * 60 * 60 * 1000
+
+        /** Songs shown in the "Start playing" grid (2 columns x 3 rows). */
+        const val StartPlayingTrackCount = 6
     }
 }

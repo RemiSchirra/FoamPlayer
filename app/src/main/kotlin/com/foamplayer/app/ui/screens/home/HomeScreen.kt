@@ -63,11 +63,11 @@ private const val HomeRowItemCount = 5
 private val ImageMimeTypes = arrayOf("image/*")
 
 /**
- * The app's landing tab: five recommendation rows (recommended playlists,
- * recommended albums, recent listens, old favorites, favorite artists), each
- * a horizontal card pager with an optional "See all" page behind it. Rows with
- * no data hide themselves; when nothing can be shown at all, a centered
- * placeholder takes the screen.
+ * The app's landing tab: a "Start playing" grid of random songs, then five
+ * recommendation rows (recommended playlists, recommended albums, recent
+ * listens, old favorites, favorite artists), each a horizontal card pager with
+ * an optional "See all" page behind it. Rows with no data hide themselves;
+ * when nothing can be shown at all, a centered placeholder takes the screen.
  *
  * Long-pressing a card opens the item's corresponding actions modal: the
  * track modal for songs (hosted at the nav root), the collection modal for
@@ -113,6 +113,7 @@ fun HomeScreen(
     val artists by viewModel.favoriteArtists.collectAsState()
     val artistImages by viewModel.artistImages.collectAsState()
     val allPlaylists by viewModel.playlists.collectAsState()
+    val randomTracks by viewModel.randomTracks.collectAsState()
 
     val trackModalState = LocalTrackFoamModalState.current
     val collectionModalState = LocalCollectionFoamModalState.current
@@ -180,6 +181,15 @@ fun HomeScreen(
                     title = stringResource(R.string.home)
                 )
             }
+        }
+
+        item(key = "home_row_start_playing") {
+            StartPlayingSection(
+                tracks = randomTracks,
+                onTrackClick = onTrackClick,
+                onTrackLongClick = { track -> trackModalState?.show(track) },
+                onRefresh = viewModel::reshuffleRandomTracks
+            )
         }
 
         item(key = "home_row_playlists") {

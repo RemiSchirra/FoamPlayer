@@ -24,6 +24,8 @@
     <string name="equalizer_dsp">Equalizer &amp; DSP</string>
     <string name="home">Home</string>
     <string name="home_see_all">See all</string>
+    <string name="home_row_start_playing">Start playing</string>
+    <string name="home_start_playing_refresh">Shuffle selection</string>
     <string name="home_row_recommended_playlists">Recommended playlists</string>
     <string name="home_row_recommended_albums">Recommended albums</string>
     <string name="home_row_recent_listens">Recent listens</string>

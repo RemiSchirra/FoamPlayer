@@ -23,6 +23,8 @@
     <string name="equalizer_dsp">Égaliseur &amp; DSP</string>
     <string name="home">Accueil</string>
     <string name="home_see_all">Voir tout</string>
+    <string name="home_row_start_playing">Commencer à écouter</string>
+    <string name="home_start_playing_refresh">Mélanger</string>
     <string name="home_row_recommended_playlists">Playlists recommandées</string>
     <string name="home_row_recommended_albums">Albums recommandés</string>
     <string name="home_row_recent_listens">Écoutes récentes</string>
