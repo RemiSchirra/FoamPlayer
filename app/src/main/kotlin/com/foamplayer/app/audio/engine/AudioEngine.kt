@@ -1788,6 +1788,8 @@ class AudioEngine @Inject constructor(
                     _positionMs.value = projectedMs
                 }
 
+                tickListenCount(displayPlayer, projectedMs)
+
                 // Gated on the real primary: mid-fade the display player is a priming secondary.
                 if (player.isPlaying) {
                     maybeStartTrackCrossfade()
