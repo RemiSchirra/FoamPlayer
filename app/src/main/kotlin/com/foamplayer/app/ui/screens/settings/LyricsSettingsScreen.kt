@@ -149,6 +149,22 @@ fun LyricsSettingsScreen(
                 )
             }
 
+            Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .background(FoamTheme.colors.surface)
+            ) {
+                FoamSwitchItem(
+                    title = stringResource(R.string.disable_word_sync),
+                    description = stringResource(R.string.disable_word_sync_desc),
+                    checked = settings.lyricsWordSyncDisabled,
+                    onCheckedChange = viewModel::setLyricsWordSyncDisabled
+                )
+            }
+
             Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
 
             BasicText(text = stringResource(R.string.manager), style = FoamTheme.typography.titleMedium)

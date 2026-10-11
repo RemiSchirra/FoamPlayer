@@ -486,6 +486,8 @@
     <string name="display">Display</string>
     <string name="manager">Manager</string>
     <string name="blur_inactive_lines">Blur inactive lines</string>
+    <string name="disable_word_sync">Disable word sync</string>
+    <string name="disable_word_sync_desc">Render word-synced lyrics line by line</string>
     <string name="mark_song_instrumental">Mark song as instrumental?</string>
 
     <!-- Player settings additions -->

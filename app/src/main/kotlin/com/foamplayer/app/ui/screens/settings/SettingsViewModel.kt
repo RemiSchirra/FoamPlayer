@@ -162,6 +162,10 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setLyricsLineBlur(enabled)
     }
 
+    fun setLyricsWordSyncDisabled(disabled: Boolean) = launch {
+        settingsRepository.setLyricsWordSyncDisabled(disabled)
+    }
+
     fun setLanguage(language: String) = launch {
         settingsRepository.setLanguage(language)
     }

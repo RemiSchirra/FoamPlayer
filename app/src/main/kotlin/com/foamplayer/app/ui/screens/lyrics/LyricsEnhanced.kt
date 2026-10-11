@@ -125,6 +125,7 @@ fun LyricsEnhanced(
     modifier: Modifier = Modifier,
     textColorOverride: Color? = null,
     lyricsLineBlurOverride: Boolean? = null,
+    wordSyncDisabled: Boolean = false,
     isReadyToParse: Boolean = true,
     lazyListState: LazyListState? = null,
     // Vertical collapse-drag, applied only to the non-scrollable placeholder states
@@ -191,7 +192,7 @@ fun LyricsEnhanced(
     var syncedLyrics by remember(lyrics) { mutableStateOf(SyncedLyrics(emptyList())) }
     var isPreparingLyrics by remember(lyrics) { mutableStateOf(lyrics != null && lyrics != LYRICS_NOT_FOUND) }
 
-    LaunchedEffect(lyrics) {
+    LaunchedEffect(lyrics, wordSyncDisabled) {
         if (lyrics == null || lyrics == LYRICS_NOT_FOUND) {
             lyricsEntries = emptyList()
             syncedLyrics = SyncedLyrics(emptyList())
@@ -210,8 +211,19 @@ fun LyricsEnhanced(
                     .filter { it.isNotBlank() }
                     .map { line -> LyricsEntry(time = -1L, text = line.trim()) }
             }
-            val builtSynced = buildSyncedLyrics(builtEntries, emptyMap())
-            builtEntries to builtSynced
+            // "Disable word sync": strip the per-word timings after parsing so every
+            // word-synced line falls through to the plain line-synced branch of
+            // buildSyncedLyrics instead of rendering as karaoke.
+            val normalizedEntries =
+                if (wordSyncDisabled && builtEntries.any { it.words != null }) {
+                    builtEntries.map { entry ->
+                        if (entry.words != null) entry.copy(words = null) else entry
+                    }
+                } else {
+                    builtEntries
+                }
+            val builtSynced = buildSyncedLyrics(normalizedEntries, emptyMap())
+            normalizedEntries to builtSynced
         }
         lyricsEntries = entries
         syncedLyrics = synced

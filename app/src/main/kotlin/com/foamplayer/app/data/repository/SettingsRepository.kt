@@ -24,6 +24,7 @@ import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
 import com.foamplayer.app.constants.DefaultNavBarSecondaryOrder
 import com.foamplayer.app.constants.LyricsLineBlurKey
+import com.foamplayer.app.constants.LyricsWordSyncDisabledKey
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavBarItem
@@ -165,6 +166,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setLyricsLineBlur(enabled: Boolean) = update {
         it.copy(lyricsLineBlur = enabled)
+    }
+
+    suspend fun setLyricsWordSyncDisabled(disabled: Boolean) = update {
+        it.copy(lyricsWordSyncDisabled = disabled)
     }
 
     suspend fun setSearchHistory(history: List<SearchHistoryEntry>) = update { it.copy(searchHistory = history) }
@@ -341,6 +346,7 @@ class SettingsRepository @Inject constructor(
             ?.mapNotNull { name -> LyricsSource.entries.find { it.name == name } }
             ?.toSet() ?: DefaultLyricsSourceOrder.toSet(),
         lyricsLineBlur = this[Keys.LYRICS_LINE_BLUR] ?: AppSettings().lyricsLineBlur,
+        lyricsWordSyncDisabled = this[Keys.LYRICS_WORD_SYNC_DISABLED] ?: AppSettings().lyricsWordSyncDisabled,
         searchHistory = deserializeSearchHistory(this[Keys.SEARCH_HISTORY]),
         searchInLyrics = this[Keys.SEARCH_IN_LYRICS] ?: AppSettings().searchInLyrics,
         searchInAlbums = this[Keys.SEARCH_IN_ALBUMS] ?: AppSettings().searchInAlbums,
@@ -427,6 +433,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.LYRICS_SOURCE_ORDER] = settings.lyricsSourceOrder.joinToString(",") { it.name }
         this[Keys.ENABLED_LYRICS_SOURCES] = settings.enabledLyricsSources.map { it.name }.toSet()
         this[Keys.LYRICS_LINE_BLUR] = settings.lyricsLineBlur
+        this[Keys.LYRICS_WORD_SYNC_DISABLED] = settings.lyricsWordSyncDisabled
         this[Keys.SEARCH_HISTORY] = serializeSearchHistory(settings.searchHistory)
         this[Keys.SEARCH_IN_LYRICS] = settings.searchInLyrics
         this[Keys.SEARCH_IN_ALBUMS] = settings.searchInAlbums
@@ -498,6 +505,7 @@ class SettingsRepository @Inject constructor(
         val LYRICS_SOURCE_ORDER = stringPreferencesKey("lyrics_source_order")
         val ENABLED_LYRICS_SOURCES = stringSetPreferencesKey("enabled_lyrics_sources")
         val LYRICS_LINE_BLUR = LyricsLineBlurKey
+        val LYRICS_WORD_SYNC_DISABLED = LyricsWordSyncDisabledKey
         val SEARCH_HISTORY = stringPreferencesKey("search_history")
         val SEARCH_IN_LYRICS = booleanPreferencesKey("search_in_lyrics")
         val SEARCH_IN_ALBUMS = booleanPreferencesKey("search_in_albums")

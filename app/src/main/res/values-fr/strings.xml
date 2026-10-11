@@ -482,6 +482,8 @@
     <string name="display">Affichage</string>
     <string name="manager">Gestion</string>
     <string name="blur_inactive_lines">Flouter les lignes inactives</string>
+    <string name="disable_word_sync">Désactiver la synchro mot à mot</string>
+    <string name="disable_word_sync_desc">Afficher les paroles synchronisées ligne par ligne</string>
     <string name="mark_song_instrumental">Marquer le morceau comme instrumental ?</string>
 
     <!-- Paramètres du lecteur : ajouts -->

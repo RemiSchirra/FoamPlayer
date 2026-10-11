@@ -60,6 +60,10 @@ class LyricsViewModel @Inject constructor(
         .map { it.lyricsLineBlur }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val lyricsWordSyncDisabled: StateFlow<Boolean> = settingsRepository.settings
+        .map { it.lyricsWordSyncDisabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     // Instrumental flag of the current track, read straight from the DB so marking a
     // track instrumental flips the lyrics subview to the music-note state immediately.
     @OptIn(ExperimentalCoroutinesApi::class)

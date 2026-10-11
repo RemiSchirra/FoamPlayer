@@ -76,6 +76,7 @@ object BackupJson {
         put("lyricsSourceOrder", toNamesArray(settings.lyricsSourceOrder))
         put("enabledLyricsSources", toNamesArray(settings.enabledLyricsSources))
         put("lyricsLineBlur", settings.lyricsLineBlur)
+        put("lyricsWordSyncDisabled", settings.lyricsWordSyncDisabled)
         put("searchHistory", searchHistoryToJson(settings.searchHistory))
         put("searchInLyrics", settings.searchInLyrics)
         put("searchInAlbums", settings.searchInAlbums)
@@ -174,6 +175,7 @@ object BackupJson {
             DefaultLyricsSourceOrder.toSet()
         ),
         lyricsLineBlur = json.optBoolean("lyricsLineBlur", false),
+        lyricsWordSyncDisabled = json.optBoolean("lyricsWordSyncDisabled", false),
         searchHistory = searchHistoryFromJsonTopLevel(json.optJSONArray("searchHistory")),
         searchInLyrics = json.optBoolean("searchInLyrics", true),
         searchInAlbums = json.optBoolean("searchInAlbums", true),

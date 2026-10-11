@@ -288,6 +288,7 @@ enum class LyricsPosition {
 val LyricsTextSizeKey = floatPreferencesKey("lyricsTextSize")
 val LyricsLineSpacingKey = floatPreferencesKey("lyricsLineSpacing")
 val LyricsLineBlurKey = booleanPreferencesKey("lyricsLineBlur")
+val LyricsWordSyncDisabledKey = booleanPreferencesKey("lyricsWordSyncDisabled")
 
 val TopSize = stringPreferencesKey("topSize")
 
