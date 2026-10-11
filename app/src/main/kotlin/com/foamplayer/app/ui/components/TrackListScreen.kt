@@ -67,6 +67,7 @@ import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.modals.DensityOrganisationModal
+import com.foamplayer.app.ui.modals.OrganisationExtraAction
 import com.foamplayer.app.ui.modals.OrganisationMenuButton
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -193,6 +194,8 @@ fun TrackListScreen(
     onRemoveTrack: ((TrackEntity) -> Unit)? = null,
     /** Edit-mode reorder persistence: called with the final displayed order's track ids. */
     onPersistTrackOrder: ((List<Long>) -> Unit)? = null,
+    /** When set, the organisation modal shows this extra action row (e.g. playlist export). */
+    organisationExtraAction: OrganisationExtraAction? = null,
     /** Whether the long-content fast scrollbar rides the container's end edge. */
     showScrollbar: Boolean = true
 ) {
@@ -797,6 +800,7 @@ fun TrackListScreen(
             onSelectSort = { onSortChange?.invoke(it) },
             sortInverted = sortInverted,
             onToggleSortInverted = { onSortInvertedChange?.invoke(it) },
+            extraAction = organisationExtraAction,
             onDismiss = { showOrganisationModal = false }
         )
     }

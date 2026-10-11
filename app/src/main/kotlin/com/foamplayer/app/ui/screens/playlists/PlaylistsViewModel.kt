@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.R
+import com.foamplayer.app.data.backup.PlaylistExporter
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.PlaylistImporter
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -65,6 +67,7 @@ class PlaylistsViewModel @Inject constructor(
     private val trackRepository: TrackRepository,
     private val settingsRepository: SettingsRepository,
     private val importer: PlaylistImporter,
+    private val exporter: PlaylistExporter,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -92,6 +95,9 @@ class PlaylistsViewModel @Inject constructor(
     /** Where tracks land inside a playlist when added from the add-to-playlist picker. */
     private val _addTrackInsertPosition = MutableStateFlow(PlaylistInsertPosition.END)
     val addTrackInsertPosition: StateFlow<PlaylistInsertPosition> = _addTrackInsertPosition
+
+    private val _exportRunning = MutableStateFlow(false)
+    val exportRunning: StateFlow<Boolean> = _exportRunning.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -206,6 +212,23 @@ class PlaylistsViewModel @Inject constructor(
             val matched = importer.matchFolder(state.folderUri, trackRepository.getAllTracksOnce()).matched
             createPlaylistWithTracks(state.name, matched.map { it.id })
             _createState.value = CreatePlaylistState.Idle
+        }
+    }
+
+    /** Exports every playlist as .m3u8 files into the picked folder. */
+    fun exportAllPlaylists(folderUri: String) {
+        runExport { exporter.exportAll(folderUri) }
+    }
+
+    private fun runExport(export: suspend () -> Unit) {
+        if (_exportRunning.value) return
+        viewModelScope.launch {
+            _exportRunning.value = true
+            try {
+                export()
+            } finally {
+                _exportRunning.value = false
+            }
         }
     }
 

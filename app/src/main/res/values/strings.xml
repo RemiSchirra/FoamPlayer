@@ -397,6 +397,11 @@
     <string name="settings_backup_failed">Backup failed</string>
     <string name="settings_backup_importing">Importing backup…</string>
 
+    <!-- Playlist export (.m3u8) -->
+    <string name="playlist_export_all">Export playlists</string>
+    <string name="playlist_export_one">Export playlist</string>
+    <string name="playlist_export_folder_hint">Choose where the .m3u8 files are written</string>
+
     <!-- Browse / library sections -->
     <string name="artists">Artists</string>
     <string name="genres">Genres</string>

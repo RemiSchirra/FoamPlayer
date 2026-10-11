@@ -393,6 +393,11 @@
     <string name="settings_backup_failed">Échec de la sauvegarde</string>
     <string name="settings_backup_importing">Importation de la sauvegarde…</string>
 
+    <!-- Export de playlists (.m3u8) -->
+    <string name="playlist_export_all">Exporter les playlists</string>
+    <string name="playlist_export_one">Exporter la playlist</string>
+    <string name="playlist_export_folder_hint">Choisissez où écrire les fichiers .m3u8</string>
+
     <!-- Sections bibliothèque -->
     <string name="artists">Artistes</string>
     <string name="genres">Genres</string>

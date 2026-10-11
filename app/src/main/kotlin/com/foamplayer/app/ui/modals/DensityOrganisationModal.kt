@@ -21,6 +21,7 @@ import androidx.compose.material.Checkbox
 import androidx.compose.material.CheckboxDefaults
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
@@ -36,6 +37,16 @@ import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+
+/**
+ * An extra action row shown at the top of [DensityOrganisationModal], above
+ * the sort and organisation groups (e.g. the playlist export entry); hidden
+ * when the hosting screen passes null.
+ */
+data class OrganisationExtraAction(
+    val label: String,
+    val onClick: () -> Unit
+)
 
 /**
  * The modal opened from a media list screen's 3-dots ("more options") button:
@@ -57,13 +68,29 @@ fun DensityOrganisationModal(
     currentSort: CollectionSortMode = CollectionSortMode.NAME,
     onSelectSort: (CollectionSortMode) -> Unit = {},
     sortInverted: Boolean = false,
-    onToggleSortInverted: (Boolean) -> Unit = {}
+    onToggleSortInverted: (Boolean) -> Unit = {},
+    /** Optional action row above the groups (e.g. playlist export). */
+    extraAction: OrganisationExtraAction? = null
 ) {
     FoamBottomModal(
         visible = visible,
         onDismissRequest = onDismiss
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
+            if (extraAction != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                        .background(FoamTheme.colors.surfaceVariant)
+                ) {
+                    ModalActionRow(
+                        label = extraAction.label,
+                        onClick = extraAction.onClick
+                    )
+                }
+            }
+
             if (sortOptions.isNotEmpty()) {
                 Column(
                     modifier = Modifier
@@ -144,6 +171,45 @@ private fun DensityRadioRow(
         )
         Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
         DensityRadioButton(selected = selected)
+    }
+}
+
+/**
+ * The extra-action card's row: a tappable button-like entry (export), with
+ * the backup export icon ahead of the label. The label uses the row-title
+ * style so it stands out from the radio rows below.
+ */
+@Composable
+private fun ModalActionRow(
+    label: String,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                role = Role.Button,
+                onClick = onClick
+            )
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.paddingMedium),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.FileUpload,
+            contentDescription = null,
+            tint = FoamTheme.accentColor,
+            modifier = Modifier.size(FoamDimens.iconMedium)
+        )
+        Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
+        BasicText(
+            text = label,
+            style = FoamTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 

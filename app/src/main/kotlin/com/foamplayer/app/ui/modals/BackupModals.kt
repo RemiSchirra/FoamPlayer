@@ -128,6 +128,71 @@ fun ExportSettingsModal(
 }
 
 /**
+ * The playlist export sheet: pick a destination folder, then Export writes
+ * one .m3u8 file per playlist into it (or just the shown playlist's file).
+ */
+@Composable
+fun ExportPlaylistModal(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    onExport: (folderUri: String) -> Unit,
+    isRunning: Boolean,
+    title: String,
+    modifier: Modifier = Modifier
+) {
+    var folderUri by remember { mutableStateOf<String?>(null) }
+    var folderName by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(visible) {
+        if (visible) {
+            folderUri = null
+            folderName = null
+        }
+    }
+
+    val context = LocalContext.current
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            }
+            folderUri = uri.toString()
+            folderName = backupFolderDisplayName(uri)
+        }
+    }
+
+    BackupModalScaffold(
+        visible = visible,
+        onDismiss = onDismiss,
+        title = title,
+        modifier = modifier
+    ) {
+        PickerCard {
+            PickerRow(
+                title = stringResource(R.string.settings_export_folder),
+                subtitle = folderName ?: stringResource(R.string.playlist_export_folder_hint),
+                selected = folderUri != null,
+                onClick = { folderPicker.launch(null) },
+                onReset = {
+                    folderUri = null
+                    folderName = null
+                }
+            )
+        }
+
+        ModalButton(
+            label = stringResource(R.string.settings_export),
+            filled = true,
+            enabled = folderUri != null && !isRunning,
+            onClick = { onExport(folderUri.orEmpty()) }
+        )
+    }
+}
+
+/**
  * The Import sheet: pick one or more JSON files, then tick which features to
  * apply. The feature list only appears once a file is selected, and features
  * the backup doesn't contain are shown disabled (darkened, untoggleable).

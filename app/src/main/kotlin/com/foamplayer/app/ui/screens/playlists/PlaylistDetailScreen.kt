@@ -8,7 +8,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
@@ -17,6 +22,8 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.TrackCenterRequest
 import com.foamplayer.app.ui.components.TrackListScreen
 import com.foamplayer.app.ui.components.rememberSortedTracks
+import com.foamplayer.app.ui.modals.ExportPlaylistModal
+import com.foamplayer.app.ui.modals.OrganisationExtraAction
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -54,6 +61,9 @@ fun PlaylistDetailScreen(
     val playlist by viewModel.playlist.collectAsState()
     val editMode by viewModel.editMode.collectAsState()
     val firstTrackArt by viewModel.firstTrackArt.collectAsState()
+    val exportRunning by viewModel.exportRunning.collectAsState()
+
+    var showExportModal by remember { mutableStateOf(false) }
 
     LaunchedEffect(playlistId) {
         viewModel.loadPlaylist(playlistId)
@@ -157,6 +167,21 @@ fun PlaylistDetailScreen(
             val storedOrder =
                 if (sortInverted) orderedIds.asReversed() else orderedIds
             viewModel.persistTrackOrder(playlistId, storedOrder)
-        }
+        },
+        organisationExtraAction = OrganisationExtraAction(
+            label = stringResource(R.string.playlist_export_one),
+            onClick = { showExportModal = true }
+        )
+    )
+
+    ExportPlaylistModal(
+        visible = showExportModal,
+        onDismiss = { showExportModal = false },
+        onExport = { folderUri ->
+            showExportModal = false
+            viewModel.exportPlaylist(playlistId, folderUri)
+        },
+        isRunning = exportRunning,
+        title = stringResource(R.string.playlist_export_one)
     )
 }

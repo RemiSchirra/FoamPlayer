@@ -99,8 +99,10 @@ import com.foamplayer.app.ui.components.caseInsensitiveComparator
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.modals.CreatePlaylistModal
 import com.foamplayer.app.ui.modals.DeletePlaylistConfirmModal
+import com.foamplayer.app.ui.modals.ExportPlaylistModal
 import com.foamplayer.app.ui.modals.MissingSongsModal
 import com.foamplayer.app.ui.modals.MissingSongsUiState
+import com.foamplayer.app.ui.modals.OrganisationExtraAction
 import com.foamplayer.app.ui.modals.PlaylistFoamModal
 import com.foamplayer.app.ui.modals.PlaylistModalStats
 import com.foamplayer.app.ui.modals.RenamePlaylistModal
@@ -146,9 +148,11 @@ fun PlaylistsScreen(
     val playlistCovers by viewModel.playlistCovers.collectAsState()
     val createState by viewModel.createState.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
+    val exportRunning by viewModel.exportRunning.collectAsState()
 
     var showCreateModal by remember { mutableStateOf(false) }
     var showMoreModal by remember { mutableStateOf(false) }
+    var showExportModal by remember { mutableStateOf(false) }
     var isEditMode by remember { mutableStateOf(false) }
 
     // Reordering is only meaningful in CUSTOM (the drag & drop order).
@@ -520,8 +524,9 @@ fun PlaylistsScreen(
         onDismiss = { deleteConfirmTarget = null }
     )
 
-    // More-options sheet: the sort radio list (custom order first) with its
-    // Inverse toggle, and the Organisation row for this view's density.
+    // More-options sheet: the export action, the sort radio list (custom order
+    // first) with its Inverse toggle, and the Organisation row for this view's
+    // density.
     DensityOrganisationModal(
         visible = showMoreModal,
         currentDensity = density,
@@ -535,7 +540,25 @@ fun PlaylistsScreen(
         onSelectSort = { onSortChange?.invoke(it) },
         sortInverted = sortInverted,
         onToggleSortInverted = { onSortInvertedChange?.invoke(it) },
+        extraAction = OrganisationExtraAction(
+            label = stringResource(R.string.playlist_export_all),
+            onClick = {
+                showMoreModal = false
+                showExportModal = true
+            }
+        ),
         onDismiss = { showMoreModal = false }
+    )
+
+    ExportPlaylistModal(
+        visible = showExportModal,
+        onDismiss = { showExportModal = false },
+        onExport = { folderUri ->
+            showExportModal = false
+            viewModel.exportAllPlaylists(folderUri)
+        },
+        isRunning = exportRunning,
+        title = stringResource(R.string.playlist_export_all)
     )
 
     val missingState = when (val state = createState) {

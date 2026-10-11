@@ -2,19 +2,22 @@ package com.foamplayer.app.ui.screens.playlists
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.foamplayer.app.data.backup.PlaylistExporter
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.PlaylistRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /** One playlist's detail state: tracks, playlist entity and edit mode. */
 @HiltViewModel
 class PlaylistDetailViewModel @Inject constructor(
-    private val repository: PlaylistRepository
+    private val repository: PlaylistRepository,
+    private val exporter: PlaylistExporter
 ) : ViewModel() {
 
     private val _tracks = MutableStateFlow<List<TrackEntity>>(emptyList())
@@ -34,6 +37,9 @@ class PlaylistDetailViewModel @Inject constructor(
     private val _editMode = MutableStateFlow(false)
     val editMode: StateFlow<Boolean> = _editMode
 
+    private val _exportRunning = MutableStateFlow(false)
+    val exportRunning: StateFlow<Boolean> = _exportRunning.asStateFlow()
+
     fun setEditMode(enabled: Boolean) {
         _editMode.value = enabled
     }
@@ -48,6 +54,19 @@ class PlaylistDetailViewModel @Inject constructor(
     fun persistTrackOrder(playlistId: Long, orderedTrackIds: List<Long>) {
         viewModelScope.launch {
             repository.reorderPlaylistTracks(playlistId, orderedTrackIds)
+        }
+    }
+
+    /** Exports this playlist as a .m3u8 file into the picked folder. */
+    fun exportPlaylist(playlistId: Long, folderUri: String) {
+        if (_exportRunning.value) return
+        viewModelScope.launch {
+            _exportRunning.value = true
+            try {
+                exporter.exportOne(playlistId, folderUri)
+            } finally {
+                _exportRunning.value = false
+            }
         }
     }
 
