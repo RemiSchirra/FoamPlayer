@@ -56,53 +56,17 @@ for some features (see more).
 ---
 
 ## 📸 Showcase
-<div align="center">
-  <table>
-    <tr>
-      <td width="33%" align="center">
-        <img src="assets/screenshots/" alt="" width="100%"/><br />
-        <sub><b>Title</b></sub>
-      </td>
-      <td width="33%" align="center">
-        <img src="assets/screenshots/" alt="" width="100%"/><br />
-        <sub><b></b></sub>
-      </td>
-      <td width="33%" align="center">
-        <img src="assets/screenshots/" alt="" width="100%"/><br />
-        <sub><b></b></sub>
-      </td>
-    </tr>
-    <tr>
-      <td width="33%" align="center">
-        <img src="assets/screenshots/" alt="" width="100%"/><br />
-        <sub><b></b></sub>
-      </td>
-      <td width="33%" align="center">
-        <img src="assets/screenshots/" alt="" width="100%"/><br />
-        <sub><b></b></sub>
-      </td>
-      <td width="33%" align="center">
-        <img src="assets/screenshots/" alt="" width="100%"/><br />
-        <sub><b></b></sub>
-      </td>
-    </tr>
-    <tr>
-      <td width="33%" align="center">
-        <img src="assets/screenshots/" alt="" width="100%"/><br />
-        <sub><b></b></sub>
-      </td>
-      <td width="33%" align="center">
-        <img src="assets/screenshots/" alt="" width="100%"/><br />
-        <sub><b></b></sub>
-      </td>
-      <td width="33%" align="center">
-        <img src="assets/screenshots/" alt="" width="100%"/><br />
-        <sub><b></b></sub>
-      </td>
-    </tr>
-  </table>
-</div>
+ <div>
+    <img src="assets/screenshots/player.jpg" width="30%" alt="Main player">
+    <img src="assets/screenshots/album.jpg" width="30%" alt="Album view">
+    <img src="assets/screenshots/lyrics.jpg" width="30%" alt="Word synced lyrics">
+    <br>
+    <img src="assets/screenshots/home.jpg" width="30%" alt="Home feed">
+    <img src="assets/screenshots/queue.jpg" width="30%" alt="Queue">
+    <img src="assets/screenshots/artist.jpg" width="30%" alt="Artist view">
+ </div>
 
+---
 
 ## Architecture
 
@@ -115,13 +79,19 @@ FoamPlayer is an Android app written in Kotlin, split into a main `:app` module 
 
 More details in [docs/architecture.md](docs/architecture.md).
 
+---
+
 ## Contributing
 Feel free to contribute to the project, either if it's developing new features, fixing bug or making new translations.
+
+---
 
 ## Credits
 FoamPlayer is built thanks to multiple existing open source projects:
 * **[ArchiveTune](https://github.com/rukamori/ArchiveTune)** : for the lyrics and canvas providers.
 * **[Accompanist lyrics](https://github.com/6xingyv/accompanist-lyrics-core)** : for the lyrics display engine.
+
+---
 
 ## License & Legal mentions
 FoamPlayer is free software licensed under the **GNU General Public License v3.0 (GPLv3)**. See [LICENSE](LICENSE) for details.
