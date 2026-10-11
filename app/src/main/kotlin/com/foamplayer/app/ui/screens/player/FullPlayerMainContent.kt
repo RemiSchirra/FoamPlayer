@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,6 +54,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
 import androidx.core.net.toUri
@@ -290,6 +290,12 @@ internal fun SharedTransitionScope.TrackHeroPager(
     val miniImageSize = 44.dp
     val fullImageSize = screenWidthDp - (PlayerDimens.horizontalPagePadding * 2)
 
+    // Pages (and the hero overlay) span the same width as the seek bar / controls
+    // (screenPadding), so the title + score + more row lines up with the seek bar. The
+    // album art alone is inset by this extra amount to keep its original size
+    // (horizontalPagePadding on each side).
+    val artInset = (PlayerDimens.horizontalPagePadding - PlayerDimens.screenPadding).coerceAtLeast(0.dp)
+
     val pausedArtScale by rememberPausedArtScale(isPlaybackActive)
 
     val miniPlayerRounding = FoamTheme.shapes.miniPlayerRounding
@@ -327,8 +333,10 @@ internal fun SharedTransitionScope.TrackHeroPager(
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = PlayerDimens.horizontalPagePadding),
-            pageSpacing = PlayerDimens.pageSpacing,
+            contentPadding = PaddingValues(horizontal = PlayerDimens.screenPadding),
+            // Pages are wider by 2 * artInset now; shave it off the spacing so the gap
+            // between neighbouring album arts (and their peek) stays what it was.
+            pageSpacing = (PlayerDimens.pageSpacing - artInset * 2).coerceAtLeast(0.dp),
             beyondViewportPageCount = 0,
             // Keyed by queue ENTRY id, not track id: the same track can legitimately
             // appear twice in the queue ("play next" on the playing track), and
@@ -349,10 +357,11 @@ internal fun SharedTransitionScope.TrackHeroPager(
 
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 if (immersive) {
-                    Spacer(modifier = Modifier.fillMaxWidth().aspectRatio(1f))
+                    Spacer(modifier = Modifier.padding(horizontal = artInset).fillMaxWidth().aspectRatio(1f))
                 } else {
                     Box(
                         modifier = Modifier
+                            .padding(horizontal = artInset)
                             .fillMaxWidth()
                             .aspectRatio(1f)
                             .graphicsLayer {
@@ -428,7 +437,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             state = pageMarquee.subtitle
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
                     TrackScoreHeart(
                         score = scoreOverrides[pageTrack.id] ?: pageTrack.score,
                         onSetScore = { value -> onSetScore(pageTrack.id, value) }
@@ -444,7 +452,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = PlayerDimens.horizontalPagePadding)
+                    .padding(horizontal = PlayerDimens.screenPadding)
                     .graphicsLayer {
                         val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
                         val pageWidthPx = pagerState.layoutInfo.pageSize.toFloat()
@@ -454,6 +462,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
             ) {
                 Box(
                     modifier = Modifier
+                        .padding(horizontal = artInset)
                         .fillMaxWidth()
                         .aspectRatio(1f)
                         .onGloballyPositioned { coordinates ->
@@ -607,7 +616,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 )
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
                     key(track.id) {
                         TrackScoreHeart(
                             score = scoreOverrides[track.id] ?: track.score,
