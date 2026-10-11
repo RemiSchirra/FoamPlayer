@@ -1,5 +1,15 @@
 package com.foamplayer.app.ui.screens.equalizer
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
+import android.os.SystemClock
+import android.util.Log
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,27 +43,38 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.audio.dsp.DspMath
@@ -1145,9 +1166,177 @@ private fun VolumeSection(
                 BasicText(text = stringResource(R.string.eq_mute), style = FoamTheme.typography.caption)
                 BasicText(text = stringResource(R.string.eq_full_scale), style = FoamTheme.typography.caption)
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            SystemVolumeControl()
         }
     }
 }
+
+/**
+ * Android media-stream (STREAM_MUSIC) volume, the same value the phone's
+ * hardware +/- keys change. The slider is continuous over the stream's range
+ * (the readout is that position as a percentage); the stream itself snaps to
+ * its nearest step, and every step change is written to the [AudioManager]
+ * immediately while dragging.
+ *
+ * Hardware presses can move the real volume by less than one whole step, while
+ * [AudioManager.getStreamVolume] only returns the rounded whole step (the
+ * volume broadcast still fires, with the same rounded value). To follow every
+ * press anyway, the half-step position is reconstructed from the broadcast
+ * sequence: with presses of half a step, a rounded value that changes by +1
+ * means the real value is now half a step below it, -1 means exactly on it,
+ * and an unchanged value means the press toggled between those two spots.
+ * Any whole-step change re-derives this, so a wrong guess corrects itself.
+ */
+@Composable
+private fun SystemVolumeControl() {
+    val context = LocalContext.current
+    val audioManager = remember(context) {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+    val maxIndex = remember(audioManager) {
+        audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+    }
+    // Rounded whole step as Android reports it, plus whether the real volume
+    // currently sits half a step below it.
+    var index by remember {
+        mutableIntStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC))
+    }
+    var halfStep by remember { mutableStateOf(false) }
+    // The rounded value as of the last processed broadcast / local write, used
+    // to classify the next broadcast independently of polling.
+    var lastKnownIndex by remember { mutableIntStateOf(index) }
+    // Our own writes echo back as broadcasts; ignore those briefly.
+    var lastLocalChangeMs by remember { mutableLongStateOf(0L) }
+
+    fun fractionOf(wholeStep: Int, half: Boolean): Float =
+        ((wholeStep - if (half) 0.5f else 0f).coerceAtLeast(0f) / maxIndex).coerceIn(0f, 1f)
+
+    // What the slider and readout show: a continuous 0..1 fraction, not rounded
+    // to steps or whole percents (like Android's own panel, whose thumb follows
+    // the finger smoothly). The stream itself can only sit on its own steps, so
+    // while the user drags this may sit between them; any external change
+    // resyncs it to the true volume. Finger input snaps it (no lag behind the
+    // thumb); changes coming from Android (hardware keys, other apps) glide.
+    val scope = rememberCoroutineScope()
+    val shownFraction = remember { Animatable(fractionOf(index, false)) }
+    fun showFromSystem(newFraction: Float) {
+        scope.launch {
+            shownFraction.animateTo(
+                newFraction,
+                tween(durationMillis = SYSTEM_VOLUME_GLIDE_MS, easing = FastOutSlowInEasing)
+            )
+        }
+    }
+
+    fun onMusicVolumeBroadcast() {
+        if (SystemClock.elapsedRealtime() - lastLocalChangeMs <= LOCAL_CHANGE_ECHO_MS) return
+        val actual = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceIn(0, maxIndex)
+        halfStep = when (actual - lastKnownIndex) {
+            0 -> !halfStep   // a sub-step press: the rounded value didn't move
+            1 -> true
+            else -> false    // -1 lands exactly on the whole step; larger jumps are not key presses
+        }
+        Log.d(SYSTEM_VOLUME_TAG, "broadcast: $lastKnownIndex -> $actual, half=$halfStep")
+        lastKnownIndex = actual
+        index = actual
+        showFromSystem(fractionOf(actual, halfStep))
+    }
+
+    DisposableEffect(audioManager, context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.getIntExtra(EXTRA_VOLUME_STREAM_TYPE, -1) != AudioManager.STREAM_MUSIC) return
+                onMusicVolumeBroadcast()
+            }
+        }
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(VOLUME_CHANGED_ACTION),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+
+    // Fallback for devices that don't send the broadcast: adopt a differing
+    // system value only if it persists across two polls (a broadcast, when it
+    // exists, arrives within milliseconds and wins).
+    LaunchedEffect(audioManager) {
+        var mismatches = 0
+        while (true) {
+            delay(SYSTEM_VOLUME_POLL_MS)
+            val actual = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceIn(0, maxIndex)
+            val settled = SystemClock.elapsedRealtime() - lastLocalChangeMs > LOCAL_CHANGE_ECHO_MS
+            if (actual != index && settled) {
+                if (++mismatches >= 2) {
+                    index = actual
+                    lastKnownIndex = actual
+                    halfStep = false
+                    showFromSystem(fractionOf(actual, false))
+                    mismatches = 0
+                }
+            } else {
+                mismatches = 0
+            }
+        }
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = Icons.Rounded.PhoneAndroid,
+            contentDescription = null,
+            tint = FoamTheme.accentColor,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        BasicText(
+            text = stringResource(R.string.eq_volume),
+            style = FoamTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f)
+        )
+        BasicText(
+            text = formatPercent((shownFraction.value * 100f).roundToInt().toFloat()),
+            style = FoamTheme.typography.monospace
+        )
+    }
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    FoamSlider(
+        value = { shownFraction.value },
+        onValueChange = { raw ->
+            val fraction = raw.coerceIn(0f, 1f)
+            // Finger input: the thumb follows continuously, cancelling any glide in progress.
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                shownFraction.snapTo(fraction)
+            }
+            val newIndex = (fraction * maxIndex).roundToInt().coerceIn(0, maxIndex)
+            if (newIndex != index || halfStep) {
+                index = newIndex
+                halfStep = false
+                lastKnownIndex = newIndex
+                lastLocalChangeMs = SystemClock.elapsedRealtime()
+                try {
+                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newIndex, 0)
+                } catch (_: SecurityException) {
+                    // Volume policy refused the change; the fallback poll restores the real value.
+                }
+            }
+        }
+    )
+}
+
+private const val SYSTEM_VOLUME_POLL_MS = 250L
+private const val SYSTEM_VOLUME_GLIDE_MS = 250
+private const val SYSTEM_VOLUME_TAG = "SystemVolume"
+private const val VOLUME_CHANGED_ACTION = "android.media.VOLUME_CHANGED_ACTION"
+private const val EXTRA_VOLUME_STREAM_TYPE = "android.media.EXTRA_VOLUME_STREAM_TYPE"
+
+/** Window after a local volume write during which system change callbacks are treated as echoes. */
+private const val LOCAL_CHANGE_ECHO_MS = 300L
 
 // -------------------------------------------------------- save preset modal
 
