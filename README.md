@@ -5,7 +5,7 @@
   <h1>FoamPlayer</h1>
 
   <p align="center">
-    Description
+    Your personal music bubble: a music player designed for your music.
   </p>
 
   <p align="center">
