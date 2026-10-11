@@ -60,6 +60,8 @@ import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import kotlin.math.abs
 import androidx.core.net.toUri
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 
 /**
  * A distant jump in progress: while the pager slides one page to [viaPage],
@@ -70,6 +72,12 @@ import kotlinx.coroutines.flow.StateFlow
  * content, so nothing pops).
  */
 private data class PendingJump(val viaPage: Int, val targetIndex: Int)
+
+/** Title + artist/album marquee state of one queue entry. */
+private class MiniEntryMarqueeStates {
+    val title = MarqueeTextState()
+    val subtitle = MarqueeTextState()
+}
 
 /**
  * Play/pause button. Deliberately a leaf: the accent background changes every
@@ -206,6 +214,29 @@ fun MiniPlayer(
         var activeToken = 0
     }
     val pagerSyncState = remember { PagerSyncState() }
+
+    // Marquee text state per track
+    val marqueeStates = remember { mutableMapOf<Long, MiniEntryMarqueeStates>() }
+    val entryKey = { page: Int -> queueEntryIds.getOrNull(page) ?: -(page + 1).toLong() }
+    val statesFor = { key: Long -> marqueeStates.getOrPut(key) { MiniEntryMarqueeStates() } }
+    LaunchedEffect(queueEntryIds) { marqueeStates.keys.retainAll(queueEntryIds.toSet()) }
+
+    // Restart the marquee effect on pager state update
+    val currentEntryKey by rememberUpdatedState(entryKey)
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.isScrollInProgress }
+            .distinctUntilChanged()
+            .filter { it }
+            .collect {
+                val leavingKey = currentEntryKey(pagerState.currentPage)
+                marqueeStates.forEach { (key, states) ->
+                    if (key != leavingKey) {
+                        states.title.restart()
+                        states.subtitle.restart()
+                    }
+                }
+            }
+    }
 
     // rememberSeekBarProgressState captures `liveProgress` once, so this lambda
     // must read the live values through rememberUpdatedState proxies instead
@@ -489,6 +520,7 @@ fun MiniPlayer(
                         // too — two visible shared elements with one key.
                         val isSettledCurrentTrackPage =
                             jump == null && page == currentIndex && pageTrack.id == track.id
+                        val pageMarquee = statesFor(entryKey(page))
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -569,7 +601,7 @@ fun MiniPlayer(
                                     text = pageTrack.title,
                                     style = FoamTheme.typography.titleMedium,
                                     mode = marqueeMode,
-                                    marqueeEnabled = isSettledCurrentTrackPage,
+                                    state = pageMarquee.title,
                                     modifier = if (useSharedElements && isSettledCurrentTrackPage) {
                                         Modifier.sharedBounds(
                                             rememberSharedContentState(key = "track_title_${track.id}"),
@@ -581,7 +613,7 @@ fun MiniPlayer(
                                     text = stringResource(R.string.artist_album_separator, pageTrack.artist, pageTrack.album),
                                     style = FoamTheme.typography.caption,
                                     mode = marqueeMode,
-                                    marqueeEnabled = isSettledCurrentTrackPage,
+                                    state = pageMarquee.subtitle,
                                     modifier = if (useSharedElements && isSettledCurrentTrackPage) {
                                         Modifier.sharedBounds(
                                             rememberSharedContentState(key = "track_artist_${track.id}"),
