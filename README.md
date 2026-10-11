@@ -56,15 +56,18 @@ for some features (see more).
 ---
 
 ## 📸 Showcase
- <div>
-    <img src="assets/screenshots/player.jpg" width="30%" alt="Main player">
-    <img src="assets/screenshots/album.jpg" width="30%" alt="Album view">
-    <img src="assets/screenshots/lyrics.jpg" width="30%" alt="Word synced lyrics">
-    <br>
-    <img src="assets/screenshots/home.jpg" width="30%" alt="Home feed">
-    <img src="assets/screenshots/queue.jpg" width="30%" alt="Queue">
-    <img src="assets/screenshots/artist.jpg" width="30%" alt="Artist view">
- </div>
+<table>
+  <tr>
+    <td><img src="assets/screenshots/player.jpg" alt="Main player"></td>
+    <td><img src="assets/screenshots/album.jpg" alt="Album view"></td>
+    <td><img src="assets/screenshots/lyrics.jpg" alt="Word synced lyrics"></td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/home.jpg" alt="Home feed"></td>
+    <td><img src="assets/screenshots/queue.jpg" alt="Queue"></td>
+    <td><img src="assets/screenshots/artist.jpg" alt="Artist view"></td>
+  </tr>
+</table>
 
 ---
 
