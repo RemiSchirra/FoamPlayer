@@ -8,9 +8,12 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.BasicText
@@ -61,6 +64,9 @@ import kotlinx.coroutines.launch
 private const val HomeRowItemCount = 5
 
 private val ImageMimeTypes = arrayOf("image/*")
+
+/** Gap between the "Home" title and the "Start playing" section. */
+private val HomeHeaderGap = 16.dp
 
 /**
  * The app's landing tab: a "Start playing" grid of random songs, then five
@@ -174,22 +180,22 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(HomeRowSpacing),
         contentPadding = PaddingValues(top = 16.dp, bottom = LocalBottomBarClearance.current)
     ) {
-        item(key = "home_header") {
-            Box(modifier = Modifier.padding(horizontal = 8.dp)) {
-                ScreenTitle(
-                    icon = FoamTheme.icons.current.home,
-                    title = stringResource(R.string.home)
+        item(key = "home_header_start_playing") {
+            Column(verticalArrangement = Arrangement.spacedBy(HomeHeaderGap)) {
+                Box(modifier = Modifier.padding(horizontal = 8.dp)) {
+                    ScreenTitle(
+                        icon = FoamTheme.icons.current.home,
+                        title = stringResource(R.string.home)
+                    )
+                }
+
+                StartPlayingSection(
+                    tracks = randomTracks,
+                    onTrackClick = onTrackClick,
+                    onTrackLongClick = { track -> trackModalState?.show(track) },
+                    onRefresh = viewModel::reshuffleRandomTracks
                 )
             }
-        }
-
-        item(key = "home_row_start_playing") {
-            StartPlayingSection(
-                tracks = randomTracks,
-                onTrackClick = onTrackClick,
-                onTrackLongClick = { track -> trackModalState?.show(track) },
-                onRefresh = viewModel::reshuffleRandomTracks
-            )
         }
 
         item(key = "home_row_playlists") {
