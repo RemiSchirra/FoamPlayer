@@ -270,7 +270,7 @@ data class AppSettings(
         const val MAX_ROUNDING = 100
         const val MIN_BACKGROUND_BLUR = 0
         const val MAX_BACKGROUND_BLUR = 100
-        const val DEFAULT_BACKGROUND_BLUR = 20
+        const val DEFAULT_BACKGROUND_BLUR = 50
 
         /** Gaussian radius, in dp, the backdrop layers render at 100% blur. */
         const val BACKGROUND_BLUR_MAX_DP = 100f
