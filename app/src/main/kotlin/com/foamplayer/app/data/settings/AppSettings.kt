@@ -80,6 +80,8 @@ data class AppSettings(
     val normalFadeSeconds: Float = DEFAULT_NORMAL_FADE_SECONDS,
     /** Duration of quick fades on play/pause/seek/skip, in seconds. 0 disables. */
     val quickFadeSeconds: Float = DEFAULT_QUICK_FADE_SECONDS,
+    /** Dead air between the end of a track and the start of the next one, in seconds. 0 disables. */
+    val silenceBetweenTracksSeconds: Float = DEFAULT_SILENCE_BETWEEN_TRACKS_SECONDS,
     val libraryFolders: Set<String> = emptySet(),
     val iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
     val miniPlayerRounding: Int = 40,
@@ -233,6 +235,10 @@ data class AppSettings(
             ),
             normalFadeSeconds = normalFadeSeconds.coerceIn(MIN_NORMAL_FADE_SECONDS, MAX_NORMAL_FADE_SECONDS),
             quickFadeSeconds = quickFadeSeconds.coerceIn(MIN_QUICK_FADE_SECONDS, MAX_QUICK_FADE_SECONDS),
+            silenceBetweenTracksSeconds = silenceBetweenTracksSeconds.coerceIn(
+                MIN_SILENCE_BETWEEN_TRACKS_SECONDS,
+                MAX_SILENCE_BETWEEN_TRACKS_SECONDS
+            ),
             miniPlayerRounding = miniPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
             fullPlayerRounding = fullPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
             backgroundBlur = backgroundBlur.coerceIn(MIN_BACKGROUND_BLUR, MAX_BACKGROUND_BLUR),
@@ -324,6 +330,12 @@ data class AppSettings(
         const val MIN_QUICK_FADE_SECONDS = 0f
         const val MAX_QUICK_FADE_SECONDS = 1f
         const val DEFAULT_QUICK_FADE_SECONDS = 0.2f
+
+        /** Silence-gap range: 0 disables the gap entirely, 5 s is the longest. */
+        const val MIN_SILENCE_BETWEEN_TRACKS_SECONDS = 0f
+        const val MAX_SILENCE_BETWEEN_TRACKS_SECONDS = 5f
+        const val DEFAULT_SILENCE_BETWEEN_TRACKS_SECONDS = 0f
+
         val DEFAULT_SEPARATORS = setOf(";", ",")
     }
 }

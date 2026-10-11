@@ -152,6 +152,12 @@
     <string name="audio_pipeline">Piepline audio</string>
     <string name="audio_pipeline_desc">Visualiser le chemin de rendu audio en direct</string>
 
+    <!-- Audio : lecture (fondus + silence inter-pistes) -->
+    <string name="playback">Lecture</string>
+    <string name="playback_desc">Enchaînement fondu, fondu rapide et silence entre les pistes</string>
+    <string name="silence_between_tracks">Silence entre les pistes</string>
+    <string name="silence_between_tracks_desc">Attendre entre la fin d\'une piste et le début de la suivante. Désactive l\'enchaînement fondu automatique</string>
+
     <!-- Fondus -->
     <string name="fades">Fondus</string>
     <string name="crossfade">Enchaînement fondu</string>

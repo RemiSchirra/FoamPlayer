@@ -148,6 +148,7 @@ import com.foamplayer.app.ui.screens.settings.LyricsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.MiscSettingsScreen
 import com.foamplayer.app.ui.screens.settings.NavBarSettingsScreen
 import com.foamplayer.app.ui.screens.settings.NotificationSettingsScreen
+import com.foamplayer.app.ui.screens.settings.PlaybackSettingsScreen
 import com.foamplayer.app.ui.screens.settings.PlayerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.SettingsScreen
 import com.foamplayer.app.ui.screens.settings.TestSettingsScreen
@@ -1780,8 +1781,12 @@ fun FoamNavHost(
                                     composable(Screen.SettingsAudio.route) {
                                         AudioSettingsScreen(
                                             onBack = { navController.popBackStack() },
+                                            onNavigateToPlayback = { navController.navigate(Screen.SettingsAudioPlayback.route) },
                                             onNavigateToDevices = { navController.navigate(Screen.SettingsAudioDevices.route) }
                                         )
+                                    }
+                                    composable(Screen.SettingsAudioPlayback.route) {
+                                        PlaybackSettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     composable(Screen.SettingsAudioDevices.route) {
                                         AudioDevicesSettingsScreen(onBack = { navController.popBackStack() })

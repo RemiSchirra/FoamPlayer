@@ -171,6 +171,10 @@ class AudioEngine @Inject constructor(
     @Volatile
     private var listenedThresholdPercent: Int = AppSettings.DEFAULT_LISTENED_THRESHOLD_PERCENT
 
+    /** Inter-track silence gap, in milliseconds. 0 disables it (default). */
+    @Volatile
+    private var silenceBetweenTracksMs: Long = 0L
+
     @Volatile
     private var latestSettings: AppSettings = AppSettings()
 
@@ -183,6 +187,12 @@ class AudioEngine @Inject constructor(
 
     /** Latch so the auto-crossfade triggers once per track. */
     private var crossfadeArmedForTrackId: Long? = null
+
+    /** Latch so the inter-track silence gap fires once per track. */
+    private var silenceGapArmedForTrackId: Long? = null
+
+    /** Pending "keep holding the finished track, then advance" job (see [maybeBeginSilenceGap]). */
+    private var silenceCountdownJob: Job? = null
 
     companion object {
         /** Tracks kept loaded on each side of the current one. */
@@ -230,6 +240,13 @@ class AudioEngine @Inject constructor(
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             _playbackState.value =
                 _playbackState.value.copy(isPlaybackRequested = playWhenReady)
+            // The pause-at-end signal of the inter-track silence gap (silence > 0 arms
+            // setPauseAtEndOfMediaItems): the track finished on its own, hold on it for the
+            // configured gap, then advance. Any other play-when-ready change (user pause,
+            // focus loss) is ignored.
+            if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
+                maybeBeginSilenceGap()
+            }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -336,6 +353,7 @@ class AudioEngine @Inject constructor(
                 RepeatMode.ONE -> Player.REPEAT_MODE_ONE
             }
             player.shuffleModeEnabled = _playbackState.value.isShuffle
+            applyPauseAtEndOfMediaItems()
 
             activePlayerField.addListener(playerListener)
             _playbackState.value =
@@ -348,6 +366,7 @@ class AudioEngine @Inject constructor(
             pendingFadeWindowStart = null
             pendingFadeWindowEnd = null
             crossfadeArmedForTrackId = null
+            silenceGapArmedForTrackId = null
 
             activePlayerField.removeListener(playerListener)
             activePlayerField.addListener(playerListener)
@@ -469,8 +488,7 @@ class AudioEngine @Inject constructor(
     ): List<MediaItem> {
         if (tracks.isEmpty()) return emptyList()
 
-        fadeEngine.cancel()
-        crossfadeArmedForTrackId = null
+        cancelPendingTransitions()
         clearListenOccurrence()
         windowJumpJob?.cancel()
         failedTrackIds.clear()
@@ -509,6 +527,7 @@ class AudioEngine @Inject constructor(
             RepeatMode.ONE -> Player.REPEAT_MODE_ONE
         }
         player.shuffleModeEnabled = isShuffle
+        applyPauseAtEndOfMediaItems()
 
         // The whole queue is loaded here; adjustWindow() trims it as playback proceeds.
         loadedRange = newQueue.indices
@@ -556,6 +575,7 @@ class AudioEngine @Inject constructor(
         _positionMs.value = positionMs
         if (emitSeekEvent) _seekEvents.tryEmit(positionMs)
         crossfadeArmedForTrackId = null
+        silenceGapArmedForTrackId = null
 
         recomputeAudioOutputInfo()
 
@@ -735,9 +755,14 @@ class AudioEngine @Inject constructor(
         scope.launch {
             settingsRepository.settings.collect { settings ->
                 listenedThresholdPercent = settings.listenedThresholdPercent
+                val silenceChanged = silenceBetweenTracksMs !=
+                        (settings.silenceBetweenTracksSeconds * 1000).toLong()
+                silenceBetweenTracksMs =
+                    (settings.silenceBetweenTracksSeconds * 1000).toLong()
                 val configChanged = latestSettings.bitPerfectEnabled != settings.bitPerfectEnabled ||
                         latestSettings.deviceAudioConfigs != settings.deviceAudioConfigs
                 latestSettings = settings
+                if (silenceChanged) applyPauseAtEndOfMediaItems()
                 if (configChanged) recomputeAudioOutputInfo()
             }
         }
@@ -812,8 +837,7 @@ class AudioEngine @Inject constructor(
      * [sourceCollectionId] marks the collection the queue was started from.
      */
     fun setQueue(tracks: List<TrackEntity>, startIndex: Int = 0, sourceCollectionId: String? = null) {
-        fadeEngine.cancel()
-        crossfadeArmedForTrackId = null
+        cancelPendingTransitions()
         clearListenOccurrence()
         windowJumpJob?.cancel()
         failedTrackIds.clear()
@@ -852,6 +876,7 @@ class AudioEngine @Inject constructor(
                     List(AUXILIARY_QUEUE_LENGTH) { false }
         )
 
+        applyPauseAtEndOfMediaItems()
         loadWindowAndPlay(newQueue, clampedStart, forcePlay = true)
     }
 
@@ -913,7 +938,7 @@ class AudioEngine @Inject constructor(
             return
         }
 
-        fadeEngine.cancel()
+        cancelPendingTransitions()
 
         val flags = current.auxiliaryFlags
         var auxStart = current.queue.size
@@ -944,7 +969,7 @@ class AudioEngine @Inject constructor(
     /** Inserts [track] at [requestedIndex] and patches the loaded timeline in place. */
     private fun insertTrack(track: TrackEntity, requestedIndex: Int) {
         // Queue mutations shift the indices a fade captured.
-        fadeEngine.cancel()
+        cancelPendingTransitions()
 
         val current = _playbackState.value
         if (current.queue.isEmpty()) {
@@ -998,7 +1023,7 @@ class AudioEngine @Inject constructor(
     private fun insertTracks(tracks: List<TrackEntity>, requestedIndex: Int) {
         if (tracks.isEmpty()) return
 
-        fadeEngine.cancel()
+        cancelPendingTransitions()
 
         val current = _playbackState.value
         if (current.queue.isEmpty()) {
@@ -1131,7 +1156,7 @@ class AudioEngine @Inject constructor(
     }
 
     fun play() {
-        fadeEngine.cancel()
+        cancelPendingTransitions()
 
         if (player.playbackState == Player.STATE_IDLE) {
             player.prepare()
@@ -1149,6 +1174,7 @@ class AudioEngine @Inject constructor(
     fun pause() {
         // Mid-crossfade, `player` is still the outgoing stream while the UI shows the incoming one.
         val settledCrossfade = fadeEngine.completeCrossfadeNow()
+        cancelSilenceCountdown()
 
         if (fadeEngine.quickFadeEnabled && player.isPlaying) {
             fadeEngine.fadeOutAndPause()
@@ -1163,12 +1189,12 @@ class AudioEngine @Inject constructor(
     }
 
     fun next() {
-        fadeEngine.cancel()
+        cancelPendingTransitions()
         advanceToNext(useFade = true)
     }
 
     fun previous() {
-        fadeEngine.cancel()
+        cancelPendingTransitions()
         val state = _playbackState.value
         if (player.hasPreviousMediaItem()) {
             if (player.contentPosition <= 5000L) {
@@ -1245,7 +1271,7 @@ class AudioEngine @Inject constructor(
         }
         if (target !in queue.indices) target = index
 
-        fadeEngine.cancel()
+        cancelPendingTransitions()
 
         if (pendingWindowResync) {
             jumpWindowTo(target)
@@ -1289,7 +1315,7 @@ class AudioEngine @Inject constructor(
     }
 
     fun seekTo(positionMs: Long) {
-        fadeEngine.cancel()
+        cancelPendingTransitions()
 
         // Only the position flow is updated: playbackState collectors shouldn't recompose per drag pixel.
         _positionMs.value = positionMs
@@ -1386,7 +1412,7 @@ class AudioEngine @Inject constructor(
         val currentQueue = _playbackState.value.queue
         if (fromIndex !in currentQueue.indices || toIndex !in currentQueue.indices || fromIndex == toIndex) return
 
-        fadeEngine.cancel()
+        cancelPendingTransitions()
 
         val current = _playbackState.value
 
@@ -1447,7 +1473,7 @@ class AudioEngine @Inject constructor(
         val currentQueue = _playbackState.value.queue
         if (index !in currentQueue.indices) return
 
-        fadeEngine.cancel()
+        cancelPendingTransitions()
 
         val current = _playbackState.value
         val flags = current.auxiliaryFlags
@@ -1520,6 +1546,8 @@ class AudioEngine @Inject constructor(
             RepeatMode.ALL -> Player.REPEAT_MODE_ALL
             RepeatMode.ONE -> Player.REPEAT_MODE_ONE
         }
+        // Repeat-one loops the item itself, so the pause-at-end signal must stay armed off.
+        applyPauseAtEndOfMediaItems()
         _playbackState.value = _playbackState.value.copy(repeatMode = nextMode)
     }
 
@@ -1623,6 +1651,7 @@ class AudioEngine @Inject constructor(
      * Re-evaluated on every progress tick.
      */
     private fun maybeStartTrackCrossfade() {
+        if (silenceBetweenTracksMs > 0L) return
         if (fadeEngine.isFading) return
         if (!fadeEngine.normalFadeEnabled) return
         val state = _playbackState.value
@@ -1648,6 +1677,87 @@ class AudioEngine @Inject constructor(
             durationMs = FadeMath.clampedFadeDurationMs(normalFadeMs, duration),
             switchAtT = 0.5f
         )
+    }
+
+    /**
+     * Applies [ExoPlayer.setPauseAtEndOfMediaItems] to the active player: the flag makes the
+     * player pause at the end of the current media item instead of auto-advancing, which is the
+     * hook the inter-track silence gap needs. Repeat-one loops the item itself, so the flag is
+     * never set there (it would pause after every loop).
+     */
+    private fun applyPauseAtEndOfMediaItems() {
+        val enabled = silenceBetweenTracksMs > 0L && _playbackState.value.repeatMode != RepeatMode.ONE
+        player.setPauseAtEndOfMediaItems(enabled)
+    }
+
+    /**
+     * The inter-track silence gap: when [silenceBetweenTracksMs] > 0, the outgoing track plays
+     * to its very end, the player pauses there ([applyPauseAtEndOfMediaItems] makes ExoPlayer
+     * report it via PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM), the engine holds on the
+     * finished track for the configured gap, then advances to the next one. The automatic
+     * crossfade is disabled while a gap is configured ([maybeStartTrackCrossfade]).
+     */
+    private fun maybeBeginSilenceGap() {
+        val silenceMs = silenceBetweenTracksMs
+        if (silenceMs <= 0L) return
+        if (silenceCountdownJob != null) return
+        if (fadeEngine.isFading) return
+
+        val state = _playbackState.value
+        if (state.repeatMode == RepeatMode.ONE) return
+
+        val trackId = player.currentMediaItem?.mediaId?.toLongOrNull() ?: return
+        if (silenceGapArmedForTrackId == trackId) return
+
+        val nextIndex = when {
+            state.queueIndex + 1 < state.queue.size -> state.queueIndex + 1
+            state.repeatMode == RepeatMode.ALL && state.queue.isNotEmpty() -> 0
+            else -> return
+        }
+        if (state.queue[nextIndex].id in failedTrackIds) return
+
+        silenceGapArmedForTrackId = trackId
+        silenceCountdownJob = scope.launch {
+            delay(silenceMs)
+            silenceCountdownJob = null
+            val current = _playbackState.value
+            val currentTrackId = player.currentMediaItem?.mediaId?.toLongOrNull()
+            // The user may have interacted during the gap (play/pause/seek/skip, queue edits).
+            // Any of those cancels or invalidates the pending advance; re-verify before switching.
+            if (currentTrackId != trackId || current.queueIndex != state.queueIndex) return@launch
+            if (fadeEngine.isFading || player.isPlaying || player.playWhenReady) return@launch
+            advanceAfterSilence(current, nextIndex)
+        }
+    }
+
+    /** Cancels a pending silence gap without touching the fade engine. */
+    private fun cancelSilenceCountdown() {
+        silenceCountdownJob?.cancel()
+        silenceCountdownJob = null
+    }
+
+    /**
+     * Cancels every pending track transition (fades and the silence gap). Callers are the user
+     * actions and queue mutations that must supersede an in-flight transition.
+     */
+    private fun cancelPendingTransitions() {
+        cancelSilenceCountdown()
+        silenceGapArmedForTrackId = null
+        fadeEngine.cancel()
+    }
+
+    /**
+     * Leaves the finished track behind: switches to [nextIndex] at position 0 and resumes
+     * playback, mirroring the queue-order convention of the auto-crossfade's target.
+     */
+    private fun advanceAfterSilence(state: PlaybackState, nextIndex: Int) {
+        if (nextIndex in loadedRange) {
+            player.seekTo(nextIndex - loadedRange.first, 0L)
+        } else {
+            loadWindowAndPlay(state.queue, nextIndex)
+        }
+        player.play()
+        _playbackState.value = _playbackState.value.copy(isPlaybackRequested = true)
     }
 
     /**

@@ -84,6 +84,9 @@ class SettingsRepository @Inject constructor(
     suspend fun setQuickFadeSeconds(seconds: Float) = update {
         it.copy(quickFadeSeconds = seconds)
     }
+    suspend fun setSilenceBetweenTracksSeconds(seconds: Float) = update {
+        it.copy(silenceBetweenTracksSeconds = seconds)
+    }
     suspend fun setIconStyle(style: FoamIconStyle) = update { it.copy(iconStyle = style) }
     suspend fun setMiniPlayerRounding(rounding: Int) = update { it.copy(miniPlayerRounding = rounding) }
     suspend fun setFullPlayerRounding(rounding: Int) = update { it.copy(fullPlayerRounding = rounding) }
@@ -288,6 +291,8 @@ class SettingsRepository @Inject constructor(
             ?: AppSettings().listenedThresholdPercent,
         normalFadeSeconds = this[Keys.NORMAL_FADE_SECONDS] ?: AppSettings().normalFadeSeconds,
         quickFadeSeconds = this[Keys.QUICK_FADE_SECONDS] ?: AppSettings().quickFadeSeconds,
+        silenceBetweenTracksSeconds = this[Keys.SILENCE_BETWEEN_TRACKS_SECONDS]
+            ?: AppSettings().silenceBetweenTracksSeconds,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
         iconStyle = this[Keys.ICON_STYLE]
             ?.let { runCatching { FoamIconStyle.valueOf(it) }.getOrNull() }
@@ -393,6 +398,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.LISTENED_THRESHOLD_PERCENT] = settings.listenedThresholdPercent
         this[Keys.NORMAL_FADE_SECONDS] = settings.normalFadeSeconds
         this[Keys.QUICK_FADE_SECONDS] = settings.quickFadeSeconds
+        this[Keys.SILENCE_BETWEEN_TRACKS_SECONDS] = settings.silenceBetweenTracksSeconds
         this[Keys.SELECTED_FOLDERS] = settings.libraryFolders
         this[Keys.ICON_STYLE] = settings.iconStyle.name
         this[Keys.MINI_PLAYER_ROUNDING] = settings.miniPlayerRounding
@@ -459,6 +465,7 @@ class SettingsRepository @Inject constructor(
         val LISTENED_THRESHOLD_PERCENT = intPreferencesKey("listened_threshold_percent")
         val NORMAL_FADE_SECONDS = floatPreferencesKey("normal_fade_seconds")
         val QUICK_FADE_SECONDS = floatPreferencesKey("quick_fade_seconds")
+        val SILENCE_BETWEEN_TRACKS_SECONDS = floatPreferencesKey("silence_between_tracks_seconds")
         val SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
         val ICON_STYLE = stringPreferencesKey("icon_style")
         val MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")

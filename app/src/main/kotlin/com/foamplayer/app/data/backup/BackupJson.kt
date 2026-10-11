@@ -48,6 +48,7 @@ object BackupJson {
         put("listenedThresholdPercent", settings.listenedThresholdPercent)
         put("normalFadeSeconds", settings.normalFadeSeconds.toDouble())
         put("quickFadeSeconds", settings.quickFadeSeconds.toDouble())
+        put("silenceBetweenTracksSeconds", settings.silenceBetweenTracksSeconds.toDouble())
         put("iconStyle", settings.iconStyle.name)
         put("miniPlayerRounding", settings.miniPlayerRounding)
         put("fullPlayerRounding", settings.fullPlayerRounding)
@@ -120,6 +121,10 @@ object BackupJson {
         quickFadeSeconds = json.optDouble(
             "quickFadeSeconds",
             AppSettings.DEFAULT_QUICK_FADE_SECONDS.toDouble()
+        ).toFloat(),
+        silenceBetweenTracksSeconds = json.optDouble(
+            "silenceBetweenTracksSeconds",
+            AppSettings.DEFAULT_SILENCE_BETWEEN_TRACKS_SECONDS.toDouble()
         ).toFloat(),
         iconStyle = decodeEnum(json.optString("iconStyle"), FoamIconStyle.FLAT),
         miniPlayerRounding = json.optInt("miniPlayerRounding", 40),

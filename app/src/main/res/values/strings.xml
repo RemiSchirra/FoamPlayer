@@ -153,6 +153,12 @@
     <string name="audio_pipeline">Audio Pipeline</string>
     <string name="audio_pipeline_desc">Visualize the live audio rendering path</string>
 
+    <!-- Audio settings: playback (fades + inter-track silence) -->
+    <string name="playback">Playback</string>
+    <string name="playback_desc">Crossfade, quick fade and silence between tracks</string>
+    <string name="silence_between_tracks">Silence Between Tracks</string>
+    <string name="silence_between_tracks_desc">Wait between the end of a track and the start of the next one. Disables the automatic crossfade</string>
+
     <!-- Fades -->
     <string name="fades">Fades</string>
     <string name="crossfade">Crossfade</string>

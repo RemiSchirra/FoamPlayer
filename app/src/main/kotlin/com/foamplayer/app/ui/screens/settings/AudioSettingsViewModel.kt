@@ -21,7 +21,8 @@ import javax.inject.Inject
 
 /**
  * Backs the reworked Audio settings screen: fidelity score, pipeline visualization,
- * global engine switches, fades and per-output-device configuration.
+ * global engine switches, playback (crossfade/quick fade/silence) and per-output-device
+ * configuration.
  */
 @HiltViewModel
 class AudioSettingsViewModel @Inject constructor(
@@ -64,6 +65,10 @@ class AudioSettingsViewModel @Inject constructor(
 
     fun setQuickFadeSeconds(seconds: Float) = launch {
         settingsRepository.setQuickFadeSeconds(seconds)
+    }
+
+    fun setSilenceBetweenTracksSeconds(seconds: Float) = launch {
+        settingsRepository.setSilenceBetweenTracksSeconds(seconds)
     }
 
     fun setDirectVolumeControl(enabled: Boolean) = launch {

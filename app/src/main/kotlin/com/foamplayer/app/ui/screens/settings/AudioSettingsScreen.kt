@@ -40,27 +40,25 @@ import com.foamplayer.app.R
 import com.foamplayer.app.audio.bitperfect.AudioOutputInfo
 import com.foamplayer.app.ui.components.FidelityScoreCard
 import com.foamplayer.app.ui.components.FoamNavigationButton
-import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.modals.AudioPipelineModal
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
-import java.util.Locale
-import kotlin.math.roundToInt
 
 /**
  * Audio settings (Poweramp-inspired):
  *  - live audio fidelity score with itemized breakdown,
  *  - engine switches (bit-perfect master, direct volume control) plus the current
  *    output summary,
- *  - fade configuration (track crossfade + quick fades),
+ *  - entry into the playback subscreen (crossfade, quick fades, inter-track silence),
  *  - entry into the output-devices subscreen,
  *  - audio pipeline visualization modal.
  */
 @Composable
 fun AudioSettingsScreen(
     onBack: () -> Unit,
+    onNavigateToPlayback: () -> Unit,
     onNavigateToDevices: () -> Unit,
     viewModel: AudioSettingsViewModel = hiltViewModel()
 ) {
@@ -69,9 +67,6 @@ fun AudioSettingsScreen(
     val dspState by viewModel.dspState.collectAsState()
 
     var showPipelineModal by rememberSaveable { mutableStateOf(false) }
-
-    val secondsTemplate = stringResource(R.string.duration_seconds)
-    val secondsDecimalTemplate = stringResource(R.string.duration_seconds_decimal)
 
     Column(
         modifier = Modifier
@@ -138,44 +133,19 @@ fun AudioSettingsScreen(
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
-            // -------------------------------------------------------- fades
+            // ------------------------------------------------------- playback
             item {
-                BasicText(
-                    text = stringResource(R.string.fades),
-                    style = FoamTheme.typography.titleMedium
-                )
-                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
                         .background(FoamTheme.colors.surface)
                 ) {
-                    Column {
-                        FoamSliderStateItem(
-                            title = stringResource(R.string.crossfade),
-                            description = stringResource(R.string.crossfade_desc),
-                            initialValue = settings.normalFadeSeconds,
-                            onValueChangeFinished = { viewModel.setNormalFadeSeconds(it) },
-                            steps = 14, // integer seconds 0..15
-                            valueRange = 0f..15f,
-                            formatValue = { String.format(Locale.getDefault(), secondsTemplate, it.roundToInt()) },
-                            minMaxDisplay = formatSeconds(secondsTemplate, 0) to formatSeconds(secondsTemplate, 15)
-                        )
-                        SectionDivider()
-                        FoamSliderStateItem(
-                            title = stringResource(R.string.quick_fade),
-                            description = stringResource(R.string.quick_fade_desc),
-                            initialValue = settings.quickFadeSeconds,
-                            onValueChangeFinished = { viewModel.setQuickFadeSeconds(it) },
-                            steps = 9, // 0.1 s increments 0..1
-                            valueRange = 0f..1f,
-                            formatValue = {
-                                formatSecondsDecimal(secondsDecimalTemplate, it)
-                            },
-                            minMaxDisplay = formatSeconds(secondsTemplate, 0) to formatSeconds(secondsTemplate, 1)
-                        )
-                    }
+                    FoamNavigationButton(
+                        title = stringResource(R.string.playback),
+                        description = stringResource(R.string.playback_desc),
+                        onClick = onNavigateToPlayback
+                    )
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
@@ -242,14 +212,6 @@ fun AudioSettingsScreen(
         outputInfo = playbackState.audioOutputInfo
     )
 }
-
-/** "5 s" from the localized [template] ("%1$d s"). */
-private fun formatSeconds(template: String, seconds: Int): String =
-    String.format(Locale.getDefault(), template, seconds)
-
-/** "0.5 s" from the localized decimal [template] ("%1$.1f s"). */
-private fun formatSecondsDecimal(template: String, seconds: Float): String =
-    String.format(Locale.getDefault(), template, seconds)
 
 // ---------------------------------------------------------------- shared bits
 
