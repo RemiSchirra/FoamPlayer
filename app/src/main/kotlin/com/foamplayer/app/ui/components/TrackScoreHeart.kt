@@ -50,7 +50,7 @@ private val ScoreOptions = listOf(
     -1 to Icons.Filled.HeartBroken
 )
 
-/** Icon/tint pair for the track score heart, for a track scored [score]. Always white (textPrimary), never the accent color. */
+/** Icon/tint pair for the track score heart. Always textPrimary, never the accent. */
 @Composable
 fun trackScoreVisual(score: Int): Pair<ImageVector, Color> = when (score) {
     2 -> Icons.Filled.AutoAwesome to FoamTheme.colors.textPrimary
@@ -60,13 +60,10 @@ fun trackScoreVisual(score: Int): Pair<ImageVector, Color> = when (score) {
 }
 
 /**
- * The track score heart: tap sets like (1), or clears back to not noted (0)
- * when the track already carries any score; long press opens a vertically
- * expanding menu of the three rating options — super like (shining star, top),
- * like (plain heart, middle, landing exactly where the resting
- * icon sits) and dislike (broken heart, bottom). The menu is an elevated
- * capsule that scales/fades in and out around the heart, with a small haptic
- * on open and on pick.
+ * The track score heart: tap sets like (1), or clears back to none (0) when
+ * the track already carries a score; long press opens an expanding menu of
+ * the three rating options — super like (top), like (middle, landing where
+ * the resting icon sits) and dislike (bottom). Haptic feedback on open/pick.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -81,7 +78,7 @@ fun TrackScoreHeart(
     var menuExpanded by remember { mutableStateOf(false) } // target state
     val haptics = LocalHapticFeedback.current
 
-    // Little spring pop whenever the score changes (skipped on first composition).
+    // Spring pop whenever the score changes (skipped on first composition).
     val popScale = remember { Animatable(1f) }
     var lastScore by remember { mutableStateOf(score) }
     LaunchedEffect(score) {
@@ -98,8 +95,8 @@ fun TrackScoreHeart(
         }
     }
 
-    // Drives the menu's scale/alpha; stays mounted until the exit settles so the
-    // dismissal is animated too, not just the entrance.
+    // Drives the menu's scale/alpha; stays mounted until the exit settles so
+    // the dismissal is animated too.
     val menuProgress = remember { Animatable(0f) }
     LaunchedEffect(menuExpanded) {
         if (menuExpanded) {
@@ -150,9 +147,8 @@ fun TrackScoreHeart(
                 onDismissRequest = ::closeMenu,
                 properties = PopupProperties(focusable = true)
             ) {
-                // One elevated capsule holding all three rating options; scales/fades
-                // as a single piece around the heart (the middle option lands on it).
-                // The outer padding gives the shadow room inside the popup window.
+                // One elevated capsule holding all three options; scales/fades
+                // around the heart. The outer padding gives the shadow room.
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp),

@@ -47,10 +47,9 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
- * Live audio fidelity verdict with the itemized breakdown, shared between the
- * audio settings screen and the player's audio-info modal. Tapping toggles the
- * itemized score breakdown; while there is no playback the card is inert (the
- * breakdown would be empty), so taps are ignored and the chevron is hidden.
+ * Live audio fidelity verdict with an itemized breakdown, shared between the
+ * audio settings screen and the player's audio-info modal. Tapping toggles
+ * the breakdown; with no playback the card is inert.
  */
 @Composable
 fun FidelityScoreCard(
@@ -125,7 +124,6 @@ fun FidelityScoreCard(
                 }
             }
 
-            // Itemized breakdown.
             AnimatedVisibility(visible = expanded && expandable) {
                 Column(
                     modifier = Modifier
@@ -162,6 +160,7 @@ private fun FidelitySectionDivider() {
     )
 }
 
+/** Score ring with the total in the middle. */
 @Composable
 private fun FidelityRing(score: FidelityScore?) {
     val ringColor = scoreColor(score)

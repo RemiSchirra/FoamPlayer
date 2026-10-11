@@ -31,15 +31,13 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
- * Settings row exposing one enum's options as side-by-side selectable chips.
- * The selected chip fills with the accent color; [getLabel]/[getIcon] render
- * each option's appearance.
+ * Settings row exposing one enum's options as selectable chips. The selected
+ * chip fills with the accent color; [getLabel]/[getIcon] render each option.
  *
- * Chips live in a [FlowRow]: when a line runs out of horizontal room the whole
- * option moves to the next line instead of its label folding — every label is
- * clamped to a single line, and items of the same line still share the width
- * evenly (FlowRow weights are per-line), so the classic full-width look is
- * kept whenever everything fits.
+ * Chips live in a [FlowRow]: when a line runs out of room the whole option
+ * moves to the next line instead of its label folding. Items of the same line
+ * share the width evenly (FlowRow weights are per-line), keeping the
+ * full-width look whenever everything fits.
  */
 @Composable
 fun <T : Enum<T>> FoamEnumItem(
@@ -85,9 +83,6 @@ fun <T : Enum<T>> FoamEnumItem(
                             role = Role.RadioButton,
                             onClick = { onOptionSelected(option) }
                         )
-                        // Generous horizontal breathing room so the text never
-                        // touches the rounded edge; tighter vertical padding so
-                        // the chip row stays compact.
                         .padding(horizontal = 14.dp, vertical = FoamDimens.spacingSmall),
                     contentAlignment = Alignment.Center
                 ) {

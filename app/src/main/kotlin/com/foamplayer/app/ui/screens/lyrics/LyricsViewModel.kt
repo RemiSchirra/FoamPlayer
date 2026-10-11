@@ -40,11 +40,10 @@ class LyricsViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    // NOT sourced from playbackState — that field only updates on track transitions and
-    // manual seeks now (see AudioEngine.positionMs), so mapping it here would freeze the
-    // karaoke sync loop in LyricsEnhanced almost immediately (it drifts, gets clamped,
-    // and keeps snapping back to a stale value instead of advancing). audioEngine.positionMs
-    // is the fast, always-ticking flow; forward it directly.
+    // NOT sourced from playbackState — that field only updates on track
+    // transitions and manual seeks. audioEngine.positionMs is the fast,
+    // always-ticking flow; forward it directly or the karaoke sync loop drifts
+    // and keeps snapping back to a stale value.
     val currentPositionMs: StateFlow<Long> = audioEngine.positionMs
 
     val durationMs: StateFlow<Long> = audioEngine.playbackState
@@ -55,7 +54,7 @@ class LyricsViewModel @Inject constructor(
         .map { it.isPlaying }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    // Blur of non-active lyric lines, as chosen in Settings > Lyrics > Display.
+    /** Blur of non-active lyric lines, as chosen in Settings > Lyrics > Display. */
     val lyricsLineBlur: StateFlow<Boolean> = settingsRepository.settings
         .map { it.lyricsLineBlur }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -64,8 +63,8 @@ class LyricsViewModel @Inject constructor(
         .map { it.lyricsWordSyncDisabled }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    // Instrumental flag of the current track, read straight from the DB so marking a
-    // track instrumental flips the lyrics subview to the music-note state immediately.
+    // Instrumental flag read straight from the DB, so marking a track
+    // instrumental flips the lyrics subview to the music-note state immediately.
     @OptIn(ExperimentalCoroutinesApi::class)
     val isInstrumental: StateFlow<Boolean> = audioEngine.playbackState
         .map { it.currentTrack }

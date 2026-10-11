@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/** Discord OAuth flow states surfaced in the settings screen. */
 sealed interface DiscordAuthUiState {
     data object Idle : DiscordAuthUiState
     data object Waiting : DiscordAuthUiState
@@ -146,6 +147,7 @@ class MiscSettingsViewModel @Inject constructor(
         }
     }
 
+    /** Returns to Idle unless an authorization is still waiting. */
     fun resetAuthState() {
         if (_authState.value != DiscordAuthUiState.Waiting) {
             _authState.value = DiscordAuthUiState.Idle

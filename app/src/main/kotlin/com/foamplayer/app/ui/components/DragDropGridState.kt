@@ -29,13 +29,13 @@ import kotlinx.coroutines.launch
 /** Distance from the top/bottom of the grid's viewport that triggers autoscroll. */
 private val AUTO_SCROLL_EDGE_ZONE = 56.dp
 
-/** How far the grid scrolls per autoscroll tick, in px. */
+/** Grid scroll per autoscroll tick, in px. */
 private const val AUTO_SCROLL_STEP_PX = 32f
 
-/** How often an autoscroll tick fires, in ms. */
+/** Autoscroll tick interval, in ms. */
 private const val AUTO_SCROLL_INTERVAL_MS = 16L
 
-/** Duration of the settle animation played when the drag is released, in ms. */
+/** Duration of the settle animation played when the drag is released. */
 private const val SETTLE_DURATION_MS = 200
 
 @Composable
@@ -46,9 +46,9 @@ fun rememberDragDropGridState(
 ): DragDropGridState {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    // The callbacks are captured once by remember, so they are kept fresh through
-    // rememberUpdatedState: a lambda closing over a plain (non-snapshot) value would
-    // otherwise freeze at its first-composition value mid-drag.
+    // The callbacks are captured once by remember, so they are kept fresh
+    // through rememberUpdatedState: a lambda closing over a plain value would
+    // freeze at its first-composition value mid-drag.
     val latestCanMove by rememberUpdatedState(canMove)
     val latestOnMove by rememberUpdatedState(onMove)
     return remember(gridState) {
@@ -57,10 +57,9 @@ fun rememberDragDropGridState(
 }
 
 /**
- * Grid counterpart of the queue's drag-drop list state: drives a draggable-
- * reorderable LazyVerticalGrid with 2D position tracking, swap-on-hover,
- * edge autoscroll and an animated settle on release. Same contract as
- * [com.foamplayer.app.ui.screens.queue.DragDropListState].
+ * Grid counterpart of the queue's drag-drop list state: drives a
+ * draggable-reorderable LazyVerticalGrid with 2D position tracking,
+ * swap-on-hover, edge autoscroll and an animated settle on release.
  */
 class DragDropGridState(
     private val gridState: LazyGridState,
@@ -71,11 +70,11 @@ class DragDropGridState(
 ) {
     private data class ItemSnapshot(val index: Int, val offset: IntOffset, val size: IntOffset)
 
-    /** Index of the item currently being dragged, or null if nothing is dragging. */
+    /** Index of the item currently being dragged, or null. */
     var draggedIndex by mutableStateOf<Int?>(null)
         private set
 
-    /** Clamped visual offset (px) to apply to the dragged item via graphicsLayer. */
+    /** Clamped visual offset (px) applied to the dragged item via graphicsLayer. */
     var draggingItemOffset by mutableStateOf(IntOffset.Zero)
         private set
 
@@ -158,7 +157,7 @@ class DragDropGridState(
         }
     }
 
-    /** Recomputes clamped position, swap target, and autoscroll state from current inputs. */
+    /** Recomputes clamped position, swap target and autoscroll state. */
     private fun evaluate() {
         val current = anchor ?: return
         val layoutInfo = gridState.layoutInfo
@@ -172,15 +171,14 @@ class DragDropGridState(
         val maxX = (layoutInfo.viewportSize.width - current.size.x).coerceAtLeast(0)
         val maxY = (viewportEnd - current.size.y).coerceAtLeast(viewportStart)
 
-        // Lock the dragged item's visible position within the grid's own bounds,
-        // not the raw finger position.
+        // Lock the dragged item to the grid's own bounds, not the finger's.
         val clamped = IntOffset(
             raw.x.coerceIn(0, maxX),
             raw.y.coerceIn(viewportStart, maxY)
         )
         draggingItemOffset = clamped
 
-        // Swap with whichever visible item the dragged item's center now overlaps.
+        // Swap with whichever visible item the dragged center now overlaps.
         val draggedCenter = IntOffset(clamped.x + current.size.x / 2, clamped.y + current.size.y / 2)
         val target = layoutInfo.visibleItemsInfo.firstOrNull { info ->
             draggedCenter.x >= info.offset.x && draggedCenter.x <= info.offset.x + info.size.width &&
@@ -188,25 +186,25 @@ class DragDropGridState(
         }
         val fromIndex = draggedIndex
         if (target != null && fromIndex != null && target.index != fromIndex && canMove(fromIndex, target.index)) {
-            // Record the current scroll position before the grid mutates
+            // Record the scroll position before the grid mutates.
             val firstIndex = gridState.firstVisibleItemIndex
             val firstOffset = gridState.firstVisibleItemScrollOffset
 
             onMove(fromIndex, target.index)
             draggedIndex = target.index
-            // Re-anchor so the offset math stays correct against the item's new slot.
+            // Re-anchor so the offset math stays correct against the new slot.
             val newOffset = IntOffset(target.offset.x, target.offset.y)
             anchor = ItemSnapshot(target.index, newOffset, IntOffset(target.size.width, target.size.height))
 
-            // Preserve the out-of-bounds finger position so the dragged item
-            // doesn't detach from the finger after a swap.
+            // Preserve the out-of-bounds finger position so the item doesn't
+            // detach from the finger after a swap.
             draggedDistance = Offset(
                 raw.x - newOffset.x.toFloat(),
                 raw.y - newOffset.y.toFloat()
             )
 
-            // If we swapped the top visible item, force the grid to maintain the
-            // current index/offset rather than jumping to follow the item's key.
+            // If we swapped the top visible item, force the grid to keep the
+            // current index/offset rather than jumping to follow the key.
             if (firstIndex == fromIndex || firstIndex == target.index) {
                 gridState.requestScrollToItem(firstIndex, firstOffset)
             }
@@ -244,11 +242,11 @@ class DragDropGridState(
                 val consumed = gridState.scrollBy(step)
 
                 // Offset the drag distance by the scroll amount so the item's
-                // raw position remains constant relative to the screen.
+                // raw position stays constant relative to the screen.
                 draggedDistance += Offset(0f, consumed)
 
-                // Keep the anchor's frame of reference in sync with what just
-                // scrolled, so the item stays visually locked at the edge.
+                // Keep the anchor's frame of reference in sync with the scroll,
+                // so the item stays visually locked at the edge.
                 anchor?.let { anchor = it.copy(offset = it.offset.copy(y = it.offset.y - consumed.roundToInt())) }
 
                 evaluate()

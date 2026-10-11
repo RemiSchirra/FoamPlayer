@@ -45,17 +45,16 @@ class SettingsViewModel @Inject constructor(
     val settings: StateFlow<AppSettings> = settingsRepository.settings.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        // Seed with defaults instead of a runBlocking DataStore read: this VM is created
-        // during first composition, and the blocking read used to land on the main
-        // thread's first frame. Consumers tolerate defaults for a frame until the real
-        // values arrive.
+        // Seed with defaults instead of a blocking DataStore read: this VM is
+        // created during first composition, and a blocking read would land on
+        // the main thread's first frame.
         initialValue = AppSettings()
     )
 
     /**
-     * Raw onboarding flag, null until DataStore's first emission. The null state lets
-     * the app root hold a blank frame instead of flashing the onboarding for existing
-     * users while the stored value loads.
+     * Raw onboarding flag, null until DataStore's first emission. The null
+     * state lets the app root hold a blank frame instead of flashing the
+     * onboarding for existing users.
      */
     val onboardingCompleted: StateFlow<Boolean?> = settingsRepository.settings
         .map { it.onboardingCompleted }
@@ -206,9 +205,9 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setNavBarSecondaryEnabled(newEnabled)
     }
 
-    // ---------------------------------------------------- developer tools
-    // Only reachable from the Components Test screen, which is compiled in
-    // solely when BuildConfig.DEV_MODE is set at build time.
+    // ----------------------------- developer tools
+    // Only reachable from the Components Test screen, compiled in solely when
+    // BuildConfig.DEV_MODE is set at build time.
 
     /** Reset onboarding so the first-run flow shows again on next start. */
     fun resetOnboarding() = setOnboardingCompleted(false)
@@ -219,7 +218,7 @@ class SettingsViewModel @Inject constructor(
     /** Fills the library with three years of random listening data. */
     fun generateRandomStats() = launch { trackRepository.generateRandomPlayStats(years = 3) }
 
-    // --------------------------------------------------------------- backups
+    // -------------------------------------- backups
 
     /** Reachable for the import sheet's feature probe. */
     val backupManager: SettingsBackupManager = settingsBackupManager

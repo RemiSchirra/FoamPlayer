@@ -23,9 +23,8 @@ import javax.inject.Inject
 
 /**
  * Backing data of a stats "see all" page: one ranked list (kind fixed by the
- * route), scoped to the period the overview was showing when the page was
- * opened. Top tracks are uncapped (every track listened to in the period);
- * albums cap at [SeeAllLimit], matching the Home rows' see-all pages.
+ * route), scoped to the period the overview was showing when opened. Top
+ * tracks are uncapped; albums cap at [SeeAllLimit], matching the Home rows.
  */
 @HiltViewModel
 class StatsSeeAllViewModel @Inject constructor(
@@ -72,19 +71,12 @@ class StatsSeeAllViewModel @Inject constructor(
             emptyStateFlow()
         }
 
-    /**
-     * Resolved pictures per artist name: a cached Spotify image when the scan
-     * found one, else the artist's first track with embedded art (both are
-     * automatic — no scan has to run for the fallback), for the top-artist rows.
-     */
+    /** Resolved pictures per artist name, for the top-artist rows. */
     val artistImages: StateFlow<Map<String, ArtistCover>> =
         artistCoverProvider.coversFlow(trackRepository.getAllArtists())
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    // Long-press collection actions, mirroring the browse screens: resolve the
-    // tracks behind a collection at action time.
-
-    /** One album's tracks in disc/track order (mirrors TrackDao.getTracksByAlbum). */
+    /** One album's tracks in disc/track order. */
     suspend fun tracksForAlbum(album: String): List<TrackEntity> =
         trackRepository.getTracksByAlbum(album).first()
 

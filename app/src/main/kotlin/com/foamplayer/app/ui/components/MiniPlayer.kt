@@ -61,23 +61,20 @@ import kotlin.math.abs
 import androidx.core.net.toUri
 import kotlinx.coroutines.flow.StateFlow
 
-// SeekBarProgressState / rememberSeekBarProgressState (SeekBarProgressState.kt) live
-// in this same package, so no import is needed for them here.
-
 /**
- * Represents a distant jump in progress. While the pager slides one page, from its
- * current position to [viaPage], [MiniPlayer] renders the *target* track's content on
- * [viaPage] instead of whatever track actually lives there. That turns any distant
- * jump into a single, real one-page pager slide that lands exactly on the right track
- * -- after which the pager is silently remapped onto the real index (content is
- * identical, so nothing pops).
+ * A distant jump in progress: while the pager slides one page to [viaPage],
+ * the mini player renders the TARGET track's content there instead of
+ * whatever track actually lives on it. That turns any distant jump into a
+ * single, real one-page slide that lands exactly on the right track, after
+ * which the pager is silently remapped onto the real index (identical
+ * content, so nothing pops).
  */
 private data class PendingJump(val viaPage: Int, val targetIndex: Int)
 
 /**
- * Play/pause button. Deliberately a leaf: the accent background changes every frame
- * while the accent color animates, and keeping the read here means only this button
- * recomposes per frame instead of the whole [MiniPlayer] body.
+ * Play/pause button. Deliberately a leaf: the accent background changes every
+ * frame while the accent color animates, and keeping the read here means only
+ * this button recomposes per frame instead of the whole [MiniPlayer] body.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -120,22 +117,13 @@ private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
 
 /**
  * Isolated on purpose, mirroring PlaybackProgressSlider in FullPlayerScreen.kt:
- * seekBarProgress.progress tracks pagerState.currentPageOffsetFraction under the
- * hood, which changes on essentially every frame of a horizontal swipe. Reading it
- * directly inside MiniPlayer's own body (as this used to do) forced the whole
- * function -- album art, title/artist text, and the HorizontalPager itself -- to
- * recompose on every drag pixel. Reading it here instead confines that
- * recomposition to just the slider, whose track fill is drawn from the value
- * lambda without recomposition at all.
+ * seekBarProgress.progress tracks the pager's offset fraction, which changes
+ * on essentially every frame of a horizontal swipe. Reading it here confines
+ * recomposition to the slider alone (its track fill is drawn from the value
+ * lambda without recomposition) instead of the whole mini player body.
  *
- * The seek itself is committed only on release: onValueChange just parks the
- * dragged position in local state, so dragging no longer issues a real media seek
- * (and a PlaybackState emission) per pixel.
- *
- * Accent colors are read here rather than in MiniPlayer's body on purpose: the
- * app-wide accent animates per frame while swiping between tracks, and reading it
- * in the body recomposed the whole mini player (art pager, texts, play button) on
- * every accent frame.
+ * The seek itself commits only on release: onValueChange parks the dragged
+ * position in local state, so dragging no longer issues a real seek per pixel.
  */
 @Composable
 private fun MiniPlayerProgressSlider(
@@ -204,7 +192,6 @@ fun MiniPlayer(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Pager state to handle the progressive swipe animation
     val pagerState = rememberPagerState(
         initialPage = currentIndex.coerceAtLeast(0),
         pageCount = { queue.size }
@@ -212,21 +199,18 @@ fun MiniPlayer(
 
     var pendingJump by remember { mutableStateOf<PendingJump?>(null) }
 
-    // See the LaunchedEffect(currentIndex) doc below for why this needs to be a
-    // token-guarded holder rather than a plain boolean.
+    // Token-guarded sync state: a newer sync must be able to cancel an older
+    // one mid-flight without the cancelled one clobbering shared state.
     class PagerSyncState {
         var isSyncing = false
         var activeToken = 0
     }
     val pagerSyncState = remember { PagerSyncState() }
 
-    // rememberSeekBarProgressState only captures `liveProgress` once (remember has no
-    // keys), so this lambda must not close over `playbackState`/`currentIndex`
-    // directly -- those are plain parameters, and a direct capture would freeze on
-    // whatever values existed the first time this composable ran. FullPlayerScreen
-    // avoids this because its `state` is a `by collectAsState()` delegate, so reading
-    // it always re-reads the live value even from a stale closure; rememberUpdatedState
-    // gives us that same "always current" proxy here.
+    // rememberSeekBarProgressState captures `liveProgress` once, so this lambda
+    // must read the live values through rememberUpdatedState proxies instead
+    // of closing over plain parameters, which would freeze on first-composition
+    // values.
     val latestPlaybackState by rememberUpdatedState(playbackState)
     val latestCurrentIndex by rememberUpdatedState(currentIndex)
     val latestSkipTrackChangeAnimation by rememberUpdatedState(skipTrackChangeAnimation)
@@ -234,9 +218,9 @@ fun MiniPlayer(
     val latestIsAnimateSeekBarEnabled by rememberUpdatedState(isAnimateSeekBarEnabled)
     val latestQueue by rememberUpdatedState(queue)
 
-    // Same live computation the FoamSlider below already had -- read lazily every
-    // time `.progress` is accessed, so it stays live while dragging/swiping and is
-    // only overridden by a settle tween after a release/transport-button track change.
+    // Same live computation FoamSlider consumes below — read lazily per access,
+    // so it stays live while dragging/swiping and is only overridden by a
+    // settle tween after a release/transport-button track change.
     val seekBarProgress = rememberSeekBarProgressState(
         positionMsFlow = positionMsFlow,
         liveProgress = { livePositionMs ->
@@ -256,10 +240,9 @@ fun MiniPlayer(
         }
     )
 
-    // Ensure colors for nearby tracks (and any in-flight jump target) are available
-    // for smooth interpolation. This only asks the shared cache to fetch anything
-    // missing -- it never decodes on its own, so it doesn't duplicate work the
-    // full player (or a previous pass here) already kicked off for the same paths.
+    // Ensure colors for nearby tracks (and any in-flight jump target) are
+    // available for interpolation. Only asks the shared cache for missing
+    // paths — never decodes on its own.
     LaunchedEffect(pagerState.currentPage, queue, pendingJump) {
         val indices = listOf(
             pagerState.currentPage - 1,
@@ -276,15 +259,11 @@ fun MiniPlayer(
         }
     }
 
-    // Intercept pager progress to drive the dynamic accent color transition. Fires
-    // every frame the pager is mid-drag, by design. See
-    // AlbumArtPaletteCache.interpolatedColor for the shared calculation (this used to
-    // be a local copy of the same index/lerp math that also lived in FullPlayerScreen).
-    //
+    // Drives the dynamic accent color transition while the pager is mid-drag.
     // Keyed on pagerState only: pendingJump is snapshot state read inside the
-    // snapshotFlow lambda (so the flow re-emits when it changes on its own), and the
-    // queue is reached through a rememberUpdatedState proxy -- keying on the List made
-    // every queue mutation tear down and resubscribe these collectors.
+    // snapshotFlow lambda, and the queue is reached through a
+    // rememberUpdatedState proxy — keying on the List made every queue
+    // mutation tear down and resubscribe these collectors.
     LaunchedEffect(pagerState) {
         snapshotFlow {
             val jump = pendingJump
@@ -301,16 +280,16 @@ fun MiniPlayer(
                 }
             }
         }.collect { interpolatedColor ->
-            // An artless page (or one whose palette extraction is still in flight)
-            // yields no color. Keeping the last accent instead of dropping it avoids
-            // flashing the static default mid-swipe and snapping back the next
-            // frame a colored page re-enters the interpolation.
+            // An artless page (or one still being extracted) yields no color.
+            // Keeping the last accent avoids flashing the static default
+            // mid-swipe and snapping back the next frame a colored page
+            // re-enters the interpolation.
             if (interpolatedColor != null) onColorChange(interpolatedColor)
         }
     }
 
-    // Keep the app-wide backdrop in lockstep with the mini-player pager, including
-    // while the user's finger is still dragging between two tracks.
+    // Keep the app-wide backdrop in lockstep with the pager, including while
+    // the finger is still dragging between two tracks.
     LaunchedEffect(pagerState) {
         snapshotFlow {
             val jump = pendingJump
@@ -332,22 +311,19 @@ fun MiniPlayer(
         }
     }
 
-    // Reset accent color when the player is dismissed
+    // Reset the accent color when the player is dismissed.
     DisposableEffect(Unit) {
         onDispose {
             onColorChange(null)
         }
     }
 
-    // Sync pager when track changes. Reads the live queue through the
-    // rememberUpdatedState proxy: the queue can change (aux refill, play-next) while
-    // this effect is running, and animating against a stale snapshot could target an
-    // out-of-range page.
+    // Sync the pager when the track changes; reads the live queue through the
+    // proxy, since the queue can change while this effect is running.
     LaunchedEffect(currentIndex) {
         val currentQueue = latestQueue
         pendingJump = null
 
-        // Doesn't animate is the full player is auto opening
         if (currentIndex in currentQueue.indices &&
             pagerState.currentPage != currentIndex &&
             !latestSkipTrackChangeAnimation
@@ -357,10 +333,10 @@ fun MiniPlayer(
             try {
                 val distance = currentIndex - pagerState.currentPage
                 if (abs(distance) <= 1) {
-                    // Slide 1 item
                     pagerState.animateScrollToPage(currentIndex)
                 } else {
-                    // Distant slide : slide 1 item but renders the via as the target track
+                    // Distant jump: slide one page but render the via page as
+                    // the target track (see [PendingJump]).
                     val direction = if (distance > 0) 1 else -1
                     val viaPage = (pagerState.currentPage + direction).coerceIn(0, currentQueue.size - 1)
                     try {
@@ -368,9 +344,8 @@ fun MiniPlayer(
                         pagerState.animateScrollToPage(viaPage)
                         pagerState.scrollToPage(currentIndex)
                     } finally {
-                        // Runs even if a newer tap cancels us mid-flight, so we
-                        // never hand off a stale override to the next jump --
-                        // unless a newer run already took over (see token doc above).
+                        // Runs even if a newer tap cancels us mid-flight, unless
+                        // a newer run already took over.
                         if (pagerSyncState.activeToken == myToken) {
                             pendingJump = null
                         }
@@ -384,17 +359,12 @@ fun MiniPlayer(
         }
     }
 
-    // Lock the bar to 0 only once the finger actually releases -- tweened in animated
-    // mode, snapped instantly otherwise -- well before the pager's own fling-to-settle
-    // animation visually finishes. Does nothing if the swipe springs back to the same
-    // track (targetPage == currentIndex), or while a button-triggered distant
-    // [pendingJump] is in flight (that's a programmatic scroll, not a finger swipe).
-    //
-    // Gating on `isDragged` going from true to false (rather than on `targetPage`
-    // directly) matters: PagerState.targetPage already reflects its predicted
-    // destination page *while the finger is still down* -- Compose updates it live
-    // from drag distance/velocity, well before release -- so collecting it directly
-    // fired the settle tween/snap mid-drag instead of on release.
+    // Commit the track change only once the finger actually releases — well
+    // before the pager's fling-to-settle visually finishes. Gating on
+    // `isDragged` going false (rather than on `targetPage` directly) matters:
+    // PagerState.targetPage already reflects its predicted destination while
+    // the finger is still down, so collecting it directly fired the commit
+    // mid-drag instead of on release.
     val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
     LaunchedEffect(pagerState) {
         snapshotFlow { isDragged }
@@ -416,8 +386,8 @@ fun MiniPlayer(
             pagerState.settledPage in latestQueue.indices
         ) {
             seekBarProgress.onTrackChangeApplied()
-            // Keep the swipe direction (same rule as the full player's pager):
-            // a swipe back must walk further back past tracks that failed to load.
+            // Keep the swipe direction: a swipe back must walk further back
+            // past tracks that failed to load.
             onSkipToTrack(
                 pagerState.settledPage,
                 pagerState.settledPage > latestCurrentIndex
@@ -443,24 +413,19 @@ fun MiniPlayer(
         }
     }
 
-    // Same driver (and default spring) as the corner radius above: 1 whenever this art
-    // is flying, 0 once it rests. When the full player closes, THIS art is the morph's
-    // target and is what the shared-element overlay renders -- so the full player's
-    // drop shadow has to live here too, starting at the hero's full elevation while
-    // the interpolated bounds are still full-size and fading to zero as the art lands
-    // in the shadowless mini slot. Without it, the resting hero's shadow vanishes the
-    // frame the close flight takes over.
+    // Same driver as the corner radius above: 1 whenever this art is flying, 0
+    // once it rests. When the full player closes, THIS art is the morph's
+    // target — so the full player's drop shadow has to live here too, fading
+    // to zero as the art lands in the shadowless mini slot.
     val animatedArtElevationFraction by animatedVisibilityScope.transition.animateFloat(label = "miniArtElevation") { enterExitState ->
         if (enterExitState == EnterExitState.Visible) 0f else 1f
     }
 
-    // The full player hero's current paused shrink (see rememberPausedArtScale). This
-    // slot itself rests at scale 1f -- a play/pause flip must NOT animate the mini
-    // player's art -- but during a shared-element flight THIS layer is what the
-    // overlay renders, so it has to depart at the hero's current paused scale and
-    // relax to 1f as it lands (blended on animatedArtElevationFraction in the
-    // graphicsLayer below), or a close flight taken while paused pops the art 3%
-    // at hand-off.
+    // The full player hero's current paused shrink. This slot rests at 1f (a
+    // play/pause flip must not animate the mini art), but mid-flight this
+    // layer renders the shared-element overlay, so it must depart at the
+    // hero's current paused scale and relax to 1f as it lands — or a close
+    // flight taken while paused pops the art 3% at hand-off.
     val heroPausedArtScale by rememberPausedArtScale(
         playbackState.isPlaying || playbackState.isPlaybackRequested
     )
@@ -474,9 +439,9 @@ fun MiniPlayer(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = NavBarDimens.MiniPlayerCardVerticalPadding)
                 .then(
-                    // Elevation over the scrolling content. Only when the card paints
-                    // its own surface: in ATTACHED mode the nav bar's extension IS the
-                    // card's surface and carries the unit's elevation instead.
+                    // Elevation over the scrolling content, only when the card
+                    // paints its own surface: in ATTACHED mode the nav bar's
+                    // extension IS the card's surface and carries the elevation.
                     if (showContainer) {
                         Modifier.shadow(
                             elevation = 8.dp,
@@ -486,8 +451,6 @@ fun MiniPlayer(
                 )
                 .clip(RoundedCornerShape(containerRadius))
                 .then(
-                    // In ATTACHED mode the nav bar's pill extends up behind the card and
-                    // provides the surface; painting the card's own would double the edges.
                     if (showContainer) {
                         Modifier.background(FoamTheme.colors.surfaceVariant)
                     } else Modifier
@@ -500,9 +463,10 @@ fun MiniPlayer(
                         state = pagerState,
                         modifier = Modifier.weight(1f),
                         beyondViewportPageCount = 1,
-                        // Keyed by queue ENTRY id, not track id: the same track can
-                        // legitimately appear twice in the queue ("play next" on the
-                        // playing track), and duplicate keys crash the pager.
+                        // Keyed by queue ENTRY id, not track id: the same track
+                        // can legitimately appear twice in the queue ("play
+                        // next" on the playing track), and duplicate keys crash
+                        // the pager.
                         key = { index -> queueEntryIds.getOrNull(index) ?: -(index + 1).toLong() }
                     ) { page ->
                         val jump = pendingJump
@@ -514,22 +478,15 @@ fun MiniPlayer(
                                 }
                                 ) ?: return@HorizontalPager
 
-                        // Only the page that's genuinely settled as the current
-                        // track may carry the shared-element continuity into the
-                        // full player. While a jump override is active, `track`
-                        // (updated instantly) can transiently match either the
-                        // page we're still visually on, or the override page
-                        // that hasn't landed yet -- neither is a safe attach
-                        // point, since the shared-element overlay renders at
-                        // wherever that page actually lays out, which may be
-                        // outside the mini player's clipped bounds. Skipping
-                        // the tag entirely during a jump avoids that; it
-                        // reattaches cleanly on the next frame after landing.
-                        // The page index must also match: the queue can hold the
-                        // same track more than once ("play next" on the playing
-                        // track), and an id match alone would tag the duplicated
-                        // neighbor page too -- two visible shared elements with
-                        // one key, which derails the close transition.
+                        // Only the page genuinely settled as the current track
+                        // may carry the shared-element continuity into the full
+                        // player: during a jump override, `track` can
+                        // transiently match either the page still on screen or
+                        // the override page that hasn't landed — neither is a
+                        // safe attach point. The page index must also match:
+                        // the queue can hold the same track twice, and an id
+                        // match alone would tag the duplicated neighbor page
+                        // too — two visible shared elements with one key.
                         val isSettledCurrentTrackPage =
                             jump == null && page == currentIndex && pageTrack.id == track.id
 
@@ -555,28 +512,27 @@ fun MiniPlayer(
                                                 .graphicsLayer { alpha = sharedArtFlightAlpha() }
                                         } else Modifier
                                     )
-                                    // The shared-element transition animates this corner radius
-                                    // every frame; consuming it inside graphicsLayer keeps that
-                                    // animation draw-only (a .clip() here recomposed the whole
-                                    // mini player per transition frame and allocated a fresh
-                                    // shape each time).
+                                    // The shared-element transition animates the
+                                    // corner radius every frame; consuming it
+                                    // inside graphicsLayer keeps that draw-only.
                                     .graphicsLayer {
                                         shape = RoundedCornerShape(animatedCornerRadius)
                                         clip = true
-                                        // Play/pause shrink is the full player hero's rest look
-                                        // ONLY -- this slot rests at 1f. But mid-flight this
-                                        // layer renders the shared-element overlay, so it must
-                                        // depart at the hero's CURRENT paused scale (flight
-                                        // fraction 1) and ease to this slot's unscaled rest
-                                        // (fraction 0) along the same curve as the shadow below,
-                                        // or a paused close flight pops 3% the frame it starts.
+                                        // Play/pause shrink is the full player
+                                        // hero's rest look ONLY; mid-flight this
+                                        // layer renders the overlay and must
+                                        // depart at the hero's CURRENT paused
+                                        // scale, easing to this slot's unscaled
+                                        // rest along the shadow's curve.
                                         val scale =
                                             1f + (heroPausedArtScale - 1f) * animatedArtElevationFraction
                                         scaleX = scale
                                         scaleY = scale
-                                        // Only while this art is the shared-element morph's renderer;
-                                        // gated off in immersive so the fading sharedArtFlightAlpha above
-                                        // never coexists with a shadow a layer's own alpha cannot fade.
+                                        // Only while this art is the morph's
+                                        // renderer; gated off in immersive so the
+                                        // fading sharedArtFlightAlpha never
+                                        // coexists with a shadow a layer's own
+                                        // alpha cannot fade.
                                         shadowElevation = if (!isImmersiveEnabled && useSharedElements && isSettledCurrentTrackPage) {
                                             PlayerDimens.fullPlayerArtElevation.toPx() * animatedArtElevationFraction
                                         } else {
@@ -600,10 +556,8 @@ fun MiniPlayer(
                                         contentScale = ContentScale.Crop
                                     )
                                 } else {
-                                    // No art at all: the image-like music-note placeholder.
-                                    // It fills this slot like real artwork would and scales with
-                                    // the shared-element flight instead of snapping between
-                                    // endpoint sizes.
+                                    // Fills this slot like real artwork would and
+                                    // scales with the shared-element flight.
                                     NoAlbumArtPlaceholder()
                                 }
                             }

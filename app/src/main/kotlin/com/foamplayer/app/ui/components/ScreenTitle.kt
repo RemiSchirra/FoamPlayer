@@ -27,15 +27,12 @@ import androidx.compose.ui.unit.sp
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
-/** Size of a ScreenTitle's leading screen icon. */
 private val ScreenTitleIconSize = 34.dp
 
 /**
- * A screen's top header: the screen's icon in the accent color, the big screen
- * title and, on the right, the screen's own action buttons (via [actions]).
- * An optional [subtitle] composable renders under the title (e.g. the
- * equalizer's DSP status line). The component owns no padding — every screen
- * provides the same 16.dp top inset itself and pads horizontally as needed.
+ * A screen's top header: the screen icon in the accent color, the big title
+ * and, on the right, the screen's own action buttons. An optional [subtitle]
+ * renders under the title. Owns no padding — every screen provides its own.
  */
 @Composable
 fun ScreenTitle(
@@ -78,10 +75,7 @@ fun ScreenTitle(
     }
 }
 
-/**
- * One circular icon button for a [ScreenTitle]'s action row, styled like the
- * player's icon rows.
- */
+/** One circular icon button for a [ScreenTitle]'s action row. */
 @Composable
 fun ScreenTitleActionButton(
     icon: ImageVector,

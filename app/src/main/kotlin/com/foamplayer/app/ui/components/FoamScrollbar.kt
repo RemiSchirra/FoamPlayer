@@ -42,56 +42,33 @@ private val ScrollbarEdgeInset = 4.dp
 /** Thumb opacity at rest; a press/drag swells it to full opacity. */
 private const val ScrollbarIdleAlpha = 0.4f
 
-/** Duration of the press/drag thickness + emphasis tween (thickness never snaps). */
+/** Duration of the press/drag thickness + emphasis tween. */
 private const val ScrollbarPressAnimationMs = 150
 
 /**
  * Visual scale on the thumb's proportional length: the viewport/content share
- * is halved so the thumb stays a compact handle even for content barely long
- * enough to show the bar. The drag mapping is unaffected — travel still spans
- * the whole track, so dragging the thumb end to end covers the whole content.
+ * is halved so the thumb stays compact. Drag mapping is unaffected — travel
+ * still spans the whole track.
  */
 private const val ScrollbarThumbLengthScale = 0.5f
 
 /**
  * Fast scrollbar for long lazy content: a thumb floating over the container's
- * end edge, colored by [color] — hosts pass their collection's accent (the
- * artwork-derived hero color), which falls back to the app accent upstream.
- * [trackTopPadding]/[trackBottomPadding] inset the thumb's track (and its
- * touch strip) from the screen's top/bottom chrome.
+ * end edge, colored by [color]. Appears — visually AND as a touch strip — only
+ * when the content spans at least [minContentToViewportRatio] viewports, so
+ * short collections never intercept touches under the end edge.
  *
- * It only appears — visually AND as a touch strip — when the content is long
- * enough to be worth fast-scrolling ([minContentToViewportRatio] viewports or
- * more): short collections get no strip at all, so nothing under the end edge
- * is ever intercepted for them.
+ * Pressing thickens the thumb (never a snap); dragging scrolls the list
+ * proportionally. The scroll lands as a DIRECT jump to the target item
+ * ([LazyListState.requestScrollToItem]) rather than incremental deltas: a long
+ * throw never composes the items it passes over, which keeps huge collections
+ * jank-free. Plain taps fall through to the rows underneath — only an actual
+ * drag inside the strip is captured.
  *
- * Pressing the strip thickens the thumb (thickness and emphasis both tween —
- * never a snap); dragging it scrolls the list proportionally: one pixel of
- * thumb travel equals the same share of the content, so the thumb tracks the
- * finger exactly while covering the whole collection. The scroll lands as a
- * DIRECT jump to the target item ([LazyListState.requestScrollToItem] /
- * [LazyGridState.requestScrollToItem]) rather than a raw incremental delta —
- * a long throw never composes or measures the items it passes over, and the
- * (many) drag events between two frames collapse into a single remeasure —
- * which is what keeps far scrollbar drags on huge collections jank-free.
- * Plain taps fall through to the rows underneath (the down is never consumed)
- * — only an actual drag inside the strip is captured. While the content isn't
- * long enough nothing is consumed either, so the strip is fully transparent
- * to the list.
- *
- * The thumb's drawn position and the drag scroll both read the lazy state
- * during the draw/gesture phases, so scrolling never recomposes the host.
- *
- * Thumb sizing models the hosts' structure — a leading item at index 0 (the
- * hero header) and a trailing item at the last index (the bottom spacer) —
- * by measuring both individually and averaging ONLY the uniform items between
- * them: folding the tall hero into the average would make the estimated
- * content height (and with it the thumb height) pulse as the hero slides
- * through the viewport, worst on the immersive layouts where it spans half
- * the screen. Both edge items report their FULL main-axis size even while
- * only partially visible (`LazyListItemInfo.size` is the item's size, not its
- * visible part), and the last sampled values are kept, so the estimate is
- * stable from the first frame the rows are measured.
+ * Thumb sizing models the hosts' structure — a leading header item and a
+ * trailing spacer — by measuring both individually and averaging ONLY the
+ * uniform items between them: folding the tall hero into the average would
+ * make the thumb height pulse as the hero slides through the viewport.
  */
 @Composable
 fun FoamScrollbar(
@@ -111,8 +88,7 @@ fun FoamScrollbar(
     /**
      * Extra draw-alpha multiplier, read every frame inside the draw phase.
      * Hosts riding shared-element flights pass their transition alpha so the
-     * bar fades with the screen while it is lifted into the transition
-     * overlay (a lifted layer escapes the host hierarchy's own fades).
+     * bar fades with the screen while lifted into the transition overlay.
      */
     alpha: () -> Float = { 1f }
 ) {
@@ -134,7 +110,7 @@ fun FoamScrollbar(
     )
 }
 
-/** Grid counterpart of [FoamScrollbar] (see it for the full behavior contract). */
+/** Grid counterpart of [FoamScrollbar] (see it for the behavior contract). */
 @Composable
 fun FoamScrollbar(
     state: LazyGridState,
@@ -153,8 +129,7 @@ fun FoamScrollbar(
     /**
      * Extra draw-alpha multiplier, read every frame inside the draw phase.
      * Hosts riding shared-element flights pass their transition alpha so the
-     * bar fades with the screen while it is lifted into the transition
-     * overlay (a lifted layer escapes the host hierarchy's own fades).
+     * bar fades with the screen while lifted into the transition overlay.
      */
     alpha: () -> Float = { 1f }
 ) {
@@ -178,27 +153,23 @@ fun FoamScrollbar(
 
 /**
  * Geometry snapshot the thumb, its drag mapping and the direct-jump mapping
- * are derived from, computed from whichever lazy layout is currently hosting
- * the content. All px. The structural fields ([headerPx], [itemPx],
- * [rowCountTotal], [trailerTopPx], [totalItemsCount], [columns]) mirror the
- * hosts' uniform list shape (hero header + uniform rows + bottom spacer) and
- * turn a content-space scroll offset into a concrete (item index, offset
- * within item) jump target — see [jumpTarget].
+ * derive from. All px. Mirrors the hosts' uniform list shape (hero header +
+ * uniform rows + bottom spacer).
  */
 private class ScrollbarGeometry(
     /** Content-space scroll position of the viewport's top edge. */
     val scrollOffsetPx: Float,
-    /** Total scrollable distance: content height (paddings included) minus container height. */
+    /** Total scrollable distance: content height minus container height. */
     val scrollExtentPx: Float,
-    /** Height of the lazy container itself (viewport minus its content paddings). */
+    /** Height of the lazy container itself (viewport minus content paddings). */
     val viewportPx: Float,
-    /** Full height of the leading edge item (the hero header, index 0). */
+    /** Full height of the leading edge item (the hero header). */
     val headerPx: Float,
-    /** Height of one uniform item (row) between the edge items. */
+    /** Height of one uniform item between the edge items. */
     val itemPx: Float,
-    /** Items per grid row; 1 for lists (a grid scrolls by rows, not by cells). */
+    /** Items per grid row; 1 for lists. */
     val columns: Int,
-    /** Number of uniform items between the leading and trailing edge items. */
+    /** Number of uniform items between the edge items. */
     val rowCountTotal: Int,
     /** Content-space top of the trailing edge item (the bottom spacer). */
     val trailerTopPx: Float,
@@ -207,12 +178,8 @@ private class ScrollbarGeometry(
 ) {
     /**
      * Maps a content-space scroll offset to the (item index, offset within
-     * that item) pair a direct requestScrollToItem jump needs: offsets inside
-     * the leading edge item target index 0, offsets past the last uniform row
-     * target the trailing edge item, everything in between targets the row
-     * under the offset with the within-row remainder as the item offset. For
-     * grids the index is the target row's FIRST item (a grid can only scroll
-     * by whole rows — every cell of a row shares its offset.y).
+     * item) pair a direct jump needs. For grids the index is the target row's
+     * FIRST item (a grid only scrolls by whole rows).
      */
     fun jumpTarget(targetPx: Float): Pair<Int, Int> {
         val offset = targetPx.coerceIn(0f, scrollExtentPx)
@@ -227,20 +194,15 @@ private class ScrollbarGeometry(
 }
 
 /**
- * Remembered per-host measurements feeding the thumb geometry: the hero
- * header's and bottom spacer's full heights plus the uniform item height.
- * Plain fields (no snapshot state) — they are sampled during the draw/gesture
- * phases from the current layout info and only ever converge to stable
- * constants, so no reader needs invalidation. `headerPx` stays 0 until the
- * header item is first composed: screens opened already scrolled past it
- * estimate slightly conservatively until a scroll near the top samples it
- * once.
+ * Remembered per-host measurements feeding the thumb geometry. Plain fields —
+ * sampled during the draw/gesture phases and only converge to stable
+ * constants, so no reader needs invalidation.
  */
 private class ScrollbarSamples {
-    /** Full height of the leading item (the hero header, index 0). */
+    /** Full height of the leading item (the hero header). */
     var headerPx = 0f
 
-    /** Full height of the trailing item (the bottom spacer, last index). */
+    /** Full height of the trailing item (the bottom spacer). */
     var trailerPx = 0f
 
     /** Average height of the uniform items between the edge items. */
@@ -264,12 +226,10 @@ private fun FoamScrollbarCore(
 ) {
     var pressed by remember { mutableStateOf(false) }
     // Fresh lambda reads for the gesture/draw phases: the wrappers recreate
-    // these on every recomposition (they close over live state), while the
-    // pointerInput below never restarts.
+    // these on every recomposition while the pointerInput never restarts.
     val currentListLayoutInfo by rememberUpdatedState(listLayoutInfo)
     val currentGridLayoutInfo by rememberUpdatedState(gridLayoutInfo)
     val currentOnThumbScrollTo by rememberUpdatedState(onThumbScrollTo)
-    // Stable across recompositions: sampled in place by the geometry lambda.
     val samples = remember { ScrollbarSamples() }
 
     val currentGeometry by rememberUpdatedState {
@@ -282,8 +242,6 @@ private fun FoamScrollbarCore(
         }
     }
 
-    // Press/drag feedback: thickness and emphasis animate on the same curve so
-    // grabbing the thumb reads as one continuous swell, and relax on release.
     val animatedThickness by animateDpAsState(
         targetValue = if (pressed) pressedThickness else thickness,
         animationSpec = tween(durationMillis = ScrollbarPressAnimationMs),
@@ -297,8 +255,6 @@ private fun FoamScrollbarCore(
 
     Box(
         modifier = modifier
-            // The insets shrink both the drawn track and the touch strip: the
-            // thumb never reaches under the screen's top/bottom chrome.
             .padding(top = trackTopPadding, bottom = trackBottomPadding)
             .width(ScrollbarTouchWidth)
             .fillMaxHeight()
@@ -308,8 +264,7 @@ private fun FoamScrollbarCore(
                     pressed = true
                     try {
                         drag(down.id) { change ->
-                            // Not long enough to scroll: stay fully transparent
-                            // to the list (don't consume, don't hijack).
+                            // Not long enough to scroll: stay transparent to the list.
                             val geo = currentGeometry() ?: return@drag
                             val dy = change.positionChange().y
                             if (dy == 0f) return@drag
@@ -347,28 +302,17 @@ private fun FoamScrollbarCore(
     )
 }
 
-/**
- * Thumb length for this geometry: the container's share of the content,
- * visually scaled down ([ScrollbarThumbLengthScale]) and floored.
- */
+/** Thumb length for this geometry: the container's share of the content, scaled and floored. */
 private fun ScrollbarGeometry.thumbHeightPx(trackPx: Float, minThumbPx: Float): Float =
     (trackPx * (viewportPx / (viewportPx + scrollExtentPx)) * ScrollbarThumbLengthScale)
         .coerceAtLeast(minThumbPx)
 
 /**
  * Scrollbar geometry for a lazy LIST whose leading item is a hero header and
- * whose trailing item is a bottom spacer: both are measured individually
- * ([ScrollbarSamples.headerPx]/[ScrollbarSamples.trailerPx], their FULL
- * heights even while partially visible) and excluded from the uniform-item
- * average, so the estimate (and the thumb height with it) never pulses while
+ * whose trailing item is a bottom spacer: both are measured individually and
+ * excluded from the uniform-item average, so the estimate never pulses while
  * either edge item slides through the viewport. Returns null while nothing is
- * composed, the uniform items aren't measured yet, or the content isn't long
- * enough to scroll.
- *
- * The viewport spans the container PLUS its content paddings
- * (viewportStartOffset == -beforeContentPadding, viewportEndOffset == container
- * height - afterContentPadding), so both paddings are folded back in: the
- * scrollable extent is the full padded content minus the bare container height.
+ * composed, items aren't measured yet, or the content isn't long enough.
  */
 private fun LazyListLayoutInfo.toScrollbarGeometry(
     minRatio: Float,
@@ -399,17 +343,14 @@ private fun LazyListLayoutInfo.toScrollbarGeometry(
 
     val itemPx = samples.itemPx
     if (itemPx <= 0f) return null
-    // Hero header + bottom spacer excluded from the row count.
     val rowCountTotal = (totalItemsCount - 2).coerceAtLeast(0)
     val content = beforeContentPadding + samples.headerPx +
             itemPx * rowCountTotal + samples.trailerPx + afterContentPadding
     if (content < container * minRatio) return null
     val extent = content - container
     if (extent <= 0f) return null
-    // Exact scroll offset from the first visible item's real position: its
-    // content-space top (header at 0, row i at header + (i-1) rows) minus its
-    // measured offset from the container top. Nothing in the visible range is
-    // estimated, so the thumb never twitches while the hero slides through.
+    // Exact scroll offset from the first visible item's real position; nothing
+    // in the visible range is estimated.
     val firstContentTop = if (first.index == 0) {
         0f
     } else {

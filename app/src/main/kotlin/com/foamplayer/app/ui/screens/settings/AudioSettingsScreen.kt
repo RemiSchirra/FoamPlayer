@@ -47,13 +47,9 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
- * Audio settings (Poweramp-inspired):
- *  - live audio fidelity score with itemized breakdown,
- *  - engine switches (bit-perfect master, direct volume control) plus the current
- *    output summary,
- *  - entry into the playback subscreen (crossfade, quick fades, inter-track silence),
- *  - entry into the output-devices subscreen,
- *  - audio pipeline visualization modal.
+ * Audio settings: live fidelity score with itemized breakdown, engine
+ * switches plus the current output summary, entries into the playback and
+ * output-devices subscreens, and the audio pipeline modal.
  */
 @Composable
 fun AudioSettingsScreen(
@@ -85,7 +81,6 @@ fun AudioSettingsScreen(
                 .padding(horizontal = FoamDimens.paddingMedium),
             contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
         ) {
-            // ------------------------------------------------ fidelity score
             item {
                 BasicText(
                     text = stringResource(R.string.audio_fidelity_score),
@@ -99,7 +94,6 @@ fun AudioSettingsScreen(
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
-            // ------------------------------------------------ engine settings
             item {
                 BasicText(
                     text = stringResource(R.string.engine_settings),
@@ -133,7 +127,6 @@ fun AudioSettingsScreen(
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
-            // ------------------------------------------------------- playback
             item {
                 Box(
                     modifier = Modifier
@@ -150,7 +143,6 @@ fun AudioSettingsScreen(
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
-            // ------------------------------------------------- output devices
             item {
                 Box(
                     modifier = Modifier
@@ -167,7 +159,6 @@ fun AudioSettingsScreen(
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
-            // ------------------------------------------- audio pipeline entry
             item {
                 Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
                 Box(
@@ -213,8 +204,6 @@ fun AudioSettingsScreen(
     )
 }
 
-// ---------------------------------------------------------------- shared bits
-
 @Composable
 private fun SectionDivider() {
     Box(
@@ -225,8 +214,7 @@ private fun SectionDivider() {
     )
 }
 
-// ------------------------------------------------------ output summary row
-
+/** Current output device + sample-rate path, with a bit-perfect/mixed verdict dot. */
 @Composable
 private fun OutputSummaryRow(outputInfo: AudioOutputInfo?) {
     val bitPerfectLabel = stringResource(R.string.mode_bit_perfect)

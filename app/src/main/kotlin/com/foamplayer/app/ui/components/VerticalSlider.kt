@@ -26,13 +26,13 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.abs
 
 /**
- * Vertical fader (Poweramp-style): a narrow track with a draggable thumb. When
- * [bipolar], the fill grows from the CENTER of the range (0 dB for a pre-amp) in
- * the direction of the value, instead of always from the bottom.
+ * Vertical fader (Poweramp-style): a narrow track with a draggable thumb.
+ * When [bipolar], the fill grows from the center of the range (0 dB for a
+ * pre-amp) toward the value instead of always from the bottom.
  *
- * A tap jumps to the tapped position; a drag updates live; the value is committed
- * once through [onCommit] on release, mirroring the app's commit-on-release sliders.
- * The value readout above the fader reflects the live drag value.
+ * A tap jumps to the tapped position; a drag updates live; the value is
+ * committed once through [onCommit] on release. The readout above reflects
+ * the live drag value.
  */
 @Composable
 fun VerticalSlider(
@@ -105,7 +105,6 @@ fun VerticalSlider(
             val trackWidth = 6.dp.toPx()
             val trackLeft = (w - trackWidth) / 2f
 
-            // Track.
             drawRoundRect(
                 color = trackColor,
                 topLeft = Offset(trackLeft, 0f),
@@ -132,7 +131,6 @@ fun VerticalSlider(
                 )
             }
 
-            // Thumb: horizontal rounded bar.
             val thumbWidth = w * 0.72f
             val thumbHeight = 5.dp.toPx()
             drawRoundRect(

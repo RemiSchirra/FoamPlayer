@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.round
 
+/** Simple surface card with rounded corners. */
 @Composable
 fun FoamGlassCard(
     modifier: Modifier = Modifier,
@@ -68,10 +69,9 @@ fun FoamSlider(
 )
 
 /**
- * Lambda-based overload for per-frame values (seek-bar progress). The value is read
- * during the track's draw phase instead of in composition, so position ticks and drag
- * updates only invalidate the track's drawing -- neither the slider nor its caller
- * recomposes while playback advances.
+ * Lambda-based overload for per-frame values (seek-bar progress). The value is
+ * read during the draw phase instead of in composition, so position ticks and
+ * drags only invalidate the track's drawing — nothing recomposes.
  */
 @Composable
 fun FoamSlider(
@@ -86,10 +86,8 @@ fun FoamSlider(
 ) {
     val currentOnValueChange by rememberUpdatedState(onValueChange)
 
-    // 1. Track whether the user is currently touching/dragging the slider
     var isDragging by remember { mutableStateOf(false) }
 
-    // 2. Smoothly animate the height based on the dragging state
     val animatedTrackHeight by animateDpAsState(
         targetValue = if (isDragging) trackHeight * growFactor else trackHeight,
         label = "trackHeightAnimation"
@@ -130,7 +128,6 @@ fun FoamSlider(
             },
         contentAlignment = Alignment.CenterStart
     ) {
-        // Track Background
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -139,9 +136,9 @@ fun FoamSlider(
                 .background(inactiveColor)
         )
 
-        // Progress. The fraction is read inside drawBehind, so per-frame values
-        // (playback position) redraw the track without recomposing this composable.
-        // The rounded rect matches the CircleShape clip: radius = half the height.
+        // Progress: the fraction is read inside drawBehind, so per-frame values
+        // redraw the track without recomposing this composable. The rounded
+        // rect matches the CircleShape clip: radius = half the height.
         Box(
             modifier = Modifier
                 .fillMaxWidth()

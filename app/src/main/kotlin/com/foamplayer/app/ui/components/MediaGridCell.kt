@@ -26,26 +26,19 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamTheme
 
-/** Horizontal/vertical breathing room around one grid cell's content. */
+/** Breathing room around one grid cell's content. */
 val MediaGridCellPadding = 6.dp
 
 /**
- * Shared grid-cell scaffold for the GRID_* densities of every media list
- * (TrackListItem, CollectionListItem, ...): a square artwork on top, the
- * title underneath, then the optional subtitle — the vertical counterpart of
- * [MediaListRow]. The press/long-press highlight is a rounded card around the
- * whole cell.
+ * Shared grid-cell scaffold for the GRID_* densities of every media list:
+ * a square artwork on top, the title underneath, then the optional subtitle —
+ * the vertical counterpart of [MediaListRow]. The press/long-press highlight
+ * is a rounded card around the whole cell.
  *
- * [artworkModifier] is applied to the square artwork box right after its
- * aspect ratio (shared-element modifier, clip, background) and
- * [artworkContent] fills it; [artworkOverlay] draws above the artwork,
- * aligned within it (score badges, track numbers, ...). The artwork casts a
- * rest drop shadow at [artworkElevation] with [artworkShape] (circular for
- * fully round artwork, so the shadow follows the rest look instead of peeking
- * out behind its corners); 0.dp [artworkElevation] opts out of the shadow
- * entirely. [highlightBackground] is drawn behind the cell's content, clipped
- * to the exact same rounded shape as the press ripple (used for the
- * active-track highlight).
+ * [artworkModifier] is applied to the artwork box after its aspect ratio and
+ * [artworkContent] fills it; [artworkOverlay] draws above the artwork (score
+ * badges, track numbers, ...). [highlightBackground] is drawn behind the
+ * cell's content, clipped to the same shape as the press ripple.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

@@ -6,6 +6,9 @@ import com.foamplayer.app.data.db.dao.ArtistPlayRow
 import com.foamplayer.app.data.db.dao.DailyPlayBucket
 import com.foamplayer.app.data.db.dao.GenrePlayRow
 import com.foamplayer.app.data.db.dao.HourBucket
+import com.foamplayer.app.data.db.dao.ListenOverview
+import com.foamplayer.app.data.db.dao.TopAlbumStat
+import com.foamplayer.app.data.db.dao.TopTrackStat
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ArtistCover
@@ -48,11 +51,7 @@ class StatsViewModel @Inject constructor(
         .flatMapLatest { period -> buildStats(period) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StatsUiState())
 
-    /**
-     * Resolved pictures per artist name: a cached Spotify image when the scan
-     * found one, else the artist's first track with embedded art (both are
-     * automatic — no scan has to run for the fallback), for the top-artist rows.
-     */
+    /** Resolved pictures per artist name, for the top-artist rows. */
     val artistImages: StateFlow<Map<String, ArtistCover>> =
         artistCoverProvider.coversFlow(trackRepository.getAllArtists())
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
@@ -61,10 +60,7 @@ class StatsViewModel @Inject constructor(
         _period.value = period
     }
 
-    // Long-press collection actions for the ranked cards, mirroring the browse
-    // screens: resolve the tracks behind a collection at action time.
-
-    /** One album's tracks in disc/track order (mirrors TrackDao.getTracksByAlbum). */
+    /** One album's tracks in disc/track order. */
     suspend fun tracksForAlbum(album: String): List<TrackEntity> =
         trackRepository.getTracksByAlbum(album).first()
 
@@ -137,7 +133,7 @@ class StatsViewModel @Inject constructor(
 
     /** Overview counters + time-distribution source rows of one period. */
     private data class CoreStats(
-        val overview: com.foamplayer.app.data.db.dao.ListenOverview,
+        val overview: ListenOverview,
         val distinctArtistStrings: List<String>,
         val dailyBuckets: List<DailyPlayBucket>,
         val hourBuckets: List<HourBucket>
@@ -145,9 +141,9 @@ class StatsViewModel @Inject constructor(
 
     /** Ranked-list source rows of one period. */
     private data class TopStats(
-        val topTracks: List<com.foamplayer.app.data.db.dao.TopTrackStat>,
+        val topTracks: List<TopTrackStat>,
         val artistRows: List<ArtistPlayRow>,
-        val topAlbums: List<com.foamplayer.app.data.db.dao.TopAlbumStat>,
+        val topAlbums: List<TopAlbumStat>,
         val genreRows: List<GenrePlayRow>
     )
 
@@ -172,9 +168,8 @@ class StatsViewModel @Inject constructor(
     }
 
     /**
-     * Builds the activity chart's buckets: every calendar day/week/month of the
-     * period window (zero-filled between the first listen and today), with its
-     * play count and listening time summed from the daily rows.
+     * Builds the activity chart's buckets: every calendar day/week/month of
+     * the period window (zero-filled between the first listen and today).
      */
     private fun buildTimeBuckets(
         daily: List<DailyPlayBucket>,
@@ -270,10 +265,7 @@ class StatsViewModel @Inject constructor(
     }
 
     private companion object {
-        /**
-         * Size of the ranked album query (the cards display the first few, with
-         * a "see all" page behind them). Top tracks are uncapped.
-         */
+        /** Size of the ranked album query (top tracks are uncapped). */
         const val TopListLimit = 50
 
         /** Number of genre bars the overview shows (genres have no see-all page). */

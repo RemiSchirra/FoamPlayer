@@ -11,19 +11,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 
-/** Scale a control shrinks to while pressed. */
 private const val PressShrinkTargetScale = 0.9f
 private const val PressShrinkInMs = 110
 private const val PressShrinkOutMs = 200
 
 /**
- * Press feedback for control buttons: tweens down to [PressShrinkTargetScale] when the
- * pointer goes down and back to 1f on release/cancel. A quick tap plays the full
- * shrink-then-return cycle (release is handled after the shrink tween completes), a
- * hold stays shrunk until the finger lifts. Pass the same [interactionSource] to the
- * paired `clickable(interactionSource = ..., indication = null)` so the ripple overlay
- * doesn't draw on top of the scale. The animated value is only read inside the
- * graphicsLayer block, so press frames redraw without recomposing the button.
+ * Press feedback for control buttons: tweens down to the target scale on
+ * press and back to 1f on release/cancel. Pair with the same
+ * [interactionSource] on `clickable(interactionSource = ..., indication = null)`
+ * so no ripple draws on top of the scale. The animated value is only read
+ * inside the graphicsLayer block, so press frames are draw-only.
  */
 @Composable
 fun Modifier.pressShrink(interactionSource: MutableInteractionSource): Modifier {

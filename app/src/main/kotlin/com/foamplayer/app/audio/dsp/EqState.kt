@@ -3,9 +3,8 @@ package com.foamplayer.app.audio.dsp
 import kotlin.math.pow
 
 /**
- * Fixed tone controls (Poweramp-style), all values in dB. Bass and treble are
- * shelves, mid is a peaking section; the corner/center frequencies are fixed
- * by the design and only the gains move.
+ * Fixed tone controls (Poweramp-style), values in dB. Bass and treble are
+ * shelves, mid is a peaking section; only the gains move.
  */
 data class ToneSettings(
     val bassDb: Float = 0f,
@@ -18,7 +17,7 @@ data class ToneSettings(
         const val MIN_DB = -12f
         const val MAX_DB = 12f
 
-        // Corner/center frequencies of the fixed tone controls.
+        // Fixed corner/center frequencies.
         const val BASS_SHELF_HZ = 90f
         const val MID_PEAK_HZ = 1000f
         const val TREBLE_SHELF_HZ = 8000f
@@ -26,11 +25,10 @@ data class ToneSettings(
 }
 
 /**
- * Graphic EQ with a MUTABLE band layout. [count] can be any value in
- * [MIN_BAND_COUNT]..[MAX_BAND_COUNT] (the UI offers 6/10/15/21/31); the band
- * centers always form a geometric series spanning exactly 20 Hz..20 kHz, so on
- * the log-frequency axis band i sits at index i/(count-1) — the layout the
- * fader strip and mini map viewport both assume. Gains are -12..+12 dB.
+ * Graphic EQ with a mutable band layout: [count] in [MIN_BAND_COUNT]..[MAX_BAND_COUNT]
+ * (UI offers 6/10/15/21/31), band centers forming a geometric series spanning
+ * 20 Hz..20 kHz, so on the log axis band i sits at index i/(count-1) — the
+ * layout the fader strip and mini map viewport assume. Gains are -12..+12 dB.
  */
 data class GraphicEqSettings(
     val enabled: Boolean = false,
@@ -54,10 +52,9 @@ data class GraphicEqSettings(
         const val MAX_GAIN_DB = 12f
 
         /**
-         * Band center for band [index] of [bands]: a geometric series from
-         * exactly 20 Hz to exactly 20 kHz, so on the log-frequency axis every
-         * band sits at index/(bands-1) — the same layout the fader strip and
-         * the mini map's viewport overlay assume.
+         * Band center for band [index] of [bands]: a geometric series from 20 Hz
+         * to 20 kHz, so on the log axis every band sits at index/(bands-1) —
+         * the layout the fader strip and mini map viewport assume.
          */
         fun bandFrequency(index: Int, bands: Int): Float {
             if (bands <= 1) return 1000f
@@ -66,10 +63,8 @@ data class GraphicEqSettings(
         }
 
         /**
-         * Overlapping peaking sections need roughly Butterworth Q to sum into a
-         * smooth response without ripple valleys between band centers. The
-         * exact value scales with spacing: denser bands want a slightly higher
-         * Q so neighboring sections don't flatten each other into mush.
+         * Roughly Butterworth Q for overlapping peaking sections, so the bands
+         * sum into a smooth response. Denser bands want a slightly higher Q.
          */
         fun bandQ(count: Int): Double {
             val n = count.coerceIn(MIN_BAND_COUNT, MAX_BAND_COUNT)
@@ -113,7 +108,7 @@ val NodeColorPalette: List<Long> = listOf(
     0xFFF06292L  // pink
 )
 
-/** Parametric EQ: up to [MAX_NODES] freely-placed filters. */
+/** Parametric EQ: up to [ParametricEqSettings.MAX_NODES] freely-placed filters. */
 data class ParametricEqSettings(
     val enabled: Boolean = false,
     val nodes: List<ParametricNode> = emptyList()
@@ -129,13 +124,12 @@ data class ParametricEqSettings(
 }
 
 /**
- * The complete, persisted DSP chain configuration. Everything the audio processor
- * needs to build its float filter graph is derived from this state; [isNeutral]
- * decides whether the processor takes the bit-perfect passthrough fast path.
+ * The complete, persisted DSP chain configuration. The audio processor derives
+ * its filter graph from this state; [isNeutral] decides whether it takes the
+ * bit-perfect passthrough fast path.
  *
- * The chain is purely linear (industry-standard EQ semantics): no limiter and no
- * automatic headroom — a boost at any frequency is exactly the boost the curve
- * shows, with nothing ever attenuating or saturating the signal.
+ * The chain is purely linear (industry-standard EQ semantics): no limiter and
+ * no automatic headroom — a boost is exactly the boost the curve shows.
  */
 data class DspState(
     val enabled: Boolean = false,
@@ -145,7 +139,7 @@ data class DspState(
     val parametricEq: ParametricEqSettings = ParametricEqSettings(),
     val balance: Float = 0f,
     val stereoWidth: Float = 1f,
-    /** Direct volume control: volume is applied in the float DSP, not by AudioFlinger. */
+    /** Volume applied in the float DSP instead of by AudioFlinger. */
     val directVolumeControl: Boolean = true,
     /** User volume 0..100 (100 = 0 dB, direct-volume path only). */
     val volumePercent: Int = 100
@@ -173,10 +167,9 @@ data class DspState(
 enum class PresetKind { GRAPHIC, PARAMETRIC }
 
 /**
- * A named EQ snapshot. Built-in presets seed either the graphic EQ + tone or a
- * fixed parametric node layout; user presets capture the whole [DspState]
- * (minus volume) and are persisted by the settings layer. A preset is either
- * graphic or parametric — the two EQ sections are mutually exclusive.
+ * A named EQ snapshot. Built-in presets seed either the graphic EQ + tone or
+ * a fixed parametric node layout; user presets capture the whole [DspState]
+ * (minus volume) and are persisted by the settings layer.
  */
 data class DspPreset(
     val name: String,
@@ -204,10 +197,8 @@ data class DspPreset(
 
     companion object {
         /**
-         * Built-in presets, expressed as shapes on a 31-band grid. 31 points
-         * cover the whole 20 Hz..20 kHz axis at 1/3-octave density; shapes are
-         * listed at full width and [DspEngine.applyPreset] resamples them to
-         * whatever band count the user currently has selected.
+         * Built-in presets, expressed as shapes on a 31-band grid and resampled
+         * by [DspEngine.applyPreset] to whatever band count the user has selected.
          */
         private fun gains(vararg values: Float): List<Float> = values.toList()
 
@@ -278,6 +269,7 @@ data class DspPreset(
                     isBuiltIn = true
                 )
             )
+
             // Built-in parametric presets: fixed node layouts with palette colors.
             add(
                 DspPreset(

@@ -73,27 +73,20 @@ private const val AuxiliaryAlpha = 0.55f
 
 /**
  * Corner radius of the full player's hero artwork: half the square art's side
- * (screen width minus the player's 24dp page padding on both sides) times the
- * full-player rounding percentage. Flight-start anchor for [playerFlightArtwork];
- * must stay in sync with TrackHeroPager's fullImageSize/fullRadius.
+ * times the full-player rounding percentage. Flight-start anchor for
+ * [playerFlightArtwork]; must stay in sync with TrackHeroPager.
  */
 @Composable
 internal fun fullPlayerArtRadius(): Dp =
     (LocalConfiguration.current.screenWidthDp.dp - 48.dp) / 2 * FoamTheme.shapes.fullPlayerRounding
 
-/**
- * Fraction of the row width the row must be dragged sideways before the
- * swipe gesture dismisses (removes) the item.
- */
+/** Fraction of the row width a swipe must cover before the item is dismissed. */
 private const val SwipeDismissThresholdFraction = 0.2f
 
-/** Fallback swipe threshold (in dp) used before the row width is measured. */
+/** Fallback swipe threshold (dp) used before the row width is measured. */
 private val SwipeDismissThreshold = 80.dp
 
-/**
- * Extra translucency applied while swiping: the row's alpha eases from 1f
- * down to (1 - SwipeMaxFade) -- i.e. 0.7f -- as it reaches the threshold.
- */
+/** Extra translucency at the dismiss threshold (alpha eases 1f -> 1 - this). */
 private const val SwipeMaxFade = 0.3f
 
 /** Duration of the fly-out animation when the item is dismissed. */
@@ -104,13 +97,11 @@ private const val SwipeReturnDurationMs = 200
 
 /**
  * One item of a track list. At the ROW_* densities it renders the shared
- * [MediaListRow] scaffold -- artwork (or track number) + title + "artist •
- * album" (RowBig grows the art to 72dp and adds a "duration • format" third
- * line) -- with the active-track highlight, swipe-to-dismiss and drag-handle
- * behaviors layered on top. At the GRID_* densities it renders a square-art
- * [MediaGridCell] with the score icon overlaid on a corner of the artwork;
- * in edit mode the same cell carries the four-direction drag chip on its
- * artwork.
+ * [MediaListRow] scaffold — artwork (or track number) + title + "artist •
+ * album" (RowBig adds a "duration • format" third line) — with the
+ * active-track highlight, swipe-to-dismiss and drag-handle behaviors. At the
+ * GRID_* densities it renders a square-art [MediaGridCell] with overlays
+ * (score, track number, drag chip) on the artwork.
  *
  * Shared-element keys ("album_art_*", "track_title_*", "track_artist_*")
  * match the mini/full player's artwork and text so the row animates into the
@@ -132,28 +123,21 @@ fun TrackListItem(
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
-    // Deferred paused-art scale for rows that act as the shared-element endpoint of a
-    // player-dismiss flight (see [playerFlightArtwork]); only origin-collection list
-    // hosts provide it, null keeps the static rest clip everywhere else.
+    // Deferred paused-art scale for rows acting as the shared-element endpoint
+    // of a player-dismiss flight; null keeps the static rest clip everywhere else.
     flightPausedArtScale: (() -> Float)? = null,
-    // Mirrors the hero's immersive fade for the flight overlay (see playerFlightArtwork).
+    // Mirrors the hero's immersive fade for the flight overlay.
     immersiveArt: Boolean = false,
-    // Whether a player-dismiss artwork flight is currently landing on this list's
-    // rows (hoisted by the hosting screen, see [rememberPlayerDismissFlightActive]).
-    // While this row is the flight's tagged target, the flying artwork casts the
-    // shadow itself and lands at exactly the row's rest elevation, so the row's
-    // static rest shadow steps aside for the flight instead of sitting under the
-    // empty art slot from the first gesture frame. Gated on this row being the
-    // flight's tagged target ([isSharedTransitionSource]), so untagged rows never
-    // read the lambda and never recompose.
+    // Whether a player-dismiss artwork flight is currently landing on this
+    // list's rows. While this row is the flight's tagged target, the flying
+    // artwork casts the shadow itself, so the row's static shadow steps aside.
+    // Gated on [isSharedTransitionSource], so untagged rows never read it.
     isDismissFlightActive: () -> Boolean = { false },
     isSharedTransitionSource: Boolean = false
 ) {
     val animatedBackgroundColor = activeRowHighlight(active, track.albumArtPath)
 
-    // The track number's color only needs the animated highlight when a number
-    // is actually drawn; rows without one (the majority of every list) skip
-    // the whole animateColorAsState allocation.
+    // Rows without a track number skip the whole animateColorAsState allocation.
     val animatedTrackNumberColor: Color = if (trackNumberText != null) {
         val targetTrackNumberColor = if (active) {
             FoamTheme.colors.textPrimary
@@ -169,8 +153,8 @@ fun TrackListItem(
         Color.Transparent
     }
 
-    // Long-press opens the track actions modal when FoamNavHost provides one at
-    // the root; an explicit [onLongClick] always wins over that default.
+    // Long-press opens the track actions modal when the nav root provides one;
+    // an explicit [onLongClick] always wins.
     val trackModalState = LocalTrackFoamModalState.current
     val resolvedOnLongClick: (() -> Unit)? = when {
         onLongClick != null -> onLongClick
@@ -182,13 +166,9 @@ fun TrackListItem(
     }
 
     // Static rest elevation of the artwork's drop shadow. Dropped (0.dp) while
-    // this row is the TAGGED target of a live player-dismiss flight: the flight's
-    // overlay artwork casts the shadow itself for the whole flight (see
-    // [playerFlightArtwork]) and lands at exactly [MediaItemArtElevation], so the
-    // static shadow resumes seamlessly when the flight settles. Without the drop,
-    // the static shadow (drawn by the row scaffold OUTSIDE the sharedElement
-    // modifier) would sit under the still-empty art slot from the first gesture
-    // frame -- the "persistent shadow in the target position".
+    // this row is the TAGGED target of a live player-dismiss flight: the
+    // flight's overlay artwork casts the shadow itself and lands at exactly
+    // [MediaItemArtElevation], so the static one resumes seamlessly.
     val artworkRestElevation =
         if (trackNumberText == null) MediaItemArtElevation else 0.dp
     val artworkElevation = if (isSharedTransitionSource && isDismissFlightActive()) {
@@ -197,11 +177,6 @@ fun TrackListItem(
         artworkRestElevation
     }
 
-    // GRID_* densities: square artwork cell, score overlaid on the art corner.
-    // In edit mode the artwork also carries the four-direction drag chip and the
-    // drag gesture lives on that chip alone ([dragHandleModifier], hosted by
-    // TrackListScreen) -- the rest of the cell stays scrollable/tappable.
-    // Swipe-to-dismiss remains a row-only affordance.
     if (density.isGrid) {
         val sharedArtworkBase: Modifier = Modifier.rowSharedArtwork(
             key = "album_art_${track.id}",
@@ -281,9 +256,8 @@ fun TrackListItem(
                         enter = GridDragHandleEnter,
                         exit = GridDragHandleExit
                     ) {
-                        // Reordering starts only from this chip: the drag gesture
-                        // arrives via dragHandleModifier; the no-op clickable
-                        // swallows taps so the cell beneath doesn't ripple.
+                        // Reordering starts only from this chip; the no-op
+                        // clickable swallows taps so the cell doesn't ripple.
                         val dragHandleInteractionSource = remember { MutableInteractionSource() }
                         GridOverlayChip(
                             modifier = dragHandleModifier.clickable(
@@ -311,19 +285,15 @@ fun TrackListItem(
     // --- Swipe-to-dismiss state (only active when onRemove is provided) ---
     val scope = rememberCoroutineScope()
 
-    // Plain snapshot float backing the swipe offset. During the drag it is written
-    // directly in the gesture callback (read back in the row's graphicsLayer, so
-    // drags cost zero coroutines); the end-of-gesture animations run through an
-    // Animatable that feeds this same float. The old backing was an Animatable
-    // snapTo'd from a fresh coroutine per drag delta -- one Job allocation plus a
-    // mutex hop at pointer-event rate (~120/s on high-refresh panels) per row.
+    // Plain snapshot float backing the swipe offset: written directly in the
+    // gesture callback during drags (read back in the graphicsLayer, so drags
+    // cost zero coroutines); end-of-gesture animations feed this same float.
     var dismissOffsetValue by remember { mutableFloatStateOf(0f) }
     val gestureAnimJob = remember { mutableStateOf<Job?>(null) }
     var itemWidthPx by remember { mutableFloatStateOf(0f) }
     val latestOnRemove by rememberUpdatedState(onRemove)
     val fallbackDismissThresholdPx = with(localDensity) { SwipeDismissThreshold.toPx() }
 
-    // Distance (in px) the row must be dragged sideways before it is dismissed
     fun swipeThresholdPx(): Float =
         if (itemWidthPx > 0f) itemWidthPx * SwipeDismissThresholdFraction
         else fallbackDismissThresholdPx
@@ -343,7 +313,7 @@ fun TrackListItem(
         Modifier.pointerInput(Unit) {
             detectHorizontalDragGestures(
                 onDragStart = {
-                    // Grabbing a row mid return/fly-out animation takes over from it.
+                    // Grabbing a row mid return/fly-out takes over from it.
                     gestureAnimJob.value?.cancel()
                 },
                 onHorizontalDrag = { change, dragAmount ->
@@ -352,7 +322,7 @@ fun TrackListItem(
                 },
                 onDragEnd = {
                     if (abs(dismissOffsetValue) >= swipeThresholdPx()) {
-                        // Fling the row fully off-screen, then remove the item
+                        // Fling the row fully off-screen, then remove it.
                         val exitDistance =
                             if (itemWidthPx > 0f) itemWidthPx else fallbackDismissThresholdPx
                         val exitTarget =
@@ -361,7 +331,6 @@ fun TrackListItem(
                             latestOnRemove?.invoke()
                         }
                     } else {
-                        // Not dragged far enough: animate back to rest
                         animateSwipeTo(0f, SwipeReturnDurationMs)
                     }
                 },
@@ -374,20 +343,14 @@ fun TrackListItem(
         Modifier
     }
 
-    // The swipe layer (translation + fade + width measurement) only exists in
-    // edit mode, where rows are actually swipeable. Attaching it unconditionally
-    // put a lambda graphicsLayer (its own render node) plus an onSizeChanged
-    // layout observer on EVERY resting row of every list -- pure scroll-frame
-    // overhead for a zero transform. Off, translationX is 0 and alpha is 1 by
-    // definition (no gesture can ever move them), so dropping the layer is
-    // visually identical.
+    // The swipe layer only exists in edit mode, where rows are actually
+    // swipeable; attaching it unconditionally put a lambda graphicsLayer (its
+    // own render node) on every resting row of every list for nothing.
     val swipeRowModifier = if (onRemove != null) {
         Modifier
             .onSizeChanged { itemWidthPx = it.width.toFloat() }
             .graphicsLayer {
                 translationX = dismissOffsetValue
-                // Become slightly translucent while swiping: alpha eases
-                // from 1f down to (1 - SwipeMaxFade) at the threshold
                 val threshold = max(swipeThresholdPx(), 1f)
                 val progress = (abs(dismissOffsetValue) / threshold).coerceIn(0f, 1f)
                 alpha = 1f - progress * SwipeMaxFade
@@ -410,8 +373,8 @@ fun TrackListItem(
             animatedVisibilityScope != null &&
             flightPausedArtScale != null
         ) {
-            // Dismiss-flight endpoint: the clip radius must ride the transition (see
-            // [playerFlightArtwork]) instead of clipping at the rest radius.
+            // Dismiss-flight endpoint: the clip radius must ride the transition
+            // instead of clipping at the rest radius.
             sharedArtworkBase
                 .playerFlightArtwork(
                     animatedVisibilityScope = animatedVisibilityScope,
@@ -433,8 +396,6 @@ fun TrackListItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            // Only auxiliary rows need an alpha layer; the lambda-graphicsLayer
-            // variant promotes every row to its own render layer even at 1f.
             .then(if (auxiliary) Modifier.graphicsLayer { alpha = AuxiliaryAlpha } else Modifier)
     ) {
         MediaListRow(
@@ -472,7 +433,6 @@ fun TrackListItem(
             } else {
                 null
             },
-            // Number-only rows have no artwork surface to cast from.
             artworkElevation = artworkElevation,
             highlightBackground = animatedBackgroundColor,
             rowModifier = swipeRowModifier,
@@ -489,10 +449,7 @@ fun TrackListItem(
                 enabled = isSharedTransitionSource
             ),
             trailingContent = {
-                // Score indicator (like / super like / dislike): informational
-                // only, so it gets no click handling of its own -- taps stay on
-                // the row. Muted (textSecondary) here, unlike the player/modal
-                // where it's white.
+                // Score indicator: informational only, so taps stay on the row.
                 if (track.score != 0) {
                     Spacer(modifier = Modifier.width(12.dp))
 
@@ -541,7 +498,7 @@ fun TrackListItem(
     }
 }
 
-/** Album-art (or format-letter fallback) filling a grid cell's square artwork box. */
+/** Album-art (or placeholder) filling a grid cell's square artwork box. */
 @Composable
 private fun TrackGridArtwork(track: TrackEntity) {
     if (track.albumArtPath != null) {
@@ -563,7 +520,7 @@ private fun TrackGridArtwork(track: TrackEntity) {
     }
 }
 
-/** Small rounded translucent chip overlaid on a grid cell's artwork corner (score badge, track number, drag handle). */
+/** Small rounded translucent chip overlaid on a grid cell's artwork corner. */
 @Composable
 private fun GridOverlayChip(
     modifier: Modifier = Modifier,

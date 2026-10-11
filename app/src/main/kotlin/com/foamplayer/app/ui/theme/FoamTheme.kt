@@ -33,7 +33,7 @@ data class FoamColors(
 )
 
 val DarkFoamColors = FoamColors(
-    background = Color(0xFF121212), // Dark Grey Background
+    background = Color(0xFF121212),
     surface = Color(0xFF212121),
     surfaceVariant = Color(0xFF2A2A2A),
     bitPerfectActive = Color(0xFF00E676),
@@ -54,7 +54,7 @@ val LightFoamColors = FoamColors(
     borderOverlay = Color(0xFFC9C9C9)
 )
 
-/** Default accent color, used until [FoamTheme] provides a live one (e.g. in previews). */
+/** Default accent, used until [FoamTheme] provides a live one (e.g. in previews). */
 val DefaultPrimaryAccent = Color(0xFFFF5252)
 
 /** The app's text styles. */
@@ -116,7 +116,7 @@ val LightFoamTypography = foamTypography(
     monoColor = LightFoamColors.bitPerfectActive
 )
 
-/** Corner rounding: the two player roundings are 0f..1f percentages of the art's half-size. */
+/** Corner rounding: the player roundings are 0f..1f percentages of the art's half-size. */
 @Immutable
 data class FoamShapes(
     val miniPlayerRounding: Float,
@@ -129,25 +129,22 @@ val DefaultFoamShapes = FoamShapes(
     fullPlayerRounding = 0.15f
 )
 
-// Rarely change after launch: static locals skip reader tracking and just
-// recompose their content wholesale on the rare value replacement.
+// Static locals: values rarely change after launch, so readers skip tracking
+// and simply recompose wholesale on the rare value replacement.
 val LocalFoamColors = staticCompositionLocalOf { DarkFoamColors }
 val LocalFoamTypography = staticCompositionLocalOf { DefaultFoamTypography }
 val LocalFoamShapes = staticCompositionLocalOf { DefaultFoamShapes }
 val LocalIsDarkTheme = staticCompositionLocalOf { true }
 
-// The accent color changes at animation frequency (per-frame while swiping
-// between tracks); a non-static local keeps its invalidation scoped to readers
-// of the accent alone.
+// The accent animates per-frame (e.g. while swiping between tracks); a
+// non-static local keeps that invalidation scoped to accent readers only.
 val LocalPrimaryAccentColor = compositionLocalOf { DefaultPrimaryAccent }
 
 // Whether the accent derives from album art; row highlights read it to pick
 // between their own extracted art color and the single app accent.
 val LocalAutomaticColorEnabled = compositionLocalOf { true }
 
-/**
- * Access point for the theme values provided by [FoamTheme].
- */
+/** Access point for the theme values provided by [FoamTheme]. */
 object FoamTheme {
     val colors: FoamColors
         @Composable @ReadOnlyComposable get() = LocalFoamColors.current
@@ -172,17 +169,15 @@ object FoamTheme {
 
 /**
  * Adapts a raw accent color (palette pick or album-art extraction) to the
- * active theme: the dark palettes were tuned around lightened colors, so on
- * light backgrounds bright accents are darkened instead to stay legible.
+ * active theme: dark palettes are tuned around lightened colors, bright
+ * accents are darkened on light backgrounds to stay legible.
  */
 fun Color.adaptAccentForTheme(darkTheme: Boolean): Color {
     val lum = luminance()
     return if (darkTheme) {
-        // Lighten the darker the color is
         val t = 0.45f * (1f - smoothstep(0.05f, 0.3f, lum))
         if (t <= 0f) this else lerp(this, Color.White, t)
     } else {
-        // Darken the lighter color
         val t = 0.25f + 0.35f * smoothstep(0.3f, 0.95f, lum)
         lerp(this, Color.Black, t)
     }

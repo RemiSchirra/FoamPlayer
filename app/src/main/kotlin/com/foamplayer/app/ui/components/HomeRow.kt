@@ -50,46 +50,30 @@ import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.theme.FoamTheme
 
-/**
- * Horizontal breathing room around a Home row's header and its card pager.
- * The Home list itself has no horizontal padding, so the pager scrolls its
- * cards all the way to the screen edges instead of being masked short of them.
- */
 private val HomeRowEdgePadding = 24.dp
-
-/** Gap between a row's title and its "See all" arrow button. */
 private val HomeRowHeaderButtonGap = 16.dp
-
-/** Gap between two cards of a Home row's pager. */
 private val HomeRowCardSpacing = 8.dp
 
-/** Gap between a row and its neighbor sections. */
+/** Vertical gap between two Home rows. */
 val HomeRowSpacing = 40.dp
 
-/** Width of the large cards in a Home row's pager (albums, playlists). */
+/** Card width for albums/playlists. */
 val HomeRowCardWidth = 140.dp
 
-/** Width of the small cards in a Home row's pager (tracks, artists). */
+/** Card width for tracks/artists. */
 val HomeRowCardSmallWidth = 112.dp
 
-/** Padding around a card's content (artwork + title), tighter than grid cells. */
 private val HomeRowCardPadding = 4.dp
-
-/** Gap between a row's header line and its card pager. */
 private val HomeRowHeaderSpacing = 4.dp
 
 /**
- * One horizontal section of the Home screen: a header line with the row title
- * (left) and an optional arrow button (right) leading to the row's "See all"
- * page, above a lazily scrolling pager of cards built through [itemContent].
- * The row hides itself entirely while [items] is empty so sparse libraries
- * stay graceful.
+ * One horizontal Home screen section: a title with an optional "See all"
+ * button, above a lazily scrolling pager of cards built through [itemContent].
+ * Hides itself while [items] is empty.
  *
- * Callers compose each card out of the shared [HomeRowCard] so every row's
- * items look identical. [itemContent] runs in [LazyItemScope] so cards can
- * opt into placement animations with Modifier.animateItem() -- recommendations
- * reorder as listening data refreshes, and the cards glide instead of popping.
- * Placement animation only takes effect when a [key] is given.
+ * [itemContent] runs in [LazyItemScope] so cards can animate item placement
+ * (recommendations reorder as listening data refreshes). Only takes effect
+ * when [key] is set.
  */
 @Composable
 fun <T> HomeRow(
@@ -154,29 +138,23 @@ fun <T> HomeRow(
 }
 
 /**
- * The shared card component for every Home row: a big square artwork on top
- * (the item's cover, or its initial when there is none) and a small
- * single-line, ellipsized title below — the horizontal-pager counterpart of
- * [MediaGridCell]. [imageIsEmbeddedArt] selects how [imageUrl] loads: audio
- * file paths embed their art (tracks, albums), playlist covers are plain
- * image URIs. [round] clips the artwork into a full circle (artists) instead
- * of the app's rounded-square album shape. [width] sizes the card: large for
- * albums/playlists, small for tracks and artists. [onLongClick] opens the
- * item's actions modal (track / collection / playlist). The loading placeholder
- * resolves from the surrounding [LocalMediaArtKind] scope, so each Home row
- * scopes its own kind once.
+ * Shared card of every Home row: square artwork (or initial) with a
+ * single-line title below — the horizontal-pager counterpart of
+ * [MediaGridCell].
+ *
+ * [imageIsEmbeddedArt] selects how [imageUrl] loads: audio file paths embed
+ * their art (tracks, albums), playlist covers are plain image URIs. [round]
+ * clips the artwork into a circle (artists). [width] sizes the card (large
+ * for albums/playlists, small for tracks/artists). [onLongClick] opens the
+ * item's actions modal.
  *
  * When [sharedArtKey]/[sharedTitleKey] and both transition scopes are given,
- * the artwork and title join the app's shared-element transitions:
+ * the artwork and title join the shared-element transitions:
  * [sharedInPlayerTransition] true styles them as the source of a player
- * open/close flight (like [TrackListItem]: default bounds transform, no
- * overlay clip), false styles them for a destination navigation (like
- * [CollectionListItem]: [AlbumArtBoundsTransform] + the artwork shape as
- * overlay clip). With [flightHeroTarget] set AND the target collection's hero
- * resolving to an immersive layout, the artwork additionally carries the
- * mirrored collection flight morph (see [collectionRowFlightArtwork]): on
- * closing flights the shared-element overlay renders only this card's own
- * content, which must then depart from the hero's square, faded look.
+ * open/close flight, false as a destination navigation. With
+ * [flightHeroTarget] resolving to an immersive layout, the artwork also
+ * carries the mirrored collection flight morph (see
+ * [collectionRowFlightArtwork]).
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -199,8 +177,7 @@ fun HomeRowCard(
 ) {
     val context = LocalContext.current
     val artShape = if (round) CircleShape else AlbumArtShape()
-    // Gentle radius on the press-highlight container: a large one would clip
-    // the title into the card's bottom rounded corners.
+    // Small radius on the press-highlight container: a large one clips the title.
     val cellShape = RoundedCornerShape(FoamTheme.shapes.cardRounding)
     val immersiveFlightHero = !sharedInPlayerTransition &&
             flightHeroTarget != null &&
@@ -213,9 +190,7 @@ fun HomeRowCard(
             enabled = sharedArtKey != null,
             restShape = artShape,
             immersiveFlightHero = true,
-            // Fully round cards (artists) land their flight morph on the circle
-            // too, so the radius never pops between the circle and the album
-            // rounding at flight end.
+            // Fully round cards (artists) land their flight morph on the circle too.
             fullyRounded = round
         )
     } else {
@@ -254,9 +229,7 @@ fun HomeRowCard(
                 .aspectRatio(1f)
                 .then(sharedArtModifier)
                 // The flight variant carries its own graphicsLayer shape (the
-                // morph) -- a static clip here would re-round every flight frame.
-                // The rest shadow sits with the static look: zero during a nav
-                // flight, like every other artwork shadow.
+                // morph); a static clip would re-round every flight frame.
                 .let {
                     if (immersiveFlightHero) it
                     else it.shadow(elevation = MediaItemArtElevation, shape = artShape)
@@ -267,11 +240,8 @@ fun HomeRowCard(
         ) {
             if (imageUrl != null) {
                 // Collection cards decode under the destination hero's
-                // deterministic key (albumArtMemoryCacheKey, as read by
-                // CollectionListScreen/CollectionHero): with the auto key the
-                // hero misses the cache and the open flight's first frame
-                // shows the placeholder. Track cards keep the auto key -- the
-                // full player's art requests read it.
+                // deterministic key so the open flight's first frame hits the
+                // cache. Track cards keep the auto key (the full player reads it).
                 val heroKeyed = flightHeroTarget != null
                 val artRequest = remember(imageUrl, imageIsEmbeddedArt, heroKeyed) {
                     ImageRequest.Builder(context)

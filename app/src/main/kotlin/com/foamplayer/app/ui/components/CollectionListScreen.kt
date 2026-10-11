@@ -65,10 +65,9 @@ import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
- * Receiver handed to [CollectionListScreen]'s content lambda: it routes the
- * item declarations to whichever lazy layout the current density selected (a
- * plain [LazyColumn] for the ROW_* modes, a [LazyVerticalGrid] for the GRID_*
- * ones), so callers can keep a single item list for both layouts.
+ * Receiver handed to [CollectionListScreen]'s content lambda: routes the item
+ * declarations to whichever lazy layout the current density selected, so
+ * callers keep a single item list for both layouts.
  */
 interface MediaListContentScope {
     fun <T> items(
@@ -83,7 +82,7 @@ interface MediaListContentScope {
         itemContent: @Composable (index: Int, item: T) -> Unit
     )
 
-    /** A standalone item; in grids it always spans the full line (headers, empty states, spacers). */
+    /** A standalone item; in grids it always spans the full line. */
     fun item(key: Any? = null, content: @Composable () -> Unit)
 }
 
@@ -124,23 +123,18 @@ private class GridMediaContentScope(private val scope: LazyGridScope) : MediaLis
 }
 
 /**
- * "List of lists" screen: the TrackListScreen equivalent for screens that hold a list
- * of collections (albums, genres, years, folders...) instead of tracks. Same layout:
- * back arrow in a top bar, artwork + title header, then the rows supplied by [content].
+ * "List of lists" screen: the TrackListScreen equivalent for screens holding a
+ * list of collections (albums, genres, years, folders...) instead of tracks.
  *
- * [density] switches the body between the row list and a square-art grid
- (columns fixed by the GRID_* mode); [onDensityChange], when set, adds the
- * 3-dots top-bar button that opens the organisation modal.
+ * [density] switches the body between the row list and a square-art grid;
+ * [onDensityChange], when set, adds the 3-dots top-bar button opening the
+ * organisation modal.
  *
  * Every hero layout scrolls full-bleed: the lazy container is the screen's
- * root (its top content padding reserves the floating chrome zone, see
- * [CollectionTopBarRowHeight]) and the scroll top bar's gradient plus the
- * floating back/more row are drawn ON TOP of it, while the list itself fades
- * its own pixels transparent across the chrome zone
- * ([collectionListTopFade]) — rows dissolve into the chrome instead of being
- * hard-clipped, on every layout. Long content also gains the accent fast
- * scrollbar ([FoamScrollbar]) along the container's end edge unless
- * [showScrollbar] is false (albums/artists lists opt out).
+ * root and the scroll top bar plus the floating back/more row are drawn ON
+ * TOP of it, while the list fades its own pixels transparent across the
+ * chrome zone ([collectionListTopFade]). Long content gains the accent fast
+ * scrollbar unless [showScrollbar] is false.
  */
 @Composable
 fun CollectionListScreen(
@@ -175,9 +169,6 @@ fun CollectionListScreen(
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
-    // Measured by the header item's layout pass (see [CollectionHeroImmersiveHeader]);
-    // read untracked inside the offset lambda, and consumed by the search-open scroll effect
-    // (see [CollectionSearchScrollToBarEffect]).
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
         if (density.isGrid) {
@@ -194,20 +185,10 @@ fun CollectionListScreen(
             }
         }
     }
-    // Root-space top y of the active scroll container, reported by the
-    // listTopObserver below and consumed by the search-open scroll effect
-    // (see [CollectionSearchScrollToBarEffect]).
     var listTopYInRootPx by remember { mutableFloatStateOf(Float.NaN) }
     val listTopObserver = Modifier.onGloballyPositioned {
         listTopYInRootPx = it.positionInRoot().y
     }
-    // Search-open scroll: when the search toggle opens the hero's search bar
-    // while the hero sits scrolled away (or hidden under the fixed chrome), the
-    // list is brought up so the bar opens at the screen top — below the floating
-    // back row, which covers every layout's list top (all of them scroll
-    // full-bleed beneath it). The open bottom padding keeps the bar reachable
-    // even when the collection has only a handful of rows (no scroll range
-    // otherwise) and the rows visible above the keyboard.
     CollectionSearchScrollToBarEffect(
         searchState = searchState,
         listState = listState,
@@ -217,19 +198,16 @@ fun CollectionListScreen(
         topChromeHeight = CollectionSearchImmersiveTopClearance
     )
 
-    // Top content padding reserving the floating chrome zone: compact/normal
-    // heroes must rest below the back/more row (their artwork is fully
-    // visible), while the immersive heroes bleed under it on purpose.
+    // Top content padding reserving the floating chrome zone; immersive
+    // heroes bleed under it on purpose.
     val heroTopPadding = if (heroLayout.isImmersive) 0.dp else CollectionTopBarRowHeight
 
     val itemsCountText = pluralStringResource(R.plurals.items_count, itemCount, itemCount)
 
     Box(modifier = modifier.fillMaxSize()) {
         if (heroLayout.isImmersive) {
-            // Artwork layer only: bleeds under the status bar behind the list.
-            // The text block is the list's own [CollectionHeroImmersiveHeader]
-            // item (no play pill on a "list of lists" page) and fades with
-            // this screen's transitions like the compact/normal heroes.
+            // Artwork layer only, bleeding under the status bar behind the list;
+            // the text block is the list's own [CollectionHeroImmersiveHeader] item.
             CollectionHero(
                 layout = heroLayout,
                 title = title,
@@ -286,8 +264,6 @@ fun CollectionListScreen(
             if (showScrollbar) {
                 FoamScrollbar(
                     state = gridState,
-                    // The thumb's track stays clear of the floating chrome zone
-                    // above and the bottom-bar clearance below.
                     trackTopPadding = CollectionTopBarRowHeight,
                     trackBottomPadding = LocalBottomBarClearance.current,
                     modifier = Modifier.align(Alignment.CenterEnd)
@@ -330,8 +306,6 @@ fun CollectionListScreen(
             if (showScrollbar) {
                 FoamScrollbar(
                     state = listState,
-                    // The thumb's track stays clear of the floating chrome zone
-                    // above and the bottom-bar clearance below.
                     trackTopPadding = CollectionTopBarRowHeight,
                     trackBottomPadding = LocalBottomBarClearance.current,
                     modifier = Modifier.align(Alignment.CenterEnd)
@@ -339,8 +313,7 @@ fun CollectionListScreen(
             }
         }
 
-        // The scroll top bar's subtle gradient above the scrolling list (whose
-        // own pixels fade transparent across the chrome zone), then the
+        // The scroll top bar's gradient above the scrolling list, then the
         // floating back/more row above THAT — for every hero layout.
         CollectionScrollTopBar(
             title = title,
@@ -391,13 +364,7 @@ fun CollectionListScreen(
     }
 }
 
-/**
- * The list's leading item: the hero (no play button — a "list of lists" page
- * has nothing to play) for compact/normal layouts, [CollectionHeroImmersiveHeader]
- * for the immersive ones — the overlaid text block as real list content (its
- * [CollectionHeroImmersiveHeader.onVisibleHeightPx] keeps the hero artwork's
- * scroll-away constant in sync).
- */
+/** The list's leading item: the full hero or the immersive overlay block. */
 @Composable
 private fun CollectionListHero(
     heroLayout: CollectionHeroLayout,
@@ -442,30 +409,21 @@ private fun CollectionListHero(
  * the shared [MediaListRow] scaffold at the ROW_* densities, or a square-art
  * [MediaGridCell] at the GRID_* ones. When a [sharedElementKey] and the
  * transition scopes are provided, the artwork and texts animate into the
- * matching album detail header using the same keys as SearchScreen's album
- * rows ("album-art-*", "album-title-*", "album-artist-*").
+ * matching detail hero.
  *
  * [active] draws the "now playing" highlight: set it only when the queue was
  * actually started from this collection (PlaybackState.queueSourceId), never
  * merely because a track inside it happens to be playing.
  *
  * [immersiveFlightHero] styles the artwork as the DRAWN side of a close flight
- * from an immersive collection detail hero: during the flight the shared
- * element's overlay renders only this row's own content and overlay clip, so
- * the row must itself morph from the hero's square, faded look to its own
- * rounded, unfaded one (see [collectionRowFlightArtwork]). The hosts resolve
- * the flag from the destination hero's layout via
- * [LocalCollectionHeroLayoutLookup].
+ * from an immersive detail hero (see [collectionRowFlightArtwork]); hosts
+ * resolve the flag via [LocalCollectionHeroLayoutLookup].
  *
- * [fullyRoundedArtwork] renders the artwork as a FULL circle (artist rows)
- * everywhere: the rest clip, the rest shadow shape and the flight morph's
- * landing radius all follow the circle, so a round source row lands on a round
- * hero (or morphs to the immersive hero's square with the radius riding the
- * flight) instead of popping between a circle and the album rounding.
+ * [fullyRoundedArtwork] renders the artwork as a full circle (artist rows)
+ * everywhere: rest clip, rest shadow and flight morph all follow the circle.
  *
  * The loading placeholder icon resolves from the surrounding
- * [LocalMediaArtKind] scope (the music note by default), so hosts of one
- * collection kind scope themselves once instead of per-row.
+ * [LocalMediaArtKind] scope.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -484,13 +442,13 @@ fun CollectionListItem(
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedElementKey: String? = null,
     // Flight key namespace: album rows fly to/from album heroes, artist rows
-    // (images resolved from Spotify) to/from the artist page's hero.
+    // to/from the artist page's hero.
     sharedElementPrefix: String = "album",
     immersiveFlightHero: Boolean = false,
     fullyRoundedArtwork: Boolean = false
 ) {
-    // Long-press opens the collection actions modal when FoamNavHost provides
-    // one at the root; an explicit [onLongClick] always wins over that default.
+    // Long-press opens the collection actions modal when the nav root provides
+    // one; an explicit [onLongClick] always wins.
     val collectionModalState = LocalCollectionFoamModalState.current
     val resolvedOnLongClick: (() -> Unit)? = when {
         onLongClick != null -> onLongClick
@@ -500,10 +458,9 @@ fun CollectionListItem(
                     CollectionInfo(
                         title = title,
                         subtitle = subtitle,
-                        // Plain image URIs (playlist covers, Spotify artist cache
-                        // files) ride through with [imageIsEmbeddedArt] == false so
-                        // the modal header loads them directly instead of trying to
-                        // extract a picture from them as audio containers.
+                        // Plain image URIs ride through with [imageIsEmbeddedArt]
+                        // == false so the modal header loads them directly
+                        // instead of trying to extract art from them.
                         imageUrl = imageUrl,
                         imageIsEmbeddedArt = imageIsEmbeddedArt,
                         icon = icon
@@ -515,25 +472,15 @@ fun CollectionListItem(
         else -> null
     }
 
-    // The percentage-based art shape equals the row radius at any artwork size
-    // (half the size times the rounding percentage), so rows and grids — and
-    // both ends of a shared-element transition — round identically. Artists
-    // render fully round instead.
     val elementKey = sharedElementKey
     val artShape: Shape = if (fullyRoundedArtwork) CircleShape else AlbumArtShape()
     val highlightBackground = activeRowHighlight(active, imageUrl)
 
     // Close-flight shadow hand-off (mirrors TrackListItem's player-dismiss
-    // handling): while a collection detail hero closes back onto THIS tagged
-    // row, the flying artwork casts the row's static drop shadow itself,
-    // elevation riding the flight (see [collectionRowFlightArtwork]'s
-    // castsFlightShadow). The scaffold's static shadow — drawn by
-    // [MediaListRow]/[MediaGridCell] OUTSIDE the sharedElement modifier —
-    // would otherwise sit at the target position from the first flight frame
-    // ("a static shadow at the target image position while the animation is
-    // playing"), so it steps aside for the flight and resumes on the settle
-    // frame, where the flight layer's elevation lands on exactly the same
-    // value — an identical-strength hand-off.
+    // handling): while a detail hero closes back onto THIS tagged row, the
+    // flying artwork casts the row's static drop shadow itself, so the static
+    // one steps aside for the flight and resumes on the settle frame at an
+    // identical strength.
     val closeFlightActive = rememberCollectionCloseFlightActive(
         sharedTransitionScope = sharedTransitionScope?.takeIf { elementKey != null },
         animatedVisibilityScope = animatedVisibilityScope
@@ -625,13 +572,7 @@ fun CollectionListItem(
     )
 }
 
-/**
- * Artwork content shared by CollectionListItem's row and grid renderings:
- * image, icon or the title's initial. The letter fallback rides
- * [NoAlbumArtLetter]: a bounds-fraction monogram that scales with the flying
- * artwork during the shared-element flight into the detail hero instead of
- * popping between this row's and the hero's fixed sizes.
- */
+/** Artwork content shared by CollectionListItem's row and grid renderings. */
 @Composable
 private fun CollectionArtwork(
     title: String,
@@ -645,8 +586,6 @@ private fun CollectionArtwork(
         val albumArtRequest = remember(imageUrl, imageIsEmbeddedArt) {
             ImageRequest.Builder(context)
                 .data(
-                    // Embedded art: the model is an audio file whose picture is
-                    // extracted. Otherwise the model is a plain image (cache file).
                     if (imageIsEmbeddedArt) EmbeddedAlbumArt(imageUrl.toUri()) else imageUrl
                 )
                 .size(AlbumArtRequestSize)

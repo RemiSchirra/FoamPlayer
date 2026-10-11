@@ -36,11 +36,11 @@ import kotlinx.coroutines.delay
 private val MarqueeLoopGap: Dp = 48.dp
 
 /**
- * Hoisted marquee state: the current scroll offset plus the measured widths the drive
- * loop needs. Owning it outside [MarqueeText] lets TWO composables render the very same
- * scrolling text (e.g. a pager page and the hero overlay that replaces it once the swipe
- * commits) without the second one restarting from offset 0: one instance drives the
- * state ([MarqueeText]'s `drivesState = true`), the others just render it.
+ * Hoisted marquee state: the current scroll offset plus the measured widths
+ * the drive loop needs. Owning it outside [MarqueeText] lets TWO composables
+ * render the same scrolling text (e.g. a pager page and the hero overlay
+ * replacing it) without the second one restarting from offset 0: one instance
+ * drives the state ([MarqueeText.drivesState] = true), the others render it.
  */
 @Stable
 class MarqueeTextState {
@@ -49,7 +49,7 @@ class MarqueeTextState {
     internal var contentWidth by mutableIntStateOf(0)
     internal var restartCount by mutableIntStateOf(0)
 
-    /** Rewinds the text to its start and restarts the initial pause before it scrolls. */
+    /** Rewinds the text to its start and restarts the initial pause. */
     fun restart() {
         offsetPx = 0f
         restartCount++
@@ -63,10 +63,9 @@ private fun travelMillis(distancePx: Float, speedPxPerSecond: Float): Int =
     ((abs(distancePx) / speedPxPerSecond) * 1000f).toInt()
 
 /**
- * Clips to its own bounds, measures the child with unbounded width (so single-line text
- * lays out at its natural width) and places it shifted left by [offsetPx]. The offset is
- * read in the placement block, so a scroll tick only re-places - no recomposition or
- * remeasure. [offsetPx] receives how far the child overflows the viewport.
+ * Clips to its own bounds, measures the child with unbounded width and places
+ * it shifted left by [offsetPx]. The offset is read in the placement block, so
+ * a scroll tick only re-places — no recomposition or remeasure.
  */
 private fun Modifier.marqueeViewport(offsetPx: (overflow: Int) -> Int): Modifier =
     clipToBounds().layout { measurable, constraints ->
@@ -85,21 +84,20 @@ private fun Modifier.marqueeViewport(offsetPx: (overflow: Int) -> Int): Modifier
     }
 
 /**
- * Single-line text with the scrolling behaviour selected by [mode].
+ * Single-line text with the scrolling behavior selected by [mode].
  *
- *  [MarqueeMode.PING_PONG] scrolls the text to its end, pauses, scrolls back, pauses,
- *  forever. [MarqueeMode.INFINITE] slides the text left continuously; a second copy
- *  follows the first, and the scroll resets by exactly one copy + gap so the text
- *  re-enters from the right with a seamless wrap.
+ *  [MarqueeMode.PING_PONG] scrolls to the end, pauses, scrolls back, pauses,
+ *  forever. [MarqueeMode.INFINITE] slides left continuously; a second copy
+ *  follows the first and the scroll resets by exactly one copy + gap for a
+ *  seamless wrap.
  *
- * Neither effect runs while the text fits the available width — it then renders as a
- * plain single line that [overflow]-ellipsizes (also the behaviour when [marqueeEnabled]
+ * Neither effect runs while the text fits the available width — it renders as
+ * a plain single line that [overflow]-ellipsizes (also when [marqueeEnabled]
  * is false).
  *
- * [state] can be hoisted so several instances show the same scroll position. Exactly one
- * of them should have [drivesState] = true (it runs the animation and reports the
- * measured widths); the rest only render the offset. A driving instance resets the
- * offset to 0 when it leaves composition.
+ * [state] can be hoisted so several instances show the same scroll position.
+ * Exactly one of them should have [drivesState] = true; the rest only render
+ * the offset. A driving instance resets the offset when it leaves composition.
  */
 @Composable
 fun MarqueeText(
@@ -144,7 +142,7 @@ fun MarqueeText(
                     return@LaunchedEffect
                 }
                 val end = maxScroll.toFloat()
-                // A restart (size change) resumes from wherever the text currently is.
+                // A restart (size change) resumes from wherever the text is.
                 if (state.offsetPx > end) state.offsetPx = end
                 delay(pauseDuration)
                 while (true) {
@@ -156,9 +154,8 @@ fun MarqueeText(
                             easing = EaseInOut
                         )
                     ) { value, _ ->
-                        // A restart() bumps restartCount: a frame of the superseded animation
-                        // may still be delivered before its effect is cancelled, and must not
-                        // write its stale offset over the rewind.
+                        // A restart() bumps restartCount: a stale animation frame
+                        // arriving before cancellation must not overwrite the rewind.
                         if (state.restartCount == generation) state.offsetPx = value
                     }
                     delay(pauseDuration)
@@ -170,9 +167,6 @@ fun MarqueeText(
                             easing = EaseInOut
                         )
                     ) { value, _ ->
-                        // A restart() bumps restartCount: a frame of the superseded animation
-                        // may still be delivered before its effect is cancelled, and must not
-                        // write its stale offset over the rewind.
                         if (state.restartCount == generation) state.offsetPx = value
                     }
                     delay(pauseDuration)
@@ -195,8 +189,8 @@ fun MarqueeText(
 
         MarqueeMode.INFINITE -> {
             val gapPx = with(LocalDensity.current) { MarqueeLoopGap.roundToPx() }
-            // One copy + gap is exactly the distance after which the second copy sits
-            // where the first started, so snapping back to 0 is invisible.
+            // One copy + gap is exactly the distance after which the second copy
+            // sits where the first started, so snapping back to 0 is invisible.
             val loopDistance = state.contentWidth + gapPx
             val isOverflowing = state.contentWidth > state.viewportWidth
 
@@ -219,9 +213,6 @@ fun MarqueeText(
                             easing = LinearEasing
                         )
                     ) { value, _ ->
-                        // A restart() bumps restartCount: a frame of the superseded animation
-                        // may still be delivered before its effect is cancelled, and must not
-                        // write its stale offset over the rewind.
                         if (state.restartCount == generation) state.offsetPx = value
                     }
                     state.offsetPx = 0f
@@ -240,8 +231,8 @@ fun MarqueeText(
                     overflow = overflow,
                     modifier = Modifier.onSizeChanged { if (drivesState) state.contentWidth = it.width }
                 )
-                // The trailing copy only exists while the text actually overflows, so
-                // short titles never show a duplicate next to them.
+                // The trailing copy only exists while the text overflows, so
+                // short titles never show a duplicate.
                 if (isOverflowing) {
                     Spacer(modifier = Modifier.width(MarqueeLoopGap))
                     BasicText(

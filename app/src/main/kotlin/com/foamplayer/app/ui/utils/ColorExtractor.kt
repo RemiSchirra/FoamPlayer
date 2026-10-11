@@ -23,16 +23,14 @@ suspend fun extractPaletteColor(context: android.content.Context, path: String, 
         val request = ImageRequest.Builder(context)
             .data(data)
             .allowHardware(false)
-            // Palette quantization downsamples internally anyway; decoding at original
-            // resolution (covers are often 1000-3000 px) wastes tens of MB per extract
-            // and lands a huge duplicate entry in Coil's memory cache.
+            // Palette downsamples internally anyway; a small decode avoids a huge
+            // duplicate entry in Coil's memory cache.
             .size(PALETTE_DECODE_SIZE)
-            // Coil's memory-cache key is the data key alone (the decode size is not
-            // part of it), so this small decode must not land in the same slot the
-            // UI's shared 480px album-art requests use: a cached 96px bitmap fails
-            // the UI request's size-validity check, forcing a re-decode that renders
-            // as a one-frame blank -- visible exactly when a shared-element
-            // transition (mini player -> full player) draws from the cache slot.
+            // Coil's memory-cache key ignores the decode size, so this small
+            // decode must not occupy the slot the UI's 480px art requests use:
+            // a cached 96px bitmap would fail the UI request's size check and
+            // force a re-decode (a one-frame blank, visible mid shared-element
+            // transition).
             .memoryCacheKey("palette:$path")
             .build()
 
@@ -50,18 +48,14 @@ suspend fun extractPaletteColor(context: android.content.Context, path: String, 
                 val hsl = FloatArray(3)
                 ColorUtils.colorToHSL(s.rgb, hsl)
 
-                // If the image is grayscale
                 if (hsl[1] < 0.1f) {
-                    hsl[1] = 0f    // Remove color
-                    hsl[2] = 0.9f  // Push the lightness up toward white
+                    // Grayscale: push toward a bright neutral.
+                    hsl[1] = 0f
+                    hsl[2] = 0.9f
                 } else {
-                    // For actual colors, ensure they pop enough to act as an accent
-                    if (hsl[2] < 0.4f) {
-                        hsl[2] = 0.5f
-                    }
-                    if (hsl[1] < 0.2f) {
-                        hsl[1] = 0.4f
-                    }
+                    // Ensure the color pops enough to act as an accent.
+                    if (hsl[2] < 0.4f) hsl[2] = 0.5f
+                    if (hsl[1] < 0.2f) hsl[1] = 0.4f
                 }
 
                 Color(ColorUtils.HSLToColor(hsl))

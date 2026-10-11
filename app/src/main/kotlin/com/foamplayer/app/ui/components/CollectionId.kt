@@ -2,12 +2,11 @@ package com.foamplayer.app.ui.components
 
 /**
  * Stable ids identifying a playable collection, used as the queue's source
- * marker ([com.foamplayer.app.audio.engine.PlaybackState.queueSourceId]): the
- * collection screen that starts playback builds its id with these helpers, and
- * every list row of the same collection computes the same id to decide whether
- * it is the one actively playing. Keyed by what the app already treats as each
- * collection's identity (album name, playlist id, genre/year strings, folder
- * document path), so ids match across screens.
+ * marker (PlaybackState.queueSourceId): the screen that starts playback builds
+ * its id with these helpers and every list row of the same collection computes
+ * the same id to decide whether it is the one actively playing. Keyed by what
+ * the app already treats as each collection's identity, so ids match across
+ * screens.
  */
 object CollectionId {
     private const val Album = "album"

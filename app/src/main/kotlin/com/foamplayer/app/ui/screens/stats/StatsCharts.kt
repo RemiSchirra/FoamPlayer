@@ -66,8 +66,8 @@ fun StatsActivityChart(
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor, textAlign = TextAlign.Center)
 
     // Text measurement is expensive; the labels are static across the growth
-    // animation, so measure once per (bucket, style, density) change OUTSIDE the
-    // draw block instead of re-measuring ~every frame of the 600ms tween.
+    // animation, so measure once per (bucket, style, density) change outside
+    // the draw block instead of re-measuring every frame of the 600ms tween.
     val labelLayouts = remember(buckets, labelStyle, textMeasurer) {
         val stride = ((buckets.size + MaxVisibleLabels - 1) / MaxVisibleLabels).coerceAtLeast(1)
         buckets.indices
@@ -131,8 +131,8 @@ fun StatsActivityChart(
 }
 
 /**
- * Ring of the top slices' share (top artists' listening time). The caller draws
- * the center content on top.
+ * Ring of the top slices' share (top artists' listening time). The caller
+ * draws the center content on top.
  */
 @Composable
 fun StatsDonutChart(
@@ -193,7 +193,7 @@ fun StatsHourChart(
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor, textAlign = TextAlign.Center)
 
     // Static hour labels measured once outside the draw block (see
-    // StatsActivityChart above) instead of on every animation frame.
+    // StatsActivityChart) instead of on every animation frame.
     val hourLabelLayouts = remember(labelStyle, textMeasurer) {
         listOf(0, 6, 12, 18).associateWith { textMeasurer.measure("$it", labelStyle) }
     }
@@ -251,7 +251,7 @@ fun StatsHourChart(
     }
 }
 
-/** Builds a tasteful multi-slice palette anchored on the app's accent color. */
+/** Builds a multi-slice palette anchored on the app's accent color. */
 internal fun donutPalette(accent: Color, count: Int): List<Color> {
     val base = FloatArray(3)
     android.graphics.Color.colorToHSV(accent.toArgb(), base)

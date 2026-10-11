@@ -205,6 +205,7 @@ fun UISettingsScreen(
     }
 }
 
+/** Dropdown picker for the app language. */
 @Composable
 private fun LanguageSelector(
     currentLanguage: String,
@@ -261,7 +262,6 @@ private fun LanguageSelector(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        // Highlight for the current selection, drawn under the ripple.
                         .background(
                             if (isSelected) FoamTheme.colors.textPrimary.copy(alpha = 0.12f)
                             else Color.Transparent

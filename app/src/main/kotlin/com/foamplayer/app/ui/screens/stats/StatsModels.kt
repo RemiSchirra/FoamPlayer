@@ -10,7 +10,7 @@ private const val DayMs = 24L * 60 * 60 * 1000
 /** Which ranked list a stats "see all" page shows. */
 enum class StatsTopKind { TRACKS, ARTISTS, ALBUMS }
 
-/** Analysis period of the stats screen; [durationMs] is a rolling window, NULL = everything. */
+/** Analysis period of the stats screen; [durationMs] is a rolling window, null = everything. */
 enum class StatsPeriod(val durationMs: Long?) {
     WEEK(DayMs * 7),
     MONTH(DayMs * 30),

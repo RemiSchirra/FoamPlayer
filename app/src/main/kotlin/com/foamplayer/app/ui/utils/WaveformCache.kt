@@ -34,14 +34,14 @@ import java.nio.ByteOrder
 import kotlin.math.abs
 
 /**
- * How full a track's extraction is, exposed as Compose state for progressive
+ * Extraction state for one track, exposed as Compose state for progressive
  * drawing.
  */
 class WaveformState internal constructor(val bucketCount: Int) {
-    /** Raw mean-amplitude buckets, NOT yet scaled — [scale] carries the song's reference. */
+    /** Raw mean-amplitude buckets, not yet scaled — [scale] carries the song's reference. */
     internal val peaks = FloatArray(bucketCount)
 
-    /** Highest bucket index (+1) backed by decoded audio so far; grows as buckets land. */
+    /** Highest bucket index (+1) backed by decoded audio so far. */
     val filled: IntState get() = _filled
 
     /** Per-song loudness reference (95th percentile of the buckets decoded so far). */
@@ -56,77 +56,67 @@ class WaveformState internal constructor(val bucketCount: Int) {
 }
 
 /**
- * Process-wide waveform cache, keyed by file path — the same pattern
- * [AlbumArtPaletteCache] uses for accent colors.
+ * Process-wide waveform cache keyed by file path, mirroring
+ * [AlbumArtPaletteCache] for accent colors.
  *
- * Extraction is ULTRA-DOWNSAMPLED and PARALLEL: the timeline is split into
- * [WORKER_COUNT] contiguous REGIONS, one per worker, and each worker seeks ONCE
- * to its region start and streams [WINDOW_FRAMES] PCM frames per bucket straight
- * off the codec — one codec prime and one seek per worker instead of one per
- * bucket (every seek flushes and re-primes the decoder, which dominates the
- * cost). Each bucket's mean amplitude fills as its frames stream by, so the
- * waveform appears within the codec's own priming latency. The seek bar
- * resamples the fixed-resolution result to however many bars its width allows,
- * so rotations never re-trigger an extraction. Results are published
- * bucket-by-bucket ([WaveformState.filled]) into a scope the cache OWNS: a
- * screen change mid-extraction neither cancels it nor duplicates it — per-path
- * dedup plus the LRU bound govern lifetime.
+ * Extraction is heavily downsampled and parallel: the timeline is split into
+ * [WaveformCache.WORKER_COUNT] contiguous regions, each worker seeks once to
+ * its region start and streams [WaveformCache.WINDOW_FRAMES] PCM frames per
+ * bucket — one codec prime and one seek per worker instead of one per bucket.
+ * Buckets publish as they complete ([WaveformState.filled]) into a scope the
+ * cache owns, so a screen change mid-extraction neither cancels nor duplicates
+ * it; per-path dedup plus an LRU bound govern lifetime. Results are read at
+ * fixed resolution and resampled by the seek bar to its bar count.
  *
- * [WaveformCache.prefetch] keeps the queue's adjacent tracks' waveforms hot, so
- * the full player's track-change morph has both envelopes ready the moment a
- * swipe starts.
+ * [WaveformCache.prefetch] keeps the queue's adjacent tracks hot so the full
+ * player's track-change morph has both envelopes ready when a swipe starts.
  */
 object WaveformCache {
     private const val TAG = "WaveformCache"
 
-    /** Number of sampled buckets — also the waveform's fixed bucket resolution. */
+    /** Sampled buckets — also the waveform's fixed bucket resolution. */
     private const val WINDOW_COUNT = 64
 
     /**
-     * Concurrent extractor+decoder pairs. Worker [w] owns the contiguous region
-     * [w * WINDOWS_PER_WORKER, (w+1) * WINDOWS_PER_WORKER). Hardware codecs are a
-     * limited resource; 8 keeps contention (and battery cost) sane.
+     * Concurrent extractor+decoder pairs. Worker w owns the contiguous region
+     * [w * WINDOWS_PER_WORKER, (w+1) * WINDOWS_PER_WORKER); 8 keeps hardware-codec
+     * contention (and battery cost) sane.
      */
     private const val WORKER_COUNT = 8
 
     /** PCM frames decoded per bucket: ~93ms at 44.1kHz (~1% of a 3-minute track). */
     private const val WINDOW_FRAMES = 4096L
 
-    /** Buckets each worker samples: WINDOW_COUNT / WORKER_COUNT. */
     private const val WINDOWS_PER_WORKER = WINDOW_COUNT / WORKER_COUNT
 
-    /**
-     * Safety bound per worker's decode loop, in iterations (codec stall /
-     * pathological input): generous enough for the whole region.
-     */
+    /** Safety bound per worker's decode loop (codec stall / pathological input). */
     private const val MAX_LOOP_ITERS = 4096
 
     /**
      * Bucket percentile used as the per-song loudness reference. A global max
-     * pins every loud master's bars at full height; the 95th percentile leaves
-     * headroom above it, so only the loudest ~5% of the song reaches (near) max.
+     * pins loud masters at full height; the 95th percentile leaves headroom so
+     * only the loudest ~5% of a song reaches (near) max.
      */
     private const val SCALE_PERCENTILE = 0.95f
 
     /** Floor for the derived scale, as a fraction of the absolute peak. */
     private const val MIN_SCALE_FRACTION = 0.35f
 
-    /** Maximum number of cached waveforms before the least-recently-read entry is evicted. */
+    /** Maximum cached waveforms before LRU eviction. */
     private const val MAX_ENTRIES = 12
 
-    /** Read this directly from composition; it's a snapshot-backed map. */
+    /** Snapshot-backed map; read directly from composition. */
     val waveforms = mutableStateMapOf<String, WaveformState>()
 
     // Detached from any composable: an extraction survives screen changes and
-    // finishes exactly once per path, whatever the UI does meanwhile.
+    // finishes exactly once per path.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val inFlight = mutableSetOf<String>()
     private val failedPaths = mutableSetOf<String>()
     private val inFlightLock = Mutex()
 
-    // Access-ordered record of what's been read recently, driving eviction
-    // (same recency mechanism as AlbumArtPaletteCache).
+    // Access-ordered record driving eviction (same mechanism as AlbumArtPaletteCache).
     private val recency = object : LinkedHashMap<String, Unit>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Unit>?): Boolean {
             return if (size > MAX_ENTRIES) {
@@ -143,10 +133,7 @@ object WaveformCache {
         recency[path] = Unit
     }
 
-    /**
-     * Ensures [path]'s waveform is being extracted, starting it at most once per
-     * path even if called concurrently.
-     */
+    /** Starts [path]'s extraction at most once per path, even when called concurrently. */
     fun ensure(context: Context, path: String?, durationMs: Long) {
         if (path.isNullOrEmpty() || durationMs <= 0L) return
         if (waveforms.containsKey(path)) {
@@ -177,14 +164,7 @@ object WaveformCache {
         }
     }
 
-    /**
-     * Warms the cache for [paths] (the queue's neighbors around the playing
-     * track): each missing path starts its extraction in the background so the
-     * seek bar's track-change morph has both envelopes on hand when a swipe
-     * begins. Cheap no-op for paths already extracted, in-flight, or known
-     * failed. Failures and completion are handled exactly like [ensure]; the
-     * caller reads results through [waveforms].
-     */
+    /** Warms the cache for [paths] (e.g. the queue's neighbors around the playing track). */
     fun prefetch(context: Context, paths: List<Pair<String, Long>>) {
         val appContext = context.applicationContext
         paths.forEach { (path, durationMs) -> ensure(appContext, path, durationMs) }
@@ -192,11 +172,10 @@ object WaveformCache {
 
     /**
      * Publishes one sampled bucket into [state]: writes the value, advances
-     * [WaveformState.filled] (out-of-order completion makes this a max, so holes
-     * between completed buckets render as the neutral minimum until they land)
-     * and refreshes the scale. Snapshot-state writes are thread-safe, and each
-     * bucket index has exactly one writer, so "bucket write, then state write"
-     * is a proper publication for readers observing the state.
+     * [WaveformState.filled] (a max — out-of-order completion leaves holes that
+     * render as the neutral minimum until they land) and refreshes the scale.
+     * Each bucket index has exactly one writer, so the bucket write followed by
+     * the state write is a proper publication.
      */
     private fun publishBucket(state: WaveformState, bucket: Int, meanAmplitude: Float) {
         synchronized(state) {
@@ -214,11 +193,7 @@ object WaveformCache {
         }
     }
 
-    /**
-     * Opens [extractor] on [path]: SAF `content://` URIs go through the
-     * ContentResolver ([MediaExtractor]'s context overload), absolute paths
-     * open directly.
-     */
+    /** Opens [extractor] on [path]: `content://` URIs via ContentResolver, paths directly. */
     private fun openExtractor(extractor: MediaExtractor, context: Context, path: String) {
         if (path.startsWith("content://")) {
             extractor.setDataSource(context, path.toUri(), null)
@@ -243,8 +218,7 @@ object WaveformCache {
             }
         }
         format ?: return null
-        // Timeline anchor for the region positions: the container's own duration
-        // when it carries one, the track tag's duration otherwise.
+        // Timeline anchor: the container's duration when present, the track tag's otherwise.
         val containerDuration = if (format.containsKey(MediaFormat.KEY_DURATION)) {
             format.getLong(MediaFormat.KEY_DURATION, 0L)
         } else {
@@ -256,12 +230,10 @@ object WaveformCache {
 
     /**
      * Samples [path]'s audio track: the timeline is split into [WORKER_COUNT]
-     * contiguous regions; each worker seeks once to its region start and streams
-     * [WINDOWS_PER_WORKER * WINDOW_FRAMES] PCM frames, folding every
-     * [WINDOW_FRAMES]-frame group's mean absolute amplitude into one bucket,
-     * published as it completes. Returns false when the file cannot be opened at
-     * all (unsupported container/codec, unreadable data) — callers treat that as
-     * terminal, like palette extraction.
+     * contiguous regions; each worker streams its region and folds every
+     * [WINDOW_FRAMES]-frame group's mean amplitude into one bucket, published
+     * as it completes. Returns false when the file cannot be opened at all —
+     * treated as terminal, like palette extraction.
      */
     private suspend fun extractWaveform(
         context: Context,
@@ -292,7 +264,7 @@ object WaveformCache {
         (0 until WORKER_COUNT).map { worker ->
             async(Dispatchers.IO) {
                 // Each worker owns its extractor+codec: no cross-worker contention,
-                // and ONE seek + ONE codec prime for its whole contiguous region.
+                // one seek + one codec prime for its whole region.
                 val extractor = MediaExtractor()
                 var codec: MediaCodec? = null
                 try {
@@ -331,10 +303,8 @@ object WaveformCache {
 
     /**
      * Streams up to [regionBuckets] * [WINDOW_FRAMES] PCM frames starting at
-     * [seekToUs], folding every [WINDOW_FRAMES] frames' mean absolute amplitude
-     * into one bucket and handing each completed bucket to [onBucket] (index
-     * within the region). Stops early at stream end; a codec that never produces
-     * output simply ends the region.
+     * [seekToUs], folding every [WINDOW_FRAMES] frames into one bucket handed
+     * to [onBucket] (index within the region). Stops early at stream end.
      */
     private fun sampleRegion(
         extractor: MediaExtractor,
@@ -353,7 +323,6 @@ object WaveformCache {
         var iters = 0
         val info = MediaCodec.BufferInfo()
 
-        // Closes the current bucket if it has collected all its frames.
         fun maybeCloseBucket() {
             if (bucketFrameCount >= WINDOW_FRAMES) {
                 onBucket(bucketIndex, (bucketAmplitudeSum / bucketFrameCount).toFloat())
@@ -425,9 +394,8 @@ object WaveformCache {
 }
 
 /**
- * Composes the waveform state for [path], kicking off the (ultra-downsampled,
- * parallel, sub-second) extraction once — into the cache's own scope, see
- * [WaveformCache]. Returns null only for files extraction cannot handle at all.
+ * Composes the waveform state for [path], kicking off the extraction once into
+ * the cache's own scope. Returns null only for files extraction cannot handle.
  */
 @Composable
 fun rememberWaveform(path: String, durationMs: Long): WaveformState? {
@@ -435,7 +403,5 @@ fun rememberWaveform(path: String, durationMs: Long): WaveformState? {
     LaunchedEffect(path, durationMs) {
         WaveformCache.ensure(context, path, durationMs)
     }
-    // Snapshot read: recomposes this caller when the state object lands, and the
-    // state's own fields propagate draw invalidations from there.
     return WaveformCache.waveforms[path]
 }

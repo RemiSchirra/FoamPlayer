@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
-/** Settings row navigating to a subscreen: title + description on the left, chevron on the right. */
+/** Settings row navigating to a subscreen: title + description, chevron right. */
 @Composable
 fun FoamNavigationButton(
     title: String,
@@ -42,8 +42,8 @@ fun FoamNavigationButton(
                 role = Role.Button,
                 onClick = onClick,
             )
-            // 16/12 matches FoamSwitchItem so all rows inside a grouped settings
-            // card share the same height rhythm.
+            // Matches FoamSwitchItem so rows inside a grouped card share
+            // the same height rhythm.
             .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
         verticalAlignment = Alignment.CenterVertically,
     ) {

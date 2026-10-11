@@ -104,10 +104,10 @@ import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.theme.FoamTheme
 
-/** Height of the immersive hero image, as a fraction of the full screen height. */
+/** Immersive hero image height, as a fraction of the full screen height. */
 const val CollectionHeroImmersiveHeightFraction = 0.5f
 
-/** Height of the compact-immersive hero image, as a fraction of the full screen height. */
+/** Compact-immersive hero image height, as a fraction of the full screen height. */
 const val CollectionHeroCompactImmersiveHeightFraction = 0.30f
 
 /** Point (fraction of the image height) where the immersive artwork's bottom fade begins. */
@@ -119,7 +119,7 @@ const val CollectionHeroImmersiveOverlayFraction = 0.85f
 /** Vertical position of the compact-immersive text/play block, as a fraction of the image height. */
 const val CollectionHeroCompactImmersiveOverlayFraction = 0.72f
 
-/** Alpha of the subtle scrim over the immersive hero's status-bar zone (icon contrast). */
+/** Alpha of the subtle scrim over the immersive hero's status-bar zone. */
 const val CollectionHeroStatusBarScrimAlpha = 0.35f
 
 /** Extra height of the status-bar scrim below the inset itself. */
@@ -129,47 +129,36 @@ val CollectionHeroStatusBarScrimExtraHeight = 12.dp
 val CollectionScrollTopBarZoneHeight = 64.dp
 
 /**
- * Height of the screens' floating back/more top-bar row: 16dp padding + 32dp
- * button + 16dp padding. Compact/Normal lists reserve it as their top content
- * padding so the hero rests below the chrome while the list still scrolls
- * full-bleed beneath it — the same zone the scroll top bar's title occupies
- * ([CollectionScrollTopBarZoneHeight]), so the fading title and the buttons
- * stay on one level.
+ * Height of the screens' floating back/more top-bar row. Compact/Normal lists
+ * reserve it as their top content padding so the hero rests below the chrome
+ * while the list still scrolls full-bleed beneath it.
  */
 val CollectionTopBarRowHeight = 64.dp
 
 /** Scroll distance over which the scroll top bar fades from invisible to fully shown. */
 val CollectionScrollTopBarFadeDistance = 160.dp
 
-/** Peak alpha of the scroll top bar's black gradient at the very top of the screen. */
+/** Peak alpha of the scroll top bar's gradient at the very top of the screen. */
 const val CollectionScrollTopBarMaxAlpha = 0.55f
 
-/** Horizontal padding kept clear of the back/more buttons for the scroll top bar's title. */
+/** Horizontal padding kept clear of the back/more buttons for the top bar's title. */
 val CollectionScrollTopBarTitleHorizontalPadding = 56.dp
 
 /** Padding between the immersive overlay block and the list's first row. */
 val CollectionHeroImmersiveListTopPadding = 16.dp
 
 /**
- * Where the hero's shuffle/play/search button row lands below the list's top
- * when search opens (see [CollectionSearchScrollToBarEffect]): the floating
- * back row covers the list's first 48dp (the status-bar inset is consumed at
- * the nav root), plus 8dp of breathing room, so the open search bar ends up
- * right below the floating chrome instead of colliding with the back button.
- * Every list layout scrolls full-bleed under the same floating chrome, so the
- * clearance applies to compact/normal heroes too (their top content padding
- * matches [CollectionTopBarRowHeight], with the same 48dp icon zone).
+ * Where the hero's shuffle/play/search row lands below the list's top when
+ * search opens: the floating back row covers the list's first 48dp plus 8dp of
+ * breathing room, so the open search bar ends up right below the floating
+ * chrome instead of colliding with the back button.
  */
 val CollectionSearchImmersiveTopClearance = 56.dp
 
 /** Fraction of the screen height reserved below a list while its search bar is open. */
 private const val CollectionSearchOpenReserveScreenFraction = 0.6f
 
-/**
- * Duration of the search-open bottom padding's grow/shrink: matched to the
- * keyboard's dismiss animation and the search bar's own exit, so the list
- * settles back in step with them instead of snapping when the bar closes.
- */
+/** Duration of the search-open bottom padding's grow/shrink. */
 private const val CollectionSearchPaddingAnimationMs = 250
 
 /**
@@ -185,46 +174,34 @@ class CollectionSearchState {
         private set
     var query by mutableStateOf("")
 
-    /** Increments on every [open]: hosts scroll the bar to the screen top (see [CollectionSearchScrollToBarEffect]). */
+    /** Increments on every [open]; hosts scroll the bar to the screen top on it. */
     var openRequest by mutableIntStateOf(0)
         private set
 
     /**
      * Whether the field has already been focused for the current open session.
-     * The hero header is a lazy-list item: scrolling it out of view DISPOSES
-     * the field and scrolling back recomposes it, and the field's own
-     * LaunchedEffect(Unit) would re-fire its focus request on every such
-     * recomposition — re-showing a keyboard the user had already dismissed.
-     * The bar therefore requests focus only while this flag is false and flips
-     * it on the first grant; [open] resets it for the next session.
+     * The hero header is a lazy-list item: scrolling it out of view disposes
+     * the field and scrolling back recomposes it, and the field's focus request
+     * would re-fire on every such recomposition — re-showing a keyboard the
+     * user had dismissed. The bar requests focus only while this is false;
+     * [open] resets it for the next session.
      */
     var focusGranted by mutableStateOf(false)
         internal set
 
     /**
-     * Root-space y of the hero's shuffle/play/search button row top, reported
-     * by that row itself on every layout pass — the FALLBACK anchor of the
-     * search-open scroll (the bar hangs right under the row on the Normal and
-     * immersive heroes, and the row's position is identical whether the bar is
-     * open or not, so the effect never has to wait for the bar's own entry
-     * animation). The compact hero reports [searchBarTopYInRootPx] instead —
-     * there the bar spans the hero's full width BELOW the artwork + details
-     * row, not under this row — and the effect prefers that anchor when set.
-     * NaN while the hero is not laid out (e.g. scrolled off-screen — where
-     * search cannot be opened from).
+     * Root-space y of the hero's button row top — the FALLBACK anchor of the
+     * search-open scroll. NaN while the hero is not laid out (e.g. scrolled
+     * off-screen, where search cannot be opened from).
      */
     var buttonRowTopYInRootPx by mutableFloatStateOf(Float.NaN)
         internal set
 
     /**
-     * Root-space y of the hero's search bar container top (the point the bar
-     * expands from), reported by an always-present wrapper around the bar so
-     * the value exists before the bar's own first layout. Set only by heroes
-     * whose bar does NOT hang right under the button row — the compact one,
-     * where the bar spans the hero's full width below the artwork + details
-     * row: anchoring on the button row there would land the bar roughly half
-     * an artwork height past the screen top. Preferred over
-     * [buttonRowTopYInRootPx] by [CollectionSearchScrollToBarEffect] when set.
+     * Root-space y of the hero's search bar container top — the preferred
+     * anchor, reported by an always-present wrapper around the bar so the
+     * value exists before the bar's own first layout. Set only by heroes whose
+     * bar does NOT hang right under the button row (the compact one).
      */
     var searchBarTopYInRootPx by mutableFloatStateOf(Float.NaN)
         internal set
@@ -233,29 +210,22 @@ class CollectionSearchState {
     fun open() {
         open = true
         openRequest++
-        // Fresh focus for the fresh session: the bar requests focus only while
-        // [focusGranted] is false (see above), so a reopen after a scroll-out
-        // re-focuses even though the flag survived the session before.
         focusGranted = false
     }
 
     /**
-     * Closes the search bar. The query is deliberately NOT cleared here: at
-     * this instant the field is still composed (its exit animation is pending),
-     * and resetting it while it might still hold focus would restart its IME
-     * connection, which re-shows the keyboard for a frame right after the hide
-     * request went out (the hide -> show -> hide flicker). The query is cleared
-     * instead when the field leaves composition AFTER this close (see
-     * [CollectionHeroSearchBar]); until then [matches] already ignores it via
-     * the closed-[open] short-circuit, so the rows restore immediately. A
-     * disposal from the header scrolling out of the lazy viewport (bar still
-     * open) keeps the query, so the filter survives the scroll round-trip.
+     * Closes the search bar. The query is deliberately NOT cleared here:
+     * resetting a focused editable's text restarts its IME connection, which
+     * re-shows the keyboard for a frame right after the hide request. The
+     * query is cleared when the field leaves composition after this close;
+     * until then [matches] already ignores it via the closed-[open]
+     * short-circuit.
      */
     fun close() {
         open = false
     }
 
-    /** Matches a case-insensitive substring anywhere in the given field. */
+    /** Matches a case-insensitive substring anywhere in the given fields. */
     fun matches(vararg fields: String?): Boolean {
         if (!open || query.isEmpty()) return true
         val needle = query.trim()
@@ -272,22 +242,14 @@ fun rememberCollectionSearchState(): CollectionSearchState = remember { Collecti
 private const val SearchOpenScrollDurationMs = 300
 
 /**
- * Bottom content padding a host list gains while its hero's search bar is open
- * (feed it into the lazy container's [androidx.compose.foundation.layout.PaddingValues]):
- * the keyboard's own inset keeps the filtered rows visible above the open
- * keyboard, and a screen-fraction reserve gives even a handful of rows enough
- * scroll range for [CollectionSearchScrollToBarEffect] to bring the bar to the screen top — a short list otherwise has no scrollable range at all, so the
- * scroll here would silently do nothing.
+ * Bottom content padding a host list gains while its hero's search bar is
+ * open (feed into the lazy container's PaddingValues): the keyboard's own
+ * inset keeps the filtered rows visible above it, and a screen-fraction
+ * reserve gives even a handful of rows enough scroll range for the
+ * search-open scroll to bring the bar to the screen top.
  *
- * The value ANIMATES on both edges: growing when the bar opens (the rows part
- * smoothly instead of being pushed apart in one frame) and, just as
- * importantly, shrinking progressively when it closes — without the animation
- * the padding would teleport from keyboard+reserve to 0dp in a single layout
- * pass and the whole list would visibly jump. The duration is matched to the
- * keyboard's dismiss and the bar's own exit ([CollectionSearchPaddingAnimationMs]),
- * and the lazy list clamps its scroll against the shrinking padding frame by
- * frame, so the settle reads as a natural slide rather than a snap. 0dp while
- * the bar is closed.
+ * The value ANIMATES on both edges so the list settles in step with the
+ * keyboard's dismiss and the bar's exit instead of snapping.
  */
 @Composable
 fun collectionSearchOpenBottomPadding(searchState: CollectionSearchState?): Dp {
@@ -295,10 +257,8 @@ fun collectionSearchOpenBottomPadding(searchState: CollectionSearchState?): Dp {
         0.dp
     } else {
         val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-        // Fraction of the screen height: covers every hero layout's worst-case
-        // distance between the screen top and the bar (the Normal hero's full-width
-        // square artwork is the tallest) with room to spare, while scaling with the
-        // actual window (landscape, tablets, foldables).
+        // Scales with the actual window (landscape, tablets, foldables) and
+        // covers every hero layout's worst-case bar distance from the top.
         val reserve = LocalConfiguration.current.screenHeightDp.dp *
                 CollectionSearchOpenReserveScreenFraction
         imeBottom + reserve
@@ -314,29 +274,14 @@ fun collectionSearchOpenBottomPadding(searchState: CollectionSearchState?): Dp {
 }
 
 /**
- * On every search-open request (see [CollectionSearchState.openRequest]) scrolls
- * the host's list so the hero's search bar — with its anchor — lands at the top
- * of the screen instead of opening wherever the hero currently sits (also
- * scrolling back a little when the bar opened partially hidden above the
- * viewport).
+ * On every search-open request, scrolls the host's list so the hero's search
+ * bar lands at the top of the screen instead of opening wherever the hero
+ * currently sits.
  *
- * The anchor is the search bar's own container top when the hero reports one
- * ([CollectionSearchState.searchBarTopYInRootPx] — the compact hero, whose bar
- * spans the hero's full width below the artwork + details row), otherwise the
- * button row ([CollectionSearchState.buttonRowTopYInRootPx]
- * — Normal and the immersive heroes, whose bar hangs right under that row).
- *
- * [listTopYInRootPx] supplies the lazy container's own root-space top y and
- * [topChromeHeight] how much of the list's top is covered by floating chrome:
- * every layout's list scrolls full-bleed beneath the floating back row (the
- * status-bar inset is consumed at the nav root), so hosts pass
- * [CollectionSearchImmersiveTopClearance] to keep the open bar clear of it. A
- * missing anchor report (NaN, header scrolled off-screen) makes the effect a
- * no-op.
- *
- * Hosts must pad their lists with [collectionSearchOpenBottomPadding] while the
- * bar is open: without that reserve a list with only a few rows has no scroll
- * range, and the scroll here would be clamped to nothing.
+ * The anchor is the search bar's own container top when reported (compact
+ * hero), otherwise the button row. [listTopYInRootPx] supplies the container's
+ * root-space top y and [topChromeHeight] how much of the list's top is covered
+ * by floating chrome. A missing anchor report (NaN) makes the effect a no-op.
  */
 @Composable
 fun CollectionSearchScrollToBarEffect(
@@ -351,9 +296,6 @@ fun CollectionSearchScrollToBarEffect(
     val chromePx = with(LocalDensity.current) { topChromeHeight.toPx() }
     LaunchedEffect(searchState.openRequest) {
         if (searchState.openRequest == 0) return@LaunchedEffect
-        // Preferred anchor: the search bar's own container top (the compact
-        // hero's bar hangs below the artwork + details row). Fallback: the
-        // button row (Normal + immersive heroes, bar right under it).
         val barAnchorY = searchState.searchBarTopYInRootPx
         val anchorY = if (barAnchorY.isNaN()) searchState.buttonRowTopYInRootPx else barAnchorY
         if (anchorY.isNaN()) return@LaunchedEffect
@@ -387,7 +329,6 @@ fun collectionHeroImmersiveHeight(layout: CollectionHeroLayout): Dp {
     return LocalConfiguration.current.screenHeightDp.dp * fraction
 }
 
-/** Overlay-block vertical position for [layout], as a fraction of the image height. */
 private fun collectionHeroOverlayFraction(layout: CollectionHeroLayout): Float = when (layout) {
     CollectionHeroLayout.Immersive -> CollectionHeroImmersiveOverlayFraction
     else -> CollectionHeroCompactImmersiveOverlayFraction
@@ -398,32 +339,21 @@ private fun collectionHeroOverlayFraction(layout: CollectionHeroLayout): Float =
  * title/subtitle/stats and the optional play pill — hanging at the artwork's
  * overlay position, with the hero artwork's room reserved around it.
  *
- * The block is real, interactive content composed inside the list's own
- * subtree: the play pill receives taps directly (there is no invisible
- * hit-target twin behind the list) and the whole block scrolls away 1:1 with
- * the list exactly like a compact/normal header item, fading with the host
- * hierarchy's own transitions the same way. The item's height is not
- * estimated — it measures its own content — so the list's first row clears
- * the play pill by [CollectionHeroImmersiveListTopPadding] with no dead space
- * below the artwork, whatever the title/subtitle/button add up to.
+ * The block is real, interactive list content: the play pill receives taps
+ * directly and the whole block scrolls away 1:1 with the list. Its height is
+ * not estimated — it measures its own content.
  *
- * [scrollOffsetPx] — the host list's current scroll in px — drives the block's
- * scroll-out fade positionally: the block stays fully opaque until its top
- * nears the screen top, then fades out across [CollectionScrollTopBarFadeDistance]
- * so it is fully gone as the top reaches the status bar — instead of fading
- * with a raw scroll fraction, which completes while the block is mid-screen.
- * [transitionAlpha] — the host's combined flight alpha (see
- * [rememberCollectionHeroFlightFraction]) — fades the block with the
- * shared-element flight: the block is lifted into the transition overlay
- * ([collectionHeroOverlayLayer]) so it draws above the flying artwork instead
- * of being covered by it, and a lifted layer escapes the host hierarchy's own
- * fades unless its alpha compensates for both.
+ * [scrollOffsetPx] drives the block's scroll-out fade positionally: fully
+ * opaque until its top nears the screen top, then fading out across
+ * [CollectionScrollTopBarFadeDistance]. [transitionAlpha] fades the block with
+ * the shared-element flight: the block is lifted into the transition overlay
+ * ([collectionHeroOverlayLayer]), and a lifted layer escapes the host
+ * hierarchy's own fades unless its alpha compensates.
  *
- * [onVisibleHeightPx] reports the measured total (px) once the item is laid
- * out, so the host screen can hand the hero artwork's 1:1 scroll-away over to
- * the same constant when the item is scrolled past (see [CollectionHero]'s
- * [CollectionHero.scrollOffsetPx]).
- */@OptIn(ExperimentalSharedTransitionApi::class)
+ * [onVisibleHeightPx] reports the measured total (px) once laid out, so the
+ * host can hand the hero artwork's 1:1 scroll-away over to the same constant.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CollectionHeroImmersiveHeader(
     layout: CollectionHeroLayout,
@@ -454,25 +384,22 @@ fun CollectionHeroImmersiveHeader(
         (heroHeight * collectionHeroOverlayFraction(layout)).roundToPx() - statusBarHeightPx
     }
     val listTopPaddingPx = with(density) { CollectionHeroImmersiveListTopPadding.roundToPx() }
-    // The overlay block hangs off a full-width hero Box with 16dp side
-    // padding; measuring at the same width keeps line wraps identical.
+    // Measured at the same width the hero Box uses (16dp side padding), so
+    // line wraps stay identical.
     val overlayMaxWidthPx = with(density) {
         LocalConfiguration.current.screenWidthDp.dp.roundToPx()
     }
-    // Chrome flight fade: while a shared transition is active the block is
-    // lifted above the flying artwork and escapes the host hierarchy's fades,
-    // so its alpha rides the flight explicitly (same fraction as the hero).
+    // While a shared transition is active the block is lifted above the flying
+    // artwork and escapes the host hierarchy's fades, so its alpha rides the
+    // flight explicitly.
     val flightFraction = rememberCollectionHeroFlightFraction(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
     )
-    // Scroll-out fade distance in px: matches the scroll top bar's title fade
-    // so the two swap places over the same stretch of scrolling.
     val fadeDistancePx = with(density) { CollectionScrollTopBarFadeDistance.toPx() }
-    // Height of the host list's top fade zone ([collectionListTopFade]) in px.
     val topFadeZonePx = with(density) { CollectionScrollTopBarZoneHeight.toPx() }
-    // Set by the measure pass below: the overlay block's height, anchoring the
-    // draw-phase fade to the block's BOTTOM (the play pill). Read untracked.
+    // Set by the measure pass below; anchors the draw-phase fade to the
+    // block's BOTTOM (the play pill). Read untracked.
     val blockHeightPx = remember { mutableIntStateOf(0) }
 
     SubcomposeLayout(modifier.fillMaxWidth()) { constraints ->
@@ -482,15 +409,11 @@ fun CollectionHeroImmersiveHeader(
                     .fillMaxWidth()
                     .collectionHeroOverlayLayer(sharedTransitionScope)
                     .graphicsLayer {
-                        // Positional fade anchored to the block's bottom (the
-                        // play pill): full alpha until the pill is within the
-                        // fade distance of the screen top, then fades out so it
-                        // is fully transparent as the pill reaches the top.
-                        // The window shrinks when the block starts closer to
-                        // the top than the distance (compact-immersive) so it
-                        // is always fully opaque at rest. Falls back to the raw
-                        // [overlayTextAlpha] when the host cannot report
-                        // scroll (scrollOffsetPx == null).
+                        // Positional fade anchored to the block's bottom: full
+                        // alpha until the pill is within the fade distance of
+                        // the screen top. The window shrinks when the block
+                        // starts closer to the top than the distance, so it is
+                        // always fully opaque at rest.
                         val scroll = scrollOffsetPx?.invoke()
                         val scrollAlpha = if (scroll != null && overlayTopPx > 0) {
                             val bottomPx = overlayTopPx + blockHeightPx.intValue
@@ -503,8 +426,6 @@ fun CollectionHeroImmersiveHeader(
                         alpha = scrollAlpha *
                                 (1f - flightFraction.value) *
                                 (transitionAlpha?.invoke() ?: 1f)
-                        // The top-fade mask below needs the block's own offscreen
-                        // buffer so DstIn only touches the block's pixels.
                         compositingStrategy = if (sharedTransitionScope?.isTransitionActive == true) {
                             CompositingStrategy.Offscreen
                         } else {
@@ -513,17 +434,13 @@ fun CollectionHeroImmersiveHeader(
                     }
                     .drawWithContent {
                         drawContent()
-                        // At rest the host list's [collectionListTopFade] dissolves
-                        // this block into the top chrome. While a shared-element
-                        // transition is active the block is lifted into the root
-                        // overlay and escapes that list-level mask, so it popped to
-                        // full opacity for the whole flight. Re-apply the same mask
-                        // here, in the block's own space: the block's top sits at
-                        // (overlayTopPx - scroll) in the list (it is the list's
-                        // first item), so the list-local fade zone [0, zone] maps
-                        // to [scroll - overlayTopPx, + zone] in block-local px.
-                        // Only while lifted — in place the list's mask applies and
-                        // doing both would fade the block twice.
+                        // At rest the host list's [collectionListTopFade]
+                        // dissolves this block into the top chrome. While a
+                        // transition is active the block is lifted into the
+                        // root overlay and escapes that mask, so re-apply the
+                        // same mask here, in the block's own space. Only while
+                        // lifted — in place the list's mask applies and doing
+                        // both would fade the block twice.
                         val scroll = scrollOffsetPx?.invoke()
                         if (scroll != null && sharedTransitionScope?.isTransitionActive == true) {
                             val zoneStart = (scroll - overlayTopPx).toFloat()
@@ -571,46 +488,31 @@ fun CollectionHeroImmersiveHeader(
 /**
  * The shared collection hero: artwork plus title/subtitle/stats and an
  * optional play button, laid out per [CollectionHeroLayout]. All four layouts
- * share the same content slots; [CollectionHeroLayout.Compact] is the classic
- * image-left/text-right header, [CollectionHeroLayout.Normal] a big rounded
- * artwork with centered text below, and the immersive variants bleed the
- * artwork under the status bar with the text block overlaid on it.
+ * share the same content slots; Compact is the classic image-left/text-right
+ * header, Normal a big rounded artwork with centered text below, and the
+ * immersive variants bleed the artwork under the status bar with the text
+ * block overlaid on it.
  *
- * When [onSubtitleClick] is provided, the subtitle (the collection's artist
- * line) renders as a tappable link with a rounded, padded-out ripple; the
- * callback receives the tapped subtitle text (the album detail page uses it
- * to open the artist page).
+ * When [onSubtitleClick] is provided, the subtitle renders as a tappable link
+ * (the album detail page uses it to open the artist page).
  *
- * Compact/Normal render the whole header (texts and play pill included) and
- * are composed as the list's leading item. The immersive variants render ONLY
- * the artwork layer: place this composable from a screen-level [Box] behind
- * the list (it offsets itself up behind the status bar), and make the list's
+ * Compact/Normal render the whole header and are composed as the list's
+ * leading item. The immersive variants render ONLY the artwork layer: place
+ * this composable from a screen-level Box behind the list, and make the list's
  * leading item a [CollectionHeroImmersiveHeader], which carries the overlaid
- * text block and play pill as real, interactive list content. Because the
- * artwork layer holds no interactive content, the play pill lives where taps
- * land and fades with the host hierarchy exactly like the compact/normal
- * heroes' — no behind-the-list hit-target copy is needed.
- * [transitionAlpha] (the host's combined flight alpha, see
- * [rememberCollectionHeroFlightFraction]) fades the status-bar scrim with the
- * shared-element flight, and [scrollOffsetPx] — the list's current scroll in
- * px — makes the artwork scroll away 1:1 with the list, exactly like a header
- * item would.
+ * text block and play pill as real, interactive list content.
  *
  * When a shared-element context is provided AND the layout is immersive, the
- * artwork's corner radius (theme percentage -> 0) and bottom fade (none ->
- * faded) animate across the shared-element transition, so the flight departs
- * from the source row's rounded, unfaded look and lands on the square, faded
- * hero. [fullyRoundedArtwork] styles the source row's look as a full circle
- * (artist images): compact/normal heroes then rest on that circle too, and the
- * immersive flight morphs circle -> 0 radius instead of album rounding -> 0.
- * Compact and Normal keep the static theme shape and no fade.
+ * artwork's corner radius and bottom fade animate across the transition, so
+ * the flight departs from the source row's rounded, unfaded look and lands on
+ * the square, faded hero. [fullyRoundedArtwork] styles the source row's look
+ * as a full circle (artist images). Compact and Normal keep the static theme
+ * shape and no fade.
  *
  * NOTE on flight rendering: the shared-element overlay draws only the
- * becoming-visible side's own content and clip. On open that is this hero, so
- * the morph below (animated overlay clip + fade) is what renders. On close the
- * DRAWN side is the source row instead — which is why the row side carries its
- * own mirrored morph (see [collectionFlightArtwork]) rather than relying on
- * this hero's.
+ * becoming-visible side's content and clip. On open that is this hero; on
+ * close the drawn side is the source row instead — which is why the row side
+ * carries its own mirrored morph (see [collectionFlightArtwork]).
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -697,13 +599,11 @@ fun CollectionHero(
 }
 
 /**
- * The classic image-left/text-right hero. The artwork + details sit in one Row;
- * the search bar hangs BELOW that Row at the hero's full width — under the
- * artwork as well as the details column, not squeezed into the (narrow) text
- * column. That full-width position also re-anchors the search-open scroll (see
- * [CollectionSearchState.searchBarTopYInRootPx]): the bar's own container top
- * is reported instead of the button row's, so opening search scrolls the bar
- * — not the button row — to the top of the list.
+ * The classic image-left/text-right hero. The artwork + details sit in one
+ * Row; the search bar hangs BELOW that Row at the hero's full width — not
+ * squeezed into the (narrow) text column. That position also re-anchors the
+ * search-open scroll (the bar's container top is reported instead of the
+ * button row's).
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -782,12 +682,11 @@ private fun CollectionHeroCompact(
                             Spacer(modifier = Modifier.width(12.dp))
                         }
                         if (onPlayAllClick != null) {
-                            // fill = false weight: the pill is the row's flexible
-                            // member. The fixed shuffle/search toggles are measured
-                            // before any weighted child, so a too-narrow text column
-                            // squeezes the PILL (which collapses to an icon-only
-                            // circle, see [CollectionHeroPlayButton]) instead of
-                            // starving the search toggle's 24dp icon.
+                            // fill = false: the fixed toggles are measured
+                            // before any weighted child, so a too-narrow column
+                            // squeezes the PILL (which collapses to an
+                            // icon-only circle) instead of starving the search
+                            // toggle's icon.
                             CollectionHeroPlayButton(
                                 onClick = onPlayAllClick,
                                 accentColor = accentColor,
@@ -805,13 +704,8 @@ private fun CollectionHeroCompact(
             }
         }
 
-        // Full-width search bar, under the artwork + details Row (NOT inside the
-        // details column, where it would be squeezed to the column's narrow
-        // width and sit beside the artwork). The always-present wrapper reports
-        // the bar's top as the search-open scroll anchor: with the bar hanging
-        // below the whole Row, the button-row anchor would land the bar roughly
-        // half an artwork height past the screen top (see
-        // [CollectionSearchState.searchBarTopYInRootPx]).
+        // Full-width search bar under the artwork + details Row; the wrapper
+        // reports the bar's top as the search-open scroll anchor.
         if (searchState != null) {
             Box(modifier = Modifier.reportHeroSearchBarTop(searchState)) {
                 CollectionHeroSearchBar(searchState = searchState, accentColor = accentColor)
@@ -901,8 +795,8 @@ private fun CollectionHeroNormal(
                         CollectionHeroPlayButton(
                             onClick = onPlayAllClick,
                             accentColor = accentColor,
-                            // Flexible member: yields to the fixed toggles when
-                            // the row is narrow (see [CollectionHeroPlayButton]).
+                            // Flexible member: yields to the fixed toggles
+                            // when the row is narrow.
                             modifier = Modifier.weight(1f, fill = false)
                         )
                     }
@@ -947,10 +841,8 @@ private fun CollectionHeroImmersiveArtwork(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
     )
-    // Read in composition: FoamTheme.shapes is @Composable, so it cannot be
-    // touched inside the draw-phase graphicsLayer block below. Fully round
-    // artwork (artists) departs from a full circle instead of the album
-    // rounding, so the immersive flight morphs circle -> 0 (square hero).
+    // Read in composition: FoamTheme.shapes is @Composable and cannot be
+    // touched inside the draw-phase graphicsLayer block below.
     val flightRestPercent = if (fullyRoundedArtwork) {
         AlbumArtFlightFullyRoundedPercent
     } else {
@@ -963,9 +855,7 @@ private fun CollectionHeroImmersiveArtwork(
             .height(heroHeight)
             .offset {
                 // Bleed behind the status bar at rest, then ride the list's
-                // scroll 1:1 so the hero scrolls away like a header item. The
-                // overlay block (title/play pill) lives in the list's own
-                // [CollectionHeroImmersiveHeader] item and scrolls with it.
+                // scroll 1:1 so the hero scrolls away like a header item.
                 IntOffset(0, -statusBarHeightPx - (scrollOffsetPx?.invoke() ?: 0))
             }
     ) {
@@ -986,9 +876,8 @@ private fun CollectionHeroImmersiveArtwork(
                     // In-flight in-place look: the shared-element overlay only
                     // takes over once the match's bounds are configured, and
                     // screens opened without a fade render in place from frame
-                    // one. The artwork must therefore carry the departing row's
-                    // rounded corners ITSELF on every frame it renders in place,
-                    // instead of flashing the settled square hero (radius 0).
+                    // one — so the artwork must carry the departing row's
+                    // rounded corners ITSELF on every frame it renders in place.
                     shape = AlbumArtFlightShape(flightRestPercent) { flightFraction.value }
                     clip = true
                 }
@@ -1039,18 +928,15 @@ private fun CollectionHeroImmersiveArtwork(
     }
 }
 
-/**
- * Static rest shape of a non-immersive hero's artwork: the theme's album
- * rounding, or a full circle for fully round artwork (artists).
- */
+/** Static rest shape of a non-immersive hero's artwork (circle for artists). */
 @Composable
 private fun heroArtworkShape(fullyRounded: Boolean): Shape =
     if (fullyRounded) CircleShape else AlbumArtShape()
 
 /**
  * The immersive overlay block's content: title/subtitle/stats and the optional
- * play pill, inset 16dp like the rest of the hero. Composed by
- * [CollectionHeroImmersiveHeader] as the list's real interactive header item.
+ * play pill. Composed by [CollectionHeroImmersiveHeader] as the list's real
+ * interactive header item.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -1102,8 +988,6 @@ private fun CollectionHeroOverlayContent(
                     CollectionHeroPlayButton(
                         onClick = onPlayAllClick,
                         accentColor = accentColor,
-                        // Flexible member: yields to the fixed toggles when the
-                        // row is narrow (see [CollectionHeroPlayButton]).
                         modifier = Modifier.weight(1f, fill = false)
                     )
                 }
@@ -1119,27 +1003,13 @@ private fun CollectionHeroOverlayContent(
     }
 }
 
-/**
- * Reports the hero's shuffle/play/search button row's root-space top y into
- * [searchState] (see [CollectionSearchState.buttonRowTopYInRootPx]) — the
- * fallback anchor of the search-open scroll
- * ([CollectionSearchScrollToBarEffect]). No-op when [searchState] is null
- * (play-pill-only heroes don't need it).
- */
+/** Reports the hero's button row's root-space top y into [searchState]. */
 private fun Modifier.reportHeroButtonRowTop(searchState: CollectionSearchState?): Modifier =
     onGloballyPositioned { info ->
         searchState?.buttonRowTopYInRootPx = info.positionInRoot().y
     }
 
-/**
- * Reports the hero's search bar container's root-space top y into [searchState]
- * (see [CollectionSearchState.searchBarTopYInRootPx]) — the preferred anchor of
- * the search-open scroll ([CollectionSearchScrollToBarEffect]) on heroes whose
- * bar does not hang right under the button row (the compact one). Reported by
- * an always-present wrapper AROUND the bar, so the value exists before the
- * bar's own first layout (the scroll effect reads it in the same frame
- * [CollectionSearchState.open] flips). No-op when [searchState] is null.
- */
+/** Reports the hero's search bar container's root-space top y into [searchState]. */
 private fun Modifier.reportHeroSearchBarTop(searchState: CollectionSearchState?): Modifier =
     onGloballyPositioned { info ->
         searchState?.searchBarTopYInRootPx = info.positionInRoot().y
@@ -1148,19 +1018,11 @@ private fun Modifier.reportHeroSearchBarTop(searchState: CollectionSearchState?)
 /**
  * Artwork fill: embedded/plain image, collection icon, or the title's initial.
  *
- * While the image loads, the placeholder resolved from the surrounding
- * [LocalMediaArtKind] scope shows through the artwork surface (the music
- * note, or the collection's own icon on album/artist pages).
- *
- * When the image CHANGES in place (e.g. a playlist reordered so its automatic
- * first-track cover picks a different track), the old image keeps rendering on
- * a top layer whose alpha tweens to 0 while the new image draws beneath it —
- * a crossfade instead of a pop through the placeholder. First compositions
- * (nav flights) render the single image directly: no extra layer, no fade.
- *
- * The no-art letter fallback rides [NoAlbumArtLetter]: a bounds-fraction
- * monogram that scales with the flying artwork during shared-element flights
- * instead of popping between the row's and the hero's fixed sizes.
+ * When the image CHANGES in place (e.g. a playlist reorder picks a different
+ * cover), the old image keeps rendering on a top layer whose alpha tweens to
+ * 0 while the new image draws beneath it — a crossfade instead of a pop
+ * through the placeholder. First compositions render the single image
+ * directly: no extra layer, no fade.
  */
 @Composable
 private fun CollectionHeroArtworkContent(
@@ -1171,8 +1033,6 @@ private fun CollectionHeroArtworkContent(
 ) {
     val context = LocalContext.current
     if (imageUrl != null) {
-        // The art currently rendered, plus the old art kept only while its
-        // fade-out runs. Both live in state so the swap happens frame-atomic.
         var displayed by remember { mutableStateOf(imageUrl to imageIsEmbeddedArt) }
         var fading by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
         val fade = remember { Animatable(1f) }
@@ -1348,23 +1208,13 @@ private fun CollectionHeroTexts(
 }
 
 /**
- * The accent play pill.
- *
- * The pill is the hero button row's only flexible member (hosts pass
- * `Modifier.weight(1f, fill = false)`): the shuffle and search toggles are
- * fixed 40dp circles measured BEFORE any weighted child, so when the row's
- * width cannot fit the labelled pill — the compact hero's text column,
- * squeezed between the 120dp artwork and the screen edge, is the case in
- * point — the pill collapses to an icon-only 40dp circle (the toggles' exact
- * footprint) instead of grabbing the width and starving the search toggle,
- * whose 24dp icon used to shrink below the shuffle/play icons as the row's
- * last-measured child.
- *
- * The labelled/icon-only switch compares the pill's incoming
- * [BoxWithConstraints.maxWidth] against the exact labelled width (icon + gap
- * + the label measured at the live typography, font scale included), so the
- * label is either rendered in full and unwrapped or not at all — never
- * ellipsized or broken mid-word.
+ * The accent play pill. The pill is the hero button row's only flexible member
+ * (`Modifier.weight(1f, fill = false)`): the fixed toggles are measured
+ * before any weighted child, so when the row's width cannot fit the labelled
+ * pill, it collapses to an icon-only circle instead of starving the search
+ * toggle. The switch compares the incoming [BoxWithConstraints.maxWidth]
+ * against the exact labelled width, so the label is either rendered in full
+ * or not at all.
  */
 @Composable
 private fun CollectionHeroPlayButton(
@@ -1375,8 +1225,7 @@ private fun CollectionHeroPlayButton(
     val interactionSource = remember { MutableInteractionSource() }
     val playLabel = stringResource(R.string.play)
     BoxWithConstraints(modifier = modifier) {
-        // The pill's chrome around the label: 48dp horizontal padding + 20dp
-        // icon + 8dp gap.
+        // The pill's chrome around the label: 48dp horizontal padding + 20dp icon + 8dp gap.
         val labelChromeWidth = 76.dp
         val labelStyle = FoamTheme.typography.titleMedium
         val density = LocalDensity.current
@@ -1432,8 +1281,7 @@ private fun CollectionHeroPlayButton(
 
 /**
  * The hero's shuffle toggle, rendered LEFT of the play pill: queues the
- * collection's items in shuffled order (play behaviour, shuffled queue).
- * Hidden when no [onShuffleAllClick] is provided.
+ * collection's items in shuffled order. Hidden without [onShuffleAllClick].
  */
 @Composable
 private fun CollectionHeroShuffleButton(
@@ -1460,11 +1308,9 @@ private fun CollectionHeroShuffleButton(
 }
 
 /**
- * The hero's search toggle, rendered right of the play pill: the search icon at
- * rest, a close cross while the search bar is open. Tapping opens the bar (the
- * bar focuses its own field on entry, and the host scrolls it up to the screen
- * top — see [CollectionSearchScrollToBarEffect]); tapping the cross closes it
- * (the query clears as the bar collapses — see [CollectionHeroSearchBar]).
+ * The hero's search toggle: the search icon at rest, a close cross while the
+ * bar is open. Tapping opens the bar (which focuses its own field and is
+ * scrolled up by the host); tapping the cross closes it.
  */
 @Composable
 private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
@@ -1504,37 +1350,16 @@ private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
 
 /**
  * The hero's inline search field, shown while [CollectionSearchState.open] is
- * true: filters the collection's rows live (empty text shows everything;
- * closing clears the query). The field's caret rides the hero's own
- * [accentColor] — the collection's palette-derived accent (the same color as
- * its play pill) — not the global app accent. Hosts place the bar wherever
- * their layout wants it: right under the button row (Normal, immersive) or
- * under the whole artwork + details row at full width (Compact, see
- * [CollectionHeroCompact]).
+ * true: filters the collection's rows live. The caret rides the hero's own
+ * [accentColor], not the global app accent. Hosts place the bar wherever
+ * their layout wants it.
  *
- * Focus handling:
- * - Focus is granted ONCE per open session (see [CollectionSearchState.focusGranted]):
- *   the hero header is a lazy-list item, so scrolling the bar out of view
- *   disposes the field and scrolling back recomposes it — re-running the focus
- *   request on every such recomposition would re-show a keyboard the user had
- *   already dismissed.
- * - Closing the bar tears the field's focus down IMMEDIATELY (not when the
- *   exiting content is removed at the end of the shrink animation), so the
- *   keyboard starts hiding in the same frame the cross is tapped instead of
- *   after a visible delay.
- * - "Done" on the keyboard hides it (clearing focus closes the IME session).
- * - When the keyboard is dismissed under an open bar (system back gesture),
- *   the field's focus is dropped too, so the caret stops blinking — the bar
- *   itself stays open and the field can be re-tapped to bring the keyboard
- *   back. Guarded by [keyboardShownThisOpen] so the clear never races the
- *   open flow's own focus request while the keyboard is still coming up.
- * - The QUERY is cleared only when the field leaves composition AFTER a close
- *   ([CollectionSearchState.close] deliberately leaves it — resetting a
- *   focused editable's text restarts its IME connection, which re-shows the
- *   keyboard for a frame right after the hide request went out; the
- *   hide -> show -> hide flicker on track taps). A disposal from the header
- *   scrolling out of the lazy viewport (bar still open) PRESERVES the query,
- *   so the filter survives the scroll round-trip.
+ * Focus handling: focus is granted ONCE per open session (scrolling the bar
+ * out of the lazy viewport and back must not re-show the keyboard); closing
+ * clears focus immediately so the keyboard hides in the same frame; "Done"
+ * hides the keyboard; a keyboard dismissed under an open bar drops focus so
+ * the caret stops blinking. The query is cleared only when the field leaves
+ * composition AFTER a close (see [CollectionSearchState.close]).
  */
 @Composable
 private fun CollectionHeroSearchBar(
@@ -1546,19 +1371,12 @@ private fun CollectionHeroSearchBar(
     val density = LocalDensity.current
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
     // Whether the keyboard has been up during THIS open: guards the
-    // keyboard-closed focus drop below against the open flow's own focus
-    // request (the keyboard takes a few frames to come up; clearing focus
-    // in that window would kill the show-request before it lands).
+    // keyboard-closed focus drop against the open flow's own focus request.
     var keyboardShownThisOpen by remember { mutableStateOf(false) }
     LaunchedEffect(searchState.openRequest) { keyboardShownThisOpen = false }
-    // Closing the bar: clear focus the moment [open] flips, so the IME
-    // session is torn down immediately (clearing focus closes the keyboard)
-    // instead of waiting for the AnimatedVisibility exit to remove the field.
     LaunchedEffect(searchState.open) {
         if (!searchState.open) focusManager.clearFocus(force = true)
     }
-    // Keyboard dismissed under an open bar (back gesture / Done): drop focus
-    // so the caret stops blinking while the bar stays open.
     LaunchedEffect(imeVisible) {
         if (imeVisible) {
             keyboardShownThisOpen = true
@@ -1574,21 +1392,16 @@ private fun CollectionHeroSearchBar(
     ) {
         val focusRequester = remember { FocusRequester() }
         // The query is cleared HERE — when the field is gone from composition
-        // after a close — and not in close(): resetting a focused editable's
-        // text restarts its IME connection, which briefly re-shows the keyboard
-        // after the hide request (see the doc above). Guarded on the bar being
-        // closed: the disposal from the header scrolling out of the lazy
-        // viewport (bar still open) must keep the query, so the filter survives
-        // the scroll round-trip.
+        // after a close — and not in close() (see [CollectionSearchState.close]).
+        // Guarded on the bar being closed: a disposal from the header scrolling
+        // out of the viewport (bar still open) must keep the query.
         DisposableEffect(Unit) {
             onDispose {
                 if (!searchState.open) searchState.query = ""
             }
         }
-        // Focus is granted once per open session: the flag lives on the
-        // screen-level [CollectionSearchState], so it survives this field being
-        // disposed (scrolled out of the lazy list) and recomposed (scrolled
-        // back) — only [open] resets it, for the next session.
+        // The flag lives on the screen-level state, so it survives this field
+        // being disposed and recomposed; only [open] resets it.
         LaunchedEffect(Unit) {
             if (!searchState.focusGranted) {
                 focusRequester.requestFocus()
@@ -1622,20 +1435,10 @@ private fun CollectionHeroSearchBar(
 
 /**
  * The shared-element flight fraction of the given transition scopes: 1f while
- * the transition is in flight (the departing screen's look), 0f once settled
- * (Visible). Consumed inside draw/graphicsLayer blocks, every frame of the
- * flight is draw-only. Returns a constant 0f when either scope is missing
- * (no shared-element context, e.g. heroes rendered without transition wiring).
- *
- * The fraction animates with the SAME duration/easing tween as the NavHost's screen
- * fade and [AlbumArtBoundsTransform] (SharedElementTransitionDurationMs/
- * SharedElementEasing), so the chrome fading with the flight lands on the
- * same frame as the screen fade and the flying artwork instead of trailing
- * them on a spring — which read as a pop at flight ends.
- *
- * Used both by the hero itself (artwork corner/fade morph, chrome fades), by
- * [CollectionHeroImmersiveHeader]'s overlay block and by host screens fading
- * their top-bar chrome in sync with the flight (see [collectionHeroOverlayLayer]).
+ * the transition is in flight, 0f once settled. Draw-phase only. Returns a
+ * constant 0f when either scope is missing. Animates with the same
+ * duration/easing as the NavHost's screen fade and [AlbumArtBoundsTransform],
+ * so chrome fading with the flight lands on the same frame as the screen fade.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -1663,16 +1466,13 @@ fun rememberCollectionHeroFlightFraction(
 /**
  * Lifts a hero chrome layer (status-bar scrim, overlay text/play block) into
  * the shared-element transition's overlay while a transition is active, so it
- * draws ABOVE the flying artwork (zIndexInOverlay 0f) instead of beneath it —
- * otherwise the artwork hides the chrome mid-flight and the chrome pops back
- * the instant the overlay empties at the end of the flight. No-op at rest and
- * without a [SharedTransitionScope]: the layer then draws in its normal place,
- * where the host hierarchy's own fades apply.
+ * draws ABOVE the flying artwork instead of beneath it — otherwise the artwork
+ * hides the chrome mid-flight and the chrome pops back the instant the overlay
+ * empties. No-op at rest and without a [SharedTransitionScope].
  *
  * Pair the lift with a flight alpha —
  * `(1f - rememberCollectionHeroFlightFraction(...).value) * scrollAlpha` — so
- * the chrome fades with the flight instead of sitting at full alpha over the
- * departing/arriving artwork.
+ * the chrome fades with the flight.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 fun Modifier.collectionHeroOverlayLayer(
@@ -1682,12 +1482,9 @@ fun Modifier.collectionHeroOverlayLayer(
 ): Modifier {
     if (sharedTransitionScope == null) return this
     return with(sharedTransitionScope) {
-        // The default predicate (isTransitionActive) is only true while a shared
-        // ELEMENT is in flight. Closing a collection towards a page with no
-        // matching shared element leaves it false, so chrome that overflows the
-        // NavHost bounds (the status-bar strip) stays in place and is cut / faded
-        // by the host instead of riding the flight alpha. Callers can pass a
-        // predicate that covers the whole nav transition.
+        // The default predicate (isTransitionActive) only covers shared
+        // ELEMENTS in flight; callers can pass one covering the whole nav
+        // transition (e.g. chrome overflowing the NavHost bounds).
         if (renderInOverlay == null) {
             renderInSharedTransitionScopeOverlay(zIndexInOverlay = zIndexInOverlay)
         } else {
@@ -1701,9 +1498,8 @@ fun Modifier.collectionHeroOverlayLayer(
 
 /**
  * True from the first frame a screen starts entering or exiting until it has
- * fully settled (Visible -> Visible). Unlike the shared-element scope's
- * isTransitionActive it also covers route pairs without any shared element.
- * Pass it as `renderInOverlay` to [collectionHeroOverlayLayer].
+ * fully settled. Unlike the shared-element scope's isTransitionActive it also
+ * covers route pairs without any shared element.
  */
 fun AnimatedVisibilityScope.isNavTransitionInProgress(): Boolean =
     transition.currentState != EnterExitState.Visible ||
@@ -1739,9 +1535,8 @@ private fun Modifier.collectionHeroSharedArtwork(
             animatedVisibilityScope = animatedVisibilityScope,
             clipInOverlayDuringTransition = OverlayClip(overlayShape),
             boundsTransform = AlbumArtBoundsTransform,
-            // Bottom of the transition overlay: every chrome layer lifted by
-            // [collectionHeroOverlayLayer] and the shared texts (zIndex 1f)
-            // draw above the flying artwork.
+            // Bottom of the transition overlay: chrome layers lifted by
+            // [collectionHeroOverlayLayer] and the shared texts draw above.
             zIndexInOverlay = 0f
         )
     }
@@ -1758,11 +1553,8 @@ private fun Modifier.collectionHeroSharedText(
     if (!enabled || sharedTransitionScope == null || animatedVisibilityScope == null) {
         return this
     }
-    // The fades ride the SAME duration/easing tween as the bounds flight
-    // (AlbumArtBoundsTransform) instead of sharedBounds' spring-based
-    // defaults: with the defaults both texts stayed opaque well into the
-    // flight and the departing one lingered past the landing — an instant
-    // scale pop plus a dirty overlapping crossfade.
+    // The fades ride the same duration/easing tween as the bounds flight
+    // instead of sharedBounds' spring defaults; see [rowSharedText].
     val fadeSpec = tween<Float>(
         durationMillis = SharedElementTransitionDurationMs,
         easing = SharedElementEasing
@@ -1775,8 +1567,6 @@ private fun Modifier.collectionHeroSharedText(
             exit = fadeOut(fadeSpec),
             resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.FillHeight, Alignment.Center),
             boundsTransform = AlbumArtBoundsTransform,
-            // Above the flying artwork so the title never disappears behind it
-            // mid-flight (the artwork is zIndexInOverlay 0f).
             zIndexInOverlay = 1f
         )
     }
@@ -1784,22 +1574,19 @@ private fun Modifier.collectionHeroSharedText(
 
 /**
  * Resolves a collection's hero layout from the app settings. Provided at the
- * nav root (FoamNavigation) so any screen hosting rows that fly into a
- * collection detail hero can know, without new parameter threading, whether
- * that hero uses an immersive layout (square + faded at rest) and therefore
- * whether its rows must carry the mirrored flight look (see
- * [collectionFlightArtwork]). The default resolves every target to Compact.
+ * nav root so any screen hosting rows that fly into a collection detail hero
+ * can know whether that hero uses an immersive layout and therefore whether
+ * its rows must carry the mirrored flight look (see [collectionFlightArtwork]).
  */
 val LocalCollectionHeroLayoutLookup: ProvidableCompositionLocal<(CollectionHeroTarget) -> CollectionHeroLayout> =
     compositionLocalOf { { CollectionHeroLayout.Compact } }
 
 /**
- * The scroll-triggered top bar: a black vertical gradient from the very top of
- * the screen (status bar included) down past the top-bar zone, with the
- * collection title fading in progressively. [fraction] (0f hidden, 1f shown)
- * comes from the list's scroll state; it is consumed inside a graphicsLayer,
- * so every scroll frame is draw-only. The bar draws NO buttons: the screen's
- * existing back/more controls render above it, keeping single hit targets.
+ * The scroll-triggered top bar: a vertical gradient from the very top of the
+ * screen down past the top-bar zone, with the collection title fading in
+ * progressively. [fraction] is consumed inside a graphicsLayer, so every
+ * scroll frame is draw-only. Draws NO buttons: the screen's own back/more
+ * controls render above it, keeping single hit targets.
  */
 @Composable
 fun CollectionScrollTopBar(
@@ -1833,10 +1620,9 @@ fun CollectionScrollTopBar(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
-                // The status-bar insets are already consumed at the nav root, so
-                // a statusBarsPadding() here would be a no-op; pad by the raw
-                // measured inset instead so the title sits exactly on the same
-                // level as the screen's back/more buttons (16dp below it).
+                // Insets are consumed at the nav root, so pad by the raw
+                // measured inset to sit exactly on the same level as the
+                // screen's back/more buttons.
                 .padding(top = statusBarHeight)
                 .height(CollectionScrollTopBarZoneHeight)
                 .padding(horizontal = CollectionScrollTopBarTitleHorizontalPadding),
@@ -1854,18 +1640,11 @@ fun CollectionScrollTopBar(
 
 /**
  * Alpha-fades the host list's OWN pixels to transparent across the floating
- * chrome zone at its top (list-local 0..[CollectionScrollTopBarZoneHeight]):
- * rows scrolling full-bleed under the chrome dissolve into it instead of just
- * being dimmed by the chrome's (deliberately subtle) gradient scrim — the same
- * alpha-fade look the immersive heroes' artwork has at its bottom edge. At rest
- * nothing is drawn inside the fade zone (the compact/normal lists' top content
- * padding covers it), so resting heroes are unaffected.
- *
- * Draw-phase only — an offscreen layer plus a DstIn mask — so scrolling costs
- * no recompositions. The offscreen layer is REQUIRED: without it the DstIn
- * blend would multiply the alpha of everything already drawn beneath the list
- * (the immersive artwork layer, the app backdrop) and erase it, instead of
- * fading only the list's own pixels.
+ * chrome zone at its top: rows scrolling full-bleed under the chrome dissolve
+ * into it instead of just being dimmed by the (subtle) gradient scrim. At
+ * rest nothing is drawn inside the fade zone (the top content padding covers
+ * it). Draw-phase only, with an offscreen layer — without it the DstIn blend
+ * would erase everything already drawn beneath the list.
  */
 fun Modifier.collectionListTopFade(): Modifier =
     graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
@@ -1882,10 +1661,7 @@ fun Modifier.collectionListTopFade(): Modifier =
             )
         }
 
-/**
- * Grid-only counterpart used by screens that only ever render a
- * [LazyVerticalGrid] (the artist page).
- */
+/** Grid-only counterpart used by screens that only ever render a [LazyVerticalGrid]. */
 @Composable
 fun rememberCollectionScrollFraction(gridState: LazyGridState): () -> Float {
     val fadeDistancePx = with(LocalDensity.current) { CollectionScrollTopBarFadeDistance.toPx() }
@@ -1903,9 +1679,8 @@ fun rememberCollectionScrollFraction(gridState: LazyGridState): () -> Float {
 /**
  * Scroll fraction (0f at rest, 1f once the list has scrolled
  * [CollectionScrollTopBarFadeDistance]) driving [CollectionScrollTopBar].
- * Works for both a [LazyListState] and a [LazyGridState]: whichever state the
- * current density renders with is read inside the returned lambda, so callers
- * can consume it from draw phases without per-frame recomposition.
+ * Works for both a [LazyListState] and a [LazyGridState]; consumed from draw
+ * phases without per-frame recomposition.
  */
 @Composable
 fun rememberCollectionScrollFraction(

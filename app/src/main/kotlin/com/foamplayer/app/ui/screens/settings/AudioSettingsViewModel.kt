@@ -20,9 +20,9 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Backs the reworked Audio settings screen: fidelity score, pipeline visualization,
- * global engine switches, playback (crossfade/quick fade/silence) and per-output-device
- * configuration.
+ * Backs the Audio settings screen: fidelity score, pipeline visualization,
+ * global engine switches, playback (crossfade/quick fade/silence) and
+ * per-output-device configuration.
  */
 @HiltViewModel
 class AudioSettingsViewModel @Inject constructor(
@@ -50,7 +50,7 @@ class AudioSettingsViewModel @Inject constructor(
     /** The device the engine currently routes to. */
     val activeDevice: StateFlow<AudioOutputDevice?> = outputDeviceManager.activeDevice
 
-    /** Carries [PlaybackState.audioOutputInfo] (bit-perfect verdict, score, pipeline). */
+    /** Carries PlaybackState.audioOutputInfo (bit-perfect verdict, score, pipeline). */
     val playbackState: StateFlow<PlaybackState> = audioEngine.playbackState
 
     val dspState: StateFlow<DspState> = dspEngine.state

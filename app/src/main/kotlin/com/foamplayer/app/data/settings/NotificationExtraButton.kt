@@ -1,11 +1,11 @@
 package com.foamplayer.app.data.settings
 
 /**
- * One of the two additional buttons the playback notification can show next to
- * the fixed Previous / Play-Pause / Next controls. [NONE] removes the slot.
+ * Extra buttons the playback notification can show next to the fixed
+ * Previous / Play-Pause / Next controls.
  */
 enum class NotificationExtraButton {
-    /** No button in this slot. */
+    /** Empty slot. */
     NONE,
 
     /** Cycles the queue's repeat mode (icon follows the current mode). */
@@ -14,13 +14,9 @@ enum class NotificationExtraButton {
     /** Toggles shuffle (icon follows the current mode). */
     SHUFFLE,
 
-    /** Cross icon: pauses playback and dismisses the notification. */
+    /** Pauses playback and dismisses the notification. */
     CLOSE,
 
-    /**
-     * Toggles the current track's score, cycling
-     * empty heart -> like -> super like -> dislike -> empty heart
-     * (the icon mirrors the track's current score).
-     */
+    /** Cycles the track score: none -> like -> super like -> dislike -> none. */
     SCORE
 }

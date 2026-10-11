@@ -9,9 +9,9 @@ import kotlin.math.roundToInt
 
 /**
  * True 2D color field for the gradient background: every point is a
- * distance-weighted blend (Shepard interpolation) of all stops' colors, so each
- * draggable anchor paints its own neighborhood instead of slicing the surface
- * into vertical bands.
+ * distance-weighted blend (Shepard interpolation) of all stops' colors, so
+ * each anchor paints its own neighborhood instead of slicing the surface into
+ * vertical bands.
  *
  * [x] and [y] are normalized 0..1 surface coordinates ([GradientStop.offset]
  * drives Y, [GradientStop.x] the free horizontal placement).
@@ -42,8 +42,8 @@ fun gradientColorAt(stops: List<GradientStop>, x: Float, y: Float): Int {
 
 /**
  * Rasterizes the 2D field at a low resolution; callers scale the result up
- * with bilinear filtering ([androidx.compose.ui.graphics.FilterQuality.Low]),
- * which is smooth at any size and cheap to rebuild while dragging.
+ * with bilinear filtering, smooth at any size and cheap to rebuild while
+ * dragging.
  */
 fun buildGradientImage(stops: List<GradientStop>, width: Int, height: Int): ImageBitmap {
     val w = width.coerceAtLeast(1)

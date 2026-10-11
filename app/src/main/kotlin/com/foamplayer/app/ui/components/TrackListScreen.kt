@@ -78,21 +78,20 @@ import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import kotlinx.coroutines.CompletableDeferred
 
 /**
- * Dismiss-to-origin-collection coordination: asked by the nav root when the full
- * player's swipe-down starts over this page, so the playing track's row can be
- * scrolled to the vertical middle of the screen and become the shared-element
- * target of the artwork flight. [requestId] makes otherwise-equal requests
- * distinguishable for the consuming LaunchedEffect.
+ * Dismiss-to-origin-collection coordination: asked by the nav root when the
+ * full player's swipe-down starts over this page, so the playing track's row
+ * can be scrolled to the vertical middle of the screen and become the
+ * shared-element target of the artwork flight. [requestId] distinguishes
+ * otherwise-equal requests.
  *
- * The row's shared-element tag is held back until [scrolledIntoPlace] completes:
- * if the element paired while the list was still at its restored scroll position,
- * the centering scroll would drag the already-matched overlay art off the hero
- * (the shared bounds follow list scrolling), which reads as the image jumping at
- * the start of the swipe. Pairing must therefore happen only after the scroll.
+ * The row's shared-element tag is held back until [scrolledIntoPlace]
+ * completes: pairing while the list is still at its restored position would
+ * drag the matched overlay art off the hero as the centering scroll runs,
+ * which reads as the image jumping at the start of the swipe.
  *
- * Once the scroll has landed, [rowArtCenterYPx] reports the row artwork's center in
- * root coordinates so the dismiss swipe can be sized to the actual artwork travel
- * distance (1:1 finger tracking).
+ * Once the scroll has landed, [rowArtCenterYPx] reports the row artwork's
+ * center in root coordinates so the dismiss swipe can be sized to the actual
+ * artwork travel distance.
  */
 class TrackCenterRequest(val trackId: Long, val requestId: Int) {
     internal val scrolledIntoPlace = CompletableDeferred<Unit>()
@@ -100,12 +99,10 @@ class TrackCenterRequest(val trackId: Long, val requestId: Int) {
 }
 
 /**
- * Instantly scrolls the list so the item at [index] sits as close to the vertical
- * middle of the viewport as the list's bounds allow: the raw scroll is clamped by
- * [scrollBy] at both ends, so short lists (not enough content above the item) keep
- * it near the top and end-of-list items stay as high as the content permits. Both
- * steps are synchronous (scrollToItem force-remeasures), so the returned info is
- * already the settled, post-centering placement.
+ * Scrolls the list so the item at [index] sits as close to the vertical middle
+ * of the viewport as the list's bounds allow (the raw scroll is clamped at
+ * both ends). Both steps are synchronous, so the returned info is already the
+ * settled placement.
  */
 private suspend fun LazyListState.scrollToCenteredItem(index: Int): LazyListItemInfo? {
     scrollToItem(index)
@@ -119,7 +116,7 @@ private suspend fun LazyListState.scrollToCenteredItem(index: Int): LazyListItem
     return layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
 }
 
-/** Grid counterpart of [LazyListState-scrollToCenteredItem]. */
+/** Grid counterpart of [LazyListState.scrollToCenteredItem]. */
 private suspend fun LazyGridState.scrollToCenteredItem(index: Int): LazyGridItemInfo? {
     scrollToItem(index)
     val info = layoutInfo
@@ -131,6 +128,9 @@ private suspend fun LazyGridState.scrollToCenteredItem(index: Int): LazyGridItem
     if (delta != 0f) scrollBy(delta)
     return layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
 }
+
+/** Scale-up applied to a track's grid cell while it is being dragged. */
+private const val GridDragLiftScale = 1.05f
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -144,21 +144,21 @@ fun TrackListScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     imageUrl: String? = null,
-    /** False when [imageUrl] is a plain image URI (e.g. a playlist cover) instead of an audio file to extract art from. */
+    /** False when [imageUrl] is a plain image URI (e.g. a playlist cover). */
     imageIsEmbeddedArt: Boolean = true,
     artistName: String? = null,
-    /** When set, the hero's artist line becomes a tappable link; receives the artist name. */
+    /** When set, the hero's artist line becomes a tappable link. */
     onArtistClick: ((String) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedElementKey: String? = null,
-    /** First path segment of the shared element keys ("album-art-*", ...). Detail screens of other entity kinds pass their own. */
+    /** First path segment of the shared element keys; detail screens of other kinds pass their own. */
     sharedElementPrefix: String = "album",
     sharedTrackId: Long? = null,
     activeTrackId: Long? = null,
     showTrackNumbers: Boolean = false,
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
-    /** This view's remembered list density; ROW_NORMAL keeps the classic layout. */
+    /** This view's remembered list density. */
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     /** When set, the top bar shows the 3-dots button opening the organisation modal. */
     onDensityChange: ((MediaDensity) -> Unit)? = null,
@@ -175,25 +175,23 @@ fun TrackListScreen(
     /** Dismiss-to-origin-collection scroll request (see [TrackCenterRequest]). */
     centerTrackRequest: TrackCenterRequest? = null,
     /**
-     * Combined playback-active bit (isPlaying || isPlaybackRequested) of the playing
-     * track, feeding the flight artwork's paused shrink when a row of this list is
-     * the shared-element target. A buffering gap between prepare() and STATE_READY
-     * also reports isPlaying=false, and shrinking across that gap would let the row
-     * art render at a different scale than the full player's hero mid-flight (both
-     * ends must match or the art pops at the hand-off) -- see rememberPausedArtScale.
+     * Combined playback-active bit (isPlaying || isPlaybackRequested) of the
+     * playing track, feeding the flight artwork's paused shrink when a row of
+     * this list is the shared-element target (both ends must match or the art
+     * pops at the hand-off) — see rememberPausedArtScale.
      */
     isPlaybackActive: Boolean = true,
-    /** Hero layout resolved from the per-collection settings; Compact keeps the classic header. */
+    /** Hero layout resolved from the per-collection settings. */
     heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
-    /** Immersive player mode: the flight overlay art must fade in like the hero does instead of popping in. */
+    /** Immersive player mode: the flight overlay art must fade in like the hero. */
     immersiveMode: Boolean = false,
-    /** Playlist edit mode: rows gain swipe-to-remove and a drag handle for reordering. */
+    /** Playlist edit mode: rows gain swipe-to-remove and a drag handle. */
     editMode: Boolean = false,
-    /** When set, the top bar shows the edit-mode pencil; the back arrow exits edit mode first. */
+    /** When set, the top bar shows the edit-mode pencil; back exits edit mode first. */
     onEditModeChange: ((Boolean) -> Unit)? = null,
     /** Edit-mode removal: a row's swipe-to-dismiss calls this with the swiped track. */
     onRemoveTrack: ((TrackEntity) -> Unit)? = null,
-    /** Edit-mode reorder persistence: called with the final displayed order's track ids when a drag settles. */
+    /** Edit-mode reorder persistence: called with the final displayed order's track ids. */
     onPersistTrackOrder: ((List<Long>) -> Unit)? = null,
     /** Whether the long-content fast scrollbar rides the container's end edge. */
     showScrollbar: Boolean = true
@@ -205,20 +203,16 @@ fun TrackListScreen(
     val context = LocalContext.current
     var showOrganisationModal by remember { mutableStateOf(false) }
 
-    // Hero search: typing in the opened bar filters the displayed rows live;
-    // matches against title and artist. Empty query (or closed bar) shows all.
     val searchState = rememberCollectionSearchState()
 
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
-    // Flight fractions of this screen's two transitions: the nav flight
-    // (open/close of the collection itself) and the player-container flight
-    // (full player expanding over / collapsing back onto this screen). The
-    // floating back/more row is lifted into the shared-element overlay while
-    // any transition is active (collectionHeroOverlayLayer), and the overlay
-    // escapes the host hierarchy's own fades — so its alpha must multiply
-    // both fractions explicitly or it would pop at flight ends.
+    // Flight fractions of this screen's two transitions: the nav flight and
+    // the player-container flight. The floating back/more row is lifted into
+    // the shared-element overlay while any transition is active
+    // (collectionHeroOverlayLayer), and a lifted layer escapes the host
+    // hierarchy's own fades — so its alpha must multiply both fractions.
     val navFlightFraction =
         rememberCollectionHeroFlightFraction(sharedTransitionScope, animatedVisibilityScope)
     val containerFlightFraction =
@@ -226,8 +220,6 @@ fun TrackListScreen(
     val transitionAlpha: () -> Float = {
         (1f - navFlightFraction.value) * (1f - containerFlightFraction.value)
     }
-    // Measured by the header item's layout pass (see [CollectionHeroImmersiveHeader]);
-    // read untracked inside the offset lambda, so it is always the settled value.
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
         // While the spacer header (item 0) is visible its scroll offset IS the
@@ -246,20 +238,10 @@ fun TrackListScreen(
             }
         }
     }
-    // Root-space top y of the active scroll container, reported by the
-    // listTopObserver below and consumed by the search-open scroll effect
-    // (see [CollectionSearchScrollToBarEffect]).
     var listTopYInRootPx by remember { mutableFloatStateOf(Float.NaN) }
     val listTopObserver = Modifier.onGloballyPositioned {
         listTopYInRootPx = it.positionInRoot().y
     }
-    // Search-open scroll: when the search toggle opens the hero's search bar
-    // while the hero sits scrolled away (or hidden under the fixed chrome), the
-    // list is brought up so the bar opens at the screen top — below the floating
-    // back row, which covers every layout's list top (all of them scroll
-    // full-bleed beneath it). The open bottom padding keeps the bar reachable
-    // even when the collection has only a handful of rows (no scroll range
-    // otherwise) and the rows visible above the keyboard.
     CollectionSearchScrollToBarEffect(
         searchState = searchState,
         listState = listState,
@@ -269,33 +251,25 @@ fun TrackListScreen(
         topChromeHeight = CollectionSearchImmersiveTopClearance
     )
 
-    // Top content padding reserving the floating chrome zone: compact/normal
-    // heroes must rest below the back/more row (their artwork is fully
-    // visible), while the immersive heroes bleed under it on purpose.
     val heroTopPadding = if (heroLayout.isImmersive) 0.dp else CollectionTopBarRowHeight
 
-    // Only the row that can become the shared-element endpoint of the player-dismiss
-    // flight needs the paused shrink; one animation is hoisted here and read by that
-    // row inside its graphicsLayer, so play/pause flips stay draw-only for the list.
+    // One hoisted paused-scale animation, read by the flight-endpoint row
+    // inside its graphicsLayer, so play/pause flips stay draw-only for the list.
     val flightPausedArtScale = rememberPausedArtScale(isPlaybackActive)
 
-    // Whether a player-dismiss artwork flight is currently landing on this list's
-    // rows (see [rememberPlayerDismissFlightActive]): while the flight is live, the
-    // flying artwork casts the shadow itself and the target row's static rest shadow
-    // steps aside, so it doesn't sit under the empty art slot from the first gesture
-    // frame. Hoisted here -- one derived state for the whole list -- and consumed
-    // per row inside TrackListItem, gated on that row being the flight's tagged
-    // target, so untagged rows never read it and never recompose.
+    // Whether a player-dismiss artwork flight is currently landing on this
+    // list's rows: while live, the flying artwork casts the shadow itself and
+    // the target row's static shadow steps aside. One derived state for the
+    // whole list, consumed per row gated on that row being the tagged target.
     val dismissFlightActive = rememberPlayerDismissFlightActive(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = playerTransitionVisibilityScope
     )
 
-    // Edit-mode drag & drop (playlist detail): a local display list absorbs the
-    // swaps live; the DB is written once when the drag settles. While a drag is
-    // in flight, incoming track emissions are ignored so they can't fight the
-    // reorder. LazyColumn item indices include the hero (item 0) and the bottom
-    // spacer, so track index <-> list index conversions happen at the edges.
+    // Edit-mode drag & drop: a local display list absorbs the swaps live; the
+    // DB is written once when the drag settles. While a drag is in flight,
+    // incoming track emissions are ignored so they can't fight the reorder.
+    // Lazy item indices include the hero (item 0) and the bottom spacer.
     var displayedTracks by remember { mutableStateOf(tracks) }
     var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(tracks, editMode) {
@@ -312,9 +286,6 @@ fun TrackListScreen(
             }
         }
     )
-    // Grid counterpart for GRID_* densities in edit mode: the same handle-only
-    // drag & drop as the playlists screen. The hero header (index 0) and the
-    // bottom spacer never take part in a swap.
     val gridDragState = rememberDragDropGridState(
         gridState = gridState,
         canMove = { from, to -> from > 0 && to in 1..displayedTracks.size },
@@ -324,8 +295,8 @@ fun TrackListScreen(
             }
         }
     )
-    // True once the finger lifts: the item keeps flying to its slot (settle
-    // animation) but the lift scale already animates back down in parallel.
+    // True once the finger lifts: the item keeps flying to its slot but the
+    // lift scale already animates back down in parallel.
     var dragReleased by remember { mutableStateOf(false) }
     // Fresh reads for the drag callbacks: pointerInput is keyed on the item's
     // track id, so a gesture handler can outlive the state it was created with.
@@ -334,24 +305,20 @@ fun TrackListScreen(
     val latestOnRemoveTrack by rememberUpdatedState(onRemoveTrack)
     val latestOnPersistTrackOrder by rememberUpdatedState(onPersistTrackOrder)
 
-    // The drag display list only diverges from the DB list mid-drag; the search
-    // filters whatever is currently displayed (never active in edit mode).
-    // rememberFilteredList keeps the incoming list identity while the hero's
-    // search bar is closed/blank — no O(n) filter pass (and no fresh list
-    // instance re-diffed into everything below) on unrelated recompositions —
-    // and moves big lists' filtering off the main thread entirely.
+    // The drag display list only diverges from the DB list mid-drag; the
+    // search filters whatever is currently displayed (never active in edit
+    // mode). rememberFilteredList keeps the incoming list identity while the
+    // search bar is closed/blank.
     val shownTracks = if (editMode) {
         displayedTracks
     } else {
         rememberFilteredList(tracks, searchState) { searchState.matches(it.title, it.artist) }
     }
 
-    // Track taps: clicking a row settles the search session — the bar closes
-    // (query cleared, keyboard hidden) as playback starts. The click lambda
-    // captures the PRE-close [shownTracks] instance, so the queue handed to
-    // [onTrackClick] is exactly the filtered list the user saw on screen.
+    // Track taps settle the search session. The click lambda captures the
+    // PRE-close [shownTracks] instance, so the queue handed to [onTrackClick]
+    // is exactly the filtered list the user saw on screen.
     val onRowClick: (Int) -> Unit = if (editMode) {
-        // Taps must not start playback while editing.
         { _ -> }
     } else {
         { index ->
@@ -360,23 +327,20 @@ fun TrackListScreen(
         }
     }
 
-    // Dismiss-to-origin-collection: bring the playing track's row to the vertical
-    // middle of the screen (clamped to the list's bounds) BEFORE the row is allowed
-    // to pair with the player's artwork -- see [TrackCenterRequest] for why the
-    // ordering matters. Runs while the player still covers the screen.
+    // Dismiss-to-origin-collection: bring the playing track's row to the
+    // vertical middle of the screen BEFORE the row is allowed to pair with the
+    // player's artwork. Runs while the player still covers the screen.
     var centeringSettled by remember { mutableStateOf(false) }
 
-    // Root-space top of the list container, needed to report the target row's center
-    // (in the same coordinates as the player's hero art) for the swipe distance.
     var listRootYPx by remember { mutableFloatStateOf(Float.NaN) }
     val listRootObserver = Modifier.onGloballyPositioned { listRootYPx = it.positionInRoot().y }
 
     LaunchedEffect(centerTrackRequest) {
         val request = centerTrackRequest ?: return@LaunchedEffect
         centeringSettled = false
-        // The centering scroll targets the row's position in the DISPLAYED list
-        // (the search filter may hide rows above it); falls back to the full
-        // list if the row is filtered out.
+        // The centering scroll targets the row's position in the DISPLAYED
+        // list (the search filter may hide rows above it); falls back to the
+        // full list if the row is filtered out.
         val trackIndex = shownTracks.indexOfFirst { it.id == request.trackId }
             .takeIf { it >= 0 } ?: tracks.indexOfFirst { it.id == request.trackId }
         if (trackIndex >= 0) {
@@ -384,9 +348,9 @@ fun TrackListScreen(
             if (density.isGrid) {
                 val item = gridState.scrollToCenteredItem(itemIndex)
                 if (item != null && !listRootYPx.isNaN()) {
-                    // Grid cells: the square art fills the cell's top with symmetric
-                    // side padding, so its center lands at itemTop + cellWidth / 2
-                    // (the paddings cancel out).
+                    // Grid cells: the square art fills the cell's top with
+                    // symmetric side padding, so its center lands at
+                    // itemTop + cellWidth / 2.
                     request.rowArtCenterYPx = listRootYPx +
                             (item.offset.y - gridState.layoutInfo.viewportStartOffset) +
                             item.size.width / 2f
@@ -394,8 +358,8 @@ fun TrackListScreen(
             } else {
                 val item = listState.scrollToCenteredItem(itemIndex)
                 if (item != null && !listRootYPx.isNaN()) {
-                    // Row densities: the artwork is vertically centered in the row,
-                    // so the row center IS the art center.
+                    // Row densities: the artwork is vertically centered, so the
+                    // row center IS the art center.
                     request.rowArtCenterYPx = listRootYPx +
                             (item.offset - listState.layoutInfo.viewportStartOffset) +
                             item.size / 2f
@@ -406,8 +370,8 @@ fun TrackListScreen(
         request.scrolledIntoPlace.complete(Unit)
     }
 
-    // The playing row only carries the shared-element tag once any pending centering
-    // scroll has landed; open flights (no request pending) tag immediately.
+    // The playing row only carries the shared-element tag once any pending
+    // centering scroll has landed; open flights (no request) tag immediately.
     val rowSharedTagActive: (Long) -> Boolean = { trackId ->
         trackId == sharedTrackId && (centerTrackRequest == null || centeringSettled)
     }
@@ -424,11 +388,8 @@ fun TrackListScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         if (heroLayout.isImmersive) {
-            // Artwork layer only: bleeds under the status bar behind the list.
-            // The overlay block (title/play pill) is the list's own
-            // [CollectionHeroImmersiveHeader] item, so it fades with this
-            // screen's transitions exactly like the compact/normal heroes and
-            // takes taps directly.
+            // Artwork layer only; the overlay block is the list's own
+            // [CollectionHeroImmersiveHeader] item.
             CollectionHero(
                 layout = heroLayout,
                 title = title,
@@ -495,10 +456,9 @@ fun TrackListScreen(
                     // +1: the hero header sits at grid item 0; the drag-drop
                     // state works in raw LazyGrid indices.
                     val gridItemIndex = index + 1
-                    // derivedStateOf: draggedIndex is shared by every cell, so
-                    // reading it directly in each cell's scope would recompose
-                    // the whole viewport on every swap; the derived boolean only
-                    // invalidates the cells whose dragging state actually flips.
+                    // derivedStateOf: draggedIndex is shared by every cell; the
+                    // derived boolean only invalidates cells whose dragging
+                    // state actually flips.
                     val isDragging by remember(gridItemIndex) {
                         derivedStateOf { gridDragState.isItemDragging(gridItemIndex) }
                     }
@@ -514,11 +474,8 @@ fun TrackListScreen(
                             .let { if (isDragging) it else it.animateItem() }
                             .zIndex(if (isDragging) 1f else 0f)
                             // The drag layer only exists while a drag is live:
-                            // its lambda graphicsLayer is its own render node, and
                             // at rest every value it produces is the identity
-                            // transform — one extra layer per resting cell, every
-                            // scroll frame, for nothing. zIndex already reads
-                            // isDragging, so the gate adds no new recompositions.
+                            // transform.
                             .then(
                                 if (isDragging) {
                                     Modifier.graphicsLayer {
@@ -580,8 +537,6 @@ fun TrackListScreen(
                                         onDragEnd = {
                                             val from = dragOriginIndex
                                             val to = gridDragState.draggedIndex
-                                            // Scale-down starts with the release; the
-                                            // settle animation flies the item to its slot.
                                             dragReleased = true
                                             gridDragState.onDragEnd()
                                             dragOriginIndex = null
@@ -615,22 +570,11 @@ fun TrackListScreen(
                 }
             }
 
-            // Fast scrollbar for long track lists: the collection's own accent
-            // (artwork-derived, app-accent fallback). Hosts opting out
-            // ([showScrollbar] == false) and playlist edit mode (where the end
-            // strip must stay free for row interactions) withhold it. The
-            // thumb's track stays clear of the floating chrome zone above and
-            // the bottom-bar clearance below.
-            //
-            // Lifted into the shared-element overlay like the scroll top bar
-            // below (zIndex 0.5f: above the flying artwork at 0f, beneath the
-            // buttons at 1f): the flying hero artwork renders in that overlay
-            // ABOVE all in-place screen content, so a full-width immersive hero
-            // sweeps over the scrollbar mid-flight — hiding it on the open's
-            // last frames (until the overlay empties) and the close's first
-            // frames (until the artwork shrinks away). Lifted, it draws above
-            // the artwork for the whole flight; its alpha mirrors the host
-            // hierarchy's fades, which a lifted layer escapes.
+            // Fast scrollbar; lifted into the shared-element overlay (zIndex
+            // 0.5f: above the flying artwork at 0f, beneath the buttons at 1f)
+            // so the flying hero artwork doesn't sweep over it mid-flight. Its
+            // alpha mirrors the host hierarchy's fades, which a lifted layer
+            // escapes.
             if (showScrollbar && !editMode) {
                 FoamScrollbar(
                     state = gridState,
@@ -687,13 +631,7 @@ fun TrackListScreen(
                 }
 
                 itemsIndexed(shownTracks, key = { _, track -> track.id }) { index, track ->
-                    // +1: the hero header sits at list item 0; the drag-drop
-                    // state works in raw LazyColumn indices.
                     val listItemIndex = index + 1
-                    // derivedStateOf: draggedIndex is shared by every row, so reading it
-                    // directly in each row's scope would recompose the whole viewport on
-                    // every swap; the derived boolean only invalidates the rows whose
-                    // dragging state actually flips (the two rows involved in the swap).
                     val isDragging by remember(listItemIndex) {
                         derivedStateOf { listDragState.isItemDragging(listItemIndex) }
                     }
@@ -703,10 +641,6 @@ fun TrackListScreen(
                         modifier = Modifier
                             .let { if (isDragging) it else it.animateItem() }
                             .zIndex(if (isDragging) 1f else 0f)
-                            // Same drag-only gate as the grid branch above: the
-                            // lambda graphicsLayer is a render node per row whose
-                            // resting transform is the identity, so it only earns
-                            // its place while a drag is actually in flight.
                             .then(
                                 if (isDragging) {
                                     Modifier.graphicsLayer {
@@ -728,7 +662,6 @@ fun TrackListScreen(
                             track = track,
                             onClick = { onRowClick(index) },
                             onLongClick = if (editMode) {
-                                // The track actions modal stays closed while editing.
                                 ({ })
                             } else {
                                 null
@@ -791,22 +724,6 @@ fun TrackListScreen(
                 item(key = "list_bottom_spacer") { Spacer(modifier = Modifier.height(LocalBottomBarClearance.current)) }
             }
 
-            // Fast scrollbar for long track lists: the collection's own accent
-            // (artwork-derived, app-accent fallback). Hosts opting out
-            // ([showScrollbar] == false) and playlist edit mode (where the end
-            // strip must stay free for row interactions) withhold it. The
-            // thumb's track stays clear of the floating chrome zone above and
-            // the bottom-bar clearance below.
-            //
-            // Lifted into the shared-element overlay like the scroll top bar
-            // below (zIndex 0.5f: above the flying artwork at 0f, beneath the
-            // buttons at 1f): the flying hero artwork renders in that overlay
-            // ABOVE all in-place screen content, so a full-width immersive hero
-            // sweeps over the scrollbar mid-flight — hiding it on the open's
-            // last frames (until the overlay empties) and the close's first
-            // frames (until the artwork shrinks away). Lifted, it draws above
-            // the artwork for the whole flight; its alpha mirrors the host
-            // hierarchy's fades, which a lifted layer escapes.
             if (showScrollbar && !editMode) {
                 FoamScrollbar(
                     state = listState,
@@ -827,17 +744,12 @@ fun TrackListScreen(
             }
         }
 
-        // The scroll top bar's subtle gradient above the scrolling list (whose
-        // own pixels fade transparent across the chrome zone), then the
-        // floating back/more row above THAT — for every hero layout. The row
-        // is lifted into the shared-element overlay during transitions so the
-        // flying artwork passes beneath the buttons; its alpha mirrors the
-        // host hierarchy's fades (see transitionAlpha above).
-        // Lifted into the overlay like the back row below (zIndex 0.5f: above the
-        // flying artwork at 0f, beneath the buttons at 1f) and multiplied by the
-        // nav/container flight alpha: drawn in place it sat in the status-bar
-        // strip outside the NavHost bounds and dropped out on the first frame of
-        // the close instead of fading with the screen.
+        // The scroll top bar's gradient above the scrolling list, then the
+        // floating back/more row above THAT. Both are lifted into the
+        // shared-element overlay during transitions and multiplied by the
+        // nav/container flight alpha (drawn in place, the top bar sits in the
+        // status-bar strip outside the NavHost bounds and drops out on the
+        // first frame of the close instead of fading with the screen).
         CollectionScrollTopBar(
             title = title,
             fraction = { topBarFraction() * transitionAlpha() },
@@ -891,11 +803,8 @@ fun TrackListScreen(
 }
 
 /**
- * The list's leading item: the full hero (artwork, texts and play pill) for
- * compact/normal layouts, [CollectionHeroImmersiveHeader] for the immersive
- * ones — the overlaid text block and play pill as real interactive list
- * content (its [CollectionHeroImmersiveHeader.onVisibleHeightPx] keeps the
- * hero artwork's scroll-away constant in sync).
+ * The list's leading item: the full hero for compact/normal layouts,
+ * [CollectionHeroImmersiveHeader] for the immersive ones.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -960,7 +869,7 @@ private fun TrackListHero(
     )
 }
 
-/** Static top bar of the track list: back arrow left, optional edit pencil + 3-dots organisation button right. */
+/** Static top bar: back arrow left, optional edit pencil + organisation button right. */
 @Composable
 private fun TrackListTopBarRow(
     onBack: () -> Unit,
@@ -983,7 +892,7 @@ private fun TrackListTopBarRow(
             modifier = Modifier
                 .size(32.dp)
                 .clickable {
-                    // While editing, back leaves edit mode before it leaves the screen.
+                    // While editing, back leaves edit mode before the screen.
                     if (editMode) onEditModeChange?.invoke(false) else onBack()
                 }
                 .padding(4.dp)
@@ -1028,6 +937,3 @@ private fun TrackListTopBarRow(
         }
     }
 }
-
-/** Scale-up applied to a track's grid cell while it is being dragged, for a "lifted" feel. */
-private const val GridDragLiftScale = 1.05f

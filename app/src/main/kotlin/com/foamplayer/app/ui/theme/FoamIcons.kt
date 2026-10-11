@@ -18,6 +18,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.foamplayer.app.data.settings.FoamIconStyle
 
+/** One app icon, per semantic role. */
 @Immutable
 data class FoamIconSet(
     val play: ImageVector,
@@ -40,6 +41,7 @@ data class FoamIconSet(
     val misc: ImageVector
 )
 
+/** The three icon styles and which one is active. */
 @Immutable
 data class FoamIcons(
     val solid: FoamIconSet,

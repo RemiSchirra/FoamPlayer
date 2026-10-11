@@ -51,11 +51,7 @@ class HomeViewModel @Inject constructor(
         playlistRepository.getRecommendedPlaylists()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /**
-     * Resolved covers per playlist id (custom image first, else the first
-     * track in custom order carrying embedded art, else absent = letter
-     * fallback), mirroring how the artist cards resolve their pictures.
-     */
+    /** Resolved covers per playlist id (custom image first, else first-track embedded art). */
     val playlistCovers: StateFlow<Map<Long, PlaylistCover>> =
         playlistRepository.getPlaylistCovers()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
@@ -70,20 +66,14 @@ class HomeViewModel @Inject constructor(
         trackRepository.getRecentlyPlayed()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /**
-     * Long-standing favorites: tracks with listening history whose last listen
-     * is older than [OldFavoritesCutoffMs] (plus never-played-but-liked ones),
-     * ranked by aggregate play count + likes — surfacing long-standing
-     * favorites rather than recent hits.
-     */
+    /** Long-standing favorites: listening history whose last listen is older than 14 days. */
     val oldFavoriteTracks: StateFlow<List<TrackEntity>> =
         trackRepository.getOldFavorites(System.currentTimeMillis() - OldFavoritesCutoffMs)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
-     * Artists ranked by the total plays of their songs. Artist names split on
-     * the app-wide "; " convention (the same rule as the repository's artist
-     * listings) with each credited share of a play counted once; artists
+     * Artists ranked by the total plays of their songs. Names split on the
+     * app-wide "; " convention with each credited share counted once; artists
      * without any play are not "favorites".
      */
     val favoriteArtists: StateFlow<List<FavoriteArtist>> =
@@ -109,24 +99,16 @@ class HomeViewModel @Inject constructor(
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /**
-     * Resolved pictures per artist name: a cached Spotify image when the scan
-     * found one, else the artist's first track with embedded art (both are
-     * automatic — no scan has to run for the fallback), for the
-     * favorite-artist cards and their see-all page.
-     */
+    /** Resolved pictures per artist name: a Spotify image or first-track embedded art. */
     val artistImages: StateFlow<Map<String, ArtistCover>> =
         artistCoverProvider.coversFlow(favoriteArtists.map { artists -> artists.map { it.name } })
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    // Long-press collection actions for the see-all pages, mirroring the browse
-    // screens: resolve the tracks behind a collection at action time.
-
-    /** One album's tracks in disc/track order (mirrors TrackDao.getTracksByAlbum). */
+    /** One album's tracks in disc/track order. */
     suspend fun tracksForAlbum(album: String): List<TrackEntity> =
         trackRepository.getTracksByAlbum(album).first()
 
-    /** Tracks naming [artist] as artist or album artist, in album order (mirrors the browse screen's matching). */
+    /** Tracks naming [artist] as artist or album artist, in album order. */
     suspend fun tracksForArtist(artist: String): List<TrackEntity> = withContext(Dispatchers.Default) {
         trackRepository.getAllTracks().first()
             .filter { it.artist == artist || it.albumArtist == artist }

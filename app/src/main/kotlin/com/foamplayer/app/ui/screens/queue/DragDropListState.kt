@@ -26,13 +26,13 @@ import kotlinx.coroutines.launch
 /** Distance from the top/bottom of the list's viewport that triggers autoscroll. */
 private val AUTO_SCROLL_EDGE_ZONE = 56.dp
 
-/** How far the list scrolls per autoscroll tick, in px. */
+/** List scroll per autoscroll tick, in px. */
 private const val AUTO_SCROLL_STEP_PX = 32f
 
-/** How often an autoscroll tick fires, in ms. */
+/** Autoscroll tick interval, in ms. */
 private const val AUTO_SCROLL_INTERVAL_MS = 16L
 
-/** Duration of the settle animation played when the drag is released, in ms. */
+/** Duration of the settle animation played when the drag is released. */
 private const val SETTLE_DURATION_MS = 200
 
 @Composable
@@ -49,14 +49,10 @@ fun rememberDragDropListState(
 }
 
 /**
- * Drives a draggable-reorderable LazyColumn:
- *  - Tracks the item currently being dragged and its visual (clamped) offset.
- *  - Clamps ("locks") the dragged item to the top/bottom edge of the list's viewport.
- *  - Swaps the dragged item with whichever item it's currently hovering over, via [onMove].
- *  - Autoscrolls the list when the drag is locked at an edge but more content exists
- *    beyond that edge.
- *  - Settles the dragged item into its final slot with a short animation on release,
- *    instead of snapping there instantly.
+ * Drives a draggable-reorderable LazyColumn: tracks the dragged item and its
+ * clamped visual offset, swaps with the hovered item via [onMove],
+ * autoscrolls at the viewport edges while more content exists beyond, and
+ * settles the item into its final slot with a short animation on release.
  */
 class DragDropListState(
     private val lazyListState: LazyListState,
@@ -67,7 +63,7 @@ class DragDropListState(
 ) {
     private data class ItemSnapshot(val index: Int, val offset: Int, val size: Int)
 
-    /** Index of the item currently being dragged, or null if nothing is dragging. */
+    /** Index of the item currently being dragged, or null. */
     var draggedIndex by mutableStateOf<Int?>(null)
         private set
 
@@ -151,7 +147,7 @@ class DragDropListState(
         }
     }
 
-    /** Recomputes clamped position, swap target, and autoscroll state from current inputs. */
+    /** Recomputes clamped position, swap target and autoscroll state. */
     private fun evaluate() {
         val current = anchor ?: return
         val layoutInfo = lazyListState.layoutInfo
@@ -161,40 +157,39 @@ class DragDropListState(
         val rawTop = current.offset + draggedDistance
         val maxTop = (viewportEnd - current.size).toFloat().coerceAtLeast(viewportStart.toFloat())
 
-        // Lock the dragged item's visible position within the list's own bounds,
-        // not the raw finger position.
+        // Lock the dragged item to the list's own bounds, not the finger's.
         val clampedTop = rawTop.coerceIn(viewportStart.toFloat(), maxTop)
         draggingItemTop = clampedTop
 
-        // Swap with whichever visible item the dragged item's center now overlaps.
+        // Swap with whichever visible item the dragged center now overlaps.
         val draggedCenter = clampedTop + current.size / 2f
         val target = layoutInfo.visibleItemsInfo.firstOrNull { info ->
             draggedCenter >= info.offset && draggedCenter <= info.offset + info.size
         }
         val fromIndex = draggedIndex
         if (target != null && fromIndex != null && target.index != fromIndex && canMove(fromIndex, target.index)) {
-            // 1. Record the current scroll position before the list mutates
+            // Record the scroll position before the list mutates.
             val firstIndex = lazyListState.firstVisibleItemIndex
             val firstOffset = lazyListState.firstVisibleItemScrollOffset
 
             onMove(fromIndex, target.index)
             draggedIndex = target.index
-            // Re-anchor so the offset math stays correct against the item's new slot.
+            // Re-anchor so the offset math stays correct against the new slot.
             anchor = ItemSnapshot(target.index, target.offset, target.size)
 
-            // FIX 1: Use rawTop instead of clampedTop to preserve the out-of-bounds
-            // finger position. This stops the dragged item from detaching from your finger.
+            // rawTop (not clampedTop): preserves the out-of-bounds finger
+            // position, so the item doesn't detach from the finger after a swap.
             draggedDistance = rawTop - target.offset
 
-            // FIX 2: If we swapped the top visible item, force LazyColumn to maintain
-            // the current index/offset rather than jumping to follow the item's key.
+            // If we swapped the top visible item, force LazyColumn to keep the
+            // current index/offset rather than jumping to follow the key.
             if (firstIndex == fromIndex || firstIndex == target.index) {
                 lazyListState.requestScrollToItem(firstIndex, firstOffset)
             }
         }
 
-        // Materializing LazyListLayoutInfo copies the visible-items snapshot, so pass
-        // the one we already read in evaluate() instead of re-reading per autoscroll tick.
+        // Materializing LazyListLayoutInfo copies the visible-items snapshot, so
+        // pass the one already read instead of re-reading per autoscroll tick.
         updateAutoScroll(layoutInfo, rawTop, rawTop + current.size, viewportStart, viewportEnd)
     }
 
@@ -230,12 +225,10 @@ class DragDropListState(
             while (isActive) {
                 val consumed = lazyListState.scrollBy(step)
 
-                // FIX: Offset the drag distance by the scroll amount so the item's
-                // rawTop remains constant relative to the screen.
+                // Offset the drag distance by the scroll amount so the item's
+                // raw position stays constant relative to the screen, and keep
+                // the anchor in sync so it stays visually locked at the edge.
                 draggedDistance += consumed
-
-                // Keep the anchor's frame of reference in sync with what just scrolled,
-                // so the item stays visually locked at the edge instead of drifting.
                 anchor?.let { anchor = it.copy(offset = it.offset - consumed.toInt()) }
 
                 evaluate()

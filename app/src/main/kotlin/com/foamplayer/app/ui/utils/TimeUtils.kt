@@ -22,7 +22,7 @@ object TimeUtils {
         }
     }
 
-    /** Compact "m:ss" (or "h:mm:ss") duration, used by the RowBig density's third line. */
+    /** Compact "m:ss" (or "h:mm:ss") duration. */
     fun formatDurationCompact(durationMs: Long): String {
         val totalSeconds = durationMs / 1000
         val hours = totalSeconds / 3600

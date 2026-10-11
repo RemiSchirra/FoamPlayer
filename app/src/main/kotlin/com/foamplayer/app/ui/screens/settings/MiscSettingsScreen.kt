@@ -31,7 +31,6 @@ import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -74,13 +73,11 @@ fun MiscSettingsScreen(
     val isDiscordEnabled = settings.discordPresenceEnabled
     val isLoggedIn = session != null
 
-    // Animate show/hide only once the user has flipped a switch; on first
-    // composition (and while settings load) sections appear/disappear instantly.
+    // Animate show/hide only after a user toggle; first composition renders instantly.
     var animateChanges by remember { mutableStateOf(false) }
 
-    // Re-checked whenever the screen comes back to the foreground so
-    // returning from the system permission screen instantly reflects the
-    // (revoked or granted) overlay state.
+    // Re-checked on ON_RESUME so returning from the system permission screen
+    // reflects the overlay state immediately.
     var overlayGranted by remember { mutableStateOf(viewModel.canDrawOverlays(context)) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -177,8 +174,6 @@ fun MiscSettingsScreen(
                         )
                     }
                 }
-                // Fast lock: end the lock-display session after 5s of inactivity;
-                // only meaningful while the lock-screen display itself is on.
                 SettingsExpandVisibility(
                     visible = settings.displayOnLockScreen,
                     animate = animateChanges
@@ -364,6 +359,7 @@ fun MiscSettingsScreen(
     }
 }
 
+/** [AnimatedVisibility] whose transitions are disabled until [animate] is first set. */
 @Composable
 private fun SettingsExpandVisibility(
     visible: Boolean,
@@ -380,6 +376,7 @@ private fun SettingsExpandVisibility(
     )
 }
 
+/** Filled accent button used for Discord login/logout and permission entries. */
 @Composable
 private fun DiscordActionButton(
     label: String,
@@ -414,6 +411,7 @@ private fun DiscordActionButton(
     }
 }
 
+/** Status line under the Discord section: spinner, check or error icon + text. */
 @Composable
 private fun DiscordStatusRow(
     text: String,

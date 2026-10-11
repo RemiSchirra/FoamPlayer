@@ -46,9 +46,7 @@ private const val AlbumArtFadeInDurationMs = 200
 
 /**
  * What an artwork surface depicts. Drives the placeholder icon shown while
- * the image loads: the music note for generic/track art, the album disc for
- * albums, a person for artists. Adding a collection kind means adding one
- * enum value and one mapping arm -- no component or call-site churn.
+ * the image loads.
  */
 enum class MediaArtKind {
     /** Generic or track artwork: the default music note. */
@@ -69,29 +67,19 @@ fun mediaArtPlaceholderIcon(kind: MediaArtKind): ImageVector = when (kind) {
 }
 
 /**
- * Fraction of the artwork surface the no-art music note spans (see
- * [NoAlbumArtPlaceholder]). A proportion of the CURRENT bounds, not a fixed
- * dp value: shared-element flights re-measure the drawn side's content at the
- * interpolated bounds every frame, so the note scales with the flying artwork
- * instead of holding one endpoint's dp size.
+ * Fraction of the artwork surface the no-art music note spans ([NoAlbumArtPlaceholder]).
+ * A proportion of the CURRENT bounds, not a fixed dp value, so shared-element
+ * flights scale the note with the flying artwork.
  */
 private const val NoAlbumArtNoteFraction = 0.7f
 
 /**
- * Image-like placeholder for artwork surfaces that have NO artwork at all --
- * as opposed to [AlbumArtImage]'s placeholder, which only covers the window
- * while real artwork loads.
- *
- * The music note is laid out at [NoAlbumArtNoteFraction] of the CURRENT
- * bounds, not at a fixed dp size. That is what makes it behave like an image
- * rather than an icon: shared-element flights (44dp mini slot <-> 48dp subview
- * header <-> full-screen hero) re-measure the becoming-visible side's content
- * at the interpolated bounds every frame, so a bounds-fraction note scales
- * continuously with the flying artwork. A fixed-dp icon cannot do that --
- * it kept the size computed for the resting endpoint and snapped the moment
- * a flight started or ended. The baked-in surfaceVariant background also
- * makes every endpoint's rest look identical, so the slot's shade no longer
- * flips when a transition's [placeholderColor] hands over at settle.
+ * Image-like placeholder for artwork surfaces that have NO artwork at all (as
+ * opposed to [AlbumArtImage]'s loading placeholder). The note is laid out at
+ * [NoAlbumArtNoteFraction] of the current bounds, which makes it behave like
+ * an image during shared-element flights: it scales continuously with the
+ * flying artwork instead of holding one endpoint's dp size. The baked-in
+ * background keeps every endpoint's rest look identical.
  */
 @Composable
 fun NoAlbumArtPlaceholder(modifier: Modifier = Modifier) {
@@ -110,36 +98,19 @@ fun NoAlbumArtPlaceholder(modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * Fraction of the artwork surface the no-art title initial (the letter
- * monogram) spans, see [NoAlbumArtLetter]. Matches the compact hero's
- * historic 48sp-in-120dp look, so hero endpoints keep their rest size; the
- * [NoAlbumArtLetterMaxSize] cap keeps wide surfaces (full-width normal and
- * immersive heroes) at that same 48sp instead of a screen-filling glyph.
- */
+/** Fraction of the artwork surface the no-art title initial spans. */
 private const val NoAlbumArtLetterFraction = 0.4f
 
-/** Upper sp bound of the no-art letter, see [NoAlbumArtLetter]. */
+/** Upper sp bound of the no-art letter, so wide surfaces don't grow a giant glyph. */
 private val NoAlbumArtLetterMaxSize = 48.sp
 
 /**
- * The letter monogram shown on artwork surfaces that have NO artwork: the
- * collection title's initial, centered on the surface (the caller draws the
- * surfaceVariant background behind it).
- *
- * The glyph is drawn in the DRAW PHASE at [NoAlbumArtLetterFraction] of the
- * surface's CURRENT min dimension, capped at [NoAlbumArtLetterMaxSize]. Sizing
- * from current bounds is what makes it behave like an image rather than a
- * fixed-sp text: shared-element flights (row <-> detail hero) re-render the
- * drawn side's content against the interpolated bounds every frame, so a
- * bounds-fraction letter scales continuously with the flying artwork surface.
- * A fixed-sp BasicText cannot do that -- it held one endpoint's sp size for
- * the whole flight and popped to the other endpoint's size the instant a
- * flight started or settled (the letter visibly jumping while its surface
- * flew correctly). The 48sp cap reproduces the compact hero's historic
- * monogram exactly and stops normal/immersive heroes (much wider than
- * 120dp) from growing a giant glyph; every surface <= 120dp across renders
- * at exactly 40% of its own size, so all flight endpoints agree at settle.
+ * The title's initial, centered on an artwork surface with no artwork (the
+ * caller draws the surfaceVariant background). The glyph is drawn in the DRAW
+ * PHASE at [NoAlbumArtLetterFraction] of the surface's current min dimension,
+ * capped at [NoAlbumArtLetterMaxSize] — bounds-fraction sizing makes it scale
+ * continuously during shared-element flights instead of popping between fixed
+ * sizes.
  */
 @Composable
 fun NoAlbumArtLetter(
@@ -180,19 +151,15 @@ fun NoAlbumArtLetter(
 
 /**
  * Placeholder kind inherited by every [AlbumArtImage] below this point in the
- * composition; defaults to the music note. Screens and sections set it once
- * through [MediaArtKindScope] instead of threading placeholder icons through
- * every component between them and the image.
+ * composition; defaults to the music note. Set once through [MediaArtKindScope]
+ * instead of threading placeholder icons through every component.
  */
 val LocalMediaArtKind = staticCompositionLocalOf { MediaArtKind.TRACK }
 
 /**
  * Overrides the placeholder kind of every [AlbumArtImage] composed inside
  * [content] (inner scopes override outer ones). Screens hosting one collection
- * kind wrap themselves once -- an artist page scopes itself to
- * [MediaArtKind.ARTIST] and re-scopes only its album grid to
- * [MediaArtKind.ALBUM] -- while mixed surfaces (search results, home cards)
- * wrap each self-describing item.
+ * kind wrap themselves once; mixed surfaces wrap each self-describing item.
  */
 @Composable
 fun MediaArtKindScope(
@@ -205,38 +172,23 @@ fun MediaArtKindScope(
 /**
  * Album artwork with a placeholder icon and a fade-in for real loads.
  *
- * While the artwork loads, the placeholder resolved from [placeholderKind]
- * (or the surrounding [LocalMediaArtKind] scope when null) shows through: the
- * music note by default, or the collection's own icon on surfaces whose kind
- * is known -- the album disc for albums, a person for artists -- so the
- * placeholder reads as the collection rather than a generic track.
+ * Coil emits Loading for EVERY request — memory-cache hits included — so the
+ * fade is gated on the RESULT's data source: a [DataSource.MEMORY_CACHE] result
+ * snaps back to full alpha synchronously in the same composition pass, so
+ * shared-element flights and revisited rows draw the image on their first
+ * frame with no placeholder flash. Only a genuine load (disk / embedded art
+ * decode) fades in over 200ms.
  *
- * Coil emits [AsyncImagePainter.State.Loading] for EVERY request -- memory-cache
- * hits included -- before delivering the result (RealImageLoader calls the
- * target's onStart unconditionally), so the fade is gated on the RESULT's data
- * source rather than on Loading: a [DataSource.MEMORY_CACHE] result snaps back
- * to full alpha 1f synchronously inside the same composition pass, so shared
- * element flights (row -> album header) and revisited list rows draw the image
- * on their very first frame with no placeholder flash and no fade. Only a
- * genuine load (disk / embedded art decode) shows the placeholder and fades
- * the decoded image in over 200ms when it arrives.
- *
- * The placeholder sits BEHIND the image and is removed on success, so the fade
- * runs cleanly over the artwork surface; on error the placeholder stays
- * visible. Every state is keyed on the model so recycled lazy-list rows reset
- * for their new item instead of inheriting the previous item's fade state.
+ * The placeholder sits behind the image and is removed on success; on error it
+ * stays visible. Every state is keyed on the model so recycled lazy rows reset
+ * for their new item.
  *
  * Scroll-cost notes (this composable is on every media-list row):
- *  - The Loading branch only writes state it is actually CHANGING. Coil fires
- *    Loading for every cache hit too; a no-op write would still invalidate the
- *    reading scopes, and a Success for a cache hit would write them right
- *    back -- two recompositions per row per scroll entry for zero visual
- *    difference. Guarding on the current values makes a cached hit write
- *    nothing at all.
- *  - The alpha `graphicsLayer` lambda is attached ONLY while a fade is running
- *    (or parked at a non-1 alpha). The lambda variant unconditionally promotes
- *    the image to its own render layer -- an extra offscreen buffer per row,
- *    even at full alpha. At rest the modifier chain is layer-free.
+ *  - The Loading branch only writes state it is actually changing — a cache
+ *    hit would otherwise invalidate readers twice per row per scroll entry.
+ *  - The alpha graphicsLayer is attached only while a fade runs; at rest the
+ *    modifier chain is layer-free (the lambda variant promotes every row to
+ *    its own render layer even at full alpha).
  */
 @Composable
 fun AlbumArtImage(
@@ -251,11 +203,10 @@ fun AlbumArtImage(
     val alphaState = remember(model) { mutableFloatStateOf(1f) }
     var loading by remember(model) { mutableStateOf(false) }
     var showPlaceholder by remember(model) { mutableStateOf(false) }
-    // A fade is in flight: keep the alpha layer attached so its frames are
-    // draw-only, then drop the layer entirely once the art rests at full alpha.
+    // A fade in flight: keep the alpha layer attached, then drop it once the
+    // art rests at full alpha.
     var fadeActive by remember(model) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    // Explicit kinds win; otherwise the surrounding MediaArtKindScope decides.
     val placeholderIcon = mediaArtPlaceholderIcon(placeholderKind ?: LocalMediaArtKind.current)
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -282,10 +233,6 @@ fun AlbumArtImage(
             onState = { state ->
                 when (state) {
                     is AsyncImagePainter.State.Loading -> {
-                        // A request is in flight. Coil ALSO emits this for
-                        // memory-cache hits; the Success branch restores the
-                        // rest look there. Writing only real changes keeps a
-                        // cache hit from invalidating anything.
                         if (!loading) loading = true
                         if (!showPlaceholder) showPlaceholder = true
                         if (alphaState.floatValue != 0f) alphaState.floatValue = 0f
@@ -311,8 +258,7 @@ fun AlbumArtImage(
                                 alphaState.floatValue = 1f
                             }
                         } else {
-                            // Memory-cache hit: draw at full alpha immediately,
-                            // so the image is on the very first drawn frame.
+                            // Memory-cache hit: draw at full alpha immediately.
                             loading = false
                             fadeActive = false
                             if (alphaState.floatValue != 1f) alphaState.floatValue = 1f

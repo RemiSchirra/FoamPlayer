@@ -41,8 +41,7 @@ data class FolderContent(
 /**
  * Process-wide memo of each track path's document id: parsing a content URI
  * per track was the dominant cost of every folder listing. A path is immutable
- * for a given track row, so the parse happens once per path per process and
- * folder grouping collapses to a cheap prefix pass.
+ * for a given track row, so the parse happens once per path per process.
  */
 private object TrackDocumentIds {
     private val cache = ConcurrentHashMap<String, String>()
@@ -62,11 +61,10 @@ private object TrackDocumentIds {
 }
 
 /**
- * Process-wide cache of built folder listings, shared by the per-destination
- * BrowseViewModels: every folder screen is a new ViewModel, so without this
- * each click rebuilt its listing from scratch. Entries are keyed by folder
- * path and remember which tracks snapshot they were built from, so a hit is
- * known to be current (the live Room stream still re-group on real changes).
+ * Process-wide cache of built folder listings: every folder screen is a new
+ * ViewModel, so without this each click rebuilt its listing from scratch.
+ * Entries remember which tracks snapshot they were built from, so a hit is
+ * known to be current.
  */
 private object FolderListingCache {
     private class Entry(
@@ -110,13 +108,7 @@ class BrowseViewModel @Inject constructor(
     val artists: StateFlow<List<String>> = trackRepository.getAllArtists()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /**
-     * Resolved pictures per artist name: a cached Spotify image when the scan
-     * found one, else the artist's first track with embedded art (both are
-     * automatic — no scan has to run for the fallback), shown in the artist
-     * lists. Rebuilt whenever the scan lands new files, so rows fill in live
-     * while it runs.
-     */
+    /** Resolved pictures per artist name; rebuilt live as the scan finds new files. */
     val artistImages: StateFlow<Map<String, ArtistCover>> =
         artistCoverProvider.coversFlow(artists)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
@@ -146,7 +138,7 @@ class BrowseViewModel @Inject constructor(
             // Seed from the process-wide snapshot so revisits render instantly;
             // the live query then corrects/updates the list. The snapshot
             // filter+sort is an O(n) full-library pass — keep it off the main
-            // dispatcher or the destination screen's first frame waits on it.
+            // dispatcher.
             if (_genreTracks.value.isEmpty()) {
                 _genreTracks.value = withContext(Dispatchers.Default) {
                     trackRepository.allTracksSnapshot().filter { track ->
@@ -182,9 +174,7 @@ class BrowseViewModel @Inject constructor(
     /**
      * Builds [folderPath]'s listing synchronously from the last warm snapshot
      * so the destination screen has content on its very first frame. Called
-     * from the parent screen's row click, right before navigating; with no
-     * warm snapshot yet (cold start) it is a no-op and the destination falls
-     * back to its async load.
+     * from the parent screen's row click, right before navigating.
      */
     fun precacheFolder(folderPath: String) {
         val tracks = FolderListingCache.latestTracks ?: return
@@ -194,9 +184,7 @@ class BrowseViewModel @Inject constructor(
     fun loadFolderContent(path: String?) {
         folderContentJob?.cancel()
         // Frame-1 fast path: publish any previously built listing for this
-        // exact folder before the first frame (filled by a previous visit or
-        // by [precacheFolder] at click time). The collection below then keeps
-        // it current; the document-id memo makes rebuilds near-free.
+        // exact folder before the first frame.
         FolderListingCache.contentFor(path)?.let { _folderContent.value = it }
         folderContentJob = viewModelScope.launch {
             // Subfolder listings group by document-id prefix and never consult
@@ -214,9 +202,8 @@ class BrowseViewModel @Inject constructor(
                 FolderListingCache.put(path, built, tracks)
                 _folderContent.value = built
             }
-            // Then keep observing the live stream (re-group on library changes).
-            // Its first emission is the same list instance as the snapshot just
-            // used, so skip it rather than re-grouping the whole library.
+            // Keep observing the live stream; its first emission is the same
+            // list instance as the snapshot just used, so skip it.
             trackRepository.getAllTracks().collect { liveTracks ->
                 if (liveTracks === tracks) return@collect
                 val rebuilt = withContext(Dispatchers.Default) {
@@ -229,25 +216,25 @@ class BrowseViewModel @Inject constructor(
     }
 
     // Long-press collection actions: resolve the tracks behind a browsable
-    // collection at action time. Each mirrors the DAO query/detail screen the
-    // collection is browsed through, so queued lists match what the user sees.
+    // collection at action time, mirroring the DAO query the collection is
+    // browsed through, so queued lists match what the user sees.
 
-    /** One album in disc/track order (mirrors TrackDao.getTracksByAlbum). */
+    /** One album in disc/track order. */
     suspend fun tracksForAlbum(album: String): List<TrackEntity> =
         trackRepository.getTracksByAlbum(album).first()
 
-    /** Tracks naming [artist] as artist or album artist, in album order (mirrors TrackDao.getAlbumsByArtist's matching). */
+    /** Tracks naming [artist] as artist or album artist, in album order. */
     suspend fun tracksForArtist(artist: String): List<TrackEntity> = withContext(Dispatchers.Default) {
         trackRepository.getAllTracks().first()
             .filter { it.artist == artist || it.albumArtist == artist }
             .sortedWith(compareBy({ it.album }, { it.discNumber }, { it.trackNumber }, { it.title }))
     }
 
-    /** Tracks tagging [genre] among their "; "-separated genres (mirrors TrackDao.getTracksByGenre's LIKE matching). */
+    /** Tracks tagging [genre] among their "; "-separated genres. */
     suspend fun tracksForGenre(genre: String): List<TrackEntity> =
         trackRepository.getTracksByGenre(genre).first()
 
-    /** One year's tracks in album order (mirrors TrackDao.getTracksByYear). */
+    /** One year's tracks in album order. */
     suspend fun tracksForYear(year: Int): List<TrackEntity> =
         trackRepository.getTracksByYear(year).first()
 

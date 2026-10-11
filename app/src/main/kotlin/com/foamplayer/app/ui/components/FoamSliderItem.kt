@@ -25,7 +25,7 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.roundToInt
 
-/** Settings row with a title, live value readout and a Material slider (see [FoamSliderStateItem] for the hoisted variant). */
+/** Settings row with a title, live value readout and a Material slider. */
 @Composable
 fun FoamSliderItem(
     title: String,
@@ -44,7 +44,6 @@ fun FoamSliderItem(
             .fillMaxWidth()
             .padding(vertical = FoamDimens.spacingMedium, horizontal = FoamDimens.paddingMedium)
     ) {
-        // Header : title, description, and current value
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -82,7 +81,6 @@ fun FoamSliderItem(
             )
         }
 
-        // Min max footer
         minMaxDisplay?.let { (min, max) ->
             Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
             Row(
@@ -97,14 +95,13 @@ fun FoamSliderItem(
 }
 
 /**
- * Self-contained variant of [FoamSliderItem] for the commit-on-release settings
- * pattern: the drag value lives in this row's own composition scope, so dragging
+ * Self-contained variant of [FoamSliderItem] for the commit-on-release
+ * pattern: the drag value lives in this row's own scope, so dragging
  * recomposes only this row instead of the whole screen.
  *
- * [onValueChange] observes every drag frame, BEFORE the commit-on-release write:
- * callers that render a live preview of the value (e.g. the background settings
- * screen feeding the app-wide backdrop) use it to update the preview without
- * round-tripping through DataStore on each pointer event.
+ * [onValueChange] observes every drag frame, BEFORE the commit-on-release
+ * write — callers rendering a live preview use it without round-tripping
+ * through DataStore on each pointer event.
  */
 @Composable
 fun FoamSliderStateItem(
@@ -120,8 +117,8 @@ fun FoamSliderStateItem(
     onValueChange: ((Float) -> Unit)? = null
 ) {
     var localValue by remember { mutableFloatStateOf(initialValue) }
-    // Re-sync when the underlying setting changes from elsewhere (e.g. a
-    // DataStore write landing after the commit).
+    // Re-sync when the setting changes from elsewhere (e.g. a DataStore write
+    // landing after the commit).
     LaunchedEffect(initialValue) { localValue = initialValue }
 
     FoamSliderItem(
