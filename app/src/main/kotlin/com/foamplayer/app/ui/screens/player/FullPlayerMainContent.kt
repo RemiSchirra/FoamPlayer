@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -40,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,6 +75,7 @@ import com.foamplayer.app.ui.components.WaveformSeekBar
 import com.foamplayer.app.ui.components.onSeekBarReleased
 import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.MarqueeText
+import com.foamplayer.app.ui.components.MarqueeTextState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
@@ -81,6 +84,8 @@ import com.foamplayer.app.ui.utils.pressShrink
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import com.foamplayer.app.ui.utils.rememberWaveform
 import kotlin.math.abs
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 
 /** Layer 1 content: handle, hi-res badge, the track hero pager, playback controls, subview shortcuts. */
@@ -204,6 +209,12 @@ internal fun SharedTransitionScope.MainPlayerContent(
     }
 }
 
+/** Title + artist/album marquee state of one queue entry. */
+private class EntryMarqueeStates {
+    val title = MarqueeTextState()
+    val subtitle = MarqueeTextState()
+}
+
 /**
  * Renders the album art + title/artist for the current queue, and drives the transition
  * between them and the mini player / subview header when swiping.
@@ -244,6 +255,36 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 abs(offset) < 1f
             }
         }
+    }
+
+    // Marquee scroll state per queue ENTRY, shared by the pager page and the hero overlay
+    // showing that entry: the page drives it (it is composed for as long as the entry is
+    // on screen, swiping or not), the hero only renders it. When a swipe commits and the
+    // hero re-anchors on the incoming entry, it therefore continues from the exact scroll
+    // offset the page had -- and the outgoing hero hands over to its page the same way.
+    val marqueeStates = remember { mutableMapOf<Long, EntryMarqueeStates>() }
+    val entryKey = { page: Int -> queueEntryIds.getOrNull(page) ?: -(page + 1).toLong() }
+    val statesFor = { key: Long -> marqueeStates.getOrPut(key) { EntryMarqueeStates() } }
+    LaunchedEffect(queueEntryIds) { marqueeStates.keys.retainAll(queueEntryIds.toSet()) }
+
+    // A swipe starting rewinds every marquee except the page being left: the neighbors
+    // are composed (prefetched) before the finger moves, so their pause timer may already
+    // be running or they may be mid-scroll. After this, an incoming title only starts
+    // scrolling if the swipe is held long enough for its own pause to elapse.
+    val currentEntryKey by rememberUpdatedState(entryKey)
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.isScrollInProgress }
+            .distinctUntilChanged()
+            .filter { it }
+            .collect {
+                val leavingKey = currentEntryKey(pagerState.currentPage)
+                marqueeStates.forEach { (key, states) ->
+                    if (key != leavingKey) {
+                        states.title.restart()
+                        states.subtitle.restart()
+                    }
+                }
+            }
     }
 
     val miniImageSize = 44.dp
@@ -292,10 +333,11 @@ internal fun SharedTransitionScope.TrackHeroPager(
             // Keyed by queue ENTRY id, not track id: the same track can legitimately
             // appear twice in the queue ("play next" on the playing track), and
             // duplicate keys crash the pager.
-            key = { page -> queueEntryIds.getOrNull(page) ?: -(page + 1).toLong() }
+            key = { page -> entryKey(page) }
         ) { page ->
             val pageTrack = queue.getOrNull(page) ?: return@HorizontalPager
             val isAnchorPage = page == anchorPage
+            val pageMarquee = statesFor(entryKey(page))
 
             fun anchorPageAlpha(): Float =
                 if (!isAnchorPage) {
@@ -360,6 +402,10 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     Column(
                         modifier = Modifier
                             .weight(1f)
+                            // While the hero overlay shows this (anchor) page's text, hide the
+                            // page's copy: both render the same shared marquee state, so
+                            // drawing both would only double the glyphs.
+                            .graphicsLayer { alpha = if (isAnchorPage && showHero) 0f else 1f }
                             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
                             .combinedClickable(
                                 interactionSource = remember { MutableInteractionSource() },
@@ -373,13 +419,13 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             text = pageTrack.title,
                             style = FoamTheme.typography.titleLarge,
                             mode = marqueeMode,
-                            marqueeEnabled = false
+                            state = pageMarquee.title
                         )
                         MarqueeText(
                             text = stringResource(R.string.artist_album_separator, pageTrack.artist, pageTrack.album),
                             style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
                             mode = marqueeMode,
-                            marqueeEnabled = false
+                            state = pageMarquee.subtitle
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
@@ -393,6 +439,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
         }
 
         if (showHero) {
+            val heroMarquee = statesFor(entryKey(anchorPage))
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
@@ -531,6 +578,8 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             text = track.title,
                             style = FoamTheme.typography.titleLarge,
                             mode = marqueeMode,
+                            state = heroMarquee.title,
+                            drivesState = false,
                             modifier = Modifier
                                 .sharedBounds(
                                     rememberSharedContentState(key = "track_title_${track.id}"),
@@ -545,6 +594,8 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             text = stringResource(R.string.artist_album_separator, track.artist, track.album),
                             style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
                             mode = marqueeMode,
+                            state = heroMarquee.subtitle,
+                            drivesState = false,
                             modifier = Modifier
                                 .sharedBounds(
                                     rememberSharedContentState(key = "track_artist_${track.id}"),
