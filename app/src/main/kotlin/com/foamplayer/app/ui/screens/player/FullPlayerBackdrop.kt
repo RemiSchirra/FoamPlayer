@@ -41,8 +41,9 @@ import coil.request.ImageRequest
 import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
-import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
+import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
+import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.buildGradientImage
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -184,6 +185,7 @@ internal fun DynamicAlbumArtBackground(
     fun artRequest(path: String, isEmbedded: Boolean) = ImageRequest.Builder(context)
         .data(if (isEmbedded) EmbeddedAlbumArt(path.toUri()) else path)
         .size(AlbumArtRequestSize)
+        .memoryCacheKey(albumArtMemoryCacheKey(path))
         .crossfade(300)
         .build()
 
@@ -375,6 +377,7 @@ internal fun AlbumArtBackdrop(
                             ImageRequest.Builder(context)
                                 .data(EmbeddedAlbumArt(frontArtPath.toUri()))
                                 .size(AlbumArtRequestSize)
+                                .memoryCacheKey(albumArtMemoryCacheKey(frontArtPath))
                                 .crossfade(false)
                                 .build()
                         }
@@ -390,6 +393,7 @@ internal fun AlbumArtBackdrop(
                             ImageRequest.Builder(context)
                                 .data(EmbeddedAlbumArt(backArtPath.toUri()))
                                 .size(AlbumArtRequestSize)
+                                .memoryCacheKey(albumArtMemoryCacheKey(backArtPath))
                                 .crossfade(false)
                                 .build()
                         }
@@ -530,6 +534,7 @@ private fun AlbumArtImagePair(
     fun request(path: String) = ImageRequest.Builder(context)
         .data(EmbeddedAlbumArt(path.toUri()))
         .size(AlbumArtRequestSize)
+        .memoryCacheKey(albumArtMemoryCacheKey(path))
         .crossfade(false)
         .build()
 
@@ -596,6 +601,7 @@ private fun CanvasAwareArtPair(
     fun request(path: String) = ImageRequest.Builder(context)
         .data(EmbeddedAlbumArt(path.toUri()))
         .size(AlbumArtRequestSize)
+        .memoryCacheKey(albumArtMemoryCacheKey(path))
         .crossfade(false)
         .build()
 
