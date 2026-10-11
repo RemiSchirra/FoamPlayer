@@ -588,11 +588,14 @@ fun EqMiniMap(
                                     val scroll = latestScroll ?: return@detectTapGestures
                                     val span = viewportSpanPx(density, latestBandCount)
                                     if (span <= 0f) return@detectTapGestures
-                                    val spacingPx = with(density) { BAND_SPACING.toPx() }
-                                    val target = (position.x / size.width) * span -
-                                            latestViewportWidth / 2f - spacingPx / 2f
+                                    val w = size.width.toFloat()
+                                    val travel = w - viewportThumbWidth(w, latestViewportWidth, span)
+                                    if (travel <= 0f) return@detectTapGestures
+                                    // Center the thumb on the tap, then convert thumb travel to scroll.
+                                    val thumbW = w - travel
+                                    val progress = ((position.x - thumbW / 2f) / travel).coerceIn(0f, 1f)
                                     scope.launch {
-                                        scroll.scrollTo(target.roundToInt().coerceIn(0, scroll.maxValue))
+                                        scroll.scrollTo((progress * scroll.maxValue).roundToInt())
                                     }
                                 }
                             )
@@ -604,7 +607,11 @@ fun EqMiniMap(
                                     val scroll = latestScroll ?: return@detectHorizontalDragGestures
                                     val span = viewportSpanPx(density, latestBandCount)
                                     if (span <= 0f) return@detectHorizontalDragGestures
-                                    val delta = dragAmount * span / size.width
+                                    val w = size.width.toFloat()
+                                    val travel = w - viewportThumbWidth(w, latestViewportWidth, span)
+                                    if (travel <= 0f) return@detectHorizontalDragGestures
+                                    // The thumb follows the finger 1:1 across its travel range.
+                                    val delta = dragAmount * scroll.maxValue / travel
                                     scope.launch { scroll.scrollBy(delta) }
                                 }
                             )
@@ -662,11 +669,11 @@ fun EqMiniMap(
             val span = spacingPx * (combinedCurveBandCount - 1)
             if (span <= 0f) return@Canvas
 
-            val rawLeft = (scroll.value + spacingPx / 2f) / span * w
-            val rawRight = rawLeft + viewportWidth / span * w
-            val left = rawLeft.coerceIn(0f, w)
-            val right = rawRight.coerceIn(0f, w)
-            if (right - left < 2f) return@Canvas
+            val thumbW = viewportThumbWidth(w, viewportWidth, span)
+            val maxScroll = scroll.maxValue
+            val progress = if (maxScroll > 0) scroll.value.toFloat() / maxScroll else 0f
+            val left = progress.coerceIn(0f, 1f) * (w - thumbW)
+            val right = left + thumbW
 
             drawRoundRect(
                 color = viewportOverlayColor.copy(alpha = 0.16f),
@@ -695,6 +702,10 @@ private fun toneBandColor(band: DspMath.ToneBand): Color = when (band) {
     DspMath.ToneBand.MID -> Color(0xFFFFD54F)
     DspMath.ToneBand.TREBLE -> Color(0xFF4FC3F7)
 }
+
+/** Width of the mini map's viewport thumb: the visible fraction of the response span, never wider than the map. */
+private fun viewportThumbWidth(mapWidth: Float, viewportPx: Int, spanPx: Float): Float =
+    (viewportPx / spanPx * mapWidth).coerceIn(0f, mapWidth)
 
 /** Visible response span of the strip in px: (bandCount - 1) fader gaps. */
 private fun viewportSpanPx(density: androidx.compose.ui.unit.Density, bandCount: Int): Float =
