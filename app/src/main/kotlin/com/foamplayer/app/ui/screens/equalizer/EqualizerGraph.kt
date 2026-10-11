@@ -1,5 +1,14 @@
 package com.foamplayer.app.ui.screens.equalizer
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.input.pointer.PointerEventPass
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -63,6 +72,9 @@ import kotlin.math.sqrt
 /** dB range shown by the response graphs (grid lines go to ±12). */
 private const val GAIN_RANGE_DB = 15f
 private const val NODE_HIT_RADIUS_PX = 44f
+
+/** How long after the last scroll movement the mini map's viewport thumb starts fading out. */
+private const val THUMB_HIDE_DELAY_MS = 700L
 
 /** Width of one graphic EQ fader column; the strip content spans the current band count of these. */
 internal val BAND_SPACING = 44.dp
@@ -577,11 +589,46 @@ fun EqMiniMap(
     val referenceColor = FoamTheme.colors.borderOverlay
     val viewportOverlayColor = if (FoamTheme.isDark) Color.White else Color.Black
 
+    // The viewport thumb only shows while the strip is being scrolled (by the
+    // strip's own drag/fling or by the map) or while the map itself is touched,
+    // and fades in/out instead of popping.
+    var scrollRecentlyChanged by remember { mutableStateOf(false) }
+    var touchingMap by remember { mutableStateOf(false) }
+    if (interactive) {
+        LaunchedEffect(scrollState) {
+            val scroll = scrollState ?: return@LaunchedEffect
+            snapshotFlow { scroll.value }
+                .drop(1) // the initial value is not a scroll
+                .collectLatest {
+                    scrollRecentlyChanged = true
+                    delay(THUMB_HIDE_DELAY_MS)
+                    scrollRecentlyChanged = false
+                }
+        }
+    }
+    val thumbVisible = interactive && (scrollRecentlyChanged || touchingMap)
+    val thumbAlpha by animateFloatAsState(
+        targetValue = if (thumbVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = if (thumbVisible) 150 else 450),
+        label = "miniMapThumbAlpha"
+    )
+
     Canvas(
         modifier = modifier
             .then(
                 if (interactive) {
                     Modifier
+                        .pointerInput(Unit) {
+                            // Observe-only: tracks finger-down on the map without consuming.
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                touchingMap = true
+                                do {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                } while (event.changes.any { it.pressed })
+                                touchingMap = false
+                            }
+                        }
                         .pointerInput(Unit) {
                             detectTapGestures(
                                 onTap = { position ->
@@ -663,7 +710,7 @@ fun EqMiniMap(
         // Translucent viewport overlay over the visible EQ section: white on
         // dark surfaces, black on light ones.
         val viewportWidth = latestViewportWidth
-        if (interactive && viewportWidth > 0) {
+        if (interactive && viewportWidth > 0 && thumbAlpha > 0.01f) {
             val scroll = latestScroll ?: return@Canvas
             val spacingPx = with(density) { BAND_SPACING.toPx() }
             val span = spacingPx * (combinedCurveBandCount - 1)
@@ -675,14 +722,15 @@ fun EqMiniMap(
             val left = progress.coerceIn(0f, 1f) * (w - thumbW)
             val right = left + thumbW
 
+            // Mini map visible zone preview
             drawRoundRect(
-                color = viewportOverlayColor.copy(alpha = 0.16f),
+                color = viewportOverlayColor.copy(alpha = 0.15f * thumbAlpha),
                 topLeft = Offset(left, 1.dp.toPx()),
                 size = Size(right - left, h - 2.dp.toPx()),
                 cornerRadius = CornerRadius(3.dp.toPx())
             )
             drawRoundRect(
-                color = viewportOverlayColor.copy(alpha = 0.55f),
+                color = viewportOverlayColor.copy(alpha = 0.2f * thumbAlpha),
                 topLeft = Offset(left, 1.dp.toPx()),
                 size = Size(right - left, h - 2.dp.toPx()),
                 cornerRadius = CornerRadius(3.dp.toPx()),

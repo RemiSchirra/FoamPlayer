@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
@@ -205,41 +206,32 @@ fun EqualizerScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // ---------------------------------------------------------- mini map
-        FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    BasicText(
-                        text = stringResource(R.string.eq_frequency_response),
-                        style = FoamTheme.typography.caption.copy(
-                            color = FoamTheme.colors.textSecondary,
-                            fontWeight = FontWeight.Bold
-                        )
+        // Full-bleed: the screen column pads 8.dp on each side, so the map is
+        // measured 16.dp wider than its constraints and shifted left by 8.dp to
+        // touch both screen edges.
+        EqMiniMap(
+            combinedCurve = miniMapCurve,
+            nodes = if (selectedSection == DspMath.Section.PARAMETRIC) workingNodes else emptyList(),
+            active = state.enabled,
+            toneCurves = toneCurves,
+            showViewport = selectedSection == DspMath.Section.GRAPHIC,
+            scrollState = stripScrollState,
+            stripViewportWidthPx = stripViewportWidthPx,
+            combinedCurveBandCount = workingGains.size,
+            modifier = Modifier
+                .fillMaxWidth()
+                .layout { measurable, constraints ->
+                    val bleed = 8.dp.roundToPx()
+                    val fullWidth = constraints.maxWidth + bleed * 2
+                    val placeable = measurable.measure(
+                        constraints.copy(minWidth = fullWidth, maxWidth = fullWidth)
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    EqMiniMap(
-                        combinedCurve = miniMapCurve,
-                        nodes = if (selectedSection == DspMath.Section.PARAMETRIC) workingNodes else emptyList(),
-                        active = state.enabled,
-                        toneCurves = toneCurves,
-                        showViewport = selectedSection == DspMath.Section.GRAPHIC,
-                        scrollState = stripScrollState,
-                        stripViewportWidthPx = stripViewportWidthPx,
-                        combinedCurveBandCount = workingGains.size,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                    )
+                    layout(constraints.maxWidth, placeable.height) {
+                        placeable.place(-bleed, 0)
+                    }
                 }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column(horizontalAlignment = Alignment.End) {
-                    MiniMapValue(stringResource(R.string.eq_preamp), formatDb(state.preampDb))
-                    MiniMapValue(stringResource(R.string.eq_bass), formatTonePercent(state.tone.bassDb))
-                    MiniMapValue(stringResource(R.string.eq_treble), formatTonePercent(state.tone.trebleDb))
-                }
-            }
-        }
+                .height(72.dp)
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -509,23 +501,6 @@ private fun PowerButton(
             ),
             tint = if (enabled) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
             modifier = Modifier.size(24.dp)
-        )
-    }
-}
-
-// ----------------------------------------------------------------- mini map
-
-@Composable
-private fun MiniMapValue(label: String, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        BasicText(
-            text = label,
-            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        BasicText(
-            text = value,
-            style = FoamTheme.typography.monospace
         )
     }
 }
@@ -1283,9 +1258,6 @@ private fun stereoWidthToPercent(width: Float): Float =
 private fun formatDb(db: Float): String = "%+.1f dB".format(db)
 
 private fun formatPercent(percent: Float): String = "%.0f%%".format(percent)
-
-/** Mini-map readout for the tone knobs: boost percent of [ToneSettings.MAX_DB]. */
-private fun formatTonePercent(db: Float): String = formatPercent(toneDbToPercent(db))
 
 internal fun frequencyDisplay(hz: Float): String =
     if (hz >= 1000f) "%.1f kHz".format(hz / 1000f) else "%.0f Hz".format(hz)
