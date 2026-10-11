@@ -244,7 +244,7 @@ internal fun SharedTransitionScope.SubViewContent(
     onCollapse: () -> Unit,
     upTransitionState: SeekableTransitionState<Boolean>
 ) {
-    Column(modifier = Modifier.fillMaxSize().padding(top = FoamDimens.paddingMedium)) {
+    Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxWidth().then(modifier)) {
             MiniPlayerHeader(
                 track = track,
@@ -379,7 +379,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 12.dp)
+            .padding(FoamDimens.paddingSmall)
             .graphicsLayer {
                 shape = RoundedCornerShape(containerRadius)
                 clip = true
