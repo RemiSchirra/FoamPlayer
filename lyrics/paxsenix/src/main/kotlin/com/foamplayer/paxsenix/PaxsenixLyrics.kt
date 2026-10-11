@@ -173,7 +173,7 @@ object PaxsenixLyrics {
         }
     }
 
-    private val ampUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+    private const val ampUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
 
     /**
      * Searches Apple Music catalog via the AMP API to find a song's catalog ID.

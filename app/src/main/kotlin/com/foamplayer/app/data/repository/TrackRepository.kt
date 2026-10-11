@@ -352,7 +352,7 @@ class TrackRepository @Inject constructor(
      * new score on the very next frame, without waiting for Room.
      */
     suspend fun setScore(trackId: Long, score: Int) {
-        _scoreOverrides.value = _scoreOverrides.value + (trackId to score)
+        _scoreOverrides.value += (trackId to score)
         trackDao.setScore(trackId, score)
     }
 

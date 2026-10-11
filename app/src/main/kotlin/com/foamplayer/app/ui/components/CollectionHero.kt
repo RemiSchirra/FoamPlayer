@@ -308,12 +308,10 @@ fun CollectionSearchScrollToBarEffect(
                     delta,
                     tween(durationMillis = SearchOpenScrollDurationMs, easing = FastOutSlowInEasing)
                 )
-            } else if (listState != null) {
-                listState.animateScrollBy(
-                    delta,
-                    tween(durationMillis = SearchOpenScrollDurationMs, easing = FastOutSlowInEasing)
-                )
-            }
+            } else listState?.animateScrollBy(
+                delta,
+                tween(durationMillis = SearchOpenScrollDurationMs, easing = FastOutSlowInEasing)
+            )
         }
     }
 }

@@ -130,11 +130,9 @@ fun FidelityScoreCard(
                         .padding(horizontal = FoamDimens.paddingMedium)
                         .padding(bottom = FoamDimens.paddingMedium)
                 ) {
-                    if (score != null) {
-                        score.items.forEachIndexed { index, item ->
-                            if (index > 0) FidelitySectionDivider()
-                            FidelityItemRow(item)
-                        }
+                    score?.items?.forEachIndexed { index, item ->
+                        if (index > 0) FidelitySectionDivider()
+                        FidelityItemRow(item)
                     }
                 }
             }

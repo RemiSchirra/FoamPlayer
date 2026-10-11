@@ -271,7 +271,7 @@ object AudioLyricsTagWriter {
             return null
         }
         val major = header[3].toInt() and 0xFF
-        if (major < 3 || major > 4) throw IOException("Unsupported ID3v2.$major tag")
+        if (major !in 3..4) throw IOException("Unsupported ID3v2.$major tag")
         val flags = header[5].toInt() and 0xFF
         if (flags and 0x80 != 0) throw IOException("ID3 tag uses unsynchronisation")
         if (flags and 0x40 != 0) throw IOException("ID3 tag uses an extended header")

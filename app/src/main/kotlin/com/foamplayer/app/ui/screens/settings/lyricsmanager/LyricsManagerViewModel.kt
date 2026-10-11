@@ -189,7 +189,11 @@ class LyricsManagerViewModel @Inject constructor(
             val result = runCatching { lyricsRepository.deleteLyrics(track) }
             _statusMap.update { current ->
                 current + (track.id to runCatching { lyricsRepository.getSourceStatus(track) }.getOrDefault(
-                    current[track.id] ?: LyricsSourceStatus(false, false, false)
+                    current[track.id] ?: LyricsSourceStatus(
+                        hasCached = false,
+                        hasFile = false,
+                        hasEmbedded = false
+                    )
                 ))
             }
             result.fold(
@@ -213,7 +217,11 @@ class LyricsManagerViewModel @Inject constructor(
             _isDetailsLoading.value = true
             val resolved = runCatching { lyricsRepository.resolveLocalLyrics(track) }.getOrNull()
             val status = runCatching { lyricsRepository.getSourceStatus(track) }.getOrDefault(
-                statusMap.value[track.id] ?: LyricsSourceStatus(false, false, false)
+                statusMap.value[track.id] ?: LyricsSourceStatus(
+                    hasCached = false,
+                    hasFile = false,
+                    hasEmbedded = false
+                )
             )
             _trackDetails.value = LyricsTrackDetails(
                 track = track,

@@ -49,7 +49,7 @@ internal object GatewayCloseCodes {
 }
 
 internal object GatewayIntents {
-    val FLAGS: Int = (1 shl 12) or
+    const val FLAGS: Int = (1 shl 12) or
             (1 shl 18) or
             (1 shl 19) or
             (1 shl 22) or
@@ -60,7 +60,7 @@ internal object GatewayIntents {
 }
 
 internal object GatewayCapabilities {
-    val FLAGS: Int = (1 shl 4) or
+    const val FLAGS: Int = (1 shl 4) or
             (1 shl 5) or
             (1 shl 12) or
             (1 shl 16)

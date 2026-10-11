@@ -60,7 +60,7 @@ class MainActivity : AppCompatActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
 
     private companion object {
-        val TRANSPARENT = android.graphics.Color.TRANSPARENT
+        const val TRANSPARENT = android.graphics.Color.TRANSPARENT
 
         /** Inactivity after which the lock-display session closes (Fast lock). */
         const val FAST_LOCK_TIMEOUT_MS = 5_000L

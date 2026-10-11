@@ -42,7 +42,7 @@ class LyricsDetailsViewModel @Inject constructor(
             _isDetailsLoading.value = true
             val resolved = runCatching { lyricsRepository.resolveLocalLyrics(track) }.getOrNull()
             val status = runCatching { lyricsRepository.getSourceStatus(track) }.getOrDefault(
-                LyricsSourceStatus(false, false, false)
+                LyricsSourceStatus(hasCached = false, hasFile = false, hasEmbedded = false)
             )
             _trackDetails.value = LyricsTrackDetails(
                 track = track,

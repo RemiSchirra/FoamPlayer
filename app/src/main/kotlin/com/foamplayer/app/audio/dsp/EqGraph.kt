@@ -165,12 +165,10 @@ class EqGraph {
                 frame[c] = if (v != v) 0f else v
             }
 
-            var nodeIndex = 0
-            for (filterIndex in filters.indices) {
+            for ((nodeIndex, _) in filters.indices.withIndex()) {
                 for (c in 0 until channelCount) {
                     frame[c] = states[nodeIndex * channelCount + c]!!.process(frame[c])
                 }
-                nodeIndex++
             }
 
             if (channelCount == 2) {

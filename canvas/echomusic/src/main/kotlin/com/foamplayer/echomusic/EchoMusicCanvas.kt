@@ -72,7 +72,7 @@ object EchoMusicCanvas {
     )
 
     private var manifestCache: CacheEntry? = null
-    private val ttlMs = 30 * 60_000L
+    private const val ttlMs = 30 * 60_000L
     // Guards the check-then-fetch below so two callers racing on a cold/expired
     // cache (e.g. the full player and mini player both fetching for the same
     // song at once) await the same network call instead of both firing it.

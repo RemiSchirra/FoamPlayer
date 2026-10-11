@@ -330,9 +330,9 @@ private fun LazyListLayoutInfo.toScrollbarGeometry(
     var rowSum = 0
     var rowCount = 0
     for (item in visible) {
-        when {
-            item.index == 0 -> samples.headerPx = item.size.toFloat()
-            item.index == totalItemsCount - 1 -> samples.trailerPx = item.size.toFloat()
+        when (item.index) {
+            0 -> samples.headerPx = item.size.toFloat()
+            totalItemsCount - 1 -> samples.trailerPx = item.size.toFloat()
             else -> {
                 rowSum += item.size
                 rowCount++
@@ -387,9 +387,9 @@ private fun LazyGridLayoutInfo.toScrollbarGeometry(
     var columns = 1
     var firstDataRowY = Float.NaN
     for (item in visible) {
-        when {
-            item.index == 0 -> samples.headerPx = item.size.height.toFloat()
-            item.index == totalItemsCount - 1 -> samples.trailerPx = item.size.height.toFloat()
+        when (item.index) {
+            0 -> samples.headerPx = item.size.height.toFloat()
+            totalItemsCount - 1 -> samples.trailerPx = item.size.height.toFloat()
             else -> {
                 if (firstDataRowY.isNaN()) {
                     firstDataRowY = item.offset.y.toFloat()

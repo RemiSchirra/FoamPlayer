@@ -109,15 +109,15 @@ fun NavBarSettingsScreen(
                     (from in SECONDARY_SECTION_RANGE && to in SECONDARY_SECTION_RANGE)
         },
         onMove = { from, to ->
-            when {
-                from in PRIMARY_SECTION_RANGE && to in PRIMARY_SECTION_RANGE -> {
+            when (from) {
+                in PRIMARY_SECTION_RANGE if to in PRIMARY_SECTION_RANGE -> {
                     val fromIdx = from - PRIMARY_SECTION_START
                     val toIdx = to - PRIMARY_SECTION_START
                     displayedPrimaryOrder = displayedPrimaryOrder.toMutableList().apply {
                         add(toIdx, removeAt(fromIdx))
                     }
                 }
-                from in SECONDARY_SECTION_RANGE && to in SECONDARY_SECTION_RANGE -> {
+                in SECONDARY_SECTION_RANGE if to in SECONDARY_SECTION_RANGE -> {
                     val fromIdx = from - SECONDARY_SECTION_START
                     val toIdx = to - SECONDARY_SECTION_START
                     displayedSecondaryOrder = displayedSecondaryOrder.toMutableList().apply {

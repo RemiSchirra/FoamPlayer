@@ -643,11 +643,11 @@ private fun CollectionInfo.listSourceKey(): String = when (kind) {
 
 /** Individual artist names across [tracks] ("; "-joined multi-artist fields are split). */
 internal fun List<TrackEntity>.distinctCollectionArtistNames(): List<String> =
-    flatMap { listOfNotNull(it.artist, it.albumArtist) }
+    asSequence().flatMap { listOfNotNull(it.artist, it.albumArtist) }
         .flatMap { it.split("; ") }
         .map { it.trim() }
         .filter { it.isNotEmpty() }
-        .distinct()
+        .distinct().toList()
 
 internal fun CollectionInfo.distinctArtistNames(): List<String> = tracks.distinctCollectionArtistNames()
 

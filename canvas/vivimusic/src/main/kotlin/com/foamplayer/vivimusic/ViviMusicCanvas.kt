@@ -60,7 +60,7 @@ object ViviMusicCanvas {
 
     private var manifestCache: CacheEntry? = null
     // Cache TTL 1 minute (re-fetches json index every minute max for instant updates)
-    private val ttlMs = 60_000L
+    private const val ttlMs = 60_000L
     // Guards the check-then-fetch below so two callers racing on a cold/expired
     // cache don't both fire the same network call.
     private val fetchMutex = Mutex()
@@ -98,15 +98,15 @@ object ViviMusicCanvas {
             matchSong && matchArtist
         }
 
-        if (target != null) {
-            return CanvasArtwork(
+        return if (target != null) {
+            CanvasArtwork(
                 name = target.song,
                 artist = target.artist,
                 videoUrl = target.url,
                 animated = target.url
             )
         } else {
-            return null
+            null
         }
     }
 }

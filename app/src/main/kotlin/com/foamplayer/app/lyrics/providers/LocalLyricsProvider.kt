@@ -32,9 +32,8 @@ class LocalLyricsProvider @Inject constructor(
             name == "$baseName.ttml" || name == "$baseName.lrc"
         } ?: return null
 
-        val chosen = candidates
-            .sortedBy { if (it.name.lowercase().endsWith(".ttml")) 0 else 1 }
-            .firstOrNull() ?: return null
+        val chosen = candidates.minByOrNull { if (it.name.lowercase().endsWith(".ttml")) 0 else 1 }
+            ?: return null
 
         return runCatching { chosen.readText(Charsets.UTF_8) }.getOrNull()?.trim()?.takeIf { it.isNotBlank() }
     }

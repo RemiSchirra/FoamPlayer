@@ -305,8 +305,8 @@ object AppleMusicCanvas {
                 if (!artistFuzzy) return@mapNotNull null
 
                 var score = 0
-                if (artistMatch) score += 10
-                else score += 5
+                score += if (artistMatch) 10
+                else 5
 
                 // Name matching (Song or Album title)
                 val nameMatch = resultName.equals(term, ignoreCase = true)
@@ -492,12 +492,12 @@ object AppleMusicCanvas {
     }
 
     private fun extractEditorialVideoUrl(ev: JsonObject): String? {
-        val assets = listOf(
+        val assets = listOfNotNull(
             ev["motionDetailRaw"]?.jsonObject,
             ev["motionDetailSquare"]?.jsonObject,
             ev["motionDetailTall"]?.jsonObject,
             ev["motionDetailStatic"]?.jsonObject // Fallback
-        ).filterNotNull()
+        )
 
         for (asset in assets) {
             // Try different possible keys for the video URL

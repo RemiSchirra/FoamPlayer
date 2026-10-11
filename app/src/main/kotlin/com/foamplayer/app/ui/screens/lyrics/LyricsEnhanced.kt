@@ -887,7 +887,7 @@ private fun buildSyncedLyrics(
                     else -> KaraokeAlignment.Start
                 }
 
-            val wordsForMain = if (mainWords.isNotEmpty()) mainWords else entry.words!!
+            val wordsForMain = mainWords.ifEmpty { entry.words }
             val wordPhonetics = romanizationMap[index] ?: emptyList()
             val mainSyllables = wordsForMain.toKaraokeSyllables(wordPhonetics)
 

@@ -502,7 +502,7 @@ class LocalAudioScanner @Inject constructor(
             val contentSize = boxSize - headerSize
             if (type == path.first()) {
                 if (path.size == 1) {
-                    if (contentSize <= 0 || contentSize > MAX_MP4_ATOM_BYTES) return null
+                    if (contentSize !in 1..MAX_MP4_ATOM_BYTES) return null
                     val content = ByteArray(contentSize.toInt())
                     return if (readFully(input, content)) content else null
                 }

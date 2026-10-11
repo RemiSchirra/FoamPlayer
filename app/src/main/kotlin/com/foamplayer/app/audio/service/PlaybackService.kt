@@ -529,10 +529,10 @@ class PlaybackService : MediaSessionService() {
      * see the same button set.
      */
     private fun refreshNotificationButtons(session: MediaSession) {
-        val buttons = listOf(
+        val buttons = listOfNotNull(
             extraButtonCommandButton(notificationButtonLeft),
             extraButtonCommandButton(notificationButtonRight)
-        ).filterNotNull()
+        )
         session.setMediaButtonPreferences(buttons)
     }
 

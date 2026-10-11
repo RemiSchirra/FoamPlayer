@@ -897,14 +897,14 @@ private fun TrackDetailsContent(
 }
 
 /** One-line technical summary of a track; [labels] carries the localized channel words. */
-internal fun audioSummaryText(track: TrackEntity, labels: ChannelLabels): String = listOf(
+internal fun audioSummaryText(track: TrackEntity, labels: ChannelLabels): String = listOfNotNull(
     TimeUtils.formatDurationLong(track.duration),
     formatSampleRate(track.sampleRate),
     "${track.bitDepth} bit",
     formatChannels(track.channels, labels),
     track.bitrate.takeIf { it > 0 }?.let { "$it kbps" },
     formatFileSize(track.size).takeIf { track.size > 0 }
-).filterNotNull().joinToString("  ·  ")
+).joinToString("  ·  ")
 
 /** Row button with a leading back arrow, used to return from the details page. */
 @Composable

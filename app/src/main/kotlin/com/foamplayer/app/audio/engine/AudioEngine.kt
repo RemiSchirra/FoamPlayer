@@ -1441,11 +1441,10 @@ class AudioEngine @Inject constructor(
             if (fromIndex < size) add(toIndex, removeAt(fromIndex))
         }
 
-        val oldPlayingIndex = current.queueIndex
-        val newPlayingIndex = when {
-            oldPlayingIndex == fromIndex -> toIndex
-            oldPlayingIndex in (fromIndex + 1)..toIndex -> oldPlayingIndex - 1
-            oldPlayingIndex in toIndex..<fromIndex -> oldPlayingIndex + 1
+        val newPlayingIndex = when (val oldPlayingIndex = current.queueIndex) {
+            fromIndex -> toIndex
+            in (fromIndex + 1)..toIndex -> oldPlayingIndex - 1
+            in toIndex..<fromIndex -> oldPlayingIndex + 1
             else -> oldPlayingIndex
         }
 
@@ -1687,7 +1686,7 @@ class AudioEngine @Inject constructor(
      */
     private fun applyPauseAtEndOfMediaItems() {
         val enabled = silenceBetweenTracksMs > 0L && _playbackState.value.repeatMode != RepeatMode.ONE
-        player.setPauseAtEndOfMediaItems(enabled)
+        player.pauseAtEndOfMediaItems = enabled
     }
 
     /**
