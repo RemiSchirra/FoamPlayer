@@ -244,7 +244,8 @@
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
 
-    <string name="up_next">Up Next (%1$d tracks)</string>
+    <string name="queue_shuffle">Shuffle queue</string>
+    <string name="queue_clear">Clear queue</string>
     <string name="track_count_duration">%1$d Tracks • %2$s</string>
     <string name="add_separator">Add separator...</string>
 

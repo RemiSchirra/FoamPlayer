@@ -1,18 +1,29 @@
 package com.foamplayer.app.ui.screens.queue
 
-import androidx.compose.foundation.background
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.Icon
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -22,12 +33,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -37,18 +51,22 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.utils.TimeUtils
 
 /**
- * The "Up Next" screen: upcoming tracks (current excluded) with drag-reorder,
+ * The queue subview: upcoming tracks (current excluded) with drag-reorder,
  * swipe-to-remove and tap-to-play. Mutations go through the engine by entry id.
+ * The header row acts on the whole upcoming list: reshuffle it (auxiliary slots
+ * included are swapped for fresh random tracks) or clear it (the auxiliary pool
+ * refills itself right away).
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun QueueScreen(
     modifier: Modifier = Modifier,
     viewModel: PlayerViewModel = hiltViewModel(),
-    showTitle: Boolean = true,
     backgroundColor: Color = FoamTheme.colors.background
 ) {
     val state by viewModel.playbackState.collectAsState()
@@ -98,14 +116,12 @@ fun QueueScreen(
             .background(backgroundColor)
             .padding(horizontal = 16.dp)
     ) {
-        if (showTitle) {
-            Spacer(modifier = Modifier.height(16.dp))
-            BasicText(
-                text = stringResource(R.string.up_next, displayedItems.size),
-                style = FoamTheme.typography.titleLarge
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+        QueueHeaderRow(
+            tracks = displayedItems.filterNot { it.isAuxiliary },
+            onShuffle = viewModel::shuffleUpcoming,
+            onClear = viewModel::clearUpcoming,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         val fadeHeight = 24.dp
 
@@ -184,6 +200,81 @@ fun QueueScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+/**
+ * Header row of the queue subview: "Queue" with the main queue's stats under it
+ * (track count and total duration on one line, auxiliary entries excluded) on
+ * the left; the shuffle and clear buttons on the right.
+ */
+@Composable
+private fun QueueHeaderRow(
+    tracks: List<QueueItem>,
+    onShuffle: () -> Unit,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val trackCount = tracks.size
+    val durationMs = tracks.sumOf { it.track.duration }
+    val durationText = remember(durationMs) { TimeUtils.formatDurationLong(durationMs) }
+
+    Row(
+        modifier = modifier.padding(top = FoamDimens.spacingTiny, bottom = FoamDimens.spacingTiny),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            BasicText(
+                text = stringResource(R.string.queue),
+                style = FoamTheme.typography.titleMedium
+            )
+            BasicText(
+                text = stringResource(R.string.track_count_duration, trackCount, durationText),
+                style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary),
+                maxLines = 1
+            )
+        }
+
+        QueueHeaderButton(
+            icon = FoamTheme.icons.current.shuffle,
+            contentDescription = stringResource(R.string.queue_shuffle),
+            onClick = onShuffle
+        )
+        QueueHeaderButton(
+            icon = FoamTheme.icons.current.close,
+            contentDescription = stringResource(R.string.queue_clear),
+            onClick = onClear
+        )
+    }
+}
+
+/** Small circular icon button with a bounded ripple. */
+@Composable
+private fun QueueHeaderButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val buttonInteractions = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = buttonInteractions,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onClick
+            )
+            .padding(10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = FoamTheme.colors.textPrimary,
+            modifier = Modifier.size(24.dp)
+        )
     }
 }
 

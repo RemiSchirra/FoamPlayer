@@ -173,6 +173,9 @@ class PlayerViewModel @Inject constructor(
         audioEngine.moveQueueEntry(entryId, toUpcomingPosition)
     fun removeQueueEntry(entryId: Long) = audioEngine.removeQueueEntry(entryId)
 
+    fun shuffleUpcoming() = audioEngine.shuffleUpcoming()
+    fun clearUpcoming() = audioEngine.clearUpcoming()
+
     fun seekTo(positionMs: Long) = audioEngine.seekTo(positionMs)
     fun toggleShuffle() = audioEngine.toggleShuffle()
     fun toggleRepeat() = audioEngine.toggleRepeat()

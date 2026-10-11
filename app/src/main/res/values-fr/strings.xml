@@ -243,7 +243,8 @@
     <string name="ok">OK</string>
     <string name="cancel">Annuler</string>
 
-    <string name="up_next">À suivre (%1$d pistes)</string>
+    <string name="queue_shuffle">Mélanger la file d\'attente</string>
+    <string name="queue_clear">Vider la file d\'attente</string>
     <string name="track_count_duration">%1$d Pistes • %2$s</string>
     <string name="add_separator">Ajouter un séparateur...</string>
 

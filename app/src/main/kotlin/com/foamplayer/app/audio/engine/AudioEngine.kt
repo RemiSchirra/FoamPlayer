@@ -1408,6 +1408,118 @@ class AudioEngine @Inject constructor(
         removeQueueItem(index)
     }
 
+    /**
+     * Shuffles the upcoming main-queue occurrences among their slots and replaces every
+     * auxiliary slot after them with a fresh random track.
+     */
+    fun shuffleUpcoming() {
+        val current = _playbackState.value
+        val queue = current.queue
+        val fromIndex = (current.queueIndex + 1).coerceAtLeast(0)
+        if (queue.isEmpty() || fromIndex > queue.lastIndex) return
+
+        cancelPendingTransitions()
+
+        val flags = current.auxiliaryFlags
+        val entryIds = current.queueEntryIds
+        val sourceFlags = current.queueSourceFlags
+        val upcomingRange = fromIndex..queue.lastIndex
+
+        val shuffledMain = upcomingRange
+            .filter { flags.getOrNull(it) != true }
+            .map { i ->
+                Triple(
+                    queue[i],
+                    entryIds.getOrNull(i) ?: allocateEntryId(),
+                    sourceFlags.getOrNull(i) == true
+                )
+            }
+            .shuffled()
+        val freshAuxiliary = drawAuxiliaryTracks(
+            existing = upcomingTrackIds(queue, current.queueIndex),
+            count = upcomingRange.count { flags.getOrNull(it) == true }
+        )
+
+        val newQueue = queue.toMutableList()
+        val newEntryIds = entryIds.toMutableList()
+        val newFlags = flags.toMutableList()
+        val newSourceFlags = sourceFlags.toMutableList()
+        var mainCursor = 0
+        var auxiliaryCursor = 0
+        for (index in upcomingRange) {
+            if (flags.getOrNull(index) == true) {
+                if (auxiliaryCursor < freshAuxiliary.size) {
+                    newQueue[index] = freshAuxiliary[auxiliaryCursor]
+                    newEntryIds[index] = allocateEntryId()
+                    auxiliaryCursor++
+                }
+            } else {
+                if (mainCursor < shuffledMain.size) {
+                    val (track, entryId, sourceFlag) = shuffledMain[mainCursor]
+                    newQueue[index] = track
+                    newEntryIds[index] = entryId
+                    newFlags[index] = false
+                    newSourceFlags[index] = sourceFlag
+                    mainCursor++
+                }
+            }
+        }
+
+        _playbackState.value = current.copy(
+            queue = newQueue,
+            queueEntryIds = normalizeEntryIds(newEntryIds, newQueue.size),
+            auxiliaryFlags = normalizeAuxiliaryFlags(newFlags, newQueue.size),
+            queueSourceFlags = normalizeQueueSourceFlags(newSourceFlags, newQueue.size)
+        )
+
+        // Patch the loaded timeline in place: everything after the current item is replaced;
+        // the current item and the played history keep their player indices.
+        if (pendingWindowResync || loadedRange == IntRange.EMPTY) return
+        val playerStart = fromIndex - loadedRange.first
+        if (playerStart >= player.mediaItemCount) return
+        player.removeMediaItems(playerStart, player.mediaItemCount)
+        val windowEnd = loadedRange.last.coerceAtMost(newQueue.lastIndex)
+        if (fromIndex <= windowEnd) {
+            player.addMediaItems(newQueue.subList(fromIndex, windowEnd + 1).map { it.toMediaItem() })
+        }
+        loadedRange = loadedRange.first..windowEnd
+    }
+
+    /**
+     * Drops every upcoming entry, main and auxiliary, keeping the played history and the
+     * current track. The auxiliary pool refills immediately; its tracks are loaded into the
+     * player lazily, like any refill.
+     */
+    fun clearUpcoming() {
+        val current = _playbackState.value
+        val queue = current.queue
+        if (queue.isEmpty()) return
+        val keep = (current.queueIndex + 1).coerceIn(0, queue.size)
+
+        cancelPendingTransitions()
+
+        _playbackState.value = current.copy(
+            queue = queue.take(keep),
+            queueEntryIds = current.queueEntryIds.take(keep),
+            auxiliaryFlags = current.auxiliaryFlags.take(keep),
+            queueSourceFlags = current.queueSourceFlags.take(keep)
+        )
+
+        if (!pendingWindowResync && loadedRange != IntRange.EMPTY) {
+            val playerStart = (keep - loadedRange.first).coerceAtLeast(0)
+            if (playerStart < player.mediaItemCount) {
+                player.removeMediaItems(playerStart, player.mediaItemCount)
+            }
+            loadedRange = if (keep > 0) {
+                loadedRange.first..(keep - 1)
+            } else {
+                IntRange.EMPTY
+            }
+        }
+
+        scheduleAuxiliaryRefill()
+    }
+
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
         val currentQueue = _playbackState.value.queue
         if (fromIndex !in currentQueue.indices || toIndex !in currentQueue.indices || fromIndex == toIndex) return
