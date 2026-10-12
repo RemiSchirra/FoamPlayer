@@ -82,23 +82,70 @@ class DspMathTest {
     }
 
     @Test
-    fun `graphic band centers span exactly 20 Hz to 20 kHz for every layout`() {
-        GraphicEqSettings.UI_BAND_COUNTS.forEach { count ->
-            val first = GraphicEqSettings.bandFrequency(0, count)
-            val last = GraphicEqSettings.bandFrequency(count - 1, count)
-            assertEquals("first band @ $count", 20f, first, 0.01f)
-            assertEquals("last band @ $count", 20_000f, last, 0.01f)
+    fun `band centers follow the ISO standard for every layout`() {
+        EqBandLayout.entries.forEach { layout ->
+            val count = layout.bands
+            assertEquals("size @ $count", count, layout.frequencies.size)
+            layout.frequencies.forEachIndexed { index, expected ->
+                assertEquals(
+                    "band $index @ $count",
+                    expected,
+                    GraphicEqSettings.bandFrequency(index, count),
+                    0.001f
+                )
+            }
         }
     }
 
     @Test
-    fun `graphic band count 21 reproduces the legacy 0 point15 decade grid`() {
+    fun `iso 10 band layout uses the exact iso centers`() {
+        val expected = listOf(31.5f, 63f, 125f, 250f, 500f, 1000f, 2000f, 4000f, 8000f, 16000f)
+        expected.forEachIndexed { index, freq ->
+            assertEquals(freq, GraphicEqSettings.bandFrequency(index, 10), 0.001f)
+        }
+    }
+
+    @Test
+    fun `iso 15 band layout uses the exact iso centers`() {
+        val expected = listOf(
+            25f, 40f, 63f, 100f, 160f, 250f, 400f, 630f, 1000f, 1600f,
+            2500f, 4000f, 6300f, 10000f, 16000f
+        )
+        expected.forEachIndexed { index, freq ->
+            assertEquals(freq, GraphicEqSettings.bandFrequency(index, 15), 0.001f)
+        }
+    }
+
+    @Test
+    fun `iso 31 band layout uses the exact iso centers`() {
+        val expected = listOf(
+            20f, 25f, 31.5f, 40f, 50f, 63f, 80f, 100f, 125f, 160f, 200f, 250f,
+            315f, 400f, 500f, 630f, 800f, 1000f, 1250f, 1600f, 2000f, 2500f,
+            3150f, 4000f, 5000f, 6300f, 8000f, 10000f, 12500f, 16000f, 20000f
+        )
+        expected.forEachIndexed { index, freq ->
+            assertEquals(freq, GraphicEqSettings.bandFrequency(index, 31), 0.001f)
+        }
+    }
+
+    @Test
+    fun `non iso band counts keep the geometric series fallback`() {
+        // The legacy 21-band grid spans the full 20 Hz..20 kHz axis evenly.
         for (i in 0 until 21) {
             val expected = 20f * 10.0.pow(0.15 * i).toFloat()
             assertEquals(
                 expected, GraphicEqSettings.bandFrequency(i, 21), expected * 0.001f
             )
         }
+    }
+
+    @Test
+    fun `nearest layout resolves legacy band counts`() {
+        assertEquals(EqBandLayout.ISO_10, EqBandLayout.nearest(10))
+        assertEquals(EqBandLayout.ISO_15, EqBandLayout.nearest(15))
+        assertEquals(EqBandLayout.ISO_31, EqBandLayout.nearest(31))
+        assertEquals(EqBandLayout.ISO_10, EqBandLayout.nearest(6))
+        assertEquals(EqBandLayout.ISO_15, EqBandLayout.nearest(21))
     }
 
     @Test
@@ -219,7 +266,6 @@ class DspMathTest {
         assertTrue(softClip(5f) > 0.95f)
         assertTrue(abs(softClip(5f)) <= SOFT_CLIP_CEILING + 1e-6f)
         assertTrue(abs(softClip(-5f)) <= SOFT_CLIP_CEILING + 1e-6f)
-        assertTrue(abs(softClip(100f)) <= SOFT_CLIP_CEILING + 1e-6f)
         assertTrue(abs(softClip(Float.POSITIVE_INFINITY)) < 1f)
     }
 

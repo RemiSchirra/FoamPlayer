@@ -74,7 +74,7 @@ class DspPersistenceTest {
     @Test
     fun `v2 payloads without node colors parse with palette defaults`() {
         // A v2 payload (node format lacks the color and slope fields): one node at 120 Hz.
-        val v2 = "2;1;0;0;0;0;0;0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;1;1:PEAKING:120:3:0.7;-0.5;1;1;1;0;1;80"
+        val v2 = "2;1;0;0;0;0;0;0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;1;1:PEAKING:120:3:0.7;-0.5;1;1;1;0;1;80"
         val restored = DspPersistence.deserialize(v2)
 
         assertTrue(restored.parametricEq.enabled)

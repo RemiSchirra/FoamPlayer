@@ -22,6 +22,7 @@
     <string name="search">Search</string>
     <string name="playlists">Playlists</string>
     <string name="equalizer_dsp">Equalizer &amp; DSP</string>
+    <string name="equalizer_dsp_desc">Band layout, presets, tone and volume</string>
     <string name="home">Home</string>
     <string name="home_see_all">See all</string>
     <string name="home_row_start_playing">Start playing</string>
@@ -274,11 +275,11 @@
     <string name="artist_format_separator" translatable="false">%1$s • %2$s</string>
 
     <string name="dynamic_background">Dynamic Background</string>
-    <string name="dynamic_background_desc">Extract colors from track art for background</string>
+    <string name="dynamic_background_desc">Extract colors from album art for the app-wide backdrop</string>
     <string name="background_mode_custom">Custom Image</string>
-    <string name="background_mode_custom_desc">Pick an image and blur it like the dynamic art</string>
+    <string name="background_mode_custom_desc">Choose an image and blur it like the dynamic art</string>
     <string name="background_mode_gradient">Gradient</string>
-    <string name="background_mode_gradient_desc">Compose a gradient from up to four colors</string>
+    <string name="background_mode_gradient_desc">Compose a gradient of up to four colors</string>
     <string name="background_custom_image">Custom background image</string>
     <string name="background_custom_pick_hint">Choose an image</string>
     <string name="background_add_stop">Add color stop</string>
@@ -571,6 +572,10 @@
     <string name="eq_balance_center">CENTER</string>
     <string name="eq_balance_left">L %.0f%%</string>
     <string name="eq_balance_right">R %.0f%%</string>
+
+    <!-- Equalizer settings subscreen -->
+    <string name="eq_band_layout">Band Layout</string>
+    <string name="eq_band_layout_desc">ISO-standard band number configuration</string>
 
     <!-- Component test screen (devMode builds only) -->
     <string name="test_switch">Test Switch</string>

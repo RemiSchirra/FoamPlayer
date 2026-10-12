@@ -12,6 +12,7 @@ import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.app.audio.dsp.EqBandLayout
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,9 +21,9 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Backs the Audio settings screen: fidelity score, pipeline visualization,
- * global engine switches, playback (crossfade/quick fade/silence) and
- * per-output-device configuration.
+ * Backs the Audio settings screen and its subscreens (playback, devices,
+ * equalizer layout): fidelity score, pipeline visualization, global engine
+ * switches and the ISO band-layout choice of the graphic EQ.
  */
 @HiltViewModel
 class AudioSettingsViewModel @Inject constructor(
@@ -54,6 +55,10 @@ class AudioSettingsViewModel @Inject constructor(
     val playbackState: StateFlow<PlaybackState> = audioEngine.playbackState
 
     val dspState: StateFlow<DspState> = dspEngine.state
+
+    fun setEqBandLayout(layout: EqBandLayout) = launch {
+        dspEngine.setGraphicBandCount(layout.bands)
+    }
 
     fun setBitPerfectEnabled(enabled: Boolean) = launch {
         settingsRepository.setBitPerfectEnabled(enabled)

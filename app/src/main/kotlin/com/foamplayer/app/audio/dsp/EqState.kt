@@ -25,10 +25,50 @@ data class ToneSettings(
 }
 
 /**
+ * ISO 266-standard band layouts selectable in Settings > Audio > Equalizer.
+ * [frequencies] holds each layout's band centers in Hz — the exact ISO values
+ * (not a computed series), so the fader labels, the filters and the response
+ * curves all sit on the standard grid. The band count lives in
+ * [GraphicEqSettings.count].
+ */
+enum class EqBandLayout(val bands: Int, val frequencies: List<Float>) {
+    ISO_10(
+        10,
+        listOf(31.5f, 63f, 125f, 250f, 500f, 1000f, 2000f, 4000f, 8000f, 16000f)
+    ),
+    ISO_15(
+        15,
+        listOf(
+            25f, 40f, 63f, 100f, 160f, 250f, 400f, 630f, 1000f, 1600f,
+            2500f, 4000f, 6300f, 10000f, 16000f
+        )
+    ),
+    ISO_31(
+        31,
+        listOf(
+            20f, 25f, 31.5f, 40f, 50f, 63f, 80f, 100f, 125f, 160f, 200f, 250f,
+            315f, 400f, 500f, 630f, 800f, 1000f, 1250f, 1600f, 2000f, 2500f,
+            3150f, 4000f, 5000f, 6300f, 8000f, 10000f, 12500f, 16000f, 20000f
+        )
+    );
+
+    companion object {
+        /** The layout with [bands] centers, or null for non-ISO counts. */
+        fun of(bands: Int): EqBandLayout? = entries.firstOrNull { it.bands == bands }
+
+        /** Nearest ISO layout to an arbitrary stored count (legacy states). */
+        fun nearest(bands: Int): EqBandLayout =
+            entries.minBy { kotlin.math.abs(it.bands - bands) }
+    }
+}
+
+/**
  * Graphic EQ with a mutable band layout: [count] in [MIN_BAND_COUNT]..[MAX_BAND_COUNT]
- * (UI offers 6/10/15/21/31), band centers forming a geometric series spanning
- * 20 Hz..20 kHz, so on the log axis band i sits at index i/(count-1) — the
- * layout the fader strip and mini map viewport assume. Gains are -12..+12 dB.
+ * (Settings > Audio > Equalizer offers the ISO layouts 10/15/31). ISO layouts
+ * use their standard band centers ([EqBandLayout.frequencies]); other counts —
+ * e.g. the legacy 21-band grid — fall back to a geometric series spanning
+ * 20 Hz..20 kHz, where on the log axis band i sits at index i/(count-1) (the
+ * layout the fader strip and mini map viewport assume). Gains are -12..+12 dB.
  */
 data class GraphicEqSettings(
     val enabled: Boolean = false,
@@ -44,19 +84,22 @@ data class GraphicEqSettings(
     fun normalizedGains(): List<Float> = List(count) { gainsDb.getOrElse(it) { 0f } }
 
     companion object {
-        const val DEFAULT_BAND_COUNT = 21
+        /** Default layout: the 1-octave ISO grid. */
+        const val DEFAULT_BAND_COUNT = 10
         const val MIN_BAND_COUNT = 2
         const val MAX_BAND_COUNT = 31
-        val UI_BAND_COUNTS = listOf(6, 10, 15, 21, 31)
         const val MIN_GAIN_DB = -12f
         const val MAX_GAIN_DB = 12f
 
         /**
-         * Band center for band [index] of [bands]: a geometric series from 20 Hz
-         * to 20 kHz, so on the log axis every band sits at index/(bands-1) —
-         * the layout the fader strip and mini map viewport assume.
+         * Band center for band [index] of [bands]: the ISO standard centers for
+         * the 10/15/31-band layouts, otherwise a geometric series from 20 Hz to
+         * 20 kHz with every band at index/(bands-1) on the log axis.
          */
         fun bandFrequency(index: Int, bands: Int): Float {
+            EqBandLayout.of(bands)?.let { layout ->
+                return layout.frequencies[index.coerceIn(0, layout.frequencies.lastIndex)]
+            }
             if (bands <= 1) return 1000f
             val t = index.toFloat().coerceIn(0f, (bands - 1).toFloat()) / (bands - 1)
             return 20f * 1000f.pow(t)

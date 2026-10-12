@@ -11,9 +11,10 @@ import javax.inject.Inject
 
 /**
  * Drives the whole DSP chain from the Equalizer screen: state, section toggles,
- * tone/control knobs, graphic bands, parametric nodes, presets and volume all
+ * tone/control knobs, graphic faders, parametric nodes, presets and volume all
  * forward straight into [DspEngine], whose publication also feeds the player's
- * audio sink and the audio-path evaluation.
+ * audio sink and the audio-path evaluation. The graphic band layout is chosen
+ * in Settings > Audio > Equalizer (AudioSettingsViewModel), not here.
  *
  * The chain is purely linear (industry-standard EQ): no limiter and no auto
  * headroom exist anywhere in the settings or the audio path, so a boost at any
@@ -47,8 +48,6 @@ class EqualizerViewModel @Inject constructor(
     fun setVolumePercent(percent: Int) = dspEngine.setVolumePercent(percent)
 
     fun setGraphicEnabled(enabled: Boolean) = dspEngine.setGraphicEnabled(enabled)
-
-    fun setGraphicBandCount(count: Int) = dspEngine.setGraphicBandCount(count)
 
     fun setGraphicGains(gainsDb: List<Float>) = dspEngine.setGraphicGains(gainsDb)
 

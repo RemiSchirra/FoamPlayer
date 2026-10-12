@@ -143,6 +143,7 @@ import com.foamplayer.app.ui.screens.settings.AudioDevicesSettingsScreen
 import com.foamplayer.app.ui.screens.settings.BackgroundSettingsScreen
 import com.foamplayer.app.ui.screens.settings.CollectionsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
+import com.foamplayer.app.ui.screens.settings.EqualizerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.LyricsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.MiscSettingsScreen
@@ -1782,7 +1783,8 @@ fun FoamNavHost(
                                         AudioSettingsScreen(
                                             onBack = { navController.popBackStack() },
                                             onNavigateToPlayback = { navController.navigate(Screen.SettingsAudioPlayback.route) },
-                                            onNavigateToDevices = { navController.navigate(Screen.SettingsAudioDevices.route) }
+                                            onNavigateToDevices = { navController.navigate(Screen.SettingsAudioDevices.route) },
+                                            onNavigateToEqualizer = { navController.navigate(Screen.SettingsAudioEqualizer.route) }
                                         )
                                     }
                                     composable(Screen.SettingsAudioPlayback.route) {
@@ -1790,6 +1792,9 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.SettingsAudioDevices.route) {
                                         AudioDevicesSettingsScreen(onBack = { navController.popBackStack() })
+                                    }
+                                    composable(Screen.SettingsAudioEqualizer.route) {
+                                        EqualizerSettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     composable(Screen.SettingsUI.route) {
                                         UISettingsScreen(

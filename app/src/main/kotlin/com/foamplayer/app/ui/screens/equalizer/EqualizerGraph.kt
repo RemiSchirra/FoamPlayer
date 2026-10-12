@@ -314,12 +314,11 @@ private fun DrawScope.drawParametricNodes(
 // -------------------------------------------------------------- graphic strip
 
 /**
- * The 21-band graphic EQ as a horizontally scrollable strip — one thin track
- * line per band, an accent line from the 0 dB axis up to each dot, and a
- * draggable dot for the band's gain (no curve, no grid: the mini map carries
- * the response overview). Band centers are spaced evenly on the log-frequency
- * axis (each band sits at index/20 of 20 Hz..20 kHz), the same axis the mini
- * map's viewport overlay uses.
+ * The graphic EQ as a horizontally scrollable strip — one thin track line per
+ * band, an accent line from the 0 dB axis up to each dot, and a draggable dot
+ * for the band's gain (no curve, no grid: the mini map carries the response
+ * overview). Band centers sit on the ISO grid for the current layout, spaced
+ * evenly (one [BAND_SPACING] per band) on the strip's own axis.
  *
  * One unified gesture handler decides per gesture: a drag starting near a dot
  * changes that band's value; any other drag slides the strip (with a small
@@ -561,9 +560,9 @@ fun GraphicEqStrip(
  * (bass red, mid amber, treble blue) wherever the active section is drawn, so
  * the tone knobs' contribution stays visible even with both EQ sections off. In
  * graphic mode (with [showViewport]) it draws the graphic section's response and
- * a translucent white overlay marking the section of the 20 Hz..20 kHz axis
- * currently visible in the scrollable fader strip. Dragging the map slides the
- * strip; a tap centers the viewport.
+ * a translucent white overlay marking the section of the response axis currently
+ * visible in the scrollable fader strip. Dragging the map slides the strip; a
+ * tap centers the viewport.
  */
 @Composable
 fun EqMiniMap(

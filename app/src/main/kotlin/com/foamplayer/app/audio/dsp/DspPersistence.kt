@@ -23,6 +23,9 @@ object DspPersistence {
 
     private const val FORMAT_VERSION = 4
 
+    /** Band layout v1-v3 payloads were written with (before the ISO enum picker). */
+    private const val LEGACY_BAND_COUNT = 21
+
     fun serialize(state: DspState): String = buildString {
         append(FORMAT_VERSION)
         append(SEP).append(if (state.enabled) "1" else "0")
@@ -63,7 +66,9 @@ object DspPersistence {
             val parts = raw.split(SEP)
             val default = DspState()
 
-            val version = parts.firstOrNull()?.toIntOrNull() ?: 1
+            // A non-numeric version prefix means the payload is not ours at all
+            // (e.g. garbage) — fall back to the pure defaults, not the legacy grid.
+            val version = parts.firstOrNull()?.toIntOrNull() ?: return default
             val isV4 = version >= 4
             val isV2 = version >= 2
 
@@ -81,7 +86,7 @@ object DspPersistence {
 
             val graphicGains = parseGains(
                 parts.getOrNull(if (isV4) 8 else 7),
-                if (isV4) parseCount(parts.getOrNull(7)) else GraphicEqSettings.DEFAULT_BAND_COUNT
+                if (isV4) parseCount(parts.getOrNull(7)) else LEGACY_BAND_COUNT
             )
 
             DspState(

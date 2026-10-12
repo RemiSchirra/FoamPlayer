@@ -21,6 +21,7 @@
     <string name="search">Rechercher</string>
     <string name="playlists">Playlists</string>
     <string name="equalizer_dsp">Égaliseur &amp; DSP</string>
+    <string name="equalizer_dsp_desc">Bandes, préréglages, tonalité et volume</string>
     <string name="home">Accueil</string>
     <string name="home_see_all">Voir tout</string>
     <string name="home_row_start_playing">Commencer à écouter</string>
@@ -565,6 +566,10 @@
     <string name="eq_balance_center">CENTRE</string>
     <string name="eq_balance_left">G %.0f%%</string>
     <string name="eq_balance_right">D %.0f%%</string>
+
+    <!-- Égaliseur : écran de réglage -->
+    <string name="eq_band_layout">Disposition des bandes</string>
+    <string name="eq_band_layout_desc">"Configuration du nombre bandes standard ISO"</string>
 
     <!-- Écran de test de composants (builds devMode uniquement) -->
     <string name="test_switch">Interrupteur de test</string>

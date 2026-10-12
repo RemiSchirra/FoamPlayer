@@ -31,8 +31,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.DropdownMenu
-import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.Switch
 import androidx.compose.material.SwitchDefaults
@@ -65,7 +63,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.layout
@@ -75,13 +72,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.audio.dsp.DspMath
 import com.foamplayer.app.audio.dsp.DspPreset
 import com.foamplayer.app.audio.dsp.DspState
 import com.foamplayer.app.audio.dsp.FilterType
-import com.foamplayer.app.audio.dsp.GraphicEqSettings
 import com.foamplayer.app.audio.dsp.NodeColorPalette
 import com.foamplayer.app.audio.dsp.ParametricEqSettings
 import com.foamplayer.app.audio.dsp.ParametricNode
@@ -108,8 +103,9 @@ import kotlin.math.roundToInt
  *    separated bass/mid/treble tone curves in both modes),
  *  - a presets entry card opening a FoamModal with response previews for every
  *    preset, plus create/delete of user presets,
- *  - Graphic (21 horizontally scrollable band faders) / Parametric (draggable
- *    colored nodes) sections — mutually exclusive: enabling one disables the other,
+ *  - Graphic (ISO band layout, chosen in Settings > Audio > Equalizer;
+ *    horizontally scrollable band faders) / Parametric (draggable colored
+ *    nodes) sections — mutually exclusive: enabling one disables the other,
  *  - rotary tone knobs — pre-amp in dB; bass/mid/treble boost-only, reading
  *    0-100% (log-tapered to 0..+12 dB, no negative dB) — and control knobs
  *    (balance, stereo width 0-100% = ×1..×2),
@@ -155,7 +151,8 @@ fun EqualizerScreen(
     var workingGains by remember { mutableStateOf(state.graphicEq.gainsDb) }
     var workingNodes by remember { mutableStateOf(state.parametricEq.nodes) }
     // Re-sync when the engine state changes externally (preset applied, node
-    // added/removed, section toggled). Rare, so a mid-drag override is acceptable.
+    // added/removed, section toggled, band layout changed in settings). Rare, so
+    // a mid-drag override is acceptable.
     LaunchedEffect(state.graphicEq.gainsDb) { workingGains = state.graphicEq.gainsDb }
     LaunchedEffect(state.parametricEq.nodes) { workingNodes = state.parametricEq.nodes }
 
@@ -183,9 +180,6 @@ fun EqualizerScreen(
     // Separated per-tone curves: bass, mid and treble each drawn in their own
     // color next to the section curve — overlays, never summed into it.
     val toneCurves = remember(state.tone) { DspMath.toneCurves(state.tone) }
-
-    // Band selector state: which count chip is active in the strip header.
-    var showBandPicker by remember { mutableStateOf(false) }
 
     val allPresets = remember(userPresets) { DspPreset.BUILT_INS + userPresets }
     val currentPreset = remember(allPresets, state) { allPresets.matching(state) }
@@ -282,55 +276,6 @@ fun EqualizerScreen(
                 style = FoamTheme.typography.caption,
                 modifier = Modifier.weight(1f)
             )
-
-            // Band-count selector, only in graphic mode (Poweramp-style layouts).
-            if (selectedSection == DspMath.Section.GRAPHIC) {
-                Box {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(FoamTheme.colors.surfaceVariant)
-                            .clickable { showBandPicker = !showBandPicker }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            BasicText(
-                                text = stringResource(R.string.eq_bands_caps, state.graphicEq.count),
-                                style = FoamTheme.typography.caption.copy(
-                                    color = FoamTheme.accentColor,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
-                    }
-                    DropdownMenu(
-                        expanded = showBandPicker,
-                        onDismissRequest = { showBandPicker = false }
-                    ) {
-                        GraphicEqSettings.UI_BAND_COUNTS.forEach { count ->
-                            DropdownMenuItem(
-                                onClick = {
-                                    viewModel.setGraphicBandCount(count)
-                                    showBandPicker = false
-                                }
-                            ) {
-                                BasicText(
-                                    text = stringResource(R.string.eq_bands, count),
-                                    style = FoamTheme.typography.caption.copy(
-                                        color = if (count == state.graphicEq.count) {
-                                            FoamTheme.accentColor
-                                        } else {
-                                            FoamTheme.colors.textPrimary
-                                        }
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-            }
 
             // Quick add-node action, only in parametric mode.
             if (selectedSection == DspMath.Section.PARAMETRIC) {

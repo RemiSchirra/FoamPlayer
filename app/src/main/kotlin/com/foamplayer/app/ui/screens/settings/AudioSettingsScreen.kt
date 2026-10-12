@@ -56,6 +56,7 @@ fun AudioSettingsScreen(
     onBack: () -> Unit,
     onNavigateToPlayback: () -> Unit,
     onNavigateToDevices: () -> Unit,
+    onNavigateToEqualizer: () -> Unit,
     viewModel: AudioSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
@@ -154,6 +155,22 @@ fun AudioSettingsScreen(
                         title = stringResource(R.string.output_devices),
                         description = stringResource(R.string.audio_devices_desc),
                         onClick = onNavigateToDevices
+                    )
+                }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    FoamNavigationButton(
+                        title = stringResource(R.string.equalizer_dsp),
+                        description = stringResource(R.string.equalizer_dsp_desc),
+                        onClick = onNavigateToEqualizer
                     )
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
