@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -61,9 +60,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
-import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
+import com.foamplayer.app.ui.components.LibraryFoldersCard
+import com.foamplayer.app.ui.components.LibraryScanCard
 import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.modals.PickerHeaderButton
 import com.foamplayer.app.ui.modals.PlaylistNameField
@@ -71,7 +71,6 @@ import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.roundToInt
-import androidx.core.net.toUri
 
 /** Which separator list the add-separator dialog is open for; null = closed. */
 private enum class SeparatorTarget { ARTIST, GENRE }
@@ -103,11 +102,6 @@ fun LibrarySettingsScreen(
         }
     }
 
-    // Sorted once per folder-set change: calling sorted() inside the LazyColumn scope
-    // re-allocated and re-sorted the list on every recomposition (and remember is not
-    // available there -- LazyListScope is not composable).
-    val sortedFolders = remember(selectedFolders) { selectedFolders.sortedBy { folderDisplayName(it) } }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -127,88 +121,11 @@ fun LibrarySettingsScreen(
         ) {
             // --- Library Folders ---
             item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    BasicText(text = stringResource(R.string.library_folders), style = FoamTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                    // FoamTheme doesn't provide an Indication, so a bare `clickable`
-                    // draws no ripple: every pressable here passes one explicitly.
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                            .background(FoamTheme.accentColor)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
-                                onClick = { folderPickerLauncher.launch(null) }
-                            )
-                            .padding(horizontal = FoamDimens.spacingMedium, vertical = FoamDimens.spacingSmall)
-                    ) {
-                        BasicText(
-                            text = stringResource(R.string.add_folder),
-                            style = FoamTheme.typography.caption.copy(
-                                color = FoamTheme.colors.background,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-            }
-
-            if (selectedFolders.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
-                            .padding(vertical = FoamDimens.paddingLarge),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        BasicText(text = stringResource(R.string.no_folders_selected), style = FoamTheme.typography.body)
-                    }
-                }
-            } else {
-                items(sortedFolders, key = { it }) { folder ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = FoamDimens.spacingTiny)
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(FoamDimens.spacingMedium),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            BasicText(
-                                text = folderDisplayName(folder),
-                                style = FoamTheme.typography.caption,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 1
-                            )
-                            Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
-                            // Circular clip bounds the ripple around the cross.
-                            Box(
-                                modifier = Modifier
-                                    .size(FoamDimens.iconMedium)
-                                    .clip(CircleShape)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = ripple(color = FoamTheme.colors.textPrimary),
-                                        onClick = { viewModel.removeFolder(folder) }
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = FoamTheme.icons.current.close,
-                                    contentDescription = stringResource(R.string.remove),
-                                    tint = FoamTheme.accentColor,
-                                    modifier = Modifier.size(FoamDimens.iconSmall)
-                                )
-                            }
-                        }
-                    }
-                }
+                LibraryFoldersCard(
+                    folders = selectedFolders,
+                    onPickFolder = { folderPickerLauncher.launch(null) },
+                    onRemoveFolder = viewModel::removeFolder
+                )
             }
 
             item { Spacer(modifier = Modifier.height(FoamDimens.spacingLarge)) }
@@ -216,83 +133,10 @@ fun LibrarySettingsScreen(
             // --- Library Scan (directly under the folder list: scanning is
             // tied to the folders above) ---
             item {
-                BasicText(text = stringResource(R.string.library_scan), style = FoamTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(FoamDimens.paddingMedium)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                BasicText(text = stringResource(R.string.scan_media), style = FoamTheme.typography.titleMedium)
-                                when (val status = scanStatus) {
-                                    is ScanStatus.Scanning -> {
-                                        BasicText(
-                                            // Extraction is done at 100%, but art probing and
-                                            // the DB write still run for a while: show a
-                                            // "finishing" label instead of the last file.
-                                            text = if (status.progress >= 1f) stringResource(R.string.scan_finishing)
-                                            else stringResource(R.string.scanning_status, status.currentFile, (status.progress * 100).toInt()),
-                                            style = FoamTheme.typography.caption
-                                        )
-                                    }
-                                    is ScanStatus.Finished -> {
-                                        BasicText(
-                                            text = stringResource(R.string.scan_finished, status.count),
-                                            style = FoamTheme.typography.caption
-                                        )
-                                    }
-                                    else -> {
-                                        BasicText(text = stringResource(R.string.sync_library), style = FoamTheme.typography.body)
-                                    }
-                                }
-                            }
-
-                            val scanning = scanStatus is ScanStatus.Scanning
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                    .background(if (scanning) FoamTheme.colors.surfaceVariant else FoamTheme.accentColor)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
-                                        enabled = !scanning,
-                                        onClick = { viewModel.startScan() }
-                                    )
-                                    .padding(horizontal = FoamDimens.spacingStandard, vertical = FoamDimens.spacingSmall)
-                            ) {
-                                BasicText(
-                                    text = if (scanning) stringResource(R.string.scanning_caps) else stringResource(R.string.start_scan),
-                                    style = FoamTheme.typography.caption.copy(
-                                        color = if (scanning) FoamTheme.colors.textSecondary else FoamTheme.colors.background,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-                        }
-
-                        if (scanStatus is ScanStatus.Scanning) {
-                            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.spacingTiny)
-                                    .clip(RoundedCornerShape(FoamDimens.spacingTiny / 2))
-                                    .background(FoamTheme.colors.surfaceVariant)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth((scanStatus as ScanStatus.Scanning).progress)
-                                        .height(FoamDimens.spacingTiny)
-                                        .background(FoamTheme.accentColor)
-                                )
-                            }
-                        }
-                    }
-                }
+                LibraryScanCard(
+                    scanStatus = scanStatus,
+                    onStartScan = viewModel::startScan
+                )
                 Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
             }
 
@@ -714,25 +558,4 @@ private fun AddSeparatorDialog(
             }
         }
     }
-}
-
-/**
- * Extracts a human-readable name from a SAF tree URI such as
- * "content://com.android.externalstorage.documents/tree/primary%3AMusic/Jazz".
- * Returns the decoded path after the volume prefix (e.g. "Music/Jazz"),
- * falling back to the raw URI when the format is unexpected.
- */
-internal fun folderDisplayName(folderUri: String): String {
-    val segments = try {
-        folderUri.toUri().pathSegments
-    } catch (_: Exception) {
-        return folderUri
-    }
-    val treeIndex = segments.indexOf("tree")
-    if (treeIndex == -1 || treeIndex >= segments.lastIndex) return folderUri
-    val treePath = segments[treeIndex + 1]
-    val relativePath = treePath.substringAfter(':', missingDelimiterValue = "")
-    if (relativePath.isNotBlank()) return relativePath
-    val volume = treePath.substringBefore(':', missingDelimiterValue = "")
-    return volume.ifBlank { folderUri }
 }

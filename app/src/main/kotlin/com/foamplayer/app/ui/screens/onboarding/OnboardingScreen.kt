@@ -11,7 +11,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -68,8 +67,9 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.scanner.ScanStatus
+import com.foamplayer.app.ui.components.LibraryFoldersCard
+import com.foamplayer.app.ui.components.LibraryScanCard
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
-import com.foamplayer.app.ui.screens.settings.folderDisplayName
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import androidx.lifecycle.Lifecycle
@@ -371,170 +371,17 @@ private fun LibraryPage(
             )
             Spacer(modifier = Modifier.height(FoamDimens.paddingLarge))
 
-            // --- Folders ---
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
-                    .background(FoamTheme.colors.surface)
-                    .padding(FoamDimens.paddingMedium)
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        BasicText(
-                            text = stringResource(R.string.library_folders),
-                            style = FoamTheme.typography.titleMedium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                .background(FoamTheme.accentColor)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = ripple(color = FoamTheme.colors.background)
-                                ) { onPickFolder() }
-                                .padding(horizontal = FoamDimens.spacingMedium, vertical = FoamDimens.spacingSmall)
-                        ) {
-                            BasicText(
-                                text = stringResource(R.string.add_folder),
-                                style = FoamTheme.typography.caption.copy(
-                                    color = FoamTheme.colors.background,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                    if (folders.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                                .background(FoamTheme.colors.surfaceVariant)
-                                .padding(vertical = FoamDimens.paddingLarge),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            BasicText(
-                                text = stringResource(R.string.no_folders_selected),
-                                style = FoamTheme.typography.body
-                            )
-                        }
-                    } else {
-                        val sortedFolders = remember(folders) { folders.sortedBy { folderDisplayName(it) } }
-                        sortedFolders.forEach { folder ->
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = FoamDimens.spacingTiny)
-                                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                                    .background(FoamTheme.colors.surfaceVariant)
-                            ) {
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(FoamDimens.spacingMedium),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    BasicText(
-                                        text = folderDisplayName(folder),
-                                        style = FoamTheme.typography.caption,
-                                        modifier = Modifier.weight(1f),
-                                        maxLines = 1
-                                    )
-                                    Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
-                                    Icon(
-                                        imageVector = FoamTheme.icons.current.close,
-                                        contentDescription = stringResource(R.string.remove),
-                                        tint = FoamTheme.accentColor,
-                                        modifier = Modifier
-                                            .size(FoamDimens.iconSmall)
-                                            .clickable { onRemoveFolder(folder) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
+            LibraryFoldersCard(
+                folders = folders,
+                onPickFolder = onPickFolder,
+                onRemoveFolder = onRemoveFolder
+            )
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+            LibraryScanCard(
+                scanStatus = scanStatus,
+                onStartScan = onStartScan
+            )
 
-            // --- First scan ---
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
-                    .background(FoamTheme.colors.surface)
-                    .padding(FoamDimens.paddingMedium)
-            ) {
-                Column(Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            BasicText(text = stringResource(R.string.scan_media), style = FoamTheme.typography.titleMedium)
-                            when (val status = scanStatus) {
-                                is ScanStatus.Scanning -> {
-                                    BasicText(
-                                        text = if (status.progress >= 1f) stringResource(R.string.scan_finishing)
-                                        else stringResource(R.string.scanning_status, status.currentFile, (status.progress * 100).toInt()),
-                                        style = FoamTheme.typography.caption
-                                    )
-                                }
-                                is ScanStatus.Finished -> {
-                                    BasicText(
-                                        text = stringResource(R.string.scan_finished, status.count),
-                                        style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.bitPerfectActive)
-                                    )
-                                }
-                                else -> {
-                                    BasicText(text = stringResource(R.string.sync_library), style = FoamTheme.typography.body)
-                                }
-                            }
-                        }
-
-                        val isScanning = scanStatus is ScanStatus.Scanning
-                        BasicText(
-                            text = if (isScanning) stringResource(R.string.scanning_caps)
-                            else stringResource(R.string.start_scan),
-                            style = FoamTheme.typography.body.copy(
-                                color = if (isScanning) FoamTheme.colors.textSecondary else FoamTheme.accentColor,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = ripple(color = FoamTheme.accentColor),
-                                    enabled = !isScanning
-                                ) { onStartScan() }
-                                .padding(horizontal = FoamDimens.spacingMedium, vertical = FoamDimens.spacingSmall)
-                        )
-                    }
-
-                    if (scanStatus is ScanStatus.Scanning) {
-                        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                        val animatedProgress by animateFloatAsState(
-                            targetValue = (scanStatus as ScanStatus.Scanning).progress,
-                            animationSpec = tween(durationMillis = 200),
-                            label = "onboardingScanProgress"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(FoamDimens.spacingTiny)
-                                .clip(RoundedCornerShape(FoamDimens.spacingTiny / 2))
-                                .background(FoamTheme.colors.surfaceVariant)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(animatedProgress.coerceIn(0f, 1f))
-                                    .height(FoamDimens.spacingTiny)
-                                    .background(FoamTheme.accentColor)
-                            )
-                        }
-                    }
-                }
-            }
             Spacer(modifier = Modifier.height(FoamDimens.paddingLarge))
             BasicText(
                 text = stringResource(R.string.onboarding_skip_hint),

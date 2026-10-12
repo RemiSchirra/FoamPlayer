@@ -47,7 +47,7 @@
     <string name="sync_library">Sync your music library</string>
     <string name="start_scan">START SCAN</string>
     <string name="scanning_caps">SCANNING</string>
-    <string name="scanning_status">Scanning: %1$s (%2$d%%)</string>
+    <string name="scanning_status_percent">\u0020(%1$d%%)</string>
     <string name="scan_finishing">End of the scan…</string>
     <string name="scan_finished">Scan finished: %1$d tracks found</string>
     <string name="scan_notification_channel_name">Library and artist scans</string>
