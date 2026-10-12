@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -328,14 +327,10 @@ fun CollectionListScreen(
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
+                CollectionTopBarIcon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = stringResource(R.string.back),
-                    tint = FoamTheme.colors.textPrimary,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clickable { onBack() }
-                        .padding(4.dp)
+                    onClick = onBack
                 )
 
                 if (onDensityChange != null) {

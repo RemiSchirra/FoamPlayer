@@ -141,6 +141,12 @@ val CollectionScrollTopBarFadeDistance = 160.dp
 /** Peak alpha of the scroll top bar's gradient at the very top of the screen. */
 const val CollectionScrollTopBarMaxAlpha = 0.55f
 
+/** Diameter of the floating top-bar icons' translucent circle. */
+val CollectionTopBarIconCircleSize = 40.dp
+
+/** Alpha of the floating top-bar icons' translucent circle background. */
+const val CollectionTopBarIconBackgroundAlpha = 0.4f
+
 /** Horizontal padding kept clear of the back/more buttons for the top bar's title. */
 val CollectionScrollTopBarTitleHorizontalPadding = 56.dp
 
@@ -1435,7 +1441,7 @@ private fun CollectionHeroSearchBar(
  * The shared-element flight fraction of the given transition scopes: 1f while
  * the transition is in flight, 0f once settled. Draw-phase only. Returns a
  * constant 0f when either scope is missing. Animates with the same
- * duration/easing as the NavHost's screen fade and [AlbumArtBoundsTransform],
+ * duration/easing tween as the NavHost's screen fade and [AlbumArtBoundsTransform],
  * so chrome fading with the flight lands on the same frame as the screen fade.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -1633,6 +1639,50 @@ fun CollectionScrollTopBar(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+/**
+ * A floating collection top-bar icon button (back arrow, edit pencil,
+ * organisation dots) rendered over the hero artwork: the glyph sits inside a
+ * translucent circle that carries its own press ripple, keeping the chrome
+ * readable over bright artwork without hiding it.
+ *
+ * The circle owns the click target and the ripple (clipped to the circle, like
+ * the hero's shuffle/search toggles); [modifier] only adds to the circle's
+ * layout/placement. [backgroundColor] defaults to a semi-transparent surface;
+ * pass an opaque color to opt out.
+ */
+@Composable
+fun CollectionTopBarIcon(
+    imageVector: ImageVector,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = FoamTheme.colors.textPrimary,
+    backgroundColor: Color = FoamTheme.colors.background.copy(alpha = CollectionTopBarIconBackgroundAlpha),
+    iconSize: Dp = 24.dp,
+    circleSize: Dp = CollectionTopBarIconCircleSize
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = modifier
+            .size(circleSize)
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = imageVector,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(iconSize)
+        )
     }
 }
 

@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
+import com.foamplayer.app.ui.components.CollectionTopBarIcon
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -296,32 +297,17 @@ private fun DensityRadioButton(selected: Boolean) {
 /**
  * The 3-dots icon button that opens [DensityOrganisationModal]; rendered in a
  * media list screen's top bar. Kept here so every screen shows the identical
- * control.
+ * control: the glyph sits in the floating top-bar's translucent circle
+ * ([CollectionTopBarIcon]) with its own press ripple.
  */
 @Composable
 internal fun OrganisationMenuButton(
     contentDescription: String,
     onClick: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-
-    Box(
-        modifier = Modifier
-            .size(32.dp)
-            .clip(CircleShape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                onClick = onClick
-            )
-            .padding(4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.MoreVert,
-            contentDescription = contentDescription,
-            tint = FoamTheme.colors.textPrimary,
-            modifier = Modifier.size(FoamDimens.iconMedium)
-        )
-    }
+    CollectionTopBarIcon(
+        imageVector = Icons.Rounded.MoreVert,
+        contentDescription = contentDescription,
+        onClick = onClick
+    )
 }

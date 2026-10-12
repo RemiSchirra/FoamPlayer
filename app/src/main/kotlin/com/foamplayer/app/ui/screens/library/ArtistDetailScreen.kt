@@ -58,6 +58,7 @@ import com.foamplayer.app.ui.components.CollectionScrollTopBar
 import com.foamplayer.app.ui.components.CollectionSearchScrollToBarEffect
 import com.foamplayer.app.ui.components.CollectionSearchImmersiveTopClearance
 import com.foamplayer.app.ui.components.CollectionSearchState
+import com.foamplayer.app.ui.components.CollectionTopBarIcon
 import com.foamplayer.app.ui.components.CollectionTopBarRowHeight
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.MediaArtKind
@@ -415,14 +416,10 @@ fun ArtistDetailScreen(
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
+                CollectionTopBarIcon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = stringResource(R.string.back),
-                    tint = FoamTheme.colors.textPrimary,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clickable { onBack() }
-                        .padding(4.dp)
+                    onClick = onBack
                 )
             }
         }

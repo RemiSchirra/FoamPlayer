@@ -6,7 +6,6 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
@@ -37,8 +35,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.Icon
-import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -51,7 +47,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -889,17 +884,13 @@ private fun TrackListTopBarRow(
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
+        // While editing, back leaves edit mode before the screen.
+        CollectionTopBarIcon(
             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
             contentDescription = stringResource(R.string.back),
-            tint = FoamTheme.colors.textPrimary,
-            modifier = Modifier
-                .size(32.dp)
-                .clickable {
-                    // While editing, back leaves edit mode before the screen.
-                    if (editMode) onEditModeChange?.invoke(false) else onBack()
-                }
-                .padding(4.dp)
+            onClick = {
+                if (editMode) onEditModeChange?.invoke(false) else onBack()
+            }
         )
 
         if (onEditModeChange != null || onDensityChange != null) {
@@ -907,26 +898,12 @@ private fun TrackListTopBarRow(
         }
 
         if (onEditModeChange != null) {
-            val editInteractionSource = remember { MutableInteractionSource() }
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .clickable(
-                        interactionSource = editInteractionSource,
-                        indication = ripple(color = FoamTheme.colors.textPrimary),
-                        onClick = { onEditModeChange(!editMode) }
-                    )
-                    .padding(4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Edit,
-                    contentDescription = stringResource(R.string.edit),
-                    tint = if (editMode) accentColor else FoamTheme.colors.textPrimary,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+            CollectionTopBarIcon(
+                imageVector = Icons.Rounded.Edit,
+                contentDescription = stringResource(R.string.edit),
+                onClick = { onEditModeChange(!editMode) },
+                tint = if (editMode) accentColor else FoamTheme.colors.textPrimary
+            )
 
             if (onDensityChange != null) {
                 Spacer(modifier = Modifier.width(12.dp))
