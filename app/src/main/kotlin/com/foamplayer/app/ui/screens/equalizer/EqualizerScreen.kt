@@ -41,10 +41,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Equalizer
-import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PowerSettingsNew
-import androidx.compose.material.icons.rounded.VolumeOff
-import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -111,7 +108,8 @@ import kotlin.math.roundToInt
  *  - rotary tone knobs — pre-amp in dB; bass/mid/treble boost-only, reading
  *    0-100% (log-tapered to 0..+12 dB, no negative dB) — and control knobs
  *    (balance, stereo width 0-100% = ×1..×2),
- *  - direct volume control slider with dB readout.
+ *  - Android media volume slider (the track volume stays at 100%; loudness is
+ *    only touched through the system volume).
  *
  * All controls commit on release so a drag never floods the DSP engine with state
  * emissions; the graphs and the mini map render from local working copies in the
@@ -412,7 +410,7 @@ fun EqualizerScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // volume
-        VolumeSection(state = state, viewModel = viewModel)
+        VolumeSection()
 
         Spacer(modifier = Modifier.height(24.dp))
     }
@@ -1055,76 +1053,9 @@ private fun SectionCaption(text: String) {
 // volume
 
 @Composable
-private fun VolumeSection(
-    state: DspState,
-    viewModel: EqualizerViewModel
-) {
+private fun VolumeSection() {
     FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = if (state.volumePercent == 0) {
-                        Icons.Rounded.VolumeOff
-                    } else {
-                        Icons.Rounded.VolumeUp
-                    },
-                    contentDescription = null,
-                    tint = FoamTheme.accentColor,
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            viewModel.setVolumePercent(if (state.volumePercent == 0) 100 else 0)
-                        }
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    BasicText(text = stringResource(R.string.eq_volume), style = FoamTheme.typography.titleMedium)
-                    BasicText(
-                        text = stringResource(R.string.eq_volume_desc),
-                        style = FoamTheme.typography.caption
-                    )
-                }
-                BasicText(
-                    text = stringResource(
-                        R.string.eq_volume_readout,
-                        state.volumePercent,
-                        DspMath.volumePercentToDb(state.volumePercent)
-                    ),
-                    style = FoamTheme.typography.monospace
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Commit-on-release: the drag stays local, the engine sees one update.
-            var dragVolume by remember(state.volumePercent) {
-                mutableIntStateOf(state.volumePercent)
-            }
-            FoamSlider(
-                value = { dragVolume / 100f },
-                onValueChange = { dragVolume = (it * 100).roundToInt() },
-                modifier = Modifier.onSeekBarReleased {
-                    viewModel.setVolumePercent(dragVolume)
-                }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                BasicText(text = stringResource(R.string.eq_mute), style = FoamTheme.typography.caption)
-                BasicText(text = stringResource(R.string.eq_full_scale), style = FoamTheme.typography.caption)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            SystemVolumeControl()
-        }
+        SystemVolumeControl()
     }
 }
 
@@ -1238,49 +1169,43 @@ private fun SystemVolumeControl() {
         }
     }
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = Icons.Rounded.PhoneAndroid,
-            contentDescription = null,
-            tint = FoamTheme.accentColor,
-            modifier = Modifier.size(22.dp)
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        BasicText(
-            text = stringResource(R.string.eq_volume),
-            style = FoamTheme.typography.titleMedium,
-            modifier = Modifier.weight(1f)
-        )
-        BasicText(
-            text = formatPercent((shownFraction.value * 100f).roundToInt().toFloat()),
-            style = FoamTheme.typography.monospace
-        )
-    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText(
+                text = stringResource(R.string.eq_volume),
+                style = FoamTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f)
+            )
+            BasicText(
+                text = formatPercent((shownFraction.value * 100f).roundToInt().toFloat()),
+                style = FoamTheme.typography.monospace
+            )
+        }
 
-    Spacer(modifier = Modifier.height(8.dp))
 
-    FoamSlider(
-        value = { shownFraction.value },
-        onValueChange = { raw ->
-            val fraction = raw.coerceIn(0f, 1f)
-            // Finger input: the thumb follows continuously, cancelling any glide in progress.
-            scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                shownFraction.snapTo(fraction)
-            }
-            val newIndex = (fraction * maxIndex).roundToInt().coerceIn(0, maxIndex)
-            if (newIndex != index || halfStep) {
-                index = newIndex
-                halfStep = false
-                lastKnownIndex = newIndex
-                lastLocalChangeMs = SystemClock.elapsedRealtime()
-                try {
-                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newIndex, 0)
-                } catch (_: SecurityException) {
-                    // Volume policy refused the change; the fallback poll restores the real value.
+        FoamSlider(
+            value = { shownFraction.value },
+            onValueChange = { raw ->
+                val fraction = raw.coerceIn(0f, 1f)
+                // Finger input: the thumb follows continuously, cancelling any glide in progress.
+                scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    shownFraction.snapTo(fraction)
+                }
+                val newIndex = (fraction * maxIndex).roundToInt().coerceIn(0, maxIndex)
+                if (newIndex != index || halfStep) {
+                    index = newIndex
+                    halfStep = false
+                    lastKnownIndex = newIndex
+                    lastLocalChangeMs = SystemClock.elapsedRealtime()
+                    try {
+                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newIndex, 0)
+                    } catch (_: SecurityException) {
+                        // Volume policy refused the change; the fallback poll restores the real value.
+                    }
                 }
             }
-        }
-    )
+        )
+    }
 }
 
 private const val SYSTEM_VOLUME_POLL_MS = 250L
