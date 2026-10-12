@@ -31,20 +31,24 @@ data class ToneSettings(
  * curves all sit on the standard grid. The band count lives in
  * [GraphicEqSettings.count].
  */
-enum class EqBandLayout(val bands: Int, val frequencies: List<Float>) {
+enum class EqBandLayout(val bands: Int, val q: Double, val frequencies: List<Float>) {
+    // [q] is the peaking-filter Q tuned for each grid. Band spacing is 1, 2/3 and
+    // 1/3 octave, so Q rises with the band count, but deliberately stays LOW: each
+    // band is 2-3x wider than the spacing between bands, so neighbouring sliders
+    // blend into a smooth curve instead of showing a spike per slider.
     ISO_10(
-        10,
+        10, 0.9,
         listOf(31.5f, 63f, 125f, 250f, 500f, 1000f, 2000f, 4000f, 8000f, 16000f)
     ),
     ISO_15(
-        15,
+        15, 1.2,
         listOf(
             25f, 40f, 63f, 100f, 160f, 250f, 400f, 630f, 1000f, 1600f,
             2500f, 4000f, 6300f, 10000f, 16000f
         )
     ),
     ISO_31(
-        31,
+        31, 1.8,
         listOf(
             20f, 25f, 31.5f, 40f, 50f, 63f, 80f, 100f, 125f, 160f, 200f, 250f,
             315f, 400f, 500f, 630f, 800f, 1000f, 1250f, 1600f, 2000f, 2500f,
@@ -139,12 +143,21 @@ data class GraphicEqSettings(
         }
 
         /**
-         * Roughly Butterworth Q for overlapping peaking sections, so the bands
-         * sum into a smooth response. Denser bands want a slightly higher Q.
+         * Q of the peaking sections for a graphic EQ with [count] bands, kept low
+         * enough that overlapping bands sum into a smooth response (no per-slider
+         * spikes).
+         *
+         * The ISO layouts (10 / 15 / 31 bands) use their tuned [EqBandLayout.q]: the
+         * fewer the bands, the wider each one is and the lower its Q. Any other count
+         * (legacy layouts) is spaced geometrically over 20 Hz..20 kHz, so its band
+         * spacing in octaves is N = log2(1000) / (count - 1); Q = 0.7 * N^-0.63 is the
+         * power law through the three ISO values, so it stays continuous with them.
          */
         fun bandQ(count: Int): Double {
+            EqBandLayout.of(count)?.let { return it.q }
             val n = count.coerceIn(MIN_BAND_COUNT, MAX_BAND_COUNT)
-            return 1.41 * (n.toDouble() / DEFAULT_BAND_COUNT).pow(0.32)
+            val octaves = kotlin.math.log2(1000.0) / (n - 1)
+            return 0.7 * octaves.pow(-0.63)
         }
     }
 }
