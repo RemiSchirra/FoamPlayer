@@ -8,14 +8,14 @@
     Your personal music bubble: a player designed for your music.
   </p>
 
-    <p align="center">
-    <a href="#-about"><b>About</b></a> •
-    <a href="#-key-features"><b>Features</b></a> •
-    <a href="#-showcase"><b>Showcase</b></a> •
-    <a href="#-architecture"><b>Architecture</b></a> •
-    <a href="#-contributing"><b>Contributing</b></a> •
-    <a href="#-credits"><b>Credits</b></a> •
-    <a href="#-license--legal-mentions"><b>Legal</b></a>
+  <p align="center">
+      <a href="#-about"><b>About</b></a> •
+      <a href="#-key-features"><b>Features</b></a> •
+      <a href="#-showcase"><b>Showcase</b></a> •
+      <a href="#-architecture"><b>Architecture</b></a> •
+      <a href="#-contributing"><b>Contributing</b></a> •
+      <a href="#-credits"><b>Credits</b></a> •
+      <a href="#-license--legal-mentions"><b>Legal</b></a>
   </p>
 </div>
 
