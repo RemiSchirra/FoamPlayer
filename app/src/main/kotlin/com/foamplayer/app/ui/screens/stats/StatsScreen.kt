@@ -131,7 +131,9 @@ fun StatsScreen(
             subtitle = {
                 BasicText(
                     text = periodWindowSubtitle(
-                        period = selectedPeriod,
+                        // Follows the displayed data, which lags the chip
+                        // selection until the new period has loaded.
+                        period = state.period,
                         firstListenEpochDay = state.timeBuckets.firstOrNull()?.startEpochDay
                     ),
                     style = FoamTheme.typography.caption
@@ -159,6 +161,9 @@ fun StatsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Only the very first load shows the loading card. Switching period
+        // keeps every card and its content in place; the view model emits the
+        // new period's state when ready and the cards update in place.
         when {
             state.loading -> FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
                 BasicText(
@@ -318,7 +323,7 @@ fun StatsScreen(
                     title = stringResource(R.string.stats_top_tracks),
                     items = state.topTracks.take(TopListDisplaySize),
                     itemKey = { it.track.id },
-                    onSeeAllClick = { onSeeAll(StatsTopKind.TRACKS, selectedPeriod) }
+                    onSeeAllClick = { onSeeAll(StatsTopKind.TRACKS, state.period) }
                 ) { index, entry ->
                     TopTrackRow(
                         entry = entry,
@@ -333,7 +338,7 @@ fun StatsScreen(
                     title = stringResource(R.string.stats_top_artists),
                     items = state.topArtists.take(TopListDisplaySize),
                     itemKey = { it.name },
-                    onSeeAllClick = { onSeeAll(StatsTopKind.ARTISTS, selectedPeriod) }
+                    onSeeAllClick = { onSeeAll(StatsTopKind.ARTISTS, state.period) }
                 ) { _, artist ->
                     TopArtistRow(
                         artist = artist,
@@ -370,7 +375,7 @@ fun StatsScreen(
                     title = stringResource(R.string.stats_top_albums),
                     items = state.topAlbums.take(TopListDisplaySize),
                     itemKey = { it.album },
-                    onSeeAllClick = { onSeeAll(StatsTopKind.ALBUMS, selectedPeriod) }
+                    onSeeAllClick = { onSeeAll(StatsTopKind.ALBUMS, state.period) }
                 ) { _, album ->
                     TopAlbumRow(
                         entry = album,

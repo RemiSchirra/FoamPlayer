@@ -33,7 +33,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 
@@ -125,7 +124,9 @@ class StatsViewModel @Inject constructor(
                 topAlbums = topStats.topAlbums,
                 topGenres = aggregateGenres(topStats.genreRows)
             )
-        }.onStart { emit(StatsUiState(period = period, loading = true)) }
+        }
+            // No loading emission on a period switch: the screen keeps showing
+            // the previous period's data until this one's first result lands.
             // Aggregations (artist/genre crediting, time buckets) run per
             // emission; keep them off the collecting (main) thread.
             .flowOn(Dispatchers.Default)
