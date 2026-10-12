@@ -535,6 +535,9 @@
     <string name="eq_bass">BASS</string>
     <string name="eq_mid">MID</string>
     <string name="eq_treble">TREBLE</string>
+    <string name="eq_bass_boost">BASS BOOST</string>
+    <string name="eq_treble_boost">TREBLE BOOST</string>
+    <string name="eq_virtualizer">VIRTUALIZER</string>
     <string name="eq_tone">TONE</string>
     <string name="eq_controls">CONTROLS</string>
     <string name="eq_balance">BALANCE</string>

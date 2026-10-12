@@ -17,6 +17,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -48,14 +49,17 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +67,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -95,30 +100,10 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
- * Poweramp-style Equalizer & DSP screen:
- *  - power toggle + response mini map with a translucent white viewport overlay
- *    that scrolls the graphic EQ (per-node colored curves in parametric mode,
- *    separated bass/mid/treble tone curves in both modes),
- *  - a preset chip showing the currently applied preset; tapping it opens a
- *    FoamModal with response previews for every preset, plus create/delete of
- *    user presets,
- *  - Graphic (ISO band layout, chosen in Settings > Audio > Equalizer;
- *    horizontally scrollable band faders) / Parametric (draggable colored
- *    nodes) sections — mutually exclusive: enabling one disables the other,
- *  - rotary tone knobs — pre-amp in dB; bass/mid/treble boost-only, reading
- *    0-100% (log-tapered to 0..+12 dB, no negative dB) — and control knobs
- *    (balance, stereo width 0-100% = ×1..×2),
- *  - Android media volume slider (the track volume stays at 100%; loudness is
- *    only touched through the system volume).
+ * Equalizer & DSP screen: power toggle, response mini map, graphic or
+ * parametric EQ editor, tone/balance/virtualizer cards and system volume.
  *
- * All controls commit on release so a drag never floods the DSP engine with state
- * emissions; the graphs and the mini map render from local working copies in the
- * meantime, so they follow the finger while the engine sees one update. The
- * pre-amp fader is the exception: it streams into the engine live while dragging
- * (it is a single scalar, and the engine's persistence is debounced).
- *
- * The DSP chain is purely linear (industry-standard EQ): the former Limiter and
- * Auto-headroom switches are gone, boosts are heard exactly as the curve shows.
+ * Edits commit on release; graphs render from local working copies while dragging.
  */
 @Composable
 fun EqualizerScreen(
@@ -132,10 +117,6 @@ fun EqualizerScreen(
     var showPresetsModal by remember { mutableStateOf(false) }
     var showSavePresetModal by remember { mutableStateOf(false) }
 
-    // The displayed EQ section is defined by the preset/state, not by tabs:
-    // applying a parametric preset switches to the parametric editor, applying
-    // a graphic preset switches back. With both sections off, the last shown
-    // section stays.
     LaunchedEffect(state.graphicEq.enabled, state.parametricEq.enabled) {
         when {
             state.parametricEq.enabled -> selectedSection = DspMath.Section.PARAMETRIC
@@ -143,27 +124,33 @@ fun EqualizerScreen(
         }
     }
 
-    // Scroll state of the graphic strip, shared with the mini map's viewport overlay.
     val stripScrollState = rememberScrollState()
     var stripViewportWidthPx by remember { mutableIntStateOf(0) }
 
-    // Working copies of the sections being edited: the graphs and the mini map
-    // render from these so a drag is visible immediately; the engine is updated
-    // once per commit. The pre-amp streams live instead (no working copy).
     var workingGains by remember { mutableStateOf(state.graphicEq.gainsDb) }
     var workingNodes by remember { mutableStateOf(state.parametricEq.nodes) }
-    // Re-sync when the engine state changes externally (preset applied, node
-    // added/removed, section toggled, band layout changed in settings). Rare, so
-    // a mid-drag override is acceptable.
     LaunchedEffect(state.graphicEq.gainsDb) { workingGains = state.graphicEq.gainsDb }
     LaunchedEffect(state.parametricEq.nodes) { workingNodes = state.parametricEq.nodes }
 
-    // Live mini-map curve: ONLY the active EQ section — tone never mixes into it,
-    // its shelves are drawn as their own separated curves alongside (see
-    // [toneCurves]). The section under edit renders from the working copies
-    // (graphic gains / parametric nodes) so a drag is visible immediately; the
-    // graphic preview stays visible even while its section is toggled off,
-    // matching the always-editable fader strip.
+    var bassValue by rememberSaveable { mutableFloatStateOf(state.tone.bassDb) }
+    var bassApplied by rememberSaveable { mutableStateOf(state.tone.bassDb != 0f) }
+    var trebleValue by rememberSaveable { mutableFloatStateOf(state.tone.trebleDb) }
+    var trebleApplied by rememberSaveable { mutableStateOf(state.tone.trebleDb != 0f) }
+
+    // A neutral engine value only means the card is off, so it is never adopted.
+    LaunchedEffect(state.tone.bassDb) {
+        if (state.tone.bassDb != 0f) {
+            bassValue = state.tone.bassDb
+            bassApplied = true
+        }
+    }
+    LaunchedEffect(state.tone.trebleDb) {
+        if (state.tone.trebleDb != 0f) {
+            trebleValue = state.tone.trebleDb
+            trebleApplied = true
+        }
+    }
+
     val miniMapCurve = remember(selectedSection, state, workingGains, workingNodes) {
         when (selectedSection) {
             DspMath.Section.GRAPHIC -> DspMath.sectionResponse(
@@ -179,9 +166,27 @@ fun EqualizerScreen(
         }
     }
 
-    // Separated per-tone curves: bass, mid and treble each drawn in their own
-    // color next to the section curve — overlays, never summed into it.
-    val toneCurves = remember(state.tone) { DspMath.toneCurves(state.tone) }
+    val miniMapToneCurves = remember(
+        bassValue, bassApplied, trebleValue, trebleApplied, state.tone.midDb
+    ) {
+        DspMath.toneCurves(
+            ToneSettings(
+                bassDb = bassValue,
+                midDb = state.tone.midDb,
+                trebleDb = trebleValue
+            )
+        ).map { (band, points) ->
+            MiniMapToneCurve(
+                band = band,
+                points = points,
+                active = when (band) {
+                    DspMath.ToneBand.BASS -> bassApplied
+                    DspMath.ToneBand.TREBLE -> trebleApplied
+                    DspMath.ToneBand.MID -> true
+                }
+            )
+        }
+    }
 
     val allPresets = remember(userPresets) { DspPreset.BUILT_INS + userPresets }
     val currentPreset = remember(allPresets, state) { allPresets.matching(state) }
@@ -193,25 +198,9 @@ fun EqualizerScreen(
             .padding(top = 16.dp, start = 8.dp, end = 8.dp)
             .padding(bottom = LocalBottomBarClearance.current)
     ) {
-        // ------------------------------------------------------------ header
         ScreenTitle(
             icon = Icons.Rounded.Equalizer,
             title = stringResource(R.string.equalizer_dsp),
-            subtitle = {
-                BasicText(
-                    text = when {
-                        state.isNeutral -> stringResource(R.string.eq_bit_perfect_passthrough)
-                        else -> stringResource(R.string.eq_float_processing)
-                    },
-                    style = FoamTheme.typography.caption.copy(
-                        color = if (state.isNeutral) {
-                            FoamTheme.colors.bitPerfectActive
-                        } else {
-                            FoamTheme.colors.bitPerfectInactive
-                        }
-                    )
-                )
-            },
             actions = {
                 PowerButton(
                     enabled = state.enabled,
@@ -222,15 +211,15 @@ fun EqualizerScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ---------------------------------------------------------- mini map
-        // Full-bleed: the screen column pads 8.dp on each side, so the map is
-        // measured 16.dp wider than its constraints and shifted left by 8.dp to
-        // touch both screen edges.
         EqMiniMap(
             combinedCurve = miniMapCurve,
             nodes = if (selectedSection == DspMath.Section.PARAMETRIC) workingNodes else emptyList(),
             active = state.enabled,
-            toneCurves = toneCurves,
+            toneCurves = miniMapToneCurves,
+            sectionActive = when (selectedSection) {
+                DspMath.Section.GRAPHIC -> state.graphicEq.enabled
+                DspMath.Section.PARAMETRIC -> state.parametricEq.enabled
+            },
             showViewport = selectedSection == DspMath.Section.GRAPHIC,
             scrollState = stripScrollState,
             stripViewportWidthPx = stripViewportWidthPx,
@@ -250,172 +239,194 @@ fun EqualizerScreen(
                 .height(72.dp)
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // preset chip
-        PresetChip(
-            currentPresetName = currentPreset?.name,
-            onClick = { showPresetsModal = true }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // ------------------------------------------- active EQ section header
-        // (defined by the applied preset's kind — graphic or parametric, never both)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BasicText(
-                text = when (selectedSection) {
-                    DspMath.Section.GRAPHIC -> stringResource(R.string.eq_graphic_title, state.graphicEq.count)
-                    DspMath.Section.PARAMETRIC -> stringResource(
-                        R.string.eq_parametric_title,
-                        workingNodes.size,
-                        ParametricEqSettings.MAX_NODES
-                    )
-                },
-                style = FoamTheme.typography.caption,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Quick add-node action, only in parametric mode.
-            if (selectedSection == DspMath.Section.PARAMETRIC) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (workingNodes.size < ParametricEqSettings.MAX_NODES) {
-                                FoamTheme.colors.surfaceVariant
-                            } else {
-                                FoamTheme.colors.surfaceVariant.copy(alpha = 0.4f)
-                            }
-                        )
-                        .clickable(
-                            enabled = workingNodes.size < ParametricEqSettings.MAX_NODES
-                        ) {
-                            val id = viewModel.addParametricNode()
-                            selectedNodeId = id
-                        }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = null,
-                            tint = FoamTheme.accentColor,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        BasicText(
-                            text = stringResource(R.string.eq_node),
-                            style = FoamTheme.typography.caption.copy(
-                                color = FoamTheme.accentColor,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-            }
-
-            SectionPowerToggle(
-                enabled = when (selectedSection) {
-                    DspMath.Section.GRAPHIC -> state.graphicEq.enabled
-                    DspMath.Section.PARAMETRIC -> state.parametricEq.enabled
-                },
-                onToggle = { on ->
-                    when (selectedSection) {
-                        DspMath.Section.GRAPHIC -> viewModel.setGraphicEnabled(on)
-                        DspMath.Section.PARAMETRIC -> viewModel.setParametricEnabled(on)
-                    }
-                }
-            )
-        }
-
         Spacer(modifier = Modifier.height(8.dp))
 
-        // preamp fader + section graph
-        Row(modifier = Modifier.fillMaxWidth()) {
-            VerticalSlider(
-                value = state.preampDb,
-                onCommit = { viewModel.setPreampDb(it) },
-                onValueChange = { viewModel.setPreampDb(it) },
-                valueRange = DspState.MIN_PREAMP_DB..DspState.MAX_PREAMP_DB,
-                label = stringResource(R.string.eq_preamp),
-                valueText = { formatDb(it) },
-                modifier = Modifier
-                    .width(56.dp)
-                    .height(230.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(FoamTheme.colors.surface)
+                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp)
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        PresetChip(
+                            currentPresetName = currentPreset?.name,
+                            onClick = { showPresetsModal = true }
+                        )
+                    }
 
-            when (selectedSection) {
-                DspMath.Section.GRAPHIC -> GraphicEqStrip(
-                    gains = workingGains,
-                    enabled = state.graphicEq.enabled,
-                    scrollState = stripScrollState,
-                    onPreview = { index, gain ->
-                        workingGains = workingGains
-                            .toMutableList()
-                            .also { it[index] = gain }
-                    },
-                    onCommit = { viewModel.setGraphicGains(workingGains) },
-                    onViewportWidthChanged = { stripViewportWidthPx = it },
-                    modifier = Modifier.weight(1f)
-                )
-                DspMath.Section.PARAMETRIC -> EqualizerGraph(
-                    state = state,
-                    nodes = workingNodes,
-                    enabled = state.parametricEq.enabled,
-                    selectedNodeId = selectedNodeId,
-                    onNodeSelect = { selectedNodeId = it },
-                    onNodesChange = { workingNodes = it },
-                    onNodeCommit = { node -> viewModel.updateParametricNode(node) },
-                    modifier = Modifier.weight(1f)
-                )
+                    Switch(
+                        checked = when (selectedSection) {
+                            DspMath.Section.GRAPHIC -> state.graphicEq.enabled
+                            DspMath.Section.PARAMETRIC -> state.parametricEq.enabled
+                        },
+                        onCheckedChange = { on ->
+                            when (selectedSection) {
+                                DspMath.Section.GRAPHIC -> viewModel.setGraphicEnabled(on)
+                                DspMath.Section.PARAMETRIC -> viewModel.setParametricEnabled(on)
+                            }
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = FoamTheme.accentColor,
+                            checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
+                            uncheckedThumbColor = FoamTheme.colors.textSecondary,
+                            uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.4f)
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (selectedSection == DspMath.Section.PARAMETRIC) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (workingNodes.size < ParametricEqSettings.MAX_NODES) {
+                                        FoamTheme.colors.surfaceVariant
+                                    } else {
+                                        FoamTheme.colors.surfaceVariant.copy(alpha = 0.4f)
+                                    }
+                                )
+                                .clickable(
+                                    enabled = workingNodes.size < ParametricEqSettings.MAX_NODES
+                                ) {
+                                    val id = viewModel.addParametricNode()
+                                    selectedNodeId = id
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Add,
+                                    contentDescription = null,
+                                    tint = FoamTheme.accentColor,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                BasicText(
+                                    text = stringResource(R.string.eq_node),
+                                    style = FoamTheme.typography.caption.copy(
+                                        color = FoamTheme.accentColor,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    VerticalSlider(
+                        value = state.preampDb,
+                        onCommit = { viewModel.setPreampDb(it) },
+                        onValueChange = { viewModel.setPreampDb(it) },
+                        valueRange = DspState.MIN_PREAMP_DB..DspState.MAX_PREAMP_DB,
+                        label = stringResource(R.string.eq_preamp),
+                        valueText = { formatDb(it) },
+                        modifier = Modifier
+                            .width(56.dp)
+                            .height(230.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    when (selectedSection) {
+                        DspMath.Section.GRAPHIC -> GraphicEqStrip(
+                            gains = workingGains,
+                            enabled = state.graphicEq.enabled,
+                            scrollState = stripScrollState,
+                            onPreview = { index, gain ->
+                                workingGains = workingGains
+                                    .toMutableList()
+                                    .also { it[index] = gain }
+                            },
+                            onCommit = { viewModel.setGraphicGains(workingGains) },
+                            onViewportWidthChanged = { stripViewportWidthPx = it },
+                            modifier = Modifier.weight(1f)
+                        )
+                        DspMath.Section.PARAMETRIC -> EqualizerGraph(
+                            state = state,
+                            nodes = workingNodes,
+                            enabled = state.parametricEq.enabled,
+                            selectedNodeId = selectedNodeId,
+                            onNodeSelect = { selectedNodeId = it },
+                            onNodesChange = { workingNodes = it },
+                            onNodeCommit = { node -> viewModel.updateParametricNode(node) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                if (selectedSection == DspMath.Section.PARAMETRIC) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val selectedNode = workingNodes.firstOrNull { it.id == selectedNodeId }
+                    if (selectedNode != null) {
+                        ParametricNodeEditor(
+                            node = selectedNode,
+                            onUpdate = { viewModel.updateParametricNode(it) },
+                            onDelete = {
+                                viewModel.removeParametricNode(selectedNode.id)
+                                selectedNodeId = null
+                            }
+                        )
+                    } else {
+                        AddNodeRow(
+                            canAdd = workingNodes.size < ParametricEqSettings.MAX_NODES,
+                            onAdd = {
+                                val id = viewModel.addParametricNode()
+                                selectedNodeId = id
+                            }
+                        )
+                    }
+                }
             }
         }
 
-        // parametric node editor
-        if (selectedSection == DspMath.Section.PARAMETRIC) {
-            Spacer(modifier = Modifier.height(8.dp))
-            val selectedNode = workingNodes.firstOrNull { it.id == selectedNodeId }
-            if (selectedNode != null) {
-                ParametricNodeEditor(
-                    node = selectedNode,
-                    onUpdate = { viewModel.updateParametricNode(it) },
-                    onDelete = {
-                        viewModel.removeParametricNode(selectedNode.id)
-                        selectedNodeId = null
+        Spacer(modifier = Modifier.height(10.dp))
+
+        ControlsRow(
+            state = state,
+            viewModel = viewModel,
+            bassValue = bassValue,
+            onBassValueChange = { bassValue = it },
+            bassApplied = bassApplied,
+            onBassAppliedChange = { bassApplied = it },
+            trebleValue = trebleValue,
+            onTrebleValueChange = { trebleValue = it },
+            trebleApplied = trebleApplied,
+            onTrebleAppliedChange = { trebleApplied = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .layout { measurable, constraints ->
+                    val bleed = 8.dp.roundToPx()
+                    val fullWidth = constraints.maxWidth + bleed * 2
+                    val placeable = measurable.measure(
+                        constraints.copy(minWidth = fullWidth, maxWidth = fullWidth)
+                    )
+                    layout(constraints.maxWidth, placeable.height) {
+                        placeable.place(-bleed, 0)
                     }
-                )
-            } else {
-                AddNodeRow(
-                    canAdd = workingNodes.size < ParametricEqSettings.MAX_NODES,
-                    onAdd = {
-                        val id = viewModel.addParametricNode()
-                        selectedNodeId = id
-                    }
-                )
-            }
-        }
+                }
+        )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // knobs
-        KnobsSection(state = state, viewModel = viewModel)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // volume
         VolumeSection()
 
         Spacer(modifier = Modifier.height(24.dp))
     }
 
-    // presets modal
     PresetsModal(
         visible = showPresetsModal,
         presets = allPresets,
@@ -432,7 +443,6 @@ fun EqualizerScreen(
         onDismiss = { showPresetsModal = false }
     )
 
-    // save preset modal
     SavePresetModal(
         visible = showSavePresetModal,
         onDismiss = { showSavePresetModal = false },
@@ -443,8 +453,6 @@ fun EqualizerScreen(
     )
 }
 
-// header
-
 @Composable
 private fun PowerButton(
     enabled: Boolean,
@@ -452,7 +460,7 @@ private fun PowerButton(
 ) {
     Box(
         modifier = Modifier
-            .size(48.dp)
+            .size(40.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(if (enabled) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant)
             .clickable(
@@ -474,13 +482,7 @@ private fun PowerButton(
     }
 }
 
-// presets
-
-/**
- * The DspPreset currently reflected by [state], if any. User presets are
- * compared on their full state; built-in graphic presets on their resampled
- * gains, so a preset matches whatever band layout the user currently has.
- */
+/** The preset reflected by [state], if any. */
 private fun List<DspPreset>.matching(state: DspState): DspPreset? = firstOrNull { preset ->
     when {
         preset.fullState != null ->
@@ -494,12 +496,7 @@ private fun List<DspPreset>.matching(state: DspState): DspPreset? = firstOrNull 
     }
 }
 
-/**
- * The preset selector: a single pill chip, centered on the screen, showing the
- * preset currently applied to the engine ("Custom" when the state matches
- * none); tapping it opens the preset browser ([PresetsModal]). The chip is
- * clipped to its pill shape first, so the bounded ripple follows the outline.
- */
+/** Pill showing the applied preset name; opens the preset browser. */
 @Composable
 private fun PresetChip(
     currentPresetName: String?,
@@ -528,11 +525,7 @@ private fun PresetChip(
     }
 }
 
-/**
- * Preset browser in a bottom sheet: every preset gets a live response preview
- * (section curve in accent, per-node and per-tone curves in their colors).
- * Built-ins can only be applied; user presets can also be deleted.
- */
+/** Bottom sheet listing presets with a live response preview. */
 @Composable
 private fun PresetsModal(
     visible: Boolean,
@@ -568,7 +561,6 @@ private fun PresetsModal(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Save the current chain as a new user preset.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -608,8 +600,6 @@ private fun PresetRow(
     onApply: () -> Unit,
     onDelete: () -> Unit
 ) {
-    // One response sample per preset, computed once per modal content: the
-    // preset's own EQ section only — its tone (if any) is drawn separately.
     val previewState = remember(preset) { preset.previewState() }
     val previewSection = when (preset.kind) {
         PresetKind.PARAMETRIC -> DspMath.Section.PARAMETRIC
@@ -618,7 +608,11 @@ private fun PresetRow(
     val previewCurve = remember(previewState, previewSection) {
         DspMath.sectionResponse(previewState, previewSection)
     }
-    val previewToneCurves = remember(previewState) { DspMath.toneCurves(previewState.tone) }
+    val previewToneCurves = remember(previewState) {
+        DspMath.toneCurves(previewState.tone).map { (band, points) ->
+            MiniMapToneCurve(band = band, points = points, active = true)
+        }
+    }
 
     val kindLabel = stringResource(
         if (preset.kind == PresetKind.PARAMETRIC) R.string.eq_preset_kind_parametric
@@ -690,36 +684,222 @@ private fun PresetRow(
     }
 }
 
-// mode tabs
+/** Mirrors [FoamGlassCard]'s content padding. */
+private val GlassCardPadding = 16.dp
 
+/**
+ * Knob card with an on/off switch. When [applied] is false the engine gets the
+ * neutral value while the knob keeps its own. [knobSize] is the card's content width.
+ */
 @Composable
-private fun SectionPowerToggle(
-    enabled: Boolean,
-    onToggle: (Boolean) -> Unit
+private fun ControlCard(
+    name: String,
+    value: Float,
+    valueText: (Float) -> String,
+    minValue: Float,
+    maxValue: Float,
+    defaultValue: Float,
+    applied: Boolean,
+    knobSize: Dp,
+    onAppliedChange: (Boolean) -> Unit,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        BasicText(
-            text = stringResource(if (enabled) R.string.on else R.string.off),
-            style = FoamTheme.typography.caption.copy(
-                color = if (enabled) FoamTheme.accentColor else FoamTheme.colors.textSecondary,
-                fontWeight = FontWeight.Bold
+    FoamGlassCard(modifier = modifier) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            KnobControl(
+                value = value,
+                onValueChange = onValueChange,
+                label = null,
+                valueText = valueText,
+                size = knobSize,
+                minValue = minValue,
+                maxValue = maxValue,
+                defaultValue = defaultValue,
+                arcSweepDegrees = 180f,
+                showNeedle = false,
+                enabled = applied
+            ) {
+                BasicText(
+                    text = valueText(value),
+                    style = FoamTheme.typography.monospace.copy(
+                        color = FoamTheme.colors.textPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+            }
+
+            Switch(
+                checked = applied,
+                onCheckedChange = onAppliedChange,
+                modifier = Modifier.alpha(if (applied) 1f else 0.5f),
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = FoamTheme.accentColor,
+                    checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
+                    uncheckedThumbColor = FoamTheme.colors.textSecondary,
+                    uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.4f)
+                )
             )
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Switch(
-            checked = enabled,
-            onCheckedChange = onToggle,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = FoamTheme.accentColor,
-                checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
-                uncheckedThumbColor = FoamTheme.colors.textSecondary,
-                uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.4f)
+
+            BasicText(
+                text = name,
+                style = FoamTheme.typography.caption.copy(
+                    color = if (applied) FoamTheme.colors.textPrimary else FoamTheme.colors.textSecondary,
+                    fontWeight = FontWeight.Bold
+                )
             )
-        )
+        }
     }
 }
 
-// node editor panel
+/** Scrollable row of control cards: bass, treble, balance, virtualizer. */
+@Composable
+private fun ControlsRow(
+    state: DspState,
+    viewModel: EqualizerViewModel,
+    modifier: Modifier = Modifier,
+    bassValue: Float,
+    onBassValueChange: (Float) -> Unit,
+    bassApplied: Boolean,
+    onBassAppliedChange: (Boolean) -> Unit,
+    trebleValue: Float,
+    onTrebleValueChange: (Float) -> Unit,
+    trebleApplied: Boolean,
+    onTrebleAppliedChange: (Boolean) -> Unit
+) {
+    BoxWithConstraints(modifier = modifier) {
+        val spacing = 10.dp
+        val edgePadding = 8.dp
+        val cardWidth = ((maxWidth - edgePadding * 2 - spacing * 2) / 3f) * 1.12f
+        val knobSize = cardWidth - GlassCardPadding * 2
+
+        var balanceValue by rememberSaveable { mutableFloatStateOf(state.balance) }
+        var widthValue by rememberSaveable { mutableFloatStateOf(state.stereoWidth) }
+
+        var balanceApplied by rememberSaveable { mutableStateOf(state.balance != 0f) }
+        var widthApplied by rememberSaveable { mutableStateOf(state.stereoWidth != 1f) }
+
+        LaunchedEffect(state.balance) {
+            if (state.balance != 0f) {
+                balanceValue = state.balance
+                balanceApplied = true
+            }
+        }
+        LaunchedEffect(state.stereoWidth) {
+            if (state.stereoWidth != 1f) {
+                widthValue = state.stereoWidth
+                widthApplied = true
+            }
+        }
+
+        val balanceCenter = stringResource(R.string.eq_balance_center)
+        val balanceLeft = stringResource(R.string.eq_balance_left)
+        val balanceRight = stringResource(R.string.eq_balance_right)
+        fun balanceText(balance: Float): String = when {
+            balance == 0f -> balanceCenter
+            balance < 0f -> balanceLeft.format(-balance * 100)
+            else -> balanceRight.format(balance * 100)
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = edgePadding),
+            horizontalArrangement = Arrangement.spacedBy(spacing)
+        ) {
+            ControlCard(
+                name = stringResource(R.string.eq_bass_boost),
+                value = toneDbToPercent(bassValue),
+                valueText = { formatPercent(it) },
+                minValue = 0f,
+                maxValue = KNOB_MAX_PERCENT,
+                defaultValue = 0f,
+                applied = bassApplied,
+                knobSize = knobSize,
+                onAppliedChange = { on ->
+                    onBassAppliedChange(on)
+                    viewModel.setBassDb(if (on) bassValue else 0f)
+                },
+                onValueChange = { percent ->
+                    val db = tonePercentToDb(percent)
+                    onBassValueChange(db)
+                    onBassAppliedChange(true)
+                    viewModel.setBassDb(db)
+                },
+                modifier = Modifier.width(cardWidth)
+            )
+
+            ControlCard(
+                name = stringResource(R.string.eq_treble_boost),
+                value = toneDbToPercent(trebleValue),
+                valueText = { formatPercent(it) },
+                minValue = 0f,
+                maxValue = KNOB_MAX_PERCENT,
+                defaultValue = 0f,
+                applied = trebleApplied,
+                knobSize = knobSize,
+                onAppliedChange = { on ->
+                    onTrebleAppliedChange(on)
+                    viewModel.setTrebleDb(if (on) trebleValue else 0f)
+                },
+                onValueChange = { percent ->
+                    val db = tonePercentToDb(percent)
+                    onTrebleValueChange(db)
+                    onTrebleAppliedChange(true)
+                    viewModel.setTrebleDb(db)
+                },
+                modifier = Modifier.width(cardWidth)
+            )
+
+            ControlCard(
+                name = stringResource(R.string.eq_balance),
+                value = balanceValue,
+                valueText = { balanceText(it) },
+                minValue = -DspState.MAX_BALANCE,
+                maxValue = DspState.MAX_BALANCE,
+                defaultValue = 0f,
+                applied = balanceApplied,
+                knobSize = knobSize,
+                onAppliedChange = { on ->
+                    balanceApplied = on
+                    viewModel.setBalance(if (on) balanceValue else 0f)
+                },
+                onValueChange = { balance ->
+                    balanceValue = balance
+                    balanceApplied = true
+                    viewModel.setBalance(balance)
+                },
+                modifier = Modifier.width(cardWidth)
+            )
+
+            ControlCard(
+                name = stringResource(R.string.eq_virtualizer),
+                value = widthValue,
+                valueText = { formatPercent(stereoWidthToPercent(it)) },
+                minValue = 1f,
+                maxValue = DspState.MAX_STEREO_WIDTH,
+                defaultValue = 1f,
+                applied = widthApplied,
+                knobSize = knobSize,
+                onAppliedChange = { on ->
+                    widthApplied = on
+                    viewModel.setStereoWidth(if (on) widthValue else 1f)
+                },
+                onValueChange = { width ->
+                    widthValue = width
+                    widthApplied = true
+                    viewModel.setStereoWidth(width)
+                },
+                modifier = Modifier.width(cardWidth)
+            )
+        }
+    }
+}
 
 @Composable
 private fun ParametricNodeEditor(
@@ -771,7 +951,6 @@ private fun ParametricNodeEditor(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Filter type selector.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -944,114 +1123,6 @@ private fun AddNodeRow(
     }
 }
 
-// knobs
-
-@Composable
-private fun KnobsSection(
-    state: DspState,
-    viewModel: EqualizerViewModel
-) {
-    // Balance readout labels are plain resources: resolve them once so the
-    // non-composable valueText lambda can format the live value with them.
-    val balanceCenter = stringResource(R.string.eq_balance_center)
-    val balanceLeft = stringResource(R.string.eq_balance_left)
-    val balanceRight = stringResource(R.string.eq_balance_right)
-    fun balanceText(balance: Float): String = when {
-        balance == 0f -> balanceCenter
-        balance < 0f -> balanceLeft.format(-balance * 100)
-        else -> balanceRight.format(balance * 100)
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Column {
-            SectionCaption(stringResource(R.string.eq_tone))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ToneKnob(
-                    label = stringResource(R.string.eq_bass),
-                    db = state.tone.bassDb,
-                    onDbChange = { viewModel.setBassDb(it) }
-                )
-                ToneKnob(
-                    label = stringResource(R.string.eq_mid),
-                    db = state.tone.midDb,
-                    onDbChange = { viewModel.setMidDb(it) }
-                )
-                ToneKnob(
-                    label = stringResource(R.string.eq_treble),
-                    db = state.tone.trebleDb,
-                    onDbChange = { viewModel.setTrebleDb(it) }
-                )
-            }
-        }
-
-        Column {
-            SectionCaption(stringResource(R.string.eq_controls))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                KnobControl(
-                    value = state.balance,
-                    onValueChange = { viewModel.setBalance(it) },
-                    label = stringResource(R.string.eq_balance),
-                    valueText = { balanceText(it) },
-                    minValue = -DspState.MAX_BALANCE,
-                    maxValue = DspState.MAX_BALANCE
-                )
-                KnobControl(
-                    value = stereoWidthToPercent(state.stereoWidth),
-                    onValueChange = { percent ->
-                        viewModel.setStereoWidth(stereoPercentToWidth(percent))
-                    },
-                    label = stringResource(R.string.eq_stereo),
-                    valueText = { formatPercent(it) },
-                    minValue = 0f,
-                    maxValue = KNOB_MAX_PERCENT
-                )
-            }
-        }
-    }
-}
-
-/**
- * Boost-only tone knob (bass / mid / treble): reads 0-100% instead of dB.
- * 0% is 0 dB (neutral, needle at the arc's start), 100% is the full +12 dB
- * boost; the percent is log-tapered into dB by [tonePercentToDb] so the
- * commonly used small boosts get most of the knob's travel. Double-tap snaps
- * back to 0% / 0 dB.
- */
-@Composable
-private fun ToneKnob(
-    label: String,
-    db: Float,
-    onDbChange: (Float) -> Unit
-) {
-    KnobControl(
-        value = toneDbToPercent(db),
-        onValueChange = { percent -> onDbChange(tonePercentToDb(percent)) },
-        label = label,
-        valueText = { formatPercent(it) },
-        minValue = 0f,
-        maxValue = KNOB_MAX_PERCENT
-    )
-}
-
-@Composable
-private fun SectionCaption(text: String) {
-    BasicText(
-        text = text,
-        style = FoamTheme.typography.caption.copy(
-            color = FoamTheme.colors.textSecondary,
-            fontWeight = FontWeight.Bold
-        ),
-        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
-    )
-}
-
-// volume
-
 @Composable
 private fun VolumeSection() {
     FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -1060,20 +1131,8 @@ private fun VolumeSection() {
 }
 
 /**
- * Android media-stream (STREAM_MUSIC) volume, the same value the phone's
- * hardware +/- keys change. The slider is continuous over the stream's range
- * (the readout is that position as a percentage); the stream itself snaps to
- * its nearest step, and every step change is written to the [AudioManager]
- * immediately while dragging.
- *
- * Hardware presses can move the real volume by less than one whole step, while
- * [AudioManager.getStreamVolume] only returns the rounded whole step (the
- * volume broadcast still fires, with the same rounded value). To follow every
- * press anyway, the half-step position is reconstructed from the broadcast
- * sequence: with presses of half a step, a rounded value that changes by +1
- * means the real value is now half a step below it, -1 means exactly on it,
- * and an unchanged value means the press toggled between those two spots.
- * Any whole-step change re-derives this, so a wrong guess corrects itself.
+ * Slider bound to the music stream volume, kept in sync with hardware keys.
+ * Half-step key presses are inferred from the broadcast sequence.
  */
 @Composable
 private fun SystemVolumeControl() {
@@ -1084,27 +1143,16 @@ private fun SystemVolumeControl() {
     val maxIndex = remember(audioManager) {
         audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
     }
-    // Rounded whole step as Android reports it, plus whether the real volume
-    // currently sits half a step below it.
     var index by remember {
         mutableIntStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC))
     }
     var halfStep by remember { mutableStateOf(false) }
-    // The rounded value as of the last processed broadcast / local write, used
-    // to classify the next broadcast independently of polling.
     var lastKnownIndex by remember { mutableIntStateOf(index) }
-    // Our own writes echo back as broadcasts; ignore those briefly.
     var lastLocalChangeMs by remember { mutableLongStateOf(0L) }
 
     fun fractionOf(wholeStep: Int, half: Boolean): Float =
         ((wholeStep - if (half) 0.5f else 0f).coerceAtLeast(0f) / maxIndex).coerceIn(0f, 1f)
 
-    // What the slider and readout show: a continuous 0..1 fraction, not rounded
-    // to steps or whole percents (like Android's own panel, whose thumb follows
-    // the finger smoothly). The stream itself can only sit on its own steps, so
-    // while the user drags this may sit between them; any external change
-    // resyncs it to the true volume. Finger input snaps it (no lag behind the
-    // thumb); changes coming from Android (hardware keys, other apps) glide.
     val scope = rememberCoroutineScope()
     val shownFraction = remember { Animatable(fractionOf(index, false)) }
     fun showFromSystem(newFraction: Float) {
@@ -1120,9 +1168,9 @@ private fun SystemVolumeControl() {
         if (SystemClock.elapsedRealtime() - lastLocalChangeMs <= LOCAL_CHANGE_ECHO_MS) return
         val actual = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceIn(0, maxIndex)
         halfStep = when (actual - lastKnownIndex) {
-            0 -> !halfStep   // a sub-step press: the rounded value didn't move
+            0 -> !halfStep
             1 -> true
-            else -> false    // -1 lands exactly on the whole step; larger jumps are not key presses
+            else -> false
         }
         Log.d(SYSTEM_VOLUME_TAG, "broadcast: $lastKnownIndex -> $actual, half=$halfStep")
         lastKnownIndex = actual
@@ -1146,9 +1194,7 @@ private fun SystemVolumeControl() {
         onDispose { context.unregisterReceiver(receiver) }
     }
 
-    // Fallback for devices that don't send the broadcast: adopt a differing
-    // system value only if it persists across two polls (a broadcast, when it
-    // exists, arrives within milliseconds and wins).
+    // Fallback for devices that don't send the volume broadcast.
     LaunchedEffect(audioManager) {
         var mismatches = 0
         while (true) {
@@ -1182,12 +1228,10 @@ private fun SystemVolumeControl() {
             )
         }
 
-
         FoamSlider(
             value = { shownFraction.value },
             onValueChange = { raw ->
                 val fraction = raw.coerceIn(0f, 1f)
-                // Finger input: the thumb follows continuously, cancelling any glide in progress.
                 scope.launch(start = CoroutineStart.UNDISPATCHED) {
                     shownFraction.snapTo(fraction)
                 }
@@ -1200,7 +1244,7 @@ private fun SystemVolumeControl() {
                     try {
                         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newIndex, 0)
                     } catch (_: SecurityException) {
-                        // Volume policy refused the change; the fallback poll restores the real value.
+                        // Refused by volume policy; the poll restores the real value.
                     }
                 }
             }
@@ -1214,10 +1258,7 @@ private const val SYSTEM_VOLUME_TAG = "SystemVolume"
 private const val VOLUME_CHANGED_ACTION = "android.media.VOLUME_CHANGED_ACTION"
 private const val EXTRA_VOLUME_STREAM_TYPE = "android.media.EXTRA_VOLUME_STREAM_TYPE"
 
-/** Window after a local volume write during which system change callbacks are treated as echoes. */
 private const val LOCAL_CHANGE_ECHO_MS = 300L
-
-// save preset modal
 
 @Composable
 private fun SavePresetModal(
@@ -1226,7 +1267,6 @@ private fun SavePresetModal(
     onSave: (String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    // Start each session with an empty name field.
     LaunchedEffect(visible) { if (visible) name = "" }
 
     FoamBottomModal(
@@ -1289,18 +1329,9 @@ private fun SavePresetModal(
     }
 }
 
-// tone/stereo knob maps
-
-/** Every percent-style knob reads 0..[KNOB_MAX_PERCENT]. */
 private const val KNOB_MAX_PERCENT = 100f
 
-/**
- * Log-tapered percent → dB for the tone knobs: dB = MAX · log10(1 + 9·x) with
- * x = percent/100. 0% maps to 0 dB (neutral) and 100% to [ToneSettings.MAX_DB];
- * the curve rises fast at first (10% ≈ 3.3 dB, 25% ≈ 6.1 dB, 50% ≈ 8.9 dB) so
- * fine control lives in the small-boost region and no negative dB exists
- * anywhere on the dial.
- */
+/** Log-tapered percent to dB: 0% is neutral, 100% is [ToneSettings.MAX_DB]. */
 private fun tonePercentToDb(percent: Float): Float {
     val x = (percent / KNOB_MAX_PERCENT).coerceIn(0f, 1f)
     return ToneSettings.MAX_DB * log10(1f + 9f * x)
@@ -1313,15 +1344,9 @@ private fun toneDbToPercent(db: Float): Float {
     return x * KNOB_MAX_PERCENT
 }
 
-/** Stereo width knob: 0% = ×1 (normal), 100% = [DspState.MAX_STEREO_WIDTH]. */
-private fun stereoPercentToWidth(percent: Float): Float =
-    1f + (percent / KNOB_MAX_PERCENT).coerceIn(0f, 1f)
-
-/** Inverse of [stereoPercentToWidth], clamped to the knob's 0-100% range. */
+/** Virtualizer knob readout: 0% = ×1 (normal), 100% = [DspState.MAX_STEREO_WIDTH]. */
 private fun stereoWidthToPercent(width: Float): Float =
     (width - 1f).coerceIn(0f, 1f) * KNOB_MAX_PERCENT
-
-// format
 
 private fun formatDb(db: Float): String = "%+.1f dB".format(db)
 

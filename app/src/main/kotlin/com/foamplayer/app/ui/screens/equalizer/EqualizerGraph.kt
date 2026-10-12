@@ -553,16 +553,33 @@ fun GraphicEqStrip(
 // ------------------------------------------------------------------- mini map
 
 /**
+ * One separated tone curve drawn on the mini map: its [band], sampled [points]
+ * and whether the control is currently [active] — an inactive curve keeps its
+ * shape but draws greyed out, so a switched-off control is dimmed on the map
+ * instead of vanishing.
+ */
+data class MiniMapToneCurve(
+    val band: DspMath.ToneBand,
+    val points: List<Float>,
+    val active: Boolean
+)
+
+/**
  * Compact frequency-response overview of the active EQ section only — never both
  * at once. In parametric mode it draws the per-node curves in the node's own
- * color plus their combined curve in the accent color; every non-neutral fixed
- * tone control is additionally drawn as its own separated curve in [toneCurves]
- * (bass red, mid amber, treble blue) wherever the active section is drawn, so
- * the tone knobs' contribution stays visible even with both EQ sections off. In
+ * color plus their combined curve in the accent color; every fixed tone control
+ * is additionally drawn as its own separated curve in [toneCurves] (bass red,
+ * mid amber, treble blue) wherever the active section is drawn, so the tone
+ * controls' contribution stays visible even with both EQ sections off. In
  * graphic mode (with [showViewport]) it draws the graphic section's response and
  * a translucent white overlay marking the section of the response axis currently
  * visible in the scrollable fader strip. Dragging the map slides the strip; a
  * tap centers the viewport.
+ *
+ * Whatever is not currently applied greys out ([dimColor]): everything when the
+ * DSP power is off ([active]), the section's curves when its own switch is off
+ * ([sectionActive]) — the curves themselves keep their shape — and each tone
+ * curve whose control is switched off ([MiniMapToneCurve.active]).
  */
 @Composable
 fun EqMiniMap(
@@ -570,7 +587,8 @@ fun EqMiniMap(
     nodes: List<ParametricNode>,
     active: Boolean,
     modifier: Modifier = Modifier,
-    toneCurves: List<Pair<DspMath.ToneBand, List<Float>>> = emptyList(),
+    toneCurves: List<MiniMapToneCurve> = emptyList(),
+    sectionActive: Boolean = true,
     showViewport: Boolean = false,
     scrollState: ScrollState? = null,
     stripViewportWidthPx: Int = 0,
@@ -671,13 +689,18 @@ fun EqMiniMap(
         val h = size.height
         if (combinedCurve.size < 2) return@Canvas
 
-        val lineColor = if (active) accent else dimColor
+        val lineColor = if (active && sectionActive) accent else dimColor
 
         // Separated per-tone curves (bass / mid / treble), under everything.
-        toneCurves.forEach { (band, curve) ->
+        // A curve whose control is switched off greys out but keeps its shape.
+        toneCurves.forEach { toneCurve ->
             drawCurve(
-                points = curve,
-                color = toneBandColor(band).copy(alpha = if (active) 0.9f else 0.4f),
+                points = toneCurve.points,
+                color = if (active && toneCurve.active) {
+                    toneBandColor(toneCurve.band).copy(alpha = 0.9f)
+                } else {
+                    dimColor
+                },
                 strokeWidth = 1.5.dp.toPx()
             )
         }
@@ -694,7 +717,11 @@ fun EqMiniMap(
         nodes.forEach { node ->
             drawCurve(
                 points = DspMath.nodeResponse(node),
-                color = Color(node.colorArgb).copy(alpha = if (active) 0.95f else 0.4f),
+                color = if (active && sectionActive) {
+                    Color(node.colorArgb).copy(alpha = 0.95f)
+                } else {
+                    dimColor
+                },
                 strokeWidth = 1.5.dp.toPx()
             )
         }

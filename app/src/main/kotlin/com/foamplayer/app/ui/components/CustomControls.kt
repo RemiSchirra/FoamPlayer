@@ -35,13 +35,14 @@ import kotlin.math.round
 fun FoamGlassCard(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 16.dp,
+    contentPadding: Dp = 16.dp,
     content: @Composable () -> Unit
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(cornerRadius))
             .background(FoamTheme.colors.surface)
-            .padding(16.dp)
+            .padding(contentPadding)
     ) {
         content()
     }
