@@ -51,6 +51,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -359,7 +360,8 @@ fun SearchScreen(
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Search Bar: text field pill with the always-visible clear icon inside.
+        // Search Bar: text field pill with the leading search icon and the
+        // always-visible clear icon inside.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -369,6 +371,13 @@ fun SearchScreen(
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Icon(
+                imageVector = Icons.Rounded.Search,
+                contentDescription = null,
+                tint = FoamTheme.colors.textSecondary,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
                     BasicText(
