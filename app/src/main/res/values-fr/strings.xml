@@ -529,8 +529,8 @@
     <string name="eq_bass">BASSES</string>
     <string name="eq_mid">MÉDIUMS</string>
     <string name="eq_treble">AIGUS</string>
-    <string name="eq_bass_boost">BOOST DES BASSES</string>
-    <string name="eq_treble_boost">BOOST DES AIGUS</string>
+    <string name="eq_bass_boost">BASSES</string>
+    <string name="eq_treble_boost">AIGUS</string>
     <string name="eq_virtualizer">VIRTUALISEUR</string>
     <string name="eq_tone">TONALITÉ</string>
     <string name="eq_controls">CONTRÔLES</string>

@@ -85,9 +85,11 @@ import com.foamplayer.app.audio.dsp.ParametricEqSettings
 import com.foamplayer.app.audio.dsp.ParametricNode
 import com.foamplayer.app.audio.dsp.PresetKind
 import com.foamplayer.app.audio.dsp.ToneSettings
+import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.components.KnobControl
+import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.components.ScreenTitle
 import com.foamplayer.app.ui.components.VerticalSlider
 import com.foamplayer.app.ui.components.onSeekBarReleased
@@ -745,12 +747,13 @@ private fun ControlCard(
                 )
             )
 
-            BasicText(
+            MarqueeText(
                 text = name,
                 style = FoamTheme.typography.caption.copy(
                     color = if (applied) FoamTheme.colors.textPrimary else FoamTheme.colors.textSecondary,
                     fontWeight = FontWeight.Bold
-                )
+                ),
+                mode = MarqueeMode.PING_PONG
             )
         }
     }
