@@ -102,8 +102,9 @@ import kotlin.math.roundToInt
  *  - power toggle + response mini map with a translucent white viewport overlay
  *    that scrolls the graphic EQ (per-node colored curves in parametric mode,
  *    separated bass/mid/treble tone curves in both modes),
- *  - a presets entry card opening a FoamModal with response previews for every
- *    preset, plus create/delete of user presets,
+ *  - a preset chip showing the currently applied preset; tapping it opens a
+ *    FoamModal with response previews for every preset, plus create/delete of
+ *    user presets,
  *  - Graphic (ISO band layout, chosen in Settings > Audio > Equalizer;
  *    horizontally scrollable band faders) / Parametric (draggable colored
  *    nodes) sections — mutually exclusive: enabling one disables the other,
@@ -253,8 +254,8 @@ fun EqualizerScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ----------------------------------------------------------- presets
-        PresetsEntryCard(
+        // preset chip
+        PresetChip(
             currentPresetName = currentPreset?.name,
             onClick = { showPresetsModal = true }
         )
@@ -495,38 +496,35 @@ private fun List<DspPreset>.matching(state: DspState): DspPreset? = firstOrNull 
     }
 }
 
+/**
+ * The preset selector: a single pill chip, centered on the screen, showing the
+ * preset currently applied to the engine ("Custom" when the state matches
+ * none); tapping it opens the preset browser ([PresetsModal]). The chip is
+ * clipped to its pill shape first, so the bounded ripple follows the outline.
+ */
 @Composable
-private fun PresetsEntryCard(
+private fun PresetChip(
     currentPresetName: String?,
     onClick: () -> Unit
 ) {
-    FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick),
-            verticalAlignment = Alignment.CenterVertically
+                .clip(RoundedCornerShape(50))
+                .background(FoamTheme.colors.surfaceVariant)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = FoamTheme.colors.textPrimary),
+                    onClick = onClick
+                )
+                .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
-            Icon(
-                imageVector = Icons.Rounded.Equalizer,
-                contentDescription = null,
-                tint = FoamTheme.accentColor,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                BasicText(text = stringResource(R.string.eq_presets), style = FoamTheme.typography.titleMedium)
-                BasicText(
-                    text = currentPresetName ?: stringResource(R.string.eq_preset_custom_hint),
-                    style = FoamTheme.typography.caption
-                )
-            }
             BasicText(
-                text = stringResource(R.string.eq_view_all),
-                style = FoamTheme.typography.caption.copy(
-                    color = FoamTheme.accentColor,
-                    fontWeight = FontWeight.Bold
-                )
+                text = currentPresetName ?: stringResource(R.string.eq_preset_custom_hint),
+                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary, fontWeight = FontWeight.Bold)
             )
         }
     }
