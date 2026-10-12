@@ -342,6 +342,7 @@ object BackupJson {
                 kind = if (state.parametricEq.enabled) PresetKind.PARAMETRIC else PresetKind.GRAPHIC,
                 graphicGainsDb = state.graphicEq.gainsDb,
                 parametricNodes = state.parametricEq.nodes,
+                preampDb = state.preampDb,
                 fullState = state,
                 isBuiltIn = false
             )
@@ -353,11 +354,13 @@ object BackupJson {
         preset.fullState ?: when (preset.kind) {
             PresetKind.GRAPHIC -> DspState(
                 enabled = true,
+                preampDb = preset.preampDb,
                 graphicEq = GraphicEqSettings(enabled = true, gainsDb = preset.graphicGainsDb),
                 tone = preset.tone
             )
             PresetKind.PARAMETRIC -> DspState(
                 enabled = true,
+                preampDb = preset.preampDb,
                 parametricEq = ParametricEqSettings(enabled = true, nodes = preset.parametricNodes),
                 tone = preset.tone
             )

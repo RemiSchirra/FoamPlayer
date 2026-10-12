@@ -114,7 +114,9 @@ import kotlin.math.roundToInt
  *
  * All controls commit on release so a drag never floods the DSP engine with state
  * emissions; the graphs and the mini map render from local working copies in the
- * meantime, so they follow the finger while the engine sees one update.
+ * meantime, so they follow the finger while the engine sees one update. The
+ * pre-amp fader is the exception: it streams into the engine live while dragging
+ * (it is a single scalar, and the engine's persistence is debounced).
  *
  * The DSP chain is purely linear (industry-standard EQ): the former Limiter and
  * Auto-headroom switches are gone, boosts are heard exactly as the curve shows.
@@ -148,7 +150,7 @@ fun EqualizerScreen(
 
     // Working copies of the sections being edited: the graphs and the mini map
     // render from these so a drag is visible immediately; the engine is updated
-    // once per commit.
+    // once per commit. The pre-amp streams live instead (no working copy).
     var workingGains by remember { mutableStateOf(state.graphicEq.gainsDb) }
     var workingNodes by remember { mutableStateOf(state.parametricEq.nodes) }
     // Re-sync when the engine state changes externally (preset applied, node
@@ -335,11 +337,12 @@ fun EqualizerScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // --------------------------- preamp fader + section graph (Poweramp layout)
+        // preamp fader + section graph
         Row(modifier = Modifier.fillMaxWidth()) {
             VerticalSlider(
                 value = state.preampDb,
                 onCommit = { viewModel.setPreampDb(it) },
+                onValueChange = { viewModel.setPreampDb(it) },
                 valueRange = DspState.MIN_PREAMP_DB..DspState.MAX_PREAMP_DB,
                 label = stringResource(R.string.eq_preamp),
                 valueText = { formatDb(it) },
@@ -376,7 +379,7 @@ fun EqualizerScreen(
             }
         }
 
-        // ------------------------------------------- parametric node editor
+        // parametric node editor
         if (selectedSection == DspMath.Section.PARAMETRIC) {
             Spacer(modifier = Modifier.height(8.dp))
             val selectedNode = workingNodes.firstOrNull { it.id == selectedNodeId }
@@ -402,18 +405,18 @@ fun EqualizerScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ------------------------------------------------------------ knobs
+        // knobs
         KnobsSection(state = state, viewModel = viewModel)
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ----------------------------------------------------------- volume
+        // volume
         VolumeSection(state = state, viewModel = viewModel)
 
         Spacer(modifier = Modifier.height(24.dp))
     }
 
-    // -------------------------------------------------------- presets modal
+    // presets modal
     PresetsModal(
         visible = showPresetsModal,
         presets = allPresets,
@@ -430,7 +433,7 @@ fun EqualizerScreen(
         onDismiss = { showPresetsModal = false }
     )
 
-    // ---------------------------------------------------- save preset modal
+    // save preset modal
     SavePresetModal(
         visible = showSavePresetModal,
         onDismiss = { showSavePresetModal = false },
@@ -441,7 +444,7 @@ fun EqualizerScreen(
     )
 }
 
-// ------------------------------------------------------------------- header
+// header
 
 @Composable
 private fun PowerButton(
@@ -472,7 +475,7 @@ private fun PowerButton(
     }
 }
 
-// ------------------------------------------------------------------ presets
+// presets
 
 /**
  * The DspPreset currently reflected by [state], if any. User presets are
@@ -485,6 +488,7 @@ private fun List<DspPreset>.matching(state: DspState): DspPreset? = firstOrNull 
             preset.fullState.copy(volumePercent = state.volumePercent) == state
         preset.kind == PresetKind.GRAPHIC ->
             state.graphicEq.enabled &&
+                    state.preampDb == preset.preampDb &&
                     GraphicEqSettings.resampleGains(preset.graphicGainsDb, state.graphicEq.count) ==
                     state.graphicEq.gainsDb
         else -> false
@@ -690,7 +694,7 @@ private fun PresetRow(
     }
 }
 
-// --------------------------------------------------------------- mode tabs
+// mode tabs
 
 @Composable
 private fun SectionPowerToggle(
@@ -719,7 +723,7 @@ private fun SectionPowerToggle(
     }
 }
 
-// -------------------------------------------------------- node editor panel
+// node editor panel
 
 @Composable
 private fun ParametricNodeEditor(
@@ -944,7 +948,7 @@ private fun AddNodeRow(
     }
 }
 
-// -------------------------------------------------------------------- knobs
+// knobs
 
 @Composable
 private fun KnobsSection(
@@ -1050,7 +1054,7 @@ private fun SectionCaption(text: String) {
     )
 }
 
-// ------------------------------------------------------------------- volume
+// volume
 
 @Composable
 private fun VolumeSection(
@@ -1290,7 +1294,7 @@ private const val EXTRA_VOLUME_STREAM_TYPE = "android.media.EXTRA_VOLUME_STREAM_
 /** Window after a local volume write during which system change callbacks are treated as echoes. */
 private const val LOCAL_CHANGE_ECHO_MS = 300L
 
-// -------------------------------------------------------- save preset modal
+// save preset modal
 
 @Composable
 private fun SavePresetModal(
@@ -1362,7 +1366,7 @@ private fun SavePresetModal(
     }
 }
 
-// ---------------------------------------------------- tone/stereo knob maps
+// tone/stereo knob maps
 
 /** Every percent-style knob reads 0..[KNOB_MAX_PERCENT]. */
 private const val KNOB_MAX_PERCENT = 100f
@@ -1394,7 +1398,7 @@ private fun stereoPercentToWidth(percent: Float): Float =
 private fun stereoWidthToPercent(width: Float): Float =
     (width - 1f).coerceIn(0f, 1f) * KNOB_MAX_PERCENT
 
-// ------------------------------------------------------------------- format
+// format
 
 private fun formatDb(db: Float): String = "%+.1f dB".format(db)
 

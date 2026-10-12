@@ -256,9 +256,9 @@ data class DspState(
 enum class PresetKind { GRAPHIC, PARAMETRIC }
 
 /**
- * A named EQ snapshot. Built-in presets seed either the graphic EQ + tone or
- * a fixed parametric node layout; user presets capture the whole [DspState]
- * (minus volume) and are persisted by the settings layer.
+ * A named EQ snapshot. Built-in presets seed the pre-amp plus either the
+ * graphic EQ + tone or a fixed parametric node layout; user presets capture
+ * the whole [DspState] (minus volume) and are persisted by the settings layer.
  */
 data class DspPreset(
     val name: String,
@@ -266,6 +266,7 @@ data class DspPreset(
     val graphicGainsDb: List<Float> = emptyList(),
     val parametricNodes: List<ParametricNode> = emptyList(),
     val tone: ToneSettings = ToneSettings(),
+    val preampDb: Float = 0f,
     /** When set, applying the preset restores this full state instead of only the EQ section. */
     val fullState: DspState? = null,
     val isBuiltIn: Boolean = false
@@ -274,6 +275,7 @@ data class DspPreset(
     fun previewState(): DspState = fullState ?: when (kind) {
         PresetKind.GRAPHIC -> DspState(
             enabled = true,
+            preampDb = preampDb,
             tone = tone,
             graphicEq = GraphicEqSettings(
                 enabled = true,
@@ -283,6 +285,7 @@ data class DspPreset(
         )
         PresetKind.PARAMETRIC -> DspState(
             enabled = true,
+            preampDb = preampDb,
             tone = tone,
             parametricEq = ParametricEqSettings(enabled = true, nodes = parametricNodes)
         )

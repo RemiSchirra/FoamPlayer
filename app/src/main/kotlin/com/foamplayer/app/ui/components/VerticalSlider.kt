@@ -30,9 +30,10 @@ import kotlin.math.abs
  * When [bipolar], the fill grows from the center of the range (0 dB for a
  * pre-amp) toward the value instead of always from the bottom.
  *
- * A tap jumps to the tapped position; a drag updates live; the value is
- * committed once through [onCommit] on release. The readout above reflects
- * the live drag value.
+ * A tap jumps to the tapped position; a drag updates live; [onValueChange], when
+ * provided, fires continuously while dragging so the value can be applied in
+ * real time — [onCommit] always fires once on release. The readout above
+ * reflects the live drag value.
  */
 @Composable
 fun VerticalSlider(
@@ -42,7 +43,8 @@ fun VerticalSlider(
     label: String,
     valueText: (Float) -> String,
     modifier: Modifier = Modifier,
-    bipolar: Boolean = true
+    bipolar: Boolean = true,
+    onValueChange: ((Float) -> Unit)? = null
 ) {
     var isDragging by remember { mutableStateOf(false) }
     var dragValue by remember(value) { mutableFloatStateOf(value) }
@@ -71,6 +73,7 @@ fun VerticalSlider(
                         onDragStart = { start ->
                             isDragging = true
                             dragValue = valueAtY(start.y, size.height.toFloat(), valueRange)
+                            onValueChange?.invoke(dragValue)
                         },
                         onDrag = { change, _ ->
                             change.consume()
@@ -79,6 +82,7 @@ fun VerticalSlider(
                                 size.height.toFloat(),
                                 valueRange
                             )
+                            onValueChange?.invoke(dragValue)
                         },
                         onDragEnd = {
                             isDragging = false

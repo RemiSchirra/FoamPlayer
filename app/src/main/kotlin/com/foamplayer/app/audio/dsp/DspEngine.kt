@@ -238,11 +238,11 @@ class DspEngine @Inject constructor(
 
     /**
      * Applies a preset. User presets (fullState set) restore their saved whole
-     * state, keeping the current volume; built-ins adjust only their own EQ
-     * section — graphic or parametric — and disable the opposite section.
-     * Built-in graphic shapes are authored on a 31-band grid and resampled on
-     * the log-frequency axis to the user's band layout, so the shape (not the
-     * per-band numbers) survives any band count.
+     * state, keeping the current volume; built-ins adjust their pre-amp and
+     * only their own EQ section — graphic or parametric — and disable the
+     * opposite section. Built-in graphic shapes are authored on a 31-band grid
+     * and resampled on the log-frequency axis to the user's band layout, so the
+     * shape (not the per-band numbers) survives any band count.
      */
     fun applyPreset(preset: DspPreset) {
         if (preset.fullState != null) {
@@ -253,6 +253,7 @@ class DspEngine @Inject constructor(
             PresetKind.GRAPHIC -> update {
                 it.copy(
                     enabled = true,
+                    preampDb = preset.preampDb.coerceIn(DspState.MIN_PREAMP_DB, DspState.MAX_PREAMP_DB),
                     tone = preset.tone,
                     graphicEq = it.graphicEq.copy(
                         enabled = true,
@@ -267,6 +268,7 @@ class DspEngine @Inject constructor(
             PresetKind.PARAMETRIC -> update {
                 it.copy(
                     enabled = true,
+                    preampDb = preset.preampDb.coerceIn(DspState.MIN_PREAMP_DB, DspState.MAX_PREAMP_DB),
                     tone = preset.tone,
                     parametricEq = ParametricEqSettings(
                         enabled = true,
@@ -287,6 +289,7 @@ class DspEngine @Inject constructor(
             kind = if (state.parametricEq.enabled) PresetKind.PARAMETRIC else PresetKind.GRAPHIC,
             graphicGainsDb = state.graphicEq.gainsDb,
             parametricNodes = state.parametricEq.nodes,
+            preampDb = state.preampDb,
             fullState = state,
             isBuiltIn = false
         )
