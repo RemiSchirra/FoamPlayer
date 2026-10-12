@@ -77,6 +77,7 @@ import com.foamplayer.app.audio.dsp.DspMath
 import com.foamplayer.app.audio.dsp.DspPreset
 import com.foamplayer.app.audio.dsp.DspState
 import com.foamplayer.app.audio.dsp.FilterType
+import com.foamplayer.app.audio.dsp.GraphicEqSettings
 import com.foamplayer.app.audio.dsp.NodeColorPalette
 import com.foamplayer.app.audio.dsp.ParametricEqSettings
 import com.foamplayer.app.audio.dsp.ParametricNode
@@ -473,13 +474,19 @@ private fun PowerButton(
 
 // ------------------------------------------------------------------ presets
 
-/** The DspPreset currently reflected by [state], if any. */
+/**
+ * The DspPreset currently reflected by [state], if any. User presets are
+ * compared on their full state; built-in graphic presets on their resampled
+ * gains, so a preset matches whatever band layout the user currently has.
+ */
 private fun List<DspPreset>.matching(state: DspState): DspPreset? = firstOrNull { preset ->
     when {
         preset.fullState != null ->
             preset.fullState.copy(volumePercent = state.volumePercent) == state
         preset.kind == PresetKind.GRAPHIC ->
-            state.graphicEq.enabled && state.graphicEq.gainsDb == preset.graphicGainsDb
+            state.graphicEq.enabled &&
+                    GraphicEqSettings.resampleGains(preset.graphicGainsDb, state.graphicEq.count) ==
+                    state.graphicEq.gainsDb
         else -> false
     }
 }

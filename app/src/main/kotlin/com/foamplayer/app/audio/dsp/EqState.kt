@@ -106,6 +106,39 @@ data class GraphicEqSettings(
         }
 
         /**
+         * Resamples [gainsDb] (one gain per band of its own layout) onto a
+         * [targetBands]-band layout on the LOG-FREQUENCY axis: each target band
+         * center takes the linear interpolation of the source gains at that
+         * frequency, held flat outside the source span. This is what makes the
+         * audible curve survive a band-layout change and lets presets authored
+         * on one grid (built-ins: the 31-band ISO grid) drive any other layout —
+         * index-based resampling would shift the shape, since the ISO layouts
+         * span different frequency ranges.
+         */
+        fun resampleGains(gainsDb: List<Float>, targetBands: Int): List<Float> {
+            val target = targetBands.coerceIn(MIN_BAND_COUNT, MAX_BAND_COUNT)
+            if (gainsDb.isEmpty()) return List(target) { 0f }
+            val source = gainsDb.map { it.coerceIn(MIN_GAIN_DB, MAX_GAIN_DB) }
+            val sourceCount = source.size
+            if (target == sourceCount) return source
+
+            val sourceFreqs = List(sourceCount) { bandFrequency(it, sourceCount).toDouble() }
+            return List(target) { index ->
+                val f = bandFrequency(index, target).toDouble()
+                val low = sourceFreqs.indexOfLast { it <= f }
+                when {
+                    low < 0 -> source.first()          // below the source span
+                    low >= sourceCount - 1 -> source.last() // above the source span
+                    else -> {
+                        val t = ((f - sourceFreqs[low]) /
+                                (sourceFreqs[low + 1] - sourceFreqs[low])).toFloat().coerceIn(0f, 1f)
+                        source[low] + (source[low + 1] - source[low]) * t
+                    }
+                }
+            }
+        }
+
+        /**
          * Roughly Butterworth Q for overlapping peaking sections, so the bands
          * sum into a smooth response. Denser bands want a slightly higher Q.
          */
@@ -229,7 +262,11 @@ data class DspPreset(
         PresetKind.GRAPHIC -> DspState(
             enabled = true,
             tone = tone,
-            graphicEq = GraphicEqSettings(enabled = true, gainsDb = graphicGainsDb)
+            graphicEq = GraphicEqSettings(
+                enabled = true,
+                count = graphicGainsDb.size,
+                gainsDb = graphicGainsDb
+            )
         )
         PresetKind.PARAMETRIC -> DspState(
             enabled = true,

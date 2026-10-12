@@ -111,9 +111,9 @@ class DspEngine @Inject constructor(
     }
 
     /**
-     * Reshapes the graphic EQ to [count] bands, resampling the current curve so
-     * the audible response is preserved across the layout change (Poweramp-style
-     * band-count switching).
+     * Reshapes the graphic EQ to [count] bands, resampling the current curve on
+     * the log-frequency axis so the audible response is preserved across the
+     * layout change (Poweramp-style band-count switching).
      */
     fun setGraphicBandCount(count: Int) = update { current ->
         val target = count.coerceIn(
@@ -240,8 +240,9 @@ class DspEngine @Inject constructor(
      * Applies a preset. User presets (fullState set) restore their saved whole
      * state, keeping the current volume; built-ins adjust only their own EQ
      * section — graphic or parametric — and disable the opposite section.
-     * Built-in graphic shapes are authored on a 31-band grid and resampled to
-     * whatever band count the user currently has selected.
+     * Built-in graphic shapes are authored on a 31-band grid and resampled on
+     * the log-frequency axis to the user's band layout, so the shape (not the
+     * per-band numbers) survives any band count.
      */
     fun applyPreset(preset: DspPreset) {
         if (preset.fullState != null) {
@@ -253,9 +254,12 @@ class DspEngine @Inject constructor(
                 it.copy(
                     enabled = true,
                     tone = preset.tone,
-                    graphicEq = resampleGraphic(
-                        it.graphicEq.copy(enabled = true, gainsDb = preset.graphicGainsDb),
-                        it.graphicEq.count
+                    graphicEq = it.graphicEq.copy(
+                        enabled = true,
+                        gainsDb = GraphicEqSettings.resampleGains(
+                            preset.graphicGainsDb,
+                            it.graphicEq.count
+                        )
                     ),
                     parametricEq = it.parametricEq.copy(enabled = false)
                 )
@@ -303,26 +307,15 @@ class DspEngine @Inject constructor(
     private var nextNodeId = 1L
 
     /**
-     * Resamples a graphic-EQ configuration to [targetCount] bands: the source
-     * gains are treated as control points on the shared 20 Hz..20 kHz log axis
-     * and linearly interpolated onto the new band centers, so the audible
-     * curve (not the per-band numbers) survives a layout change.
+     * Resamples a graphic-EQ configuration to [targetCount] bands on the
+     * log-frequency axis, so the audible curve (not the per-band numbers)
+     * survives a layout change.
      */
-    private fun resampleGraphic(graphic: GraphicEqSettings, targetCount: Int): GraphicEqSettings {
-        val target = targetCount.coerceIn(
-            GraphicEqSettings.MIN_BAND_COUNT, GraphicEqSettings.MAX_BAND_COUNT
+    private fun resampleGraphic(graphic: GraphicEqSettings, targetCount: Int): GraphicEqSettings =
+        graphic.copy(
+            count = targetCount,
+            gainsDb = GraphicEqSettings.resampleGains(graphic.gainsDb, targetCount)
         )
-        val source = graphic.normalizedGains()
-        if (target == source.size) return graphic.copy(count = target, gainsDb = source)
-        val resampled = List(target) { index ->
-            val t = index.toFloat() * (source.size - 1) / (target - 1).coerceAtLeast(1)
-            val low = t.toInt().coerceIn(0, source.size - 1)
-            val high = (low + 1).coerceAtMost(source.size - 1)
-            val frac = t - low
-            source[low] + (source[high] - source[low]) * frac
-        }
-        return graphic.copy(count = target, gainsDb = resampled)
-    }
 
     private fun update(transform: (DspState) -> DspState) {
         val newState = enforceExclusivity(transform(_state.value))
