@@ -117,6 +117,7 @@ class StatsViewModel @Inject constructor(
                     coreStats.overview.totalDurationMs / windowDays
                 } else 0L,
                 peakHour = peakHourOf(coreStats.hourBuckets),
+                activeDays = coreStats.dailyBuckets.count { it.playCount > 0 },
                 timeBuckets = timeBuckets,
                 hourHistogram = hourHistogram,
                 topTracks = topStats.topTracks,
