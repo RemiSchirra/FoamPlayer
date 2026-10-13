@@ -110,6 +110,26 @@ class PlayerViewModel @Inject constructor(
     private val _openPlayerRequested = MutableStateFlow(false)
     val openPlayerRequested: StateFlow<Boolean> = _openPlayerRequested.asStateFlow()
 
+    /**
+     * True until the first startup queue restore attempt settles: the saved playing
+     * session is either back in the engine (paused at the saved position) or there
+     * was nothing to restore. UI gates (mini player, service start) wait for it so
+     * a restored session doesn't flash as absent for a frame.
+     */
+    private val _sessionRestoreSettled = MutableStateFlow(false)
+    val sessionRestoreSettled: StateFlow<Boolean> = _sessionRestoreSettled.asStateFlow()
+
+    init {
+        // Close-and-reopen resumption: rebuild the persisted session (played history,
+        // current track, upcoming queue) PAUSED at the saved position. Playback is
+        // never started here; the user presses play. The engine no-ops when the
+        // process survived (queue still live) or nothing was saved.
+        viewModelScope.launch {
+            audioEngine.restoreSession()
+            _sessionRestoreSettled.value = true
+        }
+    }
+
     fun setDynamicAccentColor(color: Color?) {
         _dynamicAccentColor.value = color
     }

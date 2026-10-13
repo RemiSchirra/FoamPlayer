@@ -50,6 +50,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.core.content.edit
 
@@ -99,7 +100,7 @@ class MainActivity : AppCompatActivity() {
         if (ContextCompat.checkSelfPermission(this, audioReadPermission()) ==
             PackageManager.PERMISSION_GRANTED
         ) {
-            startPlaybackService()
+            startPlaybackServiceAfterRestore()
         }
     }
 
@@ -335,8 +336,23 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        if (playerViewModel.hasCurrentTrack.value) {
-            startPlaybackService()
+        startPlaybackServiceAfterRestore()
+    }
+
+    /**
+     * Starts [PlaybackService] only after the startup queue restore
+     * (PlayerViewModel.init) has settled: with a saved session, starting the
+     * service before the engine rebuilt the queue would present an EMPTY
+     * session. Once settled, the service either finds the restored queue
+     * (media button + notification controls recover, paused) or nothing
+     * (fresh install / cleared queue).
+     */
+    private fun startPlaybackServiceAfterRestore() {
+        lifecycleScope.launch {
+            playerViewModel.sessionRestoreSettled.first { it }
+            if (playerViewModel.hasCurrentTrack.value) {
+                startPlaybackService()
+            }
         }
     }
 
@@ -436,7 +452,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (missingPermissions.isEmpty()) {
-            startPlaybackService()
+            startPlaybackServiceAfterRestore()
         } else {
             permissionLauncher.launch(missingPermissions.toTypedArray())
         }

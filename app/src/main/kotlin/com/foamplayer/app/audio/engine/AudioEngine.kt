@@ -538,6 +538,47 @@ class AudioEngine @Inject constructor(
         return items
     }
 
+    /** True once [restoreSession] has run for this process (restored, or nothing to restore). */
+    private var sessionRestoreAttempted = false
+
+    /**
+     * Restores the persisted playing session when the app process starts fresh: the saved
+     * queue is resolved against the library and rebuilt PAUSED at the saved position, so the
+     * played history, the current track and the upcoming queue all survive a close-and-reopen
+     * without playback resuming on its own (the user presses play).
+     *
+     * No-op once a queue is already live (the process never died, or a media-button resumption
+     * rebuilt the session first); returns false when there was nothing to restore. Engine
+     * mutations all run on the main dispatcher, and [sessionRestoreAttempted] latches on the
+     * first call, so re-entries can't race a user pick.
+     */
+    suspend fun restoreSession(): Boolean {
+        if (sessionRestoreAttempted) return false
+        sessionRestoreAttempted = true
+        if (_playbackState.value.currentTrack != null) return false
+
+        val saved = queuePersistence.current() ?: return false
+        val byId = trackRepository.getTracksByIds(saved.trackIds).associateBy { it.id }
+        val tracks = saved.trackIds.mapNotNull { byId[it] }
+        if (tracks.isEmpty() || saved.currentIndex !in tracks.indices) return false
+
+        // The auxiliary pool was never persisted; the library snapshot may not be
+        // loaded yet this early in the process, so fetch it before drawing a new pool.
+        if (allTracks.isEmpty()) allTracks = trackRepository.getAllTracksOnce()
+
+        restoreQueue(
+            tracks = tracks,
+            startIndex = saved.currentIndex,
+            positionMs = saved.positionMs,
+            sourceCollectionId = saved.queueSourceId,
+            sourceFlags = saved.sourceFlags.takeIf { it.size == tracks.size },
+            isShuffle = saved.isShuffle,
+            repeatMode = saved.repeatMode
+        )
+        scheduleAuxiliaryRefill()
+        return true
+    }
+
     /** True when a gesture skip must not un-pause the session. Manual picks always play. */
     private fun switchStaysPaused(): Boolean =
         _playbackState.value.currentTrack != null && !player.playWhenReady
