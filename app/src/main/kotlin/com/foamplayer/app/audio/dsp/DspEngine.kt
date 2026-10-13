@@ -1,5 +1,7 @@
 package com.foamplayer.app.audio.dsp
 
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import com.foamplayer.app.data.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +27,7 @@ import javax.inject.Singleton
  * Injected as a singleton so the playback service, the EQ screen and the audio
  * settings screen all see — and drive — the exact same state.
  */
+@UnstableApi
 @Singleton
 class DspEngine @Inject constructor(
     private val settingsRepository: SettingsRepository
@@ -73,6 +76,7 @@ class DspEngine @Inject constructor(
      * for a crossfade's secondary player. Seeded with the current state and
      * registered for future publications.
      */
+    @OptIn(UnstableApi::class)
     fun createMirrorProcessor(): DspAudioProcessor =
         DspAudioProcessor().also { mirror ->
             mirror.setState(_state.value)
@@ -80,6 +84,7 @@ class DspEngine @Inject constructor(
         }
 
     /** Unregisters a mirror whose player was released (fade cancelled / aborted). */
+    @OptIn(UnstableApi::class)
     fun removeMirrorProcessor(processor: DspAudioProcessor) {
         mirrorProcessors.remove(processor)
     }
