@@ -1,5 +1,4 @@
 <resources>
-    <string name="app_name" translatable="false">FoamPlayer</string>
     <string name="playback_channel_name">FoamPlayer Playback</string>
     <string name="action_shuffle">Shuffle</string>
     <string name="action_repeat">Repeat</string>
@@ -39,7 +38,6 @@
     <string name="metadata_separators">Metadata Separators</string>
     <string name="artist_separators">Artist Separators</string>
     <string name="genre_separators">Genre Separators</string>
-    <string name="library_scan">Library Scan</string>
     <string name="statistics">Statistics</string>
     <string name="listened_threshold">Listened Threshold</string>
     <string name="listened_threshold_description">Fraction of a track after which it counts as listened</string>
@@ -116,7 +114,6 @@
     <string name="stats_period_all">All time</string>
     <string name="stats_subtitle_week">Listening over the last 7 days</string>
     <string name="stats_subtitle_month">Listening over the last 30 days</string>
-    <string name="stats_subtitle_three_months">Listening over the last 3 months</string>
     <string name="stats_subtitle_six_months">Listening over the last 6 months</string>
     <string name="stats_subtitle_year">Listening over the last 12 months</string>
     <string name="stats_subtitle_all">All-time listening</string>
@@ -163,7 +160,6 @@
     <string name="silence_between_tracks_desc">Wait between the end of a track and the start of the next one. Disables the automatic crossfade</string>
 
     <!-- Fades -->
-    <string name="fades">Fades</string>
     <string name="crossfade">Crossfade</string>
     <string name="crossfade_desc">Blend each track\'s ending into the next one</string>
     <string name="quick_fade">Quick Fade</string>
@@ -172,7 +168,6 @@
     <string name="lyrics_providers">Providers</string>
     <string name="lyrics_not_found">Lyrics not found</string>
     <string name="resume_auto_scroll">Resume auto-scroll</string>
-    <string name="search_priority">Search Priority</string>
     <string name="drag_to_reorder_desc">Drag handles to reorder. Enabled providers are searched in order.</string>
 
     <string name="lyrics_manager">Lyrics Manager</string>
@@ -184,7 +179,6 @@
     <string name="lyrics_manager_total">Total</string>
     <string name="lyrics_manager_search_hint">Search songs, artists, albums...</string>
     <string name="lyrics_manager_no_songs">No songs match</string>
-    <string name="lyrics_manager_scanning">Analyzing lyrics…</string>
     <string name="lyrics_manager_filter_all">All</string>
     <string name="lyrics_manager_delete">Delete lyrics</string>
     <string name="lyrics_manager_deleted">Lyrics deleted</string>
@@ -208,10 +202,7 @@
     <string name="lyrics_view_readable">Readable</string>
     <string name="lyrics_view_raw">Raw</string>
 
-    <string name="audio_library">Audio Library</string>
     <string name="albums">Albums</string>
-    <string name="play_all">Play All</string>
-    <string name="create_playlist">+ Create</string>
     <string name="no_playlists_yet">No playlists created yet.</string>
     <string name="create_playlist_title">Create Playlist</string>
     <string name="playlist_name_hint">Playlist name</string>
@@ -272,7 +263,6 @@
     <string name="dev_generate_random_data_message">Random listen counts, dates (last 3 years) and scores will be generated for every track, replacing the current listening history.</string>
 
     <string name="artist_album_separator" translatable="false">%1$s - %2$s</string>
-    <string name="artist_format_separator" translatable="false">%1$s • %2$s</string>
 
     <string name="dynamic_background">Dynamic Background</string>
     <string name="dynamic_background_desc">Extract colors from album art for the app-wide backdrop</string>
@@ -286,7 +276,6 @@
     <string name="background_blur">Background Blur</string>
     <string name="force_dynamic_background_title">Force dynamic background</string>
     <string name="force_dynamic_background_summary">Show the playing artwork instead of the custom image or gradient</string>
-    <string name="color_intensity">Color Intensity</string>
     <string name="none">None</string>
     <string name="max">Max</string>
     <string name="dim">Dim</string>
@@ -309,8 +298,6 @@
 
     <string name="automatic_color">Automatic Color</string>
     <string name="automatic_color_desc">Extract accent color from album art</string>
-    <string name="on">ON</string>
-    <string name="off">OFF</string>
 
     <string name="theme">Theme</string>
     <string name="theme_follow_system">Follow system</string>
@@ -328,8 +315,6 @@
     <string name="onboarding_permission_audio_desc">Read the music files stored on your device</string>
     <string name="onboarding_permission_notifications_title">Notifications</string>
     <string name="onboarding_permission_notifications_desc">Show playback controls and cover art in the notification shade</string>
-    <string name="onboarding_grant">Grant</string>
-    <string name="onboarding_granted">Granted</string>
     <string name="onboarding_skip_hint">You can change these anytime in Settings.</string>
     <string name="onboarding_library_title">Library</string>
     <string name="onboarding_library_subtitle">Pick where your music lives, then run the first scan.</string>
@@ -355,7 +340,6 @@
     <string name="notification_entry">Notification</string>
     <string name="notification_entry_desc">Buttons of the playback notification</string>
     <string name="notification_section">Notification</string>
-    <string name="notification_buttons_title">Notification buttons</string>
     <string name="notification_buttons_desc">Choose the two extra buttons of the playback notification. Previous, play/pause and next are fixed.</string>
     <string name="notification_button_left">Left button</string>
     <string name="notification_button_left_desc">Extra button left of Previous</string>
@@ -373,18 +357,15 @@
     <string name="display_on_lock_screen_desc">While a song is playing, waking the phone shows the player instead of the system lock screen. Needs the \"Display over other apps\" permission</string>
     <string name="lock_screen_overlay_hint">Allow FoamPlayer to \"Display over other apps\" so the player can show over the lock screen</string>
     <string name="lock_screen_open_permission">GRANT PERMISSION</string>
-    <string name="lock_screen_tap_to_unlock">Tap anywhere to unlock</string>
     <string name="fast_lock_screen">Fast lock</string>
     <string name="fast_lock_screen_desc">When the lock-screen player is showing, the app drops back after 5 seconds without input</string>
 
     <!-- Settings import / export -->
     <string name="settings_export">Export</string>
-    <string name="settings_export_subtitle">Save settings and data to JSON file</string>
     <string name="settings_export_folder">Export folder</string>
     <string name="settings_export_folder_hint">Choose where the JSON backup is written</string>
     <string name="settings_export_features">Features to export</string>
     <string name="settings_import">Import</string>
-    <string name="settings_import_subtitle">Restore settings and data from JSON files</string>
     <string name="settings_import_files">JSON file</string>
     <string name="settings_import_files_hint">Choose a JSON backup file</string>
     <string name="settings_import_features">Features to import</string>
@@ -528,20 +509,11 @@
     <!-- Equalizer -->
     <string name="enable_dsp">Enable DSP</string>
     <string name="disable_dsp">Disable DSP</string>
-    <string name="eq_bit_perfect_passthrough">Bit-perfect passthrough</string>
-    <string name="eq_float_processing">32-bit float processing</string>
-    <string name="eq_frequency_response">FREQUENCY RESPONSE</string>
     <string name="eq_preamp">PRE-AMP</string>
-    <string name="eq_bass">BASS</string>
-    <string name="eq_mid">MID</string>
-    <string name="eq_treble">TREBLE</string>
     <string name="eq_bass_boost">BASS</string>
     <string name="eq_treble_boost">TREBLE</string>
     <string name="eq_virtualizer">VIRTUALIZER</string>
-    <string name="eq_tone">TONE</string>
-    <string name="eq_controls">CONTROLS</string>
     <string name="eq_balance">BALANCE</string>
-    <string name="eq_stereo">STEREO</string>
     <string name="eq_color">COLOR</string>
     <string name="eq_node">NODE</string>
     <string name="eq_node_id">NODE %1$d</string>
@@ -550,7 +522,6 @@
     <string name="eq_q">Q</string>
     <string name="eq_presets">Presets</string>
     <string name="eq_preset_custom_hint">Custom · tap to browse &amp; save</string>
-    <string name="eq_view_all">VIEW ALL</string>
     <string name="eq_presets_desc">A preset drives either the graphic or the parametric EQ</string>
     <string name="eq_save_as_new">Save current as new preset</string>
     <string name="eq_preset_kind_parametric">PARAMETRIC</string>
@@ -562,16 +533,8 @@
     <string name="eq_add_node">Add parametric node</string>
     <string name="eq_node_limit">Node limit reached</string>
     <string name="eq_volume">Volume</string>
-    <string name="eq_volume_desc">Direct volume control (32-bit float)</string>
-    <string name="eq_volume_readout">%1$d%% · %2$.1f dB</string>
-    <string name="eq_mute">Mute</string>
-    <string name="eq_full_scale">Full scale</string>
     <string name="eq_save_preset_title">Save Preset</string>
     <string name="eq_preset_name_hint">Preset name</string>
-    <string name="eq_bands">%1$d bands</string>
-    <string name="eq_bands_caps">%1$d BANDS</string>
-    <string name="eq_graphic_title">%1$d-band graphic equalizer</string>
-    <string name="eq_parametric_title">Parametric equalizer · %1$d/%2$d nodes</string>
     <string name="eq_balance_center">CENTER</string>
     <string name="eq_balance_left">L %.0f%%</string>
     <string name="eq_balance_right">R %.0f%%</string>

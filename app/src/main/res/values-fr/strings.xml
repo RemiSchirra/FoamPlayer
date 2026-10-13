@@ -38,7 +38,6 @@
     <string name="metadata_separators">Séparateurs de métadonnées</string>
     <string name="artist_separators">Séparateurs d\'artistes</string>
     <string name="genre_separators">Séparateurs de genres</string>
-    <string name="library_scan">Analyse de la bibliothèque</string>
     <string name="statistics">Statistiques</string>
     <string name="listened_threshold">Seuil d\'écoute</string>
     <string name="listened_threshold_description">Fraction d\'une piste après laquelle elle est comptée comme écoutée</string>
@@ -115,7 +114,6 @@
     <string name="stats_period_all">Tout</string>
     <string name="stats_subtitle_week">Écoutes des 7 derniers jours</string>
     <string name="stats_subtitle_month">Écoutes des 30 derniers jours</string>
-    <string name="stats_subtitle_three_months">Écoutes des 3 derniers mois</string>
     <string name="stats_subtitle_six_months">Écoutes des 6 derniers mois</string>
     <string name="stats_subtitle_year">Écoutes des 12 derniers mois</string>
     <string name="stats_subtitle_all">Écoutes depuis toujours</string>
@@ -162,7 +160,6 @@
     <string name="silence_between_tracks_desc">Attendre entre la fin d\'une piste et le début de la suivante. Désactive l\'enchaînement fondu automatique</string>
 
     <!-- Fondus -->
-    <string name="fades">Fondus</string>
     <string name="crossfade">Enchaînement fondu</string>
     <string name="crossfade_desc">Fondu de fin de piste vers la suivante</string>
     <string name="quick_fade">Fondu rapide</string>
@@ -171,7 +168,6 @@
     <string name="lyrics_providers">Fournisseurs</string>
     <string name="lyrics_not_found">Paroles non trouvées</string>
     <string name="resume_auto_scroll">Reprendre le défilement auto</string>
-    <string name="search_priority">Priorité de recherche</string>
     <string name="drag_to_reorder_desc">Faites glisser les poignées pour réordonner. Les fournisseurs activés sont parcourus dans l\'ordre.</string>
 
     <string name="lyrics_manager">Gestion des paroles</string>
@@ -183,7 +179,6 @@
     <string name="lyrics_manager_total">Total</string>
     <string name="lyrics_manager_search_hint">Rechercher titres, artistes, albums...</string>
     <string name="lyrics_manager_no_songs">Aucun titre ne correspond</string>
-    <string name="lyrics_manager_scanning">Analyse des paroles…</string>
     <string name="lyrics_manager_filter_all">Tout</string>
     <string name="lyrics_manager_delete">Supprimer les paroles</string>
     <string name="lyrics_manager_deleted">Paroles supprimées</string>
@@ -207,10 +202,7 @@
     <string name="lyrics_view_readable">Lisible</string>
     <string name="lyrics_view_raw">Brut</string>
 
-    <string name="audio_library">Bibliothèque audio</string>
     <string name="albums">Albums</string>
-    <string name="play_all">Tout lire</string>
-    <string name="create_playlist">+ Créer</string>
     <string name="no_playlists_yet">Aucune playlist créée pour le moment.</string>
     <string name="create_playlist_title">Créer une playlist</string>
     <string name="playlist_name_hint">Nom de la playlist</string>
@@ -282,7 +274,6 @@
     <string name="background_blur">Flou d\'arrière-plan</string>
     <string name="force_dynamic_background_title">Forcer l\'arrière-plan dynamique</string>
     <string name="force_dynamic_background_summary">Afficher l\'art en cours de lecture à la place de l\'image personnalisée ou du dégradé</string>
-    <string name="color_intensity">Intensité des couleurs</string>
     <string name="none">Aucun</string>
     <string name="max">Max</string>
     <string name="dim">Sombre</string>
@@ -305,8 +296,6 @@
 
     <string name="automatic_color">Couleur automatique</string>
     <string name="automatic_color_desc">Extraire la couleur d\'accentuation de la pochette</string>
-    <string name="on">ON</string>
-    <string name="off">OFF</string>
 
     <string name="theme">Thème</string>
     <string name="theme_follow_system">Suivre le système</string>
@@ -324,8 +313,6 @@
     <string name="onboarding_permission_audio_desc">Lire les fichiers musicaux stockés sur votre appareil</string>
     <string name="onboarding_permission_notifications_title">Notifications</string>
     <string name="onboarding_permission_notifications_desc">Afficher les contrôles et la pochette dans le volet des notifications</string>
-    <string name="onboarding_grant">Accorder</string>
-    <string name="onboarding_granted">Accordée</string>
     <string name="onboarding_skip_hint">Vous pouvez modifier ces éléments à tout moment dans les paramètres.</string>
     <string name="onboarding_library_title">Bibliothèque</string>
     <string name="onboarding_library_subtitle">Choisissez où se trouve votre musique, puis lancez la première analyse.</string>
@@ -351,7 +338,6 @@
     <string name="notification_entry">Notification</string>
     <string name="notification_entry_desc">Boutons de la notification de lecture</string>
     <string name="notification_section">Notification</string>
-    <string name="notification_buttons_title">Boutons de notification</string>
     <string name="notification_buttons_desc">Choisissez les deux boutons supplémentaires de la notification de lecture. Précédent, lecture/pause et suivant sont fixes.</string>
     <string name="notification_button_left">Bouton gauche</string>
     <string name="notification_button_left_desc">Bouton supplémentaire à gauche de Précédent</string>
@@ -369,15 +355,12 @@
     <string name="display_on_lock_screen_desc">Pendant la lecture, le réveil du téléphone affiche le lecteur à la place de l\'écran de verrouillage. Nécessite la permission « Afficher par-dessus les autres applications »</string>
     <string name="lock_screen_overlay_hint">Autorisez FoamPlayer à « Afficher par-dessus les autres applications » pour que le lecteur s\'affiche sur l\'écran de verrouillage</string>
     <string name="lock_screen_open_permission">ACCORDER LA PERMISSION</string>
-    <string name="lock_screen_tap_to_unlock">Touchez l\'écran pour déverrouiller</string>
     <string name="fast_lock_screen">Verrouillage rapide</string>
     <string name="fast_lock_screen_desc">Quand le lecteur est affiché sur l\'écran de verrouillage, l\'application repasse derrière après 5 secondes sans interaction</string>
 
     <!-- Paramètres import / export -->
     <string name="settings_export">Exporter</string>
-    <string name="settings_export_subtitle">Sauvegarder les réglages et données en fichier JSON</string>
     <string name="settings_import">Importer</string>
-    <string name="settings_import_subtitle">Restaurer les réglages et données depuis un fichiers JSON</string>
     <string name="settings_export_folder">Dossier d\'export</string>
     <string name="settings_export_folder_hint">Choisissez où écrire la sauvegarde JSON</string>
     <string name="settings_export_features">Fonctionnalités à exporter</string>
@@ -526,20 +509,11 @@
     <!-- Égaliseur -->
     <string name="enable_dsp">Activer le DSP</string>
     <string name="disable_dsp">Désactiver le DSP</string>
-    <string name="eq_bit_perfect_passthrough">Transit bit-perfect</string>
-    <string name="eq_float_processing">Traitement en flottant 32 bits</string>
-    <string name="eq_frequency_response">RÉPONSE EN FRÉQUENCE</string>
     <string name="eq_preamp">PRÉ-AMP</string>
-    <string name="eq_bass">BASSES</string>
-    <string name="eq_mid">MÉDIUMS</string>
-    <string name="eq_treble">AIGUS</string>
     <string name="eq_bass_boost">BASSES</string>
     <string name="eq_treble_boost">AIGUS</string>
     <string name="eq_virtualizer">VIRTUALISEUR</string>
-    <string name="eq_tone">TONALITÉ</string>
-    <string name="eq_controls">CONTRÔLES</string>
     <string name="eq_balance">BALANCE</string>
-    <string name="eq_stereo">STÉRÉO</string>
     <string name="eq_color">COULEUR</string>
     <string name="eq_node">NŒUD</string>
     <string name="eq_node_id">NŒUD %1$d</string>
@@ -548,7 +522,6 @@
     <string name="eq_q">Q</string>
     <string name="eq_presets">Préréglages</string>
     <string name="eq_preset_custom_hint">Personnalisé · toucher pour parcourir et enregistrer</string>
-    <string name="eq_view_all">TOUT VOIR</string>
     <string name="eq_presets_desc">Un préréglage pilote soit l\'égaliseur graphique, soit le paramétrique</string>
     <string name="eq_save_as_new">Enregistrer le réglage actuel comme nouveau</string>
     <string name="eq_preset_kind_parametric">PARAMÉTRIQUE</string>
@@ -560,16 +533,8 @@
     <string name="eq_add_node">Ajouter un nœud paramétrique</string>
     <string name="eq_node_limit">Limite de nœuds atteinte</string>
     <string name="eq_volume">Volume</string>
-    <string name="eq_volume_desc">Contrôle direct du volume (flottant 32 bits)</string>
-    <string name="eq_volume_readout">%1$d%% · %2$.1f dB</string>
-    <string name="eq_mute">Muet</string>
-    <string name="eq_full_scale">Pleine échelle</string>
     <string name="eq_save_preset_title">Enregistrer un préréglage</string>
     <string name="eq_preset_name_hint">Nom du préréglage</string>
-    <string name="eq_bands">%1$d bandes</string>
-    <string name="eq_bands_caps">%1$d BANDES</string>
-    <string name="eq_graphic_title">Égaliseur graphique %1$d bandes</string>
-    <string name="eq_parametric_title">Égaliseur paramétrique · %1$d/%2$d nœuds</string>
     <string name="eq_balance_center">CENTRE</string>
     <string name="eq_balance_left">G %.0f%%</string>
     <string name="eq_balance_right">D %.0f%%</string>
