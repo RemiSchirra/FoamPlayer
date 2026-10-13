@@ -15,12 +15,6 @@ enum class RepeatMode { NONE, ALL, ONE }
 data class PlaybackState(
     val currentTrack: TrackEntity? = null,
     val isPlaying: Boolean = false,
-    // Pause INTENT (ExoPlayer's playWhenReady, mirrored by the engine): true
-    // while playback was requested even when a buffering gap keeps the stream
-    // from being audibly playing (isPlaying=false between prepare() and
-    // STATE_READY). UI must treat "requested but buffering" as playing, not
-    // paused -- e.g. the paused-art shrink must not trigger across those gaps,
-    // or every tap on a track shrinks the art for the load duration.
     val isPlaybackRequested: Boolean = false,
     val durationMs: Long = 0L,
     val queue: List<TrackEntity> = emptyList(),
@@ -30,7 +24,7 @@ data class PlaybackState(
     val isShuffle: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.NONE,
     val audioOutputInfo: AudioOutputInfo? = null,
-    // True for auxiliary (random) queue entries.
+    // True for auxiliary queue entries.
     val auxiliaryFlags: List<Boolean> = emptyList(),
     // Collection id the queue was started from ("album:…", "playlist:…"); null for bare lists.
     val queueSourceId: String? = null,

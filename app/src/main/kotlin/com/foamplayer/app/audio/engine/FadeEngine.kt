@@ -251,12 +251,6 @@ class FadeEngine @androidx.annotation.OptIn(UnstableApi::class)
 
         fadeJob = scope.launch {
             try {
-                // The secondary needs time to open the stream, seek and fill its buffer. Ramping
-                // during that window fades the outgoing stream out (and the incoming one up)
-                // while nothing is audible yet: a gap of near-silence before the new audio
-                // comes in. Keep the outgoing stream at full volume until the incoming one
-                // actually plays, then start the ramp from t = 0. The timeout is a safety net
-                // for a stream that never becomes ready (errors are handled by its listener).
                 val primeDeadlineNanos = System.nanoTime() + PRIME_TIMEOUT_MS * 1_000_000L
                 while (!newPlayer.isPlaying && System.nanoTime() < primeDeadlineNanos) {
                     delay(PRIME_POLL_MS)

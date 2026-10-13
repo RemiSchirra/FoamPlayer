@@ -63,8 +63,6 @@ class QueuePersistence @Inject constructor(
         append(FIELD_SEPARATOR)
         append(state.sourceFlags.joinToString(ITEM_SEPARATOR) { if (it) "1" else "0" })
         append(FIELD_SEPARATOR)
-        // Last field: a source id may contain any character, and the limit-bound
-        // split below keeps everything after the last field separator intact.
         append(state.queueSourceId.orEmpty())
     }
 

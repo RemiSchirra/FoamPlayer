@@ -240,10 +240,6 @@ class AudioEngine @Inject constructor(
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             _playbackState.value =
                 _playbackState.value.copy(isPlaybackRequested = playWhenReady)
-            // The pause-at-end signal of the inter-track silence gap (silence > 0 arms
-            // setPauseAtEndOfMediaItems): the track finished on its own, hold on it for the
-            // configured gap, then advance. Any other play-when-ready change (user pause,
-            // focus loss) is ignored.
             if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
                 maybeBeginSilenceGap()
             }
