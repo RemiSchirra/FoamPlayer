@@ -144,11 +144,8 @@ data class AppSettings(
     val collectionLayoutArtist: CollectionHeroLayout = CollectionHeroLayout.Normal,
     val collectionLayoutAlbum: CollectionHeroLayout = CollectionHeroLayout.Immersive,
     val collectionLayoutPlaylist: CollectionHeroLayout = CollectionHeroLayout.CompactImmersive,
-    /** False until the first-run onboarding flow (welcome / permissions / library) is finished. */
     val onboardingCompleted: Boolean = false,
-    /** Publishes the currently playing track as Discord Rich Presence via the user's Discord account. */
     val discordPresenceEnabled: Boolean = false,
-    /** Looks tracks up online (Spotify, then YouTube) and uses the album cover as the Discord image. */
     val discordOnlineArt: Boolean = true,
     /** Resolves a picture for the library's artists from Spotify (Settings > Library scan). */
     val artistImageResolveEnabled: Boolean = false,
@@ -158,16 +155,10 @@ data class AppSettings(
      * lock screen (requires the system "Full-screen intent" permission).
      */
     val displayOnLockScreen: Boolean = false,
-    /**
-     * While the app shows over the lock screen, end the lock-display session
-     * after five seconds without user input: the app drops back behind the
-     * keyguard ("fast lock"). Only meaningful with [displayOnLockScreen].
-     */
+    /** Fast lock screen after 5sec. Only meaningful with [displayOnLockScreen]. */
     val fastLockScreenEnabled: Boolean = true,
-    /** First of the two configurable playback-notification buttons (left of Previous). */
-    val notificationButtonLeft: NotificationExtraButton = NotificationExtraButton.SHUFFLE,
-    /** Second configurable playback-notification button (right of Next). */
-    val notificationButtonRight: NotificationExtraButton = NotificationExtraButton.REPEAT,
+    val notificationButtonLeft: NotificationExtraButton = NotificationExtraButton.SCORE,
+    val notificationButtonRight: NotificationExtraButton = NotificationExtraButton.CLOSE,
     /** Complete DSP chain state (EQ, tone, balance, volume), serialized by [DspPersistence]. */
     val dspStateSerialized: String = "",
     /** User-saved EQ presets, serialized by [DspPersistence]. */

@@ -109,9 +109,9 @@ class PlaybackService : MediaSessionService() {
 
     /** Cached notification-button configuration, read by the provider lambdas. */
     @Volatile
-    private var notificationButtonLeft = NotificationExtraButton.SHUFFLE
+    private var notificationButtonLeft = NotificationExtraButton.SCORE
     @Volatile
-    private var notificationButtonRight = NotificationExtraButton.REPEAT
+    private var notificationButtonRight = NotificationExtraButton.CLOSE
 
     /**
      * The current track's fresh score, mirrored from the shared

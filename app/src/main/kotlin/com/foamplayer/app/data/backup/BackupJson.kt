@@ -209,11 +209,11 @@ object BackupJson {
         fastLockScreenEnabled = json.optBoolean("fastLockScreenEnabled", true),
         notificationButtonLeft = decodeEnum(
             json.optString("notificationButtonLeft"),
-            NotificationExtraButton.SHUFFLE
+            NotificationExtraButton.SCORE
         ),
         notificationButtonRight = decodeEnum(
             json.optString("notificationButtonRight"),
-            NotificationExtraButton.REPEAT
+            NotificationExtraButton.CLOSE
         ),
         dspStateSerialized = json.optString("dspState", ""),
         dspUserPresets = json.optString("dspUserPresets", ""),
