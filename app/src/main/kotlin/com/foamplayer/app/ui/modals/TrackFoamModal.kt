@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.modals
 
+import android.content.res.Resources
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.compose.animation.AnimatedContent
@@ -49,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -85,19 +87,19 @@ private val StoragePrefixRegex = Regex("^/storage/emulated/\\d+/")
 internal class ChannelLabels(
     val mono: String,
     val stereo: String,
-    private val context: android.content.Context
+    private val resources: Resources
 ) {
-    fun count(n: Int): String = context.resources.getQuantityString(R.plurals.channels_count, n, n)
+    fun count(n: Int): String = resources.getQuantityString(R.plurals.channels_count, n, n)
 }
 
 @Composable
 internal fun rememberChannelLabels(): ChannelLabels {
-    val context = LocalContext.current
-    return remember(context) {
+    val resources = LocalResources.current
+    return remember(resources) {
         ChannelLabels(
-            mono = context.getString(R.string.channels_mono),
-            stereo = context.getString(R.string.channels_stereo),
-            context = context
+            mono = resources.getString(R.string.channels_mono),
+            stereo = resources.getString(R.string.channels_stereo),
+            resources = resources
         )
     }
 }

@@ -35,12 +35,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -72,17 +74,17 @@ fun LyricsSearchResultsScreen(
     val isSaving by viewModel.isSaving.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
+    val resources by rememberUpdatedState(LocalResources.current)
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             val message = when (event) {
-                LyricsWriteEvent.SavedToFile -> context.getString(R.string.lyrics_results_saved)
-                LyricsWriteEvent.Embedded -> context.getString(R.string.lyrics_results_embedded)
+                LyricsWriteEvent.SavedToFile -> resources.getString(R.string.lyrics_results_saved)
+                LyricsWriteEvent.Embedded -> resources.getString(R.string.lyrics_results_embedded)
                 is LyricsWriteEvent.SaveFailed ->
-                    context.getString(R.string.lyrics_results_save_failed, event.reason)
+                    resources.getString(R.string.lyrics_results_save_failed, event.reason)
                 is LyricsWriteEvent.EmbedFailed ->
-                    context.getString(R.string.lyrics_results_embed_failed, event.reason)
+                    resources.getString(R.string.lyrics_results_embed_failed, event.reason)
             }
             snackbarHostState.showSnackbar(message)
         }
