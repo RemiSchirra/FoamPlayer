@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.GradientStop
 import kotlin.math.roundToInt
+import androidx.core.graphics.createBitmap
 
 /**
  * True 2D color field for the gradient background: every point is a
@@ -48,7 +49,7 @@ fun gradientColorAt(stops: List<GradientStop>, x: Float, y: Float): Int {
 fun buildGradientImage(stops: List<GradientStop>, width: Int, height: Int): ImageBitmap {
     val w = width.coerceAtLeast(1)
     val h = height.coerceAtLeast(1)
-    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val bitmap = createBitmap(w, h)
     val pixels = IntArray(w * h)
     var index = 0
     for (row in 0 until h) {

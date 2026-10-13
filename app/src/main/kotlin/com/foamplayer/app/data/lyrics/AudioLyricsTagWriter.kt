@@ -8,6 +8,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import androidx.core.net.toUri
 
 /**
  * Writes lyrics into an audio file's embedded tag, in the exact places
@@ -71,13 +72,13 @@ object AudioLyricsTagWriter {
     private class RewritePlan(val newPrefix: ByteArray, val audioDataOffset: Long)
 
     private fun extensionOf(trackPath: String): String =
-        Uri.parse(trackPath).lastPathSegment
+        trackPath.toUri().lastPathSegment
             ?.substringAfterLast('.', "")
             ?.lowercase()
             .orEmpty()
 
     private fun resolveFile(trackPath: String): File? {
-        val uri = Uri.parse(trackPath)
+        val uri = trackPath.toUri()
         return when (uri.scheme) {
             null, "", "file" -> File(uri.path ?: trackPath)
             else -> null
@@ -87,7 +88,7 @@ object AudioLyricsTagWriter {
     private fun openSource(context: Context, trackPath: String): InputStream {
         val file = resolveFile(trackPath)
         return file?.inputStream()
-            ?: context.contentResolver.openInputStream(Uri.parse(trackPath))
+            ?: context.contentResolver.openInputStream(trackPath.toUri())
             ?: throw IOException("Could not open audio file for reading")
     }
 
@@ -109,7 +110,7 @@ object AudioLyricsTagWriter {
                     file.outputStream().use { output -> input.copyTo(output) }
                 }
             } else {
-                context.contentResolver.openOutputStream(Uri.parse(trackPath), "wt")?.use { output ->
+                context.contentResolver.openOutputStream(trackPath.toUri(), "wt")?.use { output ->
                     temp.inputStream().use { input -> input.copyTo(output) }
                 } ?: throw IOException("Could not open audio file for writing")
             }

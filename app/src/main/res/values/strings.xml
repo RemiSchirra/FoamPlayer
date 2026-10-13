@@ -177,7 +177,7 @@
     <string name="lyrics_manager_file">File</string>
     <string name="lyrics_manager_no_lyrics">No lyrics</string>
     <string name="lyrics_manager_total">Total</string>
-    <string name="lyrics_manager_search_hint">Search songs, artists, albums...</string>
+    <string name="lyrics_manager_search_hint">Search songs, artists, albums…</string>
     <string name="lyrics_manager_no_songs">No songs match</string>
     <string name="lyrics_manager_filter_all">All</string>
     <string name="lyrics_manager_delete">Delete lyrics</string>
@@ -239,7 +239,7 @@
     <string name="queue_shuffle">Shuffle queue</string>
     <string name="queue_clear">Clear queue</string>
     <string name="track_count_duration">%1$d Tracks • %2$s</string>
-    <string name="add_separator">Add separator...</string>
+    <string name="add_separator">Add separator…</string>
 
     <string name="audio_settings_subtitle">Bit-perfect engine and output options</string>
     <string name="ui_settings_subtitle">Appearance, icon styles and rounding</string>

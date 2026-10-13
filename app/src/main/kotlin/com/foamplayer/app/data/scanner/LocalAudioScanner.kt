@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
+import androidx.core.net.toUri
 
 /** State of a library scan as observed by the progress UI. */
 sealed class ScanStatus {
@@ -158,7 +159,7 @@ class LocalAudioScanner @Inject constructor(
         val foundFiles = mutableListOf<FoundAudioFile>()
         folderPaths.forEach { pathString ->
             try {
-                val rootUri = Uri.parse(pathString)
+                val rootUri = pathString.toUri()
                 if (rootUri.scheme == "content") {
                     val treeId = DocumentsContract.getTreeDocumentId(rootUri)
                     collectUrisRecursive(rootUri, treeId, foundFiles, onProgress)
@@ -361,7 +362,7 @@ class LocalAudioScanner @Inject constructor(
     private fun albumHasEmbeddedArt(track: TrackEntity): Boolean {
         val retriever = MediaMetadataRetriever()
         return try {
-            retriever.setDataSource(context, Uri.parse(track.path))
+            retriever.setDataSource(context, track.path.toUri())
             retriever.embeddedPicture != null
         } catch (_: Exception) {
             false

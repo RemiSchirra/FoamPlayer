@@ -9,7 +9,6 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
-import java.io.IOException
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.security.SecureRandom

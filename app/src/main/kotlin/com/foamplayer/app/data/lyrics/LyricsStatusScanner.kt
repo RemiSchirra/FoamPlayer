@@ -138,7 +138,7 @@ class LyricsStatusScanner @Inject constructor(
 
     /** Groups tracks that share a parent folder so one directory listing serves all of them. */
     private fun folderKey(track: TrackEntity): String? {
-        val uri = runCatching { Uri.parse(track.path) }.getOrNull() ?: return null
+        val uri = runCatching { track.path.toUri() }.getOrNull() ?: return null
         return when (uri.scheme) {
             "content" -> runCatching {
                 val documentId = DocumentsContract.getDocumentId(uri)
@@ -151,7 +151,7 @@ class LyricsStatusScanner @Inject constructor(
 
     /** The audio document's file name, used to find its entry in the folder listing. */
     private fun trackFileName(track: TrackEntity): String? {
-        val uri = runCatching { Uri.parse(track.path) }.getOrNull() ?: return null
+        val uri = runCatching { track.path.toUri() }.getOrNull() ?: return null
         return when (uri.scheme) {
             "content" -> runCatching { DocumentsContract.getDocumentId(uri).substringAfterLast('/') }.getOrNull()
             "file" -> uri.lastPathSegment?.substringAfterLast('/')
@@ -160,7 +160,7 @@ class LyricsStatusScanner @Inject constructor(
     }
 
     private fun listingFor(track: TrackEntity): Map<String, ListedChild>? {
-        val uri = runCatching { Uri.parse(track.path) }.getOrNull() ?: return null
+        val uri = runCatching { track.path.toUri() }.getOrNull() ?: return null
         return when (uri.scheme) {
             "content" -> runCatching { listSafChildren(uri) }.getOrDefault(emptyMap())
             "file" -> listFileChildren(uri)

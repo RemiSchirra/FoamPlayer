@@ -7,6 +7,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import androidx.core.net.toUri
 
 /**
  * Writes .lrc / .ttml sidecar files next to the audio file, following the
@@ -23,7 +24,7 @@ class LyricsFileWriter @Inject constructor(
      * [wordSynced] selects the .ttml extension; everything else is written as .lrc.
      */
     fun writeSidecar(trackPath: String, content: String, wordSynced: Boolean): Result<Unit> = runCatching {
-        val uri = Uri.parse(trackPath)
+        val uri = trackPath.toUri()
         when (uri.scheme) {
             "content" -> writeToSaf(uri, content, wordSynced)
             "file" -> writeToFile(File(uri.path ?: error("Invalid file path")), content, wordSynced)
@@ -33,7 +34,7 @@ class LyricsFileWriter @Inject constructor(
 
     /** Deletes the .lrc / .ttml sidecars of the audio at [trackPath]; returns how many were removed. */
     fun deleteSidecars(trackPath: String): Result<Int> = runCatching {
-        val uri = Uri.parse(trackPath)
+    val uri = trackPath.toUri()
         when (uri.scheme) {
             "content" -> deleteFromSaf(uri)
             "file" -> deleteFromFile(File(uri.path ?: error("Invalid file path")))

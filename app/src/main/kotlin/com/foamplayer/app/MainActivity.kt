@@ -51,6 +51,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import androidx.core.content.edit
 
 /** Single activity hosting the whole Compose UI and the media playback session. */
 @AndroidEntryPoint
@@ -82,7 +83,7 @@ class MainActivity : AppCompatActivity() {
             ?: ThemeMode.FOLLOW_SYSTEM
 
     private fun writeMirroredThemeMode(mode: ThemeMode) {
-        themeModePrefs.edit().putString("mode", mode.name).apply()
+        themeModePrefs.edit { putString("mode", mode.name) }
     }
 
     private val permissionLauncher = registerForActivityResult(

@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import androidx.core.net.toUri
 
 /** Discord OAuth flow states surfaced in the settings screen. */
 sealed interface DiscordAuthUiState {
@@ -105,7 +106,7 @@ class MiscSettingsViewModel @Inject constructor(
 
         val launched = runCatching {
             context.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(session.authorizationUrl)).apply {
+                Intent(Intent.ACTION_VIEW, session.authorizationUrl.toUri()).apply {
                     addCategory(Intent.CATEGORY_BROWSABLE)
                 }
             )

@@ -7,13 +7,14 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import androidx.core.net.toUri
 
 @Singleton
 class LocalLyricsProvider @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     fun getLyrics(trackPath: String): String? = runCatching {
-        val uri = Uri.parse(trackPath)
+        val uri = trackPath.toUri()
         when (uri.scheme) {
             "content" -> getLyricsFromSaf(uri)
             "file" -> getLyricsFromFile(File(uri.path ?: return null))

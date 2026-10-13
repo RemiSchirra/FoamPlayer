@@ -1111,7 +1111,7 @@ private fun formatSampleRate(hz: Int): String {
  */
 internal fun simplifiedDisplayPath(path: String): String {
     return runCatching {
-        val uri = Uri.parse(path)
+        val uri = path.toUri()
         when (uri.scheme) {
             "content" -> {
                 val docPath = DocumentsContract.getDocumentId(uri)

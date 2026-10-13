@@ -36,7 +36,7 @@ class PlaylistImporter @Inject constructor(
      */
     suspend fun importM3u(m3uUri: String, tracks: List<TrackEntity>): PlaylistMatchResult =
         withContext(Dispatchers.Default) {
-            val text = m3uParser.readText(Uri.parse(m3uUri))
+            val text = m3uParser.readText(m3uUri.toUri())
                 ?: return@withContext PlaylistMatchResult(emptyList(), emptyList())
             val entries = m3uParser.parse(text).entries
             val index = TrackPathIndex(tracks)
@@ -147,7 +147,7 @@ private class TrackPathIndex(tracks: List<TrackEntity>) {
 private fun trackLookupPath(path: String): String {
     if (path.startsWith("content:")) {
         return runCatching { DocumentsContract.getDocumentId(path.toUri()) }
-            .getOrElse { Uri.parse(path).lastPathSegment ?: path }
+            .getOrElse { path.toUri().lastPathSegment ?: path }
     }
     return decodeSafely(path.removePrefix("file://"))
 }

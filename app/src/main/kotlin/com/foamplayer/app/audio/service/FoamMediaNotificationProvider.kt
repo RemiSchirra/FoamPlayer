@@ -10,7 +10,6 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
 import com.foamplayer.app.R
 import com.foamplayer.app.audio.engine.PlaybackState
-import com.foamplayer.app.audio.engine.RepeatMode
 import com.foamplayer.app.data.settings.NotificationExtraButton
 import com.google.common.collect.ImmutableList
 

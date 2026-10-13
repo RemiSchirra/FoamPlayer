@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+import androidx.core.net.toUri
 
 /** A browsable folder: its storage path, display name and recursive track count. */
 data class FolderEntry(
@@ -49,7 +50,7 @@ private object TrackDocumentIds {
     fun of(path: String): String = cache.computeIfAbsent(path, ::parseDocumentId)
 
     private fun parseDocumentId(trackPath: String): String = try {
-        val uri = Uri.parse(trackPath)
+        val uri = trackPath.toUri()
         when (uri.scheme) {
             "content" -> DocumentsContract.getDocumentId(uri)
             "file" -> uri.path ?: trackPath
@@ -298,7 +299,7 @@ class BrowseViewModel @Inject constructor(
 
     private fun treeDocumentId(folderUri: String): String? {
         return try {
-            val uri = Uri.parse(folderUri)
+            val uri = folderUri.toUri()
             if (uri.scheme == "content") DocumentsContract.getTreeDocumentId(uri) else uri.path
         } catch (_: Exception) {
             null
