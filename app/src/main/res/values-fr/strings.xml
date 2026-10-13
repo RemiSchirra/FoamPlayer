@@ -411,18 +411,22 @@
     <string name="no_albums_found">Aucun album trouvé</string>
     <plurals name="track_count">
         <item quantity="one">%1$d piste</item>
+        <item quantity="many">%1$d de pistes</item>
         <item quantity="other">%1$d pistes</item>
     </plurals>
     <plurals name="album_count">
         <item quantity="one">%1$d album</item>
+        <item quantity="many">%1$d d\'albums</item>
         <item quantity="other">%1$d albums</item>
     </plurals>
     <plurals name="items_count">
         <item quantity="one">%1$d élément</item>
+        <item quantity="many">%1$d d\'éléments</item>
         <item quantity="other">%1$d éléments</item>
     </plurals>
     <plurals name="channels_count">
         <item quantity="one">%1$d canal</item>
+        <item quantity="many">%1$d de canaux</item>
         <item quantity="other">%1$d canaux</item>
     </plurals>
 
