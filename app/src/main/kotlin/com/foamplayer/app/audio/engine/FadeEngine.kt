@@ -38,8 +38,10 @@ import javax.inject.Singleton
  * mutation calls [cancel], restoring the old stream and destroying the
  * secondary — exactly one stream keeps playing.
  */
+@UnstableApi
 @Singleton
-class FadeEngine @Inject constructor(
+class FadeEngine @androidx.annotation.OptIn(UnstableApi::class)
+@Inject constructor(
     @ApplicationContext private val context: Context,
     private val dspEngine: DspEngine,
     private val settingsRepository: SettingsRepository
@@ -50,6 +52,7 @@ class FadeEngine @Inject constructor(
         val primaryPlayer: ExoPlayer
 
         /** Promotes [newPlayer] (its mirror processor must STAY registered) and re-binds the session. */
+        @androidx.annotation.OptIn(UnstableApi::class)
         fun replacePrimaryPlayer(newPlayer: ExoPlayer, newMirror: DspAudioProcessor?)
 
         /** Media items of a full window around [centerQueueIndex], plus the target's player index. */
@@ -101,7 +104,7 @@ class FadeEngine @Inject constructor(
     private var host: Host? = null
     private val scope = CoroutineScope(Dispatchers.Main + Job())
 
-    // ------------------------------------------------------------- fade state
+    // fade state
 
     private var fadeJob: Job? = null
     private var secondary: ExoPlayer? = null
@@ -139,7 +142,7 @@ class FadeEngine @Inject constructor(
     @Volatile
     private var quickFadeMs: Long = 0L
 
-    // ------------------------------------------------------------ public API
+    // public API
 
     val normalFadeEnabled: Boolean get() = normalFadeMs > 0L
     val quickFadeEnabled: Boolean get() = quickFadeMs > 0L
@@ -166,7 +169,7 @@ class FadeEngine @Inject constructor(
         }
     }
 
-    // ------------------------------------------------------- fade operations
+    // fade operations
 
     /**
      * Crossfades the current player into [targetQueueIndex] at [targetPositionMs].
@@ -176,6 +179,7 @@ class FadeEngine @Inject constructor(
      * 0 (default) for instant response on user-initiated fades, 0.5 for the
      * automatic normal crossfade.
      */
+    @androidx.annotation.OptIn(UnstableApi::class)
     fun startCrossfade(
         targetQueueIndex: Int,
         targetPositionMs: Long,
@@ -312,7 +316,7 @@ class FadeEngine @Inject constructor(
                 isFading = false
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 player.pause()
                 player.volume = h.playerBaseVolume()
                 isFading = false
@@ -343,7 +347,7 @@ class FadeEngine @Inject constructor(
                 isFading = false
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 player.volume = h.playerBaseVolume()
                 isFading = false
             }
@@ -384,7 +388,7 @@ class FadeEngine @Inject constructor(
         return true
     }
 
-    // ----------------------------------------------------------------- swap
+    // swap
 
     /**
      * Completes a crossfade: promotes the secondary, releases the old player.
@@ -417,6 +421,7 @@ class FadeEngine @Inject constructor(
     }
 
     /** Shared cleanup for [cancel]: single-stream restore + host resync. */
+    @androidx.annotation.OptIn(UnstableApi::class)
     private fun restoreAfterAbort(h: Host, logicalSwitchHadFired: Boolean) {
         val old = h.primaryPlayer
         detachFadeListeners(old)
@@ -441,7 +446,7 @@ class FadeEngine @Inject constructor(
         secondaryListener = null
     }
 
-    // -------------------------------------------------------------- plumbing
+    // plumbing
 
     private fun elapsedT(): Float {
         val elapsedMs = (System.nanoTime() - rampStartedAtNanos) / 1_000_000.0
@@ -453,7 +458,6 @@ class FadeEngine @Inject constructor(
      * focus handling — the promoted player gains it at the swap.
      */
     @androidx.annotation.OptIn(UnstableApi::class)
-    @OptIn(UnstableApi::class)
     private fun buildSecondaryPlayer(): Pair<ExoPlayer, DspAudioProcessor>? {
         val mirror = dspEngine.createMirrorProcessor()
         return try {

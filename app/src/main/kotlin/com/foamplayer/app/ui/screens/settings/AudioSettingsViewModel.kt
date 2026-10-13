@@ -1,7 +1,9 @@
 package com.foamplayer.app.ui.screens.settings
 
+import androidx.annotation.OptIn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.util.UnstableApi
 import com.foamplayer.app.audio.device.AudioOutputDevice
 import com.foamplayer.app.audio.device.DeviceAudioConfig
 import com.foamplayer.app.audio.device.DeviceBitPerfectMode
@@ -26,9 +28,10 @@ import javax.inject.Inject
  * switches and the ISO band-layout choice of the graphic EQ.
  */
 @HiltViewModel
-class AudioSettingsViewModel @Inject constructor(
+class AudioSettingsViewModel @OptIn(UnstableApi::class)
+@Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val outputDeviceManager: OutputDeviceManager,
+    outputDeviceManager: OutputDeviceManager,
     private val dspEngine: DspEngine,
     audioEngine: AudioEngine
 ) : ViewModel() {
@@ -56,6 +59,7 @@ class AudioSettingsViewModel @Inject constructor(
 
     val dspState: StateFlow<DspState> = dspEngine.state
 
+    @OptIn(UnstableApi::class)
     fun setEqBandLayout(layout: EqBandLayout) = launch {
         dspEngine.setGraphicBandCount(layout.bands)
     }
@@ -76,6 +80,7 @@ class AudioSettingsViewModel @Inject constructor(
         settingsRepository.setSilenceBetweenTracksSeconds(seconds)
     }
 
+    @OptIn(UnstableApi::class)
     fun setDirectVolumeControl(enabled: Boolean) = launch {
         dspEngine.setDirectVolumeControl(enabled)
     }

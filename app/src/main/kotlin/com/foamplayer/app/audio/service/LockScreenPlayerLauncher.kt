@@ -35,7 +35,7 @@ object LockScreenPlayerLauncher {
         Settings.canDrawOverlays(context)
 
     /** Brings the app (full player showing) over the keyguard; false when not permitted. */
-    @OptIn(UnstableApi::class)
+    @androidx.annotation.OptIn(UnstableApi::class)
     fun launch(context: Context): Boolean {
         if (!canDrawOverlays(context)) return false
         return runCatching {
