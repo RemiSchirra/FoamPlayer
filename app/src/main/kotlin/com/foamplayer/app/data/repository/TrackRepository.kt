@@ -54,9 +54,9 @@ private data class TrackStatsUpdate(
 
 /**
  * Library data layer: Room access, library scanning and listening-stats
- * persistence. Keeps the main browse listings (tracks, albums, artists, genres,
- * years) as process-warm shared flows so screens open instantly with the last
- * snapshot instead of a cold Room round-trip.
+ * persistence. Keeps the main browse listings (tracks, albums, artists,
+ * genres, years, composers) as process-warm shared flows so screens open
+ * instantly with the last snapshot instead of a cold Room round-trip.
  */
 @Singleton
 class TrackRepository @Inject constructor(
@@ -117,6 +117,20 @@ class TrackRepository @Inject constructor(
             replay = 1
         )
 
+    /** All credited composer names, kept warm process-wide and replayed to new subscribers. */
+    private val allComposersShared = trackDao.getAllComposerNames().map { rawComposers ->
+        rawComposers.flatMap { it.split("; ") }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+        .flowOn(Dispatchers.Default)
+        .shareIn(
+            scope = repositoryScope,
+            started = SharingStarted.Lazily,
+            replay = 1
+        )
+
     /** All credited genre names, kept warm process-wide and replayed to new subscribers. */
     private val allGenresShared = trackDao.getAllGenres().map { rawGenres ->
         rawGenres.flatMap { it.split("; ") }
@@ -145,6 +159,7 @@ class TrackRepository @Inject constructor(
         repositoryScope.launch { allTracksShared.collect { } }
         repositoryScope.launch { allAlbumsShared.collect { } }
         repositoryScope.launch { allArtistsShared.collect { } }
+        repositoryScope.launch { allComposersShared.collect { } }
         repositoryScope.launch { allGenresShared.collect { } }
         repositoryScope.launch { allYearsShared.collect { } }
     }
@@ -158,12 +173,17 @@ class TrackRepository @Inject constructor(
     /** Latest credited-artist list snapshot, suspending until the first emission lands. */
     suspend fun allArtistsSnapshot(): List<String> = allArtistsShared.first()
 
+    /** Latest credited-composer list snapshot, suspending until the first emission lands. */
+    suspend fun allComposersSnapshot(): List<String> = allComposersShared.first()
+
     /** The all-tracks stream with the last snapshot replayed to new subscribers. */
     fun getAllTracks(): Flow<List<TrackEntity>> = allTracksShared
 
     fun getAllAlbums(): Flow<List<AlbumSearchResult>> = allAlbumsShared
 
     fun getAllArtists(): Flow<List<String>> = allArtistsShared
+
+    fun getAllComposers(): Flow<List<String>> = allComposersShared
 
     fun getAllGenres(): Flow<List<String>> = allGenresShared
 
@@ -205,6 +225,9 @@ class TrackRepository @Inject constructor(
 
     /** All tracks naming [artist] as artist or album artist, alphabetical by title. */
     fun getTracksByArtist(artist: String): Flow<List<TrackEntity>> = trackDao.getTracksByArtist(artist)
+
+    /** All tracks crediting [composer], alphabetical by title. */
+    fun getTracksByComposer(composer: String): Flow<List<TrackEntity>> = trackDao.getTracksByComposer(composer)
 
     fun getTracksByGenre(genre: String): Flow<List<TrackEntity>> = trackDao.getTracksByGenre(genre)
 

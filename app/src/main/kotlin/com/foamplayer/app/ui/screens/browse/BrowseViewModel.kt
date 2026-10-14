@@ -109,6 +109,9 @@ class BrowseViewModel @Inject constructor(
     val artists: StateFlow<List<String>> = trackRepository.getAllArtists()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val composers: StateFlow<List<String>> = trackRepository.getAllComposers()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     /** Resolved pictures per artist name; rebuilt live as the scan finds new files. */
     val artistImages: StateFlow<Map<String, ArtistCover>> =
         artistCoverProvider.coversFlow(artists)
@@ -126,11 +129,15 @@ class BrowseViewModel @Inject constructor(
     private val _yearTracks = MutableStateFlow<List<TrackEntity>>(emptyList())
     val yearTracks: StateFlow<List<TrackEntity>> = _yearTracks.asStateFlow()
 
+    private val _composerTracks = MutableStateFlow<List<TrackEntity>>(emptyList())
+    val composerTracks: StateFlow<List<TrackEntity>> = _composerTracks.asStateFlow()
+
     private val _folderContent = MutableStateFlow<FolderContent?>(null)
     val folderContent: StateFlow<FolderContent?> = _folderContent.asStateFlow()
 
     private var genreTracksJob: Job? = null
     private var yearTracksJob: Job? = null
+    private var composerTracksJob: Job? = null
     private var folderContentJob: Job? = null
 
     fun loadGenreTracks(genre: String) {
@@ -169,6 +176,20 @@ class BrowseViewModel @Inject constructor(
                 }
             }
             trackRepository.getTracksByYear(year).collect { _yearTracks.value = it }
+        }
+    }
+
+    fun loadComposerTracks(composer: String) {
+        composerTracksJob?.cancel()
+        composerTracksJob = viewModelScope.launch {
+            if (_composerTracks.value.isEmpty()) {
+                _composerTracks.value = withContext(Dispatchers.Default) {
+                    trackRepository.allTracksSnapshot().filter { track ->
+                        track.composer?.split("; ")?.map { it.trim() }?.contains(composer) == true
+                    }.sortedWith(compareBy { it.title })
+                }
+            }
+            trackRepository.getTracksByComposer(composer).collect { _composerTracks.value = it }
         }
     }
 
@@ -220,7 +241,7 @@ class BrowseViewModel @Inject constructor(
     // collection at action time, mirroring the DAO query the collection is
     // browsed through, so queued lists match what the user sees.
 
-    /** One album in disc/track order. */
+    /** One album's tracks in disc/track order. */
     suspend fun tracksForAlbum(album: String): List<TrackEntity> =
         trackRepository.getTracksByAlbum(album).first()
 
@@ -230,6 +251,10 @@ class BrowseViewModel @Inject constructor(
             .filter { it.artist == artist || it.albumArtist == artist }
             .sortedWith(compareBy({ it.album }, { it.discNumber }, { it.trackNumber }, { it.title }))
     }
+
+    /** Tracks crediting [composer] among their "; "-separated composers. */
+    suspend fun tracksForComposer(composer: String): List<TrackEntity> =
+        trackRepository.getTracksByComposer(composer).first()
 
     /** Tracks tagging [genre] among their "; "-separated genres. */
     suspend fun tracksForGenre(genre: String): List<TrackEntity> =

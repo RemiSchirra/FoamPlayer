@@ -102,6 +102,8 @@ import com.foamplayer.app.ui.screens.browse.AllTracksBrowseScreen
 import com.foamplayer.app.ui.screens.browse.ArtistsBrowseScreen
 import com.foamplayer.app.ui.screens.browse.CollectionAlbumsScreen
 import com.foamplayer.app.ui.screens.browse.CollectionArtistsScreen
+import com.foamplayer.app.ui.screens.browse.ComposersBrowseScreen
+import com.foamplayer.app.ui.screens.browse.ComposerTracksScreen
 import com.foamplayer.app.ui.screens.browse.FolderBrowseScreen
 import com.foamplayer.app.ui.screens.browse.GenresBrowseScreen
 import com.foamplayer.app.ui.screens.browse.GenreTracksScreen
@@ -1558,6 +1560,7 @@ fun FoamNavHost(
                                             onBrowseFolders = { navController.navigate(Screen.BrowseFolders.createRoute()) },
                                             onBrowseGenres = { navController.navigate(Screen.BrowseGenres.route) },
                                             onBrowseArtists = { navController.navigate(Screen.BrowseArtists.route) },
+                                            onBrowseComposers = { navController.navigate(Screen.BrowseComposers.route) },
                                             onBrowseYears = { navController.navigate(Screen.BrowseYears.route) },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
@@ -1628,6 +1631,21 @@ fun FoamNavHost(
                                             onSortChange = { setSortMode(MediaListView.BROWSE_ARTISTS, it) },
                                             sortInverted = sortInvertedFor(MediaListView.BROWSE_ARTISTS),
                                             onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_ARTISTS, it) }
+                                        )
+                                    }
+                                    composable(Screen.BrowseComposers.route) {
+                                        ComposersBrowseScreen(
+                                            onComposerClick = { composer ->
+                                                navController.navigate(Screen.BrowseComposerDetail.createRoute(composer))
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            activeCollectionId = activeCollectionId,
+                                            density = densityFor(MediaListView.BROWSE_COMPOSERS),
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_COMPOSERS, it) },
+                                            sortMode = sortModeFor(MediaListView.BROWSE_COMPOSERS),
+                                            onSortChange = { setSortMode(MediaListView.BROWSE_COMPOSERS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.BROWSE_COMPOSERS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_COMPOSERS, it) }
                                         )
                                     }
                                     composable(Screen.BrowseGenres.route) {
@@ -1705,6 +1723,33 @@ fun FoamNavHost(
                                             onSortChange = { setSortMode(MediaListView.BROWSE_YEAR_TRACKS, it) },
                                             sortInverted = sortInvertedFor(MediaListView.BROWSE_YEAR_TRACKS),
                                             onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_YEAR_TRACKS, it) },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            centerTrackRequest = centerTrackRequest,
+                                            isPlaybackActive = isPlaybackActive,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Default),
+                                            immersiveMode = playerSettings.immersiveModeEnabled
+                                        )
+                                    }
+                                    composable(
+                                        Screen.BrowseComposerDetail.route,
+                                        arguments = listOf(navArgument("composer") { type = NavType.StringType })
+                                    ) { backStackEntry ->
+                                        val composer = backStackEntry.arguments?.getString("composer") ?: ""
+                                        ComposerTracksScreen(
+                                            composer = composer,
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index, CollectionId.composer(composer))
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            activeTrackId = activeTrackId,
+                                            density = densityFor(MediaListView.BROWSE_COMPOSER_TRACKS),
+                                            onDensityChange = { setDensity(MediaListView.BROWSE_COMPOSER_TRACKS, it) },
+                                            sortMode = sortModeFor(MediaListView.BROWSE_COMPOSER_TRACKS),
+                                            onSortChange = { setSortMode(MediaListView.BROWSE_COMPOSER_TRACKS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.BROWSE_COMPOSER_TRACKS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.BROWSE_COMPOSER_TRACKS, it) },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,

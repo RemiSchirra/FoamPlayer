@@ -394,6 +394,7 @@
 
     <!-- Sections bibliothèque -->
     <string name="artists">Artistes</string>
+    <string name="composers">Compositeurs</string>
     <string name="genres">Genres</string>
     <string name="years">Années</string>
     <string name="tracks">Pistes</string>
@@ -402,6 +403,7 @@
     <string name="no_tracks_found">Aucun morceau trouvé</string>
     <string name="no_artists_found">Aucun artiste trouvé</string>
     <string name="no_albums_found">Aucun album trouvé</string>
+    <string name="no_composers_found">Aucun compositeur trouvé</string>
     <plurals name="track_count">
         <item quantity="one">%1$d piste</item>
         <item quantity="many">%1$d de pistes</item>
@@ -431,6 +433,7 @@
     <string name="kind_year">Année</string>
     <string name="kind_folder">Dossier</string>
     <string name="kind_playlist">Playlist</string>
+    <string name="kind_composer">Compositeur</string>
 
     <!-- Recherche -->
     <string name="filter_all">Tout</string>

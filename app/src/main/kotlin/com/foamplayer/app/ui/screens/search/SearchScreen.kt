@@ -51,6 +51,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Piano
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -138,6 +139,7 @@ private val AlbumCardColor = Color(0xFFEF5350)
 private val FolderCardColor = Color(0xFFFFB300)
 private val GenreCardColor = Color(0xFF00E676)
 private val ArtistCardColor = Color(0xFF40C4FF)
+private val ComposerCardColor = Color(0xFFF06292)
 private val YearCardColor = Color(0xFFB388FF)
 
 private const val SwipeDismissThresholdFraction = 0.2f
@@ -235,6 +237,7 @@ fun SearchScreen(
     onBrowseFolders: () -> Unit,
     onBrowseGenres: () -> Unit,
     onBrowseArtists: () -> Unit,
+    onBrowseComposers: () -> Unit,
     onBrowseYears: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -684,6 +687,7 @@ fun SearchScreen(
                             BrowseCardData(R.string.folders, FolderCardColor, Icons.Rounded.Folder, onBrowseFolders),
                             BrowseCardData(R.string.genres, GenreCardColor, Icons.Rounded.Category, onBrowseGenres),
                             BrowseCardData(R.string.artists, ArtistCardColor, Icons.Rounded.Person, onBrowseArtists),
+                            BrowseCardData(R.string.composers, ComposerCardColor, Icons.Rounded.Piano, onBrowseComposers),
                             BrowseCardData(R.string.years, YearCardColor, Icons.Rounded.CalendarToday, onBrowseYears)
                         )
                         browseCards.forEachIndexed { index, card ->
@@ -704,12 +708,6 @@ fun SearchScreen(
                 item { Spacer(modifier = Modifier.height(LocalBottomBarClearance.current)) }
             }
 
-            // Fast scrollbar for long result lists: the app accent (search has
-            // no hero color of its own). It only appears — visually AND as a
-            // touch strip — once the results span at least two viewports, so
-            // short result sets, history and the idle browse cards get none.
-            // The thumb's track stays clear of the bottom-bar clearance below;
-            // nothing floats over the list's top.
             FoamScrollbar(
                 state = listState,
                 trackBottomPadding = LocalBottomBarClearance.current,

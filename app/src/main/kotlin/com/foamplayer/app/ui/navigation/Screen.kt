@@ -87,6 +87,7 @@ sealed class Screen(val route: String, val title: String) {
     object BrowseAlbums : Screen("browse/albums", "Albums")
     object BrowseAllTracks : Screen("browse/tracks", "All Tracks")
     object BrowseArtists : Screen("browse/artists", "Artists")
+    object BrowseComposers : Screen("browse/composers", "Composers")
     object BrowseGenres : Screen("browse/genres", "Genres")
     object BrowseYears : Screen("browse/years", "Years")
 
@@ -106,6 +107,9 @@ sealed class Screen(val route: String, val title: String) {
     }
     object BrowseYearDetail : Screen("browse/year/{year}", "Year") {
         fun createRoute(year: Int) = "browse/year/$year"
+    }
+    object BrowseComposerDetail : Screen("browse/composer/{composer}", "Composer") {
+        fun createRoute(composer: String) = "browse/composer/${Uri.encode(composer)}"
     }
     object BrowseFolders : Screen("browse/folders?path={path}", "Folders") {
         fun createRoute(path: String? = null): String {

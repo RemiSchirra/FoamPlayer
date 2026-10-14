@@ -35,8 +35,8 @@ private data class FoundAudioFile(val uri: Uri, val name: String, val size: Long
  * Enumerates audio files under SAF tree URIs (or plain directories) and
  * extracts their metadata with MediaMetadataRetriever. Extraction runs on a
  * bounded parallel pool; unchanged files can be reused from a previous scan;
- * container-level fallbacks read FLAC Vorbis comments and the MP4 ©day atom
- * when the platform extractor hides them.
+ * container-level fallbacks read FLAC Vorbis comments and the MP4 ©day/©wrt
+ * atoms when the platform extractor hides them.
  */
 @Singleton
 class LocalAudioScanner @Inject constructor(
@@ -303,19 +303,31 @@ class LocalAudioScanner @Inject constructor(
                 ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE)
                     ?.yearPart()
 
-            // The FLAC extractor may never surface DATE/YEAR: read Vorbis comments.
-            if (year == null && fileName.lowercase().endsWith(".flac")) {
+            // The FLAC extractor may never surface DATE/YEAR or COMPOSER: read
+            // the Vorbis comments, which carry both.
+            if (fileName.lowercase().endsWith(".flac") && (year == null || composer == null)) {
                 readFlacVorbisComments(uri)?.let { comments ->
-                    year = comments["DATE"]?.yearPart()
-                        ?: comments["YEAR"]?.yearPart()
-                                ?: comments["ORIGINALDATE"]?.yearPart()
-                                ?: comments["ORIGINALYEAR"]?.yearPart()
+                    if (year == null) {
+                        year = comments["DATE"]?.yearPart()
+                            ?: comments["YEAR"]?.yearPart()
+                                    ?: comments["ORIGINALDATE"]?.yearPart()
+                                    ?: comments["ORIGINALYEAR"]?.yearPart()
+                    }
+                    if (composer == null) {
+                        composer = comments["COMPOSER"]
+                            ?.trim()?.takeIf { it.isNotEmpty() }
+                    }
                 }
             }
 
             // M4A/M4B files often hide ©day from the retriever too.
             if (year == null && fileName.lowercase().let { it.endsWith(".m4a") || it.endsWith(".m4b") }) {
                 year = readMp4Year(uri)
+            }
+
+            // M4A/M4B files often hide ©wrt (composer) from the retriever too.
+            if (composer == null && fileName.lowercase().let { it.endsWith(".m4a") || it.endsWith(".m4b") }) {
+                composer = readMp4Composer(uri)
             }
 
             // Tag values can be "3" or "3/12" — keep the number before the slash.
@@ -480,6 +492,20 @@ class LocalAudioScanner @Inject constructor(
     }.getOrNull()
 
     /**
+     * Reads an M4A/M4B file's `moov/udta/meta/ilst/©wrt/data` atom (the MP4
+     * composer tag); the platform extractor often reports no COMPOSER for MP4
+     * containers. Returns null when the atom is absent; never throws.
+     */
+    private fun readMp4Composer(uri: Uri): String? = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val data = findMp4Atom(input, MP4_COMPOSER_ATOM_PATH, Long.MAX_VALUE) ?: return@use null
+            // 'data' box payload: 4-byte type indicator + 4-byte locale, then the text.
+            if (data.size <= 8) return@use null
+            String(data, 8, data.size - 8, Charsets.UTF_8).trim().takeIf { it.isNotEmpty() }
+        }
+    }.getOrNull()
+
+    /**
      * Walks nested MP4 boxes following [path], skipping boxes not on the path
      * without buffering them. Returns the final box's raw bytes, or null.
      */
@@ -554,6 +580,9 @@ private const val SCAN_PARALLELISM = 8
 
 /** Box path to the MP4 "date recorded" tag: moov/udta/meta/ilst/©day/data. */
 private val MP4_YEAR_ATOM_PATH = listOf("moov", "udta", "meta", "ilst", "\u00A9day", "data")
+
+/** Box path to the MP4 composer tag: moov/udta/meta/ilst/©wrt/data. */
+private val MP4_COMPOSER_ATOM_PATH = listOf("moov", "udta", "meta", "ilst", "\u00A9wrt", "data")
 
 /** The ©day/data atom is a short text tag; refuse anything implausibly large. */
 private const val MAX_MP4_ATOM_BYTES = 1 shl 16 // 64 KB

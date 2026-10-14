@@ -31,6 +31,7 @@ interface TrackDao {
         WHERE title LIKE '%' || :query || '%' ESCAPE '\' 
            OR artist LIKE '%' || :query || '%' ESCAPE '\' 
            OR album LIKE '%' || :query || '%' ESCAPE '\' 
+           OR composer LIKE '%' || :query || '%' ESCAPE '\' 
         ORDER BY title ASC
     """)
     fun searchTracks(query: String): Flow<List<TrackEntity>>
@@ -66,6 +67,10 @@ interface TrackDao {
     @Query("SELECT DISTINCT artist FROM tracks")
     fun getAllArtistNames(): Flow<List<String>>
 
+    /** All credited composers ("; "-joined multi-value fields), non-blank rows only. */
+    @Query("SELECT DISTINCT composer FROM tracks WHERE composer IS NOT NULL AND composer != ''")
+    fun getAllComposerNames(): Flow<List<String>>
+
     @Query("SELECT DISTINCT genre FROM tracks WHERE genre IS NOT NULL AND genre != ''")
     fun getAllGenres(): Flow<List<String>>
 
@@ -78,6 +83,17 @@ interface TrackDao {
         ORDER BY title ASC
     """)
     fun getTracksByGenre(genre: String): Flow<List<TrackEntity>>
+
+    /** All tracks crediting [composer] (the "; " multi-value convention, like genres). */
+    @Query("""
+        SELECT * FROM tracks 
+        WHERE composer = :composer 
+           OR composer LIKE :composer || '; %' 
+           OR composer LIKE '%; ' || :composer 
+           OR composer LIKE '%; ' || :composer || '; %'
+        ORDER BY title ASC
+    """)
+    fun getTracksByComposer(composer: String): Flow<List<TrackEntity>>
 
     @Query("SELECT DISTINCT year FROM tracks WHERE year IS NOT NULL ORDER BY year DESC")
     fun getAllYears(): Flow<List<Int>>

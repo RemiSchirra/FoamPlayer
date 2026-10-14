@@ -396,6 +396,7 @@
 
     <!-- Browse / library sections -->
     <string name="artists">Artists</string>
+    <string name="composers">Composers</string>
     <string name="genres">Genres</string>
     <string name="years">Years</string>
     <string name="tracks">Tracks</string>
@@ -404,6 +405,7 @@
     <string name="no_tracks_found">No tracks found</string>
     <string name="no_artists_found">No artists found</string>
     <string name="no_albums_found">No albums found</string>
+    <string name="no_composers_found">No composers found</string>
     <plurals name="track_count">
         <item quantity="one">%1$d track</item>
         <item quantity="other">%1$d tracks</item>
@@ -429,6 +431,7 @@
     <string name="kind_year">Year</string>
     <string name="kind_folder">Folder</string>
     <string name="kind_playlist">Playlist</string>
+    <string name="kind_composer">Composer</string>
 
     <!-- Search -->
     <string name="filter_all">All</string>

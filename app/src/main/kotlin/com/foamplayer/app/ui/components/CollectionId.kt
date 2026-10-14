@@ -15,6 +15,7 @@ object CollectionId {
     private const val Year = "year"
     private const val Folder = "folder"
     private const val Playlist = "playlist"
+    private const val Composer = "composer"
 
     fun album(name: String) = "$Album:$name"
     fun artist(name: String) = "$Artist:$name"
@@ -22,4 +23,5 @@ object CollectionId {
     fun year(year: Int) = "$Year:$year"
     fun folder(path: String) = "$Folder:$path"
     fun playlist(id: Long) = "$Playlist:$id"
+    fun composer(name: String) = "$Composer:$name"
 }

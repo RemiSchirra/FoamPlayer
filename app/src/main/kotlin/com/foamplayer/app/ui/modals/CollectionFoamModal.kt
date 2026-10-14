@@ -58,7 +58,8 @@ enum class CollectionKind(val displayName: String) {
     Artist("Artist"),
     Genre("Genre"),
     Year("Year"),
-    Folder("Folder")
+    Folder("Folder"),
+    Composer("Composer")
 }
 
 /** Localized label of a [CollectionKind] ("Album", "Artist", ...). */
@@ -70,6 +71,7 @@ fun CollectionKind.label(): String = stringResource(
         CollectionKind.Genre -> R.string.kind_genre
         CollectionKind.Year -> R.string.kind_year
         CollectionKind.Folder -> R.string.kind_folder
+        CollectionKind.Composer -> R.string.kind_composer
     }
 )
 
@@ -127,19 +129,19 @@ fun rememberCollectionFoamModalState(): CollectionFoamModalState = remember { Co
 
 /**
  * Bottom sheet shown when the user long-presses a collection (album, artist,
- * genre, year, folder). The track modal's counterpart, minus what collections
- * have no use for: no score heart in the header, no Playlist button. Layout,
- * top to bottom:
+ * genre, year, folder, composer). The track modal's counterpart, minus what
+ * collections have no use for: no score heart in the header, no Playlist
+ * button. Layout, top to bottom:
  * - A header on a darker container: artwork (or icon/letter fallback) with the
  *   collection title and its artist underneath. It stays mounted across page
  *   switches.
  * - The actions page: two side-by-side buttons ("Next" = queue the collection
  *   right after the current track, "Queue" = append it to the end of the main
  *   queue), then navigation rows — "See Artist" for albums, "See Albums" for
- *   artists, and both "See Artist" + "See Album" for folders/genres/years
- *   (when such a collection spans several artists/albums, the row opens a
- *   list screen of them via [onSeeArtistList] / [onSeeAlbumList]) — and a
- *   final "Details" button in its own section.
+ *   artists, and both "See Artist" + "See Album" for folders/genres/years/
+ *   composers (when such a collection spans several artists/albums, the row
+ *   opens a list screen of them via [onSeeArtistList] / [onSeeAlbumList]) —
+ *   and a final "Details" button in its own section.
  * - The details page: the one-line count/duration summary plus the collection
  *   metadata, reached from the Details button with a push-style slide — the
  *   header never leaves the composition; a Back button returns to the actions.
@@ -516,6 +518,21 @@ private fun CollectionDetailsContent(
     accentColor: Color
 ) {
     val totalDurationMs = collection.tracks.sumOf { it.duration }
+    // The album's credited composers across its tracks ("; " multi-value
+    // convention split apart), in first-seen order; empty when none is tagged.
+    val composers = if (collection.kind == CollectionKind.Album) {
+        remember(collection) {
+            collection.tracks.asSequence()
+                .mapNotNull { it.composer }
+                .flatMap { it.split("; ") }
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .toList()
+        }
+    } else {
+        emptyList()
+    }
 
     DetailsSection(title = stringResource(R.string.details_collection), accentColor = accentColor) {
         DetailRow(stringResource(R.string.details_type), collection.kind?.let { with(it) { label() } })
@@ -525,6 +542,9 @@ private fun CollectionDetailsContent(
             stringResource(R.string.details_duration),
             totalDurationMs.takeIf { it > 0 }?.let { TimeUtils.formatDurationLong(it) }
         )
+        if (composers.isNotEmpty()) {
+            DetailRow(stringResource(R.string.details_composer), composers.joinToString("; "))
+        }
         if (collection.kind == CollectionKind.Album) {
             DetailRow(
                 stringResource(R.string.album_art),
@@ -560,9 +580,10 @@ data class CollectionAlbumEntry(
 /**
  * The "See Artist" / "See Albums" / "See Album" rows for a collection, per
  * kind: albums navigate to their (first) artist, artists to their album list,
- * and folders/genres/years offer both rows — navigating directly when the
- * collection holds exactly one artist/album, opening a list screen of them
- * otherwise. Every row runs through [perform], so the sheet dismisses first.
+ * and folders/genres/years/composers offer both rows — navigating directly
+ * when the collection holds exactly one artist/album, opening a list screen
+ * of them otherwise. Every row runs through [perform], so the sheet
+ * dismisses first.
  */
 private fun collectionNavigationRows(
     collection: CollectionInfo,

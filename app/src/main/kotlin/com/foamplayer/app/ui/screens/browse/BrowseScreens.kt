@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -253,6 +254,75 @@ fun ArtistsBrowseScreen(
                         fullyRoundedArtwork = true
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun ComposersBrowseScreen(
+    onComposerClick: (String) -> Unit,
+    onBack: () -> Unit,
+    activeCollectionId: String? = null,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
+    viewModel: BrowseViewModel = hiltViewModel()
+) {
+    val composers by viewModel.composers.collectAsState()
+    val collectionModalState = LocalCollectionFoamModalState.current
+    val longPressScope = rememberCoroutineScope()
+    val searchState = rememberCollectionSearchState()
+    val searchedComposers = rememberFilteredList(composers, searchState) {
+        searchState.matches(it)
+    }
+    val sortedComposers = rememberSortedList(
+        searchedComposers,
+        sortMode,
+        sortInverted
+    ) {
+        caseInsensitiveComparator { it }
+    }
+
+    CollectionListScreen(
+        title = stringResource(R.string.composers),
+        itemCount = sortedComposers.size,
+        onBack = onBack,
+        headerIcon = Icons.Rounded.Person,
+        density = density,
+        onDensityChange = onDensityChange,
+        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange,
+        searchState = searchState
+    ) {
+        items(sortedComposers, key = { "browse_composer_$it" }) { composer ->
+            Box(modifier = Modifier.listRowInset(density)) {
+                CollectionListItem(
+                    title = composer,
+                    subtitle = null,
+                    icon = Icons.Rounded.Person,
+                    onClick = { onComposerClick(composer) },
+                    active = CollectionId.composer(composer) == activeCollectionId,
+                    density = density,
+                    onLongClick = {
+                        longPressScope.launch {
+                            collectionModalState?.show(
+                                CollectionInfo(
+                                    title = composer,
+                                    icon = Icons.Rounded.Person,
+                                    kind = CollectionKind.Composer,
+                                    tracks = viewModel.tracksForComposer(composer)
+                                )
+                            )
+                        }
+                    }
+                )
             }
         }
     }
@@ -532,6 +602,61 @@ fun YearTracksScreen(
 
     TrackListScreen(
         title = year.toString(),
+        tracks = sortedTracks,
+        onTrackClick = onTrackClick,
+        onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
+        onShuffleAllClick = { shuffled ->
+            if (shuffled.isNotEmpty()) onTrackClick(shuffled, 0)
+        },
+        onBack = onBack,
+        activeTrackId = activeTrackId,
+        density = density,
+        onDensityChange = onDensityChange,
+        sortOptions = TrackSortOptions,
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange,
+        sharedTransitionScope = sharedTransitionScope,
+        playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+        sharedTrackId = sharedTrackId,
+        heroLayout = heroLayout,
+        immersiveMode = immersiveMode
+    )
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun ComposerTracksScreen(
+    composer: String,
+    onTrackClick: (List<TrackEntity>, Int) -> Unit,
+    onBack: () -> Unit,
+    activeTrackId: Long?,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.NAME,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
+    sharedTrackId: Long? = null,
+    centerTrackRequest: TrackCenterRequest? = null,
+    isPlaybackActive: Boolean = true,
+    heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
+    immersiveMode: Boolean = false,
+    viewModel: BrowseViewModel = hiltViewModel()
+) {
+    val tracks by viewModel.composerTracks.collectAsState()
+
+    LaunchedEffect(composer) {
+        viewModel.loadComposerTracks(composer)
+    }
+
+    val sortedTracks = rememberSortedTracks(tracks, sortMode, sortInverted)
+
+    TrackListScreen(
+        title = composer,
         tracks = sortedTracks,
         onTrackClick = onTrackClick,
         onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
