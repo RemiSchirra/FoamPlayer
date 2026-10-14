@@ -19,8 +19,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
-import androidx.compose.material.Switch
-import androidx.compose.material.SwitchDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -41,6 +39,7 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.HomeSection
+import com.foamplayer.app.ui.components.FoamSwitch
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
@@ -221,15 +220,9 @@ private fun HomeSectionItem(
                 ),
                 modifier = Modifier.weight(1f)
             )
-            Switch(
+            FoamSwitch(
                 checked = isEnabled,
-                onCheckedChange = onEnabledChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = FoamTheme.accentColor,
-                    checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
-                    uncheckedThumbColor = FoamTheme.colors.textSecondary.copy(alpha = 1f),
-                    uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)
-                )
+                onCheckedChange = onEnabledChange
             )
         }
     }

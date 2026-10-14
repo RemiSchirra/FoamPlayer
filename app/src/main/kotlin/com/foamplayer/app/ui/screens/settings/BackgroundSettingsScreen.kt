@@ -37,8 +37,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
-import androidx.compose.material.Switch
-import androidx.compose.material.SwitchDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -79,6 +77,7 @@ import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.ui.components.FoamSliderStateItem
+import com.foamplayer.app.ui.components.FoamSwitch
 import com.foamplayer.app.ui.components.buildGradientImage
 import com.foamplayer.app.ui.modals.DefaultStopPalette
 import com.foamplayer.app.ui.modals.GradientColorPickerModal
@@ -420,16 +419,10 @@ private fun CompactSwitchRow(
             modifier = Modifier.weight(1f)
         )
 
-        Switch(
+        FoamSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            modifier = Modifier.clearAndSetSemantics {},
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = FoamTheme.accentColor,
-                checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
-                uncheckedThumbColor = FoamTheme.colors.textSecondary.copy(alpha = 1f),
-                uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)
-            )
+            modifier = Modifier.clearAndSetSemantics {}
         )
     }
 }

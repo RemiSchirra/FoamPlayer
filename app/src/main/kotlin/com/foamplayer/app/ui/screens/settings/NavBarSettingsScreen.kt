@@ -24,8 +24,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
-import androidx.compose.material.Switch
-import androidx.compose.material.SwitchDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -48,6 +46,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.ui.components.FoamEnumItem
+import com.foamplayer.app.ui.components.FoamSwitch
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.screens.queue.DragDropListState
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
@@ -109,15 +108,15 @@ fun NavBarSettingsScreen(
                     (from in SECONDARY_SECTION_RANGE && to in SECONDARY_SECTION_RANGE)
         },
         onMove = { from, to ->
-            when (from) {
-                in PRIMARY_SECTION_RANGE if to in PRIMARY_SECTION_RANGE -> {
+            when {
+                from in PRIMARY_SECTION_RANGE && to in PRIMARY_SECTION_RANGE -> {
                     val fromIdx = from - PRIMARY_SECTION_START
                     val toIdx = to - PRIMARY_SECTION_START
                     displayedPrimaryOrder = displayedPrimaryOrder.toMutableList().apply {
                         add(toIdx, removeAt(fromIdx))
                     }
                 }
-                in SECONDARY_SECTION_RANGE if to in SECONDARY_SECTION_RANGE -> {
+                from in SECONDARY_SECTION_RANGE && to in SECONDARY_SECTION_RANGE -> {
                     val fromIdx = from - SECONDARY_SECTION_START
                     val toIdx = to - SECONDARY_SECTION_START
                     displayedSecondaryOrder = displayedSecondaryOrder.toMutableList().apply {
@@ -432,15 +431,9 @@ private fun NavBarSettingsItem(
             // The MORE marker has no switch: it appears automatically while the
             // second bar is non-empty and disappears when it is empty.
             if (item != NavBarItem.MORE) {
-                Switch(
+                FoamSwitch(
                     checked = isEnabled,
-                    onCheckedChange = onEnabledChange,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = FoamTheme.accentColor,
-                        checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
-                        uncheckedThumbColor = FoamTheme.colors.textSecondary.copy(alpha = 1f),
-                        uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)
-                    )
+                    onCheckedChange = onEnabledChange
                 )
             }
         }

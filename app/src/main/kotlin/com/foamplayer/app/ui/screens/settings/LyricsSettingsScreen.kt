@@ -23,8 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
-import androidx.compose.material.Switch
-import androidx.compose.material.SwitchDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.ripple
@@ -49,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.ui.components.FoamNavigationButton
+import com.foamplayer.app.ui.components.FoamSwitch
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.modals.LyricsProvidersModal
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
@@ -325,15 +324,9 @@ private fun LyricsSourceItem(
                 ),
                 modifier = Modifier.weight(1f)
             )
-            Switch(
+            FoamSwitch(
                 checked = isEnabled,
-                onCheckedChange = onEnabledChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = FoamTheme.accentColor,
-                    checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
-                    uncheckedThumbColor = FoamTheme.colors.textSecondary.copy(alpha = 1f),
-                    uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)
-                )
+                onCheckedChange = onEnabledChange
             )
         }
     }

@@ -33,8 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
-import androidx.compose.material.Switch
-import androidx.compose.material.SwitchDefaults
 import androidx.compose.material.TextField
 import androidx.compose.material.TextFieldDefaults
 import androidx.compose.material.icons.Icons
@@ -88,6 +86,7 @@ import com.foamplayer.app.audio.dsp.ToneSettings
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.ui.components.FoamSlider
+import com.foamplayer.app.ui.components.FoamSwitch
 import com.foamplayer.app.ui.components.KnobControl
 import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.components.ScreenTitle
@@ -262,7 +261,7 @@ fun EqualizerScreen(
                         )
                     }
 
-                    Switch(
+                    FoamSwitch(
                         checked = when (selectedSection) {
                             DspMath.Section.GRAPHIC -> state.graphicEq.enabled
                             DspMath.Section.PARAMETRIC -> state.parametricEq.enabled
@@ -272,13 +271,7 @@ fun EqualizerScreen(
                                 DspMath.Section.GRAPHIC -> viewModel.setGraphicEnabled(on)
                                 DspMath.Section.PARAMETRIC -> viewModel.setParametricEnabled(on)
                             }
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = FoamTheme.accentColor,
-                            checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
-                            uncheckedThumbColor = FoamTheme.colors.textSecondary,
-                            uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.4f)
-                        )
+                        }
                     )
                 }
 
@@ -735,16 +728,10 @@ private fun ControlCard(
                 )
             }
 
-            Switch(
+            FoamSwitch(
                 checked = applied,
                 onCheckedChange = onAppliedChange,
-                modifier = Modifier.alpha(if (applied) 1f else 0.5f),
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = FoamTheme.accentColor,
-                    checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
-                    uncheckedThumbColor = FoamTheme.colors.textSecondary,
-                    uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.4f)
-                )
+                modifier = Modifier.alpha(if (applied) 1f else 0.5f)
             )
 
             MarqueeText(

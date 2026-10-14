@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.material.Switch
-import androidx.compose.material.SwitchDefaults
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -71,16 +69,10 @@ fun FoamSwitchItem(
             }
         }
 
-        Switch(
+        FoamSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            modifier = Modifier.clearAndSetSemantics {},
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = FoamTheme.accentColor,
-                checkedTrackColor = FoamTheme.accentColor.copy(alpha = 0.5f),
-                uncheckedThumbColor = FoamTheme.colors.textSecondary.copy(alpha = 1f),
-                uncheckedTrackColor = FoamTheme.colors.textSecondary.copy(alpha = 0.5f)
-            )
+            modifier = Modifier.clearAndSetSemantics {}
         )
     }
 }
