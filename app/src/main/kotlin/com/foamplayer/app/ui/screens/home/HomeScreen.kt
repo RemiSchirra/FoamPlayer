@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -188,7 +190,7 @@ fun HomeScreen(
 
         sections.forEach { section ->
             when (section) {
-                HomeSection.RANDOM_TRACKS -> item(key = "home_row_random_tracks") {
+                HomeSection.RANDOM_TRACKS -> homeSectionItem(key = "home_row_random_tracks", visible = randomTracks.isNotEmpty()) {
                     StartPlayingSection(
                         tracks = randomTracks,
                         onTrackClick = onTrackClick,
@@ -196,12 +198,10 @@ fun HomeScreen(
                         onRefresh = viewModel::reshuffleRandomTracks
                     )
                 }
-                HomeSection.RANDOM_ALBUMS -> item(key = "home_row_random_albums") {
+                HomeSection.RANDOM_ALBUMS -> homeSectionItem(key = "home_row_random_albums", visible = randomAlbums.isNotEmpty()) {
                     RandomAlbumsSection(
                         albums = randomAlbums,
                         onAlbumClick = { album ->
-                            // A random-album card opens the same detail page the
-                            // recommendation rows do; the score is not shown there.
                             onAlbumClick(
                                 AlbumRecommendation(
                                     album = album.album,
@@ -227,7 +227,7 @@ fun HomeScreen(
                         onRefresh = viewModel::reshuffleRandomAlbums
                     )
                 }
-                HomeSection.RANDOM_ARTISTS -> item(key = "home_row_random_artists") {
+                HomeSection.RANDOM_ARTISTS -> homeSectionItem(key = "home_row_random_artists", visible = randomArtists.isNotEmpty()) {
                     RandomArtistsSection(
                         artists = randomArtists,
                         covers = randomArtistCovers,
@@ -251,7 +251,7 @@ fun HomeScreen(
                         onRefresh = viewModel::reshuffleRandomArtists
                     )
                 }
-                HomeSection.RECOMMENDED_PLAYLISTS -> item(key = "home_row_playlists") {
+                HomeSection.RECOMMENDED_PLAYLISTS -> homeSectionItem(key = "home_row_playlists", visible = playlists.isNotEmpty()) {
                     HomeRow(
                         title = stringResource(R.string.home_row_recommended_playlists),
                         items = playlists.take(HomeRowItemCount),
@@ -283,7 +283,7 @@ fun HomeScreen(
                         )
                     }
                 }
-                HomeSection.RECOMMENDED_ALBUMS -> item(key = "home_row_albums") {
+                HomeSection.RECOMMENDED_ALBUMS -> homeSectionItem(key = "home_row_albums", visible = albums.isNotEmpty()) {
                     MediaArtKindScope(MediaArtKind.ALBUM) {
                         HomeRow(
                             title = stringResource(R.string.home_row_recommended_albums),
@@ -320,7 +320,7 @@ fun HomeScreen(
                         }
                     }
                 }
-                HomeSection.RECENT_TRACKS -> item(key = "home_row_recent") {
+                HomeSection.RECENT_TRACKS -> homeSectionItem(key = "home_row_recent", visible = recentTracks.isNotEmpty()) {
                     HomeRow(
                         title = stringResource(R.string.home_row_recent_listens),
                         items = recentTracks.take(HomeRowItemCount),
@@ -344,7 +344,7 @@ fun HomeScreen(
                         )
                     }
                 }
-                HomeSection.FAVORITE_TRACKS -> item(key = "home_row_favorites") {
+                HomeSection.FAVORITE_TRACKS -> homeSectionItem(key = "home_row_favorites", visible = favoriteTracks.isNotEmpty()) {
                     HomeRow(
                         title = stringResource(R.string.home_row_favorite_tracks),
                         items = favoriteTracks.take(HomeRowItemCount),
@@ -368,7 +368,7 @@ fun HomeScreen(
                         )
                     }
                 }
-                HomeSection.OLD_FAVORITES -> item(key = "home_row_old_favorites") {
+                HomeSection.OLD_FAVORITES -> homeSectionItem(key = "home_row_old_favorites", visible = oldFavoriteTracks.isNotEmpty()) {
                     HomeRow(
                         title = stringResource(R.string.home_row_old_favorites),
                         items = oldFavoriteTracks.take(HomeRowItemCount),
@@ -392,7 +392,7 @@ fun HomeScreen(
                         )
                     }
                 }
-                HomeSection.OLD_FAVORITE_ALBUMS -> item(key = "home_row_old_favorite_albums") {
+                HomeSection.OLD_FAVORITE_ALBUMS -> homeSectionItem(key = "home_row_old_favorite_albums", visible = oldFavoriteAlbums.isNotEmpty()) {
                     MediaArtKindScope(MediaArtKind.ALBUM) {
                         HomeRow(
                             title = stringResource(R.string.home_row_old_favorite_albums),
@@ -429,7 +429,7 @@ fun HomeScreen(
                         }
                     }
                 }
-                HomeSection.FAVORITE_ARTISTS -> item(key = "home_row_artists") {
+                HomeSection.FAVORITE_ARTISTS -> homeSectionItem(key = "home_row_artists", visible = artists.isNotEmpty()) {
                     MediaArtKindScope(MediaArtKind.ARTIST) {
                         HomeRow(
                             title = stringResource(R.string.home_row_favorite_artists),
@@ -457,9 +457,6 @@ fun HomeScreen(
                                         collectionModalState?.show(
                                             CollectionInfo(
                                                 title = artist.name,
-                                                // Either a Spotify cache file (plain) or an
-                                                // audio file (embedded art): the flag routes
-                                                // the modal header to the right Coil model.
                                                 imageUrl = artistImages[artist.name]?.imageUrl,
                                                 imageIsEmbeddedArt = artistImages[artist.name]?.isEmbeddedArt ?: false,
                                                 kind = CollectionKind.Artist,
@@ -479,7 +476,7 @@ fun HomeScreen(
                         }
                     }
                 }
-                HomeSection.RECENTLY_ADDED_ALBUMS -> item(key = "home_row_recently_added_albums") {
+                HomeSection.RECENTLY_ADDED_ALBUMS -> homeSectionItem(key = "home_row_recently_added_albums", visible = recentlyAddedAlbums.isNotEmpty()) {
                     MediaArtKindScope(MediaArtKind.ALBUM) {
                         HomeRow(
                             title = stringResource(R.string.home_row_recently_added_albums),
@@ -516,7 +513,7 @@ fun HomeScreen(
                         }
                     }
                 }
-                HomeSection.RECENTLY_ADDED_ARTISTS -> item(key = "home_row_recently_added_artists") {
+                HomeSection.RECENTLY_ADDED_ARTISTS -> homeSectionItem(key = "home_row_recently_added_artists", visible = recentlyAddedArtists.isNotEmpty()) {
                     MediaArtKindScope(MediaArtKind.ARTIST) {
                         HomeRow(
                             title = stringResource(R.string.home_row_recently_added_artists),
@@ -607,4 +604,18 @@ fun HomeScreen(
         },
         onDismiss = { deleteConfirmTarget = null }
     )
+}
+
+/**
+ * Emits a Home section's item only when it has content: an empty item would
+ * still receive spacing on both sides from the LazyColumn's
+ * [Arrangement.spacedBy] arrangement, leaving a double gap between its
+ * neighbors.
+ */
+private fun LazyListScope.homeSectionItem(
+    key: String,
+    visible: Boolean,
+    content: @Composable LazyItemScope.() -> Unit
+) {
+    if (visible) item(key = key, content = content)
 }
