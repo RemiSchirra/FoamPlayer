@@ -54,11 +54,16 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 
 /**
- * The queue subview: upcoming tracks (current excluded) with drag-reorder,
- * swipe-to-remove and tap-to-play. Mutations go through the engine by entry id.
- * The header row acts on the whole upcoming list: reshuffle it (auxiliary slots
- * included are swapped for fresh random tracks) or clear it (the auxiliary pool
- * refills itself right away).
+ * The queue subview: upcoming tracks (current excluded) with drag-reorder and
+ * row swipes. Mutations go through the engine by entry id. The header row acts
+ * on the whole upcoming list: reshuffle it (auxiliary slots included are
+ * swapped for fresh random tracks) or clear it (the auxiliary pool refills
+ * itself right away).
+ *
+ * Row gestures: tap plays the entry now; swiping right locks at the max
+ * travel and on release springs back and plays the track next (auxiliary rows
+ * are promoted into the main queue); swiping left flies the row off-screen and
+ * removes it. The drag handle reorders with drag-and-drop.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -192,7 +197,8 @@ fun QueueScreen(
                             }
                         )
                     },
-                    onRemove = { viewModel.removeQueueEntry(item.entryId) }
+                    onRemove = { viewModel.removeQueueEntry(item.entryId) },
+                    onPlayNext = { viewModel.promoteQueueEntry(item.entryId) }
                 )
             }
         }

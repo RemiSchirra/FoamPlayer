@@ -193,6 +193,9 @@ class PlayerViewModel @Inject constructor(
         audioEngine.moveQueueEntry(entryId, toUpcomingPosition)
     fun removeQueueEntry(entryId: Long) = audioEngine.removeQueueEntry(entryId)
 
+    /** Queue-screen swipe-right: moves the entry next; auxiliary entries join the primary queue. */
+    fun promoteQueueEntry(entryId: Long) = audioEngine.promoteQueueEntry(entryId)
+
     fun shuffleUpcoming() = audioEngine.shuffleUpcoming()
     fun clearUpcoming() = audioEngine.clearUpcoming()
 

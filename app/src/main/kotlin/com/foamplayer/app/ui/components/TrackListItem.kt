@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,11 +47,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -86,6 +90,25 @@ private const val SwipeDismissThresholdFraction = 0.2f
 /** Fallback swipe threshold (dp) used before the row width is measured. */
 private val SwipeDismissThreshold = 80.dp
 
+/**
+ * Right-swipe travel where the "play next" gesture commits (haptic tick): up
+ * to here the row follows the finger 1:1; past it drag resistance ramps up.
+ */
+private val SwipeNextCommitTravel = 64.dp
+
+/**
+ * Right-swipe travel where the resistance ramp ends and the row truly locks:
+ * sensitivity eases 1 -> 0 between [SwipeNextCommitTravel] and this distance,
+ * and the finger has no effect beyond it.
+ */
+private val SwipeNextHardStopTravel = 160.dp
+
+/** Size of the icons revealed behind a swiped row. */
+private val SwipeActionIconSize = 24.dp
+
+/** Inset of the delete icon from the row's end edge. */
+private val SwipeActionIconInset = 24.dp
+
 /** Extra translucency at the dismiss threshold (alpha eases 1f -> 1 - this). */
 private const val SwipeMaxFade = 0.3f
 
@@ -99,9 +122,16 @@ private const val SwipeReturnDurationMs = 200
  * One item of a track list. At the ROW_* densities it renders the shared
  * [MediaListRow] scaffold — artwork (or track number) + title + "artist •
  * album" (RowBig adds a "duration • format" third line) — with the
- * active-track highlight, swipe-to-dismiss and drag-handle behaviors. At the
+ * active-track highlight, swipe actions and drag-handle behaviors. At the
  * GRID_* densities it renders a square-art [MediaGridCell] with overlays
  * (score, track number, drag chip) on the artwork.
+ *
+ * Swipe actions (when [onRemove] and/or [onPlayNext] are set): swiping right
+ * follows the finger to a commit distance (haptic tick on crossing), then
+ * meets rising resistance up to a hard stop where the row locks, and on
+ * release past the commit distance springs back while [onPlayNext] fires;
+ * swiping left follows the finger, reveals a delete icon on the right, and on
+ * release past the threshold flies the row off-screen and fires [onRemove].
  *
  * Shared-element keys ("album_art_*", "track_title_*", "track_artist_*")
  * match the mini/full player's artwork and text so the row animates into the
@@ -119,6 +149,7 @@ fun TrackListItem(
     showDragHandle: Boolean = false,
     dragHandleModifier: Modifier = Modifier,
     onRemove: (() -> Unit)? = null,
+    onPlayNext: (() -> Unit)? = null,
     trackNumberText: String? = null,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -153,7 +184,7 @@ fun TrackListItem(
         Color.Transparent
     }
 
-    // Long-press opens the track actions modal when the nav root provides one;
+    // Long-press opens the track actions modal when the net root provides one;
     // an explicit [onLongClick] always wins.
     val trackModalState = LocalTrackFoamModalState.current
     val resolvedOnLongClick: (() -> Unit)? = when {
@@ -282,25 +313,64 @@ fun TrackListItem(
 
     val localDensity = LocalDensity.current
 
-    // --- Swipe-to-dismiss state (only active when onRemove is provided) ---
+    // --- Swipe actions: right = play next (resisted travel), left = remove ---
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
 
     // Plain snapshot float backing the swipe offset: written directly in the
     // gesture callback during drags (read back in the graphicsLayer, so drags
     // cost zero coroutines); end-of-gesture animations feed this same float.
     var dismissOffsetValue by remember { mutableFloatStateOf(0f) }
+    // Multiplier on the delete icon's alpha. Stays 1f while dragging; animates
+    // to 0 the moment the left swipe commits, in parallel with the fly-out.
+    var deleteIconFade by remember { mutableFloatStateOf(1f) }
     val gestureAnimJob = remember { mutableStateOf<Job?>(null) }
     var itemWidthPx by remember { mutableFloatStateOf(0f) }
     val latestOnRemove by rememberUpdatedState(onRemove)
+    val latestOnPlayNext by rememberUpdatedState(onPlayNext)
     val fallbackDismissThresholdPx = with(localDensity) { SwipeDismissThreshold.toPx() }
+    val nextCommitPx = with(localDensity) { SwipeNextCommitTravel.toPx() }
+    val nextHardStopPx = with(localDensity) { SwipeNextHardStopTravel.toPx() }
+    // Row offset at saturation: integrating the linear sensitivity ramp
+    // (1 -> 0 over the commit->hard-stop zone) adds half the zone.
+    val nextHardStopOffsetPx = nextCommitPx + (nextHardStopPx - nextCommitPx) / 2f
 
     fun swipeThresholdPx(): Float =
         if (itemWidthPx > 0f) itemWidthPx * SwipeDismissThresholdFraction
         else fallbackDismissThresholdPx
 
-    fun animateSwipeTo(target: Float, durationMs: Int, onEnd: () -> Unit = {}) {
+    /**
+     * Maps unclamped right-swipe finger travel to the row's offset: 1:1 up to
+     * the commit point, sensitivity linearly easing to 0 across the hard-stop
+     * zone, then pinned. A pure function of the total travel, so reversing
+     * the finger naturally walks back down the same curve.
+     */
+    fun nextOffsetPx(travel: Float): Float = when {
+        travel <= nextCommitPx -> travel
+        travel >= nextHardStopPx -> nextHardStopOffsetPx
+        else -> {
+            val d = travel - nextCommitPx
+            val zone = nextHardStopPx - nextCommitPx
+            nextCommitPx + d - d * d / (2f * zone)
+        }
+    }
+
+    fun animateSwipeTo(
+        target: Float,
+        durationMs: Int,
+        fadeDeleteIcon: Boolean = false,
+        onEnd: () -> Unit = {}
+    ) {
         gestureAnimJob.value?.cancel()
         gestureAnimJob.value = scope.launch {
+            if (fadeDeleteIcon) {
+                // Starts immediately on commit, concurrent with the slide.
+                launch {
+                    Animatable(deleteIconFade).animateTo(0f, tween(durationMillis = durationMs)) {
+                        deleteIconFade = value
+                    }
+                }
+            }
             val animatable = Animatable(dismissOffsetValue)
             animatable.animateTo(target, tween(durationMillis = durationMs)) {
                 dismissOffsetValue = value
@@ -309,29 +379,59 @@ fun TrackListItem(
         }
     }
 
-    val swipeModifier = if (onRemove != null) {
+    val swipeActionsEnabled = onRemove != null || onPlayNext != null
+
+    val swipeModifier = if (swipeActionsEnabled) {
         Modifier.pointerInput(Unit) {
+            // One-shot latch per gesture: the commit tick fires on crossing the
+            // commit travel, and again only after the finger dips back below it.
+            var nextSwipeCommitted = false
+            // UNCLAMPED running total of the gesture's horizontal drag, seeded
+            // from the offset where the finger grabbed the row.
+            var nextDragTotal = 0f
             detectHorizontalDragGestures(
                 onDragStart = {
                     // Grabbing a row mid return/fly-out takes over from it.
                     gestureAnimJob.value?.cancel()
+                    deleteIconFade = 1f
+                    nextSwipeCommitted = false
+                    nextDragTotal = dismissOffsetValue
                 },
                 onHorizontalDrag = { change, dragAmount ->
                     change.consume()
-                    dismissOffsetValue += dragAmount
+                    nextDragTotal += dragAmount
+                    // Right (play next) meets rising resistance past the commit
+                    // travel; left (remove) keeps following the finger so it can
+                    // fly all the way out.
+                    dismissOffsetValue = nextOffsetPx(nextDragTotal)
+                    val committed = nextDragTotal >= nextCommitPx - 0.5f
+                    if (committed && !nextSwipeCommitted) {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    }
+                    nextSwipeCommitted = committed
                 },
                 onDragEnd = {
-                    if (abs(dismissOffsetValue) >= swipeThresholdPx()) {
-                        // Fling the row fully off-screen, then remove it.
-                        val exitDistance =
-                            if (itemWidthPx > 0f) itemWidthPx else fallbackDismissThresholdPx
-                        val exitTarget =
-                            if (dismissOffsetValue > 0f) exitDistance else -exitDistance
-                        animateSwipeTo(exitTarget, SwipeDismissDurationMs) {
-                            latestOnRemove?.invoke()
+                    when {
+                        // Committed: fire the move at once and spring back in parallel —
+                        // the entry animates to the top of the list while the row
+                        // returns to rest, instead of one after the other.
+                        onPlayNext != null && dismissOffsetValue >= nextCommitPx - 0.5f -> {
+                            latestOnPlayNext?.invoke()
+                            animateSwipeTo(0f, SwipeReturnDurationMs)
                         }
-                    } else {
-                        animateSwipeTo(0f, SwipeReturnDurationMs)
+                        // Fling the row fully off-screen, then remove it.
+                        dismissOffsetValue <= -swipeThresholdPx() -> {
+                            val exitDistance =
+                                if (itemWidthPx > 0f) itemWidthPx else fallbackDismissThresholdPx
+                            animateSwipeTo(
+                                -exitDistance,
+                                SwipeDismissDurationMs,
+                                fadeDeleteIcon = true
+                            ) {
+                                latestOnRemove?.invoke()
+                            }
+                        }
+                        else -> animateSwipeTo(0f, SwipeReturnDurationMs)
                     }
                 },
                 onDragCancel = {
@@ -343,17 +443,23 @@ fun TrackListItem(
         Modifier
     }
 
-    // The swipe layer only exists in edit mode, where rows are actually
-    // swipeable; attaching it unconditionally put a lambda graphicsLayer (its
-    // own render node) on every resting row of every list for nothing.
-    val swipeRowModifier = if (onRemove != null) {
-        Modifier
+    // The swipe layer only exists where actions are actually swipeable; attaching
+    // it unconditionally put a lambda graphicsLayer (its own render node) on every
+    // resting row of every list for nothing.
+    val swipeRowModifier = if (swipeActionsEnabled) {
+        (if (auxiliary) Modifier.graphicsLayer { alpha = AuxiliaryAlpha } else Modifier)
             .onSizeChanged { itemWidthPx = it.width.toFloat() }
             .graphicsLayer {
-                translationX = dismissOffsetValue
-                val threshold = max(swipeThresholdPx(), 1f)
-                val progress = (abs(dismissOffsetValue) / threshold).coerceIn(0f, 1f)
-                alpha = 1f - progress * SwipeMaxFade
+                val offset = dismissOffsetValue
+                translationX = offset
+                // Only a left swipe (remove) fades the row; a right swipe
+                // (play next) leaves it fully opaque.
+                val progress = if (offset < 0f) {
+                    abs(offset) / max(swipeThresholdPx(), 1f)
+                } else {
+                    0f
+                }
+                alpha = 1f - progress.coerceIn(0f, 1f) * SwipeMaxFade
             }
             .then(swipeModifier)
     } else {
@@ -393,11 +499,31 @@ fun TrackListItem(
         Modifier
     }
 
+    // For swipeable rows the auxiliary dimming applies to the row itself, not
+    // the parent, so the icons revealed behind it keep full alpha.
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (auxiliary) Modifier.graphicsLayer { alpha = AuxiliaryAlpha } else Modifier)
+            .then(
+                if (auxiliary && !swipeActionsEnabled) {
+                    Modifier.graphicsLayer { alpha = AuxiliaryAlpha }
+                } else {
+                    Modifier
+                }
+            )
     ) {
+        if (swipeActionsEnabled) {
+            SwipeActionBackdrop(
+                offsetPx = { dismissOffsetValue },
+                nextRevealPx = { nextCommitPx },
+                deleteFadePx = { swipeThresholdPx() },
+                deleteCommitFade = { deleteIconFade },
+                nextIcon = if (onPlayNext != null) FoamTheme.icons.current.next else null,
+                deleteIcon = if (onRemove != null) FoamTheme.icons.current.delete else null,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+
         MediaListRow(
             onClick = onClick,
             onLongClick = resolvedOnLongClick,
@@ -498,6 +624,63 @@ fun TrackListItem(
     }
 }
 
+/**
+ * Backdrop revealed behind a row while it is swiped: the "next" icon centers in
+ * the space freed on the left on a right swipe, the delete icon sits near the
+ * end edge on a left swipe. Both icons read the swipe offset from their
+ * graphicsLayer blocks, so dragging costs no recomposition.
+ */
+@Composable
+private fun SwipeActionBackdrop(
+    offsetPx: () -> Float,
+    nextRevealPx: () -> Float,
+    deleteFadePx: () -> Float,
+    deleteCommitFade: () -> Float,
+    nextIcon: ImageVector?,
+    deleteIcon: ImageVector?,
+    modifier: Modifier = Modifier
+) {
+    if (nextIcon == null && deleteIcon == null) return
+
+    Box(modifier) {
+        if (nextIcon != null) {
+            Icon(
+                imageVector = nextIcon,
+                contentDescription = null,
+                tint = FoamTheme.accentColor,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .graphicsLayer {
+                        // Fades in to full opacity at the commit travel; the icon
+                        // keeps re-centering while the resisted strip keeps growing.
+                        val revealed = offsetPx().coerceAtLeast(0f)
+                        alpha = (revealed / nextRevealPx().coerceAtLeast(1f)).coerceIn(0f, 1f)
+                        translationX = revealed / 2f - SwipeActionIconSize.toPx() / 2f
+                    }
+                    .size(SwipeActionIconSize)
+            )
+        }
+
+        if (deleteIcon != null) {
+            Icon(
+                imageVector = deleteIcon,
+                contentDescription = null,
+                tint = FoamTheme.colors.textPrimary,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .offset(x = -SwipeActionIconInset)
+                    .graphicsLayer {
+                        // Reveal follows the drag; the commit fade then takes
+                        // over and runs down to 0 alongside the fly-out.
+                        alpha = (-offsetPx() / deleteFadePx().coerceAtLeast(1f))
+                            .coerceIn(0f, 1f) * deleteCommitFade()
+                    }
+                    .size(SwipeActionIconSize)
+            )
+        }
+    }
+}
+
 /** Album-art (or placeholder) filling a grid cell's square artwork box. */
 @Composable
 private fun TrackGridArtwork(track: TrackEntity) {
@@ -541,9 +724,9 @@ private fun GridOverlayChip(
 /** Fade + scale-in of the edit-mode grid drag chip when entering edit mode. */
 private val GridDragHandleEnter =
     fadeIn(animationSpec = tween(durationMillis = 200)) +
-        scaleIn(initialScale = 0.6f, animationSpec = tween(durationMillis = 200))
+            scaleIn(initialScale = 0.6f, animationSpec = tween(durationMillis = 200))
 
 /** Fade + scale-out of the edit-mode grid drag chip when leaving edit mode. */
 private val GridDragHandleExit =
     fadeOut(animationSpec = tween(durationMillis = 200)) +
-        scaleOut(targetScale = 0.6f, animationSpec = tween(durationMillis = 200))
+            scaleOut(targetScale = 0.6f, animationSpec = tween(durationMillis = 200))

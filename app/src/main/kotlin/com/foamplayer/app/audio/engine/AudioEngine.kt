@@ -1446,6 +1446,36 @@ class AudioEngine @Inject constructor(
     }
 
     /**
+     * The queue screen's swipe-right action: moves the entry to the first upcoming slot
+     * and, when it came from the auxiliary pool, clears its flag so it joins the primary
+     * queue (the pool refills right away).
+     */
+    fun promoteQueueEntry(entryId: Long) {
+        val fromIndex = entryIndexOf(entryId)
+        if (fromIndex == -1) return
+        val current = _playbackState.value
+        if (fromIndex <= current.queueIndex) return
+        val wasAuxiliary = current.auxiliaryFlags.getOrNull(fromIndex) == true
+        val nextIndex = (current.queueIndex + 1).coerceAtLeast(0)
+
+        if (fromIndex != nextIndex) {
+            moveQueueItem(fromIndex, nextIndex)
+        }
+
+        if (!wasAuxiliary) return
+
+        val index = entryIndexOf(entryId)
+        if (index != -1) {
+            val flags = _playbackState.value.auxiliaryFlags.toMutableList()
+            if (index < flags.size) {
+                flags[index] = false
+                _playbackState.value = _playbackState.value.copy(auxiliaryFlags = flags)
+            }
+        }
+        scheduleAuxiliaryRefill()
+    }
+
+    /**
      * Shuffles the upcoming main-queue occurrences among their slots and replaces every
      * auxiliary slot after them with a fresh random track.
      */
