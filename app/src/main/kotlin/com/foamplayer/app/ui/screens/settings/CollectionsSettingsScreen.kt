@@ -3,6 +3,7 @@ package com.foamplayer.app.ui.screens.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,9 +23,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,10 +99,11 @@ fun CollectionsSettingsScreen(
                 items = CollectionHeroTarget.entries,
                 key = { target -> "collection_layout_${target.name}" }
             ) { target ->
-                Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
+                Column {
                     BasicText(
                         text = collectionHeroTargetLabel(target),
-                        style = FoamTheme.typography.titleMedium
+                        style = FoamTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
                     )
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
                     CollectionLayoutPicker(
@@ -127,8 +131,12 @@ private fun collectionHeroTargetLabel(target: CollectionHeroTarget): String = wh
 
 /**
  * One section's layout picker: a freely scrollable horizontal list of the four
- * layout previews. Tapping a preview writes the section's DataStore value; the
- * selected one is highlighted with an accent border.
+ * layout previews, spanning the full screen width so previews crop at the
+ * screen edges while scrolling. The start content padding keeps the initial
+ * resting position aligned with the section title; the end padding leaves a
+ * gap once the last preview is scrolled into view. Tapping a preview writes
+ * the section's DataStore value; the selected one is highlighted with an
+ * accent border, and presses play a bounded ripple from the touch point.
  */
 @Composable
 private fun CollectionLayoutPicker(
@@ -138,7 +146,7 @@ private fun CollectionLayoutPicker(
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall),
-        contentPadding = PaddingValues(horizontal = FoamDimens.paddingSmall)
+        contentPadding = PaddingValues(horizontal = FoamDimens.paddingMedium)
     ) {
         items(CollectionHeroLayout.entries) { layout ->
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -165,7 +173,8 @@ private fun CollectionLayoutPicker(
  * a rectangle for the artwork, thin lines for the title/stats, one thicker
  * accent line for the play button, and grouped track lines below the hero.
  * The geometry mirrors the real layouts' constants (immersive bleed height,
- * fade span, overlay position; compact split; normal margins).
+ * fade span, overlay position; compact split; normal margins). Presses show
+ * a bounded ripple clipped to the phone's rounded shape.
  */
 @Composable
 private fun CollectionLayoutPreview(
@@ -184,7 +193,11 @@ private fun CollectionLayoutPreview(
                 shape = RoundedCornerShape(CollectionLayoutPreviewRounding)
             )
             .background(FoamTheme.colors.surfaceVariant)
-            .clickable { onClick() }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onClick
+            )
     ) {
         when (layout) {
             CollectionHeroLayout.Compact -> CompactPreview()
