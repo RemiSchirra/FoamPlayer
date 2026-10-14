@@ -1,5 +1,8 @@
 package com.foamplayer.app.ui.screens.home
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -25,28 +28,35 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.request.ImageRequest
+import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import androidx.core.net.toUri
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.scanner.ArtistCover
-import com.foamplayer.app.ui.components.AlbumArtImage
-import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.MediaArtKind
-import com.foamplayer.app.ui.components.MediaArtKindScope
 import com.foamplayer.app.ui.components.NoAlbumArtLetter
+import com.foamplayer.app.ui.components.mediaArtPlaceholderIcon
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlinx.coroutines.launch
 
 private val StartPlayingGridSpacing = 8.dp
 private val StartPlayingGridPadding = 8.dp
@@ -60,6 +70,21 @@ private val StartPlayingCardSize = StartPlayingArtSize + StartPlayingGridPadding
 
 /** Alpha of the cards' translucent surface tint. */
 private const val StartPlayingCardSurfaceAlpha = 0.2f
+
+/** Duration of the crossfade between two shuffled artworks. */
+private const val ShuffledArtCrossfadeMs = 200
+
+/** Icon size of the random cards' artwork placeholder. */
+private val ShuffledArtPlaceholderSize = 20.dp
+
+/**
+ * One artwork the random grids can show: a Coil-loadable image or the letter
+ * monogram of an artist without art.
+ */
+private sealed interface ShuffledArt {
+    data class Image(val model: Any) : ShuffledArt
+    data class Initial(val title: String) : ShuffledArt
+}
 
 /**
  * Home's "Random tracks" section: a title with a shuffle button on its right,
@@ -82,6 +107,8 @@ internal fun StartPlayingSection(
     ) {
         // Static 2x3 grid inside the Home LazyColumn: six fixed slots, no
         // internal scrolling, so it can't fight the LazyColumn's own scroll.
+        // No item keys: each slot's ShuffledArtwork state must survive a
+        // reshuffle for the previous artwork to keep painting mid-crossfade.
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = Modifier
@@ -92,7 +119,7 @@ internal fun StartPlayingSection(
             horizontalArrangement = Arrangement.spacedBy(StartPlayingGridSpacing),
             userScrollEnabled = false
         ) {
-            items(tracks, key = { it.id }) { track ->
+            items(tracks) { track ->
                 StartPlayingCard(
                     track = track,
                     onClick = { onTrackClick(track) },
@@ -132,7 +159,7 @@ internal fun RandomAlbumsSection(
             horizontalArrangement = Arrangement.spacedBy(StartPlayingGridSpacing),
             userScrollEnabled = false
         ) {
-            items(albums, key = { it.album }) { album ->
+            items(albums) { album ->
                 RandomAlbumCard(
                     album = album,
                     onClick = { onAlbumClick(album) },
@@ -147,8 +174,8 @@ internal fun RandomAlbumsSection(
  * Home's "Random artists" section, in the same 2x3 shuffle-card style as
  * [StartPlayingSection]: tapping a card opens the artist, long-pressing opens
  * the collection actions modal. [covers] pairs the resolved portraits with the
- * names the latest resolution pass covered, so cards whose resolution is still
- * pending show the person placeholder instead of flashing the letter fallback.
+ * names the latest resolution pass covered; artists still being resolved keep
+ * their previous card content instead of flashing a placeholder.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -175,7 +202,7 @@ internal fun RandomArtistsSection(
             horizontalArrangement = Arrangement.spacedBy(StartPlayingGridSpacing),
             userScrollEnabled = false
         ) {
-            items(artists, key = { it.name }) { artist ->
+            items(artists) { artist ->
                 RandomArtistCard(
                     artist = artist,
                     cover = covers.covers[artist.name],
@@ -249,7 +276,6 @@ private fun StartPlayingCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val context = LocalContext.current
     val cardShape = RoundedCornerShape(FoamTheme.shapes.cardRounding)
 
     Row(
@@ -272,14 +298,11 @@ private fun StartPlayingCard(
                 .aspectRatio(1f)
                 .background(FoamTheme.colors.surfaceVariant)
         ) {
-            val artRequest = remember(track.albumArtPath) {
-                ImageRequest.Builder(context)
-                    .data(track.albumArtPath?.let { EmbeddedAlbumArt(it.toUri()) } ?: track.title)
-                    .size(AlbumArtRequestSize)
-                    .build()
-            }
-            AlbumArtImage(
-                model = artRequest,
+            ShuffledArtwork(
+                art = ShuffledArt.Image(
+                    track.albumArtPath?.let { EmbeddedAlbumArt(it.toUri()) } ?: track.title
+                ),
+                placeholderKind = MediaArtKind.TRACK,
                 contentDescription = track.title,
                 modifier = Modifier.fillMaxSize()
             )
@@ -311,7 +334,6 @@ private fun RandomAlbumCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val context = LocalContext.current
     val cardShape = RoundedCornerShape(FoamTheme.shapes.cardRounding)
 
     Row(
@@ -334,17 +356,13 @@ private fun RandomAlbumCard(
                 .aspectRatio(1f)
                 .background(FoamTheme.colors.surfaceVariant)
         ) {
-            val artRequest = remember(album.albumArtPath, album.album) {
-                ImageRequest.Builder(context)
-                    .data(album.albumArtPath?.let { EmbeddedAlbumArt(it.toUri()) } ?: album.album)
-                    .size(AlbumArtRequestSize)
-                    .build()
-            }
-            AlbumArtImage(
-                model = artRequest,
+            ShuffledArtwork(
+                art = ShuffledArt.Image(
+                    album.albumArtPath?.let { EmbeddedAlbumArt(it.toUri()) } ?: album.album
+                ),
+                placeholderKind = MediaArtKind.ALBUM,
                 contentDescription = album.album,
-                modifier = Modifier.fillMaxSize(),
-                placeholderKind = MediaArtKind.ALBUM
+                modifier = Modifier.fillMaxSize()
             )
         }
 
@@ -365,10 +383,10 @@ private fun RandomAlbumCard(
 
 /**
  * One "Random artists" card: same layout as the other random cards, with a
- * resolved portrait or letter fallback and the artist's name. Before the
- * artist's cover resolution has answered (right after a reshuffle), the
- * loading placeholder is the person icon rather than the letter — only an
- * artist whose resolution completed without art falls back to the letter.
+ * resolved portrait or letter fallback and the artist's name. Until the
+ * artist's cover resolution answers, the previous card content keeps painting
+ * ([art] null); only an artist whose resolution completed without art falls
+ * back to the letter.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -379,7 +397,6 @@ private fun RandomArtistCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val context = LocalContext.current
     val cardShape = RoundedCornerShape(FoamTheme.shapes.cardRounding)
 
     Row(
@@ -402,28 +419,23 @@ private fun RandomArtistCard(
                 .aspectRatio(1f)
                 .background(FoamTheme.colors.surfaceVariant)
         ) {
-            if (cover != null) {
-                val artRequest = remember(cover.imageUrl, cover.isEmbeddedArt) {
-                    ImageRequest.Builder(context)
-                        .data(
-                            if (cover.isEmbeddedArt) {
-                                EmbeddedAlbumArt(cover.imageUrl.toUri())
-                            } else {
-                                cover.imageUrl
-                            }
-                        )
-                        .size(AlbumArtRequestSize)
-                        .build()
-                }
-                AlbumArtImage(
-                    model = artRequest,
-                    contentDescription = artist.name,
-                    modifier = Modifier.fillMaxSize(),
-                    placeholderKind = MediaArtKind.ARTIST
-                )
-            } else if (resolved) {
-                NoAlbumArtLetter(title = artist.name)
-            }
+            ShuffledArtwork(
+                art = when {
+                    cover != null -> ShuffledArt.Image(
+                        if (cover.isEmbeddedArt) {
+                            EmbeddedAlbumArt(cover.imageUrl.toUri())
+                        } else {
+                            cover.imageUrl
+                        }
+                    )
+                    resolved -> ShuffledArt.Initial(title = artist.name)
+                    // Resolution pending: the previous content keeps painting.
+                    else -> null
+                },
+                placeholderKind = MediaArtKind.ARTIST,
+                contentDescription = artist.name,
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
         Box(
@@ -438,5 +450,182 @@ private fun RandomArtistCard(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+/**
+ * Artwork surface of one random-section card, with swap crossfading. Two
+ * layers: the last SETTLED artwork keeps painting at full alpha underneath
+ * while the INCOMING artwork of a reshuffle loads, then crossfades over it —
+ * the loading placeholder only ever shows before anything has settled (the
+ * section's first load), never mid-swap.
+ *
+ * The grids compose their cards positionally (no item keys) so each slot's
+ * layers survive a reshuffle and the previous artwork can keep painting.
+ *
+ * [art] null freezes both layers (an artist's cover resolution is still
+ * pending); a settled-only surface re-renders statically with no layers.
+ */
+@Composable
+private fun ShuffledArtwork(
+    art: ShuffledArt?,
+    placeholderKind: MediaArtKind,
+    contentDescription: String?,
+    modifier: Modifier = Modifier
+) {
+    // The artwork fully painted (its crossfade, if any, completed).
+    var settled by remember { mutableStateOf<ShuffledArt?>(null) }
+    // The artwork currently loading/crossfading over [settled].
+    var incoming by remember { mutableStateOf<ShuffledArt?>(null) }
+
+    if (art != null && art != settled && art != incoming) {
+        // A genuinely new shuffled item: stage it over the settled layer.
+        // Nothing settled (first load) still stages it; its placeholder shows
+        // until the first image resolves.
+        incoming = art
+    }
+    if (art == null && incoming != null) {
+        // Pending resolution after a swap was staged: drop the staged layer,
+        // the settled content keeps painting.
+        incoming = null
+    }
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        when (val under = settled) {
+            is ShuffledArt.Image -> StaticImage(model = under.model, modifier = Modifier.fillMaxSize())
+            is ShuffledArt.Initial -> NoAlbumArtLetter(title = under.title)
+            null -> Unit
+        }
+
+        when (val over = incoming) {
+            is ShuffledArt.Image -> IncomingImage(
+                model = over.model,
+                contentDescription = contentDescription,
+                placeholder = mediaArtPlaceholderIcon(placeholderKind),
+                showPlaceholder = settled == null,
+                onSettled = {
+                    settled = over
+                    incoming = null
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+            is ShuffledArt.Initial -> IncomingLetter(
+                title = over.title,
+                onSettled = {
+                    settled = over
+                    incoming = null
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+            null -> if (settled == null && art == null) {
+                // Nothing settled and nothing staged: placeholder.
+                Icon(
+                    imageVector = mediaArtPlaceholderIcon(placeholderKind),
+                    contentDescription = null,
+                    tint = FoamTheme.colors.textSecondary,
+                    modifier = Modifier.size(ShuffledArtPlaceholderSize)
+                )
+            }
+        }
+    }
+}
+
+/** A fully-loaded image layer, painted with no fade machinery. */
+@Composable
+private fun StaticImage(model: Any, modifier: Modifier = Modifier) {
+    AsyncImage(
+        model = model,
+        contentDescription = null,
+        modifier = modifier,
+        contentScale = ContentScale.Crop
+    )
+}
+
+/**
+ * The incoming artwork of a swap: it paints at alpha 0 while it loads (the
+ * settled layer below stays visible), then crossfades in over 200ms once its
+ * bitmap is ready — memory-cache hits are ready on the first frame and fade
+ * right away. A failure settles so the placeholder can show (when nothing is
+ * settled).
+ */
+@Composable
+private fun IncomingImage(
+    model: Any,
+    contentDescription: String?,
+    placeholder: ImageVector,
+    showPlaceholder: Boolean,
+    onSettled: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scope = rememberCoroutineScope()
+    // 0f until the crossfade runs: the incoming bitmap never paints at full
+    // alpha before its fade starts.
+    val alphaState = remember(model) { mutableFloatStateOf(0f) }
+    var settled by remember(model) { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        if (showPlaceholder && !settled) {
+            Icon(
+                imageVector = placeholder,
+                contentDescription = null,
+                tint = FoamTheme.colors.textSecondary,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(ShuffledArtPlaceholderSize)
+            )
+        }
+        AsyncImage(
+            model = model,
+            contentDescription = contentDescription,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = alphaState.floatValue },
+            contentScale = ContentScale.Crop,
+            onState = { state ->
+                if (settled) return@AsyncImage
+                when (state) {
+                    is AsyncImagePainter.State.Loading ->
+                        if (alphaState.floatValue != 0f) alphaState.floatValue = 0f
+                    is AsyncImagePainter.State.Success -> {
+                        settled = true
+                        scope.launch {
+                            Animatable(0f).animateTo(
+                                targetValue = 1f,
+                                animationSpec = tween(
+                                    durationMillis = ShuffledArtCrossfadeMs,
+                                    easing = EaseOut
+                                )
+                            ) { alphaState.floatValue = value }
+                            onSettled()
+                        }
+                    }
+                    is AsyncImagePainter.State.Error -> {
+                        settled = true
+                        onSettled()
+                    }
+                    else -> Unit
+                }
+            }
+        )
+    }
+}
+
+/** The incoming letter of a swap, crossfaded in over the settled layer. */
+@Composable
+private fun IncomingLetter(
+    title: String,
+    onSettled: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val letterAlpha = remember(title) { Animatable(0f) }
+    androidx.compose.runtime.LaunchedEffect(title) {
+        letterAlpha.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = ShuffledArtCrossfadeMs, easing = EaseOut)
+        )
+        onSettled()
+    }
+    Box(modifier = modifier.graphicsLayer { alpha = letterAlpha.value }) {
+        NoAlbumArtLetter(title = title)
     }
 }
