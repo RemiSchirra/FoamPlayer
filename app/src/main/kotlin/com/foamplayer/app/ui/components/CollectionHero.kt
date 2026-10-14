@@ -7,6 +7,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -64,6 +65,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -77,6 +79,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
@@ -86,6 +89,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -166,6 +170,9 @@ private const val CollectionSearchOpenReserveScreenFraction = 0.6f
 
 /** Duration of the search-open bottom padding's grow/shrink. */
 private const val CollectionSearchPaddingAnimationMs = 250
+
+/** Duration of the hero title's expand/collapse reveal. */
+private const val CollectionHeroTitleExpandAnimationMs = 250
 
 /**
  * Hero layout of the "list of lists" screens (genres, years, folders and every
@@ -1118,6 +1125,77 @@ private fun CollectionHeroArtworkImage(
     )
 }
 
+/**
+ * The collection hero's title: two lines with an end ellipsis at rest,
+ * expanding to its full line count on tap — but only when the text actually
+ * overflows the two lines, otherwise it is not tappable. Tapping again
+ * collapses. The box's BOTTOM edge stays fixed (the texts below never move):
+ * the text slides UP as the box grows, the overflowing lines being revealed
+ * masked at that bottom edge.
+ */
+@Composable
+private fun CollectionHeroExpandableTitle(
+    title: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember(title) { mutableStateOf(false) }
+    var overflows by remember(title) { mutableStateOf(false) }
+    // Collapsed (2-line) height, taken from the text's own layout: the wrapper
+    // reports it so the box grows UPWARD instead of pushing the texts below.
+    var collapsedHeightPx by remember(title) { mutableIntStateOf(0) }
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = modifier.layout { measurable, constraints ->
+            val placeable = measurable.measure(constraints)
+            val height = if (collapsedHeightPx > 0) collapsedHeightPx else placeable.height
+            layout(placeable.width, height) {
+                placeable.placeRelative(0, height - placeable.height)
+            }
+        }
+    ) {
+        Box(
+            modifier = Modifier
+                // BEFORE animateContentSize: the clip tracks the ANIMATED size,
+                // so during the reveal the full-height text is masked at the
+                // box's fixed bottom edge instead of overdrawing onto the
+                // texts below.
+                .clipToBounds()
+                .animateContentSize(
+                    animationSpec = tween(
+                        durationMillis = CollectionHeroTitleExpandAnimationMs,
+                        easing = FastOutSlowInEasing
+                    )
+                )
+                .then(
+                    if (overflows) {
+                        Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = ripple(color = FoamTheme.colors.textPrimary)
+                            ) { expanded = !expanded }
+                    } else {
+                        Modifier
+                    }
+                )
+        ) {
+            BasicText(
+                text = title,
+                style = style,
+                maxLines = if (expanded) Int.MAX_VALUE else 2,
+                overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
+                onTextLayout = {
+                    if (!expanded) {
+                        overflows = it.hasVisualOverflow
+                        collapsedHeightPx = it.size.height
+                    }
+                }
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun CollectionHeroTexts(
@@ -1147,11 +1225,9 @@ private fun CollectionHeroTexts(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start
     ) {
-        BasicText(
-            text = title,
+        CollectionHeroExpandableTitle(
+            title = title,
             style = titleStyle,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.collectionHeroSharedText(
                 key = "$sharedElementPrefix-title-$sharedElementKey",
                 sharedTransitionScope = sharedTransitionScope,
