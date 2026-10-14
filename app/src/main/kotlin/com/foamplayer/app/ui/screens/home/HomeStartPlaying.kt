@@ -40,8 +40,11 @@ import com.foamplayer.app.R
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.data.scanner.ArtistCover
 import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.MediaArtKind
+import com.foamplayer.app.ui.components.MediaArtKindScope
 import com.foamplayer.app.ui.components.NoAlbumArtLetter
 import com.foamplayer.app.ui.theme.FoamTheme
 
@@ -143,13 +146,15 @@ internal fun RandomAlbumsSection(
 /**
  * Home's "Random artists" section, in the same 2x3 shuffle-card style as
  * [StartPlayingSection]: tapping a card opens the artist, long-pressing opens
- * the collection actions modal.
+ * the collection actions modal. [covers] pairs the resolved portraits with the
+ * names the latest resolution pass covered, so cards whose resolution is still
+ * pending show the person placeholder instead of flashing the letter fallback.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun RandomArtistsSection(
     artists: List<FavoriteArtist>,
-    artistImages: Map<String, com.foamplayer.app.data.scanner.ArtistCover>,
+    covers: RandomArtistCovers,
     onArtistClick: (FavoriteArtist) -> Unit,
     onArtistLongClick: (FavoriteArtist) -> Unit,
     onRefresh: () -> Unit
@@ -173,7 +178,8 @@ internal fun RandomArtistsSection(
             items(artists, key = { it.name }) { artist ->
                 RandomArtistCard(
                     artist = artist,
-                    cover = artistImages[artist.name],
+                    cover = covers.covers[artist.name],
+                    resolved = artist.name in covers.resolved,
                     onClick = { onArtistClick(artist) },
                     onLongClick = { onArtistLongClick(artist) }
                 )
@@ -337,7 +343,8 @@ private fun RandomAlbumCard(
             AlbumArtImage(
                 model = artRequest,
                 contentDescription = album.album,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                placeholderKind = MediaArtKind.ALBUM
             )
         }
 
@@ -358,13 +365,17 @@ private fun RandomAlbumCard(
 
 /**
  * One "Random artists" card: same layout as the other random cards, with a
- * resolved portrait or letter fallback and the artist's name.
+ * resolved portrait or letter fallback and the artist's name. Before the
+ * artist's cover resolution has answered (right after a reshuffle), the
+ * loading placeholder is the person icon rather than the letter — only an
+ * artist whose resolution completed without art falls back to the letter.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RandomArtistCard(
     artist: FavoriteArtist,
-    cover: com.foamplayer.app.data.scanner.ArtistCover?,
+    cover: ArtistCover?,
+    resolved: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -407,9 +418,10 @@ private fun RandomArtistCard(
                 AlbumArtImage(
                     model = artRequest,
                     contentDescription = artist.name,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    placeholderKind = MediaArtKind.ARTIST
                 )
-            } else {
+            } else if (resolved) {
                 NoAlbumArtLetter(title = artist.name)
             }
         }

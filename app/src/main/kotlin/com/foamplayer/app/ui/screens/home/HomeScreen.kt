@@ -132,6 +132,7 @@ fun HomeScreen(
     val randomTracks by viewModel.randomTracks.collectAsState()
     val randomAlbums by viewModel.randomAlbums.collectAsState()
     val randomArtists by viewModel.randomArtists.collectAsState()
+    val randomArtistCovers by viewModel.randomArtistCovers.collectAsState()
 
     val trackModalState = LocalTrackFoamModalState.current
     val collectionModalState = LocalCollectionFoamModalState.current
@@ -229,9 +230,9 @@ fun HomeScreen(
                 HomeSection.RANDOM_ARTISTS -> item(key = "home_row_random_artists") {
                     RandomArtistsSection(
                         artists = randomArtists,
-                        artistImages = artistImages,
+                        covers = randomArtistCovers,
                         onArtistClick = { artist ->
-                            val cover = artistImages[artist.name]
+                            val cover = randomArtistCovers.covers[artist.name]
                             onArtistClick(artist.name, cover?.imageUrl, cover?.isEmbeddedArt ?: false)
                         },
                         onArtistLongClick = { artist ->
@@ -239,8 +240,8 @@ fun HomeScreen(
                                 collectionModalState?.show(
                                     CollectionInfo(
                                         title = artist.name,
-                                        imageUrl = artistImages[artist.name]?.imageUrl,
-                                        imageIsEmbeddedArt = artistImages[artist.name]?.isEmbeddedArt ?: false,
+                                        imageUrl = randomArtistCovers.covers[artist.name]?.imageUrl,
+                                        imageIsEmbeddedArt = randomArtistCovers.covers[artist.name]?.isEmbeddedArt ?: false,
                                         kind = CollectionKind.Artist,
                                         tracks = viewModel.tracksForArtist(artist.name)
                                     )

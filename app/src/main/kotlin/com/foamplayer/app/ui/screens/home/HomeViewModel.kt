@@ -15,11 +15,14 @@ import com.foamplayer.app.data.scanner.PlaylistCover
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -30,6 +33,17 @@ import kotlinx.coroutines.withContext
 data class FavoriteArtist(
     val name: String,
     val totalPlayCount: Int
+)
+
+/**
+ * Covers for the "Random artists" grid, plus the names the latest resolution
+ * pass was built for: a name inside [resolved] without a cover genuinely has
+ * no art (letter fallback), while one outside it is still being resolved
+ * (placeholder, so a reshuffle never flashes letters).
+ */
+data class RandomArtistCovers(
+    val covers: Map<String, ArtistCover> = emptyMap(),
+    val resolved: Set<String> = emptySet()
 )
 
 /**
@@ -90,10 +104,33 @@ class HomeViewModel @Inject constructor(
         trackRepository.getRecentlyAddedAlbums()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** Credited artists newest-first by the latest file modification date among their tracks. */
+    /**
+     * Artists newest-first by the latest file modification date among their
+     * tracks. Credited names are split on the app-wide "; " convention so a
+     * multi-artist track counts toward each of its artists (matching the
+     * favorite-artists rows and the cover resolution keys).
+     */
     val recentlyAddedArtists: StateFlow<List<FavoriteArtist>> =
-        trackRepository.getRecentlyAddedArtistRows()
-            .map { rows -> rows.map { FavoriteArtist(it.artist, it.totalPlayCount) } }
+        trackRepository.getAllTracks()
+            .map { tracks ->
+                val lastAdded = HashMap<String, Long>()
+                for (track in tracks) {
+                    track.artist.split("; ")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .distinct()
+                        .forEach { artist -> lastAdded.merge(artist, track.dateAdded, ::maxOf) }
+                }
+                lastAdded.entries.asSequence()
+                    .filter { it.value > 0 }
+                    .sortedWith(
+                        compareByDescending<Map.Entry<String, Long>> { it.value }
+                            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.key }
+                    )
+                    .map { FavoriteArtist(it.key, 0) }
+                    .toList()
+            }
+            .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
@@ -151,6 +188,27 @@ class HomeViewModel @Inject constructor(
 
     /** The "Random artists" grid: six random artists, repicked by [reshuffleRandomArtists]. */
     val randomArtists: StateFlow<List<FavoriteArtist>> = _randomArtists.asStateFlow()
+
+    /**
+     * Covers for the "Random artists" grid. Keyed on the picked artists rather
+     * than the favorites: the grid draws from the whole library, including
+     * never-played artists that the favorites' cover map doesn't carry.
+     *
+     * [flatMapLatest] pairs each pick's names with ITS OWN resolution result:
+     * the stored value only updates once the new pick's covers have finished
+     * resolving, so the frames in between see a stale [RandomArtistCovers]
+     * whose [RandomArtistCovers.resolved] doesn't contain the fresh names —
+     * cards hold the person placeholder instead of flashing the letter.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val randomArtistCovers: StateFlow<RandomArtistCovers> =
+        randomArtists
+            .map { artists -> artists.map { it.name } }
+            .flatMapLatest { names ->
+                artistCoverProvider.coversFlow(flowOf(names))
+                    .map { covers -> RandomArtistCovers(covers, names.toSet()) }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RandomArtistCovers())
 
     init {
         viewModelScope.launch {
