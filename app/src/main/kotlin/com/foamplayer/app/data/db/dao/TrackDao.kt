@@ -134,6 +134,18 @@ interface TrackDao {
     fun getRecentlyPlayed(): Flow<List<TrackEntity>>
 
     /**
+     * Home "Favorite tracks": tracks ranked by aggregate play count + likes,
+     * regardless of when they were last played.
+     */
+    @Query("""
+        SELECT * FROM tracks 
+        WHERE playCount > 0 OR score > 0 
+        ORDER BY (playCount + MAX(score, 0) * 10) DESC, playCount DESC, title ASC 
+        LIMIT 50
+    """)
+    fun getFavoriteTracks(): Flow<List<TrackEntity>>
+
+    /**
      * Home "Old favorites": tracks with listening history whose last listen is
      * older than [cutoff], ranked by aggregate play count + likes (long-standing
      * favorites rather than recent hits; never-played-but-liked tracks qualify).
@@ -162,6 +174,56 @@ interface TrackDao {
         LIMIT 50
     """)
     fun getRecommendedAlbums(): Flow<List<AlbumRecommendation>>
+
+    /**
+     * Home "Old favorite albums": albums whose latest listen is older than
+     * [cutoff], ranked by the aggregate play count + likes of their tracks —
+     * the album counterpart of [getOldFavorites].
+     */
+    @Query("""
+        SELECT album, 
+               GROUP_CONCAT(DISTINCT COALESCE(albumArtist, artist)) as artist, 
+               MAX(albumArtPath) as albumArtPath, 
+               SUM(playCount + MAX(score, 0) * 10) as totalScore 
+        FROM tracks 
+        GROUP BY album 
+        HAVING MAX(COALESCE(lastPlayedAt, 0)) < :cutoff 
+           AND (SUM(playCount) > 0 OR MAX(score) > 0) 
+        ORDER BY totalScore DESC, album COLLATE NOCASE ASC 
+        LIMIT 50
+    """)
+    fun getOldFavoriteAlbums(cutoff: Long): Flow<List<AlbumRecommendation>>
+
+    /**
+     * Home "Recently added albums": albums ranked by the latest file
+     * modification date among their tracks (the album's last-touched file,
+     * matching the "file dates" definition of "added"), newest first.
+     */
+    @Query("""
+        SELECT album, 
+               GROUP_CONCAT(DISTINCT COALESCE(albumArtist, artist)) as artist, 
+               MAX(albumArtPath) as albumArtPath, 
+               MAX(dateAdded) as totalScore 
+        FROM tracks 
+        GROUP BY album 
+        ORDER BY MAX(dateAdded) DESC, album COLLATE NOCASE ASC 
+        LIMIT 50
+    """)
+    fun getRecentlyAddedAlbums(): Flow<List<AlbumRecommendation>>
+
+    /**
+     * Home "Recently added artists": credited artists ranked by the latest
+     * file modification date among their tracks, newest first.
+     */
+    @Query("""
+        SELECT artist, 0 as totalPlayCount, MAX(dateAdded) as dateAdded 
+        FROM tracks 
+        WHERE dateAdded > 0 
+        GROUP BY artist 
+        ORDER BY MAX(dateAdded) DESC, artist COLLATE NOCASE ASC 
+        LIMIT 50
+    """)
+    fun getRecentlyAddedArtistRows(): Flow<List<ArtistAddRow>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTracks(tracks: List<TrackEntity>)
@@ -239,6 +301,13 @@ data class AlbumRecommendation(
     val artist: String,
     val albumArtPath: String?,
     val totalScore: Int
+)
+
+/** One row of [TrackDao.getRecentlyAddedArtistRows]: a credited artist and its latest file date. */
+data class ArtistAddRow(
+    val artist: String,
+    val totalPlayCount: Int,
+    val dateAdded: Long
 )
 
 data class TrackPlayStatsRow(

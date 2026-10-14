@@ -26,11 +26,21 @@
     <string name="home_see_all">See all</string>
     <string name="home_row_start_playing">Start playing</string>
     <string name="home_start_playing_refresh">Shuffle selection</string>
+    <string name="home_row_random_tracks">Random tracks</string>
+    <string name="home_row_random_albums">Random albums</string>
+    <string name="home_row_random_artists">Random artists</string>
     <string name="home_row_recommended_playlists">Recommended playlists</string>
     <string name="home_row_recommended_albums">Recommended albums</string>
     <string name="home_row_recent_listens">Recent listens</string>
+    <string name="home_row_favorite_tracks">Favorite tracks</string>
     <string name="home_row_old_favorites">Old favorites</string>
+    <string name="home_row_old_favorite_albums">Old favorite albums</string>
     <string name="home_row_favorite_artists">Favorite artists</string>
+    <string name="home_row_recently_added_albums">Recently added albums</string>
+    <string name="home_row_recently_added_artists">Recently added artists</string>
+
+    <string name="home_settings_title">Home</string>
+    <string name="home_settings_subtitle">Reorder and show or hide the Home page sections</string>
 
     <string name="library_folders">Library Folders</string>
     <string name="add_folder">Add Folder</string>

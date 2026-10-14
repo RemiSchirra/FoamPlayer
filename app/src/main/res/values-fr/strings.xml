@@ -26,11 +26,21 @@
     <string name="home_see_all">Voir tout</string>
     <string name="home_row_start_playing">Commencer à écouter</string>
     <string name="home_start_playing_refresh">Mélanger</string>
+    <string name="home_row_random_tracks">Titres aléatoires</string>
+    <string name="home_row_random_albums">Albums aléatoires</string>
+    <string name="home_row_random_artists">Artistes aléatoires</string>
     <string name="home_row_recommended_playlists">Playlists recommandées</string>
     <string name="home_row_recommended_albums">Albums recommandés</string>
     <string name="home_row_recent_listens">Écoutes récentes</string>
+    <string name="home_row_favorite_tracks">Titres favoris</string>
     <string name="home_row_old_favorites">Anciens favoris</string>
+    <string name="home_row_old_favorite_albums">Anciens albums favoris</string>
     <string name="home_row_favorite_artists">Artistes favoris</string>
+    <string name="home_row_recently_added_albums">Albums récemment ajoutés</string>
+    <string name="home_row_recently_added_artists">Artistes récemment ajoutés</string>
+
+    <string name="home_settings_title">Accueil</string>
+    <string name="home_settings_subtitle">Réordonner et afficher ou masquer les sections de l\'Accueil</string>
 
     <string name="library_folders">Dossiers de la bibliothèque</string>
     <string name="add_folder">Ajouter un dossier</string>

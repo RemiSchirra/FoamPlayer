@@ -20,9 +20,11 @@ import com.foamplayer.app.constants.CollectionLayoutArtistKey
 import com.foamplayer.app.constants.CollectionLayoutDefaultKey
 import com.foamplayer.app.constants.CollectionLayoutPlaylistKey
 import com.foamplayer.app.constants.CollectionSortMode
+import com.foamplayer.app.constants.DefaultEnabledHomeSections
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
 import com.foamplayer.app.constants.DefaultNavBarSecondaryOrder
+import com.foamplayer.app.constants.HomeSection
 import com.foamplayer.app.constants.LyricsLineBlurKey
 import com.foamplayer.app.constants.LyricsWordSyncDisabledKey
 import com.foamplayer.app.constants.MediaDensity
@@ -31,6 +33,7 @@ import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.PreferredLyricsProvider
+import com.foamplayer.app.constants.deserializeHomeSectionOrder
 import com.foamplayer.app.constants.deserializeLyricsProviderOrder
 import com.foamplayer.app.constants.deserializeLyricsSourceOrder
 import com.foamplayer.app.constants.deserializeNavBarItemOrder
@@ -208,6 +211,17 @@ class SettingsRepository @Inject constructor(
         it.copy(navBarSecondaryEnabled = enabled)
     }
 
+    /** Sets the order of the Home page's sections (Settings > UI > Home). */
+    suspend fun setHomeSectionOrder(order: List<HomeSection>) = update {
+        it.copy(homeSectionOrder = order)
+    }
+
+    /** Enables or disables one Home page section. */
+    suspend fun setHomeSectionEnabled(section: HomeSection, enabled: Boolean) = update {
+        val newEnabled = if (enabled) it.enabledHomeSections + section else it.enabledHomeSections - section
+        it.copy(enabledHomeSections = newEnabled)
+    }
+
     /** Sets the list density of one media view. */
     suspend fun setMediaDensity(view: MediaListView, density: MediaDensity) = update {
         it.copy(mediaDensities = it.mediaDensities + (view to density))
@@ -369,6 +383,11 @@ class SettingsRepository @Inject constructor(
             storedOrder = this[Keys.NAVBAR_SECONDARY_ORDER],
             storedEnabled = this[Keys.NAVBAR_SECONDARY_ENABLED]
         ),
+        homeSectionOrder = deserializeHomeSectionOrder(this[Keys.HOME_SECTION_ORDER]),
+        enabledHomeSections = this[Keys.ENABLED_HOME_SECTIONS]
+            ?.mapNotNull { name -> HomeSection.entries.find { it.name == name } }
+            ?.toSet()
+            ?: DefaultEnabledHomeSections,
         mediaDensities = deserializeMediaDensities(this[Keys.MEDIA_DENSITIES]),
         mediaSortModes = deserializeMediaSortModes(this[Keys.MEDIA_SORT_MODES]),
         mediaSortInverted = this[Keys.MEDIA_SORT_INVERTED]
@@ -447,6 +466,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.NAVBAR_PRIMARY_ENABLED] = settings.navBarPrimaryEnabled.map { it.name }.toSet()
         this[Keys.NAVBAR_SECONDARY_ORDER] = settings.navBarSecondaryOrder.joinToString(",") { it.name }
         this[Keys.NAVBAR_SECONDARY_ENABLED] = settings.navBarSecondaryEnabled.map { it.name }.toSet()
+        this[Keys.HOME_SECTION_ORDER] = settings.homeSectionOrder.joinToString(",") { it.name }
+        this[Keys.ENABLED_HOME_SECTIONS] = settings.enabledHomeSections.map { it.name }.toSet()
         this[Keys.MEDIA_DENSITIES] = serializeMediaDensities(settings.mediaDensities)
         this[Keys.MEDIA_SORT_MODES] = serializeMediaSortModes(settings.mediaSortModes)
         this[Keys.MEDIA_SORT_INVERTED] = settings.mediaSortInverted.map { it.name }.toSet()
@@ -519,6 +540,8 @@ class SettingsRepository @Inject constructor(
         val NAVBAR_PRIMARY_ENABLED = stringSetPreferencesKey("navbar_primary_enabled")
         val NAVBAR_SECONDARY_ORDER = stringPreferencesKey("navbar_secondary_order")
         val NAVBAR_SECONDARY_ENABLED = stringSetPreferencesKey("navbar_secondary_enabled")
+        val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
+        val ENABLED_HOME_SECTIONS = stringSetPreferencesKey("enabled_home_sections")
         val MEDIA_DENSITIES = stringPreferencesKey("media_densities")
         val MEDIA_SORT_MODES = stringPreferencesKey("media_sort_modes")
         val MEDIA_SORT_INVERTED = stringSetPreferencesKey("media_sort_inverted")

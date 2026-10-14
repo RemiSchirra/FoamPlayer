@@ -28,8 +28,8 @@ sealed class ScanStatus {
     data class Finished(val count: Int) : ScanStatus()
 }
 
-/** An audio file found during enumeration, with its size already resolved. */
-private data class FoundAudioFile(val uri: Uri, val name: String, val size: Long)
+/** An audio file found during enumeration, with its size and mtime already resolved. */
+private data class FoundAudioFile(val uri: Uri, val name: String, val size: Long, val lastModified: Long)
 
 /**
  * Enumerates audio files under SAF tree URIs (or plain directories) and
@@ -78,13 +78,13 @@ class LocalAudioScanner @Inject constructor(
                             results[index] = try {
                                 extractMetadataFromUri(file, retriever, artistSeparators, genreSeparators)
                             } catch (_: Exception) {
-                                createFallbackTrack(file.uri, file.name, file.size)
+                                createFallbackTrack(file.uri, file.name, file.size, file.lastModified)
                             }
                         } finally {
                             runCatching { retriever.release() }
                         }
                     } else {
-                        results[index] = cached
+                        results[index] = cached.copy(dateAdded = file.lastModified)
                     }
                     freshTrack[index] = cached == null
                     val done = processed.incrementAndGet()
@@ -190,7 +190,8 @@ class LocalAudioScanner @Inject constructor(
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,
                 DocumentsContract.Document.COLUMN_DISPLAY_NAME,
                 DocumentsContract.Document.COLUMN_MIME_TYPE,
-                DocumentsContract.Document.COLUMN_SIZE
+                DocumentsContract.Document.COLUMN_SIZE,
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED
             )
 
             try {
@@ -199,6 +200,7 @@ class LocalAudioScanner @Inject constructor(
                     val nameIdx = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
                     val mimeIdx = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
                     val sizeIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE)
+                    val modifiedIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
 
                     val subFolderIds = mutableListOf<String>()
                     while (cursor.moveToNext()) {
@@ -211,10 +213,10 @@ class LocalAudioScanner @Inject constructor(
                             subFolderIds += id
                         } else if (isAudioFile(name)) {
                             val docUri = DocumentsContract.buildDocumentUriUsingTree(rootUri, id)
-                            // Size comes from the listing; no per-file round-trip later.
                             val size = if (sizeIdx >= 0) cursor.getLong(sizeIdx) else 0L
+                            val lastModified = if (modifiedIdx >= 0) cursor.getLong(modifiedIdx) else 0L
                             synchronized(result) {
-                                result.add(FoundAudioFile(docUri, name, size))
+                                result.add(FoundAudioFile(docUri, name, size, lastModified))
                             }
                         }
                     }
@@ -234,7 +236,7 @@ class LocalAudioScanner @Inject constructor(
             if (file.isDirectory) {
                 collectLegacyFiles(file, result)
             } else if (isAudioFile(file.name)) {
-                result.add(FoundAudioFile(Uri.fromFile(file), file.name, file.length()))
+                result.add(FoundAudioFile(Uri.fromFile(file), file.name, file.length(), file.lastModified()))
             }
         }
     }
@@ -328,7 +330,7 @@ class LocalAudioScanner @Inject constructor(
                 ?.trim()
                 ?.toIntOrNull()
         } catch (e: Exception) {
-            return createFallbackTrack(uri, fileName, size)
+            return createFallbackTrack(uri, fileName, size, file.lastModified)
         }
 
         val processedArtist = splitAndJoin(rawArtist, artistSeparators)
@@ -354,7 +356,8 @@ class LocalAudioScanner @Inject constructor(
             format = fileName.substringAfterLast('.', "MP3").uppercase(),
             path = uri.toString(),
             size = size,
-            albumArtPath = null
+            albumArtPath = null,
+            dateAdded = file.lastModified
         )
     }
 
@@ -381,7 +384,7 @@ class LocalAudioScanner @Inject constructor(
         return result.map { it.trim() }.filter { it.isNotEmpty() }.joinToString("; ")
     }
 
-    private fun createFallbackTrack(uri: Uri, fileName: String, size: Long = 0): TrackEntity {
+    private fun createFallbackTrack(uri: Uri, fileName: String, size: Long, lastModified: Long): TrackEntity {
         val format = fileName.substringAfterLast('.', "MP3").uppercase()
         return TrackEntity(
             title = fileName.substringBeforeLast('.'),
@@ -400,7 +403,8 @@ class LocalAudioScanner @Inject constructor(
             format = format,
             path = uri.toString(),
             size = size,
-            albumArtPath = null
+            albumArtPath = null,
+            dateAdded = lastModified
         )
     }
 

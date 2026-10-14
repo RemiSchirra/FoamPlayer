@@ -12,6 +12,10 @@ import com.foamplayer.app.constants.AllNavBarScreenItems
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
 import com.foamplayer.app.constants.DefaultNavBarScreenItems
 import com.foamplayer.app.constants.DefaultNavBarSecondaryOrder
+import com.foamplayer.app.constants.DefaultHomeSectionOrder
+import com.foamplayer.app.constants.DefaultEnabledHomeSections
+import com.foamplayer.app.constants.HomeSection
+import com.foamplayer.app.constants.deserializeHomeSectionOrder
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavBarItem
@@ -26,10 +30,9 @@ import kotlin.math.pow
 enum class FoamIconStyle(val label: String) {
     SOLID("Solid"),
     OUTLINE("Outline"),
-    FLAT("Flat")
+    FLAT("Flat"),
 }
 
-/** Scrolling effect applied to overflowing titles in the full player. */
 enum class MarqueeMode(val label: String) {
     PING_PONG("Ping Pong"),
     INFINITE("Infinite")
@@ -133,6 +136,13 @@ data class AppSettings(
     val navBarPrimaryEnabled: Set<NavBarItem> = DefaultNavBarScreenItems.toSet(),
     val navBarSecondaryOrder: List<NavBarItem> = DefaultNavBarSecondaryOrder,
     val navBarSecondaryEnabled: Set<NavBarItem> = setOf(NavBarItem.STATS),
+    /**
+     * Home page sections in the user's configured order, and which of them are
+     * shown (Settings > User interface > Home). The Home screen renders
+     * [homeSections] in order, skipping disabled ones.
+     */
+    val homeSectionOrder: List<HomeSection> = DefaultHomeSectionOrder,
+    val enabledHomeSections: Set<HomeSection> = DefaultEnabledHomeSections,
     /** Per-view media list density; views missing from the map fall back to [MediaDensity.ROW_NORMAL]. */
     val mediaDensities: Map<MediaListView, MediaDensity> = emptyMap(),
     /** Per-view media list sort (organisation modal); views missing from the map use [defaultSortMode]. */
@@ -176,6 +186,10 @@ data class AppSettings(
     /** Enabled items of the second bar (the row the "more" button reveals). */
     val secondaryNavBarItems: List<NavBarItem> get() = navBarSecondaryOrder.filter { it in navBarSecondaryEnabled }
 
+    /** The [HomeSection]s shown on the Home page, in the user's configured order. */
+    val homeSections: List<HomeSection>
+        get() = homeSectionOrder.filter { it in enabledHomeSections }
+
     /** The [MediaDensity] remembered by [view]; every view starts as the classic row. */
     fun mediaDensity(view: MediaListView): MediaDensity = mediaDensities[view] ?: MediaDensity.ROW_NORMAL
 
@@ -217,6 +231,10 @@ data class AppSettings(
             } else {
                 primaryEnabled + NavBarItem.SETTINGS
             }
+
+        // At least one Home section must remain, so the page never goes blank.
+        val finalEnabledSections =
+            if (enabledHomeSections.isEmpty()) setOf(HomeSection.RANDOM_TRACKS) else enabledHomeSections
 
         return copy(
             libraryFolders = libraryFolders.map(String::trim).filter(String::isNotEmpty).toSet(),

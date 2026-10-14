@@ -25,6 +25,7 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsNavBar : Screen("settings/ui/navbar", "Navigation Bar Settings")
     object SettingsBackground : Screen("settings/ui/background", "Background Settings")
     object SettingsUICollections : Screen("settings/ui/collections", "Collection Layouts")
+    object SettingsUIHome : Screen("settings/ui/home", "Home Layout")
     object SettingsLibrary : Screen("settings/library", "Library Settings")
     object SettingsLyrics : Screen("settings/lyrics", "Lyrics Settings")
     object SettingsLyricsManager : Screen("settings/lyrics/manager", "Lyrics Manager")
@@ -94,8 +95,12 @@ sealed class Screen(val route: String, val title: String) {
     object HomeSeeAllPlaylists : Screen("browse/home/playlists", "Recommended Playlists")
     object HomeSeeAllAlbums : Screen("browse/home/albums", "Recommended Albums")
     object HomeSeeAllRecentTracks : Screen("browse/home/recent", "Recent Listens")
-    object HomeSeeAllFavoriteTracks : Screen("browse/home/favorites", "Old Favorites")
+    object HomeSeeAllFavoriteTracks : Screen("browse/home/favorite-tracks", "Favorite Tracks")
+    object HomeSeeAllTopTracks : Screen("browse/home/favorites", "Old Favorites")
+    object HomeSeeAllOldFavoriteAlbums : Screen("browse/home/old-favorite-albums", "Old Favorite Albums")
     object HomeSeeAllArtists : Screen("browse/home/artists", "Favorite Artists")
+    object HomeSeeAllRecentlyAddedAlbums : Screen("browse/home/recently-added-albums", "Recently Added Albums")
+    object HomeSeeAllRecentlyAddedArtists : Screen("browse/home/recently-added-artists", "Recently Added Artists")
     object BrowseGenreDetail : Screen("browse/genre/{genre}", "Genre") {
         fun createRoute(genre: String) = "browse/genre/${Uri.encode(genre)}"
     }

@@ -108,10 +108,14 @@ import com.foamplayer.app.ui.screens.browse.GenreTracksScreen
 import com.foamplayer.app.ui.screens.browse.YearTracksScreen
 import com.foamplayer.app.ui.screens.browse.YearsBrowseScreen
 import com.foamplayer.app.ui.screens.home.FavoriteArtistsSeeAllScreen
+import com.foamplayer.app.ui.screens.home.FavoriteTracksSeeAllScreen
 import com.foamplayer.app.ui.screens.home.HomeScreen
 import com.foamplayer.app.ui.screens.home.HomeViewModel
+import com.foamplayer.app.ui.screens.home.OldFavoriteAlbumsSeeAllScreen
 import com.foamplayer.app.ui.screens.home.OldFavoritesSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecentTracksSeeAllScreen
+import com.foamplayer.app.ui.screens.home.RecentlyAddedAlbumsSeeAllScreen
+import com.foamplayer.app.ui.screens.home.RecentlyAddedArtistsSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecommendedAlbumsSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecommendedPlaylistsSeeAllScreen
 import com.foamplayer.app.ui.screens.onboarding.OnboardingScreen
@@ -144,6 +148,7 @@ import com.foamplayer.app.ui.screens.settings.BackgroundSettingsScreen
 import com.foamplayer.app.ui.screens.settings.CollectionsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.EqualizerSettingsScreen
+import com.foamplayer.app.ui.screens.settings.HomeSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.LyricsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.MiscSettingsScreen
@@ -1291,8 +1296,13 @@ fun FoamNavHost(
                                             onTrackClick = { track -> playTrackFromList(listOf(track), 0) },
                                             onSeeAllAlbums = { navController.navigate(Screen.HomeSeeAllAlbums.route) },
                                             onSeeAllRecent = { navController.navigate(Screen.HomeSeeAllRecentTracks.route) },
-                                            onSeeAllFavorites = { navController.navigate(Screen.HomeSeeAllFavoriteTracks.route) },
+                                            onSeeAllFavorites = { navController.navigate(Screen.HomeSeeAllTopTracks.route) },
                                             onSeeAllArtists = { navController.navigate(Screen.HomeSeeAllArtists.route) },
+                                            onSeeAllFavoriteTracks = { navController.navigate(Screen.HomeSeeAllFavoriteTracks.route) },
+                                            onSeeAllOldFavoriteAlbums = { navController.navigate(Screen.HomeSeeAllOldFavoriteAlbums.route) },
+                                            onSeeAllRecentlyAddedAlbums = { navController.navigate(Screen.HomeSeeAllRecentlyAddedAlbums.route) },
+                                            onSeeAllRecentlyAddedArtists = { navController.navigate(Screen.HomeSeeAllRecentlyAddedArtists.route) },
+                                            sections = playerSettings.homeSections,
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
@@ -1369,7 +1379,7 @@ fun FoamNavHost(
                                         )
                                     }
                                     composable(Screen.HomeSeeAllFavoriteTracks.route) {
-                                        OldFavoritesSeeAllScreen(
+                                        FavoriteTracksSeeAllScreen(
                                             onTrackClick = { tracks, index ->
                                                 playTrackFromList(tracks, index)
                                             },
@@ -1385,6 +1395,76 @@ fun FoamNavHost(
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
                                             heroLayout = heroLayoutFor(CollectionHeroTarget.Default),
+                                            viewModel = homeViewModel
+                                        )
+                                    }
+                                    composable(Screen.HomeSeeAllTopTracks.route) {
+                                        OldFavoritesSeeAllScreen(
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index)
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            activeTrackId = activeTrackId,
+                                            density = densityFor(MediaListView.HOME_SEE_ALL_TOP_TRACKS),
+                                            onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_TOP_TRACKS, it) },
+                                            sortMode = sortModeFor(MediaListView.HOME_SEE_ALL_TOP_TRACKS),
+                                            onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_TOP_TRACKS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_TOP_TRACKS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_TOP_TRACKS, it) },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Default),
+                                            viewModel = homeViewModel
+                                        )
+                                    }
+                                    composable(Screen.HomeSeeAllOldFavoriteAlbums.route) {
+                                        OldFavoriteAlbumsSeeAllScreen(
+                                            onAlbumClick = { album ->
+                                                activeSharedCollection = sharedCollectionTag("album", album.album)
+                                                navController.navigate(
+                                                    Screen.AlbumDetail.createRoute(
+                                                        album.album,
+                                                        album.albumArtPath,
+                                                        album.artist
+                                                    )
+                                                )
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this,
+                                            activeCollectionId = activeCollectionId,
+                                            density = densityFor(MediaListView.HOME_SEE_ALL_OLD_FAVORITE_ALBUMS),
+                                            onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_OLD_FAVORITE_ALBUMS, it) },
+                                            sortMode = sortModeFor(MediaListView.HOME_SEE_ALL_OLD_FAVORITE_ALBUMS),
+                                            onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_OLD_FAVORITE_ALBUMS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_OLD_FAVORITE_ALBUMS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_OLD_FAVORITE_ALBUMS, it) },
+                                            viewModel = homeViewModel
+                                        )
+                                    }
+                                    composable(Screen.HomeSeeAllRecentlyAddedAlbums.route) {
+                                        RecentlyAddedAlbumsSeeAllScreen(
+                                            onAlbumClick = { album ->
+                                                activeSharedCollection = sharedCollectionTag("album", album.album)
+                                                navController.navigate(
+                                                    Screen.AlbumDetail.createRoute(
+                                                        album.album,
+                                                        album.albumArtPath,
+                                                        album.artist
+                                                    )
+                                                )
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this,
+                                            activeCollectionId = activeCollectionId,
+                                            density = densityFor(MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ALBUMS),
+                                            onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ALBUMS, it) },
+                                            sortMode = sortModeFor(MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ALBUMS),
+                                            onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ALBUMS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ALBUMS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ALBUMS, it) },
                                             viewModel = homeViewModel
                                         )
                                     }
@@ -1406,6 +1486,27 @@ fun FoamNavHost(
                                             onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_ARTISTS, it) },
                                             sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_ARTISTS),
                                             onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_ARTISTS, it) },
+                                            viewModel = homeViewModel
+                                        )
+                                    }
+                                    composable(Screen.HomeSeeAllRecentlyAddedArtists.route) {
+                                        RecentlyAddedArtistsSeeAllScreen(
+                                            onArtistClick = { artist, image, imageIsEmbeddedArt ->
+                                                activeSharedCollection = sharedCollectionTag("artist", artist)
+                                                navController.navigate(
+                                                    Screen.ArtistDetail.createRoute(artist, image, imageIsEmbeddedArt)
+                                                )
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this,
+                                            activeCollectionId = activeCollectionId,
+                                            density = densityFor(MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ARTISTS),
+                                            onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ARTISTS, it) },
+                                            sortMode = sortModeFor(MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ARTISTS),
+                                            onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ARTISTS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ARTISTS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ARTISTS, it) },
                                             viewModel = homeViewModel
                                         )
                                     }
@@ -1804,6 +1905,7 @@ fun FoamNavHost(
                                             onNavigateToNavBar = { navController.navigate(Screen.SettingsNavBar.route) },
                                             onNavigateToBackground = { navController.navigate(Screen.SettingsBackground.route) },
                                             onNavigateToCollections = { navController.navigate(Screen.SettingsUICollections.route) },
+                                            onNavigateToHome = { navController.navigate(Screen.SettingsUIHome.route) }
                                         )
                                     }
                                     composable(Screen.SettingsColors.route) {
@@ -1820,6 +1922,9 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.SettingsUICollections.route) {
                                         CollectionsSettingsScreen(onBack = { navController.popBackStack() })
+                                    }
+                                    composable(Screen.SettingsUIHome.route) {
+                                        HomeSettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     composable(Screen.SettingsLyricsManager.route) {
                                         LyricsManagerScreen(

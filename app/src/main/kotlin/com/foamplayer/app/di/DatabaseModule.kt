@@ -28,6 +28,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "foam_player.db"
         )
+            .addMigrations(AppDatabase.MIGRATION_10_11)
             .fallbackToDestructiveMigration()
             .build()
     }

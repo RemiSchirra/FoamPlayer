@@ -2,6 +2,7 @@ package com.foamplayer.app.constants
 
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.foamplayer.app.R
 
 /**
  * Density of the app's media lists, compact to spacious. ROW_* render the shared
@@ -53,6 +54,10 @@ enum class MediaListView {
     HOME_SEE_ALL_RECENT_TRACKS,
     HOME_SEE_ALL_FAVORITE_TRACKS,
     HOME_SEE_ALL_ARTISTS,
+    HOME_SEE_ALL_TOP_TRACKS,
+    HOME_SEE_ALL_OLD_FAVORITE_ALBUMS,
+    HOME_SEE_ALL_RECENTLY_ADDED_ALBUMS,
+    HOME_SEE_ALL_RECENTLY_ADDED_ARTISTS,
     STATS_SEE_ALL_TRACKS,
     STATS_SEE_ALL_ARTISTS,
     STATS_SEE_ALL_ALBUMS,
@@ -106,11 +111,55 @@ fun MediaListView.defaultSortMode(): CollectionSortMode = when (this) {
     MediaListView.BROWSE_YEAR_TRACKS -> CollectionSortMode.ALBUM
     MediaListView.HOME_SEE_ALL_RECENT_TRACKS -> CollectionSortMode.LISTEN_DATE
     MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS,
+    MediaListView.HOME_SEE_ALL_TOP_TRACKS,
     MediaListView.STATS_SEE_ALL_TRACKS -> CollectionSortMode.LISTEN_COUNT
     MediaListView.HOME_SEE_ALL_PLAYLISTS,
     MediaListView.HOME_SEE_ALL_ALBUMS,
-    MediaListView.HOME_SEE_ALL_ARTISTS -> CollectionSortMode.RECOMMENDED
+    MediaListView.HOME_SEE_ALL_ARTISTS,
+    MediaListView.HOME_SEE_ALL_OLD_FAVORITE_ALBUMS,
+    MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ALBUMS,
+    MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ARTISTS -> CollectionSortMode.RECOMMENDED
     else -> CollectionSortMode.NAME
+}
+
+/**
+ * One reorderable/toggleable Home page section. [seeAll] says whether the row
+ * carries a "See all" arrow to its full list (the random sections reshuffle
+ * instead); [enabledByDefault] is the out-of-box visibility.
+ */
+enum class HomeSection(val labelRes: Int, val seeAll: Boolean, val enabledByDefault: Boolean) {
+    RANDOM_TRACKS(R.string.home_row_random_tracks, false, true),
+    RANDOM_ALBUMS(R.string.home_row_random_albums, false, false),
+    RANDOM_ARTISTS(R.string.home_row_random_artists, false, false),
+    RECOMMENDED_PLAYLISTS(R.string.home_row_recommended_playlists, true, true),
+    RECOMMENDED_ALBUMS(R.string.home_row_recommended_albums, true, true),
+    RECENT_TRACKS(R.string.home_row_recent_listens, true, true),
+    FAVORITE_TRACKS(R.string.home_row_favorite_tracks, true, true),
+    OLD_FAVORITES(R.string.home_row_old_favorites, true, true),
+    OLD_FAVORITE_ALBUMS(R.string.home_row_old_favorite_albums, true, false),
+    FAVORITE_ARTISTS(R.string.home_row_favorite_artists, true, true),
+    RECENTLY_ADDED_ALBUMS(R.string.home_row_recently_added_albums, true, false),
+    RECENTLY_ADDED_ARTISTS(R.string.home_row_recently_added_artists, true, false),
+}
+
+/** Out-of-box order of the Home page's sections. */
+val DefaultHomeSectionOrder = HomeSection.entries.toList()
+
+/** Home sections shown before the user customizes anything. */
+val DefaultEnabledHomeSections = HomeSection.entries.filter { it.enabledByDefault }.toSet()
+
+/** Parses a comma-separated Home section order, appending any missing defaults at the end. */
+fun deserializeHomeSectionOrder(orderStr: String?): List<HomeSection> {
+    if (orderStr.isNullOrBlank()) return DefaultHomeSectionOrder
+
+    val parsed =
+        orderStr
+            .split(",")
+            .mapNotNull { name -> HomeSection.entries.find { it.name == name.trim() } }
+            .distinct()
+
+    val missing = DefaultHomeSectionOrder.filterNot { it in parsed }
+    return parsed + missing
 }
 
 enum class PreferredLyricsProvider {

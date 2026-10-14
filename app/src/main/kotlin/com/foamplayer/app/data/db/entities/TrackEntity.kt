@@ -1,5 +1,6 @@
 package com.foamplayer.app.data.db.entities
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -42,5 +43,9 @@ data class TrackEntity(
     /** User rating: -1 = dislike, 0 = not noted, 1 = like, 2 = super like. */
     val score: Int = 0,
     /** User-set flag: the track has no lyrics (the lyrics view shows a music note instead). */
-    val instrumental: Boolean = false
+    val instrumental: Boolean = false,
+    /**
+     * File's last-modified timestamp (epoch ms). 0 when unknown.
+     */
+    @ColumnInfo(defaultValue = "0") val dateAdded: Long = 0
 )

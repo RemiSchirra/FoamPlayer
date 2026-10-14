@@ -6,6 +6,7 @@ import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.LyricsSource
+import com.foamplayer.app.constants.HomeSection
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.data.backup.BackupFeature
 import com.foamplayer.app.data.backup.BackupResult
@@ -203,6 +204,16 @@ class SettingsViewModel @Inject constructor(
         if (item == NavBarItem.SETTINGS && !enabled && item !in current.navBarPrimaryEnabled) return@launch
         val newEnabled = if (enabled) current.navBarSecondaryEnabled + item else current.navBarSecondaryEnabled - item
         settingsRepository.setNavBarSecondaryEnabled(newEnabled)
+    }
+
+    /** Sets the Home page's section order (Settings > UI > Home). */
+    fun setHomeSectionOrder(order: List<HomeSection>) = launch {
+        settingsRepository.setHomeSectionOrder(order)
+    }
+
+    /** Enables or disables one Home page section. */
+    fun setHomeSectionEnabled(section: HomeSection, enabled: Boolean) = launch {
+        settingsRepository.setHomeSectionEnabled(section, enabled)
     }
 
     // ----------------------------- developer tools

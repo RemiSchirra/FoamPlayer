@@ -3,6 +3,7 @@ package com.foamplayer.app.ui.screens.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.data.db.dao.AlbumRecommendation
+import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.dao.PlaylistRecommendation
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -12,6 +13,7 @@ import com.foamplayer.app.data.scanner.ArtistCover
 import com.foamplayer.app.data.scanner.ArtistCoverProvider
 import com.foamplayer.app.data.scanner.PlaylistCover
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,7 +25,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
 
 /** An artist plus the total plays of its songs (Home "Favorite artists" row). */
 data class FavoriteArtist(
@@ -32,9 +33,9 @@ data class FavoriteArtist(
 )
 
 /**
- * Data for the Home screen's five rows and their "See all" pages. Every flow
+ * Data for the Home screen's rows and their "See all" pages. Every flow
  * holds the full sorted list (DAO-capped at 50); the rows render the first
- * five entries and the see-all pages all fifty, so both ends of a "See all"
+ * few entries and the see-all pages all fifty, so both ends of a "See all"
  * always agree on the ordering.
  */
 @HiltViewModel
@@ -69,9 +70,30 @@ class HomeViewModel @Inject constructor(
         trackRepository.getRecentlyPlayed()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Tracks ranked by aggregate play count + likes, any last-played date. */
+    val favoriteTracks: StateFlow<List<TrackEntity>> =
+        trackRepository.getFavoriteTracks()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     /** Long-standing favorites: listening history whose last listen is older than 14 days. */
     val oldFavoriteTracks: StateFlow<List<TrackEntity>> =
         trackRepository.getOldFavorites(System.currentTimeMillis() - OldFavoritesCutoffMs)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Albums whose latest listen is older than 14 days, ranked by aggregate play/like. */
+    val oldFavoriteAlbums: StateFlow<List<AlbumRecommendation>> =
+        trackRepository.getOldFavoriteAlbums(System.currentTimeMillis() - OldFavoritesCutoffMs)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Albums newest-first by the latest file modification date among their tracks. */
+    val recentlyAddedAlbums: StateFlow<List<AlbumRecommendation>> =
+        trackRepository.getRecentlyAddedAlbums()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Credited artists newest-first by the latest file modification date among their tracks. */
+    val recentlyAddedArtists: StateFlow<List<FavoriteArtist>> =
+        trackRepository.getRecentlyAddedArtistRows()
+            .map { rows -> rows.map { FavoriteArtist(it.artist, it.totalPlayCount) } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
@@ -107,28 +129,71 @@ class HomeViewModel @Inject constructor(
         artistCoverProvider.coversFlow(favoriteArtists.map { artists -> artists.map { it.name } })
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    /** Library snapshot backing the "Start playing" grid. */
+    /** Resolved pictures per recently-added artist name (same resolution chain). */
+    val recentlyAddedArtistImages: StateFlow<Map<String, ArtistCover>> =
+        artistCoverProvider.coversFlow(recentlyAddedArtists.map { artists -> artists.map { it.name } })
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    /** Library snapshot backing the random sections' grids. */
     private var libraryTracks: List<TrackEntity> = emptyList()
 
     private val _randomTracks = MutableStateFlow<List<TrackEntity>>(emptyList())
 
-    /** The "Start playing" grid: six random songs, repicked by [reshuffleRandomTracks]. */
+    /** The "Random tracks" grid: six random songs, repicked by [reshuffleRandomTracks]. */
     val randomTracks: StateFlow<List<TrackEntity>> = _randomTracks.asStateFlow()
+
+    private val _randomAlbums = MutableStateFlow<List<AlbumSearchResult>>(emptyList())
+
+    /** The "Random albums" grid: six random albums, repicked by [reshuffleRandomAlbums]. */
+    val randomAlbums: StateFlow<List<AlbumSearchResult>> = _randomAlbums.asStateFlow()
+
+    private val _randomArtists = MutableStateFlow<List<FavoriteArtist>>(emptyList())
+
+    /** The "Random artists" grid: six random artists, repicked by [reshuffleRandomArtists]. */
+    val randomArtists: StateFlow<List<FavoriteArtist>> = _randomArtists.asStateFlow()
 
     init {
         viewModelScope.launch {
             trackRepository.getAllTracks().collect { tracks ->
                 libraryTracks = tracks
-                // First load seeds the grid; later library changes don't
-                // silently replace the songs the user is looking at.
+                // First load seeds the grids; later library changes don't
+                // silently replace the items the user is looking at.
                 if (_randomTracks.value.isEmpty()) reshuffleRandomTracks()
+                if (_randomAlbums.value.isEmpty()) reshuffleRandomAlbums()
+                if (_randomArtists.value.isEmpty()) reshuffleRandomArtists()
             }
         }
     }
 
-    /** Repicks the grid's six songs from the whole library. */
+    /** Repicks the "Random tracks" grid's six songs from the whole library. */
     fun reshuffleRandomTracks() {
         _randomTracks.value = libraryTracks.shuffled().take(StartPlayingTrackCount)
+    }
+
+    /** Repicks the "Random albums" grid's six albums from the whole library. */
+    fun reshuffleRandomAlbums() {
+        _randomAlbums.value = libraryTracks.groupBy { it.album }
+            .entries
+            .shuffled()
+            .take(StartPlayingTrackCount)
+            .map { (album, tracks) ->
+                AlbumSearchResult(
+                    album = album,
+                    artist = tracks.first().albumArtist ?: tracks.first().artist,
+                    albumArtPath = tracks.firstOrNull { it.albumArtPath != null }?.albumArtPath
+                )
+            }
+    }
+
+    /** Repicks the "Random artists" grid's six artists from the whole library. */
+    fun reshuffleRandomArtists() {
+        val artists = libraryTracks.flatMap { track ->
+            (track.artist.split("; ") + track.albumArtist.orEmpty().split("; "))
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+        }.distinct()
+        _randomArtists.value = artists.shuffled().take(StartPlayingTrackCount)
+            .map { name -> FavoriteArtist(name, 0) }
     }
 
     /** One album's tracks in disc/track order. */
@@ -143,10 +208,10 @@ class HomeViewModel @Inject constructor(
     }
 
     companion object {
-        /** Listens older than this count as "long-standing" for the Old favorites row (14 days). */
+        /** Listens older than this count as "long-standing" for the Old favorites rows (14 days). */
         private const val OldFavoritesCutoffMs = 14L * 24 * 60 * 60 * 1000
 
-        /** Songs shown in the "Start playing" grid (2 columns x 3 rows). */
+        /** Songs shown in the "Random tracks" grid (2 columns x 3 rows). */
         const val StartPlayingTrackCount = 6
     }
 }

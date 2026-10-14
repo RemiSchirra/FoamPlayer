@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 import com.foamplayer.app.data.db.AppDatabase
 import com.foamplayer.app.data.db.dao.AlbumRecommendation
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
+import com.foamplayer.app.data.db.dao.ArtistAddRow
 import com.foamplayer.app.data.db.dao.CachedLyricsDao
 import com.foamplayer.app.data.db.dao.DailyPlayBucket
 import com.foamplayer.app.data.db.dao.GenrePlayRow
@@ -212,11 +213,26 @@ class TrackRepository @Inject constructor(
     /** Most recently listened tracks (Home "Recent listens" row). */
     fun getRecentlyPlayed(): Flow<List<TrackEntity>> = trackDao.getRecentlyPlayed()
 
+    /** Home "Favorite tracks": aggregate play count + likes, any last-played date. */
+    fun getFavoriteTracks(): Flow<List<TrackEntity>> = trackDao.getFavoriteTracks()
+
     /** Long-standing favorites (Home "Old favorites" row); [cutoff] bounds what counts as "not recent". */
     fun getOldFavorites(cutoff: Long): Flow<List<TrackEntity>> = trackDao.getOldFavorites(cutoff)
 
     /** Albums ranked by the aggregate play count + likes of their tracks (Home row + see-all page). */
     fun getRecommendedAlbums(): Flow<List<AlbumRecommendation>> = trackDao.getRecommendedAlbums()
+
+    /**
+     * Albums whose latest listen is older than [cutoff], ranked by aggregate
+     * play count + likes (Home "Old favorite albums" row).
+     */
+    fun getOldFavoriteAlbums(cutoff: Long): Flow<List<AlbumRecommendation>> = trackDao.getOldFavoriteAlbums(cutoff)
+
+    /** Albums newest-first by the latest file modification date among their tracks. */
+    fun getRecentlyAddedAlbums(): Flow<List<AlbumRecommendation>> = trackDao.getRecentlyAddedAlbums()
+
+    /** Credited artists newest-first by the latest file modification date among their tracks. */
+    fun getRecentlyAddedArtistRows(): Flow<List<ArtistAddRow>> = trackDao.getRecentlyAddedArtistRows()
 
     /** Rescans the configured library folders. */
     suspend fun rescanLibrary() {
