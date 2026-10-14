@@ -138,7 +138,7 @@ enum class HomeSection(val labelRes: Int, val seeAll: Boolean, val enabledByDefa
     OLD_FAVORITES(R.string.home_row_old_favorites, true, true),
     OLD_FAVORITE_ALBUMS(R.string.home_row_old_favorite_albums, true, false),
     FAVORITE_ARTISTS(R.string.home_row_favorite_artists, true, true),
-    RECENTLY_ADDED_ALBUMS(R.string.home_row_recently_added_albums, true, false),
+    RECENTLY_ADDED_ALBUMS(R.string.home_row_recently_added_albums, true, true),
     RECENTLY_ADDED_ARTISTS(R.string.home_row_recently_added_artists, true, false),
 }
 

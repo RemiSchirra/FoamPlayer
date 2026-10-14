@@ -9,14 +9,17 @@ import com.foamplayer.app.audio.dsp.GraphicEqSettings
 import com.foamplayer.app.audio.dsp.ParametricEqSettings
 import com.foamplayer.app.audio.dsp.PresetKind
 import com.foamplayer.app.constants.CollectionHeroLayout
+import com.foamplayer.app.constants.CollectionSortMode
+import com.foamplayer.app.constants.DefaultEnabledHomeSections
+import com.foamplayer.app.constants.DefaultHomeSectionOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.DefaultNavBarScreenItems
+import com.foamplayer.app.constants.HomeSection
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
-import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.FoamIconStyle
@@ -90,6 +93,8 @@ object BackupJson {
         put("navBarPrimaryEnabled", toNamesArray(settings.navBarPrimaryEnabled))
         put("navBarSecondaryOrder", toNamesArray(settings.navBarSecondaryOrder))
         put("navBarSecondaryEnabled", toNamesArray(settings.navBarSecondaryEnabled))
+        put("homeSectionOrder", toNamesArray(settings.homeSectionOrder))
+        put("enabledHomeSections", toNamesArray(settings.enabledHomeSections))
         put("mediaDensities", enumMapToJson(settings.mediaDensities))
         put("mediaSortModes", enumMapToJson(settings.mediaSortModes))
         put("mediaSortInverted", toNamesArray(settings.mediaSortInverted))
@@ -194,6 +199,12 @@ object BackupJson {
         navBarSecondaryEnabled = decodeEnumSet(
             json.optJSONArray("navBarSecondaryEnabled"),
             setOf(NavBarItem.STATS)
+        ),
+        homeSectionOrder = decodeEnumList<HomeSection>(json.optJSONArray("homeSectionOrder"))
+            .ifEmpty { DefaultHomeSectionOrder },
+        enabledHomeSections = decodeEnumSet(
+            json.optJSONArray("enabledHomeSections"),
+            DefaultEnabledHomeSections
         ),
         mediaDensities = decodeEnumMap<MediaListView, MediaDensity>(json.optJSONObject("mediaDensities")),
         mediaSortModes = decodeEnumMap<MediaListView, CollectionSortMode>(json.optJSONObject("mediaSortModes")),
