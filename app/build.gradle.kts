@@ -1,3 +1,5 @@
+import com.android.build.api.variant.FilterConfiguration
+import com.android.build.api.variant.impl.VariantOutputImpl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -67,6 +69,22 @@ android {
             excludes += "META-INF/LICENSE"
             excludes += "META-INF/NOTICE"
             excludes += "META-INF/*.kotlin_module"
+        }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        if (variant.buildType == "release") {
+            variant.outputs.forEach { output ->
+                val abi = output.filters
+                    .find { it.filterType == FilterConfiguration.FilterType.ABI }
+                    ?.identifier ?: "universal"
+
+                (output as VariantOutputImpl).outputFileName.set(
+                    output.versionName.map { "foamplayer-$it-$abi.apk" }
+                )
+            }
         }
     }
 }
