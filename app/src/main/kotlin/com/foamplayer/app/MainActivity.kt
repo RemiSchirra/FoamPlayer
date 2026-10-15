@@ -66,6 +66,9 @@ class MainActivity : AppCompatActivity() {
 
         /** Inactivity after which the lock-display session closes (Fast lock). */
         const val FAST_LOCK_TIMEOUT_MS = 5_000L
+
+        /** Grace period for the keyguard state to settle after a wake (see [onLockDisplayLaunch]). */
+        const val KEYGUARD_SETTLE_MS = 400L
     }
 
     /**
@@ -140,8 +143,13 @@ class MainActivity : AppCompatActivity() {
      * call it), false while the app is the surface they were using. Decides
      * whether ending the lock-display session removes the task (their app
      * comes back) or keeps it (the app is what they were using).
+     *
+     * Delegates to the process-wide [AppForegroundState] so the service can read
+     * it before deciding whether to raise the lock-screen player.
      */
-    private var leftAppByUser = false
+    private var leftAppByUser: Boolean
+        get() = !AppForegroundState.isInForeground
+        set(value) { AppForegroundState.isInForeground = !value }
 
     /** Marks the resume that follows a lock-display launch (not a user entry). */
     private var lockLaunchInFlight = false
@@ -149,11 +157,39 @@ class MainActivity : AppCompatActivity() {
     /** Active Fast lock countdown; null while the timer is not running. */
     private var fastLockJob: Job? = null
 
+    /**
+     * True while the window is pre-flagged show-when-locked ahead of a wake.
+     * Armed on ACTION_SCREEN_OFF (the app is the foreground surface, a song is
+     * playing and the option is on) so the window is ALREADY showing over the
+     * keyguard the instant the screen turns on -- instead of being started by
+     * the service after the broadcast, which is what read as a delay. Cleared
+     * whenever the display session closes.
+     */
+    private var lockDisplayPreArmed = false
+
+    private val screenStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != Intent.ACTION_SCREEN_OFF) return
+            // Arm for the coming wake while the screen is off, so the window is
+            // in place before the screen turns on. Gated on the same conditions
+            // the service uses (foreground surface, playing, option on).
+            if (AppForegroundState.isInForeground &&
+                settingsViewModel.settings.value.displayOnLockScreen &&
+                playerViewModel.hasCurrentTrack.value &&
+                (playerViewModel.isPlaying.value || playerViewModel.isPlaybackRequested.value)
+            ) {
+                lockDisplayPreArmed = true
+                applyShowWhenLocked()
+            }
+        }
+    }
+
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != Intent.ACTION_USER_PRESENT) return
             val sessionWasActive = lockDisplaySessionActive
             lockDisplaySessionActive = false
+            lockDisplayPreArmed = false
             cancelFastLock()
             applyShowWhenLocked()
             // Unlocking hands the screen back to whatever the user was doing
@@ -165,11 +201,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Mirrors the display state onto the window. The session opens after the
+     * service verified the keyguard / setting / track, and the pre-arm is set on
+     * screen-off while the same conditions hold, so either flag marks the window
+     * show-when-locked -- immediately, without waiting for the asynchronously
+     * loaded settings/track flows (which would leave the first frames behind the
+     * keyguard and read as a delay).
+     */
     private fun applyShowWhenLocked() {
-        val show = lockDisplaySessionActive &&
-                settingsViewModel.settings.value.displayOnLockScreen &&
-                playerViewModel.hasCurrentTrack.value
-        setShowWhenLocked(show)
+        setShowWhenLocked(lockDisplaySessionActive || lockDisplayPreArmed)
     }
 
     /** True while the keyguard is showing (device locked). */
@@ -194,23 +235,22 @@ class MainActivity : AppCompatActivity() {
 
     /** Common path for a screen-event launch: opens (or re-arms) the session. */
     private fun onLockDisplayLaunch() {
-        // The service checks the keyguard BEFORE starting this activity, but
-        // the intent is delivered later: a cold start (the service reviving
-        // the process) or a warm onNewIntent can land a beat after the user
-        // dismissed the keyguard. With no session up, such a delivery would
-        // put the app in front of whatever the user is doing -- drop the task
-        // so their app comes back (this is what used to read as "the app
-        // closes to the home page while we're already unlocked"). With a
-        // session up, the player was already showing (a screen-off keeps it)
-        // and the delivery is only a re-arm.
-        if (!isDeviceLocked()) {
-            if (!lockDisplaySessionActive && leftAppByUser) dismissLockDisplayTask()
-            return
-        }
         lockLaunchInFlight = true
+        lockDisplayPreArmed = false
         lockDisplaySessionActive = true
         applyShowWhenLocked()
         restartFastLock()
+        if (!isDeviceLocked()) {
+            lifecycleScope.launch {
+                delay(KEYGUARD_SETTLE_MS)
+                if (lockDisplaySessionActive && !isDeviceLocked()) {
+                    lockDisplaySessionActive = false
+                    cancelFastLock()
+                    applyShowWhenLocked()
+                    if (leftAppByUser) dismissLockDisplayTask()
+                }
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -224,6 +264,12 @@ class MainActivity : AppCompatActivity() {
             IntentFilter(Intent.ACTION_USER_PRESENT),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        ContextCompat.registerReceiver(
+            this,
+            screenStateReceiver,
+            IntentFilter(Intent.ACTION_SCREEN_OFF),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         // The initial intent is handled HERE, before the window draws: a cold
         // start straight over the keyguard (the service revived the process)
         // must show over the lock screen from the first frame, and the
@@ -231,10 +277,10 @@ class MainActivity : AppCompatActivity() {
         // only covers the warm start.
         handleIntent(intent)
         if (intent?.getBooleanExtra(LockDisplayLaunch, false) == true) {
-            // A cold start with the launch extra is always service-initiated:
-            // this activity did not exist, so the user's foreground app before
-            // the screen locked was something else.
-            leftAppByUser = true
+            // A cold start with the launch extra is service-initiated: the
+            // service only sends it while the app is in the foreground (see
+            // [AppForegroundState]), so [leftAppByUser] already holds the right
+            // value and must not be clobbered here.
             onLockDisplayLaunch()
         }
         // Permissions are requested on onboarding; afterwards they're auto-requested once.
@@ -252,9 +298,10 @@ class MainActivity : AppCompatActivity() {
                 settingsViewModel.settings,
                 playerViewModel.hasCurrentTrack
             ) { settings, hasTrack -> settings to hasTrack }.collect { (settings, hasTrack) ->
+                val settingsLoaded = settingsViewModel.onboardingCompleted.value != null
                 if (!hasTrack) {
                     endLockDisplaySession()
-                } else if (lockDisplaySessionActive && !settings.displayOnLockScreen) {
+                } else if (settingsLoaded && lockDisplaySessionActive && !settings.displayOnLockScreen) {
                     // The display option was switched off mid-session.
                     endLockDisplaySession()
                 }
@@ -373,10 +420,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        // The user navigated away by choice (home, recents, another app).
-        // Screen-off/keyguard does NOT call this, so the flag cleanly splits
-        // "the user left the app" from "the system covered the app".
         leftAppByUser = true
+        // Pre-arm for the wake
+        if (lockDisplayPreArmed) {
+            lockDisplayPreArmed = false
+            applyShowWhenLocked()
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && !isDeviceLocked()) leftAppByUser = false
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -421,6 +475,7 @@ class MainActivity : AppCompatActivity() {
     private fun endLockDisplaySession() {
         val sessionWasActive = lockDisplaySessionActive
         lockDisplaySessionActive = false
+        lockDisplayPreArmed = false
         cancelFastLock()
         applyShowWhenLocked()
         // Clearing show-when-locked is enough for the system lock screen to
@@ -443,6 +498,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         cancelFastLock()
         runCatching { unregisterReceiver(unlockReceiver) }
+        runCatching { unregisterReceiver(screenStateReceiver) }
         super.onDestroy()
     }
 
@@ -481,6 +537,21 @@ class MainActivity : AppCompatActivity() {
 
 /** Extra on the launcher intent marking a lock-screen-display launch. */
 const val LockDisplayLaunch = "com.foamplayer.app.extra.LOCK_DISPLAY_LAUNCH"
+
+/**
+ * Process-wide foreground flag shared by [MainActivity] and
+ * [com.foamplayer.app.audio.service.PlaybackService]. True while the user's
+ * current foreground surface is this app: set on a real user entry (onResume
+ * with the keyguard down) and cleared when they navigate away
+ * (onUserLeaveHint). Screen-off neither sets nor clears it, and it survives
+ * activity recreation, so the service can tell "the app was on screen when the
+ * phone locked" (raise the lock-screen player) from "the app was in the
+ * background" (leave the system lock screen untouched).
+ */
+object AppForegroundState {
+    @Volatile
+    var isInForeground: Boolean = false
+}
 
 /** Root composable: applies theme, accent color and locale, then the nav host. */
 @Composable

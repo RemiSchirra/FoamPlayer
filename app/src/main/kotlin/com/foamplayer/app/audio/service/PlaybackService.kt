@@ -1,6 +1,5 @@
 package com.foamplayer.app.audio.service
 
-import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -19,6 +18,7 @@ import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
+import com.foamplayer.app.AppForegroundState
 import com.foamplayer.app.FoamApplication
 import com.foamplayer.app.MainActivity
 import com.foamplayer.app.R
@@ -38,7 +38,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -128,14 +127,7 @@ class PlaybackService : MediaSessionService() {
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            when (intent.action) {
-                // The keyguard state settles a beat after the screen-on
-                // broadcast; a short delay keeps the launch check from racing it.
-                Intent.ACTION_SCREEN_ON -> serviceScope.launch {
-                    delay(LOCK_ARM_DELAY_MS)
-                    showLockScreenPlayer()
-                }
-            }
+            if (intent.action == Intent.ACTION_SCREEN_ON) showLockScreenPlayer()
         }
     }
 
@@ -384,20 +376,18 @@ class PlaybackService : MediaSessionService() {
 
     /**
      * The only trigger for the lock-screen display: the screen WAKES while a
-     * song is playing and the device is locked. Screen-off never launches (the
+     * song is playing AND the app was the user's foreground surface when the
+     * phone locked ([AppForegroundState]). Screen-off never launches (the
      * session decision belongs to the wake), and once up the app stays over
      * the keyguard until an explicit close trigger in MainActivity — so
      * pausing/resuming never dismisses or re-fires it.
      */
     private fun showLockScreenPlayer() {
         if (!displayOnLockScreenEnabled) return
-        val state = audioEngine.playbackState.value
-        if (!state.isPlaying || !isKeyguardUp()) return
+        if (!AppForegroundState.isInForeground) return
+        if (!audioEngine.playbackState.value.isPlaying) return
         LockScreenPlayerLauncher.launch(this)
     }
-
-    private fun isKeyguardUp(): Boolean =
-        (getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
 
     /**
      * Cycles the current track's score: not noted -> like -> super like ->
@@ -538,7 +528,6 @@ class PlaybackService : MediaSessionService() {
 
     companion object {
         private const val TAG = "PlaybackService"
-        private const val LOCK_ARM_DELAY_MS = 300L
 
         /**
          * True while the user closed the notification and playback is paused:

@@ -46,7 +46,11 @@ class PlayerViewModel @Inject constructor(
     val hasCurrentTrack: StateFlow<Boolean> = audioEngine.playbackState
         .map { it.currentTrack != null }
         .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        .stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            audioEngine.playbackState.value.currentTrack != null
+        )
 
     val activeTrackId: StateFlow<Long?> = audioEngine.playbackState
         .map { it.currentTrack?.id }
