@@ -24,6 +24,7 @@ import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.constants.completeNavBarItemOrder
 import com.foamplayer.app.constants.defaultSortMode
+import com.foamplayer.distant.DistantServer
 import kotlin.math.pow
 
 /** The complete, validated set of user-configurable application preferences. */
@@ -86,6 +87,8 @@ data class AppSettings(
     /** Dead air between the end of a track and the start of the next one, in seconds. 0 disables. */
     val silenceBetweenTracksSeconds: Float = DEFAULT_SILENCE_BETWEEN_TRACKS_SECONDS,
     val libraryFolders: Set<String> = emptySet(),
+    /** Connected distant servers (Plex/Jellyfin) and the folders scanned from them. */
+    val distantServers: List<DistantServer> = emptyList(),
     val iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
     val miniPlayerRounding: Int = 40,
     val fullPlayerRounding: Int = 40,
@@ -238,6 +241,9 @@ data class AppSettings(
 
         return copy(
             libraryFolders = libraryFolders.map(String::trim).filter(String::isNotEmpty).toSet(),
+            distantServers = distantServers
+                .filter { it.id.isNotBlank() && (!it.type.requiresBaseUrl || it.baseUrl.isNotBlank()) }
+                .distinctBy { it.id },
             listenedThresholdPercent = listenedThresholdPercent.coerceIn(
                 MIN_LISTENED_THRESHOLD_PERCENT,
                 MAX_LISTENED_THRESHOLD_PERCENT

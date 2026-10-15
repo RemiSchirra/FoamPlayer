@@ -43,6 +43,10 @@ class BitPerfectDetector @Inject constructor(
         val dspState: DspState,
         /** Master bit-perfect switch from the settings; when off, never claim it. */
         val masterBitPerfectEnabled: Boolean = true,
+        /** True when the source is fetched over the network rather than read from disk. */
+        val isStreaming: Boolean = false,
+        /** Transport facts of a distant provider stream, when the source is remote. */
+        val stream: AudioStreamInfo? = null,
         val deviceConfig: DeviceAudioConfig
     )
 
@@ -146,14 +150,14 @@ class BitPerfectDetector @Inject constructor(
         mixerRate: Int,
         isBitPerfect: Boolean
     ): FidelityScore {
-        val items = ArrayList<FidelityItem>(6)
+        val items = ArrayList<FidelityItem>(7)
 
-        // 1. Sample rate path (25 pts)
+        // 1. Sample rate path (20 pts)
         val ratePoints = when {
-            !resampling && isBitPerfect -> 25
-            !resampling -> 20
-            directCapable -> 15
-            else -> 6
+            !resampling && isBitPerfect -> 20
+            !resampling -> 16
+            directCapable -> 12
+            else -> 5
         }
         items += FidelityItem(
             label = "Sample rate",
@@ -167,7 +171,7 @@ class BitPerfectDetector @Inject constructor(
                 else -> "${input.sourceSampleRate} Hz → $mixerRate Hz system SRC"
             },
             points = ratePoints,
-            maxPoints = 25
+            maxPoints = 20
         )
 
         // 2. Bit depth path (20 pts)
@@ -189,11 +193,11 @@ class BitPerfectDetector @Inject constructor(
             maxPoints = 20
         )
 
-        // 3. DSP path (25 pts) — the chain is purely linear float processing.
+        // 3. DSP path (20 pts) — the chain is purely linear float processing.
         val dspEngaged = !dspNeutral
         val dspPoints = when {
-            !dspEngaged -> 25
-            else -> 15
+            !dspEngaged -> 20
+            else -> 12
         }
         items += FidelityItem(
             label = "DSP chain",
@@ -206,7 +210,7 @@ class BitPerfectDetector @Inject constructor(
                 else -> "Float 32-bit processing (tone/EQ)"
             },
             points = dspPoints,
-            maxPoints = 25
+            maxPoints = 20
         )
 
         // 4. Volume path (15 pts)
@@ -252,6 +256,19 @@ class BitPerfectDetector @Inject constructor(
             maxPoints = 15
         )
 
+        // 6. Transport (10 pts) — a network fetch can't be verified as bit-exact.
+        items += FidelityItem(
+            label = "Transport",
+            status = if (input.isStreaming) FidelityStatus.WARN else FidelityStatus.PASS,
+            detail = if (input.isStreaming) {
+                "Network stream — integrity depends on the provider"
+            } else {
+                "Local file — direct disk read"
+            },
+            points = if (input.isStreaming) 6 else 10,
+            maxPoints = 10
+        )
+
         val total = items.sumOf { it.points }.coerceAtMost(FidelityScore.MAX_SCORE)
         return FidelityScore(
             total = total,
@@ -278,7 +295,36 @@ class BitPerfectDetector @Inject constructor(
         outputBitDepth: Int,
         isBitPerfect: Boolean
     ): AudioPipeline {
-        val stages = ArrayList<PipelineStage>(9)
+        val stages = ArrayList<PipelineStage>(10)
+
+        if (input.isStreaming) {
+            val stream = input.stream
+            stages += PipelineStage(
+                name = "Transport",
+                status = PipelineStageStatus.WARN,
+                headline = when {
+                    stream == null -> "Network stream"
+                    stream.direct -> "${stream.provider} · Direct play"
+                    else -> "${stream.provider} · Transcoded"
+                },
+                details = buildList {
+                    if (!stream?.endpoint.isNullOrBlank()) {
+                        add("HTTP · ${stream.endpoint}")
+                    }
+                    streamFormatLine(input)?.let { add(it) }
+                    if (stream != null) {
+                        add(
+                            if (stream.direct) {
+                                "Original file streamed without transcoding"
+                            } else {
+                                "Server-side transcode"
+                            }
+                        )
+                    }
+                    add("Integrity not verifiable end-to-end")
+                }
+            )
+        }
 
         // 1. Source file
         stages += PipelineStage(
@@ -424,6 +470,16 @@ class BitPerfectDetector @Inject constructor(
         )
 
         return AudioPipeline(stages)
+    }
+
+    /** "Format: FLAC · 1411 kbps" from the source metadata, or null when the codec is unknown. */
+    private fun streamFormatLine(input: Input): String? {
+        val format = input.sourceFormat.takeIf { it.isNotBlank() && it.uppercase() != "NETWORK" }
+            ?: return null
+        return buildString {
+            append("Format: $format")
+            if (input.sourceBitrateKbps > 0) append(" · ${input.sourceBitrateKbps} kbps")
+        }
     }
 
     private fun formatHz(hz: Float): String =

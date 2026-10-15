@@ -16,17 +16,21 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.foamplayer.app.audio.bitperfect.AudioOutputInfo
+import com.foamplayer.app.audio.bitperfect.AudioStreamInfo
 import com.foamplayer.app.audio.bitperfect.BitPerfectDetector
 import com.foamplayer.app.audio.device.OutputDeviceManager
 import com.foamplayer.app.audio.dsp.DspAudioProcessor
 import com.foamplayer.app.audio.dsp.DspEngine
 import com.foamplayer.app.audio.dsp.DspState
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.distant.DistantUris
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +54,7 @@ import javax.inject.Singleton
 import kotlin.math.abs
 import kotlin.math.roundToLong
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Owns the ExoPlayer, the queue and the playback state.
@@ -71,6 +76,7 @@ class AudioEngine @Inject constructor(
     private val outputDeviceManager: OutputDeviceManager,
     private val settingsRepository: SettingsRepository,
     private val trackRepository: TrackRepository,
+    private val distantRepository: DistantRepository,
     private val fadeEngine: FadeEngine,
     private val queuePersistence: QueuePersistence
 ) {
@@ -92,7 +98,11 @@ class AudioEngine @Inject constructor(
                     .setEnableFloatOutput(enableFloatOutput)
                     .build()
         }
-        return ExoPlayer.Builder(context, renderersFactory).build()
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(DistantDataSourceFactory(context) { distantRepository.streamFor(it) })
+        return ExoPlayer.Builder(context, renderersFactory)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
     }
 
     private val scope = CoroutineScope(Dispatchers.Main + Job())
@@ -431,7 +441,7 @@ class AudioEngine @Inject constructor(
      * no frames in the background, so an unbounded wait would freeze the progress loop.
      */
     private suspend fun awaitFrame() {
-        withTimeoutOrNull(FRAME_WAIT_TIMEOUT_MS) {
+        withTimeoutOrNull(FRAME_WAIT_TIMEOUT_MS.milliseconds) {
             suspendCancellableCoroutine { cont ->
                 val callback = Choreographer.FrameCallback { cont.resumeWith(Result.success(Unit)) }
                 Choreographer.getInstance().postFrameCallback(callback)
@@ -440,18 +450,24 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    private fun TrackEntity.toMediaItem(): MediaItem =
-        MediaItem.Builder()
+    private fun TrackEntity.toMediaItem(): MediaItem {
+        val artwork = if (com.foamplayer.distant.DistantUris.isDistant(path)) {
+            (albumArtPath ?: path).toUri()
+        } else {
+            path.toUri()
+        }
+        return MediaItem.Builder()
             .setUri(path.toUri())
             .setMediaId(id.toString())
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(title)
                     .setArtist(artist)
-                    .setArtworkUri(path.toUri())
+                    .setArtworkUri(artwork)
                     .build()
             )
             .build()
+    }
 
     /** Called after a crossfade promoted a new player, so the MediaSession can re-bind. */
     fun setOnPlayerSwappedListener(listener: (() -> Unit)?) {
@@ -696,6 +712,8 @@ class AudioEngine @Inject constructor(
                 sourceBitrateKbps = track.bitrate,
                 dspState = dspEngine.state.value,
                 masterBitPerfectEnabled = latestSettings.bitPerfectEnabled,
+                isStreaming = com.foamplayer.distant.DistantUris.isDistant(track.path),
+                stream = streamInfoFor(track),
                 deviceConfig = latestSettings.deviceAudioConfig(outputDeviceManager.activeDevice.value?.id)
             )
         )
@@ -703,6 +721,28 @@ class AudioEngine @Inject constructor(
             lastAudioOutputInfo = info
             _playbackState.value = _playbackState.value.copy(audioOutputInfo = info)
         }
+    }
+
+    /** Resolves the transport facts of a distant track for the pipeline's Transport stage. */
+    private fun streamInfoFor(track: TrackEntity): AudioStreamInfo? {
+        if (!DistantUris.isDistant(track.path)) return null
+        val parsed = DistantUris.parse(track.path) ?: return null
+        val endpoint = runCatching { distantRepository.streamFor(track.path) }
+            .getOrNull()
+            ?.url
+            ?.let(::endpointOf)
+            .orEmpty()
+        return AudioStreamInfo(provider = parsed.type.displayName, endpoint = endpoint)
+    }
+
+    /** Scheme + authority of a stream URL (drops the path/query so no token leaks). */
+    private fun endpointOf(url: String): String {
+        val schemeEnd = url.indexOf("://")
+        if (schemeEnd < 0) return ""
+        val rest = url.substring(schemeEnd + 3)
+        val slash = rest.indexOf('/')
+        val authority = if (slash < 0) rest else rest.substring(0, slash)
+        return url.substring(0, schemeEnd + 3) + authority
     }
 
     private fun startAudioPathObservers() {

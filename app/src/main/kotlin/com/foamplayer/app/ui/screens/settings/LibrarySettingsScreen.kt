@@ -64,6 +64,7 @@ import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.components.LibraryFoldersCard
 import com.foamplayer.app.ui.components.LibraryScanCard
+import com.foamplayer.app.ui.modals.AddProviderModal
 import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.modals.PickerHeaderButton
 import com.foamplayer.app.ui.modals.PlaylistNameField
@@ -89,6 +90,7 @@ fun LibrarySettingsScreen(
     val context = LocalContext.current
 
     var separatorDialogTarget by remember { mutableStateOf<SeparatorTarget?>(null) }
+    var showAddProvider by remember { mutableStateOf(false) }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -123,8 +125,10 @@ fun LibrarySettingsScreen(
             item {
                 LibraryFoldersCard(
                     folders = selectedFolders,
-                    onPickFolder = { folderPickerLauncher.launch(null) },
-                    onRemoveFolder = viewModel::removeFolder
+                    servers = settings.distantServers,
+                    onAddProvider = { showAddProvider = true },
+                    onRemoveFolder = viewModel::removeFolder,
+                    onRemoveServer = viewModel::removeServer
                 )
             }
 
@@ -383,6 +387,14 @@ fun LibrarySettingsScreen(
             onDismiss = { separatorDialogTarget = null }
         )
     }
+
+    AddProviderModal(
+        viewModel = viewModel,
+        visible = showAddProvider,
+        onDismiss = { showAddProvider = false },
+        onPickLocalFolder = { folderPickerLauncher.launch(null) },
+        onServerScanned = viewModel::scanServer
+    )
 }
 
 /**

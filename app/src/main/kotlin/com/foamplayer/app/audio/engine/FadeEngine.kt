@@ -11,8 +11,10 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.foamplayer.app.audio.dsp.DspAudioProcessor
 import com.foamplayer.app.audio.dsp.DspEngine
+import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.settings.AppSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -44,6 +46,7 @@ class FadeEngine @androidx.annotation.OptIn(UnstableApi::class)
 @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dspEngine: DspEngine,
+    private val distantRepository: DistantRepository,
     private val settingsRepository: SettingsRepository
 ) {
 
@@ -466,7 +469,11 @@ class FadeEngine @androidx.annotation.OptIn(UnstableApi::class)
                         .setEnableFloatOutput(enableFloatOutput)
                         .build()
             }
-            val player = ExoPlayer.Builder(context, renderersFactory).build()
+            val mediaSourceFactory = DefaultMediaSourceFactory(context)
+                .setDataSourceFactory(DistantDataSourceFactory(context) { distantRepository.streamFor(it) })
+            val player = ExoPlayer.Builder(context, renderersFactory)
+                .setMediaSourceFactory(mediaSourceFactory)
+                .build()
             player.setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)

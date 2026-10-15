@@ -20,6 +20,7 @@ import com.foamplayer.app.data.db.dao.TrackPlayStatsRow
 import com.foamplayer.app.data.db.entities.ListenHistoryEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.scanner.LocalAudioScanner
+import com.foamplayer.app.data.scanner.RemoteLibraryScanner
 import com.foamplayer.app.data.scanner.ScanStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +64,7 @@ class TrackRepository @Inject constructor(
     private val db: AppDatabase,
     private val trackDao: TrackDao,
     private val scanner: LocalAudioScanner,
+    private val remoteScanner: RemoteLibraryScanner,
     private val settingsRepository: SettingsRepository,
     private val cachedLyricsDao: CachedLyricsDao,
     private val listenHistoryDao: ListenHistoryDao
@@ -301,23 +303,39 @@ class TrackRepository @Inject constructor(
         }
     }
 
-    /** Scans [folders], replacing the library with the results (orphans removed). */
+    /**
+     * Scans [folders] (local) plus every connected distant server, replacing
+     * the library with the results (orphans removed).
+     */
     suspend fun startScan(folders: Set<String>) {
-        if (folders.isEmpty()) {
+        val settings = settingsRepository.settings.first()
+        val servers = settings.distantServers
+        if (folders.isEmpty() && servers.isEmpty()) {
             _scanStatus.value = ScanStatus.Finished(0)
             return
         }
 
-        val settings = settingsRepository.settings.first()
         val artistSeps = settings.artistSeparators
         val genreSeps = settings.genreSeparators
         val knownTracks = reusableTracks(artistSeps, genreSeps)
 
         _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
-        val scannedTracks = scanner.scanFoldersSync(folders, artistSeps, genreSeps, knownTracks) { progress, currentFile ->
-            _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
+        remoteScanner.refreshTokens()
+
+        val localTracks = if (folders.isEmpty()) {
+            emptyList()
+        } else {
+            scanner.scanFoldersSync(folders, artistSeps, genreSeps, knownTracks) { progress, currentFile ->
+                _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
+            }
         }
         settingsRepository.markScanSeparators(artistSeps, genreSeps)
+
+        val remoteTracks = remoteScanner.scan(servers) { progress, label ->
+            _scanStatus.value = ScanStatus.Scanning(progress, label)
+        }
+
+        val scannedTracks = localTracks + remoteTracks
 
         // insertTracks() replaces rows on conflict, which would wipe the listen
         // stats and score: re-attach the existing ones (with their row id, so
@@ -360,6 +378,25 @@ class TrackRepository @Inject constructor(
             _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
         }
         settingsRepository.markScanSeparators(artistSeps, genreSeps)
+
+        val existingStats = trackDao.getPlayStats().associateBy { it.path }
+        val mergedTracks = scannedTracks.map { scanned ->
+            mergeStats(scanned, existingStats[scanned.path])
+        }
+
+        trackDao.insertTracks(mergedTracks)
+        _scanStatus.value = ScanStatus.Finished(mergedTracks.size)
+    }
+
+    /** Scans one distant server's folders and merges the result without touching other sources. */
+    suspend fun scanServerAndMerge(serverId: String) {
+        val server = settingsRepository.settings.first().distantServers.firstOrNull { it.id == serverId } ?: return
+        remoteScanner.refreshTokens()
+
+        _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
+        val scannedTracks = remoteScanner.scan(listOf(server)) { progress, label ->
+            _scanStatus.value = ScanStatus.Scanning(progress, label)
+        }
 
         val existingStats = trackDao.getPlayStats().associateBy { it.path }
         val mergedTracks = scannedTracks.map { scanned ->

@@ -14,6 +14,7 @@ import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.LocalAudioScanner
 import com.foamplayer.app.data.scanner.PlaylistCoverProvider
+import com.foamplayer.app.data.scanner.RemoteLibraryScanner
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -40,6 +41,7 @@ object RepositoryModule {
         database: AppDatabase,
         trackDao: TrackDao,
         scanner: LocalAudioScanner,
+        remoteScanner: RemoteLibraryScanner,
         settingsRepository: SettingsRepository,
         cachedLyricsDao: CachedLyricsDao,
         listenHistoryDao: ListenHistoryDao
@@ -48,6 +50,7 @@ object RepositoryModule {
             database,
             trackDao,
             scanner,
+            remoteScanner,
             settingsRepository,
             cachedLyricsDao,
             listenHistoryDao

@@ -37,8 +37,10 @@ import com.foamplayer.app.constants.deserializeHomeSectionOrder
 import com.foamplayer.app.constants.deserializeLyricsProviderOrder
 import com.foamplayer.app.constants.deserializeLyricsSourceOrder
 import com.foamplayer.app.constants.deserializeNavBarItemOrder
+import com.foamplayer.app.data.distant.DistantServersCodec
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.BackgroundMode
+import com.foamplayer.distant.DistantServer
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
@@ -128,6 +130,18 @@ class SettingsRepository @Inject constructor(
     }
     suspend fun addFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders + path) }
     suspend fun removeFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders - path) }
+
+    /** Connects a distant server (replacing any server with the same id). */
+    suspend fun upsertDistantServer(server: DistantServer) = update { settings ->
+        settings.copy(
+            distantServers = settings.distantServers.filterNot { it.id == server.id } + server
+        )
+    }
+
+    /** Disconnects a distant server and forgets its folders. */
+    suspend fun removeDistantServer(serverId: String) = update { settings ->
+        settings.copy(distantServers = settings.distantServers.filterNot { it.id == serverId })
+    }
     suspend fun setArtistSeparators(separators: Set<String>) = update { it.copy(artistSeparators = separators) }
     suspend fun setGenreSeparators(separators: Set<String>) = update { it.copy(genreSeparators = separators) }
 
@@ -313,6 +327,7 @@ class SettingsRepository @Inject constructor(
         silenceBetweenTracksSeconds = this[Keys.SILENCE_BETWEEN_TRACKS_SECONDS]
             ?: AppSettings().silenceBetweenTracksSeconds,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
+        distantServers = DistantServersCodec.decode(this[Keys.DISTANT_SERVERS]),
         iconStyle = this[Keys.ICON_STYLE]
             ?.let { runCatching { FoamIconStyle.valueOf(it) }.getOrNull() }
             ?: AppSettings().iconStyle,
@@ -425,6 +440,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.QUICK_FADE_SECONDS] = settings.quickFadeSeconds
         this[Keys.SILENCE_BETWEEN_TRACKS_SECONDS] = settings.silenceBetweenTracksSeconds
         this[Keys.SELECTED_FOLDERS] = settings.libraryFolders
+        this[Keys.DISTANT_SERVERS] = DistantServersCodec.encode(settings.distantServers)
         this[Keys.ICON_STYLE] = settings.iconStyle.name
         this[Keys.MINI_PLAYER_ROUNDING] = settings.miniPlayerRounding
         this[Keys.FULL_PLAYER_ROUNDING] = settings.fullPlayerRounding
@@ -495,6 +511,7 @@ class SettingsRepository @Inject constructor(
         val QUICK_FADE_SECONDS = floatPreferencesKey("quick_fade_seconds")
         val SILENCE_BETWEEN_TRACKS_SECONDS = floatPreferencesKey("silence_between_tracks_seconds")
         val SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
+        val DISTANT_SERVERS = stringPreferencesKey("distant_servers")
         val ICON_STYLE = stringPreferencesKey("icon_style")
         val MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")
         val FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")

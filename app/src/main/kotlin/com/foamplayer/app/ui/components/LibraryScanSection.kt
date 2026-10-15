@@ -33,6 +33,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.distant.DistantServer
 
 /**
  * Folders + scan cards shared by the onboarding Library page and the Library
@@ -46,8 +47,10 @@ import com.foamplayer.app.ui.theme.FoamTheme
 @Composable
 fun LibraryFoldersCard(
     folders: Set<String>,
-    onPickFolder: () -> Unit,
+    servers: List<DistantServer>,
+    onAddProvider: () -> Unit,
     onRemoveFolder: (String) -> Unit,
+    onRemoveServer: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -64,11 +67,11 @@ fun LibraryFoldersCard(
                     style = FoamTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
-                AddFolderButton(onClick = onPickFolder)
+                AddProviderButton(onClick = onAddProvider)
             }
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-            if (folders.isEmpty()) {
+            if (folders.isEmpty() && servers.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -89,6 +92,78 @@ fun LibraryFoldersCard(
                 sortedFolders.forEach { folder ->
                     FolderRow(folder = folder, onRemove = onRemoveFolder)
                 }
+
+                if (servers.isNotEmpty()) {
+                    if (folders.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                    }
+                    BasicText(
+                        text = stringResource(R.string.connected_servers),
+                        style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
+                    )
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
+                    servers.forEach { server ->
+                        ServerRow(server = server, onRemove = onRemoveServer)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One connected distant server: each picked folder as "provider/folder", with a remove cross. */
+@Composable
+private fun ServerRow(server: DistantServer, onRemove: (String) -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = FoamDimens.spacingTiny)
+            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+            .background(FoamTheme.colors.surfaceVariant)
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(FoamDimens.spacingMedium),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                if (server.folders.isEmpty()) {
+                    BasicText(
+                        text = server.name,
+                        style = FoamTheme.typography.caption,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                } else {
+                    server.folders.forEach { folder ->
+                        BasicText(
+                            text = "${server.name}:${server.credentials.username}/${folder.name}",
+                            style = FoamTheme.typography.caption,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
+            Box(
+                modifier = Modifier
+                    .size(FoamDimens.iconMedium)
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = { onRemove(server.id) }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = FoamTheme.icons.current.close,
+                    contentDescription = stringResource(R.string.remove),
+                    tint = FoamTheme.accentColor,
+                    modifier = Modifier.size(FoamDimens.iconSmall)
+                )
             }
         }
     }
@@ -222,9 +297,9 @@ private fun FolderRow(folder: String, onRemove: (String) -> Unit) {
     }
 }
 
-/** Accent ADD FOLDER pill. */
+/** Accent ADD PROVIDER pill. */
 @Composable
-private fun AddFolderButton(onClick: () -> Unit) {
+private fun AddProviderButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
@@ -237,7 +312,7 @@ private fun AddFolderButton(onClick: () -> Unit) {
             .padding(horizontal = FoamDimens.spacingMedium, vertical = FoamDimens.spacingSmall)
     ) {
         BasicText(
-            text = stringResource(R.string.add_folder),
+            text = stringResource(R.string.add_provider),
             style = FoamTheme.typography.caption.copy(
                 color = FoamTheme.colors.background,
                 fontWeight = FontWeight.Bold
