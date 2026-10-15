@@ -21,7 +21,7 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0.0-alpha"
+        versionName = "1.1.0-alpha"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -43,6 +43,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -165,5 +166,9 @@ dependencies {
     implementation(project(":lyrics:simpmusic"))
     implementation(project(":lyrics:unison"))
     implementation(project(":lyrics:youlyplus"))
+
+    implementation(project(":distant:core"))
+    implementation(project(":distant:plex"))
+    implementation(project(":distant:jellyfin"))
 
 }
