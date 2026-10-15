@@ -42,6 +42,10 @@ FoamPlayer/
 │   ├── youlyplus/
 │   └── paxsenix/       # Aggregator (Apple Music, Musixmatch, Netease, Spotify, YouTube)
 ├── spotify/            # Anonymous auth, album and artist images
+├── distant/
+│   ├── core/           # Provider interface, models, URI scheme, HTTP
+│   ├── plex/           # Plex media server
+│   └── jellyfin/       # Jellyfin media server
 └── discord/            # Rich Presence
 ```
 
@@ -84,10 +88,11 @@ com.foamplayer.app/
 │   ├── backup/         # JSON backup and restore
 │   ├── canvas/         # CanvasProvider
 │   ├── db/             # Room entities and DAOs
+│   ├── distant/        # DistantRepository, OAuth coordinator, URI streaming
 │   ├── lyrics/         # LRC parsing, lyrics file and tag writers
 │   ├── media/          # Embedded album art
 │   ├── repository/     # Track, Playlist, Lyrics, Settings, ArtistImage
-│   ├── scanner/        # LocalAudioScanner (SAF), M3U, covers
+│   ├── scanner/        # LocalAudioScanner (SAF), RemoteLibraryScanner, M3U, covers
 │   └── settings/       # AppSettings
 ├── di/                 # Hilt modules
 ├── discord/            # DiscordPresenceController
@@ -98,7 +103,7 @@ com.foamplayer.app/
 
 ### Data flow
 
-1. **Scan.** `LocalAudioScanner` walks the SAF folders, reads metadata in parallel, and upserts tracks into Room.
+1. **Scan.** `LocalAudioScanner` walks the SAF folders, reads metadata in parallel, and upserts tracks into Room. `RemoteLibraryScanner` does the same for distant providers, in parallel with the local scan.
 2. **Browse.** ViewModels collect Room flows from the repositories and feed the Compose screens.
 3. **Play.** The UI calls `AudioEngine`. The engine owns the queue, loads only a few items around the current track, and saves the queue through `QueuePersistence`.
 4. **Enrich.** While a track plays, three things happen:
@@ -145,12 +150,25 @@ Online sources sit behind a small interface and a registry. This makes them plug
 
 The `:lyrics:*` and `:canvas:*` modules use plain Kotlin and Ktor only.
 
+### Distant providers (media servers)
+
+The `:distant:*` modules extend the same registry idea to remote libraries. A distant source is scanned into Room like a local one, then streamed on demand.
+
+- `DistantProvider` is the interface (login, token refresh, folder/track listing, stream URL, artwork).
+- `DistantProviderRegistry` maps provider types to implementations.
+- `DistantUris` gives every remote track a synthetic `foam-distant://` URI; the real URL is resolved at play time.
+- `DistantRepository` coordinates connection (Plex signs in through its browser PIN flow; Jellyfin uses credentials), scanning, and streaming. Tokens and server config are stored in DataStore (`AppSettings.distantServers`).
+- `DistantDataSourceFactory` is a Media3 `ResolvingDataSource` injected into the player. It turns a `foam-distant://` URI into signed URL plus headers, so ExoPlayer streams remote audio without the engine knowing it is remote.
+
+Providers that stream over the network are flagged as streaming in `BitPerfectDetector`, which caps the fidelity score at a `WARN` transport stage.
+
 ---
 
 ## Integrations
 
 - **`:spotify`** gets anonymous web-player tokens and resolves album art and artist images.
 - **`:discord`** is a custom client: OAuth login, a gateway client over WebSockets, and a presence client. Art comes from `:spotify`, with a YouTube thumbnail as fallback.
+- **`:distant:*`** list and stream remote libraries: Plex (browser PIN sign-in) and Jellyfin (credentials).
 - Thin controllers in `:app` (`DiscordPresenceController`, `ArtistImageStore`) connect both modules to `AudioEngine`'s playback state.
 
 ---
