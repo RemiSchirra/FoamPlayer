@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -146,78 +145,20 @@ internal fun SubViewSelectorRow(
     subViewMode: SubViewMode,
     progress: () -> Float,
     onSelect: (SubViewMode) -> Unit,
-    audioInfoText: String?,
-    onAudioInfoClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            SubViewMode.entries.forEach { mode ->
-                SubViewSelectorItem(
-                    mode = mode,
-                    isSelected = mode == subViewMode,
-                    progress = progress,
-                    onSelect = onSelect
-                )
-            }
-        }
-
-        AudioInfoChip(
-            text = audioInfoText,
-            progress = progress,
-            onClick = onAudioInfoClick,
-            modifier = Modifier.align(Alignment.Center)
-        )
-    }
-}
-
-/**
- * Pill between the lyrics and queue selector icons showing the playing track's
- * audio format and bitrate; opens the audio-info modal. Deferred-`progress` pattern
- * like the transport buttons: the subview transition fraction is read
- * inside graphicsLayer (redraw-only) and the clickable is gated through a
- * derivedStateOf, so drag frames don't recompose the chip. The alpha runs
- * INVERSE to that of the transport cluster, which fades into this chip's exact
- * spot when the subview opens -- the two must never be visible together.
- */
-@Composable
-private fun AudioInfoChip(
-    text: String?,
-    progress: () -> Float,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    if (text == null) return
-
-    val isEnabled by remember(progress) {
-        derivedStateOf { progress() < 1f - PlayerDimens.visibilityEpsilon }
-    }
-    val chipInteractions = remember { MutableInteractionSource() }
-
-    Box(
-        modifier = modifier
-            .graphicsLayer { alpha = (1f - progress()).coerceIn(0f, 1f) }
-            .pressShrink(chipInteractions)
-            .clickable(
-                interactionSource = chipInteractions,
-                indication = null,
-                enabled = isEnabled,
-                onClick = onClick
-            )
-            .padding(horizontal = 8.dp, vertical = 12.dp)
-            .clip(CircleShape)
-            .background(FoamTheme.colors.background.copy(alpha = 0.2f))
-            .padding(horizontal = 14.dp, vertical = 7.dp),
-        contentAlignment = Alignment.Center
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        BasicText(
-            text = text,
-            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textPrimary),
-            maxLines = 1
-        )
+        SubViewMode.entries.forEach { mode ->
+            SubViewSelectorItem(
+                mode = mode,
+                isSelected = mode == subViewMode,
+                progress = progress,
+                onSelect = onSelect
+            )
+        }
     }
 }
 

@@ -843,6 +843,8 @@ fun FullPlayerScreen(
                             seekBarProgress = seekBarProgress,
                             isAnimateSeekBarEnabled = settleSeekBarAnimated,
                             seekBarStyle = seekBarStyle,
+                            audioInfoText = audioInfoText,
+                            onAudioInfoClick = { showAudioInfoModal = true },
                             morphFromWaveform = morphFromWaveform,
                             morphTargetWaveform = morphTargetWaveform,
                             envelopeMorphProgress = envelopeMorphProgress,
@@ -913,8 +915,6 @@ fun FullPlayerScreen(
                                 gestureController.expandToSubView()
                             }
                         },
-                        audioInfoText = audioInfoText,
-                        onAudioInfoClick = { showAudioInfoModal = true },
                         modifier = selectorRowModifier
                     )
 

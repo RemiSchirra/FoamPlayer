@@ -51,6 +51,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -115,6 +116,8 @@ internal fun SharedTransitionScope.MainPlayerContent(
     seekBarProgress: SeekBarProgressState,
     isAnimateSeekBarEnabled: Boolean,
     seekBarStyle: SeekBarStyle,
+    audioInfoText: String?,
+    onAudioInfoClick: () -> Unit,
     // The waveform envelope morph (waveform seek bar only, both null otherwise): the
     // track the bars are anchored on when it is NOT the playing one (pinned at trigger
     // time, carried across re-aims), and the track being changed to -- both resolved by
@@ -175,6 +178,8 @@ internal fun SharedTransitionScope.MainPlayerContent(
             seekBarProgress = seekBarProgress,
             isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
             seekBarStyle = seekBarStyle,
+            audioInfoText = audioInfoText,
+            onAudioInfoClick = onAudioInfoClick,
             morphFromWaveform = morphFromWaveform,
             morphTargetWaveform = morphTargetWaveform,
             envelopeMorphProgress = envelopeMorphProgress,
@@ -674,6 +679,8 @@ internal fun SharedTransitionScope.PlaybackControls(
     seekBarProgress: SeekBarProgressState,
     isAnimateSeekBarEnabled: Boolean,
     seekBarStyle: SeekBarStyle,
+    audioInfoText: String?,
+    onAudioInfoClick: () -> Unit,
     morphFromWaveform: WaveformState?,
     morphTargetWaveform: WaveformState?,
     envelopeMorphProgress: () -> Float,
@@ -695,7 +702,9 @@ internal fun SharedTransitionScope.PlaybackControls(
             morphFromWaveform = morphFromWaveform,
             morphTargetWaveform = morphTargetWaveform,
             trackChangeProgress = envelopeMorphProgress,
-            onSeek = onSeek
+            onSeek = onSeek,
+            audioInfoText = audioInfoText,
+            onAudioInfoClick = onAudioInfoClick
         )
         Spacer(modifier = Modifier.height(PlayerDimens.controlsSpacing))
 
@@ -812,7 +821,9 @@ internal fun PlaybackProgressSlider(
     morphTargetWaveform: WaveformState? = null,
     trackChangeProgress: () -> Float = { 0f },
     modifier: Modifier = Modifier,
-    labelSpacing: Dp = PlayerDimens.seekBarLabelSpacing
+    labelSpacing: Dp = PlayerDimens.seekBarLabelSpacing,
+    audioInfoText: String? = null,
+    onAudioInfoClick: () -> Unit = {}
 ) {
     Column(modifier = modifier) {
         var dragValue by remember { mutableStateOf<Float?>(null) }
@@ -859,13 +870,34 @@ internal fun PlaybackProgressSlider(
         }
         Spacer(modifier = Modifier.height(labelSpacing))
         val labelStyle = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        val infoInteractions = remember { MutableInteractionSource() }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             ElapsedTimeLabel(
                 durationMs = durationMs,
                 dragValue = { dragValue },
                 positionMs = { seekBarProgress.positionMs },
                 style = labelStyle
             )
+            if (audioInfoText != null) {
+                BasicText(
+                    text = audioInfoText,
+                    style = labelStyle.copy(color = FoamTheme.typography.body.color),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .padding(horizontal = 8.dp)
+                        .pressShrink(infoInteractions)
+                        .clickable(
+                            interactionSource = infoInteractions,
+                            indication = null,
+                            onClick = onAudioInfoClick
+                        )
+                )
+            }
             BasicText(text = TimeUtils.formatDurationCompact(durationMs), style = labelStyle)
         }
     }
