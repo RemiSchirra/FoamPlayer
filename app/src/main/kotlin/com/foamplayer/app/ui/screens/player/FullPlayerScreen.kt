@@ -866,6 +866,7 @@ fun FullPlayerScreen(
 
                     SubViewSelectorRow(
                         subViewMode = subViewMode,
+                        repeatMode = state.repeatMode,
                         progress = subControlsProgress,
                         onSelect = { mode ->
                             if (upTransitionState.targetState) {
@@ -879,7 +880,9 @@ fun FullPlayerScreen(
                                 gestureController.expandToSubView()
                             }
                         },
+                        onRadioClick = { /* TODO: radio */ },
                         onPlayOnClick = { showPlayOnModal = true },
+                        onRepeatClick = { viewModel.toggleRepeat() },
                         modifier = selectorRowModifier
                     )
 

@@ -49,6 +49,7 @@ import androidx.compose.ui.util.lerp as lerpFloat
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.foamplayer.app.R
+import com.foamplayer.app.audio.engine.RepeatMode
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
@@ -143,9 +144,12 @@ private fun SubViewSelectorItem(
 @Composable
 internal fun SubViewSelectorRow(
     subViewMode: SubViewMode,
+    repeatMode: RepeatMode,
     progress: () -> Float,
     onSelect: (SubViewMode) -> Unit,
+    onRadioClick: () -> Unit,
     onPlayOnClick: () -> Unit,
+    onRepeatClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -161,10 +165,28 @@ internal fun SubViewSelectorRow(
         )
 
         SubViewSelectorAction(
+            icon = FoamTheme.icons.current.radio,
+            contentDescription = stringResource(R.string.action_radio),
+            progress = progress,
+            onClick = onRadioClick
+        )
+
+        SubViewSelectorAction(
             icon = FoamTheme.icons.current.cast,
             contentDescription = stringResource(R.string.play_on),
             progress = progress,
             onClick = onPlayOnClick
+        )
+
+        SubViewSelectorAction(
+            icon = when (repeatMode) {
+                RepeatMode.ONE -> FoamTheme.icons.current.repeatOne
+                else -> FoamTheme.icons.current.repeat
+            },
+            contentDescription = stringResource(R.string.action_repeat),
+            isDimmed = repeatMode == RepeatMode.NONE,
+            progress = progress,
+            onClick = onRepeatClick
         )
 
         SubViewSelectorItem(
@@ -177,18 +199,21 @@ internal fun SubViewSelectorRow(
 }
 
 /**
- * One non-selector action icon living between the lyrics/queue selectors (currently
- * only "Play on"). Same icon/touch sizing as SubViewSelectorItem, but it disappears
+ * Non-selector action icons living between the lyrics/queue selectors (radio, "Play
+ * on", repeat). Same icon/touch sizing as SubViewSelectorItem, but they disappear
  * as the subview opens: [progress] -> 1 fades the icon out (draw-phase alpha) and
  * gates the click once invisible, so a hidden action is never tappable while the
  * lyrics/queue selectors at both ends stay reachable for switching/collapsing.
+ * [isDimmed] renders the icon semi-transparent (e.g. repeat disabled); otherwise
+ * the icon renders full-opacity primary.
  */
 @Composable
 private fun SubViewSelectorAction(
     icon: ImageVector,
     contentDescription: String,
     progress: () -> Float,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isDimmed: Boolean = false
 ) {
     val isEnabled by remember(progress) {
         derivedStateOf { progress() < 1f - PlayerDimens.visibilityEpsilon }
@@ -210,16 +235,17 @@ private fun SubViewSelectorAction(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = FoamTheme.colors.textSecondary,
+            tint = FoamTheme.colors.textPrimary,
             modifier = Modifier
                 .size(24.dp)
-                .graphicsLayer { alpha = 1f - progress().coerceIn(0f, 1f) }
+                .graphicsLayer {
+                    alpha = (if (isDimmed) 0.4f else 1f) * (1f - progress().coerceIn(0f, 1f))
+                }
         )
     }
 }
 
 /** Layer 2 content: mini header (draggable handle) plus the lyrics or queue subview. */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun SharedTransitionScope.SubViewContent(
     track: TrackEntity,

@@ -2,6 +2,7 @@
     <string name="playback_channel_name">Lecture FoamPlayer</string>
     <string name="action_shuffle">Aléatoire</string>
     <string name="action_repeat">Répéter</string>
+    <string name="action_radio">Radio</string>
     <string name="play">Lecture</string>
     <string name="pause">Pause</string>
     <string name="previous">Précédent</string>

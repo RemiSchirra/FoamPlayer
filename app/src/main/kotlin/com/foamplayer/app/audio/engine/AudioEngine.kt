@@ -264,6 +264,21 @@ class AudioEngine @Inject constructor(
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val trackId = mediaItem?.mediaId?.toLongOrNull() ?: return
+
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                val state = _playbackState.value
+                if (state.repeatMode == RepeatMode.ALL) {
+                    val index = resolveExactQueueIndex(trackId)
+                    if (index != null &&
+                        index == primaryQueueLastIndex(state) + 1 &&
+                        state.auxiliaryFlags.getOrNull(index) == true
+                    ) {
+                        wrapToQueueStart()
+                        return
+                    }
+                }
+            }
+
             applyTrackTransition(trackId, positionMs = 0L, emitSeekEvent = false)
         }
     }
@@ -365,11 +380,7 @@ class AudioEngine @Inject constructor(
             stashedListenOccurrence = null
 
             // Session modes toggled mid-fade would otherwise be lost.
-            player.repeatMode = when (_playbackState.value.repeatMode) {
-                RepeatMode.NONE -> Player.REPEAT_MODE_OFF
-                RepeatMode.ALL -> Player.REPEAT_MODE_ALL
-                RepeatMode.ONE -> Player.REPEAT_MODE_ONE
-            }
+            player.repeatMode = playerRepeatMode(_playbackState.value.repeatMode)
             player.shuffleModeEnabled = _playbackState.value.isShuffle
             applyPauseAtEndOfMediaItems()
 
@@ -545,11 +556,7 @@ class AudioEngine @Inject constructor(
             }
         )
 
-        player.repeatMode = when (repeatMode) {
-            RepeatMode.NONE -> Player.REPEAT_MODE_OFF
-            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
-            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
-        }
+        player.repeatMode = playerRepeatMode(repeatMode)
         player.shuffleModeEnabled = isShuffle
         applyPauseAtEndOfMediaItems()
 
@@ -1544,12 +1551,25 @@ class AudioEngine @Inject constructor(
         player.seekTo(positionMs)
     }
 
-    /** Advances to the next item, crossfading when [useFade] and quick fades are enabled. */
+    /**
+     * Advances to the next item, crossfading when [useFade] and quick fades are enabled.
+     * Repeat-all wraps at the primary queue's end (the auxiliary pool is only entered by
+     * manual navigation); repeat-off also advances into the pool.
+     */
     private fun advanceToNext(useFade: Boolean) {
         val state = _playbackState.value
         if (player.hasNextMediaItem()) {
+            val targetQueueIndex = player.nextMediaItemIndex + loadedRange.first
+            // Repeat-all wrap: a timeline next landing on the first auxiliary entry past
+            // the primary queue restarts the queue instead.
+            if (state.repeatMode == RepeatMode.ALL &&
+                targetQueueIndex == primaryQueueLastIndex(state) + 1 &&
+                state.auxiliaryFlags.getOrNull(targetQueueIndex) == true
+            ) {
+                wrapToQueueStart()
+                return
+            }
             if (useFade) {
-                val targetQueueIndex = player.nextMediaItemIndex + loadedRange.first
                 val targetId = state.queue.getOrNull(targetQueueIndex)?.id
                 if (fadeEngine.quickFadeEnabled && player.isPlaying && targetId != null &&
                     targetId !in failedTrackIds &&
@@ -1560,18 +1580,25 @@ class AudioEngine @Inject constructor(
             }
             player.seekToNextMediaItem()
         } else {
-            val nextIndex = state.queueIndex + 1
-            if (nextIndex in state.queue.indices) {
-                if (useFade) {
-                    val targetId = state.queue[nextIndex].id
-                    if (fadeEngine.quickFadeEnabled && player.isPlaying && targetId !in failedTrackIds &&
-                        fadeEngine.startCrossfade(nextIndex, 0L, fadeEngine.quickFadeDurationMs)
-                    ) {
-                        return
-                    }
+            var nextIndex = state.queueIndex + 1
+            val primaryLast = primaryQueueLastIndex(state)
+            if (nextIndex > primaryLast) {
+                if (state.repeatMode == RepeatMode.ALL && primaryLast >= 0) {
+                    nextIndex = 0
+                } else if (nextIndex >= state.queue.size) {
+                    return
                 }
-                loadWindowAndPlay(state.queue, nextIndex)
+                // Else: repeat-off flows on into the auxiliary pool (up-next content).
             }
+            if (useFade) {
+                val targetId = state.queue[nextIndex].id
+                if (fadeEngine.quickFadeEnabled && player.isPlaying && targetId !in failedTrackIds &&
+                    fadeEngine.startCrossfade(nextIndex, 0L, fadeEngine.quickFadeDurationMs)
+                ) {
+                    return
+                }
+            }
+            loadWindowAndPlay(state.queue, nextIndex)
         }
     }
 
@@ -1880,21 +1907,29 @@ class AudioEngine @Inject constructor(
         _playbackState.value = _playbackState.value.copy(isShuffle = newShuffle)
     }
 
-    /** Cycles repeat mode: NONE -> ALL -> ONE. */
+    /** Cycles repeat mode: NONE -> ONE -> ALL. */
     fun toggleRepeat() {
         val nextMode = when (_playbackState.value.repeatMode) {
-            RepeatMode.NONE -> RepeatMode.ALL
-            RepeatMode.ALL -> RepeatMode.ONE
-            RepeatMode.ONE -> RepeatMode.NONE
+            RepeatMode.NONE -> RepeatMode.ONE
+            RepeatMode.ONE -> RepeatMode.ALL
+            RepeatMode.ALL -> RepeatMode.NONE
         }
-        player.repeatMode = when (nextMode) {
-            RepeatMode.NONE -> Player.REPEAT_MODE_OFF
-            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
-            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
-        }
+        player.repeatMode = playerRepeatMode(nextMode)
         // Repeat-one loops the item itself, so the pause-at-end signal must stay armed off.
         applyPauseAtEndOfMediaItems()
         _playbackState.value = _playbackState.value.copy(repeatMode = nextMode)
+    }
+
+    /**
+     * Session repeat mode as an ExoPlayer mode. ALL deliberately maps to OFF: the app-level
+     * loop wraps only the primary queue (see [maybeStartTrackCrossfade] and the STATE_ENDED
+     * wrap in [startProgressTracker]), while the player's REPEAT_MODE_ALL would also loop the
+     * random auxiliary pool appended after the user's queue.
+     */
+    private fun playerRepeatMode(mode: RepeatMode): Int = when (mode) {
+        RepeatMode.NONE -> Player.REPEAT_MODE_OFF
+        RepeatMode.ALL -> Player.REPEAT_MODE_OFF
+        RepeatMode.ONE -> Player.REPEAT_MODE_ONE
     }
 
     /** Queue index of the playing track from the player's timeline position, falling back to the nearest occurrence. */
@@ -1925,6 +1960,31 @@ class AudioEngine @Inject constructor(
 
     private fun normalizeAuxiliaryFlags(flags: List<Boolean>, queueSize: Int): List<Boolean> =
         if (flags.size == queueSize) flags else List(queueSize) { false }
+
+    /**
+     * Repeat-all wrap: restarts the primary queue. Plays index 0 through the standard
+     * window loader; the transition's listen bookkeeping fires from the player callback.
+     */
+    private fun wrapToQueueStart() {
+        val state = _playbackState.value
+        if (state.queue.isEmpty()) return
+        crossfadeArmedForTrackId = null
+        silenceGapArmedForTrackId = null
+        loadWindowAndPlay(state.queue, 0)
+    }
+
+    /**
+     * Last index of the PRIMARY queue (the user's own tracks), i.e. before the random
+     * auxiliary pool. -1 when the queue has no primary tracks. Repeat-all wraps at this
+     * boundary; the auxiliary tail is only ever reached by manual navigation.
+     */
+    private fun primaryQueueLastIndex(state: PlaybackState): Int {
+        var index = state.queue.lastIndex
+        while (index >= 0 && state.auxiliaryFlags.getOrNull(index) == true) {
+            index--
+        }
+        return index
+    }
 
     private fun normalizeQueueSourceFlags(flags: List<Boolean>, queueSize: Int): List<Boolean> =
         if (flags.size == queueSize) flags else List(queueSize) { false }
@@ -1993,8 +2053,9 @@ class AudioEngine @Inject constructor(
 
     /**
      * Starts the automatic crossfade into the next track when the current one nears its end.
-     * Skipped for repeat-one, at the queue end, and when the next track failed to load.
-     * Re-evaluated on every progress tick.
+     * Skipped for repeat-one and when the next track failed to load. At the primary queue's
+     * end, repeat-all wraps to its start (the auxiliary pool is only entered by manual
+     * navigation); repeat-off keeps flowing into the pool. Re-evaluated on every progress tick.
      */
     private fun maybeStartTrackCrossfade() {
         if (silenceBetweenTracksMs > 0L) return
@@ -2009,8 +2070,17 @@ class AudioEngine @Inject constructor(
         val duration = player.duration
         if (duration <= 0L || duration == C.TIME_UNSET) return
 
-        val nextIndex = state.queueIndex + 1
-        if (nextIndex !in state.queue.indices) return
+        var nextIndex = state.queueIndex + 1
+        val primaryLast = primaryQueueLastIndex(state)
+        if (nextIndex > primaryLast) {
+            when {
+                state.repeatMode == RepeatMode.ALL && primaryLast >= 0 &&
+                        (nextIndex == primaryLast + 1 || nextIndex >= state.queue.size) ->
+                    nextIndex = 0
+                nextIndex >= state.queue.size -> return
+                // Else: repeat-off flows on into the auxiliary pool (up-next content).
+            }
+        }
         if (state.queue[nextIndex].id in failedTrackIds) return
 
         val normalFadeMs = fadeEngine.normalFadeDurationMs
@@ -2055,9 +2125,11 @@ class AudioEngine @Inject constructor(
         val trackId = player.currentMediaItem?.mediaId?.toLongOrNull() ?: return
         if (silenceGapArmedForTrackId == trackId) return
 
+        val primaryLast = primaryQueueLastIndex(state)
         val nextIndex = when {
+            state.queueIndex + 1 <= primaryLast -> state.queueIndex + 1
+            state.repeatMode == RepeatMode.ALL && primaryLast >= 0 -> 0
             state.queueIndex + 1 < state.queue.size -> state.queueIndex + 1
-            state.repeatMode == RepeatMode.ALL && state.queue.isNotEmpty() -> 0
             else -> return
         }
         if (state.queue[nextIndex].id in failedTrackIds) return
