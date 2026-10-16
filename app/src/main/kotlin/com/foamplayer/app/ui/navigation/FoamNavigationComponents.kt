@@ -308,6 +308,22 @@ object NavBarDimens {
             (ItemHitTargetSize - ExtraRowHeight) / 2 + ExtraRowRippleMargin
         )
 
+    /**
+     * How far content sitting above the bar rides UP while the extra row expands —
+     * its VISIBLE growth. The row's tight footprint dips into the main row below it
+     * ([extraRowBottomOverlap]), so riding the full height would overshoot the bar's
+     * visible top and open a gap bigger than the collapsed one. The full player's
+     * bottom controls use this to keep a constant gap to the bar.
+     */
+    fun extraRowVisibleRide(mode: NavigationBarMode, expandFraction: Float = 1f): Dp {
+        val expandedGrowth = ExtraRowHeight + ExtraRowExpandedSpacing
+        val dip = when (mode) {
+            NavigationBarMode.DOCKED -> extraRowBottomOverlap(DockedBarHeight)
+            else -> extraRowBottomOverlap(FloatingRowHeight)
+        }
+        return (expandedGrowth - dip) * expandFraction
+    }
+
     // ---- Mini player card placement --------------------------------------------
     /** Gap between the card's bottom edge and the top of the docked bar. */
     val DockedMiniPlayerGap = 2.dp

@@ -30,6 +30,14 @@ internal object PlayerDimens {
     /** Gap between the lyrics/queue selector row and the navbar when the subview is closed. */
     val selectorRowBottomPadding = 4.dp
 
+    /**
+     * How far the selector row sinks below its layout slot at rest (main player), landing
+     * its icons just above the navbar's surface. Unwound as the subview opens to make
+     * room for the seek bar, and cancelled by the navbar's extra-row growth (fed in as
+     * [FullPlayerScreen.navbarExpandHeight]).
+     */
+    val selectorRowNavbarDrop = 12.dp
+
     /** Space between the seek bar and its position/duration labels. */
     val seekBarLabelSpacing = 4.dp
 

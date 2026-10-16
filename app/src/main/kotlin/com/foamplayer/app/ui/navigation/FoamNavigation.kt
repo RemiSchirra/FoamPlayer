@@ -2184,6 +2184,14 @@ fun FoamNavHost(
                                 animatedVisibilityScope = this@AnimatedVisibility,
                                 playerTransitionState = playerTransitionState,
                                 backdropState = fullPlayerBackdropState,
+                                navbarExpandHeight = {
+                                    with(density) {
+                                        NavBarDimens.extraRowVisibleRide(
+                                            mode = navigationBarMode,
+                                            expandFraction = navBarExpandFraction
+                                        ).toPx()
+                                    }
+                                },
                                 isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                                 onOpenAlbum = { track ->
                                     activeSharedCollection = sharedCollectionTag("album", track.album)

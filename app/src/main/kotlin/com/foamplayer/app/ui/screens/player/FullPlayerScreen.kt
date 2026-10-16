@@ -110,7 +110,9 @@ fun FullPlayerScreen(
     onDismissGestureActivate: (suspend () -> Unit)? = null,
     onDismissGestureCancelled: (() -> Unit)? = null,
     dismissSwipeDistancePx: (() -> Float)? = null,
-    flightGeometry: PlayerFlightGeometryState? = null
+    flightGeometry: PlayerFlightGeometryState? = null,
+    /** Current extra-row growth of the navbar below, in px (0 = collapsed). Draw-phase read. */
+    navbarExpandHeight: () -> Float = { 0f }
 ) {
     val state by viewModel.playbackState.collectAsState()
     val settings by viewModel.settings.collectAsState()
@@ -849,6 +851,9 @@ fun FullPlayerScreen(
                 }
 
                 Box(modifier = Modifier.fillMaxWidth()) {
+                    val latestNavbarExpandHeight = rememberUpdatedState(navbarExpandHeight)
+                    val latestSubControlsProgress = rememberUpdatedState(subControlsProgress)
+
                     val selectorRowModifier = remember(subControlsProgress, uiAlpha) {
                         Modifier
                             .fillMaxWidth()
@@ -860,7 +865,10 @@ fun FullPlayerScreen(
                             )
                             .graphicsLayer {
                                 alpha = uiAlpha()
-                                translationY = -PlayerDimens.selectorRowRise.toPx() * subControlsProgress()
+                                val progress = latestSubControlsProgress.value()
+                                translationY = PlayerDimens.selectorRowNavbarDrop.toPx() * (1f - progress) -
+                                        PlayerDimens.selectorRowRise.toPx() * progress -
+                                        latestNavbarExpandHeight.value()
                             }
                     }
 
@@ -890,7 +898,9 @@ fun FullPlayerScreen(
                         Modifier
                             .align(Alignment.Center)
                             .graphicsLayer {
-                                translationY = -PlayerDimens.playButtonRise.toPx() * subControlsProgress()
+                                translationY = -PlayerDimens.playButtonRise.toPx() *
+                                        latestSubControlsProgress.value() -
+                                        latestNavbarExpandHeight.value()
                             }
                     }
 
@@ -970,7 +980,8 @@ fun FullPlayerScreen(
                         )
                         .graphicsLayer {
                             alpha = subControlsProgress()
-                            translationY = PlayerDimens.seekBarRise.toPx() * (1f - subControlsProgress())
+                            translationY = PlayerDimens.seekBarRise.toPx() * (1f - subControlsProgress()) -
+                                    navbarExpandHeight()
                         }
                 )
             }
