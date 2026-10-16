@@ -156,7 +156,7 @@ private fun Modifier.performantBlur(radius: Dp): Modifier {
  */
 @Composable
 internal fun backdropScrimColor(): Color =
-    if (FoamTheme.isDark) Color.Black else FoamTheme.colors.background
+    FoamTheme.colors.background
 
 /**
  * A blurred, crossfading artwork layer for non-settings areas of the app.

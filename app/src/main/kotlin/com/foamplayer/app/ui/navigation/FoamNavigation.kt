@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -55,6 +56,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -194,6 +196,14 @@ private const val NavScreenFadeDurationMs = 400
 
 /** Settings and browse subscreens slide by a fraction of their width when pushed/popped. */
 private const val SubScreenSlideDivisor = 3
+
+/**
+ * Peak alpha of the theme-aware scrim drawn behind the bottom chrome (app nav
+ * bar, mini player card and the system navigation bar's inset). 0.5 at the very
+ * bottom edge of the screen, fading to fully transparent at the top of the bar
+ * zone (see the layer in [FoamNavHost]).
+ */
+private const val BottomChromeScrimMaxAlpha = 0.9f
 
 /**
  * zIndex of the nav bar while lifted into the shared-element overlay (see
@@ -2215,6 +2225,22 @@ fun FoamNavHost(
                             )
                         }
                     }
+                }
+
+                if (currentRoute != Screen.Onboarding.route) {
+                    val bottomScrimColor = backdropScrimColor()
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(bottomBarClearance)
+                            .background(
+                                Brush.verticalGradient(
+                                    0f to bottomScrimColor.copy(alpha = 0f),
+                                    1f to bottomScrimColor.copy(alpha = BottomChromeScrimMaxAlpha)
+                                )
+                            )
+                    )
                 }
 
                 // Nav bar + mini player overlay, hidden on onboarding.
