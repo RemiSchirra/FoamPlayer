@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.foamplayer.app.audio.device.OutputDeviceManager
+import com.foamplayer.app.data.distant.DistantRepository
+import com.foamplayer.app.data.distant.PlayOnDeviceRepository
 import com.foamplayer.app.data.db.AppDatabase
 import com.foamplayer.app.data.db.dao.CachedLyricsDao
 import com.foamplayer.app.data.db.dao.ListenHistoryDao
@@ -70,4 +73,13 @@ object RepositoryModule {
     @Singleton
     fun provideSettingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         context.settingsDataStore
+
+    @Provides
+    @Singleton
+    fun providePlayOnDeviceRepository(
+        outputDeviceManager: OutputDeviceManager,
+        distantRepository: DistantRepository
+    ): PlayOnDeviceRepository {
+        return PlayOnDeviceRepository(outputDeviceManager, distantRepository)
+    }
 }

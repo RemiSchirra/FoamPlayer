@@ -102,6 +102,9 @@ class SettingsRepository @Inject constructor(
     suspend fun setImmersiveModeEnabled(enabled: Boolean) = update { it.copy(immersiveModeEnabled = enabled) }
     suspend fun setAnimateSeekBarEnabled(enabled: Boolean) = update { it.copy(animateSeekBarEnabled = enabled) }
     suspend fun setSeekBarStyle(style: SeekBarStyle) = update { it.copy(seekBarStyle = style) }
+    suspend fun setPreferredOutputDeviceId(deviceId: String?) = update {
+        it.copy(preferredOutputDeviceId = deviceId)
+    }
     suspend fun setAutoOpenPlayerEnabled(enabled: Boolean) = update { it.copy(autoOpenPlayerEnabled = enabled) }
     suspend fun setAnimatedCoverEnabled(enabled: Boolean) = update { it.copy(animatedCoverEnabled = enabled) }
     suspend fun setAnimatedCoverAllowMobileData(enabled: Boolean) = update {
@@ -435,7 +438,8 @@ class SettingsRepository @Inject constructor(
             ?: AppSettings().notificationButtonRight,
         dspStateSerialized = this[Keys.DSP_STATE].orEmpty(),
         dspUserPresets = this[Keys.DSP_USER_PRESETS].orEmpty(),
-        deviceAudioConfigs = deserializeDeviceAudioConfigs(this[Keys.DEVICE_AUDIO_CONFIGS])
+        deviceAudioConfigs = deserializeDeviceAudioConfigs(this[Keys.DEVICE_AUDIO_CONFIGS]),
+        preferredOutputDeviceId = this[Keys.PREFERRED_OUTPUT_DEVICE_ID]?.takeIf { it.isNotBlank() }
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -507,6 +511,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.NOTIFICATION_BUTTON_RIGHT] = settings.notificationButtonRight.name
         this[Keys.DSP_STATE] = settings.dspStateSerialized
         this[Keys.DSP_USER_PRESETS] = settings.dspUserPresets
+        this[Keys.PREFERRED_OUTPUT_DEVICE_ID] = settings.preferredOutputDeviceId.orEmpty()
         this[Keys.DEVICE_AUDIO_CONFIGS] = serializeDeviceAudioConfigs(settings.deviceAudioConfigs)
     }
 
@@ -584,6 +589,7 @@ class SettingsRepository @Inject constructor(
         val DSP_STATE = stringPreferencesKey("dsp_state")
         val DSP_USER_PRESETS = stringPreferencesKey("dsp_user_presets")
         val DEVICE_AUDIO_CONFIGS = stringPreferencesKey("device_audio_configs")
+        val PREFERRED_OUTPUT_DEVICE_ID = stringPreferencesKey("preferred_output_device_id")
     }
 }
 

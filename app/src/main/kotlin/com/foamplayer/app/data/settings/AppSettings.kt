@@ -179,7 +179,13 @@ data class AppSettings(
     /** User-saved EQ presets, serialized by [DspPersistence]. */
     val dspUserPresets: String = "",
     /** Per-output-device audio configuration, keyed by device id. */
-    val deviceAudioConfigs: Map<String, DeviceAudioConfig> = emptyMap()
+    val deviceAudioConfigs: Map<String, DeviceAudioConfig> = emptyMap(),
+    /**
+     * The user's "Play on" routing pick: an AudioOutputDevice id, "this_device"
+     * (pin the phone's local outputs), or null for the platform's default
+     * routing. Persisted so the route survives process restarts.
+     */
+    val preferredOutputDeviceId: String? = null
 ) {
     /**
      * Items of the main bar, in the user's configured order. Includes the [NavBarItem.MORE]

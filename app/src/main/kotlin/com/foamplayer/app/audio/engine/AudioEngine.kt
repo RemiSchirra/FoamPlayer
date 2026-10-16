@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
@@ -106,6 +107,12 @@ class AudioEngine @Inject constructor(
     }
 
     private val scope = CoroutineScope(Dispatchers.Main + Job())
+
+    /** The user's "Play on" routing pick (null = no explicit pick yet). */
+    val preferredOutputDeviceId: StateFlow<String?> = outputDeviceManager.preferredDeviceId
+
+    /** The routing target folded to a "Play on" sheet id (what the UI shows as selected). */
+    val selectedPlayOnDeviceId: StateFlow<String?> = outputDeviceManager.selectedPlayOnDeviceId
 
     private val _playbackState = MutableStateFlow(PlaybackState())
     val playbackState: StateFlow<PlaybackState> = _playbackState
@@ -271,6 +278,11 @@ class AudioEngine @Inject constructor(
             activePlayerField = newPlayer
             newPlayer.setAudioAttributes(mediaAudioAttributes, /* handleAudioFocus = */ true)
             onPlayerSwappedListener?.invoke()
+        }
+
+        @androidx.annotation.OptIn(UnstableApi::class)
+        override fun applyOutputRouting(player: ExoPlayer) {
+            applyPreferredAudioDeviceTo(player)
         }
 
         override fun buildFadeWindow(centerQueueIndex: Int): FadeEngine.FadeWindow? {
@@ -761,6 +773,122 @@ class AudioEngine @Inject constructor(
                 recomputeAudioOutputInfo()
             }
         }
+        // User-picked routing ("Play on" sheet): re-resolve and re-apply the
+        // preferred device whenever the override changes OR the device set changes
+        // (a detached headset must drop the override; a re-attached one must
+        // reclaim it). setPreferredAudioDevice pins the sink and every AudioTrack
+        // it creates afterwards, so both players and future tracks follow. The
+        // persisted pick is restored first (before the collectors can act on a
+        // null it would briefly read), then the observers take over.
+        scope.launch {
+            val persisted = settingsRepository.settings.first().preferredOutputDeviceId
+            if (persisted != null &&
+                outputDeviceManager.preferredDeviceId.value == null
+            ) {
+                outputDeviceManager.setPreferredDevice(persisted)
+            }
+        }
+        scope.launch {
+            outputDeviceManager.devices.collect {
+                applyPreferredAudioDevice()
+                recomputeAudioOutputInfo()
+            }
+        }
+        scope.launch {
+            outputDeviceManager.preferredDeviceId.collect {
+                applyPreferredAudioDevice()
+                recomputeAudioOutputInfo()
+            }
+        }
+    }
+
+    /**
+     * Applies the resolved routing target to the active player's audio sink.
+     * Three cases:
+     *  - no explicit pick yet -> clear the pin, the platform routes by its own
+     *    priority (BT attached => BT, matching pre-"Play on" behavior);
+     *  - "this device" pick -> pin the best LOCAL output (USB, wired, speaker) so
+     *    an attached BT headset does NOT steal the route;
+     *  - a concrete device pick -> pin that device.
+     * A target that detached between the state flip and this call leaves the
+     * previous route untouched (the override state itself self-corrects in
+     * [OutputDeviceManager.refresh]).
+     */
+    private fun applyPreferredAudioDevice() {
+        applyPreferredAudioDeviceTo(activePlayerField)
+        // Mid-crossfade the AUDIBLE stream is the not-yet-promoted secondary: pin
+        // it too, or the incoming stream stays on the platform's default route.
+        fadeEngine.activeSecondaryPlayer?.let { applyPreferredAudioDeviceTo(it) }
+    }
+
+    /**
+     * Pins [target]'s audio sink to the resolved routing target. Three cases:
+     *  - no explicit pick yet -> clear the pin, the platform routes by its own
+     *    priority (BT attached => BT, matching pre-"Play on" behavior);
+     *  - "this device" pick -> pin the best LOCAL output (USB, wired, speaker) so
+     *    an attached BT headset does NOT steal the route;
+     *  - a concrete device pick -> pin that device.
+     * A target that detached between the state flip and this call leaves the
+     * previous route untouched (the override state itself self-corrects in
+     * [OutputDeviceManager.refresh]).
+     */
+    private fun applyPreferredAudioDeviceTo(target: ExoPlayer) {
+        val preferredId = outputDeviceManager.preferredDeviceId.value
+        if (preferredId == null) {
+            target.setPreferredAudioDevice(null)
+            return
+        }
+        val resolvedId = if (preferredId == OutputDeviceManager.ThisDevicePickId) {
+            // "This device" is a virtual target: the best local output stands in
+            // for it. No local output attached -> nothing to pin.
+            outputDeviceManager.localDevice?.id ?: return
+        } else {
+            preferredId
+        }
+        val deviceInfo = outputDeviceManager.systemDeviceInfoForId(resolvedId) ?: return
+        target.setPreferredAudioDevice(deviceInfo)
+    }
+
+    /**
+     * Explicit "Play on" routing from the device picker. Returns false when the
+     * target is not (or no longer) attached, so the UI can keep its previous
+     * selection. The pick persists across process restarts.
+     *
+     * After pinning the sink the player is flushed and re-prepared at the current
+     * position: several OEM AudioFlinger implementations only honor
+     * AudioTrack.setPreferredDevice at track CREATION, silently ignoring a live
+     * re-route of a playing track (which is why the switch otherwise only "works"
+     * after the next track change creates a fresh AudioTrack). Recreating the
+     * track makes the first switch deterministic; the brief gap is the same one a
+     * seek produces.
+     */
+    fun routeTo(deviceId: String): Boolean {
+        if (fadeEngine.isFading) fadeEngine.completeCrossfadeNow()
+        val applied = outputDeviceManager.setPreferredDevice(deviceId)
+        if (!applied) {
+            recomputeAudioOutputInfo()
+            return false
+        }
+        applyPreferredAudioDevice()
+        scope.launch { settingsRepository.setPreferredOutputDeviceId(deviceId) }
+        recomputeAudioOutputInfo()
+
+        // Force the fresh AudioTrack unless playback is idle anyway (nothing to
+        // re-create; the pin applies when the next track is prepared). stop()
+        // tears the renderer's AudioTrack down (STATE_IDLE) and prepare() rebuilds
+        // it with the just-pinned preferred device, at the same position.
+        if (player.playbackState != Player.STATE_IDLE) {
+            val resume = player.playWhenReady
+            val positionMs = player.currentPosition
+            player.stop()
+            player.seekTo(positionMs)
+            player.prepare()
+            if (resume) {
+                player.play()
+                _playbackState.value = _playbackState.value.copy(isPlaying = true)
+            }
+        }
+        return true
     }
 
     /**

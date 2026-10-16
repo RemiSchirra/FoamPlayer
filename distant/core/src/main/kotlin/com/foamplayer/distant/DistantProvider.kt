@@ -44,7 +44,40 @@ interface DistantProvider {
 
     /** Cover art for [track], if the provider exposes one. */
     fun artUrl(server: DistantServer, track: DistantTrack): String? = track.artUrl
+
+    // ── Remote play ("Play on") — optional capability ────────────────────────
+
+    /** Controllable sessions (devices the server can drive), empty when unsupported. */
+    suspend fun listRemoteSessions(server: DistantServer): List<RemoteSession> = emptyList()
+
+    /** Commands the session's device to play [itemIds] now (optionally at [positionTicks]). */
+    suspend fun remotePlay(
+        server: DistantServer,
+        sessionId: String,
+        itemIds: List<String>,
+        positionTicks: Long?
+    ) {
+        throw DistantException("${type.displayName} does not support remote play")
+    }
+
+    /** Commands [sessionId]'s device to pause or resume. */
+    suspend fun remotePause(server: DistantServer, sessionId: String, pause: Boolean) {
+        throw DistantException("${type.displayName} does not support remote play")
+    }
+
+    /** Commands [sessionId]'s device to stop playing. */
+    suspend fun remoteStop(server: DistantServer, sessionId: String) {
+        throw DistantException("${type.displayName} does not support remote play")
+    }
 }
+
+/** One controllable remote playback session (a device the server can drive). */
+data class RemoteSession(
+    val id: String,
+    val deviceName: String,
+    val clientName: String,
+    val applicationVersion: String?
+)
 
 private val AUDIO_EXTENSIONS = setOf(
     "mp3", "flac", "m4a", "aac", "ogg", "oga", "opus", "wav", "wma", "alac", "aiff", "aif", "ape", "m4b", "mp4"

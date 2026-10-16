@@ -95,6 +95,15 @@ class FadeEngine @androidx.annotation.OptIn(UnstableApi::class)
 
         /** Volume a player carries when NOT fading (DSP direct-volume path aware). */
         fun playerBaseVolume(): Float
+
+        /**
+         * Applies the app's output-device routing (the "Play on" pick) to a freshly
+         * built secondary player, so the incoming crossfade stream renders on the
+         * SAME device as the outgoing one from its very first frame (the platform's
+         * own default routing would otherwise hand the incoming stream to whichever
+         * device has priority -- e.g. back to an attached BT headset mid-fade).
+         */
+        fun applyOutputRouting(player: ExoPlayer)
     }
 
     data class FadeWindow(
@@ -138,6 +147,10 @@ class FadeEngine @androidx.annotation.OptIn(UnstableApi::class)
      */
     val displayPlayer: ExoPlayer?
         get() = if (isFading && logicalSwitchFired) secondary else null
+
+    /** The in-flight crossfade's incoming player while a fade runs, null otherwise. */
+    val activeSecondaryPlayer: ExoPlayer?
+        get() = if (isFading) secondary else null
 
     @Volatile
     private var normalFadeMs: Long = 0L
@@ -456,6 +469,7 @@ class FadeEngine @androidx.annotation.OptIn(UnstableApi::class)
      */
     @androidx.annotation.OptIn(UnstableApi::class)
     private fun buildSecondaryPlayer(): Pair<ExoPlayer, DspAudioProcessor>? {
+        val h = host
         val mirror = dspEngine.createMirrorProcessor()
         return try {
             val renderersFactory = object : androidx.media3.exoplayer.DefaultRenderersFactory(context) {
@@ -481,6 +495,7 @@ class FadeEngine @androidx.annotation.OptIn(UnstableApi::class)
                     .build(),
                 /* handleAudioFocus = */ false
             )
+            h?.applyOutputRouting(player)
             player to mirror
         } catch (e: Exception) {
             Log.w(TAG, "Failed to build secondary player", e)

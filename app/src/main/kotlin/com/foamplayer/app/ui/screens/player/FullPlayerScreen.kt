@@ -69,6 +69,8 @@ import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.rememberSeekBarProgressState
 import com.foamplayer.app.ui.modals.PlayerAudioInfoModal
+import com.foamplayer.app.ui.modals.PlayOnDevice
+import com.foamplayer.app.ui.modals.PlayOnModal
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.WaveformCache
@@ -93,7 +95,6 @@ class PlayerFlightGeometryState {
     var heroArtCenterY: Float by mutableFloatStateOf(Float.NaN)
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun FullPlayerScreen(
     viewModel: PlayerViewModel,
@@ -103,22 +104,12 @@ fun FullPlayerScreen(
     playerTransitionState: SeekableTransitionState<Boolean>,
     backdropState: FullPlayerBackdropState,
     isAnimateSeekBarEnabled: Boolean = false,
-    // Title/artist box gestures: tap opens the album view, long-press opens the
-    // artist view (both staged through the nav root, closing the player).
     onOpenAlbum: (TrackEntity) -> Unit = {},
     onOpenArtist: (TrackEntity) -> Unit = {},
-    // Dismiss-to-origin-collection coordination (see PlayerGestureController): the
-    // nav root preloads the row flight on finger-down (compose the page invisibly,
-    // scroll the row into view -- no pairing), TAGS the row on the first drag delta
-    // (activation) and is told when the gesture settles back without committing.
     onDismissGestureStart: (suspend () -> Unit)? = null,
     onDismissGestureActivate: (suspend () -> Unit)? = null,
     onDismissGestureCancelled: (() -> Unit)? = null,
-    // Finger-to-artwork travel distance for the dismiss swipe (1:1 tracking); falls
-    // back to the screen height when unknown.
     dismissSwipeDistancePx: (() -> Float)? = null,
-    // Receives the hero artwork's center so the nav root can compute the swipe
-    // distance above.
     flightGeometry: PlayerFlightGeometryState? = null
 ) {
     val state by viewModel.playbackState.collectAsState()
@@ -128,35 +119,13 @@ fun FullPlayerScreen(
     val isAnimatedCoverEnabled = isImmersiveEnabled && settings.animatedCoverEnabled
     val allowMobileDataForCanvas = settings.animatedCoverAllowMobileData
     val marqueeMode = settings.marqueeMode
-    // Seek bar rendering (full player only; the mini player keeps the classic bar).
     val seekBarStyle = settings.seekBarStyle
 
-    // Waveform bars always settle track changes with an animation (they recede on
-    // the swipe commit instead of snapping -- see SeekBarProgressState); the classic
-    // bar only does so when the "animate seek bar" setting is on. Continuous
-    // swipe-follow of the bars stays tied to the setting alone (see liveProgress).
     val settleSeekBarAnimated = isAnimateSeekBarEnabled || seekBarStyle == SeekBarStyle.WAVEFORM
 
-    // ── Waveform envelope morph (waveform seek bar only) ─────────────────────────
-    // Track changes morph the bars between the two tracks' amplitude envelopes
-    // instead of hard-swapping them. The swap's pinned pages live in
-    // [SeekBarProgressState] (shared with the mask settle's hold/settle lifecycle);
-    // this screen resolves the pinned envelopes through the process-wide cache and
-    // hands the blend driver to the waveform. While the finger is down the blend is
-    // the hero pager's own swipe fraction (progressive; raw "animate seek bar" setting
-    // on), and at RELEASE a tween takes the blend over -- committing swipes tween on
-    // up to 1, spring-backs tween back down to 0 -- so the morph always terminates
-    // with an animation instead of snapping or coasting on the pager's fling.
     val isWaveformSeek = seekBarStyle == SeekBarStyle.WAVEFORM
     val isProgressiveEnvelope = isWaveformSeek && isAnimateSeekBarEnabled
 
-    // Narrow, equality-gated projections of the playback state -- the same idea as the
-    // ViewModel's narrow projections for the composition roots (FoamApp,
-    // FoamNavHost). Collecting these instead of the whole state keeps emissions like
-    // play/pause flips, audio-output changes) no longer recompose
-    // this whole screen: a play/pause press now only invalidates the transport leaves that
-    // read it. isPlaying deliberately stays raw -- it is consumed exclusively through the
-    // deferred provider below, inside leaf scopes (transport buttons, paused-art scale).
     val currentTrack by remember { derivedStateOf { state.currentTrack } }
     val queue by remember { derivedStateOf { state.queue } }
     val queueIndex by remember { derivedStateOf { state.queueIndex } }
@@ -164,22 +133,17 @@ fun FullPlayerScreen(
     val durationMs by remember { derivedStateOf { state.durationMs } }
     val audioOutputInfo by remember { derivedStateOf { state.audioOutputInfo } }
     val isPlayingProvider = { state.isPlaying }
-    // Combined playback-active bit for the paused-art shrink: isPlaying is false
-    // through the buffering gap between prepare() and STATE_READY even though
-    // playback was just requested, and shrinking across that gap made every track
-    // tap scale the art down for the load duration and back up when ready. A
-    // buffering read must not be a paused read -- see rememberPausedArtScale.
-    // The mini player applies the identical formula, so both ends of the
-    // album-art shared-element pair always render the same scale mid-flight.
     val isPlaybackActiveProvider = { state.isPlaying || state.isPlaybackRequested }
     val track = currentTrack ?: return
     val queueSize = queue.size
 
     var subViewMode by remember { mutableStateOf(SubViewMode.LYRICS) }
     var showAudioInfoModal by remember { mutableStateOf(false) }
+    var showPlayOnModal by remember { mutableStateOf(false) }
 
-    // Chip label between the lyrics/queue selector icons: live audio format +
-    // bitrate from the engine's output info, falling back to the track's tags.
+    val playOnDevices by viewModel.playOnDevices.collectAsState()
+    val selectedPlayOnDeviceId by viewModel.selectedPlayOnDeviceId.collectAsState()
+
     val audioInfoText = run {
         val format = audioOutputInfo?.sourceFormat?.takeIf { it.isNotBlank() } ?: track.format
         val bitrateKbps = audioOutputInfo?.sourceBitrateKbps?.takeIf { it > 0 } ?: track.bitrate
@@ -915,6 +879,7 @@ fun FullPlayerScreen(
                                 gestureController.expandToSubView()
                             }
                         },
+                        onPlayOnClick = { showPlayOnModal = true },
                         modifier = selectorRowModifier
                     )
 
@@ -1015,6 +980,19 @@ fun FullPlayerScreen(
         outputInfo = audioOutputInfo,
         track = track
     )
+
+    PlayOnModal(
+        visible = showPlayOnModal,
+        onDismiss = { showPlayOnModal = false },
+        devices = playOnDevices,
+        selectedDeviceId = selectedPlayOnDeviceId ?: PlayOnDevice.ThisDeviceId,
+        onDeviceSelected = { device ->
+            showPlayOnModal = false
+            if (device.id != (selectedPlayOnDeviceId ?: PlayOnDevice.ThisDeviceId)) {
+                viewModel.routePlayOn(device.id)
+            }
+        }
+    )
 }
 
 @Composable
@@ -1042,12 +1020,6 @@ private fun TrackChangeCommitEffect(
                     targetPage in 0 until latestQueueSize &&
                     targetPage != latestQueueIndex
                 ) {
-                    // Release terminating on a NEW track: the envelope swap tweens on
-                    // up to blend 1 from wherever the pager fraction left it (a
-                    // progressive swipe) or from 0 (a non-progressive bar), in the same
-                    // motion as the mask's settle tween. fromPageIndex pins the
-                    // trigger-time playing page so the engine's later flip cannot swap
-                    // the from-envelope underneath the tween.
                     seekBarProgress.onTrackChangeCommitted(
                         animated = latestIsAnimateSeekBarEnabled,
                         morphTargetPage = if (latestIsWaveformSeek) targetPage else null,

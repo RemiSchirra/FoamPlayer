@@ -6,11 +6,13 @@ import com.foamplayer.distant.DistantCredentials
 import com.foamplayer.distant.DistantException
 import com.foamplayer.distant.DistantFolder
 import com.foamplayer.distant.DistantFolderEntry
+import com.foamplayer.distant.DistantProvider
 import com.foamplayer.distant.DistantProviderRegistry
 import com.foamplayer.distant.DistantProviderType
 import com.foamplayer.distant.DistantServer
 import com.foamplayer.distant.DistantTrack
 import com.foamplayer.distant.DistantUris
+import com.foamplayer.distant.RemoteSession
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -147,6 +149,48 @@ class DistantRepository @Inject constructor(
 
     fun artFor(server: DistantServer, track: DistantTrack): String? =
         registry.get(server.type).artUrl(server, track)
+
+    /** One controllable remote session tagged with the server that drives it. */
+    data class DistantRemoteSession(
+        val session: RemoteSession,
+        val server: DistantServer
+    )
+
+    /**
+     * Controllable playback sessions across every configured server (Jellyfin
+     * devices the server can drive). Servers without remote-play support (or
+     * failing to answer) contribute nothing instead of failing the discovery.
+     */
+    suspend fun listRemoteSessions(): List<DistantRemoteSession> =
+        serversCache.flatMap { server ->
+            runCatching { registry.get(server.type).listRemoteSessions(server) }
+                .getOrElse { emptyList() }
+                .map { DistantRemoteSession(it, server) }
+        }
+
+    /** Commands [session]'s device to play the [itemIds] (server item ids) now. */
+    suspend fun remotePlay(
+        remote: DistantRemoteSession,
+        itemIds: List<String>,
+        positionTicks: Long? = null
+    ) {
+        registry.get(remote.server.type)
+            .remotePlay(remote.server, remote.session.id, itemIds, positionTicks)
+    }
+
+    /** Commands [remote]'s device to pause or resume. */
+    suspend fun remotePause(remote: DistantRemoteSession, pause: Boolean) {
+        runCatching {
+            registry.get(remote.server.type).remotePause(remote.server, remote.session.id, pause)
+        }
+    }
+
+    /** Commands [remote]'s device to stop playing. */
+    suspend fun remoteStop(remote: DistantRemoteSession) {
+        runCatching {
+            registry.get(remote.server.type).remoteStop(remote.server, remote.session.id)
+        }
+    }
 
     /** Synchronous stream resolution used by the player's data source. */
     fun streamFor(uri: String): DistantStream? {

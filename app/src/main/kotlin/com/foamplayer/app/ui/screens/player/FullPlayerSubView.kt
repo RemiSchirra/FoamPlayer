@@ -145,20 +145,76 @@ internal fun SubViewSelectorRow(
     subViewMode: SubViewMode,
     progress: () -> Float,
     onSelect: (SubViewMode) -> Unit,
+    onPlayOnClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        SubViewMode.entries.forEach { mode ->
-            SubViewSelectorItem(
-                mode = mode,
-                isSelected = mode == subViewMode,
-                progress = progress,
-                onSelect = onSelect
+        SubViewSelectorItem(
+            mode = SubViewMode.LYRICS,
+            isSelected = subViewMode == SubViewMode.LYRICS,
+            progress = progress,
+            onSelect = onSelect
+        )
+
+        SubViewSelectorAction(
+            icon = FoamTheme.icons.current.cast,
+            contentDescription = stringResource(R.string.play_on),
+            progress = progress,
+            onClick = onPlayOnClick
+        )
+
+        SubViewSelectorItem(
+            mode = SubViewMode.QUEUE,
+            isSelected = subViewMode == SubViewMode.QUEUE,
+            progress = progress,
+            onSelect = onSelect
+        )
+    }
+}
+
+/**
+ * One non-selector action icon living between the lyrics/queue selectors (currently
+ * only "Play on"). Same icon/touch sizing as SubViewSelectorItem, but it disappears
+ * as the subview opens: [progress] -> 1 fades the icon out (draw-phase alpha) and
+ * gates the click once invisible, so a hidden action is never tappable while the
+ * lyrics/queue selectors at both ends stay reachable for switching/collapsing.
+ */
+@Composable
+private fun SubViewSelectorAction(
+    icon: ImageVector,
+    contentDescription: String,
+    progress: () -> Float,
+    onClick: () -> Unit
+) {
+    val isEnabled by remember(progress) {
+        derivedStateOf { progress() < 1f - PlayerDimens.visibilityEpsilon }
+    }
+    val actionInteractions = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .pressShrink(actionInteractions)
+            .clickable(
+                interactionSource = actionInteractions,
+                indication = null,
+                enabled = isEnabled,
+                onClick = onClick
             )
-        }
+            .padding(12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = FoamTheme.colors.textSecondary,
+            modifier = Modifier
+                .size(24.dp)
+                .graphicsLayer { alpha = 1f - progress().coerceIn(0f, 1f) }
+        )
     }
 }
 

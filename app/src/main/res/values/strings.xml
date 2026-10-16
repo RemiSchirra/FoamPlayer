@@ -273,6 +273,15 @@
 
     <string name="queue_shuffle">Shuffle queue</string>
     <string name="queue_clear">Clear queue</string>
+
+    <!-- Play on (cast / remote devices) -->
+    <string name="play_on">Play on</string>
+    <string name="play_on_this_device">This device</string>
+    <string name="play_on_this_device_desc">Android</string>
+    <string name="play_on_bluetooth_desc">Bluetooth</string>
+    <string name="play_on_chromecast_desc">Chromecast</string>
+    <string name="play_on_remote_player_desc">%1$s media server</string>
+    <string name="play_on_upnp_desc">UPnP</string>
     <string name="track_count_duration">%1$d Tracks • %2$s</string>
     <string name="add_separator">Add separator…</string>
 
