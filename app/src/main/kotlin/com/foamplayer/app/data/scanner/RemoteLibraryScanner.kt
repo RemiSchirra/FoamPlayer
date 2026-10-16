@@ -31,19 +31,34 @@ class RemoteLibraryScanner @Inject constructor(
         if (servers.isEmpty()) return emptyList()
 
         val totalFolders = servers.sumOf { it.folders.size }.coerceAtLeast(1)
-        val result = ArrayList<TrackEntity>()
-        // Album art is shared by many tracks: download each distinct URL once.
-        val artworkCache = HashMap<String, String?>()
-        var done = 0
+        val listed = ArrayList<Pair<DistantServer, List<DistantTrack>>>()
+        var foldersDone = 0
 
         servers.forEach { server ->
             server.folders.forEach { folder ->
-                onProgress(done.toFloat() / totalFolders, "${server.name} · ${folder.name}")
+                val label = "${server.name} · ${folder.name}"
+                onProgress(foldersDone.toFloat() / (totalFolders * 2), label)
                 val tracks = runCatching { repository.listTracks(server, folder) }.getOrDefault(emptyList())
-                tracks.forEach { result += it.toEntity(server, artworkCache) }
-                done++
+                listed += server to tracks
+                foldersDone++
+                onProgress(foldersDone.toFloat() / (totalFolders * 2), label)
             }
         }
+
+        val totalTracks = listed.sumOf { it.second.size }.coerceAtLeast(1)
+        val result = ArrayList<TrackEntity>(totalTracks)
+        // Album art is shared by many tracks: download each distinct URL once.
+        val artworkCache = HashMap<String, String?>()
+        var tracksDone = 0
+
+        listed.forEach { (server, tracks) ->
+            tracks.forEach { track ->
+                onProgress(0.5f + tracksDone.toFloat() / (totalTracks * 2), track.title)
+                result += track.toEntity(server, artworkCache)
+                tracksDone++
+            }
+        }
+        onProgress(1f, "")
         return result
     }
 
