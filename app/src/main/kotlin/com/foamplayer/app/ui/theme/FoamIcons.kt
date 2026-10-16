@@ -40,7 +40,8 @@ data class FoamIconSet(
     val delete: ImageVector,
     val arrowForward: ImageVector,
     val shuffle: ImageVector,
-    val misc: ImageVector
+    val misc: ImageVector,
+    val ui: ImageVector
 )
 
 /** The three icon styles and which one is active. */
@@ -80,7 +81,8 @@ val DefaultFoamIcons = FoamIcons(
         delete = Icons.Filled.Delete,
         arrowForward = Icons.AutoMirrored.Filled.ArrowForward,
         shuffle = Icons.Filled.Shuffle,
-        misc = Icons.Filled.Extension
+        misc = Icons.Filled.Extension,
+        ui = Icons.Filled.Palette
     ),
     outline = FoamIconSet(
         play = Icons.Outlined.PlayArrow,
@@ -102,7 +104,8 @@ val DefaultFoamIcons = FoamIcons(
         delete = Icons.Outlined.Delete,
         arrowForward = Icons.AutoMirrored.Outlined.ArrowForward,
         shuffle = Icons.Outlined.Shuffle,
-        misc = Icons.Outlined.Extension
+        misc = Icons.Outlined.Extension,
+        ui = Icons.Outlined.Palette
     ),
     flat = FoamIconSet(
         play = Icons.Rounded.PlayArrow,
@@ -124,7 +127,8 @@ val DefaultFoamIcons = FoamIcons(
         delete = Icons.Rounded.Delete,
         arrowForward = Icons.AutoMirrored.Rounded.ArrowForward,
         shuffle = Icons.Rounded.Shuffle,
-        misc = Icons.Rounded.Extension
+        misc = Icons.Rounded.Extension,
+        ui = Icons.Rounded.Palette
     ),
     currentStyle = FoamIconStyle.FLAT
 )

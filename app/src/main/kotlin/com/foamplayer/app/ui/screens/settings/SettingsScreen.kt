@@ -105,7 +105,7 @@ fun SettingsScreen(
                 SettingsCategoryItem(
                     title = stringResource(R.string.user_interface),
                     subtitle = stringResource(R.string.ui_settings_subtitle),
-                    icon = FoamTheme.icons.current.settings,
+                    icon = FoamTheme.icons.current.ui,
                     onClick = onNavigateToUI
                 )
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
