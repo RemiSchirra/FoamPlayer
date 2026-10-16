@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +57,6 @@ import com.foamplayer.app.ui.modals.PlaylistModalStats
 import com.foamplayer.app.ui.modals.RenamePlaylistModal
 import com.foamplayer.app.ui.modals.rememberPlaylistFoamModalState
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
-import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -64,6 +64,32 @@ import kotlinx.coroutines.launch
 
 /** How many items a Home row's pager shows (its "See all" page holds up to 50). */
 private const val HomeRowItemCount = 5
+
+/**
+ * Stable tag of each Home row. The same album/artist/track can appear in more
+ * than one row at once, so item identity alone cannot pick the card that was
+ * actually clicked: every matching card would register the same shared-element
+ * key and the flight would lag between them / leave from the wrong source.
+ * HomeScreen remembers the tag of the row whose card started the current
+ * transition ([clickedRowTag]) and only that row's cards join the flight.
+ */
+private object HomeRowTag {
+    const val RANDOM_TRACKS = "home_row_random_tracks"
+    const val RANDOM_ALBUMS = "home_row_random_albums"
+    const val RANDOM_ARTISTS = "home_row_random_artists"
+    const val PLAYLISTS = "home_row_playlists"
+    const val ALBUMS = "home_row_albums"
+    const val RECENT_TRACKS = "home_row_recent"
+    const val FAVORITE_TRACKS = "home_row_favorites"
+    const val OLD_FAVORITES = "home_row_old_favorites"
+    const val OLD_FAVORITE_ALBUMS = "home_row_old_favorite_albums"
+    const val ARTISTS = "home_row_artists"
+    const val RECENTLY_ADDED_ALBUMS = "home_row_recently_added_albums"
+    const val RECENTLY_ADDED_ARTISTS = "home_row_recently_added_artists"
+}
+
+/** Identity of one clicked collection card: row + kind + item id. */
+private fun collectionKey(rowTag: String, kind: String, id: String) = "$rowTag|$kind|$id"
 
 private val ImageMimeTypes = arrayOf("image/*")
 
@@ -140,6 +166,10 @@ fun HomeScreen(
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
 
+    var clickedRowTag by rememberSaveable { mutableStateOf<String?>(null) }
+
+    var clickedCollectionKey by rememberSaveable { mutableStateOf<String?>(null) }
+
     // Long-press actions for playlist cards: the playlist actions modal,
     // hosted here with the same edit/rename/delete wiring as PlaylistsScreen.
     val playlistModalState = rememberPlaylistFoamModalState()
@@ -193,7 +223,10 @@ fun HomeScreen(
                 HomeSection.RANDOM_TRACKS -> homeSectionItem(key = "home_row_random_tracks", visible = randomTracks.isNotEmpty()) {
                     StartPlayingSection(
                         tracks = randomTracks,
-                        onTrackClick = onTrackClick,
+                        onTrackClick = { track ->
+                            clickedRowTag = HomeRowTag.RANDOM_TRACKS
+                            onTrackClick(track)
+                        },
                         onTrackLongClick = { track -> trackModalState?.show(track) },
                         onRefresh = viewModel::reshuffleRandomTracks
                     )
@@ -202,6 +235,8 @@ fun HomeScreen(
                     RandomAlbumsSection(
                         albums = randomAlbums,
                         onAlbumClick = { album ->
+                            clickedRowTag = HomeRowTag.RANDOM_ALBUMS
+                            clickedCollectionKey = collectionKey(HomeRowTag.RANDOM_ALBUMS, "album", album.album)
                             onAlbumClick(
                                 AlbumRecommendation(
                                     album = album.album,
@@ -232,6 +267,8 @@ fun HomeScreen(
                         artists = randomArtists,
                         covers = randomArtistCovers,
                         onArtistClick = { artist ->
+                            clickedRowTag = HomeRowTag.RANDOM_ARTISTS
+                            clickedCollectionKey = collectionKey(HomeRowTag.RANDOM_ARTISTS, "artist", artist.name)
                             val cover = randomArtistCovers.covers[artist.name]
                             onArtistClick(artist.name, cover?.imageUrl, cover?.isEmbeddedArt ?: false)
                         },
@@ -258,12 +295,16 @@ fun HomeScreen(
                         key = { it.playlistId }
                     ) { playlist ->
                         val cover = playlistCovers[playlist.playlistId]
-                        val inFlight = isActiveSharedCollection("playlist", "${playlist.playlistId}")
+                        val inFlight = clickedCollectionKey == collectionKey(HomeRowTag.PLAYLISTS, "playlist", "${playlist.playlistId}")
                         HomeRowCard(
                             title = playlist.name,
                             imageUrl = cover?.imageUrl ?: playlist.imageUrl,
                             imageIsEmbeddedArt = cover?.isEmbeddedArt ?: false,
-                            onClick = { onPlaylistClick(playlist) },
+                            onClick = {
+                                clickedRowTag = HomeRowTag.PLAYLISTS
+                                clickedCollectionKey = collectionKey(HomeRowTag.PLAYLISTS, "playlist", "${playlist.playlistId}")
+                                onPlaylistClick(playlist)
+                            },
                             onLongClick = {
                                 val entity = allPlaylists.firstOrNull { it.playlistId == playlist.playlistId }
                                     ?: PlaylistEntity(
@@ -291,11 +332,15 @@ fun HomeScreen(
                             onSeeAllClick = onSeeAllAlbums,
                             key = { it.album }
                         ) { album ->
-                            val inFlight = isActiveSharedCollection("album", album.album)
+                            val inFlight = clickedCollectionKey == collectionKey(HomeRowTag.ALBUMS, "album", album.album)
                             HomeRowCard(
                                 title = album.album,
                                 imageUrl = album.albumArtPath,
-                                onClick = { onAlbumClick(album) },
+                                onClick = {
+                                    clickedRowTag = HomeRowTag.ALBUMS
+                                    clickedCollectionKey = collectionKey(HomeRowTag.ALBUMS, "album", album.album)
+                                    onAlbumClick(album)
+                                },
                                 onLongClick = {
                                     longPressScope.launch {
                                         collectionModalState?.show(
@@ -327,12 +372,16 @@ fun HomeScreen(
                         onSeeAllClick = onSeeAllRecent,
                         key = { it.id }
                     ) { track ->
-                        val inPlayerFlight = track.id == sharedTrackId
+                        val inPlayerFlight = track.id == sharedTrackId &&
+                                clickedRowTag == HomeRowTag.RECENT_TRACKS
                         HomeRowCard(
                             title = track.title,
                             imageUrl = track.albumArtPath,
                             width = HomeRowCardSmallWidth,
-                            onClick = { onTrackClick(track) },
+                            onClick = {
+                                clickedRowTag = HomeRowTag.RECENT_TRACKS
+                                onTrackClick(track)
+                            },
                             onLongClick = { trackModalState?.show(track) },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
@@ -351,12 +400,16 @@ fun HomeScreen(
                         onSeeAllClick = onSeeAllFavoriteTracks,
                         key = { it.id }
                     ) { track ->
-                        val inPlayerFlight = track.id == sharedTrackId
+                        val inPlayerFlight = track.id == sharedTrackId &&
+                                clickedRowTag == HomeRowTag.FAVORITE_TRACKS
                         HomeRowCard(
                             title = track.title,
                             imageUrl = track.albumArtPath,
                             width = HomeRowCardSmallWidth,
-                            onClick = { onTrackClick(track) },
+                            onClick = {
+                                clickedRowTag = HomeRowTag.FAVORITE_TRACKS
+                                onTrackClick(track)
+                            },
                             onLongClick = { trackModalState?.show(track) },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
@@ -375,12 +428,16 @@ fun HomeScreen(
                         onSeeAllClick = onSeeAllFavorites,
                         key = { it.id }
                     ) { track ->
-                        val inPlayerFlight = track.id == sharedTrackId
+                        val inPlayerFlight = track.id == sharedTrackId &&
+                                clickedRowTag == HomeRowTag.OLD_FAVORITES
                         HomeRowCard(
                             title = track.title,
                             imageUrl = track.albumArtPath,
                             width = HomeRowCardSmallWidth,
-                            onClick = { onTrackClick(track) },
+                            onClick = {
+                                clickedRowTag = HomeRowTag.OLD_FAVORITES
+                                onTrackClick(track)
+                            },
                             onLongClick = { trackModalState?.show(track) },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
@@ -400,11 +457,15 @@ fun HomeScreen(
                             onSeeAllClick = onSeeAllOldFavoriteAlbums,
                             key = { it.album }
                         ) { album ->
-                            val inFlight = isActiveSharedCollection("album", album.album)
+                            val inFlight = clickedCollectionKey == collectionKey(HomeRowTag.OLD_FAVORITE_ALBUMS, "album", album.album)
                             HomeRowCard(
                                 title = album.album,
                                 imageUrl = album.albumArtPath,
-                                onClick = { onAlbumClick(album) },
+                                onClick = {
+                                    clickedRowTag = HomeRowTag.OLD_FAVORITE_ALBUMS
+                                    clickedCollectionKey = collectionKey(HomeRowTag.OLD_FAVORITE_ALBUMS, "album", album.album)
+                                    onAlbumClick(album)
+                                },
                                 onLongClick = {
                                     longPressScope.launch {
                                         collectionModalState?.show(
@@ -437,7 +498,7 @@ fun HomeScreen(
                             onSeeAllClick = onSeeAllArtists,
                             key = { it.name }
                         ) { artist ->
-                            val inFlight = isActiveSharedCollection("artist", artist.name)
+                            val inFlight = clickedCollectionKey == collectionKey(HomeRowTag.ARTISTS, "artist", artist.name)
                             HomeRowCard(
                                 title = artist.name,
                                 imageUrl = artistImages[artist.name]?.imageUrl,
@@ -445,6 +506,8 @@ fun HomeScreen(
                                 width = HomeRowCardSmallWidth,
                                 round = true,
                                 onClick = {
+                                    clickedRowTag = HomeRowTag.ARTISTS
+                                    clickedCollectionKey = collectionKey(HomeRowTag.ARTISTS, "artist", artist.name)
                                     val cover = artistImages[artist.name]
                                     onArtistClick(
                                         artist.name,
@@ -484,11 +547,15 @@ fun HomeScreen(
                             onSeeAllClick = onSeeAllRecentlyAddedAlbums,
                             key = { it.album }
                         ) { album ->
-                            val inFlight = isActiveSharedCollection("album", album.album)
+                            val inFlight = clickedCollectionKey == collectionKey(HomeRowTag.RECENTLY_ADDED_ALBUMS, "album", album.album)
                             HomeRowCard(
                                 title = album.album,
                                 imageUrl = album.albumArtPath,
-                                onClick = { onAlbumClick(album) },
+                                onClick = {
+                                    clickedRowTag = HomeRowTag.RECENTLY_ADDED_ALBUMS
+                                    clickedCollectionKey = collectionKey(HomeRowTag.RECENTLY_ADDED_ALBUMS, "album", album.album)
+                                    onAlbumClick(album)
+                                },
                                 onLongClick = {
                                     longPressScope.launch {
                                         collectionModalState?.show(
@@ -521,7 +588,7 @@ fun HomeScreen(
                             onSeeAllClick = onSeeAllRecentlyAddedArtists,
                             key = { it.name }
                         ) { artist ->
-                            val inFlight = isActiveSharedCollection("artist", artist.name)
+                            val inFlight = clickedCollectionKey == collectionKey(HomeRowTag.RECENTLY_ADDED_ARTISTS, "artist", artist.name)
                             HomeRowCard(
                                 title = artist.name,
                                 imageUrl = recentlyAddedArtistImages[artist.name]?.imageUrl,
@@ -529,6 +596,8 @@ fun HomeScreen(
                                 width = HomeRowCardSmallWidth,
                                 round = true,
                                 onClick = {
+                                    clickedRowTag = HomeRowTag.RECENTLY_ADDED_ARTISTS
+                                    clickedCollectionKey = collectionKey(HomeRowTag.RECENTLY_ADDED_ARTISTS, "artist", artist.name)
                                     val cover = recentlyAddedArtistImages[artist.name]
                                     onArtistClick(
                                         artist.name,
