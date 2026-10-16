@@ -96,6 +96,7 @@ import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.MiniPlayer
 import com.foamplayer.app.ui.modals.PlaylistPickerModal
 import com.foamplayer.app.ui.modals.TrackFoamModal
+import com.foamplayer.app.ui.modals.UpdateFoamModal
 import com.foamplayer.app.ui.modals.rememberCollectionFoamModalState
 import com.foamplayer.app.ui.modals.rememberTrackFoamModalState
 import com.foamplayer.app.ui.screens.equalizer.EqualizerScreen
@@ -146,6 +147,8 @@ import com.foamplayer.app.ui.screens.stats.StatsScreen
 import com.foamplayer.app.ui.screens.stats.StatsSeeAllScreen
 import com.foamplayer.app.ui.screens.stats.StatsTopKind
 import com.foamplayer.app.ui.screens.search.SearchScreen
+import com.foamplayer.app.ui.screens.settings.AboutSettingsScreen
+import com.foamplayer.app.update.UpdateManager
 import com.foamplayer.app.ui.screens.settings.AudioSettingsScreen
 import com.foamplayer.app.ui.screens.settings.AudioDevicesSettingsScreen
 import com.foamplayer.app.ui.screens.settings.BackgroundSettingsScreen
@@ -457,25 +460,6 @@ fun FoamNavHost(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Previous route, for backdrop fade timing below: the full-bleed detail
-    // backdrop is the ONLY layer painting the status-bar strip (screens start
-    // below the inset), so its fade must run on EXACTLY the same clock as the
-    // screens' transition — same duration AND easing — or the strip visibly
-    // lags or leads the content while a collection closes. The duration is
-    // derived from the TRANSITION PAIR (the rule the NavHost uses for its
-    // fades: shared-element when EITHER endpoint is one), not from the
-    // destination alone — closing album -> browse fades the screens in 350ms
-    // (the outgoing detail route is shared-element) and the backdrop must
-    // match, even though browse itself is not a shared-element route.
-    // [SideEffect] keeps [lastRoute] one composition behind [currentRoute]:
-    // during the frame where the route flips, it still holds the route the
-    // transition leaves.
-    //
-    // NOTE: this must be updated DURING composition, not in a [SideEffect]. The
-    // backdrop's target flips in a later recomposition (its art is cleared from a
-    // LaunchedEffect), and by then a SideEffect has already overwritten the
-    // previous route with the current one, so the pair read as (browse, browse)
-    // and the fade got the wrong duration.
     val routePair = remember { object { var previous: String? = currentRoute; var current: String? = currentRoute } }
     if (routePair.current != currentRoute) {
         routePair.previous = routePair.current
@@ -510,36 +494,25 @@ fun FoamNavHost(
 
     val collectionModalState = rememberCollectionFoamModalState()
 
-    // Pending "open the search screen focused" request: raised by the nav bar's
-    // search icon tap, honored + consumed by SearchScreen. Any other nav-bar
-    // tap cancels it, so a stale request can never re-open the keyboard later.
+    val updateManager: UpdateManager = hiltViewModel<UpdateViewModel>().updateManager
+    val updateStartupRelease by updateManager.startupRelease.collectAsState()
+    val updateDownloadState by updateManager.downloadState.collectAsState()
+    val updateInstallFile by updateManager.installPrompt.collectAsState()
+
     val searchFocusRequest = remember { SearchFocusRequest() }
 
-    // Live-preview overrides pushed by the background settings screen while it
-    // is open (see [BackgroundSettingsPreviewState]); owned here so the layers
-    // below survive across screen visits and are cleared by the screen itself.
     val backgroundSettingsPreview = remember { BackgroundSettingsPreviewState() }
 
-    // Narrow projections instead of the whole PlaybackState: collecting the full
-    // state here would re-run this body on every playback emission.
     val activeCollectionId by playerViewModel.activeCollectionId.collectAsState()
     val hasCurrentTrack by playerViewModel.hasCurrentTrack.collectAsState()
     val activeTrackId by playerViewModel.activeTrackId.collectAsState()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
-    // Pause intent (ExoPlayer's playWhenReady mirror): with [isPlaying] it forms the
-    // combined playback-active bit the track-list rows' flight-artwork paused shrink
-    // consumes. A buffering gap between prepare() and STATE_READY also reports
-    // isPlaying=false, and the rows would then render a different scale than the
-    // full player's hero mid-flight (see rememberPausedArtScale).
     val isPlaybackRequested by playerViewModel.isPlaybackRequested.collectAsState()
     val isPlaybackActive = isPlaying || isPlaybackRequested
     val playerSettings by playerViewModel.settings.collectAsState()
     val scoreOverrides by playerViewModel.scoreOverrides.collectAsState()
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
     val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
-    // The preview's mode (last tap on the background settings page) leads the
-    // persisted value by the DataStore round-trip, so the layers switch on the
-    // tap itself. Null = use the persisted mode.
     val backgroundMode = backgroundSettingsPreview.mode ?: playerSettings.backgroundMode
     val forceDynamicBackgroundInCollections = playerSettings.forceDynamicBackgroundInCollections
     val forceDynamicBackgroundInPlayer = playerSettings.forceDynamicBackgroundInPlayer
@@ -1926,6 +1899,7 @@ fun FoamNavHost(
                                             onNavigateToLibrary = { navController.navigate(Screen.SettingsLibrary.route) },
                                             onNavigateToLyrics = { navController.navigate(Screen.SettingsLyrics.route) },
                                             onNavigateToMisc = { navController.navigate(Screen.SettingsMisc.route) },
+                                            onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
                                             // Compiled in only with devMode=true; the entry
                                             // disappears from Settings when the flag is off.
                                             onNavigateToTest = if (BuildConfig.DEV_MODE) {
@@ -2020,6 +1994,9 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.SettingsNotification.route) {
                                         NotificationSettingsScreen(onBack = { navController.popBackStack() })
+                                    }
+                                    composable(Screen.SettingsAbout.route) {
+                                        AboutSettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     // Developer test screen: registered only with devMode=true.
                                     if (BuildConfig.DEV_MODE) {
@@ -2410,10 +2387,24 @@ fun FoamNavHost(
                 }
             }
 
+            // In-app update sheets: startup "new update available" (auto-check)
+            // and the "install" prompt raised whenever a download completes.
+            // Dismissing a sheet never stops the download; only the explicit
+            // "Cancel download" button does.
+            UpdateFoamModal(
+                startupRelease = updateStartupRelease,
+                downloadState = updateDownloadState,
+                installFile = updateInstallFile,
+                onDismissStartup = updateManager::dismissStartupRelease,
+                onCancelDownload = updateManager::cancelDownload,
+                onDownload = updateManager::downloadAndInstall,
+                onInstall = updateManager::installApk,
+                onDismissInstall = updateManager::dismissInstallPrompt
+            )
+
             // Long-press track actions (plain Dialogs hosted at the root).
             TrackFoamModal(
-                state = trackModalState,
-                onPlayNext = playerViewModel::playNext,
+                state = trackModalState,                onPlayNext = playerViewModel::playNext,
                 onAddToQueue = playerViewModel::addToQueue,
                 onAddToPlaylist = { track -> playlistPickerTrack = track },
                 onSeeArtist = { track ->

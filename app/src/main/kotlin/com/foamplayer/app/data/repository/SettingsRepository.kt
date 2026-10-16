@@ -273,6 +273,10 @@ class SettingsRepository @Inject constructor(
         it.copy(onboardingCompleted = completed)
     }
 
+    suspend fun setAutoUpdateCheckEnabled(enabled: Boolean) = update {
+        it.copy(autoUpdateCheckEnabled = enabled)
+    }
+
     suspend fun setDiscordPresenceEnabled(enabled: Boolean) = update {
         it.copy(discordPresenceEnabled = enabled)
     }
@@ -417,6 +421,7 @@ class SettingsRepository @Inject constructor(
         collectionLayoutPlaylist = CollectionHeroLayout.fromName(this[Keys.COLLECTION_LAYOUT_PLAYLIST])
             ?: AppSettings().collectionLayoutPlaylist,
         onboardingCompleted = this[Keys.ONBOARDING_COMPLETED] ?: AppSettings().onboardingCompleted,
+        autoUpdateCheckEnabled = this[Keys.AUTO_UPDATE_CHECK_ENABLED] ?: AppSettings().autoUpdateCheckEnabled,
         discordPresenceEnabled = this[Keys.DISCORD_PRESENCE_ENABLED] ?: AppSettings().discordPresenceEnabled,
         discordOnlineArt = this[Keys.DISCORD_ONLINE_ART] ?: AppSettings().discordOnlineArt,
         artistImageResolveEnabled = this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] ?: AppSettings().artistImageResolveEnabled,
@@ -492,6 +497,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.COLLECTION_LAYOUT_ALBUM] = settings.collectionLayoutAlbum.name
         this[Keys.COLLECTION_LAYOUT_PLAYLIST] = settings.collectionLayoutPlaylist.name
         this[Keys.ONBOARDING_COMPLETED] = settings.onboardingCompleted
+        this[Keys.AUTO_UPDATE_CHECK_ENABLED] = settings.autoUpdateCheckEnabled
         this[Keys.DISCORD_PRESENCE_ENABLED] = settings.discordPresenceEnabled
         this[Keys.DISCORD_ONLINE_ART] = settings.discordOnlineArt
         this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] = settings.artistImageResolveEnabled
@@ -567,6 +573,7 @@ class SettingsRepository @Inject constructor(
         val COLLECTION_LAYOUT_ALBUM = CollectionLayoutAlbumKey
         val COLLECTION_LAYOUT_PLAYLIST = CollectionLayoutPlaylistKey
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val AUTO_UPDATE_CHECK_ENABLED = booleanPreferencesKey("auto_update_check_enabled")
         val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
         val DISCORD_ONLINE_ART = booleanPreferencesKey("discord_online_art")
         val ARTIST_IMAGE_RESOLVE_ENABLED = booleanPreferencesKey("artist_image_resolve_enabled")

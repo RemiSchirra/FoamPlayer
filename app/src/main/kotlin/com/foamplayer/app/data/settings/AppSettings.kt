@@ -158,6 +158,8 @@ data class AppSettings(
     val collectionLayoutAlbum: CollectionHeroLayout = CollectionHeroLayout.Immersive,
     val collectionLayoutPlaylist: CollectionHeroLayout = CollectionHeroLayout.CompactImmersive,
     val onboardingCompleted: Boolean = false,
+    /** Checks GitHub for a newer release when the app starts (Settings > About). */
+    val autoUpdateCheckEnabled: Boolean = true,
     val discordPresenceEnabled: Boolean = false,
     val discordOnlineArt: Boolean = true,
     /** Resolves a picture for the library's artists from Spotify (Settings > Library scan). */

@@ -386,6 +386,36 @@
     <string name="notification_button_close">Close</string>
     <string name="notification_button_score">Score</string>
 
+    <!-- About / updates -->
+    <string name="settings_about">About</string>
+    <string name="about_settings_subtitle">Version and updates</string>
+    <string name="about_current_version">Current version</string>
+    <string name="about_available_version">Available version</string>
+    <string name="about_release_notes">Release notes</string>
+    <string name="about_release_notes_title">Version %1$s</string>
+    <string name="about_no_release_notes">No release notes for this version.</string>
+    <string name="about_check_for_update">Check for update</string>
+    <string name="about_checking">Checking for update…</string>
+    <string name="about_up_to_date">You are on the latest version</string>
+    <string name="about_check_failed">Could not check for updates</string>
+    <string name="about_auto_check">Automatic update check</string>
+    <string name="about_auto_check_desc">Check GitHub for a new release when the app starts</string>
+    <string name="about_download_update">Download update</string>
+    <string name="about_download_progress">Downloading… %1$d%%</string>
+    <string name="about_cancel_download">Cancel download</string>
+    <string name="about_install_update">Install update</string>
+    <string name="about_download_failed">Download failed</string>
+    <string name="update_notification_channel_name">App updates</string>
+    <string name="update_notification_channel_desc">Download progress of app updates</string>
+    <string name="notif_update_downloading_title">Downloading update</string>
+    <string name="notif_update_preparing">Preparing download…</string>
+    <string name="notif_update_progress">%1$d%%</string>
+    <string name="update_available_title">New update available</string>
+    <string name="update_available_version">Version %1$s</string>
+    <string name="update_install_ready_title">Install update</string>
+    <string name="update_install_ready_text">The update has been downloaded. Install it now?</string>
+    <string name="update_install_later">Later</string>
+
     <!-- Lock screen player -->
     <string name="lock_screen_section">Lock screen</string>
     <string name="display_on_lock_screen">Display on lock screen</string>
