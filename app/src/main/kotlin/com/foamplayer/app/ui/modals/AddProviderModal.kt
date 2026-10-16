@@ -35,6 +35,8 @@ import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -94,11 +96,15 @@ fun AddProviderModal(
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
-    LaunchedEffect(visible) {
+    var openSession by remember { mutableIntStateOf(0) }
+    var wasVisible by remember { mutableStateOf(false) }
+    if (visible != wasVisible) {
+        wasVisible = visible
         if (visible) {
             step = ProviderStep.Source
             error = null
             busy = false
+            openSession++
         }
     }
 
@@ -129,83 +135,85 @@ fun AddProviderModal(
             )
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-            AnimatedContent(
-                targetState = step,
-                // Key on the step only: ticking a folder (or loading the list)
-                // changes the Folders state in place without replaying the
-                // slide-in transition.
-                contentKey = { it.order },
-                transitionSpec = {
-                    if (targetState.order >= initialState.order) {
-                        (slideInHorizontally(tween(260)) { it } + fadeIn(tween(160))) togetherWith
-                                (slideOutHorizontally(tween(260)) { -it } + fadeOut(tween(120)))
-                    } else {
-                        (slideInHorizontally(tween(260)) { -it } + fadeIn(tween(160))) togetherWith
-                                (slideOutHorizontally(tween(260)) { it } + fadeOut(tween(120)))
-                    }
-                },
-                label = "addProviderStep"
-            ) { current ->
-                when (current) {
-                    ProviderStep.Source -> SourceStep(
-                        onLocal = {
-                            onPickLocalFolder()
-                            onDismiss()
-                        },
-                        onDistant = { step = ProviderStep.Provider }
-                    )
-
-                    ProviderStep.Provider -> ProviderStepList(onSelect = { step = ProviderStep.Configure(it) })
-
-                    is ProviderStep.Configure -> ConfigureStep(
-                        type = current.type,
-                        busy = busy,
-                        error = error,
-                        viewModel = viewModel,
-                        onConnecting = { busy = true; error = null },
-                        onError = { busy = false; error = it },
-                        onServerReady = { server ->
-                            busy = false
-                            error = null
-                            step = ProviderStep.Folders(server, emptyList(), emptySet())
-                        },
-                        onSignIn = { url ->
-                            error = null
-                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
-                                .onFailure { error = it.message }
+            key(openSession) {
+                AnimatedContent(
+                    targetState = step,
+                    // Key on the step only: ticking a folder (or loading the list)
+                    // changes the Folders state in place without replaying the
+                    // slide-in transition.
+                    contentKey = { it.order },
+                    transitionSpec = {
+                        if (targetState.order >= initialState.order) {
+                            (slideInHorizontally(tween(260)) { it } + fadeIn(tween(160))) togetherWith
+                                    (slideOutHorizontally(tween(260)) { -it } + fadeOut(tween(120)))
+                        } else {
+                            (slideInHorizontally(tween(260)) { -it } + fadeIn(tween(160))) togetherWith
+                                    (slideOutHorizontally(tween(260)) { it } + fadeOut(tween(120)))
                         }
-                    )
+                    },
+                    label = "addProviderStep"
+                ) { current ->
+                    when (current) {
+                        ProviderStep.Source -> SourceStep(
+                            onLocal = {
+                                onPickLocalFolder()
+                                onDismiss()
+                            },
+                            onDistant = { step = ProviderStep.Provider }
+                        )
 
-                    is ProviderStep.Folders -> FoldersStep(
-                        viewModel = viewModel,
-                        step = current,
-                        busy = busy,
-                        error = error,
-                        onLoad = { entries ->
-                            step = current.copy(entries = entries)
-                        },
-                        onLoadError = { error = it },
-                        onToggle = { id ->
-                            val selected = if (id in current.selected) current.selected - id else current.selected + id
-                            step = current.copy(selected = selected)
-                        },
-                        onDone = {
-                            busy = true
-                            scope.launch {
-                                val folders = current.entries
-                                    .filter { it.id in current.selected }
-                                    .map { DistantFolder(id = it.id, name = it.name, path = it.path) }
-                                val ok = viewModel.saveServerFolders(current.server, folders)
+                        ProviderStep.Provider -> ProviderStepList(onSelect = { step = ProviderStep.Configure(it) })
+
+                        is ProviderStep.Configure -> ConfigureStep(
+                            type = current.type,
+                            busy = busy,
+                            error = error,
+                            viewModel = viewModel,
+                            onConnecting = { busy = true; error = null },
+                            onError = { busy = false; error = it },
+                            onServerReady = { server ->
                                 busy = false
-                                if (ok) {
-                                    onServerScanned(current.server.id)
-                                    onDismiss()
-                                } else {
-                                    error = saveFailed
+                                error = null
+                                step = ProviderStep.Folders(server, emptyList(), emptySet())
+                            },
+                            onSignIn = { url ->
+                                error = null
+                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+                                    .onFailure { error = it.message }
+                            }
+                        )
+
+                        is ProviderStep.Folders -> FoldersStep(
+                            viewModel = viewModel,
+                            step = current,
+                            busy = busy,
+                            error = error,
+                            onLoad = { entries ->
+                                step = current.copy(entries = entries)
+                            },
+                            onLoadError = { error = it },
+                            onToggle = { id ->
+                                val selected = if (id in current.selected) current.selected - id else current.selected + id
+                                step = current.copy(selected = selected)
+                            },
+                            onDone = {
+                                busy = true
+                                scope.launch {
+                                    val folders = current.entries
+                                        .filter { it.id in current.selected }
+                                        .map { DistantFolder(id = it.id, name = it.name, path = it.path) }
+                                    val ok = viewModel.saveServerFolders(current.server, folders)
+                                    busy = false
+                                    if (ok) {
+                                        onServerScanned(current.server.id)
+                                        onDismiss()
+                                    } else {
+                                        error = saveFailed
+                                    }
                                 }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
