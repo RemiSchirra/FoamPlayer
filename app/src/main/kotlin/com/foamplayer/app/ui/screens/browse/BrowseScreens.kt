@@ -54,6 +54,7 @@ import com.foamplayer.app.ui.components.rememberCollectionSearchState
 import com.foamplayer.app.ui.components.rememberFilteredList
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.components.rememberSortedTracks
+import com.foamplayer.app.ui.components.scrollSectionLetter
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +64,21 @@ import kotlinx.coroutines.withContext
 /** Horizontal inset of one list row; grid cells get their own symmetric padding instead. */
 private fun Modifier.listRowInset(density: MediaDensity): Modifier =
     padding(horizontal = if (density.isGrid) 0.dp else 16.dp)
+
+/**
+ * Fast-scroll section-letter source for a name-alphabetical collection list:
+ * maps a lazy item index (item 0 is the hero header) onto [items]' [text].
+ * Null when [mode] isn't alphabetical, which hides the scrollbar's bubble.
+ */
+private fun <T> alphabeticalCollectionLabels(
+    mode: CollectionSortMode,
+    items: List<T>,
+    text: (T) -> String?
+): ((Int) -> String?)? = if (mode == CollectionSortMode.NAME) {
+    { index -> scrollSectionLetter(items.getOrNull(index - 1)?.let(text)) }
+} else {
+    null
+}
 
 /**
  * Album/artist browse screens: each screen scopes its artwork kind once
@@ -127,7 +143,8 @@ fun AlbumsBrowseScreen(
             onSortChange = onSortChange,
             sortInverted = sortInverted,
             onSortInvertedChange = onSortInvertedChange,
-            searchState = searchState
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedAlbums) { it.album }
         ) {
             items(sortedAlbums, key = { "browse_album_${it.album}" }) { album ->
                 Box(modifier = Modifier.listRowInset(density)) {
@@ -210,7 +227,8 @@ fun ArtistsBrowseScreen(
             onSortChange = onSortChange,
             sortInverted = sortInverted,
             onSortInvertedChange = onSortInvertedChange,
-            searchState = searchState
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedArtists) { it }
         ) {
             items(sortedArtists, key = { "browse_artist_$it" }) { artist ->
                 Box(modifier = Modifier.listRowInset(density)) {
@@ -288,19 +306,20 @@ fun ComposersBrowseScreen(
     }
 
     CollectionListScreen(
-        title = stringResource(R.string.composers),
-        itemCount = sortedComposers.size,
-        onBack = onBack,
-        headerIcon = Icons.Rounded.Person,
-        density = density,
-        onDensityChange = onDensityChange,
-        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
-        currentSort = sortMode,
-        onSortChange = onSortChange,
-        sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange,
-        searchState = searchState
-    ) {
+            title = stringResource(R.string.composers),
+            itemCount = sortedComposers.size,
+            onBack = onBack,
+            headerIcon = Icons.Rounded.Person,
+            density = density,
+            onDensityChange = onDensityChange,
+            sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+            currentSort = sortMode,
+            onSortChange = onSortChange,
+            sortInverted = sortInverted,
+            onSortInvertedChange = onSortInvertedChange,
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedComposers) { it }
+        ) {
         items(sortedComposers, key = { "browse_composer_$it" }) { composer ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
@@ -357,19 +376,20 @@ fun GenresBrowseScreen(
     }
 
     CollectionListScreen(
-        title = stringResource(R.string.genres),
-        itemCount = sortedGenres.size,
-        onBack = onBack,
-        headerIcon = Icons.Rounded.Category,
-        density = density,
-        onDensityChange = onDensityChange,
-        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
-        currentSort = sortMode,
-        onSortChange = onSortChange,
-        sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange,
-        searchState = searchState
-    ) {
+            title = stringResource(R.string.genres),
+            itemCount = sortedGenres.size,
+            onBack = onBack,
+            headerIcon = Icons.Rounded.Category,
+            density = density,
+            onDensityChange = onDensityChange,
+            sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+            currentSort = sortMode,
+            onSortChange = onSortChange,
+            sortInverted = sortInverted,
+            onSortInvertedChange = onSortInvertedChange,
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedGenres) { it }
+        ) {
         items(sortedGenres, key = { "browse_genre_$it" }) { genre ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
@@ -430,19 +450,20 @@ fun YearsBrowseScreen(
     }
 
     CollectionListScreen(
-        title = stringResource(R.string.years),
-        itemCount = sortedYears.size,
-        onBack = onBack,
-        headerIcon = Icons.Rounded.CalendarToday,
-        density = density,
-        onDensityChange = onDensityChange,
-        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
-        currentSort = sortMode,
-        onSortChange = onSortChange,
-        sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange,
-        searchState = searchState
-    ) {
+            title = stringResource(R.string.years),
+            itemCount = sortedYears.size,
+            onBack = onBack,
+            headerIcon = Icons.Rounded.CalendarToday,
+            density = density,
+            onDensityChange = onDensityChange,
+            sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+            currentSort = sortMode,
+            onSortChange = onSortChange,
+            sortInverted = sortInverted,
+            onSortInvertedChange = onSortInvertedChange,
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedYears) { it.toString() }
+        ) {
         items(sortedYears, key = { "browse_year_$it" }) { year ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
@@ -741,7 +762,23 @@ fun FolderBrowseScreen(
         onSortChange = onSortChange,
         sortInverted = sortInverted,
         onSortInvertedChange = onSortInvertedChange,
-        searchState = searchState
+        searchState = searchState,
+        // Folders come first (alphabetical), then the folder's own tracks.
+        labelForIndex = if (sortMode == CollectionSortMode.NAME) {
+            { index ->
+                val pos = index - 1
+                val folder = sortedFolders.getOrNull(pos)
+                scrollSectionLetter(
+                    if (folder != null) {
+                        folder.name
+                    } else {
+                        shownTracks.getOrNull(pos - sortedFolders.size)?.title
+                    }
+                )
+            }
+        } else {
+            null
+        }
     ) {
         items(sortedFolders, key = { "browse_folder_${it.path}" }) { folder ->
             val folderSubtitle = pluralTrackCount(folder.trackCount)
@@ -898,7 +935,8 @@ fun CollectionArtistsScreen(
             onSortChange = onSortChange,
             sortInverted = sortInverted,
             onSortInvertedChange = onSortInvertedChange,
-            searchState = searchState
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedRows) { it.name }
         ) {
             items(sortedRows, key = { "artists_in_${kind}_${it.name}" }) { row ->
                 Box(modifier = Modifier.listRowInset(density)) {
@@ -1014,7 +1052,8 @@ fun CollectionAlbumsScreen(
             onSortChange = onSortChange,
             sortInverted = sortInverted,
             onSortInvertedChange = onSortInvertedChange,
-            searchState = searchState
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedRows) { it.album }
         ) {
             items(sortedRows, key = { "albums_in_${kind}_${it.album}" }) { entry ->
                 Box(modifier = Modifier.listRowInset(density)) {

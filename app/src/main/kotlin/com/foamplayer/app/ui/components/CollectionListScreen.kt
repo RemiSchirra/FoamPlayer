@@ -160,6 +160,13 @@ fun CollectionListScreen(
     heroLayout: CollectionHeroLayout = LocalDefaultCollectionHeroLayout.current,
     /** Whether the long-content fast scrollbar rides the container's end edge. */
     showScrollbar: Boolean = true,
+    /**
+     * Optional fast-scroll section-letter source (see [FoamScrollbar]): maps a
+     * lazy item index to the letter shown beside the thumb while dragging.
+     * Callers with an alphabetically sorted content list pass their initial
+     * mapping; null hides the bubble.
+     */
+    labelForIndex: ((itemIndex: Int) -> String?)? = null,
     content: MediaListContentScope.() -> Unit
 ) {
     var showOrganisationModal by remember { mutableStateOf(false) }
@@ -264,6 +271,7 @@ fun CollectionListScreen(
                     state = gridState,
                     trackTopPadding = CollectionTopBarRowHeight,
                     trackBottomPadding = LocalBottomBarClearance.current,
+                    labelForIndex = labelForIndex,
                     modifier = Modifier.align(Alignment.CenterEnd)
                 )
             }
@@ -306,6 +314,7 @@ fun CollectionListScreen(
                     state = listState,
                     trackTopPadding = CollectionTopBarRowHeight,
                     trackBottomPadding = LocalBottomBarClearance.current,
+                    labelForIndex = labelForIndex,
                     modifier = Modifier.align(Alignment.CenterEnd)
                 )
             }

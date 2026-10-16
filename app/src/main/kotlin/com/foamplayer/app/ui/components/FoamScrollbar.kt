@@ -24,10 +24,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
@@ -51,6 +57,20 @@ private const val ScrollbarPressAnimationMs = 150
  * still spans the whole track.
  */
 private const val ScrollbarThumbLengthScale = 0.5f
+
+/** Diameter of the section-letter bubble drawn beside the thumb while dragging. */
+private val ScrollbarBubbleSize = 60.dp
+
+/** Horizontal gap between the bubble's squared corner and the thumb's leading edge. */
+private val ScrollbarBubbleGap = 6.dp
+
+/**
+ * The uppercased first non-blank character of [text] — the section letter a
+ * fast-scroll bubble shows for an alphabetically sorted row. Null for blank
+ * text, which hides the bubble.
+ */
+internal fun scrollSectionLetter(text: String?): String? =
+    text?.firstOrNull { !it.isWhitespace() }?.uppercaseChar()?.toString()
 
 /**
  * Fast scrollbar for long lazy content: a thumb floating over the container's
@@ -86,6 +106,13 @@ fun FoamScrollbar(
     /** Clears the thumb's track (and touch strip) of the screen's bottom chrome. */
     trackBottomPadding: Dp = 0.dp,
     /**
+     * Optional section-letter source for alphabetically sorted lists: maps the
+     * item index under the thumb to the label shown in a bubble to the thumb's
+     * left while dragging. Sized to a single glyph; return null (or pass null)
+     * for indices with no letter (e.g. the header row) to hide the bubble.
+     */
+    labelForIndex: ((itemIndex: Int) -> String?)? = null,
+    /**
      * Extra draw-alpha multiplier, read every frame inside the draw phase.
      * Hosts riding shared-element flights pass their transition alpha so the
      * bar fades with the screen while lifted into the transition overlay.
@@ -105,6 +132,7 @@ fun FoamScrollbar(
         minThumbHeight = minThumbHeight,
         trackTopPadding = trackTopPadding,
         trackBottomPadding = trackBottomPadding,
+        labelForIndex = labelForIndex,
         alpha = alpha,
         modifier = modifier
     )
@@ -127,6 +155,13 @@ fun FoamScrollbar(
     /** Clears the thumb's track (and touch strip) of the screen's bottom chrome. */
     trackBottomPadding: Dp = 0.dp,
     /**
+     * Optional section-letter source for alphabetically sorted lists: maps the
+     * item index under the thumb to the label shown in a bubble to the thumb's
+     * left while dragging. Sized to a single glyph; return null (or pass null)
+     * for indices with no letter (e.g. the header row) to hide the bubble.
+     */
+    labelForIndex: ((itemIndex: Int) -> String?)? = null,
+    /**
      * Extra draw-alpha multiplier, read every frame inside the draw phase.
      * Hosts riding shared-element flights pass their transition alpha so the
      * bar fades with the screen while lifted into the transition overlay.
@@ -146,6 +181,7 @@ fun FoamScrollbar(
         minThumbHeight = minThumbHeight,
         trackTopPadding = trackTopPadding,
         trackBottomPadding = trackBottomPadding,
+        labelForIndex = labelForIndex,
         alpha = alpha,
         modifier = modifier
     )
@@ -221,15 +257,21 @@ private fun FoamScrollbarCore(
     minThumbHeight: Dp,
     trackTopPadding: Dp,
     trackBottomPadding: Dp,
+    labelForIndex: ((itemIndex: Int) -> String?)?,
     alpha: () -> Float,
     modifier: Modifier
 ) {
     var pressed by remember { mutableStateOf(false) }
+    var activeLabel by remember { mutableStateOf<String?>(null) }
+    var bubbleLabel by remember { mutableStateOf<String?>(null) }
     // Fresh lambda reads for the gesture/draw phases: the wrappers recreate
     // these on every recomposition while the pointerInput never restarts.
     val currentListLayoutInfo by rememberUpdatedState(listLayoutInfo)
     val currentGridLayoutInfo by rememberUpdatedState(gridLayoutInfo)
     val currentOnThumbScrollTo by rememberUpdatedState(onThumbScrollTo)
+    val currentLabelForIndex by rememberUpdatedState(labelForIndex)
+    val bubbleTextStyle = FoamTheme.typography.titleLarge
+    val textMeasurer = rememberTextMeasurer()
     val samples = remember { ScrollbarSamples() }
 
     val currentGeometry by rememberUpdatedState {
@@ -252,6 +294,11 @@ private fun FoamScrollbarCore(
         animationSpec = tween(durationMillis = ScrollbarPressAnimationMs),
         label = "scrollbarEmphasis"
     )
+    val bubbleAlpha by animateFloatAsState(
+        targetValue = if (pressed && activeLabel != null) 1f else 0f,
+        animationSpec = tween(durationMillis = ScrollbarPressAnimationMs),
+        label = "scrollbarBubbleEmphasis"
+    )
 
     Box(
         modifier = modifier
@@ -262,6 +309,13 @@ private fun FoamScrollbarCore(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     pressed = true
+                    // Seed the letter from the item currently at the viewport's
+                    // top, so the bubble reads the section on a plain press too.
+                    val seed = currentGeometry()?.let { geo ->
+                        currentLabelForIndex?.invoke(geo.jumpTarget(geo.scrollOffsetPx).first)
+                    }
+                    activeLabel = seed
+                    if (seed != null) bubbleLabel = seed
                     try {
                         drag(down.id) { change ->
                             // Not long enough to scroll: stay transparent to the list.
@@ -278,10 +332,14 @@ private fun FoamScrollbarCore(
                                 ((geo.scrollOffsetPx / geo.scrollExtentPx * travel + dy)
                                     .coerceIn(0f, travel)) / travel * geo.scrollExtentPx
                             val (itemIndex, offsetInItem) = geo.jumpTarget(targetOffset)
+                            val label = currentLabelForIndex?.invoke(itemIndex)
+                            activeLabel = label
+                            if (label != null) bubbleLabel = label
                             currentOnThumbScrollTo(itemIndex, offsetInItem)
                         }
                     } finally {
                         pressed = false
+                        activeLabel = null
                     }
                 }
             }
@@ -292,12 +350,63 @@ private fun FoamScrollbarCore(
                 val travel = (size.height - thumbHeight).coerceAtLeast(1f)
                 val thumbTop = (geo.scrollOffsetPx / geo.scrollExtentPx).coerceIn(0f, 1f) * travel
                 val thumbWidth = animatedThickness.toPx()
+                val thumbLeft = size.width - ScrollbarEdgeInset.toPx() - thumbWidth
                 drawRoundRect(
                     color = color.copy(alpha = color.alpha * animatedAlpha * alpha()),
-                    topLeft = Offset(size.width - ScrollbarEdgeInset.toPx() - thumbWidth, thumbTop),
+                    topLeft = Offset(thumbLeft, thumbTop),
                     size = Size(thumbWidth, thumbHeight),
                     cornerRadius = CornerRadius(thumbWidth / 2f)
                 )
+
+                // Section-letter bubble: a circle whose bottom-right corner is
+                // square and pinned to the thumb's vertical center, so the notch
+                // points at the thumb's leading edge. Drawn from the retained
+                // label so it survives the fade-out as [bubbleAlpha] drops.
+                val label = bubbleLabel
+                if (label != null && bubbleAlpha > 0f) {
+                    val opacity = bubbleAlpha * alpha()
+                    val bubblePx = ScrollbarBubbleSize.toPx()
+                    val bubbleRight = thumbLeft - ScrollbarBubbleGap.toPx()
+                    val bubbleBottom = thumbTop + thumbHeight / 2f
+                    val rect = Rect(
+                        left = bubbleRight - bubblePx,
+                        top = bubbleBottom - bubblePx,
+                        right = bubbleRight,
+                        bottom = bubbleBottom
+                    )
+                    val radius = CornerRadius(bubblePx / 2f)
+                    val bubble = Path().apply {
+                        addRoundRect(
+                            RoundRect(
+                                rect = rect,
+                                topLeft = radius,
+                                topRight = radius,
+                                bottomRight = CornerRadius.Zero,
+                                bottomLeft = radius
+                            )
+                        )
+                    }
+                    drawPath(
+                        path = bubble,
+                        color = color.copy(alpha = color.alpha * opacity)
+                    )
+                    val contentColor =
+                        if (color.luminance() > 0.5f) Color.Black else Color.White
+                    val layout = textMeasurer.measure(
+                        text = label,
+                        style = bubbleTextStyle.copy(
+                            color = contentColor.copy(alpha = opacity)
+                        ),
+                        maxLines = 1
+                    )
+                    drawText(
+                        textLayoutResult = layout,
+                        topLeft = Offset(
+                            x = rect.center.x - layout.size.width / 2f,
+                            y = rect.center.y - layout.size.height / 2f
+                        )
+                    )
+                }
             }
     )
 }
@@ -356,7 +465,7 @@ private fun LazyListLayoutInfo.toScrollbarGeometry(
     } else {
         samples.headerPx + (first.index - 1) * itemPx
     }
-    val scrollOffset = firstContentTop - (first.offset - viewportStartOffset)
+    val scrollOffset = firstContentTop - first.offset
     return ScrollbarGeometry(
         scrollOffsetPx = scrollOffset,
         scrollExtentPx = extent,
@@ -416,7 +525,7 @@ private fun LazyGridLayoutInfo.toScrollbarGeometry(
     } else {
         samples.headerPx + (first.index - 1) * itemPx
     }
-    val scrollOffset = firstContentTop - (first.offset.y - viewportStartOffset)
+    val scrollOffset = firstContentTop - first.offset.y
     return ScrollbarGeometry(
         scrollOffsetPx = scrollOffset,
         scrollExtentPx = extent,

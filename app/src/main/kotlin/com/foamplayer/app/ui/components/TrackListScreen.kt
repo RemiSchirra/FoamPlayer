@@ -311,6 +311,12 @@ fun TrackListScreen(
         rememberFilteredList(tracks, searchState) { searchState.matches(it.title, it.artist) }
     }
 
+    val scrollLetterForIndex: ((Int) -> String?)? = if (currentSort == CollectionSortMode.NAME) {
+        { index -> scrollSectionLetter(shownTracks.getOrNull(index - 1)?.title) }
+    } else {
+        null
+    }
+
     // Track taps settle the search session. The click lambda captures the
     // PRE-close [shownTracks] instance, so the queue handed to [onTrackClick]
     // is exactly the filtered list the user saw on screen.
@@ -577,6 +583,7 @@ fun TrackListScreen(
                     color = heroAccentColor,
                     trackTopPadding = CollectionTopBarRowHeight,
                     trackBottomPadding = LocalBottomBarClearance.current,
+                    labelForIndex = scrollLetterForIndex,
                     alpha = transitionAlpha,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
@@ -726,6 +733,7 @@ fun TrackListScreen(
                     color = heroAccentColor,
                     trackTopPadding = CollectionTopBarRowHeight,
                     trackBottomPadding = LocalBottomBarClearance.current,
+                    labelForIndex = scrollLetterForIndex,
                     alpha = transitionAlpha,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
