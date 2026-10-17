@@ -243,6 +243,9 @@ private class ScrollbarSamples {
 
     /** Average height of the uniform items between the edge items. */
     var itemPx = 0f
+
+    /** Last reliably measured grid column count (0 = not measured yet). */
+    var columns = 0
 }
 
 @Composable
@@ -493,28 +496,43 @@ private fun LazyGridLayoutInfo.toScrollbarGeometry(
 
     var rowSum = 0
     var rowCount = 0
-    var columns = 1
-    var firstDataRowY = Float.NaN
+    // Per-row item counts among the visible data cells. The widest row is the
+    // true column count; the last row of the grid may be partial.
+    var rowY = Float.NaN
+    var inRow = 0
+    var maxInRow = 0
+    var distinctRows = 0
     for (item in visible) {
         when (item.index) {
             0 -> samples.headerPx = item.size.height.toFloat()
             totalItemsCount - 1 -> samples.trailerPx = item.size.height.toFloat()
             else -> {
-                if (firstDataRowY.isNaN()) {
-                    firstDataRowY = item.offset.y.toFloat()
-                } else if (item.offset.y.toFloat() == firstDataRowY) {
-                    columns++
+                val y = item.offset.y.toFloat()
+                if (y != rowY) {
+                    rowY = y
+                    inRow = 0
+                    distinctRows++
                 }
+                inRow++
+                if (inRow > maxInRow) maxInRow = inRow
                 rowSum += item.size.height
                 rowCount++
             }
         }
     }
     if (rowCount > 0) samples.itemPx = rowSum.toFloat() / rowCount
+    // With 2+ rows on screen at least one is full, so the count is reliable.
+    // A lone (possibly partial) row falls back to the last good measurement.
+    if (maxInRow > 0 && (distinctRows >= 2 || samples.columns == 0)) {
+        samples.columns = maxInRow
+    }
+    val columns = samples.columns.coerceAtLeast(1)
 
     val itemPx = samples.itemPx
     if (itemPx <= 0f) return null
-    val rowCountTotal = (totalItemsCount - 2).coerceAtLeast(0)
+    // Grid content is measured in ROWS, not items: each row holds [columns] cells.
+    val dataItems = (totalItemsCount - 2).coerceAtLeast(0)
+    val rowCountTotal = (dataItems + columns - 1) / columns
     val content = beforeContentPadding + samples.headerPx +
             itemPx * rowCountTotal + samples.trailerPx + afterContentPadding
     if (content < container * minRatio) return null
@@ -523,7 +541,7 @@ private fun LazyGridLayoutInfo.toScrollbarGeometry(
     val firstContentTop = if (first.index == 0) {
         0f
     } else {
-        samples.headerPx + (first.index - 1) * itemPx
+        samples.headerPx + ((first.index - 1) / columns) * itemPx
     }
     val scrollOffset = firstContentTop - first.offset.y
     return ScrollbarGeometry(
