@@ -11,6 +11,7 @@ import com.foamplayer.distant.DistantProviderRegistry
 import com.foamplayer.distant.DistantProviderType
 import com.foamplayer.distant.DistantServer
 import com.foamplayer.distant.DistantTrack
+import com.foamplayer.distant.DistantUri
 import com.foamplayer.distant.DistantUris
 import com.foamplayer.distant.RemoteSession
 import java.util.UUID
@@ -149,6 +150,18 @@ class DistantRepository @Inject constructor(
 
     fun artFor(server: DistantServer, track: DistantTrack): String? =
         registry.get(server.type).artUrl(server, track)
+
+    /**
+     * Live artwork URL for a parsed distant track URI (server + remote id), or
+     * null when the server is unknown/unreachable. Used as a fallback when a
+     * track row has no usable cached image: the notification's bitmap loader
+     * can fetch this URL directly.
+     */
+    fun artworkUrlFor(uri: DistantUri): String? {
+        val server = server(uri.serverId) ?: return null
+        val track = DistantTrack(remoteId = uri.remoteId, title = "")
+        return runCatching { registry.get(uri.type).artUrl(server, track) }.getOrNull()
+    }
 
     /** One controllable remote session tagged with the server that drives it. */
     data class DistantRemoteSession(

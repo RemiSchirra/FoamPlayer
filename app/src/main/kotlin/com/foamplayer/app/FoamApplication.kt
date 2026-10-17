@@ -8,6 +8,7 @@ import coil.ImageLoaderFactory
 import coil.key.Keyer
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.media.EmbeddedAlbumArtFetcher
+import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.notification.ScanProgressNotifier
 import com.foamplayer.app.update.UpdateManager
@@ -26,6 +27,7 @@ class FoamApplication : Application(), ImageLoaderFactory {
     @Inject lateinit var scanProgressNotifier: ScanProgressNotifier
     @Inject lateinit var updateManager: UpdateManager
     @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var distantRepository: DistantRepository
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -37,10 +39,17 @@ class FoamApplication : Application(), ImageLoaderFactory {
     }
 
     // Lets AsyncImage(model = EmbeddedAlbumArt(...)) load cover art from audio files.
+    // Distant audio URIs (foam-distant://) resolve through the provider when the
+    // scan-time cached image is missing.
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
             .components {
-                add(EmbeddedAlbumArtFetcher.Factory(this@FoamApplication))
+                add(
+                    EmbeddedAlbumArtFetcher.Factory(this@FoamApplication) { uri ->
+                        com.foamplayer.distant.DistantUris.parse(uri.toString())
+                            ?.let { distantRepository.artworkUrlFor(it) }
+                    }
+                )
                 add(Keyer<EmbeddedAlbumArt> { data, _ -> data.trackUri.toString() })
             }
             .build()

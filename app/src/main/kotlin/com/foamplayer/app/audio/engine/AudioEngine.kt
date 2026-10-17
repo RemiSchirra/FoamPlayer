@@ -1,6 +1,7 @@
 package com.foamplayer.app.audio.engine
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import android.view.Choreographer
 import androidx.annotation.OptIn
@@ -50,6 +51,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
@@ -474,10 +476,17 @@ class AudioEngine @Inject constructor(
     }
 
     private fun TrackEntity.toMediaItem(): MediaItem {
-        val artwork = if (com.foamplayer.distant.DistantUris.isDistant(path)) {
-            (albumArtPath ?: path).toUri()
-        } else {
-            path.toUri()
+        // The session's artwork must always be loadable: a distant track points at
+        // its cached image file (albumArtPath), but that file can be gone (cleared
+        // storage, failed download, restored DB) — advertising a dead path makes
+        // every notification surface log a load error ("Unable to load bitmap").
+        // Verify the file exists and otherwise fall back to the live artwork URL;
+        // only give up when there is nothing loadable at all. Local tracks carry
+        // their art embedded, so their audio URI is the right artwork URI.
+        val isDistant = com.foamplayer.distant.DistantUris.isDistant(path)
+        val artwork = when {
+            isDistant -> artworkUriForDistantTrack()
+            else -> path.toUri()
         }
         return MediaItem.Builder()
             .setUri(path.toUri())
@@ -490,6 +499,24 @@ class AudioEngine @Inject constructor(
                     .build()
             )
             .build()
+    }
+
+    /**
+     * Loadable artwork for a distant track. The metadata artwork URI is consumed
+     * out-of-process too (SystemUI's media controls), which cannot read this
+     * app's private files — so prefer the provider's live http(s) URL and only
+     * fall back to the scan-time cached image (verified to exist) when the
+     * provider gives nothing. Never advertise the audio URI itself: no surface
+     * can open a `foam-distant://` data source.
+     */
+    private fun TrackEntity.artworkUriForDistantTrack(): Uri? {
+        DistantUris.parse(path)
+            ?.let { distantRepository.artworkUrlFor(it) }
+            ?.let { return it.toUri() }
+        albumArtPath?.takeIf { it.isNotBlank() && !it.startsWith("http") }?.let { artPath ->
+            if (File(artPath.toUri().path ?: "").isFile) return artPath.toUri()
+        }
+        return null
     }
 
     /** Called after a crossfade promoted a new player, so the MediaSession can re-bind. */

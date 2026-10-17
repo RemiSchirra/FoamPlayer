@@ -3,6 +3,7 @@ package com.foamplayer.app.data.media
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import androidx.core.net.toUri
 import coil.ImageLoader
 import coil.decode.DataSource
 import coil.decode.ImageSource
@@ -29,14 +30,16 @@ data class EmbeddedAlbumArt(val trackUri: Uri)
 
 /**
  * Resolves the artwork for [EmbeddedAlbumArt.trackUri]: the embedded picture of
- * a local audio file, a cached local image file, or a remote http(s) URL. No
- * file is ever written to app storage here — Coil's own memory/disk cache
- * (already bounded, already used for every other image in the app) is the only
- * caching layer involved.
+ * a local audio file, a cached local image file, a remote http(s) URL, or — for
+ * `foam-distant://` audio URIs whose cached image went missing — the provider's
+ * live artwork URL. No file is ever written to app storage here — Coil's own
+ * memory/disk cache (already bounded, already used for every other image in the
+ * app) is the only caching layer involved.
  */
 class EmbeddedAlbumArtFetcher(
     private val data: EmbeddedAlbumArt,
-    private val context: Context
+    private val context: Context,
+    private val distantArtworkUrl: (Uri) -> String? = { null }
 ) : Fetcher {
 
     override suspend fun fetch(): FetchResult? = withContext(Dispatchers.IO) {
@@ -48,7 +51,7 @@ class EmbeddedAlbumArtFetcher(
         val bytes = when {
             remote -> readRemote(uri)
             isImageFile(uri) -> readFileBytes(uri)
-            else -> readEmbeddedPicture(uri)
+            else -> readEmbeddedPicture(uri) ?: readDistantArtwork(uri)
         }
         bytes ?: return@withContext null
 
@@ -57,6 +60,16 @@ class EmbeddedAlbumArtFetcher(
             mimeType = "image/jpeg",
             dataSource = if (remote) DataSource.NETWORK else DataSource.DISK
         )
+    }
+
+    /**
+     * Distant audio URIs (foam-distant://) have no embedded picture; when their
+     * scan-time image cache entry is gone, fetch the provider's live artwork.
+     */
+    private fun readDistantArtwork(uri: Uri): ByteArray? {
+        if (uri.scheme != com.foamplayer.distant.DistantUris.SCHEME) return null
+        val url = distantArtworkUrl(uri) ?: return null
+        return readRemote(url.toUri())
     }
 
     private fun isImageFile(uri: Uri): Boolean {
@@ -103,9 +116,10 @@ class EmbeddedAlbumArtFetcher(
         }
     }
 
-    class Factory(private val context: Context) : Fetcher.Factory<EmbeddedAlbumArt> {
+    class Factory(private val context: Context, private val distantArtworkUrl: (Uri) -> String? = { null }) :
+        Fetcher.Factory<EmbeddedAlbumArt> {
         override fun create(data: EmbeddedAlbumArt, options: Options, imageLoader: ImageLoader): Fetcher {
-            return EmbeddedAlbumArtFetcher(data, context)
+            return EmbeddedAlbumArtFetcher(data, context, distantArtworkUrl)
         }
     }
 

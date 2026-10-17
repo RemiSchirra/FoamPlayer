@@ -97,6 +97,9 @@ class PlaybackService : MediaSessionService() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    @Inject
+    lateinit var distantRepository: com.foamplayer.app.data.distant.DistantRepository
+
     private var mediaSession: MediaSession? = null
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -232,7 +235,12 @@ class PlaybackService : MediaSessionService() {
 
         val session = MediaSession.Builder(this, audioEngine.player)
             .setCallback(callback)
-            .setBitmapLoader(EmbeddedAlbumArtBitmapLoader(this))
+            .setBitmapLoader(
+                EmbeddedAlbumArtBitmapLoader(this) { uri ->
+                    com.foamplayer.distant.DistantUris.parse(uri.toString())
+                        ?.let { distantRepository.artworkUrlFor(it) }
+                }
+            )
             .setSessionActivity(pendingIntent)
             .build()
 

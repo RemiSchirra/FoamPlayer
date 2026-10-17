@@ -31,6 +31,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.nio.ByteOrder
+import java.util.Collections
 import kotlin.math.abs
 
 /**
@@ -74,8 +75,30 @@ class WaveformState internal constructor(val bucketCount: Int) {
 object WaveformCache {
     private const val TAG = "WaveformCache"
 
+    /**
+     * Track path schemes extraction cannot open (MediaExtractor only reads local
+     * files and content URIs). Distant/server tracks stream through the player's
+     * own data source and have no readable media file — they must never reach a
+     * MediaExtractor (setDataSource on these schemes crashes the process).
+     */
+    private val UNSUPPORTED_SCHEMES = Collections.unmodifiableSet(
+        setOf("http", "https", "rtsp", "udp", "udp6", "tcp", "foam-distant")
+    )
+
     /** Sampled buckets — also the waveform's fixed bucket resolution. */
     private const val WINDOW_COUNT = 64
+
+    /**
+     * The definitive envelope of a track extraction can never handle (streams):
+     * all-flat at the standard bucket resolution. Published for such paths so
+     * track-change morphs ANIMATE to (or from) flat — the bars collapse with the
+     * swipe like between any two extracted tracks — instead of the previous
+     * shape holding through the swipe and snapping flat when the track flips.
+     * Shared read-only instance: nothing ever writes to it after creation.
+     */
+    private val FLAT_ENVELOPE: WaveformState = WaveformState(WINDOW_COUNT).apply {
+        _done.value = true
+    }
 
     /**
      * Concurrent extractor+decoder pairs. Worker w owns the contiguous region
@@ -113,7 +136,7 @@ object WaveformCache {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val inFlight = mutableSetOf<String>()
-    private val failedPaths = mutableSetOf<String>()
+    private val failedPaths: MutableSet<String> = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap())
     private val inFlightLock = Mutex()
 
     // Access-ordered record driving eviction (same mechanism as AlbumArtPaletteCache).
@@ -136,6 +159,16 @@ object WaveformCache {
     /** Starts [path]'s extraction at most once per path, even when called concurrently. */
     fun ensure(context: Context, path: String?, durationMs: Long) {
         if (path.isNullOrEmpty() || durationMs <= 0L) return
+        // Streams (distant/server tracks, plain URLs) have no readable media
+        // file: publish the shared flat envelope without ever constructing an
+        // extractor — MediaExtractor.setDataSource on these schemes crashes
+        // the process.
+        if (path.toUri().scheme?.lowercase() in UNSUPPORTED_SCHEMES) {
+            failedPaths += path
+            waveforms[path] = FLAT_ENVELOPE
+            touch(path)
+            return
+        }
         if (waveforms.containsKey(path)) {
             touch(path)
             return
@@ -158,6 +191,10 @@ object WaveformCache {
                 } else {
                     failedPaths += path
                 }
+            } catch (_: Exception) {
+                // Extraction must never take the app down (the full player kicks
+                // these off for every queue neighbor): treat as terminal failure.
+                failedPaths += path
             } finally {
                 inFlightLock.withLock { inFlight -= path }
             }
@@ -200,6 +237,14 @@ object WaveformCache {
         } else {
             extractor.setDataSource(path)
         }
+    }
+
+    /** True when [throwable] is the native-side rejection of an unopenable data source. */
+    private fun isUnopenableSource(throwable: Throwable): Boolean {
+        val message = throwable.message ?: return false
+        return message.contains("Failed to open file", ignoreCase = true) ||
+                message.contains("No such file or directory", ignoreCase = true) ||
+                message.contains("setDataSource failed", ignoreCase = true)
     }
 
     /** The file's first audio track format + its timeline duration in µs, or null. */
@@ -245,6 +290,10 @@ object WaveformCache {
 
         // One probe supplies the shared track format + timeline duration; the
         // workers re-open the file (a cheap fd open) for their own instances.
+        // Everything here can die natively on an unreadable path (the platform
+        // logs "Failed to open file" and, on some builds, aborts the process);
+        // the scheme gate in [ensure] keeps the known-dead inputs away, and the
+        // catch bounds any remaining native-side failure to a failed extraction.
         val probe = MediaExtractor()
         val trackFormat: MediaFormat
         val durationUs: Long
@@ -257,6 +306,11 @@ object WaveformCache {
             }
             trackFormat = track.first
             durationUs = track.second
+        } catch (error: Exception) {
+            if (!isUnopenableSource(error)) {
+                Log.w(TAG, "Extraction failed: $path", error)
+            }
+            return@withContext false
         } finally {
             runCatching { probe.release() }
         }
@@ -286,6 +340,10 @@ object WaveformCache {
                             publishBucket(state, firstBucket + indexInRegion, meanAmplitude)
                         }
                     )
+                } catch (error: Exception) {
+                    if (!isUnopenableSource(error)) {
+                        Log.w(TAG, "Worker extraction failed: $path", error)
+                    }
                 } finally {
                     runCatching {
                         codec?.stop()
@@ -395,7 +453,9 @@ object WaveformCache {
 
 /**
  * Composes the waveform state for [path], kicking off the extraction once into
- * the cache's own scope. Returns null only for files extraction cannot handle.
+ * the cache's own scope. Returns the shared flat envelope for streams
+ * (extraction can never handle them) and null while a real track's extraction
+ * is still in flight.
  */
 @Composable
 fun rememberWaveform(path: String, durationMs: Long): WaveformState? {

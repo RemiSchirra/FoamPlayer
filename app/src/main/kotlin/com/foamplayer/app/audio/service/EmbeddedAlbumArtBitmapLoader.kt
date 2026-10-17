@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import androidx.core.net.toUri
 import android.util.LruCache
 import androidx.core.graphics.scale
 import androidx.media3.common.util.BitmapLoader
@@ -44,7 +45,10 @@ import java.util.concurrent.ConcurrentHashMap
  * case). Bitmaps are resized small.
  */
 @UnstableApi
-class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
+class EmbeddedAlbumArtBitmapLoader(
+    context: Context,
+    private val distantArtworkUrl: (Uri) -> String? = { null }
+) : BitmapLoader {
 
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -103,9 +107,20 @@ class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
         val bytes = when {
             remote -> readRemote(uri)
             isImageFile(uri) -> readFileBytes(uri)
-            else -> readEmbeddedPicture(uri)
+            else -> readEmbeddedPicture(uri) ?: readDistantArtwork(uri)
         }
         return bytes?.let { decodeAndResize(it) }
+    }
+
+    /**
+     * Distant audio URIs (foam-distant://) have no embedded picture and no
+     * readable media file; when their scan-time image cache entry is gone,
+     * fetch the provider's live artwork URL instead of advertising a dead path.
+     */
+    private fun readDistantArtwork(uri: Uri): ByteArray? {
+        if (uri.scheme != com.foamplayer.distant.DistantUris.SCHEME) return null
+        val url = distantArtworkUrl(uri) ?: return null
+        return readRemote(url.toUri())
     }
 
     private fun isImageFile(uri: Uri): Boolean {
