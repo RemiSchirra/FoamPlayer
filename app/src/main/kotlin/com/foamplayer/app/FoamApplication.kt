@@ -10,6 +10,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.media.EmbeddedAlbumArtFetcher
 import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.repository.SettingsRepository
+import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.notification.ScanProgressNotifier
 import com.foamplayer.app.update.UpdateManager
 import dagger.hilt.android.HiltAndroidApp
@@ -28,6 +29,7 @@ class FoamApplication : Application(), ImageLoaderFactory {
     @Inject lateinit var updateManager: UpdateManager
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var distantRepository: DistantRepository
+    @Inject lateinit var trackRepository: TrackRepository
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -35,6 +37,7 @@ class FoamApplication : Application(), ImageLoaderFactory {
         super.onCreate()
         createNotificationChannel()
         scanProgressNotifier.start()
+        trackRepository.autoScanOnOpen()
         checkForUpdateOnStartup()
     }
 

@@ -265,9 +265,9 @@ class TrackRepository @Inject constructor(
     fun getRecentlyAddedArtistRows(): Flow<List<ArtistAddRow>> = trackDao.getRecentlyAddedArtistRows()
 
     /** Rescans the configured library folders. */
-    suspend fun rescanLibrary() {
+    suspend fun rescanLibrary(automatic: Boolean = false) {
         val folders = settingsRepository.settings.first().libraryFolders
-        startScan(folders)
+        startScan(folders, automatic)
     }
 
     /**
@@ -286,6 +286,22 @@ class TrackRepository @Inject constructor(
     fun scanServerDetached(serverId: String) {
         if (scanJob?.isActive == true) return
         scanJob = repositoryScope.launch { scanServerAndMerge(serverId) }
+    }
+
+    /**
+     * Scans the library on app open: the same full rescan as the manual one,
+     * on the process-lifetime scope, flagged automatic so the scan-progress
+     * notification is skipped (in-app indicators still update). Skipped when
+     * no source is configured yet (fresh install / pending onboarding) —
+     * there is nothing to scan.
+     */
+    fun autoScanOnOpen() {
+        repositoryScope.launch {
+            val settings = settingsRepository.settings.first()
+            if (settings.libraryFolders.isNotEmpty() || settings.distantServers.isNotEmpty()) {
+                rescanLibrary(automatic = true)
+            }
+        }
     }
 
     /**
@@ -328,13 +344,14 @@ class TrackRepository @Inject constructor(
 
     /**
      * Scans [folders] (local) plus every connected distant server, replacing
-     * the library with the results (orphans removed).
+     * the library with the results (orphans removed). [automatic] is carried
+     * on the emitted [ScanStatus] so notification observers can skip it.
      */
-    suspend fun startScan(folders: Set<String>) {
+    suspend fun startScan(folders: Set<String>, automatic: Boolean = false) {
         val settings = settingsRepository.settings.first()
         val servers = settings.distantServers
         if (folders.isEmpty() && servers.isEmpty()) {
-            _scanStatus.value = ScanStatus.Finished(0)
+            _scanStatus.value = ScanStatus.Finished(0, automatic)
             return
         }
 
@@ -342,20 +359,20 @@ class TrackRepository @Inject constructor(
         val genreSeps = settings.genreSeparators
         val knownTracks = reusableTracks(artistSeps, genreSeps)
 
-        _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
+        _scanStatus.value = ScanStatus.Scanning(0f, "Starting...", automatic)
         remoteScanner.refreshTokens()
 
         val localTracks = if (folders.isEmpty()) {
             emptyList()
         } else {
             scanner.scanFoldersSync(folders, artistSeps, genreSeps, knownTracks) { progress, currentFile ->
-                _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
+                _scanStatus.value = ScanStatus.Scanning(progress, currentFile, automatic)
             }
         }
         settingsRepository.markScanSeparators(artistSeps, genreSeps)
 
         val remoteTracks = remoteScanner.scan(servers) { progress, label ->
-            _scanStatus.value = ScanStatus.Scanning(progress, label)
+            _scanStatus.value = ScanStatus.Scanning(progress, label, automatic)
         }
 
         val scannedTracks = localTracks + remoteTracks
@@ -386,7 +403,7 @@ class TrackRepository @Inject constructor(
             }
         }
 
-        _scanStatus.value = ScanStatus.Finished(scannedTracks.size)
+        _scanStatus.value = ScanStatus.Finished(scannedTracks.size, automatic)
     }
 
     /**
