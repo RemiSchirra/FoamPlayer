@@ -59,6 +59,9 @@ import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import kotlin.math.abs
 import androidx.core.net.toUri
+import com.foamplayer.app.audio.engine.RepeatMode
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -193,9 +196,21 @@ fun MiniPlayer(
 ) {
     val playbackState by playbackStateFlow.collectAsState()
     val track = playbackState.currentTrack ?: return
-    val queue = playbackState.queue
-    val queueEntryIds = playbackState.queueEntryIds
-    val currentIndex = playbackState.queueIndex
+    // In repeat-all the pager shows the primary queue as a closed loop (see LoopingPagerModel):
+    // `queue`, `queueEntryIds` and `currentIndex` are the pager's page numbering, and engine
+    // calls go through `realIndexOf`.
+    val loopModelCache = remember { LoopingPagerModelCache() }
+    val loopModel = loopModelCache.resolve(
+        queue = playbackState.queue,
+        auxiliaryFlags = playbackState.auxiliaryFlags,
+        entryIds = playbackState.queueEntryIds,
+        queueIndex = playbackState.queueIndex,
+        repeatAll = playbackState.repeatMode == RepeatMode.ALL
+    )
+    val latestLoopModel by rememberUpdatedState(loopModel)
+    val queue = loopModel.queue
+    val queueEntryIds = loopModel.entryIds
+    val currentIndex = loopModel.index
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -212,6 +227,9 @@ fun MiniPlayer(
     class PagerSyncState {
         var isSyncing = false
         var activeToken = 0
+        // A skip already requested for a swipe that ended on a loop ghost page (real index + time).
+        var wrapRequestedReal = -1
+        var wrapRequestedAtMs = 0L
     }
     val pagerSyncState = remember { PagerSyncState() }
 
@@ -261,7 +279,7 @@ fun MiniPlayer(
 
             val activeFraction = if (isAnimateSeekBarEnabled) {
                 val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                val distanceFromCurrent = abs(scrollPosition - latestCurrentIndex.coerceAtLeast(0))
+                val distanceFromCurrent = latestLoopModel.distanceToPlayingPage(scrollPosition)
                 (1f - distanceFromCurrent).coerceIn(0f, 1f)
             } else {
                 1f
@@ -351,19 +369,57 @@ fun MiniPlayer(
 
     // Sync the pager when the track changes; reads the live queue through the
     // proxy, since the queue can change while this effect is running.
+    val currentEntryId = queueEntryIds.getOrNull(currentIndex)
+    val latestEntryId by rememberUpdatedState(currentEntryId)
+    var lastSyncedEntryId by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(currentIndex) {
         val currentQueue = latestQueue
         pendingJump = null
+        // Same playing entry under a new page number (repeat mode toggled, a row removed before it):
+        // snap, never sweep across the renumbered queue.
+        val pureRenumbering = latestEntryId != null && latestEntryId == lastSyncedEntryId
+        lastSyncedEntryId = latestEntryId
+
+        // Parked on (or flung onto) the ghost of the playing track: the idle hop below lands on
+        // its twin. Treating the ghost as a real position would sweep back across the whole loop.
+        val loopModel = latestLoopModel
+        val parkedOnGhostOfPlaying = loopModel.isGhostPage(pagerState.currentPage) &&
+                loopModel.ghostTwinPage(pagerState.currentPage) == currentIndex
+
+        if (pureRenumbering && !parkedOnGhostOfPlaying && currentIndex in currentQueue.indices) {
+            if (pagerState.currentPage != currentIndex) pagerState.scrollToPage(currentIndex)
+            return@LaunchedEffect
+        }
 
         if (currentIndex in currentQueue.indices &&
             pagerState.currentPage != currentIndex &&
+            !parkedOnGhostOfPlaying &&
             !latestSkipTrackChangeAnimation
         ) {
             val myToken = ++pagerSyncState.activeToken
             pagerSyncState.isSyncing = true
             try {
+                // Repeat-all wrap across the loop's seam: one real page slide onto the ghost
+                // page, then a silent hop onto its identical twin.
+                val wrapPage = latestLoopModel.wrapTransitPage(
+                    fromPage = pagerState.currentPage,
+                    toPage = currentIndex,
+                    backward = false
+                )
                 val distance = currentIndex - pagerState.currentPage
-                if (abs(distance) <= 1) {
+                if (wrapPage != null) {
+                    try {
+                        pagerState.animateScrollToPage(wrapPage)
+                    } finally {
+                        withContext(NonCancellable) {
+                            val model = latestLoopModel
+                            val page = pagerState.currentPage
+                            if (model.isGhostPage(page)) {
+                                pagerState.scrollToPage(model.ghostTwinPage(page))
+                            }
+                        }
+                    }
+                } else if (abs(distance) <= 1) {
                     pagerState.animateScrollToPage(currentIndex)
                 } else {
                     // Distant jump: slide one page but render the via page as
@@ -411,18 +467,54 @@ fun MiniPlayer(
     }
 
     LaunchedEffect(pagerState.settledPage) {
-        if (!pagerSyncState.isSyncing &&
-            pendingJump == null &&
-            pagerState.settledPage != latestCurrentIndex &&
-            pagerState.settledPage in latestQueue.indices
-        ) {
+        val settled = pagerState.settledPage
+        val model = latestLoopModel
+        if (pagerSyncState.isSyncing || pendingJump != null || settled !in latestQueue.indices) {
+            return@LaunchedEffect
+        }
+        val real = model.realIndexOf(settled)
+
+        if (model.isGhostPage(settled)) {
+            // Loop ghost page: commit its twin track but don't move the pager here (settle can be
+            // reported at finger release; the idle hop below moves it once it has really
+            // stopped). A twin the engine already plays is a programmatic wrap that landed.
+            if (model.ghostTwinPage(settled) != latestCurrentIndex) {
+                pagerSyncState.wrapRequestedReal = real
+                pagerSyncState.wrapRequestedAtMs = System.currentTimeMillis()
+                seekBarProgress.onTrackChangeApplied()
+                onSkipToTrack(real, model.isTrailingGhost(settled))
+            }
+            return@LaunchedEffect
+        }
+
+        val alreadyRequested = pagerSyncState.wrapRequestedReal >= 0 &&
+                System.currentTimeMillis() - pagerSyncState.wrapRequestedAtMs < 2_000L &&
+                real == pagerSyncState.wrapRequestedReal
+        pagerSyncState.wrapRequestedReal = -1
+        if (alreadyRequested) return@LaunchedEffect
+
+        if (settled != latestCurrentIndex) {
             seekBarProgress.onTrackChangeApplied()
             // Keep the swipe direction: a swipe back must walk further back
             // past tracks that failed to load.
-            onSkipToTrack(
-                pagerState.settledPage,
-                pagerState.settledPage > latestCurrentIndex
-            )
+            onSkipToTrack(real, settled > latestCurrentIndex)
+        }
+    }
+
+    // Idle hop: a pager that has really stopped on a loop ghost page moves silently onto its
+    // identical twin, whoever got it there (swipe or automatic wrap).
+    LaunchedEffect(pagerState) {
+        snapshotFlow {
+            val model = latestLoopModel
+            if (!pagerState.isScrollInProgress && model.isGhostPage(pagerState.currentPage)) {
+                pagerState.currentPage
+            } else {
+                -1
+            }
+        }.collect { ghostPage ->
+            if (ghostPage >= 0) {
+                pagerState.scrollToPage(latestLoopModel.ghostTwinPage(ghostPage))
+            }
         }
     }
 

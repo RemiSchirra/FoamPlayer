@@ -1537,11 +1537,28 @@ class AudioEngine @Inject constructor(
         val queue = _playbackState.value.queue
         if (index !in queue.indices) return
 
+        val state = _playbackState.value
+        val primaryFirst = primaryQueueFirstIndex(state)
+        val primaryLast = primaryQueueLastIndex(state)
         var target = index
-        while (target in queue.indices && queue[target].id in failedTrackIds) {
-            target += if (forward) 1 else -1
+        if (state.repeatMode == RepeatMode.ALL && primaryFirst < primaryLast && index in primaryFirst..primaryLast) {
+            // Repeat-all: the primary queue is a loop, so stepping over failed tracks wraps
+            // around its ends instead of leaking into the auxiliary pool.
+            var guard = 0
+            while (queue[target].id in failedTrackIds && guard++ <= primaryLast - primaryFirst) {
+                target = if (forward) {
+                    if (target >= primaryLast) primaryFirst else target + 1
+                } else {
+                    if (target <= primaryFirst) primaryLast else target - 1
+                }
+            }
+            if (queue[target].id in failedTrackIds) target = index
+        } else {
+            while (target in queue.indices && queue[target].id in failedTrackIds) {
+                target += if (forward) 1 else -1
+            }
+            if (target !in queue.indices) target = index
         }
-        if (target !in queue.indices) target = index
 
         cancelPendingTransitions()
 
@@ -1618,15 +1635,25 @@ class AudioEngine @Inject constructor(
      */
     private fun advanceToNext(useFade: Boolean) {
         val state = _playbackState.value
+        // Repeat-all wrap, decided from the LOGICAL queue position rather than from the
+        // player's timeline: on the last primary track, next always restarts the primary
+        // queue and never flows on into the auxiliary pool, whatever the window holds.
+        if (state.repeatMode == RepeatMode.ALL && state.queueIndex >= 0) {
+            val primaryLast = primaryQueueLastIndex(state)
+            if (primaryLast >= 0 && state.queueIndex >= primaryLast) {
+                wrapToQueueStart(useFade)
+                return
+            }
+        }
         if (player.hasNextMediaItem()) {
             val targetQueueIndex = player.nextMediaItemIndex + loadedRange.first
-            // Repeat-all wrap: a timeline next landing on the first auxiliary entry past
+            // Safety net: a timeline next landing on the first auxiliary entry past
             // the primary queue restarts the queue instead.
             if (state.repeatMode == RepeatMode.ALL &&
                 targetQueueIndex == primaryQueueLastIndex(state) + 1 &&
                 state.auxiliaryFlags.getOrNull(targetQueueIndex) == true
             ) {
-                wrapToQueueStart()
+                wrapToQueueStart(useFade)
                 return
             }
             if (useFade) {
@@ -2042,12 +2069,27 @@ class AudioEngine @Inject constructor(
      * Repeat-all wrap: restarts the primary queue. Plays index 0 through the standard
      * window loader; the transition's listen bookkeeping fires from the player callback.
      */
-    private fun wrapToQueueStart() {
+    private fun wrapToQueueStart(useFade: Boolean = false) {
         val state = _playbackState.value
         if (state.queue.isEmpty()) return
         crossfadeArmedForTrackId = null
         silenceGapArmedForTrackId = null
-        loadWindowAndPlay(state.queue, primaryQueueFirstIndex(state))
+
+        // First primary track that did not fail to load (known-failed ones are stepped over).
+        val first = primaryQueueFirstIndex(state)
+        val last = primaryQueueLastIndex(state)
+        var target = first
+        while (target < last && state.queue[target].id in failedTrackIds) {
+            target++
+        }
+
+        if (useFade && fadeEngine.quickFadeEnabled && player.isPlaying &&
+            state.queue[target].id !in failedTrackIds &&
+            fadeEngine.startCrossfade(target, 0L, fadeEngine.quickFadeDurationMs)
+        ) {
+            return
+        }
+        loadWindowAndPlay(state.queue, target)
     }
 
     /**

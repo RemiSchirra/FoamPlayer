@@ -38,6 +38,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +47,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -65,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.settings.SeekBarStyle
+import com.foamplayer.app.ui.components.LoopingPagerModelCache
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.rememberSeekBarProgressState
@@ -76,6 +79,9 @@ import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.WaveformCache
 import com.foamplayer.app.ui.utils.WaveformState
 import com.foamplayer.app.ui.utils.rememberWaveform
+import com.foamplayer.app.audio.engine.RepeatMode
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 /**
@@ -129,9 +135,28 @@ fun FullPlayerScreen(
     val isProgressiveEnvelope = isWaveformSeek && isAnimateSeekBarEnabled
 
     val currentTrack by remember { derivedStateOf { state.currentTrack } }
-    val queue by remember { derivedStateOf { state.queue } }
-    val queueIndex by remember { derivedStateOf { state.queueIndex } }
-    val queueEntryIds by remember { derivedStateOf { state.queueEntryIds } }
+    // The hero pager shows [heroModel]: the plain queue, except in repeat-all where it is a
+    // closed loop over the PRIMARY queue (auxiliary entries hidden) framed by two ghost pages
+    // on each side (copies of the loop's neighbours, so a ghost has the same neighbours as its
+    // twin and the silent hop is invisible). Next at the end and previous at the start are
+    // therefore ordinary one-page moves; the pager snaps off the ghost onto its twin. `queue`, `queueIndex` and
+    // `queueEntryIds` below are the pager's (display) numbering; engine calls go through
+    // [LoopingPagerModel.realIndexOf].
+    val heroModelCache = remember { LoopingPagerModelCache() }
+    val heroModel by remember {
+        derivedStateOf {
+            heroModelCache.resolve(
+                queue = state.queue,
+                auxiliaryFlags = state.auxiliaryFlags,
+                entryIds = state.queueEntryIds,
+                queueIndex = state.queueIndex,
+                repeatAll = state.repeatMode == RepeatMode.ALL
+            )
+        }
+    }
+    val queue by remember { derivedStateOf { heroModel.queue } }
+    val queueIndex by remember { derivedStateOf { heroModel.index } }
+    val queueEntryIds by remember { derivedStateOf { heroModel.entryIds } }
     val durationMs by remember { derivedStateOf { state.durationMs } }
     val audioOutputInfo by remember { derivedStateOf { state.audioOutputInfo } }
     val isPlayingProvider = { state.isPlaying }
@@ -333,10 +358,18 @@ fun FullPlayerScreen(
     }
     val placeholderColor = if (isTransitioning) Color.Transparent else FoamTheme.colors.surfaceVariant
 
-    val pagerState = rememberPagerState(
-        initialPage = queueIndex.coerceAtLeast(0),
-        pageCount = { queue.size }
-    )
+    // A fresh pager per repeat-all on/off: toggling it renumbers the queue (ghost pages are added or
+    // removed in front of the playing page). Re-anchoring the same PagerState only lands at the next
+    // measure, leaving one frame where composition and pager disagree on the numbering (the flicker).
+    // A new state starts ON the new numbering's playing page, so every reader is coherent at once.
+    val pagerState = key(state.repeatMode == RepeatMode.ALL) {
+        rememberPagerState(
+            initialPage = queueIndex.coerceAtLeast(0),
+            pageCount = { queue.size }
+        )
+    }
+    // Long-lived lambdas (remember { } / rememberSeekBarProgressState) must not capture a replaced pager.
+    val latestPagerState by rememberUpdatedState(pagerState)
 
     // Page-number anchoring for the hero pager across queue renumberings. Deleting
     // an entry BEFORE the playing one (repeat-all's full-queue view) shifts every
@@ -353,6 +386,10 @@ fun FullPlayerScreen(
     var pagerAnchoredEntryIds by remember { mutableStateOf(queueEntryIds) }
     var pagerSyncEntryId by remember { mutableStateOf(currentEntryId) }
     var pagerSyncQueueIndex by remember { mutableStateOf(queueIndex) }
+    // Held for the one frame where the queue is renumbered (repeat mode toggled, ...) but the pager has
+    // not yet landed on the new page: the backdrop fraction would otherwise be computed from the new
+    // page against the old art pair and flash the neighbour's art.
+    var backdropRenumberHold by remember { mutableStateOf(false) }
     // One-frame signal, computed in composition where the shift is observed: the
     // playing entry kept its id while its index moved. The pager is snapped
     // silently (a real track change animates via the follow effect further down).
@@ -374,6 +411,7 @@ fun FullPlayerScreen(
         }
         pagerSyncEntryId = currentEntryId
         pagerSyncQueueIndex = queueIndex
+        backdropRenumberHold = pagerRenumberingPending && pagerState.currentPage != queueIndex
     }
 
     // The playing entry's page as the pager currently displays it: the live index
@@ -386,7 +424,7 @@ fun FullPlayerScreen(
     }
 
     val idlePage by remember {
-        derivedStateOf { if (pagerState.isScrollInProgress) -1 else pagerState.currentPage }
+        derivedStateOf { if (latestPagerState.isScrollInProgress) -1 else latestPagerState.currentPage }
     }
     val coverCarry = remember { AnimatedCoverCarry() }
     val animatedCover: AnimatedCoverOwner? = if (!isAnimatedCoverEnabled) {
@@ -414,8 +452,8 @@ fun FullPlayerScreen(
             val progress = if (durationMs > 0) livePositionMs.toFloat() / durationMs else 0f
 
             val activeFraction = if (isAnimateSeekBarEnabled) {
-                val scrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                val distanceFromCurrent = abs(scrollPosition - queueIndex.coerceAtLeast(0))
+                val scrollPosition = latestPagerState.currentPage + latestPagerState.currentPageOffsetFraction
+                val distanceFromCurrent = heroModel.distanceToPlayingPage(scrollPosition)
                 (1f - distanceFromCurrent).coerceIn(0f, 1f)
             } else {
                 1f
@@ -430,6 +468,37 @@ fun FullPlayerScreen(
     val latestQueueIndex = rememberUpdatedState(queueIndex)
     val latestQueueSize = rememberUpdatedState(queueSize)
     val latestQueue = rememberUpdatedState(queue)
+    val latestHeroModel = rememberUpdatedState(heroModel)
+    // Time of the last transport-button "previous" skip; disambiguates the wrap direction of a
+    // two-track loop (see LoopingPagerModel.wrapTransitPage). 0 = the last button skip was a "next".
+    val lastBackwardSkipMs = remember { longArrayOf(0L) }
+    val markSkipIntent: (Boolean) -> Unit = { backward ->
+        lastBackwardSkipMs[0] = if (backward) System.currentTimeMillis() else 0L
+    }
+
+    // While the pager hops off a repeat-all ghost page onto its twin, the backdrop holds still.
+    // The hop changes the pager's page in one measure pass, but the backdrop's art pair is only
+    // republished by the next composition; drawing that frame against the stale pair makes the
+    // crossfade fraction jump to 1 on a backward hop (page 1 -> n + 1) and flash the wrong art.
+    // Ghost and twin show the same track, so holding the fraction at 0 is exact.
+    var backdropHopHold by remember { mutableStateOf(false) }
+    suspend fun hopOffGhost() {
+        // Mid-renumbering the pager still reports its OLD page number, which can land in the new
+        // ghost zone: hopping "off" it would scroll to the wrong twin and fight the pending snap.
+        if (backdropRenumberHold) return
+        val model = latestHeroModel.value
+        val page = pagerState.currentPage
+        if (!model.isGhostPage(page)) return
+        backdropHopHold = true
+        try {
+            pagerState.scrollToPage(model.ghostTwinPage(page))
+            // Let the composition that republishes the art pair land before releasing the hold.
+            withFrameNanos { }
+            withFrameNanos { }
+        } finally {
+            backdropHopHold = false
+        }
+    }
 
     // The two envelopes the waveform renders while a swap is in flight: where the bars
     // are anchored (null = the playing track's own envelope, pinned at trigger time)
@@ -473,7 +542,7 @@ fun FullPlayerScreen(
                     if (originPage == targetPage) {
                         0f
                     } else {
-                        val absolute = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                        val absolute = latestPagerState.currentPage + latestPagerState.currentPageOffsetFraction
                         abs((absolute - originPage) / (targetPage - originPage)).coerceIn(0f, 1f)
                     }
                 }
@@ -525,6 +594,8 @@ fun FullPlayerScreen(
     LaunchedEffect(pagerState, settings.automaticColorEnabled) {
         if (!settings.automaticColorEnabled) return@LaunchedEffect
         snapshotFlow {
+            // New page number against the old queue for a frame would push a wrong accent.
+            if (backdropRenumberHold) return@snapshotFlow null
             val anchoredQueue = pagerAnchoredQueue
             AlbumArtPaletteCache.interpolatedColor(
                 currentPage = pagerState.currentPage,
@@ -557,7 +628,11 @@ fun FullPlayerScreen(
         isAnimateSeekBarEnabled = settleSeekBarAnimated,
         isWaveformSeek = isWaveformSeek,
         envelopeMorphProgress = envelopeMorphProgress,
-        seekBarProgress = seekBarProgress
+        seekBarProgress = seekBarProgress,
+        isWrapLanding = { page ->
+            val loop = latestHeroModel.value
+            loop.isGhostPage(page) && loop.ghostTwinPage(page) == latestQueueIndex.value
+        }
     )
 
     // Progressive envelope latch (raw "animate seek bar" setting only): while the
@@ -629,15 +704,56 @@ fun FullPlayerScreen(
         // deleted) must not start a catch-up morph: the "previous page" it would
         // anchor on holds a different track after the shift.
         if (currentEntryId != previousEnvelopeEntryId) {
-            seekBarProgress.onPlayingIndexChanged(queueIndex, previousQueueIndex)
+            // Repeat-all wrap (last <-> first): the engine index jumps across the whole loop, but the
+            // swap was pinned on the ghost page the pager slides onto. Report the landing there, or the
+            // swap never resolves (wrong blend, envelope pops to the new track).
+            val landedPage = latestHeroModel.value.wrapTransitPage(
+                fromPage = previousQueueIndex,
+                toPage = queueIndex,
+                backward = System.currentTimeMillis() - lastBackwardSkipMs[0] < SKIP_INTENT_WINDOW_MS
+            ) ?: queueIndex
+            seekBarProgress.onPlayingIndexChanged(landedPage, previousQueueIndex)
         }
         previousQueueIndex = queueIndex
         previousEnvelopeEntryId = currentEntryId
     }
 
     LaunchedEffect(pagerState) {
+        // Real queue index (and time) of a skip already requested for a swipe that ended on a
+        // repeat-all ghost page, so the later settle on its twin page doesn't request it twice.
+        var wrapRequestedReal = -1
+        var wrapRequestedAtMs = 0L
         snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
+                // A settled page read mid-renumbering is a stale number, not a user landing.
+                if (backdropRenumberHold) return@collect
+                val model = latestHeroModel.value
+                if (model.isGhostPage(settledPage)) {
+                    // Ghost pages are visual only: commit the twin track to the engine but do
+                    // NOT move the pager here (settle can be reported at finger release, and a
+                    // jump would cut the fling short). The idle-hop effect below moves the pager
+                    // onto the twin once it has really stopped. A twin the engine already
+                    // plays is a programmatic wrap that landed, which needs no skip.
+                    if (isMainPagerVisible() &&
+                        model.ghostTwinPage(settledPage) != latestQueueIndex.value
+                    ) {
+                        wrapRequestedReal = model.realIndexOf(settledPage)
+                        wrapRequestedAtMs = System.currentTimeMillis()
+                        seekBarProgress.onTrackChangeApplied()
+                        markSkipIntent(!model.isTrailingGhost(settledPage))
+                        viewModel.skipToIndex(
+                            wrapRequestedReal,
+                            forward = model.isTrailingGhost(settledPage)
+                        )
+                    }
+                    return@collect
+                }
+                val alreadyRequested = wrapRequestedReal >= 0 &&
+                        System.currentTimeMillis() - wrapRequestedAtMs < 2_000L &&
+                        model.realIndexOf(settledPage) == wrapRequestedReal
+                wrapRequestedReal = -1
+                if (alreadyRequested) return@collect
+
                 if (isMainPagerVisible() &&
                     settledPage in 0 until latestQueueSize.value &&
                     settledPage != latestQueueIndex.value
@@ -646,7 +762,7 @@ fun FullPlayerScreen(
                     // Keep the swipe direction: a swipe back must not land on a
                     // track that failed to load (it walks further back instead).
                     viewModel.skipToIndex(
-                        settledPage,
+                        model.realIndexOf(settledPage),
                         forward = settledPage > latestQueueIndex.value
                     )
                 } else if (settledPage == latestQueueIndex.value) {
@@ -657,6 +773,24 @@ fun FullPlayerScreen(
                     seekBarProgress.revertTrackChangeEnvelope()
                 }
             }
+    }
+
+    // Idle hop: a pager that has really stopped on a repeat-all ghost page is moved silently
+    // onto its identical twin, whoever got it there (a swipe, a transport-button wrap, an
+    // automatic advance). Waiting for idle keeps the fling's animation intact.
+    LaunchedEffect(pagerState) {
+        snapshotFlow {
+            val model = latestHeroModel.value
+            if (!backdropRenumberHold && !pagerState.isScrollInProgress &&
+                model.isGhostPage(pagerState.currentPage)
+            ) {
+                pagerState.currentPage
+            } else {
+                -1
+            }
+        }.collect { ghostPage ->
+            if (ghostPage >= 0) hopOffGhost()
+        }
     }
 
     val programmaticBackdropCrossfade = remember { Animatable(1f) }
@@ -717,11 +851,38 @@ fun FullPlayerScreen(
             !pagerState.isScrollInProgress &&
             !pagerRenumberingPending
         ) {
+            val loop = latestHeroModel.value
+            if (loop.isGhostPage(pagerState.currentPage) &&
+                loop.ghostTwinPage(pagerState.currentPage) == queueIndex
+            ) {
+                // Parked on the ghost of the playing track: the idle hop lands on its twin.
+                return@LaunchedEffect
+            }
             if (isMainPagerVisible()) {
-                pagerState.animateScrollToPage(
-                    page = queueIndex,
-                    animationSpec = tween(TRANSITION_DURATION_MS)
+                // Repeat-all wrap (last -> first or first -> last): the engine already sits on
+                // the far end of the loop, but visually it is a normal one-page move onto the
+                // ghost page, followed by a silent hop onto its twin.
+                val transitPage = latestHeroModel.value.wrapTransitPage(
+                    fromPage = pagerState.currentPage,
+                    toPage = queueIndex,
+                    backward = System.currentTimeMillis() - lastBackwardSkipMs[0] < SKIP_INTENT_WINDOW_MS
                 )
+                if (transitPage != null) {
+                    try {
+                        pagerState.animateScrollToPage(
+                            page = transitPage,
+                            animationSpec = tween(TRANSITION_DURATION_MS)
+                        )
+                    } finally {
+                        // Also when cancelled by a rapid second skip: never leave the pager parked on a ghost.
+                        withContext(NonCancellable) { hopOffGhost() }
+                    }
+                } else {
+                    pagerState.animateScrollToPage(
+                        page = queueIndex,
+                        animationSpec = tween(TRANSITION_DURATION_MS)
+                    )
+                }
             } else {
                 pagerState.scrollToPage(queueIndex)
             }
@@ -852,7 +1013,7 @@ fun FullPlayerScreen(
                         { programmaticBackdropCrossfade.value }
                     } else {
                         {
-                            if (upTransitionState.currentState) {
+                            if (upTransitionState.currentState || backdropHopHold || backdropRenumberHold) {
                                 0f
                             } else {
                                 val absoluteOffset =
@@ -910,7 +1071,8 @@ fun FullPlayerScreen(
                             onSetScore = viewModel::setTrackScore,
                             onOpenAlbum = onOpenAlbum,
                             onOpenArtist = onOpenArtist,
-                            flightGeometry = flightGeometry
+                            flightGeometry = flightGeometry,
+                            onSkipIntent = markSkipIntent
                         )
                     }
 
@@ -1019,7 +1181,10 @@ fun FullPlayerScreen(
                                     )
                                 ) {
                                     PreviousAction.RESTART_CURRENT -> viewModel.seekTo(0L)
-                                    PreviousAction.SKIP_TO_PREVIOUS -> viewModel.previous()
+                                    PreviousAction.SKIP_TO_PREVIOUS -> {
+                                        markSkipIntent(true)
+                                        viewModel.previous()
+                                    }
                                 }
                             }
                         )
@@ -1045,6 +1210,7 @@ fun FullPlayerScreen(
                                     fromBlend = envelopeMorphProgress(),
                                     fromPageIndex = queueIndex
                                 )
+                                markSkipIntent(false)
                                 viewModel.next()
                             }
                         )
@@ -1108,8 +1274,11 @@ private fun TrackChangeCommitEffect(
     isAnimateSeekBarEnabled: Boolean,
     isWaveformSeek: Boolean,
     envelopeMorphProgress: () -> Float,
-    seekBarProgress: SeekBarProgressState
+    seekBarProgress: SeekBarProgressState,
+    /** True for a ghost page twinning the playing track: the pager is landing a wrap, not starting a change. */
+    isWrapLanding: (Int) -> Boolean
 ) {
+    val latestIsWrapLanding by rememberUpdatedState(isWrapLanding)
     val latestQueueIndex by rememberUpdatedState(currentQueueIndex)
     val latestQueueSize by rememberUpdatedState(currentQueueSize)
     val latestIsAnimateSeekBarEnabled by rememberUpdatedState(isAnimateSeekBarEnabled)
@@ -1123,7 +1292,8 @@ private fun TrackChangeCommitEffect(
             .collect { (dragging, targetPage) ->
                 if (!dragging &&
                     targetPage in 0 until latestQueueSize &&
-                    targetPage != latestQueueIndex
+                    targetPage != latestQueueIndex &&
+                    !latestIsWrapLanding(targetPage)
                 ) {
                     seekBarProgress.onTrackChangeCommitted(
                         animated = latestIsAnimateSeekBarEnabled,
@@ -1135,3 +1305,4 @@ private fun TrackChangeCommitEffect(
             }
     }
 }
+private const val SKIP_INTENT_WINDOW_MS = 1_500L

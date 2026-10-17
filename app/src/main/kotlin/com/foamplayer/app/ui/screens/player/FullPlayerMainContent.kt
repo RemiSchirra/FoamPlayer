@@ -132,7 +132,9 @@ internal fun SharedTransitionScope.MainPlayerContent(
     onSetScore: (Long, Int) -> Unit,
     onOpenAlbum: (TrackEntity) -> Unit,
     onOpenArtist: (TrackEntity) -> Unit,
-    flightGeometry: PlayerFlightGeometryState? = null
+    flightGeometry: PlayerFlightGeometryState? = null,
+    /** Reports a transport-button skip (true = previous) so a repeat-all wrap animates in the right direction. */
+    onSkipIntent: (backward: Boolean) -> Unit = {}
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(top = PlayerDimens.screenPadding),
@@ -195,7 +197,10 @@ internal fun SharedTransitionScope.MainPlayerContent(
                     )
                 ) {
                     PreviousAction.RESTART_CURRENT -> viewModel.seekTo(0L)
-                    PreviousAction.SKIP_TO_PREVIOUS -> viewModel.previous()
+                    PreviousAction.SKIP_TO_PREVIOUS -> {
+                        onSkipIntent(true)
+                        viewModel.previous()
+                    }
                 }
             },
             onPlayPause = { if (isPlaying()) viewModel.pause() else viewModel.play() },
@@ -206,6 +211,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
                     fromBlend = envelopeMorphProgress(),
                     fromPageIndex = queueIndex
                 )
+                onSkipIntent(false)
                 viewModel.next()
             }
         )
@@ -251,16 +257,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
 ) {
     val anchorPage = queueIndex.coerceAtLeast(0)
 
-    val showHero by remember(anchorPage, immersive) {
-        derivedStateOf {
-            if (immersive) {
-                true
-            } else {
-                val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
-                abs(offset) < 1f
-            }
-        }
-    }
 
     // Marquee scroll state per queue ENTRY, shared by the pager page and the hero overlay
     // showing that entry: the page drives it (it is composed for as long as the entry is
@@ -277,6 +273,28 @@ internal fun SharedTransitionScope.TrackHeroPager(
     // be running or they may be mid-scroll. After this, an incoming title only starts
     // scrolling if the swipe is held long enough for its own pause to elapse.
     val currentEntryKey by rememberUpdatedState(entryKey)
+
+    // Entry-aware: a pure renumbering (repeat mode toggled, a row removed before the playing one)
+    // changes anchorPage in composition one frame before the pager's own position follows at measure.
+    // Comparing raw page numbers there reads "pager far from anchor", drops the hero for that frame
+    // and flashes the art + title. The pager's last-measured page is resolved to its entry key, so
+    // both sides always describe the same entry.
+    val showHero by remember(anchorPage, immersive, pagerState) {
+        derivedStateOf {
+            if (immersive) {
+                true
+            } else {
+                val pageKey = pagerState.layoutInfo.visiblePagesInfo
+                    .firstOrNull { it.index == pagerState.currentPage }?.key
+                val offset = if (pageKey == currentEntryKey(anchorPage)) {
+                    pagerState.currentPageOffsetFraction
+                } else {
+                    pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
+                }
+                abs(offset) < 1f
+            }
+        }
+    }
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.isScrollInProgress }
             .distinctUntilChanged()
