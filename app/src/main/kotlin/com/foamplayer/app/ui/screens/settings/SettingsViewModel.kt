@@ -84,7 +84,7 @@ class SettingsViewModel @Inject constructor(
     fun setFullPlayerRounding(rounding: Int) = launch { settingsRepository.setFullPlayerRounding(rounding) }
     fun setMarqueeMode(mode: MarqueeMode) = launch { settingsRepository.setMarqueeMode(mode) }
     fun addFolder(path: String) = launch { settingsRepository.addFolder(path) }
-    fun removeFolder(path: String) = launch { settingsRepository.removeFolder(path) }
+    fun removeFolder(path: String) = trackRepository.removeFolderDetached(path)
 
     // ----------------------------- distant providers
 

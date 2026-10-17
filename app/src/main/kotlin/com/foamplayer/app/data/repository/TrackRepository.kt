@@ -1,6 +1,8 @@
 package com.foamplayer.app.data.repository
 
+import android.provider.DocumentsContract
 import android.util.Log
+import androidx.core.net.toUri
 import androidx.room.withTransaction
 import com.foamplayer.app.data.db.AppDatabase
 import com.foamplayer.app.data.db.dao.AlbumRecommendation
@@ -302,6 +304,62 @@ class TrackRepository @Inject constructor(
                 rescanLibrary(automatic = true)
             }
         }
+    }
+
+    /**
+     * Removes [folder] from the configured library folders and immediately
+     * drops every track stored under it, plus their cached lyrics — removed
+     * folders' tracks used to linger until the next full rescan's orphan
+     * cleanup. Deletions run chunked and transactional like [startScan].
+     * (Removing a folder while a scan is in flight can re-add its tracks;
+     * the next full rescan prunes them again.)
+     */
+    suspend fun removeFolderAndPruneTracks(folder: String) {
+        settingsRepository.removeFolder(folder)
+
+        val root = treeDocumentIdOf(folder) ?: return
+        val prefix = "$root/"
+        val removedPaths = trackDao.getAllTrackPaths()
+            .filter { documentIdOf(it).startsWith(prefix) }
+
+        db.withTransaction {
+            removedPaths.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
+                trackDao.deleteTracksByPaths(chunk)
+            }
+
+            // Mirrors startScan's orphan cleanup: drop cached lyrics whose
+            // track row no longer exists.
+            val liveTrackIds = trackDao.getAllTrackIds().toHashSet()
+            val orphanedCachedIds = cachedLyricsDao.getCachedTrackIds().filterNot { it in liveTrackIds }
+            orphanedCachedIds.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
+                cachedLyricsDao.deleteByTrackIds(chunk)
+            }
+        }
+    }
+
+    /** Detached variant of [removeFolderAndPruneTracks]: pruning survives leaving Settings. */
+    fun removeFolderDetached(folder: String) {
+        repositoryScope.launch { removeFolderAndPruneTracks(folder) }
+    }
+
+    /** Document id of a track path (content document id, file path, or the raw string). */
+    private fun documentIdOf(trackPath: String): String = try {
+        val uri = trackPath.toUri()
+        when (uri.scheme) {
+            "content" -> DocumentsContract.getDocumentId(uri)
+            "file" -> uri.path ?: trackPath
+            else -> trackPath
+        }
+    } catch (_: Exception) {
+        trackPath
+    }
+
+    /** Tree document id of a picked library folder (content tree URI or file path). */
+    private fun treeDocumentIdOf(folderUri: String): String? = try {
+        val uri = folderUri.toUri()
+        if (uri.scheme == "content") DocumentsContract.getTreeDocumentId(uri) else uri.path
+    } catch (_: Exception) {
+        null
     }
 
     /**
