@@ -1023,8 +1023,11 @@ class AudioEngine @Inject constructor(
     private suspend fun saveSessionSnapshot(state: PlaybackState) {
         val ids = ArrayList<Long>(state.queue.size)
         val flags = ArrayList<Boolean>(state.queue.size)
+        // Auxiliary entries may precede the current track, so its saved index is counted among main entries only.
+        var persistedCurrentIndex = 0
         state.queue.forEachIndexed { i, track ->
             if (state.auxiliaryFlags.getOrNull(i) != true) {
+                if (i < state.queueIndex) persistedCurrentIndex++
                 ids.add(track.id)
                 flags.add(state.queueSourceFlags.getOrNull(i) == true)
             }
@@ -1035,7 +1038,7 @@ class AudioEngine @Inject constructor(
             PersistedPlayback(
                 trackIds = ids,
                 sourceFlags = flags,
-                currentIndex = state.queueIndex.coerceIn(0, ids.lastIndex),
+                currentIndex = persistedCurrentIndex.coerceIn(0, ids.lastIndex),
                 positionMs = _positionMs.value,
                 isShuffle = state.isShuffle,
                 repeatMode = state.repeatMode,
@@ -1134,8 +1137,10 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Plays [tracks] from a list pick: keeps played history, replaces the upcoming main-queue
-     * tracks with [tracks] and jumps to [startIndex]. The auxiliary pool is kept.
+     * Plays [tracks] from a list pick. The incoming list replaces the current track and every
+     * upcoming main-queue track, and becomes the only content of the main queue. Everything
+     * before the current track is kept as history but flagged auxiliary, so it no longer
+     * belongs to the main queue. The trailing auxiliary pool is kept.
      */
     fun playListReplacingUpcoming(
         tracks: List<TrackEntity>,
@@ -1153,29 +1158,33 @@ class AudioEngine @Inject constructor(
         cancelPendingTransitions()
 
         val flags = current.auxiliaryFlags
+        // Trailing auxiliary pool: kept, but never reaching back into the replaced current track.
         var auxStart = current.queue.size
         while (auxStart > current.queueIndex + 1 && flags.getOrNull(auxStart - 1) == true) {
             auxStart--
         }
 
-        val keptCount = current.queueIndex + 1
-        val newQueue = current.queue.take(keptCount) + tracks +
+        // Entries before the current track stay, demoted to the auxiliary queue.
+        val historyCount = current.queueIndex
+        val tailCount = current.queue.size - auxStart
+        val newQueue = current.queue.take(historyCount) + tracks +
                 current.queue.subList(auxStart, current.queue.size)
 
         _playbackState.value = current.copy(
             queue = newQueue,
-            queueEntryIds = current.queueEntryIds.take(keptCount) +
+            queueEntryIds = current.queueEntryIds.take(historyCount) +
                     List(tracks.size) { allocateEntryId() } +
                     current.queueEntryIds.subList(auxStart, current.queueEntryIds.size),
-            auxiliaryFlags = flags.take(keptCount) + List(tracks.size) { false } +
-                    flags.subList(auxStart, flags.size),
+            auxiliaryFlags = List(historyCount) { true } +
+                    List(tracks.size) { false } +
+                    List(tailCount) { true },
             queueSourceId = sourceCollectionId,
-            queueSourceFlags = List(keptCount) { false } +
+            queueSourceFlags = List(historyCount) { false } +
                     List(tracks.size) { sourceCollectionId != null } +
-                    List(current.queue.size - auxStart) { false }
+                    List(tailCount) { false }
         )
 
-        jumpWindowTo(keptCount + startIndex.coerceIn(0, tracks.lastIndex), forcePlay = true)
+        jumpWindowTo(historyCount + startIndex.coerceIn(0, tracks.lastIndex), forcePlay = true)
     }
 
     /** Inserts [track] at [requestedIndex] and patches the loaded timeline in place. */
@@ -1584,7 +1593,7 @@ class AudioEngine @Inject constructor(
             val primaryLast = primaryQueueLastIndex(state)
             if (nextIndex > primaryLast) {
                 if (state.repeatMode == RepeatMode.ALL && primaryLast >= 0) {
-                    nextIndex = 0
+                    nextIndex = primaryQueueFirstIndex(state)
                 } else if (nextIndex >= state.queue.size) {
                     return
                 }
@@ -1970,7 +1979,16 @@ class AudioEngine @Inject constructor(
         if (state.queue.isEmpty()) return
         crossfadeArmedForTrackId = null
         silenceGapArmedForTrackId = null
-        loadWindowAndPlay(state.queue, 0)
+        loadWindowAndPlay(state.queue, primaryQueueFirstIndex(state))
+    }
+
+    /**
+     * First index of the PRIMARY queue: auxiliary history demoted by a list pick can precede
+     * it. Repeat-all wraps here. 0 when the queue has no primary tracks.
+     */
+    private fun primaryQueueFirstIndex(state: PlaybackState): Int {
+        val index = state.auxiliaryFlags.indexOfFirst { !it }
+        return if (index >= 0) index else 0
     }
 
     /**
@@ -2076,7 +2094,7 @@ class AudioEngine @Inject constructor(
             when {
                 state.repeatMode == RepeatMode.ALL && primaryLast >= 0 &&
                         (nextIndex == primaryLast + 1 || nextIndex >= state.queue.size) ->
-                    nextIndex = 0
+                    nextIndex = primaryQueueFirstIndex(state)
                 nextIndex >= state.queue.size -> return
                 // Else: repeat-off flows on into the auxiliary pool (up-next content).
             }
@@ -2128,7 +2146,7 @@ class AudioEngine @Inject constructor(
         val primaryLast = primaryQueueLastIndex(state)
         val nextIndex = when {
             state.queueIndex + 1 <= primaryLast -> state.queueIndex + 1
-            state.repeatMode == RepeatMode.ALL && primaryLast >= 0 -> 0
+            state.repeatMode == RepeatMode.ALL && primaryLast >= 0 -> primaryQueueFirstIndex(state)
             state.queueIndex + 1 < state.queue.size -> state.queueIndex + 1
             else -> return
         }
