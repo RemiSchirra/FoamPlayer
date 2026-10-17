@@ -63,7 +63,7 @@ import kotlinx.coroutines.launch
 
 /** Horizontal inset of one list row; grid cells get their own symmetric padding instead. */
 private fun Modifier.listRowInset(density: MediaDensity): Modifier =
-    padding(horizontal = if (density.isGrid) 0.dp else 16.dp)
+    padding(horizontal = if (density.isGrid) 0.dp else 6.dp)
 
 /**
  * Sort modes of the Home recommendation pages: the row's own ranking first
@@ -102,9 +102,6 @@ fun RecommendedPlaylistsSeeAllScreen(
     val playlists by viewModel.recommendedPlaylists.collectAsState()
     val playlistCovers by viewModel.playlistCovers.collectAsState()
     val searchState = rememberCollectionSearchState()
-    // rememberFilteredList keeps the incoming list identity while the hero's
-    // search bar is closed/blank (see rememberFilteredList): no fresh list
-    // instance per unrelated recomposition feeding rememberSortedList below.
     val searchedPlaylists = rememberFilteredList(playlists, searchState) {
         searchState.matches(it.name)
     }
@@ -160,7 +157,6 @@ fun RecommendedPlaylistsSeeAllScreen(
  * [CollectionSortMode.RECOMMENDED]), mirroring the albums browse screen
  (long-press collection actions and shared elements included).
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun RecommendedAlbumsSeeAllScreen(
     onAlbumClick: (AlbumRecommendation) -> Unit,
@@ -402,7 +398,6 @@ fun OldFavoritesSeeAllScreen(
  * long-standing favorite albums in the row's aggregate play/like order,
  * mirroring the recommended-albums page.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun OldFavoriteAlbumsSeeAllScreen(
     onAlbumClick: (AlbumRecommendation) -> Unit,
@@ -442,7 +437,6 @@ fun OldFavoriteAlbumsSeeAllScreen(
  * "See all" page behind the Home "Recently added albums" row: up to 50 albums
  * newest-first by their earliest scanned track.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun RecentlyAddedAlbumsSeeAllScreen(
     onAlbumClick: (AlbumRecommendation) -> Unit,
@@ -483,7 +477,6 @@ fun RecentlyAddedAlbumsSeeAllScreen(
  * artists newest-first by their earliest scanned track, mirroring the
  * favorite-artists page.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun RecentlyAddedArtistsSeeAllScreen(
     onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
@@ -579,7 +572,6 @@ fun RecentlyAddedArtistsSeeAllScreen(
  * their songs' total plays (the default, kept by
  * [CollectionSortMode.RECOMMENDED]), mirroring the artists browse screen.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun FavoriteArtistsSeeAllScreen(
     onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
@@ -678,7 +670,6 @@ fun FavoriteArtistsSeeAllScreen(
  * favorites, recently added): the same list, differing only in data source
  * and title.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun AlbumRecommendationsList(
     title: String,

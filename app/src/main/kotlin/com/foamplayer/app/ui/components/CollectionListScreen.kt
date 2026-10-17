@@ -211,8 +211,6 @@ fun CollectionListScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         if (heroLayout.isImmersive) {
-            // Artwork layer only, bleeding under the status bar behind the list;
-            // the text block is the list's own [CollectionHeroImmersiveHeader] item.
             CollectionHero(
                 layout = heroLayout,
                 title = title,
@@ -235,9 +233,9 @@ fun CollectionListScreen(
                     .then(listTopObserver),
                 state = gridState,
                 contentPadding = PaddingValues(
-                    start = 10.dp,
+                    start = 6.dp,
                     top = heroTopPadding,
-                    end = 10.dp,
+                    end = 6.dp,
                     bottom = collectionSearchOpenBottomPadding(searchState)
                 )
             ) {
@@ -246,17 +244,24 @@ fun CollectionListScreen(
                     key = "collection_header",
                     span = { GridItemSpan(maxLineSpan) }
                 ) {
-                    CollectionListHero(
-                        heroLayout = heroLayout,
-                        title = title,
-                        subtitle = subtitle,
-                        itemCount = itemCount,
-                        imageUrl = headerImageUrl,
-                        icon = headerIcon,
-                        searchState = searchState,
-                        onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
-                        scrollOffsetPx = heroScrollOffsetPx
-                    )
+                    val heroModifier = if (heroLayout.isImmersive) {
+                        Modifier.collectionGridEdgeCancel()
+                    } else {
+                        Modifier
+                    }
+                    Box(modifier = heroModifier) {
+                        CollectionListHero(
+                            heroLayout = heroLayout,
+                            title = title,
+                            subtitle = subtitle,
+                            itemCount = itemCount,
+                            imageUrl = headerImageUrl,
+                            icon = headerIcon,
+                            searchState = searchState,
+                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                            scrollOffsetPx = heroScrollOffsetPx
+                        )
+                    }
                 }
 
                 GridMediaContentScope(gridScope).content()
@@ -289,17 +294,19 @@ fun CollectionListScreen(
             ) {
                 val listScope = this
                 item(key = "collection_header") {
-                    CollectionListHero(
-                        heroLayout = heroLayout,
-                        title = title,
-                        subtitle = subtitle,
-                        itemCount = itemCount,
-                        imageUrl = headerImageUrl,
-                        icon = headerIcon,
-                        searchState = searchState,
-                        onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
-                        scrollOffsetPx = heroScrollOffsetPx
-                    )
+                    Box(modifier = Modifier.let { if (heroLayout.isImmersive) it else it.padding(horizontal = 6.dp) }) {
+                        CollectionListHero(
+                            heroLayout = heroLayout,
+                            title = title,
+                            subtitle = subtitle,
+                            itemCount = itemCount,
+                            imageUrl = headerImageUrl,
+                            icon = headerIcon,
+                            searchState = searchState,
+                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                            scrollOffsetPx = heroScrollOffsetPx
+                        )
+                    }
                 }
 
                 ListMediaContentScope(listScope).content()
@@ -320,8 +327,6 @@ fun CollectionListScreen(
             }
         }
 
-        // The scroll top bar's gradient above the scrolling list, then the
-        // floating back/more row above THAT — for every hero layout.
         CollectionScrollTopBar(
             title = title,
             fraction = topBarFraction,
@@ -428,7 +433,6 @@ private fun CollectionListHero(
  * The loading placeholder icon resolves from the surrounding
  * [LocalMediaArtKind] scope.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CollectionListItem(
     title: String,

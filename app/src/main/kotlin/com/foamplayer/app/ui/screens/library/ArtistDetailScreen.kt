@@ -236,16 +236,8 @@ fun ArtistDetailScreen(
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // The whole page depicts the artist: the hero portrait (and any artwork
-        // reusing it) loads under the person placeholder. The albums grid
-        // re-scopes itself below.
         MediaArtKindScope(MediaArtKind.ARTIST) {
             if (heroLayout.isImmersive) {
-                // Artwork layer only: bleeds under the status bar behind the grid.
-                // The overlay block (title/play pill) is the grid's own
-                // [CollectionHeroImmersiveHeader] item, so it fades with this
-                // screen's transitions exactly like the compact/normal heroes and
-                // takes taps directly.
                 CollectionHero(
                     layout = heroLayout,
                     title = artistName,
@@ -262,9 +254,7 @@ fun ArtistDetailScreen(
                     sharedElementKey = artistName,
                     sharedElementPrefix = "artist",
                     modifier = Modifier.align(Alignment.TopStart),
-                    // The artist image is fully round at its sources; the immersive
-                    // hero morphs that circle to its own square (radius 0) look
-                    // during the flight.
+                    // Force rounded artwork for artists
                     fullyRoundedArtwork = true
                 )
             }
@@ -277,9 +267,9 @@ fun ArtistDetailScreen(
                     .then(gridTopObserver),
                 state = gridState,
                 contentPadding = PaddingValues(
-                    start = 10.dp,
+                    start = 6.dp,
                     top = if (heroLayout.isImmersive) 0.dp else CollectionTopBarRowHeight,
-                    end = 10.dp,
+                    end = 6.dp,
                     bottom = collectionSearchOpenBottomPadding(searchState)
                 )
             ) {
@@ -324,10 +314,6 @@ fun ArtistDetailScreen(
                         TrackListItem(
                             track = track,
                             onClick = {
-                                // The clicked track settles the search session: the bar
-                                // closes (query cleared, keyboard hidden) as playback
-                                // starts, while the queue still hands over the search
-                                // context (the artist's full track list, indexed from it).
                                 searchState.close()
                                 val index = tracks.indexOfFirst { it.id == track.id }
                                 if (index >= 0) onTrackClick(tracks, index)
@@ -358,10 +344,6 @@ fun ArtistDetailScreen(
                                 density = MediaDensity.GRID_NORMAL,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                // Only an album the user taps flies (into the album
-                                // detail hero): gating on the nav root's tag keeps the
-                                // albums from pairing with their twins on the source
-                                // screen while THIS page opens.
                                 sharedElementKey = album.album
                                     .takeIf { isActiveSharedCollection("album", album.album) },
                                 immersiveFlightHero = LocalCollectionHeroLayoutLookup
@@ -378,16 +360,6 @@ fun ArtistDetailScreen(
             }
         }
 
-        // The scroll top bar's subtle gradient above the scrolling grid (whose
-        // own pixels fade transparent across the chrome zone), then the
-        // floating back row above THAT — for every hero layout. The row is
-        // lifted into the shared-element overlay during transitions so the
-        // flying artwork passes beneath the back button; its alpha mirrors
-        // the host hierarchy's fades (see transitionAlpha above).
-        // Lifted into the overlay (zIndex 0.5f: above the flying artwork, beneath
-        // the back button) with the flight alpha multiplied in: drawn in place it
-        // sat in the status-bar strip outside the NavHost bounds and dropped out
-        // on the first frame of the close instead of fading with the screen.
         CollectionScrollTopBar(
             title = artistName,
             fraction = { topBarFraction() * transitionAlpha() },

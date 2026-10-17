@@ -126,7 +126,6 @@ private suspend fun LazyGridState.scrollToCenteredItem(index: Int): LazyGridItem
 /** Scale-up applied to a track's grid cell while it is being dragged. */
 private const val GridDragLiftScale = 1.05f
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun TrackListScreen(
     title: String,
@@ -218,8 +217,6 @@ fun TrackListScreen(
     }
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
-        // While the spacer header (item 0) is visible its scroll offset IS the
-        // hero's travel; past it the hero is fully scrolled out.
         if (density.isGrid) {
             if (gridState.firstVisibleItemIndex == 0) {
                 gridState.firstVisibleItemScrollOffset
@@ -420,9 +417,9 @@ fun TrackListScreen(
                     .then(listTopObserver),
                 state = gridState,
                 contentPadding = PaddingValues(
-                    start = 10.dp,
+                    start = 6.dp,
                     top = heroTopPadding,
-                    end = 10.dp,
+                    end = 6.dp,
                     bottom = collectionSearchOpenBottomPadding(searchState)
                 )
             ) {
@@ -430,28 +427,35 @@ fun TrackListScreen(
                     key = "grid_header",
                     span = { GridItemSpan(maxLineSpan) }
                 ) {
-                    TrackListHero(
-                        heroLayout = heroLayout,
-                        title = title,
-                        artistName = artistName,
-                        statsText = statsText,
-                        imageUrl = imageUrl,
-                        imageIsEmbeddedArt = imageIsEmbeddedArt,
-                        onPlayAllClick = onPlayAllClick,
-                        onShuffleAllClick = onShuffleAllClick?.let { callback ->
-                            { callback(shownTracks.shuffled()) }
-                        },
-                        onArtistClick = onArtistClick,
-                        searchState = searchState,
-                        accentColor = heroAccentColor,
-                        onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
-                        scrollOffsetPx = heroScrollOffsetPx,
-                        transitionAlpha = transitionAlpha,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        sharedElementKey = sharedElementKey,
-                        sharedElementPrefix = sharedElementPrefix
-                    )
+                    val heroModifier = if (heroLayout.isImmersive) {
+                        Modifier.collectionGridEdgeCancel()
+                    } else {
+                        Modifier
+                    }
+                    Box(modifier = heroModifier) {
+                        TrackListHero(
+                            heroLayout = heroLayout,
+                            title = title,
+                            artistName = artistName,
+                            statsText = statsText,
+                            imageUrl = imageUrl,
+                            imageIsEmbeddedArt = imageIsEmbeddedArt,
+                            onPlayAllClick = onPlayAllClick,
+                            onShuffleAllClick = onShuffleAllClick?.let { callback ->
+                                { callback(shownTracks.shuffled()) }
+                            },
+                            onArtistClick = onArtistClick,
+                            searchState = searchState,
+                            accentColor = heroAccentColor,
+                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                            scrollOffsetPx = heroScrollOffsetPx,
+                            transitionAlpha = transitionAlpha,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            sharedElementKey = sharedElementKey,
+                            sharedElementPrefix = sharedElementPrefix
+                        )
+                    }
                 }
 
                 itemsIndexed(shownTracks, key = { _, track -> track.id }) { index, track ->
@@ -609,28 +613,30 @@ fun TrackListScreen(
                 )
             ) {
                 item(key = "list_header") {
-                    TrackListHero(
-                        heroLayout = heroLayout,
-                        title = title,
-                        artistName = artistName,
-                        statsText = statsText,
-                        imageUrl = imageUrl,
-                        imageIsEmbeddedArt = imageIsEmbeddedArt,
-                        onPlayAllClick = onPlayAllClick,
-                        onShuffleAllClick = onShuffleAllClick?.let { callback ->
-                            { callback(shownTracks.shuffled()) }
-                        },
-                        onArtistClick = onArtistClick,
-                        searchState = searchState,
-                        accentColor = heroAccentColor,
-                        onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
-                        scrollOffsetPx = heroScrollOffsetPx,
-                        transitionAlpha = transitionAlpha,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        sharedElementKey = sharedElementKey,
-                        sharedElementPrefix = sharedElementPrefix
-                    )
+                    Box(modifier = Modifier.let { if (heroLayout.isImmersive) it else it.padding(horizontal = 6.dp) }) {
+                        TrackListHero(
+                            heroLayout = heroLayout,
+                            title = title,
+                            artistName = artistName,
+                            statsText = statsText,
+                            imageUrl = imageUrl,
+                            imageIsEmbeddedArt = imageIsEmbeddedArt,
+                            onPlayAllClick = onPlayAllClick,
+                            onShuffleAllClick = onShuffleAllClick?.let { callback ->
+                                { callback(shownTracks.shuffled()) }
+                            },
+                            onArtistClick = onArtistClick,
+                            searchState = searchState,
+                            accentColor = heroAccentColor,
+                            onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
+                            scrollOffsetPx = heroScrollOffsetPx,
+                            transitionAlpha = transitionAlpha,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            sharedElementKey = sharedElementKey,
+                            sharedElementPrefix = sharedElementPrefix
+                        )
+                    }
                 }
 
                 itemsIndexed(shownTracks, key = { _, track -> track.id }) { index, track ->
@@ -659,7 +665,7 @@ fun TrackListScreen(
                                     Modifier
                                 }
                             )
-                            .padding(horizontal = 16.dp)
+                            .padding(horizontal = 6.dp)
                     ) {
                         TrackListItem(
                             track = track,
@@ -748,12 +754,6 @@ fun TrackListScreen(
             }
         }
 
-        // The scroll top bar's gradient above the scrolling list, then the
-        // floating back/more row above THAT. Both are lifted into the
-        // shared-element overlay during transitions and multiplied by the
-        // nav/container flight alpha (drawn in place, the top bar sits in the
-        // status-bar strip outside the NavHost bounds and drops out on the
-        // first frame of the close instead of fading with the screen).
         CollectionScrollTopBar(
             title = title,
             fraction = { topBarFraction() * transitionAlpha() },
@@ -811,7 +811,6 @@ fun TrackListScreen(
  * The list's leading item: the full hero for compact/normal layouts,
  * [CollectionHeroImmersiveHeader] for the immersive ones.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun TrackListHero(
     heroLayout: CollectionHeroLayout,

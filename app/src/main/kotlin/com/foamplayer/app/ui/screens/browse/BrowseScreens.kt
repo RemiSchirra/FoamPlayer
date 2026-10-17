@@ -63,7 +63,7 @@ import kotlinx.coroutines.withContext
 
 /** Horizontal inset of one list row; grid cells get their own symmetric padding instead. */
 private fun Modifier.listRowInset(density: MediaDensity): Modifier =
-    padding(horizontal = if (density.isGrid) 0.dp else 16.dp)
+    padding(horizontal = if (density.isGrid) 0.dp else 6.dp)
 
 /**
  * Fast-scroll section-letter source for a name-alphabetical collection list:
@@ -85,7 +85,6 @@ private fun <T> alphabeticalCollectionLabels(
  * ([MediaArtKindScope]) so every row's cover/portrait loads under the
  * collection's own placeholder icon — no per-row parameter threading.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AlbumsBrowseScreen(
     onAlbumClick: (AlbumSearchResult) -> Unit,
@@ -183,7 +182,6 @@ fun AlbumsBrowseScreen(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistsBrowseScreen(
     onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
@@ -491,7 +489,6 @@ fun YearsBrowseScreen(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AllTracksBrowseScreen(
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
@@ -536,7 +533,6 @@ fun AllTracksBrowseScreen(
     )
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun GenreTracksScreen(
     genre: String,
@@ -591,7 +587,6 @@ fun GenreTracksScreen(
     )
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun YearTracksScreen(
     year: Int,
@@ -646,7 +641,6 @@ fun YearTracksScreen(
     )
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ComposerTracksScreen(
     composer: String,
@@ -717,11 +711,6 @@ fun FolderBrowseScreen(
     onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
-    // Kicked during composition, not in a frame effect: a LaunchedEffect only
-    // runs after the first frame is committed, which is exactly the blank
-    // frame this screen used to flash. Any pre-built listing for this folder
-    // (a previous visit, or click-time pre-caching in the parent screen) is
-    // already in the StateFlow when this scope first reads it.
     remember(path) { viewModel.loadFolderContent(path); viewModel }
     val content by viewModel.folderContent.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
@@ -883,7 +872,6 @@ private suspend fun BrowseViewModel.tracksForSource(kind: String, key: String): 
  * opened from the collection modal's "See Artist" row when the collection
  * spans several artists. Tapping a row opens the artist's album list.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CollectionArtistsScreen(
     kind: String,
