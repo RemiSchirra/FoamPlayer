@@ -12,6 +12,7 @@ import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ArtistCover
 import com.foamplayer.app.data.scanner.ArtistCoverProvider
 import com.foamplayer.app.data.scanner.PlaylistCover
+import com.foamplayer.app.data.scanner.ScanStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -58,6 +59,9 @@ class HomeViewModel @Inject constructor(
     private val playlistRepository: PlaylistRepository,
     artistCoverProvider: ArtistCoverProvider
 ) : ViewModel() {
+
+    /** Live library scan status (Idle / Scanning / Finished), for the header's scanning indicator. */
+    val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus
 
     /** All playlists, for resolving a recommendation into its real entity (long-press modal). */
     val playlists: StateFlow<List<PlaylistEntity>> =

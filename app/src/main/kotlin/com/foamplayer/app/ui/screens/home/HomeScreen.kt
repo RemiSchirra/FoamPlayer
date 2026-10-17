@@ -11,12 +11,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -26,7 +26,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -36,10 +35,10 @@ import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.HomeSection
 import com.foamplayer.app.data.db.dao.AlbumRecommendation
-import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.dao.PlaylistRecommendation
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.components.HomeRow
 import com.foamplayer.app.ui.components.HomeRowCard
 import com.foamplayer.app.ui.components.HomeRowCardSmallWidth
@@ -96,6 +95,9 @@ private val ImageMimeTypes = arrayOf("image/*")
 /** Gap between the "Home" title and the first section. */
 private val HomeHeaderGap = 16.dp
 
+/** Size of the spinner shown beside the "Home" title while the library scans. */
+private val HomeScanSpinnerSize = 24.dp
+
 /**
  * The app's landing tab. Its sections are user-configurable (Settings > UI >
  * Home): each [HomeSection] renders in the configured order when enabled, and
@@ -120,7 +122,6 @@ private val HomeHeaderGap = 16.dp
  * load their covers under the album disc, artist cards their portraits under
  * the person icon — no per-card parameter threading.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -161,6 +162,7 @@ fun HomeScreen(
     val randomAlbums by viewModel.randomAlbums.collectAsState()
     val randomArtists by viewModel.randomArtists.collectAsState()
     val randomArtistCovers by viewModel.randomArtistCovers.collectAsState()
+    val scanStatus by viewModel.scanStatus.collectAsState()
 
     val trackModalState = LocalTrackFoamModalState.current
     val collectionModalState = LocalCollectionFoamModalState.current
@@ -212,7 +214,16 @@ fun HomeScreen(
                 Box(modifier = Modifier.padding(horizontal = 8.dp)) {
                     ScreenTitle(
                         icon = FoamTheme.icons.current.home,
-                        title = stringResource(R.string.home)
+                        title = stringResource(R.string.home),
+                        actions = {
+                            if (scanStatus is ScanStatus.Scanning) {
+                                CircularProgressIndicator(
+                                    color = FoamTheme.accentColor,
+                                    strokeWidth = 3.dp,
+                                    modifier = Modifier.size(HomeScanSpinnerSize)
+                                )
+                            }
+                        }
                     )
                 }
             }

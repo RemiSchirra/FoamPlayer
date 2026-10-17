@@ -22,8 +22,10 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.scanner.LocalAudioScanner
 import com.foamplayer.app.data.scanner.RemoteLibraryScanner
 import com.foamplayer.app.data.scanner.ScanStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -86,6 +88,9 @@ class TrackRepository @Inject constructor(
     // per-navigation-destination, so without these every screen open would pay
     // a cold Room round-trip. Aggregation runs off the main thread.
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Latest detached scan ([rescanLibraryDetached] / [scanServerDetached]); guards double-starts. */
+    private var scanJob: Job? = null
 
     /** All tracks, kept warm process-wide and replayed to new subscribers. */
     private val allTracksShared = trackDao.getAllTracks()
@@ -266,6 +271,24 @@ class TrackRepository @Inject constructor(
     }
 
     /**
+     * Launches [rescanLibrary] on the repository's process-lifetime scope. A
+     * scan must outlive the screen that started it: launched from a ViewModel
+     * scope, leaving Settings (or finishing onboarding) cancelled the scan
+     * mid-flight and left [scanStatus] stuck on "Scanning". No-op while another
+     * detached scan is still running.
+     */
+    fun rescanLibraryDetached() {
+        if (scanJob?.isActive == true) return
+        scanJob = repositoryScope.launch { rescanLibrary() }
+    }
+
+    /** Detached variant of [scanServerAndMerge]; see [rescanLibraryDetached]. */
+    fun scanServerDetached(serverId: String) {
+        if (scanJob?.isActive == true) return
+        scanJob = repositoryScope.launch { scanServerAndMerge(serverId) }
+    }
+
+    /**
      * Previous scan results that are still valid: only when the separator
      * settings are unchanged (they transform the extracted strings) can files
      * with an unchanged size skip metadata re-extraction entirely.
@@ -366,26 +389,37 @@ class TrackRepository @Inject constructor(
         _scanStatus.value = ScanStatus.Finished(scannedTracks.size)
     }
 
-    /** Scans one folder and merges the result without deleting tracks from other folders. */
+    /**
+     * Scans one folder and merges the result without deleting tracks from
+     * other folders. Unlike the detached scans this runs on the caller's
+     * scope (the playlist-import flow needs its result), so a cancellation
+     * (its ViewModel dying mid-import) resets the status to Idle instead of
+     * leaving a "Scanning" value spinning every indicator forever.
+     */
     suspend fun scanFolderAndMerge(folder: String) {
-        val settings = settingsRepository.settings.first()
-        val artistSeps = settings.artistSeparators
-        val genreSeps = settings.genreSeparators
-        val knownTracks = reusableTracks(artistSeps, genreSeps)
+        try {
+            val settings = settingsRepository.settings.first()
+            val artistSeps = settings.artistSeparators
+            val genreSeps = settings.genreSeparators
+            val knownTracks = reusableTracks(artistSeps, genreSeps)
 
-        _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
-        val scannedTracks = scanner.scanFoldersSync(setOf(folder), artistSeps, genreSeps, knownTracks) { progress, currentFile ->
-            _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
+            _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
+            val scannedTracks = scanner.scanFoldersSync(setOf(folder), artistSeps, genreSeps, knownTracks) { progress, currentFile ->
+                _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
+            }
+            settingsRepository.markScanSeparators(artistSeps, genreSeps)
+
+            val existingStats = trackDao.getPlayStats().associateBy { it.path }
+            val mergedTracks = scannedTracks.map { scanned ->
+                mergeStats(scanned, existingStats[scanned.path])
+            }
+
+            trackDao.insertTracks(mergedTracks)
+            _scanStatus.value = ScanStatus.Finished(mergedTracks.size)
+        } catch (cancellation: CancellationException) {
+            _scanStatus.value = ScanStatus.Idle
+            throw cancellation
         }
-        settingsRepository.markScanSeparators(artistSeps, genreSeps)
-
-        val existingStats = trackDao.getPlayStats().associateBy { it.path }
-        val mergedTracks = scannedTracks.map { scanned ->
-            mergeStats(scanned, existingStats[scanned.path])
-        }
-
-        trackDao.insertTracks(mergedTracks)
-        _scanStatus.value = ScanStatus.Finished(mergedTracks.size)
     }
 
     /** Scans one distant server's folders and merges the result without touching other sources. */

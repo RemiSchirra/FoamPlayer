@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.milliseconds
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -94,7 +95,7 @@ class SettingsViewModel @Inject constructor(
 
     fun removeServer(serverId: String) = launch { distantRepository.removeServer(serverId) }
 
-    fun scanServer(serverId: String) = launch { trackRepository.scanServerAndMerge(serverId) }
+    fun scanServer(serverId: String) = trackRepository.scanServerDetached(serverId)
 
     suspend fun connectMediaServer(
         type: DistantProviderType,
@@ -113,7 +114,7 @@ class SettingsViewModel @Inject constructor(
             .getOrNull()
 
     suspend fun awaitOAuthConnection(type: DistantProviderType): DistantServer? =
-        withTimeoutOrNull(OAUTH_TIMEOUT_MS) { distantRepository.connectionEvents.first { it.type == type } }
+        withTimeoutOrNull(OAUTH_TIMEOUT_MS.milliseconds) { distantRepository.connectionEvents.first { it.type == type } }
 
     suspend fun listFolders(server: DistantServer): List<DistantFolderEntry>? =
         runCatching { distantRepository.listFolders(server) }
@@ -174,7 +175,7 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setOnboardingCompleted(completed)
     }
 
-    fun startScan() = launch { trackRepository.rescanLibrary() }
+    fun startScan() = trackRepository.rescanLibraryDetached()
 
     fun setArtistImageResolveEnabled(enabled: Boolean) = launch {
         settingsRepository.setArtistImageResolveEnabled(enabled)
