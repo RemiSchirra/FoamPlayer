@@ -338,6 +338,53 @@ fun FullPlayerScreen(
         pageCount = { queue.size }
     )
 
+    // Page-number anchoring for the hero pager across queue renumberings. Deleting
+    // an entry BEFORE the playing one (repeat-all's full-queue view) shifts every
+    // later entry down a slot while the track under the playhead is unchanged. The
+    // snap only lands at this frame's MEASURE, but the backdrop SideEffect below
+    // publishes art in the APPLY phase -- using composition-phase page numbers.
+    // Resolving that pre-snap publish against the live (already-shifted) queue
+    // shows the shifted neighbor for one frame -- the flash. So the backdrop (and
+    // canvas gates) resolve through [pagerAnchoredQueue]/[pagerAnchoredEntryIds],
+    // the snapshot matching the numbering the pager still displays, until the
+    // snap lands; the pager's own page content follows the live queue (its
+    // key-based scroll position remaps in the same measure that lands the snap).
+    var pagerAnchoredQueue by remember { mutableStateOf(queue) }
+    var pagerAnchoredEntryIds by remember { mutableStateOf(queueEntryIds) }
+    var pagerSyncEntryId by remember { mutableStateOf(currentEntryId) }
+    var pagerSyncQueueIndex by remember { mutableStateOf(queueIndex) }
+    // One-frame signal, computed in composition where the shift is observed: the
+    // playing entry kept its id while its index moved. The pager is snapped
+    // silently (a real track change animates via the follow effect further down).
+    val pagerRenumberingPending = currentEntryId == pagerSyncEntryId &&
+            queueIndex != pagerSyncQueueIndex
+    SideEffect {
+        if (pagerRenumberingPending &&
+            queueIndex in 0 until queueSize &&
+            pagerState.currentPage != queueIndex &&
+            !pagerState.isScrollInProgress
+        ) {
+            pagerState.requestScrollToPage(queueIndex)
+        }
+        // Adopt the live queue unless this frame is a pre-snap renumbering: until
+        // the snap lands, art must resolve the way the pager still displays it.
+        if (!pagerRenumberingPending || pagerState.currentPage == queueIndex) {
+            pagerAnchoredQueue = queue
+            pagerAnchoredEntryIds = queueEntryIds
+        }
+        pagerSyncEntryId = currentEntryId
+        pagerSyncQueueIndex = queueIndex
+    }
+
+    // The playing entry's page as the pager currently displays it: the live index
+    // once the anchor has adopted the live queue, the pre-shift position during
+    // a pending renumbering frame.
+    val anchoredPlayingPage = if (pagerAnchoredQueue === queue) {
+        queueIndex.coerceAtLeast(0)
+    } else {
+        pagerAnchoredEntryIds.indexOf(currentEntryId).coerceAtLeast(0)
+    }
+
     val idlePage by remember {
         derivedStateOf { if (pagerState.isScrollInProgress) -1 else pagerState.currentPage }
     }
@@ -348,17 +395,17 @@ fun FullPlayerScreen(
         val resolved = resolvedCover
         if (resolved != null &&
             resolved.entryId == currentEntryId &&
-            idlePage == queueIndex.coerceAtLeast(0)
+            idlePage == anchoredPlayingPage
         ) {
             resolved
         } else {
             coverCarry.owner?.takeIf { carried ->
-                idlePage == -1 || queueEntryIds.indexOf(carried.entryId) == idlePage
+                idlePage == -1 || pagerAnchoredEntryIds.indexOf(carried.entryId) == idlePage
             }
         }
     }
     val animatedCoverIndex = animatedCover
-        ?.let { queueEntryIds.indexOf(it.entryId) }
+        ?.let { pagerAnchoredEntryIds.indexOf(it.entryId) }
         ?: -1
 
     val seekBarProgress = rememberSeekBarProgressState(
@@ -467,14 +514,23 @@ fun FullPlayerScreen(
     // manual accent (automaticColorEnabled = false) the value is discarded by
     // rememberAccentColor, so the whole per-frame pipeline (snapshotFlow read,
     // StateFlow write, FoamApp + theme recomposition) runs for nothing -- skip it.
-    LaunchedEffect(pagerState, queue, settings.automaticColorEnabled) {
+    // Resolves pages through [pagerAnchoredQueue], read INSIDE the flow, instead of the
+    // live `queue` captured by the effect key. When a row before the playing one is
+    // removed, the SideEffect above snaps the pager to the shifted page and adopts the
+    // shifted queue in the same apply pass. A closure over the live queue (or over the
+    // previous one until the key-restart lands) paired the new page number with the
+    // wrong queue for one emission -- the neighbor's color pushed to the accent for a
+    // frame. Page and queue snapshot now always change together, so each emission is
+    // coherent, and no restart is needed when the queue changes.
+    LaunchedEffect(pagerState, settings.automaticColorEnabled) {
         if (!settings.automaticColorEnabled) return@LaunchedEffect
         snapshotFlow {
+            val anchoredQueue = pagerAnchoredQueue
             AlbumArtPaletteCache.interpolatedColor(
                 currentPage = pagerState.currentPage,
                 currentPageOffsetFraction = pagerState.currentPageOffsetFraction,
-                pageCount = queue.size
-            ) { page -> queue.getOrNull(page)?.albumArtPath }
+                pageCount = anchoredQueue.size
+            ) { page -> anchoredQueue.getOrNull(page)?.albumArtPath }
         }.collect { interpolatedColor ->
             // An artless page (or one whose palette extraction is still in flight)
             // yields no color. Keeping the last accent instead of dropping it avoids
@@ -567,9 +623,16 @@ fun FullPlayerScreen(
     // unprompted one-page move (natural advance, queue pick) gets a catch-up morph
     // from the previously playing track's envelope.
     var previousQueueIndex by remember { mutableStateOf(queueIndex) }
-    LaunchedEffect(queueIndex) {
-        seekBarProgress.onPlayingIndexChanged(queueIndex, previousQueueIndex)
+    var previousEnvelopeEntryId by remember { mutableStateOf(currentEntryId) }
+    LaunchedEffect(queueIndex, currentEntryId) {
+        // A pure renumbering (playing entry unchanged -- e.g. a row before it was
+        // deleted) must not start a catch-up morph: the "previous page" it would
+        // anchor on holds a different track after the shift.
+        if (currentEntryId != previousEnvelopeEntryId) {
+            seekBarProgress.onPlayingIndexChanged(queueIndex, previousQueueIndex)
+        }
         previousQueueIndex = queueIndex
+        previousEnvelopeEntryId = currentEntryId
     }
 
     LaunchedEffect(pagerState) {
@@ -607,40 +670,52 @@ fun FullPlayerScreen(
     // with no crossfade).
     var backdropFadeGeneration by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(queueIndex) {
-        if (!isMainPagerVisible() &&
-            queueIndex in 0 until queueSize &&
-            pagerState.currentPage != queueIndex
+    // Backdrop follows playback, but only while the main pager is hidden (subview
+    // open): there the pager sweep can't communicate the change, so the backdrop
+    // crossfades programmatically. A pure renumbering never reaches the fade: the
+    // anchored-queue snapshot keeps the pager frame art-correct, and this gate
+    // skips the shift frame where page != queueIndex with the track unchanged.
+    LaunchedEffect(queueIndex, currentEntryId) {
+        if (isMainPagerVisible() ||
+            queueIndex !in 0 until queueSize ||
+            pagerState.currentPage == queueIndex ||
+            pagerRenumberingPending
         ) {
-            val fromPath = queue.getOrNull(pagerState.currentPage)?.albumArtPath
-            val toPath = queue.getOrNull(queueIndex)?.albumArtPath
-            if (fromPath != toPath) {
-                val generation = ++backdropFadeGeneration
-                programmaticBackdropFromPath = fromPath
-                programmaticBackdropToPath = toPath
-                programmaticBackdropCrossfade.snapTo(0f)
-                try {
-                    programmaticBackdropCrossfade.animateTo(1f, tween(TRANSITION_DURATION_MS))
-                } finally {
-                    // A cancelled animation (queueIndex changing again mid-crossfade, or the
-                    // player leaving composition) must not leave the crossfade "active" with
-                    // fromPath frozen into frontArtPath; clearing the programmatic paths hands
-                    // control straight back to the pager-driven state. Plain state writes run
-                    // in a cancelled coroutine's finally block without suspension -- but only
-                    // when THIS run still owns the paths (see backdropFadeGeneration).
-                    if (generation == backdropFadeGeneration) {
-                        programmaticBackdropFromPath = null
-                        programmaticBackdropToPath = null
-                    }
+            return@LaunchedEffect
+        }
+        val fromPath = pagerAnchoredQueue.getOrNull(pagerState.currentPage)?.albumArtPath
+        val toPath = queue.getOrNull(queueIndex)?.albumArtPath
+        if (fromPath != toPath) {
+            val generation = ++backdropFadeGeneration
+            programmaticBackdropFromPath = fromPath
+            programmaticBackdropToPath = toPath
+            programmaticBackdropCrossfade.snapTo(0f)
+            try {
+                programmaticBackdropCrossfade.animateTo(1f, tween(TRANSITION_DURATION_MS))
+            } finally {
+                // A cancelled animation (queueIndex changing again mid-crossfade, or the
+                // player leaving composition) must not leave the crossfade "active" with
+                // fromPath frozen into frontArtPath; clearing the programmatic paths hands
+                // control straight back to the pager-driven state. Plain state writes run
+                // in a cancelled coroutine's finally block without suspension -- but only
+                // when THIS run still owns the paths (see backdropFadeGeneration).
+                if (generation == backdropFadeGeneration) {
+                    programmaticBackdropFromPath = null
+                    programmaticBackdropToPath = null
                 }
             }
         }
     }
 
-    LaunchedEffect(queueIndex) {
+    // Re-anchors the pager onto the playing page with the sweep animation. The
+    // silent, immediate case (a pure renumbering) is handled by the SideEffect
+    // snap above; the shift frame itself is skipped so a renumbering never
+    // animates a sweep through the shifted neighbors' art.
+    LaunchedEffect(queueIndex, currentEntryId) {
         if (queueIndex in 0 until queueSize &&
             pagerState.currentPage != queueIndex &&
-            !pagerState.isScrollInProgress
+            !pagerState.isScrollInProgress &&
+            !pagerRenumberingPending
         ) {
             if (isMainPagerVisible()) {
                 pagerState.animateScrollToPage(
@@ -675,17 +750,17 @@ fun FullPlayerScreen(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            val indexA by remember(pagerState, queueSize) {
+            val indexA by remember(pagerState, pagerAnchoredQueue) {
                 derivedStateOf {
                     val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    absoluteOffset.toInt().coerceIn(0, (queueSize - 1).coerceAtLeast(0))
+                    absoluteOffset.toInt().coerceIn(0, (pagerAnchoredQueue.size - 1).coerceAtLeast(0))
                 }
             }
 
-            val indexB by remember(pagerState, queueSize) {
+            val indexB by remember(pagerState, pagerAnchoredQueue) {
                 derivedStateOf {
                     val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    (absoluteOffset.toInt() + 1).coerceAtMost((queueSize - 1).coerceAtLeast(0))
+                    (absoluteOffset.toInt() + 1).coerceAtMost((pagerAnchoredQueue.size - 1).coerceAtLeast(0))
                 }
             }
 
@@ -731,11 +806,24 @@ fun FullPlayerScreen(
             // here. SideEffect runs after apply and before the frame's draw, so the host
             // never draws a stale frame.
             SideEffect {
+                // Resolve the pager indices NOW, against the same snapshot pair
+                // (pagerState + pagerAnchoredQueue) the effect above just left coherent.
+                // backdropIndexA/B were captured during composition, i.e. under the
+                // pre-snap numbering; when a row before the playing one is removed, the
+                // effect above snaps the pager and adopts the shifted queue in this same
+                // apply pass, so pairing those stale indices with the new queue shows the
+                // NEXT track's art for exactly one frame. The captured values above stay
+                // only as the composition-phase read that re-triggers this effect.
+                val lastAnchoredIndex = (pagerAnchoredQueue.size - 1).coerceAtLeast(0)
+                val liveOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                val liveIndexA = liveOffset.toInt().coerceIn(0, lastAnchoredIndex)
+                val liveIndexB = (liveOffset.toInt() + 1).coerceAtMost(lastAnchoredIndex)
+
                 backdropState.frontArtPath =
                     if (programmaticCrossfadeActive) {
                         programmaticBackdropFromPath
                     } else {
-                        queue.getOrNull(backdropIndexA)?.albumArtPath
+                        pagerAnchoredQueue.getOrNull(liveIndexA)?.albumArtPath
                     }
                 backdropState.backArtPath =
                     if (programmaticCrossfadeActive) {
@@ -743,15 +831,18 @@ fun FullPlayerScreen(
                     } else if (playerTransitionState.currentState != playerTransitionState.targetState) {
                         null
                     } else {
-                        queue.getOrNull(backdropIndexB)?.albumArtPath
+                        pagerAnchoredQueue.getOrNull(liveIndexB)?.albumArtPath
                     }
                 backdropState.immersive = isImmersiveEnabled
                 backdropState.canvasUrl = animatedCover?.url
                 backdropState.canvasPlaying = isCanvasPlaying
+                val liveCoverIndex = animatedCover
+                    ?.let { pagerAnchoredEntryIds.indexOf(it.entryId) }
+                    ?: -1
                 backdropState.canvasAnchor = when {
                     animatedCover == null || programmaticCrossfadeActive -> CanvasAnchor.NONE
-                    animatedCoverIndex == backdropIndexA -> CanvasAnchor.FRONT
-                    animatedCoverIndex == backdropIndexB -> CanvasAnchor.BACK
+                    liveCoverIndex == liveIndexA -> CanvasAnchor.FRONT
+                    liveCoverIndex == liveIndexB -> CanvasAnchor.BACK
                     else -> CanvasAnchor.NONE
                 }
                 coverCarry.owner = animatedCover
@@ -766,7 +857,7 @@ fun FullPlayerScreen(
                             } else {
                                 val absoluteOffset =
                                     pagerState.currentPage + pagerState.currentPageOffsetFraction
-                                (absoluteOffset - backdropIndexA).coerceIn(0f, 1f)
+                                (absoluteOffset - liveIndexA).coerceIn(0f, 1f)
                             }
                         }
                     }

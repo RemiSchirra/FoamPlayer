@@ -14,5 +14,7 @@ data class QueueItem(
     /** Rendered translucent. */
     val isAuxiliary: Boolean,
     /** Row appended by the latest auxiliary refill. */
-    val isFreshFromRefill: Boolean
+    val isFreshFromRefill: Boolean,
+    /** Row of the playing track (repeat-all full-queue view only). */
+    val isPlaying: Boolean
 )

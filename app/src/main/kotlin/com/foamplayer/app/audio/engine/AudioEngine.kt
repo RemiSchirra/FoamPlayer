@@ -1444,6 +1444,30 @@ class AudioEngine @Inject constructor(
     fun previous() {
         cancelPendingTransitions()
         val state = _playbackState.value
+        // Repeat-all wrap: previous at the primary queue's head (within the restart
+        // window, like any other previous step) goes back to the primary queue's end,
+        // stepping backward over known-failed tracks. Auxiliary entries before the
+        // primary queue are skipped by the wrap.
+        if (state.repeatMode == RepeatMode.ALL &&
+            state.queueIndex >= 0 &&
+            state.queueIndex == primaryQueueFirstIndex(state) &&
+            player.contentPosition <= 5000L
+        ) {
+            var target = primaryQueueLastIndex(state)
+            while (target > state.queueIndex && state.queue[target].id in failedTrackIds) {
+                target--
+            }
+            if (target > state.queueIndex) {
+                if (fadeEngine.quickFadeEnabled && player.isPlaying &&
+                    fadeEngine.startCrossfade(target, 0L, fadeEngine.quickFadeDurationMs)
+                ) {
+                    return
+                }
+                loadWindowAndPlay(state.queue, target)
+                return
+            }
+            // Sole primary track or all of them failed: fall through to the default behavior.
+        }
         if (player.hasPreviousMediaItem()) {
             if (player.contentPosition <= 5000L) {
                 // TODO: Make this an app parameter.
@@ -1647,10 +1671,19 @@ class AudioEngine @Inject constructor(
             .filter { (_, t) -> t.id == trackId }
             .map { (i, _) -> i }
 
-    /** Manual pick from the queue screen: moves the entry next and plays it, even over a paused session. */
+    /**
+     * Manual pick from the queue screen. In repeat-all it just moves the playhead to the
+     * entry, keeping the queue order intact; otherwise it moves the entry next and plays
+     * it, even over a paused session.
+     */
     fun playQueueEntry(entryId: Long) {
         val fromIndex = entryIndexOf(entryId)
         if (fromIndex == -1) return
+        if (_playbackState.value.repeatMode == RepeatMode.ALL) {
+            skipToIndex(fromIndex)
+            player.play()
+            return
+        }
         val nextIndex = (_playbackState.value.queueIndex + 1).coerceAtLeast(0)
         if (fromIndex != nextIndex) {
             moveQueueItem(fromIndex, nextIndex)
@@ -1679,15 +1712,23 @@ class AudioEngine @Inject constructor(
     /**
      * The queue screen's swipe-right action: moves the entry to the first upcoming slot
      * and, when it came from the auxiliary pool, clears its flag so it joins the primary
-     * queue (the pool refills right away).
+     * queue (the pool refills right away). Entries from the played history (repeat-all's
+     * full-queue view) are moved there too. The playing entry itself is left alone.
      */
     fun promoteQueueEntry(entryId: Long) {
         val fromIndex = entryIndexOf(entryId)
         if (fromIndex == -1) return
         val current = _playbackState.value
-        if (fromIndex <= current.queueIndex) return
+        if (fromIndex == current.queueIndex) return
         val wasAuxiliary = current.auxiliaryFlags.getOrNull(fromIndex) == true
-        val nextIndex = (current.queueIndex + 1).coerceAtLeast(0)
+        // moveQueueItem's target is the entry's FINAL index. From behind the playhead,
+        // taking the entry out shifts the playing track down one slot, so the first
+        // upcoming slot is queueIndex itself, not queueIndex + 1.
+        val nextIndex = if (fromIndex < current.queueIndex) {
+            current.queueIndex
+        } else {
+            (current.queueIndex + 1).coerceAtLeast(0)
+        }
 
         if (fromIndex != nextIndex) {
             moveQueueItem(fromIndex, nextIndex)
