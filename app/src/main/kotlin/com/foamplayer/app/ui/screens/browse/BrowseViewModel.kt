@@ -1,11 +1,11 @@
 package com.foamplayer.app.ui.screens.browse
 
-import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ArtistCover
@@ -24,13 +24,39 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import androidx.core.net.toUri
+import com.foamplayer.distant.DistantServer
+import com.foamplayer.distant.DistantUris
 
 /** A browsable folder: its storage path, display name and recursive track count. */
 data class FolderEntry(
     val path: String,
     val name: String,
-    val trackCount: Int
+    val trackCount: Int,
+    val isDistant: Boolean = false,
 )
+
+/** Path of a distant server's flat root folder, matching DistantUris' track-path shape minus the id. */
+internal fun distantRootPath(server: DistantServer): String =
+    "${DistantUris.SCHEME}://${server.type.name.lowercase()}/${server.id}"
+
+/**
+ * Human title for a distant server folder: "jellyfin:example.com" — provider
+ * plus the domain of the server URL ("http://jellyfin.example.com" →
+ * "example.com") instead of the raw generated id.
+ */
+internal fun distantServerTitle(server: DistantServer): String =
+    "${server.type.displayName}:${distantServerDomain(server)}"
+
+/** Registrable-ish domain of [server]'s base URL, e.g. "jellyfin.example.com" → "example.com". */
+internal fun distantServerDomain(server: DistantServer): String {
+    val host = server.baseUrl.toUri().host ?: return server.name
+    // IP addresses (and IPv6 hosts, which contain ':') are shown verbatim —
+    if (host.contains(':') || host.all { it.isDigit() || it == '.' }) return host
+    val labels = host.split('.')
+    // Drop the first label (e.g. the "jellyfin" subdomain) when something is
+    // left; a bare "example.com" stays intact.
+    return if (labels.size >= 3) labels.drop(1).joinToString(".") else host
+}
 
 /** The content of one folder level: subfolders plus the tracks directly inside. */
 data class FolderContent(
@@ -97,6 +123,7 @@ private object FolderListingCache {
 class BrowseViewModel @Inject constructor(
     private val trackRepository: TrackRepository,
     private val settingsRepository: SettingsRepository,
+    private val distantRepository: DistantRepository,
     artistCoverProvider: ArtistCoverProvider
 ) : ViewModel() {
 
@@ -200,7 +227,11 @@ class BrowseViewModel @Inject constructor(
      */
     fun precacheFolder(folderPath: String) {
         val tracks = FolderListingCache.latestTracks ?: return
-        FolderListingCache.put(folderPath, buildFolderContent(folderPath, tracks, emptySet()), tracks)
+        FolderListingCache.put(
+            folderPath,
+            buildFolderContent(folderPath, tracks, emptySet(), emptyList()),
+            tracks
+        )
     }
 
     fun loadFolderContent(path: String?) {
@@ -211,15 +242,13 @@ class BrowseViewModel @Inject constructor(
         folderContentJob = viewModelScope.launch {
             // Subfolder listings group by document-id prefix and never consult
             // the library roots, so only the root screen pays the DataStore read.
-            val libraryFolders = if (path == null) {
-                settingsRepository.settings.first().libraryFolders
-            } else {
-                emptySet()
-            }
+            val settings = if (path == null) settingsRepository.settings.first() else null
+            val libraryFolders = settings?.libraryFolders ?: emptySet()
+            val distantServers = settings?.distantServers ?: emptyList()
             val tracks = trackRepository.allTracksSnapshot()
             if (FolderListingCache.sourceTracksFor(path) !== tracks) {
                 val built = withContext(Dispatchers.Default) {
-                    buildFolderContent(path, tracks, libraryFolders)
+                    buildFolderContent(path, tracks, libraryFolders, distantServers)
                 }
                 FolderListingCache.put(path, built, tracks)
                 _folderContent.value = built
@@ -229,7 +258,7 @@ class BrowseViewModel @Inject constructor(
             trackRepository.getAllTracks().collect { liveTracks ->
                 if (liveTracks === tracks) return@collect
                 val rebuilt = withContext(Dispatchers.Default) {
-                    buildFolderContent(path, liveTracks, libraryFolders)
+                    buildFolderContent(path, liveTracks, libraryFolders, distantServers)
                 }
                 FolderListingCache.put(path, rebuilt, liveTracks)
                 _folderContent.value = rebuilt
@@ -270,24 +299,49 @@ class BrowseViewModel @Inject constructor(
             .filter { TrackDocumentIds.of(it.path).startsWith("$folderPath/") }
     }
 
+    /**
+     * Title for one folder path: distant server roots render as
+     * "Jellyfin:example.com" (see [distantServerTitle]); local folders render
+     * their leaf name.
+     */
+    fun folderTitle(path: String): String {
+        if (DistantUris.isDistant(path)) {
+            val serverId = path
+                .removePrefix("${DistantUris.SCHEME}://")
+                .substringAfter('/', missingDelimiterValue = "")
+                .substringBefore('/')
+            val server = distantRepository.server(serverId)
+            if (server != null) return distantServerTitle(server)
+            // Server unknown (cache not warm / just disconnected): show the
+            // provider segment rather than the raw server id.
+            return path.removePrefix("${DistantUris.SCHEME}://").substringBefore('/')
+        }
+        return path.substringAfterLast('/').ifEmpty { path.substringAfterLast(':') }
+    }
+
     private fun buildFolderContent(
         path: String?,
         tracks: List<TrackEntity>,
-        libraryFolders: Set<String>
+        libraryFolders: Set<String>,
+        distantServers: List<DistantServer>
     ): FolderContent {
         if (path == null) {
-            val roots = libraryFolders.mapNotNull { treeDocumentId(it) }
-                .ifEmpty {
-                    tracks.map { parentDocumentIdOf(it.path) }
-                        .filter { it.isNotBlank() }
-                        .distinct()
-                }
+            val localRoots = libraryFolders.mapNotNull { treeDocumentId(it) }
+            val distantRoots = distantServers.associate { server ->
+                distantRootPath(server) to distantServerTitle(server)
+            }
+            val roots = localRoots.ifEmpty {
+                tracks.map { parentDocumentIdOf(it.path) }
+                    .filter { it.isNotBlank() && !DistantUris.isDistant(it) }
+                    .distinct()
+            } + distantRoots.keys
             val entries = roots
                 .map { root ->
                     FolderEntry(
                         path = root,
-                        name = folderDisplayName(root),
-                        trackCount = tracks.count { TrackDocumentIds.of(it.path).startsWith("$root/") }
+                        name = distantRoots[root] ?: folderDisplayName(root),
+                        trackCount = tracks.count { TrackDocumentIds.of(it.path).startsWith("$root/") },
+                        isDistant = DistantUris.isDistant(root)
                     )
                 }
                 .filter { it.trackCount > 0 }

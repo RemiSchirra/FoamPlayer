@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.browse
 
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +9,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
@@ -57,6 +57,7 @@ import com.foamplayer.app.ui.components.rememberSortedTracks
 import com.foamplayer.app.ui.components.scrollSectionLetter
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.distant.DistantUris
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -716,11 +717,9 @@ fun FolderBrowseScreen(
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
 
-    val foldersFallback = stringResource(R.string.folders)
-    val title = path
-        ?.substringAfterLast('/')
-        ?.ifEmpty { path.substringAfterLast(':') }
-        ?: foldersFallback
+    // Distant server roots get a "Jellyfin:example.com" title derived from the
+    // server URL's domain instead of the raw server id segment of their URI.
+    val title = path?.let { viewModel.folderTitle(it) } ?: stringResource(R.string.folders)
 
     val folders = content?.folders.orEmpty()
     val searchState = rememberCollectionSearchState()
@@ -743,7 +742,11 @@ fun FolderBrowseScreen(
         title = title,
         itemCount = sortedFolders.size + shownTracks.size,
         onBack = onBack,
-        headerIcon = Icons.Rounded.Folder,
+        headerIcon = if (path != null && DistantUris.isDistant(path)) {
+            Icons.Rounded.Cloud
+        } else {
+            Icons.Rounded.Folder
+        },
         density = density,
         onDensityChange = onDensityChange,
         sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
@@ -775,7 +778,7 @@ fun FolderBrowseScreen(
                 CollectionListItem(
                     title = folder.name,
                     subtitle = folderSubtitle,
-                    icon = Icons.Rounded.Folder,
+                    icon = if (folder.isDistant) Icons.Rounded.Cloud else Icons.Rounded.Folder,
                     onClick = {
                         // Build the destination's listing from this screen's
                         // warm snapshot now, so its first frame has content.
@@ -790,7 +793,7 @@ fun FolderBrowseScreen(
                                 CollectionInfo(
                                     title = folder.name,
                                     subtitle = folderSubtitle,
-                                    icon = Icons.Rounded.Folder,
+                                    icon = if (folder.isDistant) Icons.Rounded.Cloud else Icons.Rounded.Folder,
                                     kind = CollectionKind.Folder,
                                     tracks = viewModel.tracksForFolder(folder.path),
                                     location = folder.path
@@ -855,8 +858,12 @@ private fun List<TrackEntity>.toCollectionArtistRows(): List<CollectionArtistRow
             CollectionArtistRow(name, albumCount)
         }
 
-private fun collectionMembersTitle(kind: String, key: String): String = when (kind) {
-    CollectionKind.Folder.name -> key.substringAfterLast('/').ifEmpty { key.substringAfterLast(':') }
+private fun collectionMembersTitle(
+    kind: String,
+    key: String,
+    viewModel: BrowseViewModel
+): String = when (kind) {
+    CollectionKind.Folder.name -> viewModel.folderTitle(key)
     else -> key
 }
 
@@ -912,7 +919,7 @@ fun CollectionArtistsScreen(
 
     MediaArtKindScope(MediaArtKind.ARTIST) {
         CollectionListScreen(
-            title = collectionMembersTitle(kind, key),
+            title = collectionMembersTitle(kind, key, viewModel),
             subtitle = stringResource(R.string.artists),
             itemCount = sortedRows.size,
             onBack = onBack,
@@ -1025,7 +1032,7 @@ fun CollectionAlbumsScreen(
 
     MediaArtKindScope(MediaArtKind.ALBUM) {
         CollectionListScreen(
-            title = collectionMembersTitle(kind, key),
+            title = collectionMembersTitle(kind, key, viewModel),
             subtitle = stringResource(R.string.albums),
             itemCount = sortedRows.size,
             onBack = onBack,
