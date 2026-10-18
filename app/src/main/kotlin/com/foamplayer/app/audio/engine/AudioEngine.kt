@@ -1197,8 +1197,14 @@ class AudioEngine @Inject constructor(
         val newQueue = current.queue.take(historyCount) + tracks +
                 current.queue.subList(auxStart, current.queue.size)
 
+        val newIndex = historyCount + startIndex.coerceIn(0, tracks.lastIndex)
+        val newTrack = newQueue[newIndex]
+
         _playbackState.value = current.copy(
             queue = newQueue,
+            queueIndex = newIndex,
+            currentTrack = newTrack,
+            durationMs = newTrack.duration,
             queueEntryIds = current.queueEntryIds.take(historyCount) +
                     List(tracks.size) { allocateEntryId() } +
                     current.queueEntryIds.subList(auxStart, current.queueEntryIds.size),
@@ -1211,7 +1217,7 @@ class AudioEngine @Inject constructor(
                     List(tailCount) { false }
         )
 
-        jumpWindowTo(historyCount + startIndex.coerceIn(0, tracks.lastIndex), forcePlay = true)
+        jumpWindowTo(newIndex, forcePlay = true)
     }
 
     /** Inserts [track] at [requestedIndex] and patches the loaded timeline in place. */

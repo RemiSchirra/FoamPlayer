@@ -27,6 +27,7 @@ import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +51,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.audio.engine.PlaybackState
+import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.navigation.NavBarDimens
@@ -73,8 +75,38 @@ import kotlinx.coroutines.flow.filter
  * single, real one-page slide that lands exactly on the right track, after
  * which the pager is silently remapped onto the real index (identical
  * content, so nothing pops).
+ *
+ * The slide is ALWAYS one page forward (never backward), wherever the target
+ * really lives. When the queue was replaced under the pager (a list pick), the
+ * departing page ([departurePage]) keeps rendering the track that was playing
+ * ([departureTrack]) so it slides out instead of popping into something else.
  */
-private data class PendingJump(val viaPage: Int, val targetIndex: Int)
+private data class PendingJump(
+    val viaPage: Int,
+    val targetIndex: Int,
+    val departurePage: Int = -1,
+    val departureTrack: TrackEntity? = null
+)
+
+/** The track [page] must render while [jump] is in flight, or null for its real one. */
+private fun overrideTrackFor(jump: PendingJump?, page: Int, queue: List<TrackEntity>): TrackEntity? = when {
+    jump == null -> null
+    page == jump.viaPage -> queue.getOrNull(jump.targetIndex)
+    jump.departureTrack != null && page == jump.departurePage -> jump.departureTrack
+    else -> null
+}
+
+/** What the pager's current page showed on the last settled composition. */
+private class PageShadow {
+    var page = -1
+    var entryId: Long? = null
+    var track: TrackEntity? = null
+    /** The departure of a slide that is still running, carried over if a newer change retargets it. */
+    var inFlight: DepartureOverride? = null
+}
+
+/** The old playing track that must stay on its page while the queue under it was replaced. */
+private class DepartureOverride(val page: Int, val track: TrackEntity)
 
 /** Title + artist/album marquee state of one queue entry. */
 private class MiniEntryMarqueeStates {
@@ -211,6 +243,7 @@ fun MiniPlayer(
     val queue = loopModel.queue
     val queueEntryIds = loopModel.entryIds
     val currentIndex = loopModel.index
+    val currentEntryId = queueEntryIds.getOrNull(currentIndex)
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -221,6 +254,36 @@ fun MiniPlayer(
     )
 
     var pendingJump by remember { mutableStateOf<PendingJump?>(null) }
+
+    // A list pick replaces the queue under the pager: the old playing entry vanishes and its page
+    // suddenly holds a different track. Detect that synchronously (in composition, so not even one
+    // frame pops) and keep the old track on its page so it can slide out.
+    val pageShadow = remember { PageShadow() }
+    val departureCandidate = remember(currentEntryId) {
+        val s = pageShadow
+        s.inFlight ?: run {
+            val oldEntry = s.entryId
+            val oldTrack = s.track
+            if (oldEntry != null && oldTrack != null && currentEntryId != null &&
+                oldEntry != currentEntryId &&
+                s.page in queue.indices &&
+                s.page == pagerState.currentPage &&
+                queue.getOrNull(currentIndex)?.id != oldTrack.id &&
+                oldEntry !in queueEntryIds
+            ) DepartureOverride(s.page, oldTrack) else null
+        }
+    }
+    var departureSpent by remember(currentEntryId) { mutableStateOf(false) }
+    val departure = if (departureSpent) null else departureCandidate
+    val latestDeparture by rememberUpdatedState(departure)
+    SideEffect {
+        if (departure == null && pendingJump == null) {
+            val page = pagerState.currentPage
+            pageShadow.page = page
+            pageShadow.entryId = queueEntryIds.getOrNull(page)
+            pageShadow.track = queue.getOrNull(page)
+        }
+    }
 
     // Token-guarded sync state: a newer sync must be able to cancel an older
     // one mid-flight without the cancelled one clobbering shared state.
@@ -301,7 +364,10 @@ fun MiniPlayer(
 
         val pathsToKeep = (indices.mapNotNull { i ->
             queue.getOrNull(i)?.albumArtPath
-        } + listOfNotNull(pendingJump?.let { queue.getOrNull(it.targetIndex)?.albumArtPath })).toSet()
+        } + listOfNotNull(
+            pendingJump?.let { queue.getOrNull(it.targetIndex)?.albumArtPath },
+            pendingJump?.departureTrack?.albumArtPath
+        )).toSet()
 
         pathsToKeep.forEach { path ->
             AlbumArtPaletteCache.ensure(scope = this, context = context, path = path)
@@ -322,11 +388,7 @@ fun MiniPlayer(
                 currentPageOffsetFraction = pagerState.currentPageOffsetFraction,
                 pageCount = currentQueue.size
             ) { page ->
-                if (jump != null && page == jump.viaPage) {
-                    currentQueue.getOrNull(jump.targetIndex)?.albumArtPath
-                } else {
-                    currentQueue.getOrNull(page)?.albumArtPath
-                }
+                (overrideTrackFor(jump, page, currentQueue) ?: currentQueue.getOrNull(page))?.albumArtPath
             }
         }.collect { interpolatedColor ->
             // An artless page (or one still being extracted) yields no color.
@@ -348,11 +410,7 @@ fun MiniPlayer(
             val backIndex = (frontIndex + 1).coerceAtMost((currentQueue.size - 1).coerceAtLeast(0))
             val fraction = (absoluteOffset - frontIndex).coerceIn(0f, 1f)
             val pathForPage: (Int) -> String? = { page ->
-                if (jump != null && page == jump.viaPage) {
-                    currentQueue.getOrNull(jump.targetIndex)?.albumArtPath
-                } else {
-                    currentQueue.getOrNull(page)?.albumArtPath
-                }
+                (overrideTrackFor(jump, page, currentQueue) ?: currentQueue.getOrNull(page))?.albumArtPath
             }
             Triple(pathForPage(frontIndex), pathForPage(backIndex), fraction)
         }.collect { (frontArtPath, backArtPath, fraction) ->
@@ -369,12 +427,24 @@ fun MiniPlayer(
 
     // Sync the pager when the track changes; reads the live queue through the
     // proxy, since the queue can change while this effect is running.
-    val currentEntryId = queueEntryIds.getOrNull(currentIndex)
     val latestEntryId by rememberUpdatedState(currentEntryId)
     var lastSyncedEntryId by remember { mutableStateOf<Long?>(null) }
-    LaunchedEffect(currentIndex) {
+    // Keyed on the entry too: a list pick can swap the playing entry while the index stays put
+    // (e.g. tapping the first row), which must still slide instead of popping.
+    LaunchedEffect(currentIndex, currentEntryId) {
+        // Taking the token first turns a superseded run's `finally` into a no-op.
+        val myToken = ++pagerSyncState.activeToken
         val currentQueue = latestQueue
-        pendingJump = null
+        val inFlight = pendingJump          // slide of a superseded run still on screen, if any
+        val dep = latestDeparture           // old track pinned on its page by a queue replacement
+
+        fun clearJumpState() {
+            pendingJump = null
+            pageShadow.inFlight = null
+            departureSpent = true
+            pagerSyncState.isSyncing = false
+        }
+
         // Same playing entry under a new page number (repeat mode toggled, a row removed before it):
         // snap, never sweep across the renumbered queue.
         val pureRenumbering = latestEntryId != null && latestEntryId == lastSyncedEntryId
@@ -388,61 +458,78 @@ fun MiniPlayer(
 
         if (pureRenumbering && !parkedOnGhostOfPlaying && currentIndex in currentQueue.indices) {
             if (pagerState.currentPage != currentIndex) pagerState.scrollToPage(currentIndex)
+            clearJumpState()
             return@LaunchedEffect
         }
 
-        if (currentIndex in currentQueue.indices &&
-            pagerState.currentPage != currentIndex &&
-            !parkedOnGhostOfPlaying &&
-            !latestSkipTrackChangeAnimation
-        ) {
-            val myToken = ++pagerSyncState.activeToken
-            pagerSyncState.isSyncing = true
-            try {
-                // Repeat-all wrap across the loop's seam: one real page slide onto the ghost
-                // page, then a silent hop onto its identical twin.
-                val wrapPage = latestLoopModel.wrapTransitPage(
-                    fromPage = pagerState.currentPage,
+        val needsSync = currentIndex in currentQueue.indices &&
+                !parkedOnGhostOfPlaying &&
+                (pagerState.currentPage != currentIndex || dep != null)
+        if (!needsSync) {
+            clearJumpState()
+            return@LaunchedEffect
+        }
+
+        // Player is opening over the mini player: no animation, but the pager must still land on
+        // the playing page (otherwise it keeps showing whatever sits on its old page number).
+        if (latestSkipTrackChangeAnimation) {
+            if (pagerState.currentPage != currentIndex) pagerState.scrollToPage(currentIndex)
+            clearJumpState()
+            return@LaunchedEffect
+        }
+
+        pagerSyncState.isSyncing = true
+        try {
+            val from = pagerState.currentPage
+            val plain = dep == null && inFlight == null
+            // Repeat-all wrap across the loop's seam: one real page slide onto the ghost
+            // page, then a silent hop onto its identical twin.
+            val wrapPage = if (plain) {
+                latestLoopModel.wrapTransitPage(
+                    fromPage = from,
                     toPage = currentIndex,
                     backward = false
                 )
-                val distance = currentIndex - pagerState.currentPage
-                if (wrapPage != null) {
-                    try {
-                        pagerState.animateScrollToPage(wrapPage)
-                    } finally {
-                        withContext(NonCancellable) {
-                            val model = latestLoopModel
-                            val page = pagerState.currentPage
-                            if (model.isGhostPage(page)) {
-                                pagerState.scrollToPage(model.ghostTwinPage(page))
-                            }
-                        }
-                    }
-                } else if (abs(distance) <= 1) {
-                    pagerState.animateScrollToPage(currentIndex)
-                } else {
-                    // Distant jump: slide one page but render the via page as
-                    // the target track (see [PendingJump]).
-                    val direction = if (distance > 0) 1 else -1
-                    val viaPage = (pagerState.currentPage + direction).coerceIn(0, currentQueue.size - 1)
-                    try {
-                        pendingJump = PendingJump(viaPage, currentIndex)
-                        pagerState.animateScrollToPage(viaPage)
-                        pagerState.scrollToPage(currentIndex)
-                    } finally {
-                        // Runs even if a newer tap cancels us mid-flight, unless
-                        // a newer run already took over.
-                        if (pagerSyncState.activeToken == myToken) {
-                            pendingJump = null
+            } else null
+            val distance = currentIndex - from
+            if (wrapPage != null) {
+                try {
+                    pagerState.animateScrollToPage(wrapPage)
+                } finally {
+                    withContext(NonCancellable) {
+                        val model = latestLoopModel
+                        val page = pagerState.currentPage
+                        if (model.isGhostPage(page)) {
+                            pagerState.scrollToPage(model.ghostTwinPage(page))
                         }
                     }
                 }
-            } finally {
-                if (pagerSyncState.activeToken == myToken) {
-                    pagerSyncState.isSyncing = false
+            } else if (plain && abs(distance) <= 1) {
+                // Prev/next neighbour: the natural one-page slide.
+                pagerState.animateScrollToPage(currentIndex)
+            } else {
+                // Any other jump (list pick, queue pick, retarget mid-slide): exactly ONE page
+                // forward, rendering the target on the via page (see [PendingJump]) — never a
+                // sweep across the tracks in between, never backward.
+                val viaPage = when {
+                    inFlight != null -> inFlight.viaPage
+                    from + 1 in currentQueue.indices -> from + 1
+                    from - 1 in currentQueue.indices -> from - 1 // nothing ahead: last page
+                    else -> -1
+                }
+                if (viaPage < 0) {
+                    pagerState.scrollToPage(currentIndex)
+                } else {
+                    pageShadow.inFlight = dep
+                    pendingJump = PendingJump(viaPage, currentIndex, dep?.page ?: -1, dep?.track)
+                    pagerState.animateScrollToPage(viaPage)
+                    // Landed on the target's content; remap silently onto its real page.
+                    pagerState.scrollToPage(currentIndex)
                 }
             }
+        } finally {
+            // Runs even if a newer change cancels us mid-flight, unless that run already took over.
+            if (pagerSyncState.activeToken == myToken) clearJumpState()
         }
     }
 
@@ -593,12 +680,11 @@ fun MiniPlayer(
                         key = { index -> queueEntryIds.getOrNull(index) ?: -(index + 1).toLong() }
                     ) { page ->
                         val jump = pendingJump
+                        val dep = departure
                         val pageTrack = (
-                                if (jump != null && page == jump.viaPage) {
-                                    queue.getOrNull(jump.targetIndex)
-                                } else {
-                                    queue.getOrNull(page)
-                                }
+                                overrideTrackFor(jump, page, queue)
+                                    ?: dep?.takeIf { jump == null && page == it.page }?.track
+                                    ?: queue.getOrNull(page)
                                 ) ?: return@HorizontalPager
 
                         // Only the page genuinely settled as the current track
@@ -611,7 +697,7 @@ fun MiniPlayer(
                         // match alone would tag the duplicated neighbor page
                         // too — two visible shared elements with one key.
                         val isSettledCurrentTrackPage =
-                            jump == null && page == currentIndex && pageTrack.id == track.id
+                            jump == null && dep == null && page == currentIndex && pageTrack.id == track.id
                         val pageMarquee = statesFor(entryKey(page))
 
                         Row(
