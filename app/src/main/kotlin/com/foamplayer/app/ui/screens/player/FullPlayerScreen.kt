@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.PagerState
@@ -50,6 +51,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -1086,6 +1090,7 @@ fun FullPlayerScreen(
                                 slideOutVertically(tween(TRANSITION_DURATION_MS)) { h -> h / 6 },
                         modifier = Modifier
                             .fillMaxSize()
+                            .extendBottom(PlayerDimens.subViewContentBottomExtension)
                             .nestedScroll(nestedScrollConnection)
                     ) {
                         SubViewContent(
@@ -1151,9 +1156,11 @@ fun FullPlayerScreen(
 
                     val transportClusterModifier = remember(subControlsProgress) {
                         Modifier
-                            .align(Alignment.Center)
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = PlayerDimens.selectorRowBottomPadding)
+                            .height(PlayerDimens.miniPlayButtonSize)
                             .graphicsLayer {
-                                translationY = -PlayerDimens.playButtonRise.toPx() *
+                                translationY = -(PlayerDimens.playButtonRise + PlayerDimens.transportBottomInset).toPx() *
                                         latestSubControlsProgress.value() -
                                         latestNavbarExpandHeight.value()
                             }
@@ -1227,7 +1234,7 @@ fun FullPlayerScreen(
                     isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                     onSeek = { positionMs -> viewModel.seekTo(positionMs) },
                     seekBarStyle = SeekBarStyle.NORMAL,
-                    labelSpacing = 2.dp,
+                    showTimeLabels = false,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
@@ -1239,7 +1246,8 @@ fun FullPlayerScreen(
                         )
                         .graphicsLayer {
                             alpha = subControlsProgress()
-                            translationY = PlayerDimens.seekBarRise.toPx() * (1f - subControlsProgress()) -
+                            translationY = PlayerDimens.seekBarRise.toPx() * (1f - subControlsProgress()) +
+                                    PlayerDimens.seekBarNavbarDrop.toPx() -
                                     navbarExpandHeight()
                         }
                 )
@@ -1266,6 +1274,19 @@ fun FullPlayerScreen(
             }
         }
     )
+}
+
+/**
+ * Lets this node's content measure and draw [extra] taller than the space it is given while
+ * reporting its original size to the parent, so siblings and surrounding layout are untouched.
+ * Used to run the lyrics/queue content (and its bottom fade) down behind the lowered control row.
+ */
+private fun Modifier.extendBottom(extra: Dp): Modifier = layout { measurable, constraints ->
+    val extraPx = extra.roundToPx()
+    val width = constraints.maxWidth
+    val height = constraints.maxHeight
+    val placeable = measurable.measure(Constraints.fixed(width, height + extraPx))
+    layout(width, height) { placeable.place(0, 0) }
 }
 
 @Composable

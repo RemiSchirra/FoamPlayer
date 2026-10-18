@@ -90,7 +90,6 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 
 /** Layer 1 content: handle, hi-res badge, the track hero pager, playback controls, subview shortcuts. */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun SharedTransitionScope.MainPlayerContent(
     track: TrackEntity,
@@ -230,7 +229,6 @@ private class EntryMarqueeStates {
  * Renders the album art + title/artist for the current queue, and drives the transition
  * between them and the mini player / subview header when swiping.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun SharedTransitionScope.TrackHeroPager(
     track: TrackEntity,
@@ -686,7 +684,6 @@ internal fun TrackMoreButton(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun SharedTransitionScope.PlaybackControls(
     track: TrackEntity,
@@ -775,7 +772,6 @@ internal fun SharedTransitionScope.PlaybackControls(
  * to itself instead of also dragging the Prev/Next icons and shared-element
  * bounds along with it.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun SharedTransitionScope.PlayPauseButton(
     track: TrackEntity,
@@ -813,7 +809,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
 }
 
 /**
- * Progress bar + elapsed/remaining labels. [seekBarStyle] picks the rendering:
+ * Progress bar + optional elapsed/remaining labels. [seekBarStyle] picks the rendering:
  * the classic [FoamSlider] track, or the full player's [WaveformSeekBar] whose
  * bars trace the audio's amplitude envelope (see [rememberWaveform] for the
  * data source). Both share the same drag-to-seek contract and release callback.
@@ -840,6 +836,7 @@ internal fun PlaybackProgressSlider(
     trackChangeProgress: () -> Float = { 0f },
     modifier: Modifier = Modifier,
     labelSpacing: Dp = PlayerDimens.seekBarLabelSpacing,
+    showTimeLabels: Boolean = true,
     audioInfoText: String? = null,
     onAudioInfoClick: () -> Unit = {}
 ) {
@@ -886,37 +883,39 @@ internal fun PlaybackProgressSlider(
                 inactiveColor = FoamTheme.accentColor.copy(alpha = 0.4f)
             )
         }
-        Spacer(modifier = Modifier.height(labelSpacing))
-        val labelStyle = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
-        val infoInteractions = remember { MutableInteractionSource() }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ElapsedTimeLabel(
-                durationMs = durationMs,
-                dragValue = { dragValue },
-                positionMs = { seekBarProgress.positionMs },
-                style = labelStyle
-            )
-            if (audioInfoText != null) {
-                BasicText(
-                    text = audioInfoText,
-                    style = labelStyle.copy(color = FoamTheme.typography.body.color),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .padding(horizontal = 8.dp)
-                        .pressShrink(infoInteractions)
-                        .clickable(
-                            interactionSource = infoInteractions,
-                            indication = null,
-                            onClick = onAudioInfoClick
-                        )
+        if (showTimeLabels) {
+            Spacer(modifier = Modifier.height(labelSpacing))
+            val labelStyle = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
+            val infoInteractions = remember { MutableInteractionSource() }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ElapsedTimeLabel(
+                    durationMs = durationMs,
+                    dragValue = { dragValue },
+                    positionMs = { seekBarProgress.positionMs },
+                    style = labelStyle
                 )
+                if (audioInfoText != null) {
+                    BasicText(
+                        text = audioInfoText,
+                        style = labelStyle.copy(color = FoamTheme.typography.body.color),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(horizontal = 8.dp)
+                            .pressShrink(infoInteractions)
+                            .clickable(
+                                interactionSource = infoInteractions,
+                                indication = null,
+                                onClick = onAudioInfoClick
+                            )
+                    )
+                }
+                BasicText(text = TimeUtils.formatDurationCompact(durationMs), style = labelStyle)
             }
-            BasicText(text = TimeUtils.formatDurationCompact(durationMs), style = labelStyle)
         }
     }
 }
