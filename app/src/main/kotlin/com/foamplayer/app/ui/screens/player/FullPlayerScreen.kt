@@ -1154,6 +1154,14 @@ fun FullPlayerScreen(
                         modifier = selectorRowModifier
                     )
 
+                    // Compose the transport cluster only while it is (becoming) visible. At rest it
+                    // is alpha 0 but still sits on top of the radio / Play on / repeat buttons
+                    // (same Box, composed later, ~162dp wide centered), and its disabled
+                    // clickables still take part in hit-testing, swallowing taps meant for them.
+                    val showTransportCluster by remember(subControlsProgress) {
+                        derivedStateOf { subControlsProgress() > PlayerDimens.visibilityEpsilon }
+                    }
+
                     val transportClusterModifier = remember(subControlsProgress) {
                         Modifier
                             .align(Alignment.BottomCenter)
@@ -1166,63 +1174,65 @@ fun FullPlayerScreen(
                             }
                     }
 
-                    Row(
-                        modifier = transportClusterModifier,
-                        horizontalArrangement = Arrangement.spacedBy(PlayerDimens.transportSpacing),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        MiniTransportButton(
-                            icon = FoamTheme.icons.current.previous,
-                            contentDescription = stringResource(R.string.previous),
-                            progress = subControlsProgress,
-                            onClick = {
-                                when (
-                                    seekBarProgress.onPreviousPressed(
+                    if (showTransportCluster) {
+                        Row(
+                            modifier = transportClusterModifier,
+                            horizontalArrangement = Arrangement.spacedBy(PlayerDimens.transportSpacing),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            MiniTransportButton(
+                                icon = FoamTheme.icons.current.previous,
+                                contentDescription = stringResource(R.string.previous),
+                                progress = subControlsProgress,
+                                onClick = {
+                                    when (
+                                        seekBarProgress.onPreviousPressed(
+                                            animated = settleSeekBarAnimated,
+                                            positionMs = viewModel.positionMs.value,
+                                            morphTargetPage = if (isWaveformSeek) {
+                                                (queueIndex - 1).takeIf { it >= 0 }
+                                            } else {
+                                                null
+                                            },
+                                            fromBlend = envelopeMorphProgress(),
+                                            fromPageIndex = queueIndex
+                                        )
+                                    ) {
+                                        PreviousAction.RESTART_CURRENT -> viewModel.seekTo(0L)
+                                        PreviousAction.SKIP_TO_PREVIOUS -> {
+                                            markSkipIntent(true)
+                                            viewModel.previous()
+                                        }
+                                    }
+                                }
+                            )
+
+                            MiniPlayPauseButton(
+                                isPlaying = isPlayingProvider,
+                                progress = subControlsProgress,
+                                onClick = { if (isPlayingProvider()) viewModel.pause() else viewModel.play() }
+                            )
+
+                            MiniTransportButton(
+                                icon = FoamTheme.icons.current.next,
+                                contentDescription = stringResource(R.string.next),
+                                progress = subControlsProgress,
+                                onClick = {
+                                    seekBarProgress.onNextPressed(
                                         animated = settleSeekBarAnimated,
-                                        positionMs = viewModel.positionMs.value,
                                         morphTargetPage = if (isWaveformSeek) {
-                                            (queueIndex - 1).takeIf { it >= 0 }
+                                            (queueIndex + 1).takeIf { it < queueSize }
                                         } else {
                                             null
                                         },
                                         fromBlend = envelopeMorphProgress(),
                                         fromPageIndex = queueIndex
                                     )
-                                ) {
-                                    PreviousAction.RESTART_CURRENT -> viewModel.seekTo(0L)
-                                    PreviousAction.SKIP_TO_PREVIOUS -> {
-                                        markSkipIntent(true)
-                                        viewModel.previous()
-                                    }
+                                    markSkipIntent(false)
+                                    viewModel.next()
                                 }
-                            }
-                        )
-
-                        MiniPlayPauseButton(
-                            isPlaying = isPlayingProvider,
-                            progress = subControlsProgress,
-                            onClick = { if (isPlayingProvider()) viewModel.pause() else viewModel.play() }
-                        )
-
-                        MiniTransportButton(
-                            icon = FoamTheme.icons.current.next,
-                            contentDescription = stringResource(R.string.next),
-                            progress = subControlsProgress,
-                            onClick = {
-                                seekBarProgress.onNextPressed(
-                                    animated = settleSeekBarAnimated,
-                                    morphTargetPage = if (isWaveformSeek) {
-                                        (queueIndex + 1).takeIf { it < queueSize }
-                                    } else {
-                                        null
-                                    },
-                                    fromBlend = envelopeMorphProgress(),
-                                    fromPageIndex = queueIndex
-                                )
-                                markSkipIntent(false)
-                                viewModel.next()
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }
