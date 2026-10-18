@@ -5,11 +5,16 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -50,6 +55,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -784,6 +791,23 @@ internal fun SharedTransitionScope.PlayPauseButton(
     // deferred provider keeps the controls row and the pager above it uninvalidated.
     val isPlaying = isPlaying()
     val playInteractions = remember { MutableInteractionSource() }
+
+    val isPressed by playInteractions.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) PLAY_BUTTON_PRESSED_SCALE else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        label = "playButtonPressScale"
+    )
+
+    // 0f = play icon showing, 1f = pause icon showing. Both icons ride this one value
+    // in opposite directions, so they always crossfade in lockstep.
+    val pauseFraction by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0f,
+        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
+        label = "playPauseCrossfade"
+    )
+
+    val description = stringResource(if (isPlaying) R.string.pause else R.string.play)
     Box(
         modifier = modifier
             .size(PlayerDimens.playButtonSize)
@@ -791,7 +815,11 @@ internal fun SharedTransitionScope.PlayPauseButton(
                 rememberSharedContentState(key = "play_button_${track.id}"),
                 animatedVisibilityScope = outerVisibilityScope
             )
-            .pressShrink(playInteractions)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
+            .semantics { contentDescription = description }
             .clickable(
                 interactionSource = playInteractions,
                 indication = null,
@@ -799,14 +827,40 @@ internal fun SharedTransitionScope.PlayPauseButton(
             ),
         contentAlignment = Alignment.Center
     ) {
+        // Play icon: 100% -> 20% scale and 100% -> 0% opacity when switching to pause.
         Icon(
-            imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
-            contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
+            imageVector = FoamTheme.icons.current.play,
+            contentDescription = null,
             tint = FoamTheme.colors.textPrimary,
-            modifier = Modifier.size(PlayerDimens.playButtonIconSize)
+            modifier = Modifier
+                .size(PlayerDimens.playButtonIconSize)
+                .graphicsLayer {
+                    val visible = 1f - pauseFraction
+                    alpha = visible
+                    val iconScale = 0.2f + 0.8f * visible
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
+        )
+        // Pause icon: the exact reverse (20% -> 100% scale, 0% -> 100% opacity).
+        Icon(
+            imageVector = FoamTheme.icons.current.pause,
+            contentDescription = null,
+            tint = FoamTheme.colors.textPrimary,
+            modifier = Modifier
+                .size(PlayerDimens.playButtonIconSize)
+                .graphicsLayer {
+                    alpha = pauseFraction
+                    val iconScale = 0.2f + 0.8f * pauseFraction
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
         )
     }
 }
+
+private const val PLAY_BUTTON_PRESSED_SCALE = 0.88f
+private const val PLAY_PAUSE_CROSSFADE_MS = 250
 
 /**
  * Progress bar + optional elapsed/remaining labels. [seekBarStyle] picks the rendering:
