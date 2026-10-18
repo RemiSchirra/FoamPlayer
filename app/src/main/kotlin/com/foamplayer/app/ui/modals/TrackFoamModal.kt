@@ -33,6 +33,8 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -338,11 +340,13 @@ fun TrackFoamModal(
                             ) {
                                 ModalRowButton(
                                     label = stringResource(R.string.see_artist),
+                                    icon = Icons.Rounded.Person,
                                     onClick = { perform(onSeeArtist) }
                                 )
                                 ModalSectionDivider()
                                 ModalRowButton(
                                     label = stringResource(R.string.see_album),
+                                    icon = Icons.Rounded.Album,
                                     onClick = { perform(onSeeAlbum) }
                                 )
                             }
@@ -722,13 +726,14 @@ internal fun ModalActionButton(
     }
 }
 
-/** Full-width single-line button with a trailing chevron, used for See Artist / See Album / Details. */
+/** Full-width single-line button with a trailing chevron and an optional leading icon, used for See Artist / See Album / Details. */
 @Composable
 internal fun ModalRowButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    subtitle: String? = null
+    subtitle: String? = null,
+    icon: ImageVector? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -743,6 +748,15 @@ internal fun ModalRowButton(
             .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.paddingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = FoamTheme.colors.textPrimary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(FoamDimens.spacingMedium))
+        }
         Column(modifier = Modifier.weight(1f)) {
             BasicText(
                 text = label,
