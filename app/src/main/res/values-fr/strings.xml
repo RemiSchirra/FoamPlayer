@@ -512,6 +512,8 @@
     <string name="see_artist">Voir l\'artiste</string>
     <string name="see_album">Voir l\'album</string>
     <string name="see_albums">Voir les albums</string>
+    <string name="see_radio">Voir la radio</string>
+    <string name="radio_no_similar_tracks">Aucune piste similaire trouvée</string>
     <string name="add_to_playlist">Ajouter à une playlist</string>
     <string name="reset_listen_stats">Réinitialiser les stats d\'écoute</string>
     <string name="details_collection">Collection</string>

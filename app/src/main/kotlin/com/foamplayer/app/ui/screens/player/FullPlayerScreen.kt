@@ -112,6 +112,8 @@ fun FullPlayerScreen(
     isAnimateSeekBarEnabled: Boolean = false,
     onOpenAlbum: (TrackEntity) -> Unit = {},
     onOpenArtist: (TrackEntity) -> Unit = {},
+    /** Opens the song-radio sheet for [TrackEntity] (the current track). */
+    onOpenRadio: (TrackEntity) -> Unit = {},
     onDismissGestureStart: (suspend () -> Unit)? = null,
     onDismissGestureActivate: (suspend () -> Unit)? = null,
     onDismissGestureCancelled: (() -> Unit)? = null,
@@ -1141,7 +1143,7 @@ fun FullPlayerScreen(
                                 gestureController.expandToSubView()
                             }
                         },
-                        onRadioClick = { /* TODO: radio */ },
+                        onRadioClick = { onOpenRadio(track) },
                         onPlayOnClick = { showPlayOnModal = true },
                         onRepeatClick = { viewModel.toggleRepeat() },
                         modifier = selectorRowModifier

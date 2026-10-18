@@ -140,6 +140,40 @@ interface TrackDao {
     """)
     fun getTracksByArtist(artist: String): Flow<List<TrackEntity>>
 
+    /**
+     * Ids of tracks sharing the single "; "-convention value [genre], excluding
+     * [excludeId]. Id-only projection so the similar-track radio doesn't
+     * materialize whole rows; multi-valued seeds are queried value by value.
+     */
+    @Query("""
+        SELECT id FROM tracks 
+        WHERE id != :excludeId 
+           AND (genre = :genre 
+              OR genre LIKE :genre || '; %' 
+              OR genre LIKE '%; ' || :genre 
+              OR genre LIKE '%; ' || :genre || '; %')
+    """)
+    suspend fun getTrackIdsMatchingGenre(excludeId: Long, genre: String): List<Long>
+
+    /**
+     * Ids of tracks crediting the single "; "-convention value [artist] as
+     * artist or album artist, excluding [excludeId]. Id-only projection with
+     * the same patterns as [getTracksByArtist] for the similar-track radio.
+     */
+    @Query("""
+        SELECT id FROM tracks 
+        WHERE id != :excludeId 
+           AND (artist = :artist 
+              OR artist LIKE :artist || '; %' 
+              OR artist LIKE '%; ' || :artist 
+              OR artist LIKE '%; ' || :artist || '; %' 
+              OR albumArtist = :artist 
+              OR albumArtist LIKE :artist || '; %' 
+              OR albumArtist LIKE '%; ' || :artist 
+              OR albumArtist LIKE '%; ' || :artist || '; %')
+    """)
+    suspend fun getTrackIdsMatchingArtist(excludeId: Long, artist: String): List<Long>
+
     /** Tracks with at least one listen, newest listen first (Home "Recent listens"). */
     @Query("""
         SELECT * FROM tracks 

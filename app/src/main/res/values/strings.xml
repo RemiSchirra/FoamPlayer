@@ -510,6 +510,8 @@
     <string name="see_artist">See Artist</string>
     <string name="see_album">See Album</string>
     <string name="see_albums">See Albums</string>
+    <string name="see_radio">See Radio</string>
+    <string name="radio_no_similar_tracks">No similar tracks found</string>
     <string name="add_to_playlist">Add to Playlist</string>
     <string name="reset_listen_stats">Reset listen stats</string>
     <string name="details_collection">Collection</string>

@@ -272,12 +272,25 @@ fun FoamBottomModal(
                     override suspend fun onPreFling(available: Velocity): Velocity {
                         val restingMidContent =
                             currentCapPx() >= restingPx() - 0.5f && scrollState.value > 0
-                        return if (restingMidContent) {
-                            Velocity.Zero
-                        } else {
-                            settle(available.y)
-                            Velocity(0f, available.y)
+                        val innerListScrolls =
+                            currentCapPx() >= restingPx() - 0.5f && scrollState.maxValue == 0
+                        return when {
+                            innerListScrolls -> Velocity.Zero
+                            restingMidContent -> Velocity.Zero
+                            else -> {
+                                settle(available.y)
+                                Velocity(0f, available.y)
+                            }
                         }
+                    }
+
+                    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                        val innerListScrolls =
+                            currentCapPx() >= restingPx() - 0.5f && scrollState.maxValue == 0
+                        if (innerListScrolls && available.y > 0f) {
+                            settle(available.y)
+                        }
+                        return Velocity.Zero
                     }
                 }
             }

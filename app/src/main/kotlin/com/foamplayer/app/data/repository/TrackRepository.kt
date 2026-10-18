@@ -215,6 +215,24 @@ class TrackRepository @Inject constructor(
         return trackIds.mapNotNull { byId[it] }
     }
 
+    /**
+     * Radio-qualified track ids for the "; "-multi-value seeds of a track:
+     * the union of ids sharing any of its genre values plus ids crediting any
+     * of its artist / album-artist credits, deduplicated. Id-only projection
+     * queries keep a radio build from materializing the whole track table.
+     */
+    suspend fun getSimilarTrackIds(
+        excludeId: Long,
+        genreSeeds: List<String>,
+        artistSeeds: List<String>
+    ): List<Long> {
+        val matched = buildList {
+            genreSeeds.forEach { addAll(trackDao.getTrackIdsMatchingGenre(excludeId, it)) }
+            artistSeeds.forEach { addAll(trackDao.getTrackIdsMatchingArtist(excludeId, it)) }
+        }
+        return matched.distinct()
+    }
+
     fun searchTracks(query: String): Flow<List<TrackEntity>> = trackDao.searchTracks(escapeLike(query))
 
     /** Searches credited artists (the "; " convention split apart), matching filtered. */

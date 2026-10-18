@@ -96,6 +96,8 @@ import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.MiniPlayer
 import com.foamplayer.app.ui.modals.PlaylistPickerModal
 import com.foamplayer.app.ui.modals.TrackFoamModal
+import com.foamplayer.app.ui.modals.TrackRadioModal
+import com.foamplayer.app.ui.modals.TrackRadioViewModel
 import com.foamplayer.app.ui.modals.UpdateFoamModal
 import com.foamplayer.app.ui.modals.rememberCollectionFoamModalState
 import com.foamplayer.app.ui.modals.rememberTrackFoamModalState
@@ -486,6 +488,10 @@ fun FoamNavHost(
     val lyricsDetailsViewModel: LyricsDetailsViewModel = hiltViewModel()
     val lyricsTrackDetails by lyricsDetailsViewModel.trackDetails.collectAsState()
     val isLyricsDetailsLoading by lyricsDetailsViewModel.isDetailsLoading.collectAsState()
+
+    // Song radio sheet: the similar list is built per seed track on open.
+    val trackRadioViewModel: TrackRadioViewModel = hiltViewModel()
+    val trackRadioState by trackRadioViewModel.state.collectAsState()
 
     val pickerTrackId = playlistPickerTrack?.id ?: trackModalState.track?.id
     val playlistIdsWithTrack by remember(pickerTrackId) {
@@ -2206,7 +2212,8 @@ fun FoamNavHost(
                                         Screen.ArtistDetail.createRoute(track.artist),
                                         Screen.ArtistDetail.route
                                     )
-                                }
+                                },
+                                onOpenRadio = { track -> trackRadioViewModel.openRadioFor(track) }
                             )
                         }
                     }
@@ -2429,6 +2436,7 @@ fun FoamNavHost(
                         Screen.AlbumDetail.route
                     )
                 },
+                onSeeRadio = { track -> trackRadioViewModel.openRadioFor(track) },
                 onOpenLyrics = { track ->
                     lyricsModalTrack = track
                     lyricsDetailsViewModel.loadTrackDetails(track)
@@ -2464,6 +2472,22 @@ fun FoamNavHost(
                 onInsertPositionChange = playlistsViewModel::setAddTrackInsertPosition,
                 onCreatePlaylist = { name -> playlistsViewModel.createPlaylist(name) },
                 onDismiss = { playlistPickerTrack = null }
+            )
+
+            TrackRadioModal(
+                visible = trackRadioState.sourceTrack != null,
+                sourceTrack = trackRadioState.sourceTrack,
+                tracks = trackRadioState.tracks,
+                isLoading = trackRadioState.isLoading,
+                useAlbumArtAccent = playerSettings.automaticColorEnabled,
+                onPlay = { startIndex ->
+                    val radioTracks = trackRadioState.tracks
+                    if (radioTracks.isNotEmpty()) {
+                        playerViewModel.playQueueReplacingUpcoming(radioTracks, startIndex)
+                    }
+                    trackRadioViewModel.dismissRadio()
+                },
+                onDismiss = trackRadioViewModel::dismissRadio
             )
 
             LyricsTrackDetailsModal(

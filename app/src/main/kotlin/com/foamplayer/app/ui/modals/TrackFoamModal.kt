@@ -173,6 +173,7 @@ fun TrackFoamModal(
     onAddToPlaylist: (TrackEntity) -> Unit = {},
     onSeeArtist: (TrackEntity) -> Unit = {},
     onSeeAlbum: (TrackEntity) -> Unit = {},
+    onSeeRadio: (TrackEntity) -> Unit = {},
     onOpenLyrics: (TrackEntity) -> Unit = {},
     onResetPlayStats: (TrackEntity) -> Unit = {},
     onSetInstrumental: (TrackEntity, Boolean) -> Unit = { _, _ -> },
@@ -348,6 +349,12 @@ fun TrackFoamModal(
                                     label = stringResource(R.string.see_album),
                                     icon = Icons.Rounded.Album,
                                     onClick = { perform(onSeeAlbum) }
+                                )
+                                ModalSectionDivider()
+                                ModalRowButton(
+                                    label = stringResource(R.string.see_radio),
+                                    icon = FoamTheme.icons.current.radio,
+                                    onClick = { perform(onSeeRadio) }
                                 )
                             }
 
