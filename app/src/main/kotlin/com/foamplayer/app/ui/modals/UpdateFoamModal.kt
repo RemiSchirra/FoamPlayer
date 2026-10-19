@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
 import com.foamplayer.app.update.DownloadState
 import com.foamplayer.app.update.GitHubRelease
+import com.foamplayer.app.ui.components.MarkdownText
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import java.io.File
@@ -154,9 +155,8 @@ private fun ReleaseNotesBody(notes: String?) {
     val text = notes?.takeIf { it.isNotBlank() }
         ?: stringResource(R.string.about_no_release_notes)
     val scrollState = rememberScrollState()
-    BasicText(
-        text = text,
-        style = FoamTheme.typography.body,
+    MarkdownText(
+        markdown = text,
         modifier = Modifier
             .height(280.dp)
             .verticalScroll(scrollState)
