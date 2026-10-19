@@ -517,6 +517,7 @@ fun FoamNavHost(
     val isPlaybackActive = isPlaying || isPlaybackRequested
     val playerSettings by playerViewModel.settings.collectAsState()
     val scoreOverrides by playerViewModel.scoreOverrides.collectAsState()
+    val libraryGenres by playerViewModel.genres.collectAsState()
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
     val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
     val backgroundMode = backgroundSettingsPreview.mode ?: playerSettings.backgroundMode
@@ -2466,6 +2467,7 @@ fun FoamNavHost(
                     trackModalState.updateCurrentTrack { it.copy(instrumental = instrumental) }
                 },
                 scoreOverrides = scoreOverrides,
+                existingGenres = libraryGenres,
                 onSetScore = playerViewModel::setTrackScore,
                 useAlbumArtAccent = playerSettings.automaticColorEnabled
             )

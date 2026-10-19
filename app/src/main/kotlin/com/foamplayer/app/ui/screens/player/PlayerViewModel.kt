@@ -277,6 +277,10 @@ class PlayerViewModel @Inject constructor(
     suspend fun freshTrack(track: TrackEntity): TrackEntity =
         trackRepository.getTrackById(track.id) ?: track
 
+    // Existing genres across all files
+    val genres: StateFlow<List<String>> = trackRepository.getAllGenres()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     // Track details modal: reset the listen counter and last-listen date.
     fun resetPlayStats(trackId: Long) {
         viewModelScope.launch { trackRepository.resetPlayStats(trackId) }

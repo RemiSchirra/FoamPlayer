@@ -3,7 +3,16 @@ package com.foamplayer.app.ui.modals
 import android.content.res.Resources
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -17,13 +26,19 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,9 +55,11 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -55,14 +72,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextRange
@@ -71,8 +97,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.ui.window.DialogProperties
+import kotlin.math.roundToInt
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.R
@@ -201,21 +232,17 @@ fun TrackFoamModal(
     onResetPlayStats: (TrackEntity) -> Unit = {},
     onSetInstrumental: (TrackEntity, Boolean) -> Unit = { _, _ -> },
     scoreOverrides: Map<Long, Int> = emptyMap(),
+    existingGenres: List<String> = emptyList(),
     onSetScore: (Long, Int) -> Unit = { _, _ -> },
     useAlbumArtAccent: Boolean = false,
     onDismiss: () -> Unit = { state.dismiss() }
 ) {
-    // FoamBottomModal stays mounted while its exit animation plays, but state.track
-    // is already null by then. Keep the last shown track around so the sheet keeps
-    // rendering its content while it slides away instead of collapsing to empty.
     var lastShownTrack by remember { mutableStateOf<TrackEntity?>(null) }
     SideEffect {
         if (state.track != null) lastShownTrack = state.track
     }
     val displayTrack = state.track ?: lastShownTrack
 
-    // Accent for the shared header + details page: the viewed track's own album
-    // art color when the automatic-color setting is on, else the app accent.
     val context = LocalContext.current
     LaunchedEffect(useAlbumArtAccent, displayTrack?.albumArtPath) {
         if (useAlbumArtAccent) {
@@ -229,18 +256,12 @@ fun TrackFoamModal(
     }
     val accentColor = artAccent?.adaptAccentForTheme(FoamTheme.isDark) ?: FoamTheme.accentColor
 
-    // Details and Edit are further pages of the SAME sheet (one Dialog window),
-    // so the header can genuinely persist across the switch instead of being
-    // cloned into another dialog. Reset when the sheet closes or changes track
-    // (keyed on the id: stat updates copy the track but keep the page open).
     var page by remember { mutableStateOf(TrackModalPage.ACTIONS) }
     LaunchedEffect(state.track?.id) {
         page = TrackModalPage.ACTIONS
     }
 
-    // Horizontal gap kept between the outgoing and incoming pages while they
-    // slide (both travel one width + gap in lockstep), so their contents never
-    // touch mid-transition; at rest neither offset applies.
+    // Horizontal gap kept between the outgoing and incoming pages while they slide
     val pageGapPx = with(LocalDensity.current) { FoamDimens.spacingSmall.roundToPx() }
 
     fun perform(action: (TrackEntity) -> Unit) {
@@ -253,13 +274,18 @@ fun TrackFoamModal(
         visible = state.isVisible,
         onDismissRequest = onDismiss
     ) {
+        BackHandler(enabled = state.isVisible && page != TrackModalPage.ACTIONS) {
+            page = when (page) {
+                TrackModalPage.EDIT -> TrackModalPage.DETAILS
+                else -> TrackModalPage.ACTIONS
+            }
+        }
+
         if (displayTrack != null) {
             Column(
                 modifier = Modifier.padding(bottom = FoamDimens.spacingSmall),
                 verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
             ) {
-                // Shared across both pages: it stays mounted while the content
-                // below it animates, so it reads as one continuous header.
                 TrackModalHeader(
                     track = displayTrack,
                     accentColor = accentColor,
@@ -271,11 +297,9 @@ fun TrackFoamModal(
                     targetState = page,
                     transitionSpec = {
                         if (targetState.ordinal > initialState.ordinal) {
-                            // Push: the next page slides in from the right...
                             slideInHorizontally { it + pageGapPx } togetherWith
                                     slideOutHorizontally { -it - pageGapPx }
                         } else {
-                            // ...pop: back to the previous one.
                             slideInHorizontally { -it - pageGapPx } togetherWith
                                     slideOutHorizontally { it + pageGapPx }
                         }
@@ -286,8 +310,6 @@ fun TrackFoamModal(
                         verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
                     ) {
                         if (currentPage == TrackModalPage.DETAILS) {
-                            // Pure formatting over the track; the modal recomposes per
-                            // animation frame while the dynamic accent animates.
                             val channelLabels = rememberChannelLabels()
                             val trackSummary = remember(displayTrack, channelLabels) {
                                 audioSummaryText(displayTrack, channelLabels)
@@ -338,6 +360,7 @@ fun TrackFoamModal(
                             TrackEditContent(
                                 track = displayTrack,
                                 accentColor = accentColor,
+                                existingGenres = existingGenres,
                                 onApply = { edit ->
                                     onApplyMetadata(displayTrack, edit)
                                     page = TrackModalPage.DETAILS
@@ -474,6 +497,7 @@ private fun TrackEditDraft.toEdit(): TrackMetadataEdit = TrackMetadataEdit(
 private fun TrackEditContent(
     track: TrackEntity,
     accentColor: Color,
+    existingGenres: List<String>,
     onApply: (TrackMetadataEdit) -> Unit,
     onCancel: () -> Unit
 ) {
@@ -571,6 +595,7 @@ private fun TrackEditContent(
 
     if (showAddGenre) {
         AddGenreDialog(
+            existingGenres = existingGenres,
             onConfirm = { genre ->
                 draft = draft.copy(genres = (draft.genres + genre).distinct())
                 showAddGenre = false
@@ -617,6 +642,9 @@ private fun EditField(
  * index 0 when focus is requested programmatically (the add-genre dialog),
  * so the selection is tracked explicitly and restored to the end whenever
  * the text is set from outside (prefill / re-open).
+ * [trailing] renders an extra slot inside the pill's trailing edge (the
+ * add-genre dropdown chevron); the text keeps clear of it. [shape] lets the
+ * add-genre field square its bottom corners while its dropdown is attached.
  */
 @Composable
 private fun MetadataField(
@@ -626,7 +654,9 @@ private fun MetadataField(
     hint: String = "",
     focusRequester: FocusRequester? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
-    keyboardActions: KeyboardActions = KeyboardActions.Default
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    shape: Shape = CircleShape,
+    trailing: (@Composable () -> Unit)? = null
 ) {
     var textFieldValue by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
     if (textFieldValue.text != value) {
@@ -636,32 +666,40 @@ private fun MetadataField(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(CircleShape)
+            .clip(shape)
             .background(FoamTheme.colors.surfaceVariant)
             .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingSmall),
         contentAlignment = Alignment.CenterStart
     ) {
-        if (value.isEmpty()) {
-            BasicText(
-                text = hint,
-                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary)
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                if (value.isEmpty()) {
+                    BasicText(
+                        text = hint,
+                        style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary)
+                    )
+                }
+                BasicTextField(
+                    value = textFieldValue,
+                    onValueChange = {
+                        val textChanged = it.text != textFieldValue.text
+                        textFieldValue = it
+                        if (textChanged) onValueChange(it.text)
+                    },
+                    textStyle = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
+                    cursorBrush = SolidColor(FoamTheme.accentColor),
+                    keyboardOptions = keyboardOptions,
+                    keyboardActions = keyboardActions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
+                    singleLine = true
+                )
+            }
+            if (trailing != null) {
+                trailing()
+            }
         }
-        BasicTextField(
-            value = textFieldValue,
-            onValueChange = {
-                textFieldValue = it
-                onValueChange(it.text)
-            },
-            textStyle = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
-            cursorBrush = SolidColor(FoamTheme.accentColor),
-            keyboardOptions = keyboardOptions,
-            keyboardActions = keyboardActions,
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
-            singleLine = true
-        )
     }
 }
 
@@ -767,47 +805,242 @@ private fun GenreChip(genre: String, onRemove: () -> Unit) {
     }
 }
 
-/** Add-genre dialog: the plain small name-field dialog, as in the library settings. */
+/**
+ * Add-genre dialog: a name field with an autocomplete dropdown of the
+ * library's existing genres.
+ *
+ * Dropdown behaviour:
+ * - It hangs directly under the field and reads as one surface with it (same
+ *   color, no gap, the field's bottom corners square off while it is open).
+ * - It is filtered live by the text (case-insensitive "contains", prefix
+ *   matches first), and opens as soon as the user types.
+ * - The chevron in the field shows/hides it at any time.
+ * - Picking a row fills the field and closes the list; it only comes back
+ *   when the user types again or taps the chevron.
+ *
+ * Implementation notes (these are the fixes over the previous version):
+ * - No separate Popup window any more. The popup's outside-tap handling
+ *   closed the list on a chevron tap and the chevron's own click then
+ *   re-opened it (the "closes then reopens" bug), and its height was capped
+ *   by the height of a wrap-content dialog window (the "only 2 rows" bug).
+ * - The dialog window is full-screen (transparent card centred in it), so
+ *   the list can overlay the buttons and extend past the card without being
+ *   clipped, and is sized from the real visible height (window resizes for
+ *   the soft keyboard) so it never runs behind the IME.
+ * - [MetadataField] only reports real text changes, not cursor/selection
+ *   moves, so merely tapping into the field can't re-open the list.
+ * - The typed text is no longer trimmed on every keystroke (that made it
+ *   impossible to type multi-word genres such as "Hip Hop"); it is trimmed
+ *   when confirming.
+ */
 @Composable
-private fun AddGenreDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+private fun AddGenreDialog(
+    existingGenres: List<String>,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
     var value by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+    var fieldBounds by remember { mutableStateOf(Rect.Zero) }
+    var rootHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
+    val allGenres = remember(existingGenres) {
+        existingGenres.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+    }
+    val query = value.trim()
+    // Filter the dropdown
+    val suggestions = remember(allGenres, query) {
+        allGenres
+            .filter { it.contains(query, ignoreCase = true) }
+            .sortedByDescending { it.startsWith(query, ignoreCase = true) }
+    }
+    val listVisible = expanded && suggestions.isNotEmpty()
+
+    // Square the field's bottom corners while the list is attached to it.
+    val fieldBottomCornerPercent by animateIntAsState(
+        targetValue = if (listVisible) 0 else 50,
+        label = "GenreFieldBottomCorners"
+    )
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (listVisible) 180f else 0f,
+        label = "GenreChevronRotation"
+    )
+
+    Dialog(
+        onDismissRequest = { if (listVisible) expanded = false else onDismiss() },
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        val dialogView = LocalView.current
+        DisposableEffect(dialogView) {
+            (dialogView.parent as? DialogWindowProvider)?.window
+                ?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            onDispose { }
+        }
+
+        Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                .background(FoamTheme.colors.surface)
-                .padding(FoamDimens.spacingMedium),
-            verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
+                .fillMaxSize()
+                .onSizeChanged { rootHeightPx = it.height }
+                .pointerInput(listVisible) {
+                    detectTapGestures { if (listVisible) expanded = false else onDismiss() }
+                },
+            contentAlignment = Alignment.Center
         ) {
-            BasicText(
-                text = stringResource(R.string.add_genre),
-                style = FoamTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall, vertical = FoamDimens.spacingTiny)
-            )
-            MetadataField(
-                value = value,
-                onValueChange = { value = it },
-                hint = stringResource(R.string.add_genre),
-                focusRequester = focusRequester,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { if (value.isNotBlank()) onConfirm(value.trim()) })
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
-                ModalButton(
-                    label = stringResource(R.string.cancel),
-                    filled = false,
-                    modifier = Modifier.weight(1f),
-                    onClick = onDismiss
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .widthIn(max = 480.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                    .background(FoamTheme.colors.surface)
+                    .pointerInput(Unit) { detectTapGestures { } }
+                    .padding(FoamDimens.spacingMedium),
+                verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
+            ) {
+                BasicText(
+                    text = stringResource(R.string.add_genre),
+                    style = FoamTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall, vertical = FoamDimens.spacingTiny)
                 )
-                ModalButton(
-                    label = stringResource(R.string.add),
-                    filled = true,
-                    modifier = Modifier.weight(1f),
-                    enabled = value.isNotBlank(),
-                    onClick = { if (value.isNotBlank()) onConfirm(value.trim()) }
+                MetadataField(
+                    modifier = Modifier.onGloballyPositioned { fieldBounds = it.boundsInRoot() },
+                    shape = RoundedCornerShape(
+                        topStartPercent = 50,
+                        topEndPercent = 50,
+                        bottomEndPercent = fieldBottomCornerPercent,
+                        bottomStartPercent = fieldBottomCornerPercent
+                    ),
+                    value = value,
+                    onValueChange = {
+                        value = it
+                        expanded = true
+                    },
+                    hint = stringResource(R.string.add_genre),
+                    focusRequester = focusRequester,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { if (value.isNotBlank()) onConfirm(value.trim()) }),
+                    trailing = if (allGenres.isNotEmpty()) {
+                        {
+                            Box(
+                                modifier = Modifier
+                                    .offset(x = 6.dp)
+                                    .size(28.dp)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        role = Role.Button,
+                                        onClick = { expanded = !listVisible }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.ExpandMore,
+                                    contentDescription = stringResource(R.string.show_existing_genres),
+                                    tint = FoamTheme.colors.textSecondary,
+                                    modifier = Modifier.graphicsLayer { rotationZ = chevronRotation }
+                                )
+                            }
+                        }
+                    } else {
+                        null
+                    }
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
+                    ModalButton(
+                        label = stringResource(R.string.cancel),
+                        filled = false,
+                        modifier = Modifier.weight(1f),
+                        onClick = onDismiss
+                    )
+                    ModalButton(
+                        label = stringResource(R.string.add),
+                        filled = true,
+                        modifier = Modifier.weight(1f),
+                        enabled = value.isNotBlank(),
+                        onClick = { if (value.isNotBlank()) onConfirm(value.trim()) }
+                    )
+                }
+            }
+
+            if (fieldBounds.width > 0f) {
+                val maxListHeight = with(density) {
+                    (rootHeightPx - fieldBounds.bottom - 12.dp.toPx()).toDp()
+                        .coerceIn(GenreDropdownMinHeight, GenreDropdownMaxHeight)
+                }
+                GenreDropdown(
+                    visible = listVisible,
+                    genres = suggestions,
+                    width = with(density) { fieldBounds.width.toDp() },
+                    maxHeight = maxListHeight,
+                    onSelect = { genre ->
+                        value = genre
+                        expanded = false
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset { IntOffset(fieldBounds.left.roundToInt(), fieldBounds.bottom.roundToInt()) }
+                )
+            }
+        }
+    }
+}
+
+private val GenreDropdownMaxHeight = 280.dp
+private val GenreDropdownMinHeight = 96.dp
+
+/**
+ * The add-genre suggestion list: the continuation of the pill field above it
+ * (same surface, square top edge, rounded bottom), positioned by the caller
+ * flush under the field. Height-capped by [maxHeight] and scrollable; tapping
+ * a row calls [onSelect]. Expands/collapses from the field's bottom edge.
+ */
+@Composable
+private fun GenreDropdown(
+    visible: Boolean,
+    genres: List<String>,
+    width: Dp,
+    maxHeight: Dp,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var displayed by remember { mutableStateOf(genres) }
+    if (genres.isNotEmpty() && genres != displayed) displayed = genres
+
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+        exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .width(width)
+                .heightIn(max = maxHeight)
+                .clip(
+                    RoundedCornerShape(
+                        bottomStart = FoamDimens.itemRounding,
+                        bottomEnd = FoamDimens.itemRounding
+                    )
+                )
+                .background(FoamTheme.colors.surfaceVariant)
+        ) {
+            items(displayed, key = { it }) { genre ->
+                BasicText(
+                    text = genre,
+                    style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(color = FoamTheme.colors.textPrimary),
+                            onClick = { onSelect(genre) }
+                        )
+                        .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingSmall)
                 )
             }
         }

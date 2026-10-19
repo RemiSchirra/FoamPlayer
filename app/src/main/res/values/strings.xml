@@ -547,6 +547,7 @@
     <string name="details_title">Title</string>
     <string name="apply">Apply</string>
     <string name="add_genre">Add genre</string>
+    <string name="show_existing_genres">Show existing genres</string>
     <string name="details_file_path">File path</string>
     <string name="details_format">Format</string>
     <string name="instrumental">Instrumental</string>
