@@ -139,6 +139,7 @@ fun UpdateFoamModal(
                 filled = true,
                 onClick = { installFile?.let(onInstall) }
             )
+            Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
             ModalButton(
                 label = stringResource(R.string.update_install_later),
                 filled = false,
