@@ -238,7 +238,11 @@ fun HomeScreen(
                             clickedRowTag = HomeRowTag.RANDOM_TRACKS
                             onTrackClick(track)
                         },
-                        onTrackLongClick = { track -> trackModalState?.show(track) },
+                        onTrackLongClick = { track ->
+                            longPressScope.launch {
+                                trackModalState?.show(viewModel.freshTrack(track))
+                            }
+                        },
                         onRefresh = viewModel::reshuffleRandomTracks
                     )
                 }
@@ -393,7 +397,11 @@ fun HomeScreen(
                                 clickedRowTag = HomeRowTag.RECENT_TRACKS
                                 onTrackClick(track)
                             },
-                            onLongClick = { trackModalState?.show(track) },
+                            onLongClick = {
+                longPressScope.launch {
+                    trackModalState?.show(viewModel.freshTrack(track))
+                }
+            },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
                             sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
@@ -421,7 +429,11 @@ fun HomeScreen(
                                 clickedRowTag = HomeRowTag.FAVORITE_TRACKS
                                 onTrackClick(track)
                             },
-                            onLongClick = { trackModalState?.show(track) },
+                            onLongClick = {
+                longPressScope.launch {
+                    trackModalState?.show(viewModel.freshTrack(track))
+                }
+            },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
                             sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
@@ -449,7 +461,11 @@ fun HomeScreen(
                                 clickedRowTag = HomeRowTag.OLD_FAVORITES
                                 onTrackClick(track)
                             },
-                            onLongClick = { trackModalState?.show(track) },
+                            onLongClick = {
+                longPressScope.launch {
+                    trackModalState?.show(viewModel.freshTrack(track))
+                }
+            },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
                             sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },

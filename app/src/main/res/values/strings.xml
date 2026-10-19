@@ -536,6 +536,9 @@
     <string name="details_album_artist">Album artist</string>
     <string name="details_album">Album</string>
     <string name="details_composer">Composer</string>
+    <string name="details_title">Title</string>
+    <string name="apply">Apply</string>
+    <string name="add_genre">Add genre</string>
     <string name="details_file_path">File path</string>
     <string name="details_format">Format</string>
     <string name="instrumental">Instrumental</string>

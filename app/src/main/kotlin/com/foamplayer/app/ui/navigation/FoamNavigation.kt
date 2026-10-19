@@ -2445,6 +2445,22 @@ fun FoamNavHost(
                     playerViewModel.resetPlayStats(track.id)
                     trackModalState.updateCurrentTrack { it.copy(playCount = 0, lastPlayedAt = null) }
                 },
+                onApplyMetadata = { track, edit ->
+                    playerViewModel.updateTrackMetadata(track, edit)
+                    trackModalState.updateCurrentTrack {
+                        it.copy(
+                            title = edit.title,
+                            artist = edit.artist,
+                            album = edit.album,
+                            albumArtist = edit.albumArtist,
+                            genre = edit.genre.ifEmpty { null },
+                            composer = edit.composer,
+                            year = edit.year,
+                            trackNumber = edit.trackNumber,
+                            discNumber = edit.discNumber
+                        )
+                    }
+                },
                 onSetInstrumental = { track, instrumental ->
                     playerViewModel.setTrackInstrumental(track.id, instrumental)
                     trackModalState.updateCurrentTrack { it.copy(instrumental = instrumental) }

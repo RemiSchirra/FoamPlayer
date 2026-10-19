@@ -307,6 +307,33 @@ interface TrackDao {
     @Query("UPDATE tracks SET instrumental = :instrumental WHERE id = :trackId")
     suspend fun setInstrumental(trackId: Long, instrumental: Boolean)
 
+    /** Overwrites one track's user-editable metadata block (track modal's edit page). */
+    @Query("""
+        UPDATE tracks
+        SET title = :title,
+            artist = :artist,
+            album = :album,
+            albumArtist = :albumArtist,
+            genre = :genre,
+            composer = :composer,
+            year = :year,
+            trackNumber = :trackNumber,
+            discNumber = :discNumber
+        WHERE id = :trackId
+    """)
+    suspend fun updateMetadata(
+        trackId: Long,
+        title: String,
+        artist: String,
+        album: String,
+        albumArtist: String?,
+        genre: String?,
+        composer: String?,
+        year: Int?,
+        trackNumber: Int?,
+        discNumber: Int?
+    )
+
     @Query("SELECT instrumental FROM tracks WHERE id = :trackId")
     fun observeInstrumental(trackId: Long): Flow<Boolean>
 

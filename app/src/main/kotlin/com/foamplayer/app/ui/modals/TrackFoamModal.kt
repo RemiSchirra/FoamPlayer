@@ -16,7 +16,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +28,9 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Checkbox
 import androidx.compose.material.CheckboxDefaults
 import androidx.compose.material.Icon
@@ -47,24 +53,35 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.data.repository.MULTI_VALUE_SEPARATOR
 import com.foamplayer.app.data.repository.PlaylistInsertPosition
+import com.foamplayer.app.data.repository.TrackMetadataEdit
 import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -73,12 +90,16 @@ import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.TimeUtils
 import androidx.core.net.toUri
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.distant.DistantUris
 import com.foamplayer.app.ui.components.TrackScoreHeart
 import com.foamplayer.app.ui.components.albumArtCornerRadius
 import java.util.Locale
 
 // Hoisted: this was compiled inside simplifiedDisplayPath on every composition pass.
 private val StoragePrefixRegex = Regex("^/storage/emulated/\\d+/")
+
+/** The track modal's in-sheet pages, slid through in ordinal order (push) or back. */
+private enum class TrackModalPage { ACTIONS, DETAILS, EDIT }
 
 /**
  * Pre-resolved localized channel labels, built once per composition. The
@@ -158,7 +179,8 @@ fun rememberTrackFoamModalState(): TrackFoamModalState = remember { TrackFoamMod
  *   metadata (tags, file info), reached from the Details button with a
  *   push-style slide — the header never leaves the composition, so the
  *   transition reads as one continuous sheet; a Lyrics row opens the lyrics
- *   details sheet on top of the track sheet, and a Back button returns to the
+ *   details sheet on top of the track sheet, an Edit row opens the metadata
+ *   edit page (the third in-sheet page), and a Back button returns to the
  *   actions.
  *
  * Every queue/navigation action dismisses the sheet before invoking its
@@ -175,6 +197,7 @@ fun TrackFoamModal(
     onSeeAlbum: (TrackEntity) -> Unit = {},
     onSeeRadio: (TrackEntity) -> Unit = {},
     onOpenLyrics: (TrackEntity) -> Unit = {},
+    onApplyMetadata: (TrackEntity, TrackMetadataEdit) -> Unit = { _, _ -> },
     onResetPlayStats: (TrackEntity) -> Unit = {},
     onSetInstrumental: (TrackEntity, Boolean) -> Unit = { _, _ -> },
     scoreOverrides: Map<Long, Int> = emptyMap(),
@@ -206,13 +229,13 @@ fun TrackFoamModal(
     }
     val accentColor = artAccent?.adaptAccentForTheme(FoamTheme.isDark) ?: FoamTheme.accentColor
 
-    // Details is a second page of the SAME sheet (one Dialog window), so the
-    // header can genuinely persist across the switch instead of being cloned
-    // into another dialog. Reset when the sheet closes or changes track (keyed
-    // on the id: stat updates copy the track but keep the details page open).
-    var showDetails by remember { mutableStateOf(false) }
+    // Details and Edit are further pages of the SAME sheet (one Dialog window),
+    // so the header can genuinely persist across the switch instead of being
+    // cloned into another dialog. Reset when the sheet closes or changes track
+    // (keyed on the id: stat updates copy the track but keep the page open).
+    var page by remember { mutableStateOf(TrackModalPage.ACTIONS) }
     LaunchedEffect(state.track?.id) {
-        showDetails = false
+        page = TrackModalPage.ACTIONS
     }
 
     // Horizontal gap kept between the outgoing and incoming pages while they
@@ -245,24 +268,24 @@ fun TrackFoamModal(
                 )
 
                 AnimatedContent(
-                    targetState = showDetails,
+                    targetState = page,
                     transitionSpec = {
-                        if (targetState) {
-                            // Push: details slides in from the right...
+                        if (targetState.ordinal > initialState.ordinal) {
+                            // Push: the next page slides in from the right...
                             slideInHorizontally { it + pageGapPx } togetherWith
                                     slideOutHorizontally { -it - pageGapPx }
                         } else {
-                            // ...pop: back to the actions.
+                            // ...pop: back to the previous one.
                             slideInHorizontally { -it - pageGapPx } togetherWith
                                     slideOutHorizontally { it + pageGapPx }
                         }
                     },
                     label = "TrackModalPage"
-                ) { isDetails ->
+                ) { currentPage ->
                     Column(
                         verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
                     ) {
-                        if (isDetails) {
+                        if (currentPage == TrackModalPage.DETAILS) {
                             // Pure formatting over the track; the modal recomposes per
                             // animation frame while the dynamic accent animates.
                             val channelLabels = rememberChannelLabels()
@@ -282,6 +305,8 @@ fun TrackFoamModal(
                                 onSetInstrumental = { onSetInstrumental(displayTrack, it) }
                             )
 
+                            // Np tag edition for streamed tracks
+                            val isDistantTrack = DistantUris.isDistant(displayTrack.path)
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -292,6 +317,13 @@ fun TrackFoamModal(
                                     label = stringResource(R.string.lyrics),
                                     onClick = { onOpenLyrics(displayTrack) }
                                 )
+                                if (!isDistantTrack) {
+                                    ModalSectionDivider()
+                                    ModalRowButton(
+                                        label = stringResource(R.string.edit),
+                                        onClick = { page = TrackModalPage.EDIT }
+                                    )
+                                }
                             }
 
                             Column(
@@ -300,8 +332,18 @@ fun TrackFoamModal(
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
                                     .background(FoamTheme.colors.surfaceVariant)
                             ) {
-                                ModalBackButton(onBack = { showDetails = false })
+                                ModalBackButton(onBack = { page = TrackModalPage.ACTIONS })
                             }
+                        } else if (currentPage == TrackModalPage.EDIT) {
+                            TrackEditContent(
+                                track = displayTrack,
+                                accentColor = accentColor,
+                                onApply = { edit ->
+                                    onApplyMetadata(displayTrack, edit)
+                                    page = TrackModalPage.DETAILS
+                                },
+                                onCancel = { page = TrackModalPage.DETAILS }
+                            )
                         } else {
                             Row(
                                 modifier = Modifier
@@ -366,12 +408,407 @@ fun TrackFoamModal(
                             ) {
                                 ModalRowButton(
                                     label = stringResource(R.string.details),
-                                    onClick = { showDetails = true }
+                                    onClick = { page = TrackModalPage.DETAILS }
                                 )
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Local draft of the edit page, seeded from the track once when the page opens
+ * (keyed on the id so stat updates don't wipe the form). Numeric fields stay
+ * text until Apply parses them; blank optional fields become null.
+ */
+private data class TrackEditDraft(
+    val title: String,
+    val artist: String,
+    val album: String,
+    val albumArtist: String,
+    val genres: List<String>,
+    val composer: String,
+    val year: String,
+    val trackNumber: String,
+    val discNumber: String
+) {
+    companion object {
+        fun from(track: TrackEntity): TrackEditDraft = TrackEditDraft(
+            title = track.title,
+            artist = track.artist,
+            album = track.album,
+            albumArtist = track.albumArtist.orEmpty(),
+            genres = track.genre?.split(MULTI_VALUE_SEPARATOR)
+                ?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty(),
+            composer = track.composer.orEmpty(),
+            year = track.year?.toString().orEmpty(),
+            trackNumber = track.trackNumber?.toString().orEmpty(),
+            discNumber = track.discNumber?.toString().orEmpty()
+        )
+    }
+}
+
+/** Parses the draft into the persisted edit: trims, blanks → null, numeric text → Int. */
+private fun TrackEditDraft.toEdit(): TrackMetadataEdit = TrackMetadataEdit(
+    title = title.trim(),
+    artist = artist.trim(),
+    album = album.trim(),
+    albumArtist = albumArtist.trim().ifEmpty { null },
+    genres = genres.map { it.trim() }.filter { it.isNotEmpty() }.distinct(),
+    composer = composer.trim().ifEmpty { null },
+    year = year.trim().toIntOrNull(),
+    trackNumber = trackNumber.trim().toIntOrNull(),
+    discNumber = discNumber.trim().toIntOrNull()
+)
+
+/**
+ * The track modal's metadata edit page: pill fields for the text metadata, the
+ * genre list as removable chips with an add button (the library settings'
+ * separator-list pattern), and an Apply/Cancel row — both return to the
+ * details page, Apply persists through [TrackMetadataEdit].
+ */
+@Composable
+private fun TrackEditContent(
+    track: TrackEntity,
+    accentColor: Color,
+    onApply: (TrackMetadataEdit) -> Unit,
+    onCancel: () -> Unit
+) {
+    var draft by remember(track) { mutableStateOf(TrackEditDraft.from(track)) }
+    var showAddGenre by remember { mutableStateOf(false) }
+
+    val focusManager = LocalFocusManager.current
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    LaunchedEffect(imeVisible) {
+        if (!imeVisible) focusManager.clearFocus()
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
+        EditField(
+            title = stringResource(R.string.details_title),
+            accentColor = accentColor,
+            value = draft.title,
+            onValueChange = { draft = draft.copy(title = it) }
+        )
+        EditField(
+            title = stringResource(R.string.details_artist),
+            accentColor = accentColor,
+            value = draft.artist,
+            onValueChange = { draft = draft.copy(artist = it) }
+        )
+        EditField(
+            title = stringResource(R.string.details_album),
+            accentColor = accentColor,
+            value = draft.album,
+            onValueChange = { draft = draft.copy(album = it) }
+        )
+        EditField(
+            title = stringResource(R.string.details_album_artist),
+            accentColor = accentColor,
+            value = draft.albumArtist,
+            onValueChange = { draft = draft.copy(albumArtist = it) }
+        )
+        GenreEditSection(
+            genres = draft.genres,
+            accentColor = accentColor,
+            onAdd = { showAddGenre = true },
+            onRemove = { genre -> draft = draft.copy(genres = draft.genres - genre) }
+        )
+        EditField(
+            title = stringResource(R.string.details_composer),
+            accentColor = accentColor,
+            value = draft.composer,
+            onValueChange = { draft = draft.copy(composer = it) }
+        )
+        EditField(
+            title = stringResource(R.string.details_year),
+            accentColor = accentColor,
+            value = draft.year,
+            onValueChange = { draft = draft.copy(year = it) },
+            numeric = true
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
+            EditField(
+                modifier = Modifier.weight(1f),
+                title = stringResource(R.string.details_track_number),
+                accentColor = accentColor,
+                value = draft.trackNumber,
+                onValueChange = { draft = draft.copy(trackNumber = it) },
+                numeric = true
+            )
+            EditField(
+                modifier = Modifier.weight(1f),
+                title = stringResource(R.string.details_disc_number),
+                accentColor = accentColor,
+                value = draft.discNumber,
+                onValueChange = { draft = draft.copy(discNumber = it) },
+                numeric = true
+            )
+        }
+
+        Row(
+            modifier = Modifier.padding(top = FoamDimens.spacingMedium),
+            horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
+        ) {
+            ModalButton(
+                label = stringResource(R.string.cancel),
+                filled = false,
+                modifier = Modifier.weight(1f),
+                onClick = onCancel
+            )
+            ModalButton(
+                label = stringResource(R.string.apply),
+                filled = true,
+                modifier = Modifier.weight(1f),
+                enabled = draft.title.isNotBlank() && draft.artist.isNotBlank() && draft.album.isNotBlank(),
+                onClick = { onApply(draft.toEdit()) }
+            )
+        }
+    }
+
+    if (showAddGenre) {
+        AddGenreDialog(
+            onConfirm = { genre ->
+                draft = draft.copy(genres = (draft.genres + genre).distinct())
+                showAddGenre = false
+            },
+            onDismiss = { showAddGenre = false }
+        )
+    }
+}
+
+/** One edit-page field: a track-colored title above the thin pill text field ([MetadataField]), which doubles as the placeholder. */
+@Composable
+private fun EditField(
+    modifier: Modifier = Modifier,
+    title: String,
+    accentColor: Color,
+    value: String,
+    onValueChange: (String) -> Unit,
+    numeric: Boolean = false
+) {
+    val focusManager = LocalFocusManager.current
+    Column(modifier = modifier) {
+        BasicText(
+            text = title,
+            style = FoamTheme.typography.caption.copy(color = accentColor),
+            modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall, vertical = FoamDimens.spacingTiny)
+        )
+        MetadataField(
+            value = value,
+            onValueChange = onValueChange,
+            hint = title,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
+        )
+    }
+}
+
+/**
+ * The metadata page's own thin pill text field — slimmer than the playlist
+ * name pill it used to reuse, since this page stacks nine of them.
+ * Same caret handling: BasicTextField's String overload drops the caret at
+ * index 0 when focus is requested programmatically (the add-genre dialog),
+ * so the selection is tracked explicitly and restored to the end whenever
+ * the text is set from outside (prefill / re-open).
+ */
+@Composable
+private fun MetadataField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    hint: String = "",
+    focusRequester: FocusRequester? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default
+) {
+    var textFieldValue by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    if (textFieldValue.text != value) {
+        textFieldValue = TextFieldValue(value, TextRange(value.length))
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(CircleShape)
+            .background(FoamTheme.colors.surfaceVariant)
+            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingSmall),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        if (value.isEmpty()) {
+            BasicText(
+                text = hint,
+                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary)
+            )
+        }
+        BasicTextField(
+            value = textFieldValue,
+            onValueChange = {
+                textFieldValue = it
+                onValueChange(it.text)
+            },
+            textStyle = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary),
+            cursorBrush = SolidColor(FoamTheme.accentColor),
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
+            singleLine = true
+        )
+    }
+}
+
+/** The edit page's genre section: a track-colored title above a rounded card holding the chips and the "+" on the same row (library settings' separator list). */
+@Composable
+private fun GenreEditSection(
+    genres: List<String>,
+    accentColor: Color,
+    onAdd: () -> Unit,
+    onRemove: (String) -> Unit
+) {
+    Column {
+        BasicText(
+            text = stringResource(R.string.details_genre),
+            style = FoamTheme.typography.caption.copy(color = accentColor),
+            modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall, vertical = FoamDimens.spacingTiny)
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                .background(FoamTheme.colors.surfaceVariant)
+                .padding(
+                    horizontal = FoamDimens.paddingMedium,
+                    vertical = FoamDimens.spacingSmall
+                )
+        ) {
+            if (genres.isEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BasicText(
+                        text = stringResource(R.string.none),
+                        style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary),
+                        modifier = Modifier.weight(1f)
+                    )
+                    AddGenreButton(onAdd)
+                }
+            } else {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall),
+                    verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall),
+                    itemVerticalAlignment = Alignment.CenterVertically
+                ) {
+                    genres.forEach { genre ->
+                        GenreChip(genre = genre, onRemove = { onRemove(genre) })
+                    }
+                    AddGenreButton(onAdd)
+                }
+            }
+        }
+    }
+}
+
+/** The "+" that opens the add-genre dialog, sitting inline with the chips it extends. */
+@Composable
+private fun AddGenreButton(onAdd: () -> Unit) {
+    PickerHeaderButton(
+        icon = Icons.Rounded.Add,
+        contentDescription = stringResource(R.string.add),
+        onClick = onAdd
+    )
+}
+
+/** One genre chip: the name on a pill with a tiny accent cross that removes it. */
+@Composable
+private fun GenreChip(genre: String, onRemove: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+            .background(FoamTheme.colors.surface)
+            .padding(
+                start = FoamDimens.spacingMedium,
+                top = FoamDimens.spacingTiny,
+                end = FoamDimens.spacingTiny,
+                bottom = FoamDimens.spacingTiny
+            )
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText(
+                text = genre,
+                style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textPrimary)
+            )
+            Spacer(modifier = Modifier.width(FoamDimens.spacingTiny))
+            Box(
+                modifier = Modifier
+                    .size(FoamDimens.iconMedium)
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = onRemove
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = FoamTheme.icons.current.close,
+                    contentDescription = stringResource(R.string.remove),
+                    tint = FoamTheme.accentColor,
+                    modifier = Modifier.size(FoamDimens.iconTiny)
+                )
+            }
+        }
+    }
+}
+
+/** Add-genre dialog: the plain small name-field dialog, as in the library settings. */
+@Composable
+private fun AddGenreDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var value by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                .background(FoamTheme.colors.surface)
+                .padding(FoamDimens.spacingMedium),
+            verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
+        ) {
+            BasicText(
+                text = stringResource(R.string.add_genre),
+                style = FoamTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall, vertical = FoamDimens.spacingTiny)
+            )
+            MetadataField(
+                value = value,
+                onValueChange = { value = it },
+                hint = stringResource(R.string.add_genre),
+                focusRequester = focusRequester,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (value.isNotBlank()) onConfirm(value.trim()) })
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
+                ModalButton(
+                    label = stringResource(R.string.cancel),
+                    filled = false,
+                    modifier = Modifier.weight(1f),
+                    onClick = onDismiss
+                )
+                ModalButton(
+                    label = stringResource(R.string.add),
+                    filled = true,
+                    modifier = Modifier.weight(1f),
+                    enabled = value.isNotBlank(),
+                    onClick = { if (value.isNotBlank()) onConfirm(value.trim()) }
+                )
             }
         }
     }

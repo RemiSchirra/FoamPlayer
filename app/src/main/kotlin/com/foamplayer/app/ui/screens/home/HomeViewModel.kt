@@ -63,6 +63,14 @@ class HomeViewModel @Inject constructor(
     /** Live library scan status (Idle / Scanning / Finished), for the header's scanning indicator. */
     val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus
 
+    /**
+     * Re-reads a track from the DB right before the track modal opens: home rows
+     * are collected snapshots, so an edited track's metadata can be stale in the
+     * row list. Falls back to the snapshot when the row can't be found.
+     */
+    suspend fun freshTrack(track: TrackEntity): TrackEntity =
+        trackRepository.getTrackById(track.id) ?: track
+
     /** All playlists, for resolving a recommendation into its real entity (long-press modal). */
     val playlists: StateFlow<List<PlaylistEntity>> =
         playlistRepository.getAllPlaylists()
