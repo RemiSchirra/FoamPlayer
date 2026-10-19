@@ -576,7 +576,7 @@ class AudioEngine @Inject constructor(
 
         val entryIds = List(tracks.size) { allocateEntryId() } +
                 List(AUXILIARY_QUEUE_LENGTH) { allocateEntryId() }
-        val newQueue = tracks + drawAuxiliaryTracks(emptySet(), AUXILIARY_QUEUE_LENGTH)
+        val newQueue = tracks + drawAuxiliaryTracks(queueTrackIds(tracks), AUXILIARY_QUEUE_LENGTH)
 
         pendingWindowResync = false
         _playbackState.value = _playbackState.value.copy(
@@ -1128,7 +1128,7 @@ class AudioEngine @Inject constructor(
 
         val entryIds = List(tracks.size) { allocateEntryId() } +
                 List(AUXILIARY_QUEUE_LENGTH) { allocateEntryId() }
-        val newQueue = tracks + drawAuxiliaryTracks(emptySet(), AUXILIARY_QUEUE_LENGTH)
+        val newQueue = tracks + drawAuxiliaryTracks(queueTrackIds(tracks), AUXILIARY_QUEUE_LENGTH)
 
         pendingWindowResync = false
         _playbackState.value = _playbackState.value.copy(
@@ -1862,9 +1862,11 @@ class AudioEngine @Inject constructor(
                 )
             }
             .shuffled()
+        // Auxiliary slots are being replaced, so only the rest of the queue (history included) counts.
+        val replacedAuxiliary = upcomingRange.filter { flags.getOrNull(it) == true }
         val freshAuxiliary = drawAuxiliaryTracks(
-            existing = upcomingTrackIds(queue, current.queueIndex),
-            count = upcomingRange.count { flags.getOrNull(it) == true }
+            existing = queueTrackIds(queue, replacedAuxiliary.toSet()),
+            count = replacedAuxiliary.size
         )
 
         val newQueue = queue.toMutableList()
@@ -2449,22 +2451,34 @@ class AudioEngine @Inject constructor(
         return count >= AUXILIARY_QUEUE_LENGTH
     }
 
-    private fun upcomingTrackIds(queue: List<TrackEntity>, queueIndex: Int): Set<Long> =
-        queue.drop(queueIndex + 1).mapTo(HashSet()) { it.id }
+    /**
+     * Ids of every track in the queue (played history, current track and upcoming entries),
+     * optionally ignoring the slots in [ignoredIndices] (e.g. auxiliary slots about to be replaced).
+     */
+    private fun queueTrackIds(
+        queue: List<TrackEntity>,
+        ignoredIndices: Set<Int> = emptySet()
+    ): Set<Long> {
+        val ids = HashSet<Long>(queue.size * 2)
+        queue.forEachIndexed { i, track -> if (i !in ignoredIndices) ids += track.id }
+        return ids
+    }
 
-    /** Draws [count] random tracks, preferring ids not in [existing]. Repeats only when the library is exhausted. */
+    /**
+     * Draws [count] random tracks. Tracks not in [existing] are used first, each at most once
+     * per call. Only when the library has too few such tracks are repeats allowed: the rest is
+     * filled by cycling through reshuffled copies of the whole library, so a track repeats
+     * only after every other one has been drawn.
+     */
     private fun drawAuxiliaryTracks(existing: Collection<Long>, count: Int): List<TrackEntity> {
         val pool = allTracks
         if (pool.isEmpty() || count <= 0) return emptyList()
 
-        val fresh = pool.filter { it.id !in existing }
+        val excluded = existing as? Set<Long> ?: existing.toHashSet()
         val draws = ArrayList<TrackEntity>(count)
+        draws += pool.filter { it.id !in excluded }.shuffled().take(count)
         while (draws.size < count) {
-            draws += if (fresh.isNotEmpty()) {
-                fresh[Random.nextInt(fresh.size)]
-            } else {
-                pool[Random.nextInt(pool.size)]
-            }
+            draws += pool.shuffled().take(count - draws.size)
         }
         return draws
     }
@@ -2481,7 +2495,10 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    /** Appends random tracks so the auxiliary pool after the current track is full. */
+    /**
+     * Appends random tracks so the auxiliary pool after the current track is full. Tracks already
+     * anywhere in the queue are avoided unless the library is too small.
+     */
     private fun refillAuxiliary() {
         val current = _playbackState.value
         val flags = current.auxiliaryFlags
@@ -2489,10 +2506,8 @@ class AudioEngine @Inject constructor(
         if (hasFullAuxiliaryPool(flags, current.queueIndex)) return
 
         val needed = AUXILIARY_QUEUE_LENGTH - flags.drop(current.queueIndex + 1).count { it }
-        val additions = drawAuxiliaryTracks(
-            upcomingTrackIds(current.queue, current.queueIndex),
-            needed
-        )
+        // Whole queue: played history, current track and upcoming entries.
+        val additions = drawAuxiliaryTracks(queueTrackIds(current.queue), needed)
         if (additions.isEmpty()) return
 
         _playbackState.value = current.copy(
