@@ -43,6 +43,11 @@
     <string name="home_settings_title">Home</string>
     <string name="home_settings_subtitle">Reorder and show or hide the Home page sections</string>
 
+    <string name="home_empty_title">Nothing to show</string>
+    <string name="home_empty_body">All Home sections are hidden. Re-enable the ones you want to see.</string>
+    <string name="home_empty_open_settings">Open Home settings</string>
+    <string name="home_empty_open_library">Open Library settings</string>
+
     <string name="library_folders">Library Folders</string>
     <string name="add_folder">Add Folder</string>
     <string name="add_provider">Add provider</string>

@@ -186,6 +186,16 @@ class HomeViewModel @Inject constructor(
     /** Library snapshot backing the random sections' grids. */
     private var libraryTracks: List<TrackEntity> = emptyList()
 
+    private val _libraryLoaded = MutableStateFlow(false)
+
+    /** True once the first library snapshot has arrived; Home's empty state waits for it. */
+    val libraryLoaded: StateFlow<Boolean> = _libraryLoaded.asStateFlow()
+
+    private val _libraryEmpty = MutableStateFlow(true)
+
+    /** True when the library holds no tracks at all. */
+    val libraryEmpty: StateFlow<Boolean> = _libraryEmpty.asStateFlow()
+
     private val _randomTracks = MutableStateFlow<List<TrackEntity>>(emptyList())
 
     /** The "Random tracks" grid: six random songs, repicked by [reshuffleRandomTracks]. */
@@ -226,6 +236,8 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             trackRepository.getAllTracks().collect { tracks ->
                 libraryTracks = tracks
+                _libraryEmpty.value = tracks.isEmpty()
+                _libraryLoaded.value = true
                 // First load seeds the grids; later library changes don't
                 // silently replace the items the user is looking at.
                 if (_randomTracks.value.isEmpty()) reshuffleRandomTracks()

@@ -43,6 +43,11 @@
     <string name="home_settings_title">Accueil</string>
     <string name="home_settings_subtitle">Réordonner et afficher ou masquer les sections de l\'Accueil</string>
 
+    <string name="home_empty_title">Rien à afficher</string>
+    <string name="home_empty_body">Toutes les sections de l\'Accueil sont masquées. Réactivez celles que vous voulez voir.</string>
+    <string name="home_empty_open_settings">Ouvrir les réglages de l\'Accueil</string>
+    <string name="home_empty_open_library">Ouvrir les réglages de la Bibliothèque</string>
+
     <string name="library_folders">Dossiers de la bibliothèque</string>
     <string name="add_folder">Ajouter un dossier</string>
     <string name="add_provider">Ajouter une source</string>

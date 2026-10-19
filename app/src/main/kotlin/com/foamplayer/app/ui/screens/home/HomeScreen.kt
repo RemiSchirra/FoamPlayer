@@ -4,19 +4,27 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -26,9 +34,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
@@ -59,6 +71,7 @@ import com.foamplayer.app.ui.modals.rememberPlaylistFoamModalState
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
 
@@ -138,6 +151,8 @@ fun HomeScreen(
     onSeeAllOldFavoriteAlbums: () -> Unit,
     onSeeAllRecentlyAddedAlbums: () -> Unit,
     onSeeAllRecentlyAddedArtists: () -> Unit,
+    onOpenHomeSettings: () -> Unit,
+    onOpenLibrarySettings: () -> Unit,
     sections: List<HomeSection>,
     playerViewModel: PlayerViewModel = hiltViewModel(),
     playlistsViewModel: PlaylistsViewModel = hiltViewModel(),
@@ -164,6 +179,26 @@ fun HomeScreen(
     val randomArtists by viewModel.randomArtists.collectAsState()
     val randomArtistCovers by viewModel.randomArtistCovers.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
+    val libraryLoaded by viewModel.libraryLoaded.collectAsState()
+    val libraryEmpty by viewModel.libraryEmpty.collectAsState()
+
+    // True when at least one enabled section would actually render a row.
+    val anyRowVisible = sections.any { section ->
+        when (section) {
+            HomeSection.RANDOM_TRACKS -> randomTracks.isNotEmpty()
+            HomeSection.RANDOM_ALBUMS -> randomAlbums.isNotEmpty()
+            HomeSection.RANDOM_ARTISTS -> randomArtists.isNotEmpty()
+            HomeSection.RECOMMENDED_PLAYLISTS -> playlists.isNotEmpty()
+            HomeSection.RECOMMENDED_ALBUMS -> albums.isNotEmpty()
+            HomeSection.RECENT_TRACKS -> recentTracks.isNotEmpty()
+            HomeSection.FAVORITE_TRACKS -> favoriteTracks.isNotEmpty()
+            HomeSection.OLD_FAVORITES -> oldFavoriteTracks.isNotEmpty()
+            HomeSection.OLD_FAVORITE_ALBUMS -> oldFavoriteAlbums.isNotEmpty()
+            HomeSection.FAVORITE_ARTISTS -> artists.isNotEmpty()
+            HomeSection.RECENTLY_ADDED_ALBUMS -> recentlyAddedAlbums.isNotEmpty()
+            HomeSection.RECENTLY_ADDED_ARTISTS -> recentlyAddedArtists.isNotEmpty()
+        }
+    }
 
     val trackModalState = LocalTrackFoamModalState.current
     val collectionModalState = LocalCollectionFoamModalState.current
@@ -206,30 +241,40 @@ fun HomeScreen(
         }
     }
 
+    // No row loaded or empty library
+    if (libraryLoaded && !anyRowVisible) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            HomeHeader(scanStatus = scanStatus)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = LocalBottomBarClearance.current),
+                contentAlignment = Alignment.Center
+            ) {
+                if (libraryEmpty) {
+                    HomeEmptyState(
+                        body = stringResource(R.string.no_audio_detected),
+                        buttonLabel = stringResource(R.string.home_empty_open_library),
+                        onButtonClick = onOpenLibrarySettings
+                    )
+                } else {
+                    HomeEmptyState(
+                        body = stringResource(R.string.home_empty_body),
+                        buttonLabel = stringResource(R.string.home_empty_open_settings),
+                        onButtonClick = onOpenHomeSettings
+                    )
+                }
+            }
+        }
+        return
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(HomeRowSpacing),
         contentPadding = PaddingValues(top = 16.dp, bottom = LocalBottomBarClearance.current)
     ) {
-        item(key = "home_header") {
-            Column(verticalArrangement = Arrangement.spacedBy(HomeHeaderGap)) {
-                Box(modifier = Modifier.padding(horizontal = 8.dp)) {
-                    ScreenTitle(
-                        icon = FoamTheme.icons.current.home,
-                        title = stringResource(R.string.home),
-                        actions = {
-                            if (scanStatus is ScanStatus.Scanning) {
-                                CircularProgressIndicator(
-                                    color = FoamTheme.accentColor,
-                                    strokeWidth = 3.dp,
-                                    modifier = Modifier.size(HomeScanSpinnerSize)
-                                )
-                            }
-                        }
-                    )
-                }
-            }
-        }
+        item(key = "home_header") { HomeHeader(scanStatus = scanStatus) }
 
         sections.forEach { section ->
             when (section) {
@@ -719,4 +764,71 @@ private fun LazyListScope.homeSectionItem(
     content: @Composable LazyItemScope.() -> Unit
 ) {
     if (visible) item(key = key, content = content)
+}
+
+/** The Home page's title row; shows the scan spinner while a scan is running. */
+@Composable
+private fun HomeHeader(scanStatus: ScanStatus) {
+    Column(verticalArrangement = Arrangement.spacedBy(HomeHeaderGap)) {
+        Box(modifier = Modifier.padding(horizontal = 8.dp)) {
+            ScreenTitle(
+                icon = FoamTheme.icons.current.home,
+                title = stringResource(R.string.home),
+                actions = {
+                    if (scanStatus is ScanStatus.Scanning) {
+                        CircularProgressIndicator(
+                            color = FoamTheme.accentColor,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(HomeScanSpinnerSize)
+                        )
+                    }
+                }
+            )
+        }
+    }
+}
+
+/** Placeholder shown centered on the Home page when no rows are displayed. */
+@Composable
+private fun HomeEmptyState(
+    body: String,
+    buttonLabel: String,
+    onButtonClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FoamDimens.paddingMedium),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        BasicText(
+            text = stringResource(R.string.home_empty_title),
+            style = FoamTheme.typography.titleMedium
+        )
+        Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
+        BasicText(
+            text = body,
+            style = FoamTheme.typography.caption.copy(textAlign = TextAlign.Center)
+        )
+        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                .background(FoamTheme.accentColor)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
+                    onClick = onButtonClick
+                )
+                .padding(horizontal = FoamDimens.spacingMedium, vertical = FoamDimens.spacingSmall)
+        ) {
+            BasicText(
+                text = buttonLabel,
+                style = FoamTheme.typography.caption.copy(
+                    color = FoamTheme.colors.background,
+                    fontWeight = FontWeight.Bold
+                )
+            )
+        }
+    }
 }

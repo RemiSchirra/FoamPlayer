@@ -1325,6 +1325,8 @@ fun FoamNavHost(
                                             onSeeAllOldFavoriteAlbums = { navController.navigate(Screen.HomeSeeAllOldFavoriteAlbums.route) },
                                             onSeeAllRecentlyAddedAlbums = { navController.navigate(Screen.HomeSeeAllRecentlyAddedAlbums.route) },
                                             onSeeAllRecentlyAddedArtists = { navController.navigate(Screen.HomeSeeAllRecentlyAddedArtists.route) },
+                                            onOpenHomeSettings = { navController.navigate(Screen.SettingsUIHome.route) },
+                                            onOpenLibrarySettings = { navController.navigate(Screen.SettingsLibrary.route) },
                                             sections = playerSettings.homeSections,
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
