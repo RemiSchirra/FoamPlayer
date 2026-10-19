@@ -145,9 +145,10 @@ private fun SubViewSelectorItem(
 internal fun SubViewSelectorRow(
     subViewMode: SubViewMode,
     repeatMode: RepeatMode,
+    isShuffle: Boolean,
     progress: () -> Float,
     onSelect: (SubViewMode) -> Unit,
-    onRadioClick: () -> Unit,
+    onShuffleClick: () -> Unit,
     onPlayOnClick: () -> Unit,
     onRepeatClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -165,10 +166,11 @@ internal fun SubViewSelectorRow(
         )
 
         SubViewSelectorAction(
-            icon = FoamTheme.icons.current.radio,
-            contentDescription = stringResource(R.string.action_radio),
+            icon = FoamTheme.icons.current.shuffle,
+            contentDescription = "Shuffle",
+            isDimmed = !isShuffle,
             progress = progress,
-            onClick = onRadioClick
+            onClick = onShuffleClick
         )
 
         SubViewSelectorAction(
@@ -199,7 +201,7 @@ internal fun SubViewSelectorRow(
 }
 
 /**
- * Non-selector action icons living between the lyrics/queue selectors (radio, "Play
+ * Non-selector action icons living between the lyrics/queue selectors (shuffle, radio, "Play
  * on", repeat). Same icon/touch sizing as SubViewSelectorItem, but they disappear
  * as the subview opens: [progress] -> 1 fades the icon out (draw-phase alpha) and
  * gates the click once invisible, so a hidden action is never tappable while the

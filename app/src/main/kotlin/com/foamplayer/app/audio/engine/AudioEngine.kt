@@ -156,6 +156,16 @@ class AudioEngine @Inject constructor(
 
     private var windowJumpJob: Job? = null
 
+    /**
+     * Queue shuffle bookkeeping. [preparedWrap] = (playing entry id, primary queue size, forward) once the
+     * repeat-all wrap landing slot was settled for this boundary visit; [postWrapLandingEntryId] = the
+     * entry the wrap lands on, whose arrival triggers the main-queue reshuffle ([trackLandedForQueueShuffle]).
+     */
+    private var preparedWrap: Triple<Long, Int, Boolean>? = null
+    private var postWrapLandingEntryId: Long? = null
+    private var postWrapLanded = false
+    private var postWrapRestPending = false
+
     /** Only the newest window jump may write the timeline. */
     private var windowJumpId: Long = 0L
 
@@ -369,6 +379,8 @@ class AudioEngine @Inject constructor(
             recomputeAudioOutputInfo()
             if (wasAuxiliary) scheduleAuxiliaryRefill()
 
+            trackLandedForQueueShuffle()
+
             onDisplayPlayerChangedListener?.invoke(displayPlayer ?: activePlayerField)
         }
 
@@ -383,12 +395,16 @@ class AudioEngine @Inject constructor(
 
             // Session modes toggled mid-fade would otherwise be lost.
             player.repeatMode = playerRepeatMode(_playbackState.value.repeatMode)
-            player.shuffleModeEnabled = _playbackState.value.isShuffle
+            // Queue shuffle is app-level (see prepareWrapLanding), never ExoPlayer's shuffle mode.
+            player.shuffleModeEnabled = false
             applyPauseAtEndOfMediaItems()
 
             activePlayerField.addListener(playerListener)
             _playbackState.value =
                 _playbackState.value.copy(isPlaybackRequested = player.playWhenReady)
+
+            // The new active timeline is committed: finish a repeat-all wrap's queue shuffle.
+            trackLandedForQueueShuffle()
 
             scope.launch { adjustWindow() }
         }
@@ -584,7 +600,7 @@ class AudioEngine @Inject constructor(
         )
 
         player.repeatMode = playerRepeatMode(repeatMode)
-        player.shuffleModeEnabled = isShuffle
+        player.shuffleModeEnabled = false
         applyPauseAtEndOfMediaItems()
 
         // The whole queue is loaded here; adjustWindow() trims it as playback proceeds.
@@ -682,6 +698,9 @@ class AudioEngine @Inject constructor(
             pendingWindowResync = false
             loadWindowAndPlay(currentQueue, index)
         }
+
+        // Landed after a repeat-all wrap with shuffle: the main queue changes order shortly (see below).
+        trackLandedForQueueShuffle()
 
         scope.launch { adjustWindow() }
 
@@ -1048,16 +1067,20 @@ class AudioEngine @Inject constructor(
     }
 
     private suspend fun saveSessionSnapshot(state: PlaybackState) {
-        val ids = ArrayList<Long>(state.queue.size)
-        val flags = ArrayList<Boolean>(state.queue.size)
-        // Auxiliary entries may precede the current track, so its saved index is counted among main entries only.
-        var persistedCurrentIndex = 0
-        state.queue.forEachIndexed { i, track ->
-            if (state.auxiliaryFlags.getOrNull(i) != true) {
-                if (i < state.queueIndex) persistedCurrentIndex++
-                ids.add(track.id)
-                flags.add(state.queueSourceFlags.getOrNull(i) == true)
+        // O(queue) walk: kept off the Main dispatcher (the snapshot is immutable).
+        val (ids, flags, persistedCurrentIndex) = withContext(Dispatchers.Default) {
+            val ids = ArrayList<Long>(state.queue.size)
+            val flags = ArrayList<Boolean>(state.queue.size)
+            // Auxiliary entries may precede the current track, so its saved index is counted among main entries only.
+            var persistedCurrentIndex = 0
+            state.queue.forEachIndexed { i, track ->
+                if (state.auxiliaryFlags.getOrNull(i) != true) {
+                    if (i < state.queueIndex) persistedCurrentIndex++
+                    ids.add(track.id)
+                    flags.add(state.queueSourceFlags.getOrNull(i) == true)
+                }
             }
+            Triple(ids, flags, persistedCurrentIndex)
         }
         if (ids.isEmpty()) return
         hasSessionSaved = true
@@ -1349,10 +1372,12 @@ class AudioEngine @Inject constructor(
                 tracks.subList(windowStart, windowEnd + 1).map { it.toMediaItem() }
             }
             if (jumpId != windowJumpId) return@launch
+            // Set BEFORE touching the player: ExoPlayer dispatches its listener callbacks
+            // synchronously inside setMediaItems, and they resolve queue indices through loadedRange.
+            loadedRange = windowStart..windowEnd
             player.setMediaItems(windowItems, centerIndex - windowStart, 0L)
             if (playAfterPrepare) player.play() else player.pause()
             player.prepare()
-            loadedRange = windowStart..windowEnd
         }
     }
 
@@ -1368,6 +1393,9 @@ class AudioEngine @Inject constructor(
 
             var start = loadedRange.first
             var end = loadedRange.last
+            // The queue can be reordered while a chunk is being built (queue shuffle); a chunk
+            // from the old order must not reach the timeline. A later transition re-adjusts.
+            fun queueChanged() = _playbackState.value.queue !== tracks
 
             if (end < tracks.lastIndex && end - currentIndex < EDGE_TRIGGER_MARGIN) {
                 val newEnd = (end + CHUNK_SIZE).coerceAtMost(tracks.lastIndex)
@@ -1375,8 +1403,10 @@ class AudioEngine @Inject constructor(
                     tracks.subList(end + 1, newEnd + 1).map { it.toMediaItem() }
                 }
                 awaitFrame()
+                if (queueChanged()) return@withLock
                 player.addMediaItems(chunk)
                 end = newEnd
+                loadedRange = start..end
             }
 
             if (start > 0 && currentIndex - start < EDGE_TRIGGER_MARGIN) {
@@ -1385,8 +1415,10 @@ class AudioEngine @Inject constructor(
                     tracks.subList(newStart, start).map { it.toMediaItem() }
                 }
                 awaitFrame()
+                if (queueChanged()) return@withLock
                 player.addMediaItems(0, chunk)
                 start = newStart
+                loadedRange = start..end
             }
 
             val overhang = WINDOW_RADIUS + CHUNK_SIZE
@@ -1394,15 +1426,19 @@ class AudioEngine @Inject constructor(
                 val newStart = currentIndex - WINDOW_RADIUS
                 val removeCount = newStart - start
                 awaitFrame()
+                if (queueChanged()) return@withLock
                 player.removeMediaItems(0, removeCount)
                 start = newStart
+                loadedRange = start..end
             }
             if (end - currentIndex > overhang) {
                 val newEnd = currentIndex + WINDOW_RADIUS
                 val keepCount = newEnd - start + 1
                 awaitFrame()
+                if (queueChanged()) return@withLock
                 player.removeMediaItems(keepCount, player.mediaItemCount)
                 end = newEnd
+                loadedRange = start..end
             }
 
             loadedRange = start..end
@@ -1459,6 +1495,9 @@ class AudioEngine @Inject constructor(
             state.queueIndex == primaryQueueFirstIndex(state) &&
             player.contentPosition <= 5000L
         ) {
+            // Repeat-all + shuffle: settle the wrap landing (the queue's last slot) first.
+            prepareWrapLanding(forward = false)
+            val state = _playbackState.value
             var target = primaryQueueLastIndex(state)
             while (target > state.queueIndex && state.queue[target].id in failedTrackIds) {
                 target--
@@ -1473,6 +1512,11 @@ class AudioEngine @Inject constructor(
                 return
             }
             // Sole primary track or all of them failed: fall through to the default behavior.
+        }
+        if (pendingWindowResync && state.queueIndex > 0 && player.contentPosition <= 5000L) {
+            // The loaded timeline no longer matches the queue: step along the queue itself.
+            loadWindowAndPlay(state.queue, state.queueIndex - 1)
+            return
         }
         if (player.hasPreviousMediaItem()) {
             if (player.contentPosition <= 5000L) {
@@ -1651,6 +1695,11 @@ class AudioEngine @Inject constructor(
                 return
             }
         }
+        if (pendingWindowResync && state.queueIndex + 1 in state.queue.indices) {
+            // The loaded timeline no longer matches the queue: step along the queue itself.
+            loadWindowAndPlay(state.queue, state.queueIndex + 1)
+            return
+        }
         if (player.hasNextMediaItem()) {
             val targetQueueIndex = player.nextMediaItemIndex + loadedRange.first
             // Safety net: a timeline next landing on the first auxiliary entry past
@@ -1698,11 +1747,17 @@ class AudioEngine @Inject constructor(
     private fun entryIndexOf(entryId: Long): Int =
         _playbackState.value.queueEntryIds.indexOf(entryId)
 
-    private fun candidateIndexesFor(trackId: Long): List<Int> =
-        _playbackState.value.queue
-            .withIndex()
-            .filter { (_, t) -> t.id == trackId }
-            .map { (i, _) -> i }
+    private fun candidateIndexesFor(trackId: Long): List<Int> {
+        val queue = _playbackState.value.queue
+        var result: ArrayList<Int>? = null
+        for (i in queue.indices) {
+            if (queue[i].id == trackId) {
+                if (result == null) result = ArrayList(2)
+                result.add(i)
+            }
+        }
+        return result ?: emptyList()
+    }
 
     /**
      * Manual pick from the queue screen. In repeat-all it just moves the playhead to the
@@ -2011,9 +2066,14 @@ class AudioEngine @Inject constructor(
         }
     }
 
+    /**
+     * Toggles queue shuffle. Only effective in repeat-all: wrapping past the end (next) or the
+     * start (previous) of the main queue reshuffles it (see [prepareWrapLanding]).
+     */
     fun toggleShuffle() {
         val newShuffle = !_playbackState.value.isShuffle
-        player.shuffleModeEnabled = newShuffle
+        player.shuffleModeEnabled = false
+        clearQueueShufflePending()
         _playbackState.value = _playbackState.value.copy(isShuffle = newShuffle)
     }
 
@@ -2027,6 +2087,7 @@ class AudioEngine @Inject constructor(
         player.repeatMode = playerRepeatMode(nextMode)
         // Repeat-one loops the item itself, so the pause-at-end signal must stay armed off.
         applyPauseAtEndOfMediaItems()
+        clearQueueShufflePending()
         _playbackState.value = _playbackState.value.copy(repeatMode = nextMode)
     }
 
@@ -2076,6 +2137,8 @@ class AudioEngine @Inject constructor(
      * window loader; the transition's listen bookkeeping fires from the player callback.
      */
     private fun wrapToQueueStart(useFade: Boolean = false) {
+        // Repeat-all + shuffle: settle the wrap landing (the queue's first slot) first.
+        prepareWrapLanding(forward = true)
         val state = _playbackState.value
         if (state.queue.isEmpty()) return
         crossfadeArmedForTrackId = null
@@ -2096,6 +2159,261 @@ class AudioEngine @Inject constructor(
             return
         }
         loadWindowAndPlay(state.queue, target)
+    }
+
+    /**
+     * Queue shuffle, step 1 (repeat-all + shuffle enabled only). When the playing track is on the
+     * last primary slot and the next move wraps forward (or on the first slot and it wraps
+     * backward), settles which entry the wrap lands on: a random other main entry is swapped into
+     * the landing slot (first slot going next, last slot going previous). The playing entry keeps
+     * its slot, so nothing visible moves, yet the pager's ghost page already shows the real
+     * upcoming track. Safe to call repeatedly; also called by the full player when a swipe starts
+     * ([prepareQueueShuffle]). The actual reshuffle follows once the pager rests ([trackLandedForQueueShuffle]).
+     */
+    private fun prepareWrapLanding(forward: Boolean) {
+        val state = _playbackState.value
+        if (!state.isShuffle || state.repeatMode != RepeatMode.ALL) return
+        if (pendingFadeWindowStart != null) return
+        val current = state.queueIndex
+        val queue = state.queue
+        if (current !in queue.indices) return
+
+        val first = primaryQueueFirstIndex(state)
+        val last = primaryQueueLastIndex(state)
+        if (last <= first) return
+        if (current != (if (forward) last else first)) return
+
+        val entryIds = state.queueEntryIds
+        val sourceFlags = state.queueSourceFlags
+        if (entryIds.size != queue.size || sourceFlags.size != queue.size) return
+        val mark = Triple(entryIds[current], last - first + 1, forward)
+        if (preparedWrap == mark) return
+
+        val flags = state.auxiliaryFlags
+        val from = pickRandomPrimarySlot(first, last, current, flags)
+        if (from < 0) return
+        preparedWrap = mark
+
+        val landingSlot = if (forward) first else last
+        postWrapLandingEntryId = entryIds[from]
+        if (from == landingSlot) return
+
+        val newQueue = queue.toMutableList()
+        val newEntryIds = entryIds.toMutableList()
+        val newSourceFlags = sourceFlags.toMutableList()
+        newQueue[landingSlot] = queue[from]
+        newQueue[from] = queue[landingSlot]
+        newEntryIds[landingSlot] = entryIds[from]
+        newEntryIds[from] = entryIds[landingSlot]
+        newSourceFlags[landingSlot] = sourceFlags[from]
+        newSourceFlags[from] = sourceFlags[landingSlot]
+        _playbackState.value = state.copy(
+            queue = newQueue,
+            queueEntryIds = newEntryIds,
+            queueSourceFlags = newSourceFlags
+        )
+        patchTimelineAroundCurrent(newQueue, current)
+    }
+
+    /**
+     * Random primary slot in [first]..[last] other than [exclude] and not auxiliary, or -1.
+     * Rejection sampling keeps this O(1) on long queues (no boxed candidate list); the
+     * exhaustive reservoir scan only runs for tiny or auxiliary-heavy ranges.
+     */
+    private fun pickRandomPrimarySlot(first: Int, last: Int, exclude: Int, flags: List<Boolean>): Int {
+        val span = last - first + 1
+        if (span <= 0) return -1
+        repeat(16) {
+            val i = first + Random.nextInt(span)
+            if (i != exclude && flags.getOrNull(i) != true) return i
+        }
+        var seen = 0
+        var pick = -1
+        for (i in first..last) {
+            if (i == exclude || flags.getOrNull(i) == true) continue
+            seen++
+            if (Random.nextInt(seen) == 0) pick = i
+        }
+        return pick
+    }
+
+    /** Full player hook: a swipe started, so the wrap landing is settled before its ghost page is revealed. */
+    fun prepareQueueShuffle() {
+        val state = _playbackState.value
+        val last = primaryQueueLastIndex(state)
+        val first = primaryQueueFirstIndex(state)
+        when (state.queueIndex) {
+            last -> prepareWrapLanding(forward = true)
+            first -> prepareWrapLanding(forward = false)
+        }
+    }
+
+    private fun clearQueueShufflePending() {
+        preparedWrap = null
+        postWrapLandingEntryId = null
+        postWrapLanded = false
+        postWrapRestPending = false
+    }
+
+    /**
+     * Called whenever a track becomes current (natural transition, window load, crossfade switch
+     * and swap). Marks the wrap landing as reached; the reshuffle itself waits for the full
+     * player's hero pager to come to rest ([onHeroPagerRested]), because reordering earlier would
+     * change the outgoing page while it is still sliding away. If the user moves on before that
+     * (or the full player isn't showing), the shuffle is applied here instead, keeping both the
+     * left and the new track in place.
+     */
+    private fun trackLandedForQueueShuffle() {
+        resolveLandedForQueueShuffle()
+        settleBoundaryLandingEarly()
+    }
+
+    /**
+     * Settles the wrap landing as soon as the playing track sits on a primary boundary slot,
+     * instead of waiting for the next swipe to start. The pager's ghost page (and its artwork /
+     * palette prefetch) then already targets the real landing track while the user is still
+     * listening, so the art is loaded before the swipe reveals it. Skipped while a wrap's own
+     * reshuffle is pending, so it can't overwrite that landing entry.
+     */
+    private fun settleBoundaryLandingEarly() {
+        if (postWrapLandingEntryId != null) return
+        prepareQueueShuffle()
+    }
+
+    private fun resolveLandedForQueueShuffle() {
+        val landing = postWrapLandingEntryId ?: return
+        val state = _playbackState.value
+        val entry = state.queueEntryIds.getOrNull(state.queueIndex)
+        if (entry == landing) {
+            postWrapLanded = true
+            applyShuffleIfPagerRested()
+            return
+        }
+        if (postWrapLanded && entry != null) applyPostWrapShuffle(setOf(landing, entry))
+        clearQueueShufflePending()
+    }
+
+    /** Full player hook: the hero pager rests on the playing page, so no outgoing page is left to disturb. */
+    fun onHeroPagerRested() {
+        val landing = postWrapLandingEntryId ?: return
+        if (!postWrapLanded) return
+        val state = _playbackState.value
+        if (state.queueEntryIds.getOrNull(state.queueIndex) != landing) return
+        postWrapRestPending = true
+        applyShuffleIfPagerRested()
+    }
+
+    private fun applyShuffleIfPagerRested() {
+        val landing = postWrapLandingEntryId ?: return
+        if (!postWrapLanded || !postWrapRestPending) return
+        // A crossfade still owns the timeline; the swap hook comes back here.
+        if (pendingFadeWindowStart != null) return
+        applyPostWrapShuffle(setOf(landing))
+        clearQueueShufflePending()
+        // The track we rest on may itself be a boundary slot (e.g. just wrapped onto slot 0).
+        settleBoundaryLandingEarly()
+    }
+
+    /**
+     * Queue shuffle, step 2: after a repeat-all wrap the main queue changes order. Entries in
+     * [pinned] (the track now playing, and possibly the one just left) keep their slots; every
+     * other main entry is shuffled among the primary slots. The auxiliary queue is never touched.
+     */
+    private fun applyPostWrapShuffle(pinned: Set<Long>) {
+        val state = _playbackState.value
+        if (pendingFadeWindowStart != null) return
+        if (!state.isShuffle || state.repeatMode != RepeatMode.ALL) return
+        val current = state.queueIndex
+        val queue = state.queue
+        val entryIds = state.queueEntryIds
+        val sourceFlags = state.queueSourceFlags
+        if (current !in queue.indices) return
+        if (entryIds.size != queue.size || sourceFlags.size != queue.size) return
+
+        val first = primaryQueueFirstIndex(state)
+        val last = primaryQueueLastIndex(state)
+        val flags = state.auxiliaryFlags
+        // Primitive arrays: boxed List<Int> filter/shuffle was the main cost on queues of
+        // thousands of tracks, and this runs on the Main dispatcher.
+        val slotBuffer = IntArray((last - first + 1).coerceAtLeast(0))
+        var slotCount = 0
+        for (i in first..last) {
+            if (i != current && flags.getOrNull(i) != true && entryIds[i] !in pinned) {
+                slotBuffer[slotCount++] = i
+            }
+        }
+        if (slotCount < 2) return
+        val slots = slotBuffer.copyOf(slotCount)
+        val order = slots.copyOf()
+        for (i in slotCount - 1 downTo 1) {
+            val j = Random.nextInt(i + 1)
+            val tmp = order[i]; order[i] = order[j]; order[j] = tmp
+        }
+        if (order.contentEquals(slots)) {
+            val tmp = order[0]; order[0] = order[1]; order[1] = tmp
+        }
+
+        val newQueue = queue.toMutableList()
+        val newEntryIds = entryIds.toMutableList()
+        val newSourceFlags = sourceFlags.toMutableList()
+        for (i in 0 until slotCount) {
+            val from = order[i]
+            val to = slots[i]
+            newQueue[to] = queue[from]
+            newEntryIds[to] = entryIds[from]
+            newSourceFlags[to] = sourceFlags[from]
+        }
+        _playbackState.value = state.copy(
+            queue = newQueue,
+            queueEntryIds = newEntryIds,
+            queueSourceFlags = newSourceFlags
+        )
+        patchTimelineAroundCurrent(newQueue, current)
+    }
+
+    /**
+     * Rewrites every loaded media item except the playing one from [newQueue], without
+     * interrupting playback. Falls back to a lazy window rebuild when the timeline can't be
+     * trusted (the player is not on [currentIndex]).
+     */
+    private fun patchTimelineAroundCurrent(newQueue: List<TrackEntity>, currentIndex: Int) {
+        if (pendingWindowResync || loadedRange == IntRange.EMPTY) return
+        val currentPlayerIndex = currentIndex - loadedRange.first
+        if (currentPlayerIndex !in 0 until player.mediaItemCount ||
+            player.currentMediaItemIndex != currentPlayerIndex
+        ) {
+            windowJumpId++
+            windowJumpJob?.cancel()
+            pendingWindowResync = true
+            return
+        }
+        val start = loadedRange.first
+        val end = loadedRange.last.coerceAtMost(newQueue.lastIndex)
+        // Each side is swapped with a single atomic replace: the playing item never leaves the
+        // timeline, so listeners (MediaSession) never observe an index outside it.
+        val afterCount = player.mediaItemCount - (currentPlayerIndex + 1)
+        if (afterCount > 0 && currentIndex + 1 <= end &&
+            end - currentIndex == afterCount
+        ) {
+            player.replaceMediaItems(
+                currentPlayerIndex + 1,
+                player.mediaItemCount,
+                newQueue.subList(currentIndex + 1, end + 1).map { it.toMediaItem() }
+            )
+        } else if (afterCount > 0) {
+            windowJumpId++
+            windowJumpJob?.cancel()
+            pendingWindowResync = true
+            return
+        }
+        if (currentPlayerIndex > 0) {
+            player.replaceMediaItems(
+                0,
+                currentPlayerIndex,
+                newQueue.subList(start, currentIndex).map { it.toMediaItem() }
+            )
+        }
+        loadedRange = start..end
     }
 
     /**
@@ -2195,6 +2513,7 @@ class AudioEngine @Inject constructor(
         if (silenceBetweenTracksMs > 0L) return
         if (fadeEngine.isFading) return
         if (!fadeEngine.normalFadeEnabled) return
+        prepareWrapLanding(forward = true)
         val state = _playbackState.value
         if (state.repeatMode == RepeatMode.ONE) return
 
@@ -2253,6 +2572,7 @@ class AudioEngine @Inject constructor(
         if (silenceCountdownJob != null) return
         if (fadeEngine.isFading) return
 
+        prepareWrapLanding(forward = true)
         val state = _playbackState.value
         if (state.repeatMode == RepeatMode.ONE) return
 
@@ -2461,7 +2781,7 @@ class AudioEngine @Inject constructor(
                 if (audible) {
                     awaitFrame()
                 } else {
-                    delay(PAUSED_POLL_INTERVAL_MS)
+                    delay(PAUSED_POLL_INTERVAL_MS.milliseconds)
                 }
             }
         }

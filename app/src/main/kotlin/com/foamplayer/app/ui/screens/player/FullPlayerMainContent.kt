@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
+import coil.imageLoader
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -354,6 +355,21 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 EaseInCubic.transform(rawHeader)
             }
             (outerFraction * (1f - headerFraction)).coerceIn(0f, 1f)
+        }
+    }
+
+    val prefetchContext = LocalContext.current
+    LaunchedEffect(pagerState, queue) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            for (p in (page - 2)..(page + 2)) {
+                val path = queue.getOrNull(p)?.albumArtPath ?: continue
+                prefetchContext.imageLoader.enqueue(
+                    ImageRequest.Builder(prefetchContext)
+                        .data(EmbeddedAlbumArt(path.toUri()))
+                        .size(AlbumArtRequestSize)
+                        .build()
+                )
+            }
         }
     }
 

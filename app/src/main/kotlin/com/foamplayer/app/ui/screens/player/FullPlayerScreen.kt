@@ -20,6 +20,7 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -575,13 +576,23 @@ fun FullPlayerScreen(
     // to the pager's window extracted in the process-wide cache, so a track-change
     // morph has both envelopes ready the moment a swipe starts or a transport button
     // is pressed -- the same window the palette prefetch above keeps hot.
-    LaunchedEffect(pagerState, isWaveformSeek) {
+    // Keyed on `queue` as well: the engine reorders upcoming slots (queue shuffle, wrap landing
+    // settled a few tracks ahead of the seam), which changes the neighbours without any page
+    // change, and their envelopes were then only requested once the swipe was already under way
+    // (flat bars). Requested in priority order -- playing page, the likely next one, then the
+    // previous and the pages beyond -- so extraction of the track about to be shown starts first.
+    LaunchedEffect(pagerState, isWaveformSeek, queue) {
         if (!isWaveformSeek) return@LaunchedEffect
         snapshotFlow { pagerState.currentPage }
             .collect { currentPage ->
-                listOf(currentPage - 1, currentPage, currentPage + 1)
-                    .mapNotNull { page -> latestQueue.value.getOrNull(page) }
-                    .forEach { WaveformCache.ensure(context, it.path, it.duration) }
+                val pages = intArrayOf(
+                    currentPage, currentPage + 1, currentPage - 1, currentPage + 2, currentPage - 2
+                )
+                val seen = HashSet<String>()
+                for (page in pages) {
+                    val t = queue.getOrNull(page) ?: continue
+                    if (seen.add(t.path)) WaveformCache.ensure(context, t.path, t.duration)
+                }
             }
     }
 
@@ -779,6 +790,25 @@ fun FullPlayerScreen(
                     seekBarProgress.revertTrackChangeEnvelope()
                 }
             }
+    }
+
+    // Queue shuffle: a swipe starting at the main queue's start or end settles the wrap landing first,
+    // so the ghost page being revealed already shows the track that will really play next.
+    LaunchedEffect(pagerState) {
+        pagerState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start) viewModel.prepareQueueShuffle()
+        }
+    }
+
+    // Queue shuffle, step 2: once the pager rests on the real playing page (after a wrap's slide and
+    // ghost hop), the engine may reorder the queue without changing any page still on screen.
+    LaunchedEffect(pagerState) {
+        snapshotFlow {
+            !backdropRenumberHold &&
+                    !pagerState.isScrollInProgress &&
+                    !latestHeroModel.value.isGhostPage(pagerState.currentPage) &&
+                    pagerState.currentPage == latestQueueIndex.value
+        }.collect { rested -> if (rested) viewModel.onHeroPagerRested() }
     }
 
     // Idle hop: a pager that has really stopped on a repeat-all ghost page is moved silently
@@ -1135,6 +1165,7 @@ fun FullPlayerScreen(
                     SubViewSelectorRow(
                         subViewMode = subViewMode,
                         repeatMode = state.repeatMode,
+                        isShuffle = state.isShuffle,
                         progress = subControlsProgress,
                         onSelect = { mode ->
                             if (upTransitionState.targetState) {
@@ -1148,14 +1179,14 @@ fun FullPlayerScreen(
                                 gestureController.expandToSubView()
                             }
                         },
-                        onRadioClick = { onOpenRadio(track) },
+                        onShuffleClick = { viewModel.toggleShuffle() },
                         onPlayOnClick = { showPlayOnModal = true },
                         onRepeatClick = { viewModel.toggleRepeat() },
                         modifier = selectorRowModifier
                     )
 
                     // Compose the transport cluster only while it is (becoming) visible. At rest it
-                    // is alpha 0 but still sits on top of the radio / Play on / repeat buttons
+                    // is alpha 0 but still sits on top of the shuffle / radio / Play on / repeat buttons
                     // (same Box, composed later, ~162dp wide centered), and its disabled
                     // clickables still take part in hit-testing, swallowing taps meant for them.
                     val showTransportCluster by remember(subControlsProgress) {

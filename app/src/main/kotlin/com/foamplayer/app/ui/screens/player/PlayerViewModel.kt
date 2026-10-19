@@ -259,6 +259,15 @@ class PlayerViewModel @Inject constructor(
 
     fun seekTo(positionMs: Long) = audioEngine.seekTo(positionMs)
     fun toggleShuffle() = audioEngine.toggleShuffle()
+
+    /**
+     * Called when a hero-pager swipe starts: at the main queue's start/end (repeat-all + shuffle)
+     * settles the wrap landing so the revealed ghost page shows the track that will really play.
+     */
+    fun prepareQueueShuffle() = audioEngine.prepareQueueShuffle()
+
+    /** The full player's hero pager came to rest on the playing page: queue shuffle may reorder now. */
+    fun onHeroPagerRested() = audioEngine.onHeroPagerRested()
     fun toggleRepeat() = audioEngine.toggleRepeat()
 
     // Track details modal: the queue entities held in PlaybackState are snapshots and go

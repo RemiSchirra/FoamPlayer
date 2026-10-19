@@ -46,7 +46,7 @@ data class FoamIconSet(
     val shuffle: ImageVector,
     val misc: ImageVector,
     val ui: ImageVector,
-    val info: ImageVector
+    val info: ImageVector,
 )
 
 /** The three icon styles and which one is active. */
