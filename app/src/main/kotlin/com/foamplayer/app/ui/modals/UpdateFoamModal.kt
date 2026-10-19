@@ -58,14 +58,9 @@ fun UpdateFoamModal(
                 text = stringResource(R.string.update_available_title),
                 style = FoamTheme.typography.titleLarge
             )
-            Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
-            BasicText(
-                text = stringResource(R.string.update_available_version, release.version),
-                style = FoamTheme.typography.titleMedium
-            )
-            release.name?.takeIf { it.isNotBlank() }?.let { title ->
+            release.name?.takeIf { it.isNotBlank() }?.let { name ->
                 Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
-                BasicText(text = title, style = FoamTheme.typography.body)
+                BasicText(text = name, style = FoamTheme.typography.titleMedium)
             }
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
             Box(

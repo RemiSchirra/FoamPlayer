@@ -421,7 +421,6 @@
     <string name="notif_update_preparing">Preparing download…</string>
     <string name="notif_update_progress">%1$d%%</string>
     <string name="update_available_title">New update available</string>
-    <string name="update_available_version">Version %1$s</string>
     <string name="update_install_ready_title">Install update</string>
     <string name="update_install_ready_text">The update has been downloaded. Install it now?</string>
     <string name="update_install_later">Later</string>

@@ -450,13 +450,10 @@ private fun ReleaseNotesModal(
         if (release == null) return@FoamBottomModal
         Column(modifier = Modifier.fillMaxWidth()) {
             BasicText(
-                text = stringResource(R.string.about_release_notes_title, release.version),
+                text = release.name?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.about_release_notes_title, release.version),
                 style = FoamTheme.typography.titleLarge
             )
-            release.name?.takeIf { it.isNotBlank() }?.let { title ->
-                Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
-                BasicText(text = title, style = FoamTheme.typography.body)
-            }
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
             Box(
                 modifier = Modifier
