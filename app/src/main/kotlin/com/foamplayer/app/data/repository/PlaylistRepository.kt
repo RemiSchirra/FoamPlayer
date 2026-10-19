@@ -9,6 +9,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.data.scanner.PlaylistCoverProvider
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,6 +43,15 @@ class PlaylistRepository @Inject constructor(
     /** Live ids of the playlists that contain a track; pre-checks their rows in the add-to-playlist picker. */
     fun playlistIdsContainingTrack(trackId: Long): Flow<Set<Long>> =
         playlistDao.playlistIdsContainingTrack(trackId).map { it.toSet() }
+
+    /**
+     * Live ids of the playlists that contain EVERY track of [trackIds]
+     * (empty list → no playlists); pre-checks their rows in the picker when
+     * whole collections are added.
+     */
+    fun playlistIdsContainingAllTracks(trackIds: List<Long>): Flow<Set<Long>> =
+        if (trackIds.isEmpty()) flowOf(emptySet())
+        else playlistDao.playlistIdsContainingAllTracks(trackIds, trackIds.size).map { it.toSet() }
 
     /** Creates a playlist and returns its id. */
     suspend fun createPlaylist(name: String, imageUrl: String? = null): Long =
@@ -109,6 +119,35 @@ class PlaylistRepository @Inject constructor(
     /** Appends a track at the end of a playlist's current order. */
     suspend fun appendTrackToPlaylist(playlistId: Long, trackId: Long) {
         addTrackToPlaylist(playlistId, trackId, playlistDao.nextOrderIndex(playlistId))
+    }
+
+    /**
+     * Adds several tracks to a playlist at [position]'s slot, keeping the
+     * list order: start inserts them reversed at index 0 (each insert pushes
+     * the previous ones down, so the original order survives), end appends
+     * them in order, random drops each at its own uniform slot. Tracks the
+     * playlist already contains are skipped — whole-collection adds must not
+     * duplicate the memberships the playlist happens to have already.
+     */
+    suspend fun addTracksToPlaylist(playlistId: Long, trackIds: List<Long>, position: PlaylistInsertPosition) {
+        val existing = playlistDao.getTrackIdsForPlaylistOnce(playlistId).toSet()
+        val missing = trackIds.filterNot { it in existing }
+        when (position) {
+            PlaylistInsertPosition.START ->
+                missing.asReversed().forEach { trackId ->
+                    playlistDao.insertTrackAtIndex(playlistId, trackId, 0)
+                }
+            PlaylistInsertPosition.END ->
+                missing.forEach { trackId -> appendTrackToPlaylist(playlistId, trackId) }
+            PlaylistInsertPosition.RANDOM ->
+                missing.forEach { trackId -> addTrackToPlaylist(playlistId, trackId, position) }
+        }
+    }
+
+    suspend fun removeTracksFromPlaylist(playlistId: Long, trackIds: List<Long>) {
+        trackIds.forEach { trackId ->
+            playlistDao.removeTrackFromPlaylist(playlistId, trackId)
+        }
     }
 
     suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {

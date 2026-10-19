@@ -300,6 +300,27 @@ class PlaylistsViewModel @Inject constructor(
         if (trackId == null) flowOf(emptySet())
         else playlistRepository.playlistIdsContainingTrack(trackId)
 
+    /**
+     * Live ids of the playlists that contain EVERY track of [trackIds];
+     * drives the picker's checkboxes when a whole collection is added.
+     */
+    fun playlistIdsContainingAllTracks(trackIds: List<Long>): Flow<Set<Long>> =
+        playlistRepository.playlistIdsContainingAllTracks(trackIds)
+
+    /** Adds a whole list of tracks (a collection) to a playlist, skipping ones it already has. */
+    fun addTracksToPlaylist(playlistId: Long, trackIds: List<Long>) {
+        viewModelScope.launch {
+            playlistRepository.addTracksToPlaylist(playlistId, trackIds, _addTrackInsertPosition.value)
+        }
+    }
+
+    /** Removes a whole list of tracks from a playlist (unchecking a row in a batch add). */
+    fun removeTracksFromPlaylist(playlistId: Long, trackIds: List<Long>) {
+        viewModelScope.launch {
+            playlistRepository.removeTracksFromPlaylist(playlistId, trackIds)
+        }
+    }
+
     fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {
         viewModelScope.launch {
             playlistRepository.removeTrackFromPlaylist(playlistId, trackId)

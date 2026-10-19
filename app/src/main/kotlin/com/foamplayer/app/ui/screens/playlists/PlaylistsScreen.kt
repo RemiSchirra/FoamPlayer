@@ -105,6 +105,7 @@ import com.foamplayer.app.ui.modals.MissingSongsUiState
 import com.foamplayer.app.ui.modals.OrganisationExtraAction
 import com.foamplayer.app.ui.modals.PlaylistFoamModal
 import com.foamplayer.app.ui.modals.PlaylistModalStats
+import com.foamplayer.app.ui.modals.LocalOpenPlaylistPickerForPlaylist
 import com.foamplayer.app.ui.modals.RenamePlaylistModal
 import com.foamplayer.app.ui.modals.RepairPlaylistsResultModal
 import com.foamplayer.app.ui.modals.rememberPlaylistFoamModalState
@@ -214,6 +215,7 @@ fun PlaylistsScreen(
     }
 
     val playlistModalState = rememberPlaylistFoamModalState()
+    val openPlaylistPicker = LocalOpenPlaylistPickerForPlaylist.current
     var renameTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
     var deleteConfirmTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
 
@@ -496,6 +498,9 @@ fun PlaylistsScreen(
             longPressScope.launch {
                 playerViewModel.addToQueue(viewModel.playlistTracks(playlist.playlistId))
             }
+        },
+        onAddToPlaylist = { playlist ->
+            openPlaylistPicker(playlist)
         },
         stats = modalStats,
         cover = playlistModalState.playlist?.let { playlistCovers[it.playlistId] },

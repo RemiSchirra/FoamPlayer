@@ -369,6 +369,12 @@ val LocalTrackFoamModalState = staticCompositionLocalOf<TrackFoamModalState?> { 
  * is expected to stay live, so a toggle is reflected as soon as it persists.
  * [onToggle] reports a row's new checked state.
  *
+ * Whole collections (an album/playlist/etc. added at once from the collection
+ * modal's "Add to Playlist" row) come through [collection] +
+ * [collectionTracks] instead: the header shows the collection's name, a
+ * playlist's checkbox is checked only when it already contains EVERY track of
+ * the list, and toggling applies to the whole list at once.
+ *
  * The header's trailing buttons sit on the title's row, aligned right:
  * - `+` opens [NewPlaylistDialog], a small name-only creation dialog.
  * - The sort button opens [InsertPositionDialog] to choose where toggled
@@ -389,7 +395,9 @@ fun PlaylistPickerModal(
     onInsertPositionChange: (PlaylistInsertPosition) -> Unit,
     onCreatePlaylist: (String) -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    collection: CollectionInfo? = null,
+    collectionTracks: List<TrackEntity> = emptyList()
 ) {
     // Same exit-animation preservation as TrackFoamModal: keep rendering the
     // track while the sheet slides away after a pick or dismissal.
@@ -399,18 +407,26 @@ fun PlaylistPickerModal(
     }
     val displayTrack = track ?: lastShownTrack
 
+    // Batch (whole-collection) adds keep their header alive the same way.
+    var lastShownCollection by remember { mutableStateOf<CollectionInfo?>(null) }
+    SideEffect {
+        if (collection != null) lastShownCollection = collection
+    }
+    val displayCollection = collection ?: lastShownCollection
+    val headerTrack = displayTrack ?: displayCollection?.tracks?.firstOrNull()
+
     var showCreateDialog by remember { mutableStateOf(false) }
     var showInsertPositionDialog by remember { mutableStateOf(false) }
 
     FoamBottomModal(
-        visible = track != null,
+        visible = track != null || collection != null,
         onDismissRequest = onDismiss,
         // The name dialog stacked on this sheet owns the soft keyboard; if this
         // sheet padded for the IME it would ride up in lock-step with typing.
         liftAboveKeyboard = false,
         modifier = modifier
     ) {
-        if (displayTrack != null) {
+        if (headerTrack != null) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
             ) {
@@ -442,6 +458,15 @@ fun PlaylistPickerModal(
                         icon = Icons.Rounded.Add,
                         contentDescription = stringResource(R.string.create_playlist_title),
                         onClick = { showCreateDialog = true }
+                    )
+                }
+
+                // Whole-collection add: name the collection under the title.
+                if (displayCollection != null) {
+                    BasicText(
+                        text = displayCollection.title,
+                        style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
+                        modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
                     )
                 }
 

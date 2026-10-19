@@ -90,7 +90,10 @@ import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.ui.modals.CollectionFoamModal
 import com.foamplayer.app.ui.components.CollectionId
+import com.foamplayer.app.ui.modals.CollectionInfo
+import com.foamplayer.app.ui.modals.CollectionKind
 import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
+import com.foamplayer.app.ui.modals.LocalOpenPlaylistPickerForPlaylist
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.MiniPlayer
@@ -478,6 +481,13 @@ fun FoamNavHost(
     val trackModalState = rememberTrackFoamModalState()
     var playlistPickerTrack by remember { mutableStateOf<TrackEntity?>(null) }
 
+    var pickerBatchCollection by remember { mutableStateOf<CollectionInfo?>(null) }
+    var pickerBatchTracks by remember { mutableStateOf<List<TrackEntity>?>(null) }
+
+    // In playlist -> add to playlist, the source playlist itself is hidden from the
+    // picker.
+    var pickerExcludedPlaylistId by remember { mutableStateOf<Long?>(null) }
+
     // Lyrics details sheet: a separate Dialog stacked on the open track sheet.
     var lyricsModalTrack by remember { mutableStateOf<TrackEntity?>(null) }
     var lastLyricsModalTrack by remember { mutableStateOf<TrackEntity?>(null) }
@@ -496,6 +506,11 @@ fun FoamNavHost(
     val pickerTrackId = playlistPickerTrack?.id ?: trackModalState.track?.id
     val playlistIdsWithTrack by remember(pickerTrackId) {
         playlistsViewModel.playlistIdsContainingTrack(pickerTrackId)
+    }.collectAsState(initial = emptySet())
+
+    val batchTrackIds = pickerBatchTracks?.map { it.id } ?: emptyList()
+    val playlistIdsWithBatch by remember(batchTrackIds) {
+        playlistsViewModel.playlistIdsContainingAllTracks(batchTrackIds)
     }.collectAsState(initial = emptySet())
 
     val collectionModalState = rememberCollectionFoamModalState()
@@ -832,6 +847,22 @@ fun FoamNavHost(
         CompositionLocalProvider(
             LocalTrackFoamModalState provides trackModalState,
             LocalCollectionFoamModalState provides collectionModalState,
+            LocalOpenPlaylistPickerForPlaylist provides { source ->
+                pickerExcludedPlaylistId = source.playlistId
+                scope.launch {
+                    val tracks = playlistsViewModel.playlistTracks(source.playlistId)
+                    if (tracks.isEmpty()) return@launch
+                    pickerBatchCollection = CollectionInfo(
+                        title = source.name,
+                        subtitle = null,
+                        imageUrl = null,
+                        imageIsEmbeddedArt = false,
+                        kind = CollectionKind.Playlist,
+                        tracks = tracks
+                    )
+                    pickerBatchTracks = tracks
+                }
+            },
             LocalBottomBarClearance provides bottomBarClearance,
             LocalCollectionHeroLayoutLookup provides heroLayoutFor,
             LocalActiveSharedCollection provides activeSharedCollection,
@@ -2474,22 +2505,44 @@ fun FoamNavHost(
 
             PlaylistPickerModal(
                 track = playlistPickerTrack,
-                playlists = playlists,
+                playlists = pickerExcludedPlaylistId
+                    ?.let { excluded -> playlists.filterNot { it.playlistId == excluded } }
+                    ?: playlists,
                 playlistCovers = playlistCovers,
-                playlistIdsWithTrack = playlistIdsWithTrack,
+                playlistIdsWithTrack = if (pickerBatchCollection != null) {
+                    playlistIdsWithBatch
+                } else {
+                    playlistIdsWithTrack
+                },
                 insertPosition = addTrackInsertPosition,
                 onToggle = { playlist, checked ->
-                    playlistPickerTrack?.let { track ->
+                    val batchTrackList = pickerBatchTracks
+                    if (pickerBatchCollection != null && batchTrackList != null) {
                         if (checked) {
-                            playlistsViewModel.addTrackToPlaylist(playlist.playlistId, track.id)
+                            playlistsViewModel.addTracksToPlaylist(playlist.playlistId, batchTrackList.map { it.id })
                         } else {
-                            playlistsViewModel.removeTrackFromPlaylist(playlist.playlistId, track.id)
+                            playlistsViewModel.removeTracksFromPlaylist(playlist.playlistId, batchTrackList.map { it.id })
+                        }
+                    } else {
+                        playlistPickerTrack?.let { track ->
+                            if (checked) {
+                                playlistsViewModel.addTrackToPlaylist(playlist.playlistId, track.id)
+                            } else {
+                                playlistsViewModel.removeTrackFromPlaylist(playlist.playlistId, track.id)
+                            }
                         }
                     }
                 },
                 onInsertPositionChange = playlistsViewModel::setAddTrackInsertPosition,
                 onCreatePlaylist = { name -> playlistsViewModel.createPlaylist(name) },
-                onDismiss = { playlistPickerTrack = null }
+                onDismiss = {
+                    playlistPickerTrack = null
+                    pickerBatchCollection = null
+                    pickerBatchTracks = null
+                    pickerExcludedPlaylistId = null
+                },
+                collection = pickerBatchCollection,
+                collectionTracks = pickerBatchTracks ?: emptyList()
             )
 
             TrackRadioModal(
@@ -2531,6 +2584,13 @@ fun FoamNavHost(
                 state = collectionModalState,
                 onPlayNext = { collection -> playerViewModel.playNext(collection.tracks) },
                 onAddToQueue = { collection -> playerViewModel.addToQueue(collection.tracks) },
+                onAddToPlaylist = { collection ->
+                    // Nothing to add for a track-less collection
+                    if (collection.tracks.isNotEmpty()) {
+                        pickerBatchCollection = collection
+                        pickerBatchTracks = collection.tracks
+                    }
+                },
                 onSeeArtist = { artist ->
                     activeSharedCollection = sharedCollectionTag("artist", artist)
                     navController.navigate(Screen.ArtistDetail.createRoute(artist))

@@ -52,6 +52,7 @@ import com.foamplayer.app.ui.modals.DeletePlaylistConfirmModal
 import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.modals.PlaylistFoamModal
+import com.foamplayer.app.ui.modals.LocalOpenPlaylistPickerForPlaylist
 import com.foamplayer.app.ui.modals.PlaylistModalStats
 import com.foamplayer.app.ui.modals.RenamePlaylistModal
 import com.foamplayer.app.ui.modals.rememberPlaylistFoamModalState
@@ -175,6 +176,7 @@ fun HomeScreen(
     // Long-press actions for playlist cards: the playlist actions modal,
     // hosted here with the same edit/rename/delete wiring as PlaylistsScreen.
     val playlistModalState = rememberPlaylistFoamModalState()
+    val openPlaylistPicker = LocalOpenPlaylistPickerForPlaylist.current
     var renameTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
     var deleteConfirmTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
 
@@ -671,6 +673,9 @@ fun HomeScreen(
             longPressScope.launch {
                 playerViewModel.addToQueue(playlistsViewModel.playlistTracks(playlist.playlistId))
             }
+        },
+        onAddToPlaylist = { playlist ->
+            openPlaylistPicker(playlist)
         },
         stats = modalStats,
         cover = playlistModalState.playlist?.let { playlistCovers[it.playlistId] },

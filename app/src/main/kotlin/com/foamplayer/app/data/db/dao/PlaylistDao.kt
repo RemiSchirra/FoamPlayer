@@ -139,6 +139,19 @@ interface PlaylistDao {
     fun playlistIdsContainingTrack(trackId: Long): Flow<List<Long>>
 
     /**
+     * Ids of the playlists that contain EVERY one of [trackIds]; pre-checks
+     * their rows in the add-to-playlist picker when whole collections are
+     * added. The caller passes the distinct id list and its size.
+     */
+    @Query("""
+        SELECT playlistId FROM playlist_track_cross_ref 
+        WHERE trackId IN (:trackIds) 
+        GROUP BY playlistId 
+        HAVING COUNT(DISTINCT trackId) = :trackCount
+    """)
+    fun playlistIdsContainingAllTracks(trackIds: List<Long>, trackCount: Int): Flow<List<Long>>
+
+    /**
      * Home "Recommended playlists": playlists ranked by the aggregate play
      * count + likes of the songs they contain. Empty playlists (no tracks) are
      * excluded — they have nothing to recommend.

@@ -59,7 +59,8 @@ enum class CollectionKind(val displayName: String) {
     Genre("Genre"),
     Year("Year"),
     Folder("Folder"),
-    Composer("Composer")
+    Composer("Composer"),
+    Playlist("Playlist")
 }
 
 /** Localized label of a [CollectionKind] ("Album", "Artist", ...). */
@@ -72,6 +73,7 @@ fun CollectionKind.label(): String = stringResource(
         CollectionKind.Year -> R.string.kind_year
         CollectionKind.Folder -> R.string.kind_folder
         CollectionKind.Composer -> R.string.kind_composer
+        CollectionKind.Playlist -> R.string.kind_playlist
     }
 )
 
@@ -130,14 +132,15 @@ fun rememberCollectionFoamModalState(): CollectionFoamModalState = remember { Co
 /**
  * Bottom sheet shown when the user long-presses a collection (album, artist,
  * genre, year, folder, composer). The track modal's counterpart, minus what
- * collections have no use for: no score heart in the header, no Playlist
- * button. Layout, top to bottom:
+ * collections have no use for: no score heart in the header. Layout, top to
+ * bottom:
  * - A header on a darker container: artwork (or icon/letter fallback) with the
  *   collection title and its artist underneath. It stays mounted across page
  *   switches.
- * - The actions page: two side-by-side buttons ("Next" = queue the collection
- *   right after the current track, "Queue" = append it to the end of the main
- *   queue), then navigation rows — "See Artist" for albums, "See Albums" for
+ * - The actions page: three side-by-side buttons ("Next" = queue the
+ *   collection right after the current track, "Queue" = append it to the end
+ *   of the main queue, "Playlist" = add every track of the collection to a
+ *   playlist via the playlist picker), then navigation rows — "See Artist" for albums, "See Albums" for
  *   artists, and both "See Artist" + "See Album" for folders/genres/years/
  *   composers (when such a collection spans several artists/albums, the row
  *   opens a list screen of them via [onSeeArtistList] / [onSeeAlbumList]) —
@@ -153,6 +156,7 @@ fun CollectionFoamModal(
     state: CollectionFoamModalState,
     onPlayNext: (CollectionInfo) -> Unit = {},
     onAddToQueue: (CollectionInfo) -> Unit = {},
+    onAddToPlaylist: (CollectionInfo) -> Unit = {},
     onSeeArtist: (String) -> Unit = {},
     onSeeAlbum: (album: String, albumArtPath: String?, artist: String?) -> Unit = { _, _, _ -> },
     onSeeArtistList: (sourceKind: CollectionKind, sourceKey: String) -> Unit = { _, _ -> },
@@ -279,6 +283,12 @@ fun CollectionFoamModal(
                                     icon = FoamTheme.icons.current.queue,
                                     label = stringResource(R.string.queue),
                                     onClick = { perform(onAddToQueue) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                ModalActionButton(
+                                    icon = FoamTheme.icons.current.playlists,
+                                    label = stringResource(R.string.playlist),
+                                    onClick = { perform(onAddToPlaylist) },
                                     modifier = Modifier.weight(1f)
                                 )
                             }
