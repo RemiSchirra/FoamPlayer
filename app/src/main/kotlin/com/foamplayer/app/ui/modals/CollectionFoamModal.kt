@@ -41,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.core.net.toUri
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Person
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
@@ -338,6 +341,7 @@ fun CollectionFoamModal(
                                         if (index > 0) ModalSectionDivider()
                                         ModalRowButton(
                                             label = row.label,
+                                            icon = row.icon,
                                             onClick = row.onClick
                                         )
                                     }
@@ -584,6 +588,7 @@ private fun CollectionDetailsContent(
 /** One navigation row on the actions page: label plus the action to run on tap. */
 private data class CollectionModalNavRow(
     val label: String,
+    val icon: ImageVector? = null,
     val onClick: () -> Unit
 )
 
@@ -615,7 +620,9 @@ private fun collectionNavigationRows(
 ): List<CollectionModalNavRow> = when (collection.kind) {
     // The artist detail screen IS the artist's album list.
     CollectionKind.Artist -> listOf(
-        CollectionModalNavRow(labels.seeAlbums) { perform { onSeeArtist(collection.title) } }
+        CollectionModalNavRow(labels.seeAlbums, icon = Icons.Rounded.Album) {
+            perform { onSeeArtist(collection.title) }
+        }
     )
     else -> buildList {
         when (collection.kind) {
@@ -625,7 +632,11 @@ private fun collectionNavigationRows(
                 collection.artist?.split("; ")
                     ?.firstOrNull { it.isNotBlank() }
                     ?.let { name ->
-                        add(CollectionModalNavRow(labels.seeArtist) { perform { onSeeArtist(name) } })
+                        add(
+                            CollectionModalNavRow(labels.seeArtist, icon = Icons.Rounded.Person) {
+                                perform { onSeeArtist(name) }
+                            }
+                        )
                     }
             }
             else -> {
@@ -634,10 +645,14 @@ private fun collectionNavigationRows(
 
                 when {
                     artistNames.size == 1 -> add(
-                        CollectionModalNavRow(labels.seeArtist) { perform { onSeeArtist(artistNames.first()) } }
+                        CollectionModalNavRow(labels.seeArtist, icon = Icons.Rounded.Person) {
+                            perform { onSeeArtist(artistNames.first()) }
+                        }
                     )
                     artistNames.size > 1 && sourceKind != null -> add(
-                        CollectionModalNavRow(labels.seeArtist) { perform { onSeeArtistList(sourceKind, sourceKey) } }
+                        CollectionModalNavRow(labels.seeArtist, icon = Icons.Rounded.Person) {
+                            perform { onSeeArtistList(sourceKind, sourceKey) }
+                        }
                     )
                 }
 
@@ -645,13 +660,15 @@ private fun collectionNavigationRows(
                     albums.size == 1 -> {
                         val entry = albums.first()
                         add(
-                            CollectionModalNavRow(labels.seeAlbum) {
+                            CollectionModalNavRow(labels.seeAlbum, icon = Icons.Rounded.Album) {
                                 perform { onSeeAlbum(entry.album, entry.albumArtPath, entry.artist) }
                             }
                         )
                     }
                     albums.size > 1 && sourceKind != null -> add(
-                        CollectionModalNavRow(labels.seeAlbum) { perform { onSeeAlbumList(sourceKind, sourceKey) } }
+                        CollectionModalNavRow(labels.seeAlbum, icon = Icons.Rounded.Album) {
+                            perform { onSeeAlbumList(sourceKind, sourceKey) }
+                        }
                     )
                 }
             }
