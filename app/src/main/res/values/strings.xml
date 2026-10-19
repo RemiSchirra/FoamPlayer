@@ -459,6 +459,14 @@
     <string name="playlist_export_one">Export playlist</string>
     <string name="playlist_export_folder_hint">Choose where the .m3u8 files are written</string>
 
+    <!-- Playlist repair: re-links entries orphaned by moved files + rescans -->
+    <string name="playlist_repair">Repair playlists</string>
+    <string name="playlist_repair_description">Re-link songs that disappeared from playlists after their files were moved or renamed and the library was rescanned</string>
+    <string name="playlist_repair_caps">REPAIR</string>
+    <string name="playlist_repairing_caps">REPAIRING…</string>
+    <string name="playlist_repair_nothing">Nothing to repair.</string>
+    <string name="playlist_repair_done">Re-linked %1$d playlist entries, removed %2$d stale ones; %3$d could not be matched.</string>
+
     <!-- Browse / library sections -->
     <string name="artists">Artists</string>
     <string name="composers">Composers</string>

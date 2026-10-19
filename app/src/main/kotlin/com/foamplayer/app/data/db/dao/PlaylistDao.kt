@@ -171,6 +171,32 @@ interface PlaylistDao {
 
     @Query("DELETE FROM playlist_track_cross_ref WHERE playlistId = :playlistId")
     suspend fun clearPlaylistTracks(playlistId: Long)
+
+    /**
+     * Memberships whose track row no longer exists — a rescan orphaned them
+     * by re-scanning a moved file under a fresh id and deleting the old row
+     * (getTracksForPlaylist's INNER JOIN silently hides them while
+     * getPlaylistTrackCounts still counts them).
+     */
+    @Query("""
+        SELECT ref.* FROM playlist_track_cross_ref ref 
+        LEFT JOIN tracks t ON t.id = ref.trackId 
+        WHERE t.id IS NULL
+    """)
+    suspend fun getOrphanedTrackRefs(): List<PlaylistTrackCrossRef>
+
+    /**
+     * Re-points one membership at the re-scanned row of the same file. The
+     * caller must guarantee (playlistId, newTrackId) isn't already a row (or
+     * the upsert would drop the old order index) — the repairer claims ids
+     * per playlist before writing.
+     */
+    @Query("""
+        UPDATE playlist_track_cross_ref 
+        SET trackId = :newTrackId 
+        WHERE playlistId = :playlistId AND trackId = :oldTrackId
+    """)
+    suspend fun retargetPlaylistTrack(playlistId: Long, oldTrackId: Long, newTrackId: Long)
 }
 
 /** One row of [PlaylistDao.getRecommendedPlaylists]: a playlist plus its aggregate listen/like score. */

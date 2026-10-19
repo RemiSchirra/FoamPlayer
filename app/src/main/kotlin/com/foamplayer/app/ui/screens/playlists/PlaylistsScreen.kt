@@ -106,6 +106,7 @@ import com.foamplayer.app.ui.modals.OrganisationExtraAction
 import com.foamplayer.app.ui.modals.PlaylistFoamModal
 import com.foamplayer.app.ui.modals.PlaylistModalStats
 import com.foamplayer.app.ui.modals.RenamePlaylistModal
+import com.foamplayer.app.ui.modals.RepairPlaylistsResultModal
 import com.foamplayer.app.ui.modals.rememberPlaylistFoamModalState
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
@@ -149,6 +150,7 @@ fun PlaylistsScreen(
     val createState by viewModel.createState.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
     val exportRunning by viewModel.exportRunning.collectAsState()
+    val repairResult by viewModel.repairResult.collectAsState()
 
     var showCreateModal by remember { mutableStateOf(false) }
     var showMoreModal by remember { mutableStateOf(false) }
@@ -547,6 +549,16 @@ fun PlaylistsScreen(
                 showExportModal = true
             }
         ),
+        extraActions = listOf(
+            OrganisationExtraAction(
+                label = stringResource(R.string.playlist_repair),
+                icon = FoamTheme.icons.current.repair,
+                onClick = {
+                    showMoreModal = false
+                    viewModel.repairPlaylists()
+                }
+            )
+        ),
         onDismiss = { showMoreModal = false }
     )
 
@@ -559,6 +571,11 @@ fun PlaylistsScreen(
         },
         isRunning = exportRunning,
         title = stringResource(R.string.playlist_export_all)
+    )
+
+    RepairPlaylistsResultModal(
+        result = repairResult,
+        onDismiss = { viewModel.consumeRepairResult() }
     )
 
     val missingState = when (val state = createState) {

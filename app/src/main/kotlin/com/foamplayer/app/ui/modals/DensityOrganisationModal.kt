@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -41,11 +42,12 @@ import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
  * An extra action row shown at the top of [DensityOrganisationModal], above
- * the sort and organisation groups (e.g. the playlist export entry); hidden
- * when the hosting screen passes null.
+ * the sort and organisation groups (e.g. the playlist export and repair
+ * entries); hidden when the hosting screen passes none.
  */
 data class OrganisationExtraAction(
     val label: String,
+    val icon: ImageVector? = null,
     val onClick: () -> Unit
 )
 
@@ -71,24 +73,34 @@ fun DensityOrganisationModal(
     sortInverted: Boolean = false,
     onToggleSortInverted: (Boolean) -> Unit = {},
     /** Optional action row above the groups (e.g. playlist export). */
-    extraAction: OrganisationExtraAction? = null
+    extraAction: OrganisationExtraAction? = null,
+    /** Further action rows rendered after [extraAction] in the same card. */
+    extraActions: List<OrganisationExtraAction> = emptyList()
 ) {
     FoamBottomModal(
         visible = visible,
         onDismissRequest = onDismiss
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
-            if (extraAction != null) {
+            val actions = buildList {
+                extraAction?.let { add(it) }
+                addAll(extraActions)
+            }
+            if (actions.isNotEmpty()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.itemRounding))
                         .background(FoamTheme.colors.surfaceVariant)
                 ) {
-                    ModalActionRow(
-                        label = extraAction.label,
-                        onClick = extraAction.onClick
-                    )
+                    actions.forEachIndexed { index, action ->
+                        if (index > 0) ModalSectionDivider()
+                        ModalActionRow(
+                            label = action.label,
+                            icon = action.icon,
+                            onClick = action.onClick
+                        )
+                    }
                 }
             }
 
@@ -176,14 +188,15 @@ private fun DensityRadioRow(
 }
 
 /**
- * The extra-action card's row: a tappable button-like entry (export), with
- * the backup export icon ahead of the label. The label uses the row-title
- * style so it stands out from the radio rows below.
+ * The extra-action card's row: a tappable button-like entry (export, repair…)
+ * with an icon ahead of the label (the backup export icon by default). The
+ * label uses the row-title style so it stands out from the radio rows below.
  */
 @Composable
 private fun ModalActionRow(
     label: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    icon: ImageVector? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -200,7 +213,7 @@ private fun ModalActionRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Outlined.FileUpload,
+            imageVector = icon ?: Icons.Outlined.FileUpload,
             contentDescription = null,
             tint = FoamTheme.accentColor,
             modifier = Modifier.size(FoamDimens.iconMedium)

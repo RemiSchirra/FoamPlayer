@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import com.foamplayer.app.data.db.entities.TrackDeletionLogEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -364,6 +365,26 @@ interface TrackDao {
 
     @Query("DELETE FROM tracks WHERE path IN (:paths)")
     suspend fun deleteTracksByPaths(paths: List<String>)
+
+    /** Full rows of the tracks about to be deleted by [deleteTracksByPaths], for the deletion log snapshot. */
+    @Query("SELECT * FROM tracks WHERE path IN (:paths)")
+    suspend fun getTracksByPaths(paths: List<String>): List<TrackEntity>
+
+    /** Replaces any previous snapshot of the same id (a deleted id can be re-inserted). */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDeletionLogEntries(entries: List<TrackDeletionLogEntity>)
+
+    /** Identity snapshots of the tracks previous scans deleted, keyed by [TrackDeletionLogEntity.trackId]. */
+    @Query("SELECT * FROM track_deletion_log")
+    suspend fun getDeletionLog(): List<TrackDeletionLogEntity>
+
+    /** Drops the log rows a repair run re-linked. */
+    @Query("DELETE FROM track_deletion_log WHERE trackId IN (:trackIds)")
+    suspend fun deleteDeletionLogByTrackIds(trackIds: List<Long>)
+
+    /** Drops log rows older than [cutoff] (their references are repaired or hopeless by then). */
+    @Query("DELETE FROM track_deletion_log WHERE deletedAt < :cutoff")
+    suspend fun pruneDeletionLog(cutoff: Long)
 }
 
 data class AlbumSearchResult(

@@ -219,6 +219,69 @@ fun LibraryScanCard(
 }
 
 /**
+ * Repair card: the repair title, a one-line explanation and a REPAIR /
+ * REPAIRING pill. Runs [com.foamplayer.app.data.repository.PlaylistRepairer],
+ * which re-links playlist entries left dangling by moved files between
+ * rescans.
+ */
+@Composable
+fun RepairPlaylistsCard(
+    running: Boolean,
+    onRepair: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+            .background(FoamTheme.colors.surface)
+            .padding(FoamDimens.paddingMedium)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                BasicText(
+                    text = stringResource(R.string.playlist_repair),
+                    style = FoamTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
+                BasicText(
+                    text = stringResource(R.string.playlist_repair_description),
+                    style = FoamTheme.typography.caption
+                )
+            }
+
+            Spacer(modifier = Modifier.width(FoamDimens.spacingMedium))
+            RepairPillButton(running = running, onClick = onRepair)
+        }
+    }
+}
+
+/** REPAIR <-> REPAIRING pill; disabled (surfaceVariant) while repairing. */
+@Composable
+private fun RepairPillButton(running: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+            .background(if (running) FoamTheme.colors.surfaceVariant else FoamTheme.accentColor)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
+                enabled = !running,
+                onClick = onClick
+            )
+            .padding(horizontal = FoamDimens.spacingStandard, vertical = FoamDimens.spacingSmall)
+    ) {
+        BasicText(
+            text = if (running) stringResource(R.string.playlist_repairing_caps) else stringResource(R.string.playlist_repair_caps),
+            style = FoamTheme.typography.caption.copy(
+                color = if (running) FoamTheme.colors.textSecondary else FoamTheme.colors.background,
+                fontWeight = FontWeight.Bold
+            )
+        )
+    }
+}
+
+/**
  * One-line scan status: "song name (xx%)" — the song name ellipsizes when it
  * runs out of width; the percentage, split into its own text, always stays
  * visible.

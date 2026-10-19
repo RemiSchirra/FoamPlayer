@@ -21,6 +21,7 @@ import com.foamplayer.app.data.db.dao.ArtistPlayRow
 import com.foamplayer.app.data.db.dao.TrackPlayStatsRow
 import com.foamplayer.app.data.db.entities.ListenHistoryEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.db.entities.toDeletionLogEntry
 import com.foamplayer.app.data.scanner.AudioTagWriter
 import com.foamplayer.app.data.scanner.LocalAudioScanner
 import com.foamplayer.app.data.scanner.RemoteLibraryScanner
@@ -366,7 +367,12 @@ class TrackRepository @Inject constructor(
             .filter { documentIdOf(it).startsWith(prefix) }
 
         db.withTransaction {
+            val deletedAt = System.currentTimeMillis()
             removedPaths.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
+                val doomed = trackDao.getTracksByPaths(chunk)
+                if (doomed.isNotEmpty()) {
+                    trackDao.insertDeletionLogEntries(doomed.map { it.toDeletionLogEntry(deletedAt) })
+                }
                 trackDao.deleteTracksByPaths(chunk)
             }
 
@@ -493,7 +499,12 @@ class TrackRepository @Inject constructor(
             // 999 host-variable limit on API 29.
             val scannedPathSet = mergedTracks.mapTo(HashSet()) { it.path }
             val stalePaths = trackDao.getAllTrackPaths().filterNot { it in scannedPathSet }
+            val deletedAt = System.currentTimeMillis()
             stalePaths.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
+                val doomed = trackDao.getTracksByPaths(chunk)
+                if (doomed.isNotEmpty()) {
+                    trackDao.insertDeletionLogEntries(doomed.map { it.toDeletionLogEntry(deletedAt) })
+                }
                 trackDao.deleteTracksByPaths(chunk)
             }
 

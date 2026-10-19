@@ -64,10 +64,12 @@ import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.components.LibraryFoldersCard
 import com.foamplayer.app.ui.components.LibraryScanCard
+import com.foamplayer.app.ui.components.RepairPlaylistsCard
 import com.foamplayer.app.ui.modals.AddProviderModal
 import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.modals.PickerHeaderButton
 import com.foamplayer.app.ui.modals.PlaylistNameField
+import com.foamplayer.app.ui.modals.RepairPlaylistsResultModal
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -84,6 +86,8 @@ fun LibrarySettingsScreen(
     val settings by viewModel.settings.collectAsState()
     val selectedFolders = settings.libraryFolders
     val scanStatus by viewModel.scanStatus.collectAsState()
+    val repairRunning by viewModel.repairRunning.collectAsState()
+    val repairResult by viewModel.repairResult.collectAsState()
     val artistImageScan by viewModel.artistImageScan.collectAsState()
     val artistSeparators = settings.artistSeparators
     val genreSeparators = settings.genreSeparators
@@ -134,12 +138,18 @@ fun LibrarySettingsScreen(
 
             item { Spacer(modifier = Modifier.height(FoamDimens.spacingLarge)) }
 
-            // --- Library Scan (directly under the folder list: scanning is
-            // tied to the folders above) ---
             item {
                 LibraryScanCard(
                     scanStatus = scanStatus,
                     onStartScan = viewModel::startScan
+                )
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+
+            item {
+                RepairPlaylistsCard(
+                    running = repairRunning,
+                    onRepair = viewModel::repairPlaylists
                 )
                 Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
             }
@@ -394,6 +404,11 @@ fun LibrarySettingsScreen(
         onDismiss = { showAddProvider = false },
         onPickLocalFolder = { folderPickerLauncher.launch(null) },
         onServerScanned = viewModel::scanServer
+    )
+
+    RepairPlaylistsResultModal(
+        result = repairResult,
+        onDismiss = { viewModel.consumeRepairResult() }
     )
 }
 

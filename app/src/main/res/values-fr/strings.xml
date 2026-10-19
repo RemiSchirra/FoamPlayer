@@ -455,6 +455,12 @@
     <!-- Export de playlists (.m3u8) -->
     <string name="playlist_export_all">Exporter les playlists</string>
     <string name="playlist_export_one">Exporter la playlist</string>
+    <string name="playlist_repair">Réparer les playlists</string>
+    <string name="playlist_repair_description">Réassocier les morceaux disparus des playlists après un déplacement ou un renommage de fichiers suivi d\'un nouveau scan de la bibliothèque</string>
+    <string name="playlist_repair_caps">RÉPARER</string>
+    <string name="playlist_repairing_caps">RÉPARATION…</string>
+    <string name="playlist_repair_nothing">Rien à réparer.</string>
+    <string name="playlist_repair_done">%1$d entrées de playlist réassociées, %2$d obsolètes supprimées ; %3$d introuvables.</string>
     <string name="playlist_export_folder_hint">Choisissez où écrire les fichiers .m3u8</string>
 
     <!-- Sections bibliothèque -->
