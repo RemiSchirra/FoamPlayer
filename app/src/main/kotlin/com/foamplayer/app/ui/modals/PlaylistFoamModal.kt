@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.modals
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -173,6 +174,12 @@ fun PlaylistFoamModal(
         visible = state.isVisible,
         onDismissRequest = onDismiss
     ) {
+        // Match the track modal: system back while on the details page returns
+        // to the actions page instead of dismissing the whole sheet.
+        BackHandler(enabled = state.isVisible && showDetails) {
+            showDetails = false
+        }
+
         if (displayPlaylist != null) {
             Column(
                 modifier = Modifier.padding(bottom = FoamDimens.spacingSmall),
