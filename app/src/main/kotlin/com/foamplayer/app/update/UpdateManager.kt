@@ -24,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Result of an update check against the GitHub latest release. */
 sealed interface UpdateCheckResult {
@@ -180,8 +181,25 @@ class UpdateManager @Inject constructor(
     fun downloadedApk(release: GitHubRelease): File? =
         apkFile(release).takeIf { it.exists() && it.length() > 0 }
 
+    /**
+     * Deletes every downloaded update APK from disk. Called once at app start:
+     * stale installers (already-installed versions, abandoned downloads)
+     * would otherwise pile up forever, since nothing else clears this folder.
+     * A deferred install simply re-downloads on demand. No-op while a
+     * download is in flight.
+     */
+    suspend fun clearUpdateCache() {
+        if (downloadJob?.isActive == true) return
+        withContext(Dispatchers.IO) {
+            updateFilesDir()?.listFiles()?.forEach { it.delete() }
+        }
+    }
+
+    private fun updateFilesDir(): File? =
+        context.getExternalFilesDir(UPDATES_DIR)?.apply { mkdirs() }
+
     private fun apkFile(release: GitHubRelease): File =
-        File(context.getExternalFilesDir("updates"), "foamplayer-${release.version}.apk")
+        File(updateFilesDir(), "foamplayer-${release.version}.apk")
 
     @SuppressLint("MissingPermission")
     private fun postProgressNotification(progress: Float, indeterminate: Boolean) {
@@ -248,6 +266,7 @@ class UpdateManager @Inject constructor(
     private companion object {
         const val UPDATE_CHANNEL_ID = "foam_update_channel"
         const val DOWNLOAD_NOTIFICATION_ID = 4001
+        const val UPDATES_DIR = "updates"
     }
 }
 
