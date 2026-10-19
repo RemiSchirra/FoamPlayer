@@ -49,6 +49,7 @@ import androidx.compose.ui.util.lerp as lerpFloat
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.foamplayer.app.R
+import com.foamplayer.app.audio.engine.RepeatMode
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
@@ -143,27 +144,110 @@ private fun SubViewSelectorItem(
 @Composable
 internal fun SubViewSelectorRow(
     subViewMode: SubViewMode,
+    repeatMode: RepeatMode,
+    isShuffle: Boolean,
     progress: () -> Float,
     onSelect: (SubViewMode) -> Unit,
+    onShuffleClick: () -> Unit,
+    onPlayOnClick: () -> Unit,
+    onRepeatClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        SubViewMode.entries.forEach { mode ->
-            SubViewSelectorItem(
-                mode = mode,
-                isSelected = mode == subViewMode,
-                progress = progress,
-                onSelect = onSelect
+        SubViewSelectorItem(
+            mode = SubViewMode.LYRICS,
+            isSelected = subViewMode == SubViewMode.LYRICS,
+            progress = progress,
+            onSelect = onSelect
+        )
+
+        SubViewSelectorAction(
+            icon = FoamTheme.icons.current.shuffle,
+            contentDescription = "Shuffle",
+            isDimmed = !isShuffle,
+            progress = progress,
+            onClick = onShuffleClick
+        )
+
+        SubViewSelectorAction(
+            icon = FoamTheme.icons.current.cast,
+            contentDescription = stringResource(R.string.play_on),
+            progress = progress,
+            onClick = onPlayOnClick
+        )
+
+        SubViewSelectorAction(
+            icon = when (repeatMode) {
+                RepeatMode.ONE -> FoamTheme.icons.current.repeatOne
+                else -> FoamTheme.icons.current.repeat
+            },
+            contentDescription = stringResource(R.string.action_repeat),
+            isDimmed = repeatMode == RepeatMode.NONE,
+            progress = progress,
+            onClick = onRepeatClick
+        )
+
+        SubViewSelectorItem(
+            mode = SubViewMode.QUEUE,
+            isSelected = subViewMode == SubViewMode.QUEUE,
+            progress = progress,
+            onSelect = onSelect
+        )
+    }
+}
+
+/**
+ * Non-selector action icons living between the lyrics/queue selectors (shuffle, radio, "Play
+ * on", repeat). Same icon/touch sizing as SubViewSelectorItem, but they disappear
+ * as the subview opens: [progress] -> 1 fades the icon out (draw-phase alpha) and
+ * gates the click once invisible, so a hidden action is never tappable while the
+ * lyrics/queue selectors at both ends stay reachable for switching/collapsing.
+ * [isDimmed] renders the icon semi-transparent (e.g. repeat disabled); otherwise
+ * the icon renders full-opacity primary.
+ */
+@Composable
+private fun SubViewSelectorAction(
+    icon: ImageVector,
+    contentDescription: String,
+    progress: () -> Float,
+    onClick: () -> Unit,
+    isDimmed: Boolean = false
+) {
+    val isEnabled by remember(progress) {
+        derivedStateOf { progress() < 1f - PlayerDimens.visibilityEpsilon }
+    }
+    val actionInteractions = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .pressShrink(actionInteractions)
+            .clickable(
+                interactionSource = actionInteractions,
+                indication = null,
+                enabled = isEnabled,
+                onClick = onClick
             )
-        }
+            .padding(12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = FoamTheme.colors.textPrimary,
+            modifier = Modifier
+                .size(24.dp)
+                .graphicsLayer {
+                    alpha = (if (isDimmed) 0.4f else 1f) * (1f - progress().coerceIn(0f, 1f))
+                }
+        )
     }
 }
 
 /** Layer 2 content: mini header (draggable handle) plus the lyrics or queue subview. */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun SharedTransitionScope.SubViewContent(
     track: TrackEntity,

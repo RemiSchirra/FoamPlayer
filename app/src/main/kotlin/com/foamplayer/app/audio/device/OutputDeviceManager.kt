@@ -6,9 +6,15 @@ import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.AudioAttributes as SystemAudioAttributes
 import android.os.Build
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 
 /** How the engine should treat a specific output device for bit-perfect delivery. */
 enum class DeviceBitPerfectMode(val label: String) {
@@ -66,6 +72,15 @@ class OutputDeviceManager(
     private val _activeDevice = MutableStateFlow<AudioOutputDevice?>(null)
     val activeDevice: StateFlow<AudioOutputDevice?> = _activeDevice.asStateFlow()
 
+    /**
+     * User-picked output override: the [AudioOutputDevice.id] to route playback to,
+     * [ThisDevicePickId] for the phone's own local outputs, or null for "no
+     * explicit pick" (fresh start: the platform's default routing). When the
+     * picked device detaches the override falls back to null automatically.
+     */
+    private val _preferredDeviceId = MutableStateFlow<String?>(null)
+    val preferredDeviceId: StateFlow<String?> = _preferredDeviceId.asStateFlow()
+
     private val deviceCallback = object : android.media.AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
             refresh()
@@ -91,6 +106,76 @@ class OutputDeviceManager(
         audioManager.unregisterAudioDeviceCallback(deviceCallback)
     }
 
+    /**
+     * Routes playback to [deviceId] (a concrete attached device, or the virtual
+     * "this device" target [ThisDevicePickId]). Returns false when no attached
+     * device matches (the override is not kept in that case, so callers can
+     * reflect it in their UI).
+     *
+     * The actual re-route happens in the engine, which resolves the pick to a live
+     * [AudioDeviceInfo] and hands it to the active player's audio sink.
+     */
+    fun setPreferredDevice(deviceId: String): Boolean {
+        val exists = deviceId == ThisDevicePickId || _devices.value.any { it.id == deviceId }
+        if (!exists) return false
+        if (_preferredDeviceId.value == deviceId) return false // no-op pick, nothing changed
+        _preferredDeviceId.value = deviceId
+        return true
+    }
+
+    /** True once the user has made an explicit "Play on" pick (this device counts). */
+    val hasExplicitPick: Boolean get() = _preferredDeviceId.value != null
+
+    /**
+     * The currently-resolved routing target: the user's preferred device when it
+     * is still attached, the system-default active device otherwise. Null when
+     * nothing is attached at all. Drives the fidelity/info display.
+     */
+    val routingDevice: AudioOutputDevice?
+        get() {
+            val preferredId = _preferredDeviceId.value
+            val byPreference = _devices.value.firstOrNull { it.id == preferredId }
+            if (preferredId != null && byPreference != null) return byPreference
+            return _activeDevice.value
+        }
+
+    /**
+     * What the "Play on" sheet should SHOW as selected: the routing target above,
+     * folded back to sheet ids. A concrete BT pick shows as that device; the best
+     * local output always shows as "this device" (the virtual pick that resolves
+     * to it), so with no explicit pick the checkmark sits on where audio actually
+     * plays (BT attached => the BT row, not "this device").
+     */
+    val selectedPlayOnDeviceId: StateFlow<String?> =
+        combine(_preferredDeviceId, _devices, _activeDevice) { preferredId, devices, active ->
+            when {
+                preferredId == null -> active?.takeIf { it.isBluetooth }?.id ?: ThisDevicePickId
+                preferredId == ThisDevicePickId -> ThisDevicePickId
+                else -> devices.firstOrNull { it.id == preferredId }?.id ?: ThisDevicePickId
+            }
+        }.stateIn(CoroutineScope(Dispatchers.Default + SupervisorJob()), SharingStarted.Eagerly, ThisDevicePickId)
+
+    /**
+     * The best LOCAL output of this phone (USB > wired > speaker): what "this
+     * device" means. Bluetooth endpoints are excluded -- they are separate
+     * "Play on" targets, not the phone itself.
+     */
+    val localDevice: AudioOutputDevice?
+        get() = _devices.value
+            .filter { !it.isBluetooth }
+            .maxByOrNull { it.routingPriority }
+
+    /**
+     * The live [AudioDeviceInfo] whose [AudioOutputDevice.id] matches [deviceId]
+     * (same "$type:$address:$name" hash as [toOutputDevice]), or null when it has
+     * detached since. The platform types can't be cached -- they are only valid
+     * while the device is attached -- so the engine resolves through here at
+     * apply time.
+     */
+    fun systemDeviceInfoForId(deviceId: String): AudioDeviceInfo? =
+        audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            .firstOrNull { it.isSink && it.toOutputDevice().id == deviceId }
+
     /** Re-enumerates all output devices and publishes a new snapshot. */
     fun refresh() {
         val systemDevices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
@@ -101,6 +186,12 @@ class OutputDeviceManager(
 
         _devices.value = resolved
         _activeDevice.value = resolved.firstOrNull()
+        val pick = _preferredDeviceId.value
+        if (pick != null && pick != ThisDevicePickId &&
+            resolved.none { it.id == pick }
+        ) {
+            _preferredDeviceId.value = null
+        }
     }
 
     private val AudioOutputDevice.routingPriority: Int
@@ -163,6 +254,9 @@ class OutputDeviceManager(
         }
 
     companion object {
+        /** Virtual "play on this phone" target id (never a real AudioOutputDevice id). */
+        const val ThisDevicePickId = "this_device"
+
         private val PROBE_SAMPLE_RATES = listOf(192_000, 96_000, 88_200, 48_000, 44_100)
 
         fun typeLabel(type: Int): String = when (type) {

@@ -1,6 +1,7 @@
 package com.foamplayer.app.audio.engine
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import android.view.Choreographer
 import androidx.annotation.OptIn
@@ -16,17 +17,21 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.foamplayer.app.audio.bitperfect.AudioOutputInfo
+import com.foamplayer.app.audio.bitperfect.AudioStreamInfo
 import com.foamplayer.app.audio.bitperfect.BitPerfectDetector
 import com.foamplayer.app.audio.device.OutputDeviceManager
 import com.foamplayer.app.audio.dsp.DspAudioProcessor
 import com.foamplayer.app.audio.dsp.DspEngine
 import com.foamplayer.app.audio.dsp.DspState
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.distant.DistantUris
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,17 +44,20 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
 import kotlin.math.roundToLong
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Owns the ExoPlayer, the queue and the playback state.
@@ -71,6 +79,7 @@ class AudioEngine @Inject constructor(
     private val outputDeviceManager: OutputDeviceManager,
     private val settingsRepository: SettingsRepository,
     private val trackRepository: TrackRepository,
+    private val distantRepository: DistantRepository,
     private val fadeEngine: FadeEngine,
     private val queuePersistence: QueuePersistence
 ) {
@@ -92,10 +101,20 @@ class AudioEngine @Inject constructor(
                     .setEnableFloatOutput(enableFloatOutput)
                     .build()
         }
-        return ExoPlayer.Builder(context, renderersFactory).build()
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(DistantDataSourceFactory(context) { distantRepository.streamFor(it) })
+        return ExoPlayer.Builder(context, renderersFactory)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
     }
 
     private val scope = CoroutineScope(Dispatchers.Main + Job())
+
+    /** The user's "Play on" routing pick (null = no explicit pick yet). */
+    val preferredOutputDeviceId: StateFlow<String?> = outputDeviceManager.preferredDeviceId
+
+    /** The routing target folded to a "Play on" sheet id (what the UI shows as selected). */
+    val selectedPlayOnDeviceId: StateFlow<String?> = outputDeviceManager.selectedPlayOnDeviceId
 
     private val _playbackState = MutableStateFlow(PlaybackState())
     val playbackState: StateFlow<PlaybackState> = _playbackState
@@ -136,6 +155,16 @@ class AudioEngine @Inject constructor(
     private var pendingFadeWindowEnd: Int? = null
 
     private var windowJumpJob: Job? = null
+
+    /**
+     * Queue shuffle bookkeeping. [preparedWrap] = (playing entry id, primary queue size, forward) once the
+     * repeat-all wrap landing slot was settled for this boundary visit; [postWrapLandingEntryId] = the
+     * entry the wrap lands on, whose arrival triggers the main-queue reshuffle ([trackLandedForQueueShuffle]).
+     */
+    private var preparedWrap: Triple<Long, Int, Boolean>? = null
+    private var postWrapLandingEntryId: Long? = null
+    private var postWrapLanded = false
+    private var postWrapRestPending = false
 
     /** Only the newest window jump may write the timeline. */
     private var windowJumpId: Long = 0L
@@ -247,6 +276,21 @@ class AudioEngine @Inject constructor(
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val trackId = mediaItem?.mediaId?.toLongOrNull() ?: return
+
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                val state = _playbackState.value
+                if (state.repeatMode == RepeatMode.ALL) {
+                    val index = resolveExactQueueIndex(trackId)
+                    if (index != null &&
+                        index == primaryQueueLastIndex(state) + 1 &&
+                        state.auxiliaryFlags.getOrNull(index) == true
+                    ) {
+                        wrapToQueueStart()
+                        return
+                    }
+                }
+            }
+
             applyTrackTransition(trackId, positionMs = 0L, emitSeekEvent = false)
         }
     }
@@ -261,6 +305,11 @@ class AudioEngine @Inject constructor(
             activePlayerField = newPlayer
             newPlayer.setAudioAttributes(mediaAudioAttributes, /* handleAudioFocus = */ true)
             onPlayerSwappedListener?.invoke()
+        }
+
+        @androidx.annotation.OptIn(UnstableApi::class)
+        override fun applyOutputRouting(player: ExoPlayer) {
+            applyPreferredAudioDeviceTo(player)
         }
 
         override fun buildFadeWindow(centerQueueIndex: Int): FadeEngine.FadeWindow? {
@@ -330,6 +379,8 @@ class AudioEngine @Inject constructor(
             recomputeAudioOutputInfo()
             if (wasAuxiliary) scheduleAuxiliaryRefill()
 
+            trackLandedForQueueShuffle()
+
             onDisplayPlayerChangedListener?.invoke(displayPlayer ?: activePlayerField)
         }
 
@@ -343,17 +394,17 @@ class AudioEngine @Inject constructor(
             stashedListenOccurrence = null
 
             // Session modes toggled mid-fade would otherwise be lost.
-            player.repeatMode = when (_playbackState.value.repeatMode) {
-                RepeatMode.NONE -> Player.REPEAT_MODE_OFF
-                RepeatMode.ALL -> Player.REPEAT_MODE_ALL
-                RepeatMode.ONE -> Player.REPEAT_MODE_ONE
-            }
-            player.shuffleModeEnabled = _playbackState.value.isShuffle
+            player.repeatMode = playerRepeatMode(_playbackState.value.repeatMode)
+            // Queue shuffle is app-level (see prepareWrapLanding), never ExoPlayer's shuffle mode.
+            player.shuffleModeEnabled = false
             applyPauseAtEndOfMediaItems()
 
             activePlayerField.addListener(playerListener)
             _playbackState.value =
                 _playbackState.value.copy(isPlaybackRequested = player.playWhenReady)
+
+            // The new active timeline is committed: finish a repeat-all wrap's queue shuffle.
+            trackLandedForQueueShuffle()
 
             scope.launch { adjustWindow() }
         }
@@ -431,7 +482,7 @@ class AudioEngine @Inject constructor(
      * no frames in the background, so an unbounded wait would freeze the progress loop.
      */
     private suspend fun awaitFrame() {
-        withTimeoutOrNull(FRAME_WAIT_TIMEOUT_MS) {
+        withTimeoutOrNull(FRAME_WAIT_TIMEOUT_MS.milliseconds) {
             suspendCancellableCoroutine { cont ->
                 val callback = Choreographer.FrameCallback { cont.resumeWith(Result.success(Unit)) }
                 Choreographer.getInstance().postFrameCallback(callback)
@@ -440,18 +491,49 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    private fun TrackEntity.toMediaItem(): MediaItem =
-        MediaItem.Builder()
+    private fun TrackEntity.toMediaItem(): MediaItem {
+        // The session's artwork must always be loadable: a distant track points at
+        // its cached image file (albumArtPath), but that file can be gone (cleared
+        // storage, failed download, restored DB) — advertising a dead path makes
+        // every notification surface log a load error ("Unable to load bitmap").
+        // Verify the file exists and otherwise fall back to the live artwork URL;
+        // only give up when there is nothing loadable at all. Local tracks carry
+        // their art embedded, so their audio URI is the right artwork URI.
+        val isDistant = com.foamplayer.distant.DistantUris.isDistant(path)
+        val artwork = when {
+            isDistant -> artworkUriForDistantTrack()
+            else -> path.toUri()
+        }
+        return MediaItem.Builder()
             .setUri(path.toUri())
             .setMediaId(id.toString())
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(title)
                     .setArtist(artist)
-                    .setArtworkUri(path.toUri())
+                    .setArtworkUri(artwork)
                     .build()
             )
             .build()
+    }
+
+    /**
+     * Loadable artwork for a distant track. The metadata artwork URI is consumed
+     * out-of-process too (SystemUI's media controls), which cannot read this
+     * app's private files — so prefer the provider's live http(s) URL and only
+     * fall back to the scan-time cached image (verified to exist) when the
+     * provider gives nothing. Never advertise the audio URI itself: no surface
+     * can open a `foam-distant://` data source.
+     */
+    private fun TrackEntity.artworkUriForDistantTrack(): Uri? {
+        DistantUris.parse(path)
+            ?.let { distantRepository.artworkUrlFor(it) }
+            ?.let { return it.toUri() }
+        albumArtPath?.takeIf { it.isNotBlank() && !it.startsWith("http") }?.let { artPath ->
+            if (File(artPath.toUri().path ?: "").isFile) return artPath.toUri()
+        }
+        return null
+    }
 
     /** Called after a crossfade promoted a new player, so the MediaSession can re-bind. */
     fun setOnPlayerSwappedListener(listener: (() -> Unit)?) {
@@ -494,7 +576,7 @@ class AudioEngine @Inject constructor(
 
         val entryIds = List(tracks.size) { allocateEntryId() } +
                 List(AUXILIARY_QUEUE_LENGTH) { allocateEntryId() }
-        val newQueue = tracks + drawAuxiliaryTracks(emptySet(), AUXILIARY_QUEUE_LENGTH)
+        val newQueue = tracks + drawAuxiliaryTracks(queueTrackIds(tracks), AUXILIARY_QUEUE_LENGTH)
 
         pendingWindowResync = false
         _playbackState.value = _playbackState.value.copy(
@@ -517,12 +599,8 @@ class AudioEngine @Inject constructor(
             }
         )
 
-        player.repeatMode = when (repeatMode) {
-            RepeatMode.NONE -> Player.REPEAT_MODE_OFF
-            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
-            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
-        }
-        player.shuffleModeEnabled = isShuffle
+        player.repeatMode = playerRepeatMode(repeatMode)
+        player.shuffleModeEnabled = false
         applyPauseAtEndOfMediaItems()
 
         // The whole queue is loaded here; adjustWindow() trims it as playback proceeds.
@@ -621,6 +699,9 @@ class AudioEngine @Inject constructor(
             loadWindowAndPlay(currentQueue, index)
         }
 
+        // Landed after a repeat-all wrap with shuffle: the main queue changes order shortly (see below).
+        trackLandedForQueueShuffle()
+
         scope.launch { adjustWindow() }
 
         if (wasAuxiliary) {
@@ -696,6 +777,8 @@ class AudioEngine @Inject constructor(
                 sourceBitrateKbps = track.bitrate,
                 dspState = dspEngine.state.value,
                 masterBitPerfectEnabled = latestSettings.bitPerfectEnabled,
+                isStreaming = com.foamplayer.distant.DistantUris.isDistant(track.path),
+                stream = streamInfoFor(track),
                 deviceConfig = latestSettings.deviceAudioConfig(outputDeviceManager.activeDevice.value?.id)
             )
         )
@@ -703,6 +786,28 @@ class AudioEngine @Inject constructor(
             lastAudioOutputInfo = info
             _playbackState.value = _playbackState.value.copy(audioOutputInfo = info)
         }
+    }
+
+    /** Resolves the transport facts of a distant track for the pipeline's Transport stage. */
+    private fun streamInfoFor(track: TrackEntity): AudioStreamInfo? {
+        if (!DistantUris.isDistant(track.path)) return null
+        val parsed = DistantUris.parse(track.path) ?: return null
+        val endpoint = runCatching { distantRepository.streamFor(track.path) }
+            .getOrNull()
+            ?.url
+            ?.let(::endpointOf)
+            .orEmpty()
+        return AudioStreamInfo(provider = parsed.type.displayName, endpoint = endpoint)
+    }
+
+    /** Scheme + authority of a stream URL (drops the path/query so no token leaks). */
+    private fun endpointOf(url: String): String {
+        val schemeEnd = url.indexOf("://")
+        if (schemeEnd < 0) return ""
+        val rest = url.substring(schemeEnd + 3)
+        val slash = rest.indexOf('/')
+        val authority = if (slash < 0) rest else rest.substring(0, slash)
+        return url.substring(0, schemeEnd + 3) + authority
     }
 
     private fun startAudioPathObservers() {
@@ -721,6 +826,122 @@ class AudioEngine @Inject constructor(
                 recomputeAudioOutputInfo()
             }
         }
+        // User-picked routing ("Play on" sheet): re-resolve and re-apply the
+        // preferred device whenever the override changes OR the device set changes
+        // (a detached headset must drop the override; a re-attached one must
+        // reclaim it). setPreferredAudioDevice pins the sink and every AudioTrack
+        // it creates afterwards, so both players and future tracks follow. The
+        // persisted pick is restored first (before the collectors can act on a
+        // null it would briefly read), then the observers take over.
+        scope.launch {
+            val persisted = settingsRepository.settings.first().preferredOutputDeviceId
+            if (persisted != null &&
+                outputDeviceManager.preferredDeviceId.value == null
+            ) {
+                outputDeviceManager.setPreferredDevice(persisted)
+            }
+        }
+        scope.launch {
+            outputDeviceManager.devices.collect {
+                applyPreferredAudioDevice()
+                recomputeAudioOutputInfo()
+            }
+        }
+        scope.launch {
+            outputDeviceManager.preferredDeviceId.collect {
+                applyPreferredAudioDevice()
+                recomputeAudioOutputInfo()
+            }
+        }
+    }
+
+    /**
+     * Applies the resolved routing target to the active player's audio sink.
+     * Three cases:
+     *  - no explicit pick yet -> clear the pin, the platform routes by its own
+     *    priority (BT attached => BT, matching pre-"Play on" behavior);
+     *  - "this device" pick -> pin the best LOCAL output (USB, wired, speaker) so
+     *    an attached BT headset does NOT steal the route;
+     *  - a concrete device pick -> pin that device.
+     * A target that detached between the state flip and this call leaves the
+     * previous route untouched (the override state itself self-corrects in
+     * [OutputDeviceManager.refresh]).
+     */
+    private fun applyPreferredAudioDevice() {
+        applyPreferredAudioDeviceTo(activePlayerField)
+        // Mid-crossfade the AUDIBLE stream is the not-yet-promoted secondary: pin
+        // it too, or the incoming stream stays on the platform's default route.
+        fadeEngine.activeSecondaryPlayer?.let { applyPreferredAudioDeviceTo(it) }
+    }
+
+    /**
+     * Pins [target]'s audio sink to the resolved routing target. Three cases:
+     *  - no explicit pick yet -> clear the pin, the platform routes by its own
+     *    priority (BT attached => BT, matching pre-"Play on" behavior);
+     *  - "this device" pick -> pin the best LOCAL output (USB, wired, speaker) so
+     *    an attached BT headset does NOT steal the route;
+     *  - a concrete device pick -> pin that device.
+     * A target that detached between the state flip and this call leaves the
+     * previous route untouched (the override state itself self-corrects in
+     * [OutputDeviceManager.refresh]).
+     */
+    private fun applyPreferredAudioDeviceTo(target: ExoPlayer) {
+        val preferredId = outputDeviceManager.preferredDeviceId.value
+        if (preferredId == null) {
+            target.setPreferredAudioDevice(null)
+            return
+        }
+        val resolvedId = if (preferredId == OutputDeviceManager.ThisDevicePickId) {
+            // "This device" is a virtual target: the best local output stands in
+            // for it. No local output attached -> nothing to pin.
+            outputDeviceManager.localDevice?.id ?: return
+        } else {
+            preferredId
+        }
+        val deviceInfo = outputDeviceManager.systemDeviceInfoForId(resolvedId) ?: return
+        target.setPreferredAudioDevice(deviceInfo)
+    }
+
+    /**
+     * Explicit "Play on" routing from the device picker. Returns false when the
+     * target is not (or no longer) attached, so the UI can keep its previous
+     * selection. The pick persists across process restarts.
+     *
+     * After pinning the sink the player is flushed and re-prepared at the current
+     * position: several OEM AudioFlinger implementations only honor
+     * AudioTrack.setPreferredDevice at track CREATION, silently ignoring a live
+     * re-route of a playing track (which is why the switch otherwise only "works"
+     * after the next track change creates a fresh AudioTrack). Recreating the
+     * track makes the first switch deterministic; the brief gap is the same one a
+     * seek produces.
+     */
+    fun routeTo(deviceId: String): Boolean {
+        if (fadeEngine.isFading) fadeEngine.completeCrossfadeNow()
+        val applied = outputDeviceManager.setPreferredDevice(deviceId)
+        if (!applied) {
+            recomputeAudioOutputInfo()
+            return false
+        }
+        applyPreferredAudioDevice()
+        scope.launch { settingsRepository.setPreferredOutputDeviceId(deviceId) }
+        recomputeAudioOutputInfo()
+
+        // Force the fresh AudioTrack unless playback is idle anyway (nothing to
+        // re-create; the pin applies when the next track is prepared). stop()
+        // tears the renderer's AudioTrack down (STATE_IDLE) and prepare() rebuilds
+        // it with the just-pinned preferred device, at the same position.
+        if (player.playbackState != Player.STATE_IDLE) {
+            val resume = player.playWhenReady
+            val positionMs = player.currentPosition
+            player.stop()
+            player.seekTo(positionMs)
+            player.prepare()
+            if (resume) {
+                player.play()
+                _playbackState.value = _playbackState.value.copy(isPlaying = true)
+            }
+        }
+        return true
     }
 
     /**
@@ -846,13 +1067,20 @@ class AudioEngine @Inject constructor(
     }
 
     private suspend fun saveSessionSnapshot(state: PlaybackState) {
-        val ids = ArrayList<Long>(state.queue.size)
-        val flags = ArrayList<Boolean>(state.queue.size)
-        state.queue.forEachIndexed { i, track ->
-            if (state.auxiliaryFlags.getOrNull(i) != true) {
-                ids.add(track.id)
-                flags.add(state.queueSourceFlags.getOrNull(i) == true)
+        // O(queue) walk: kept off the Main dispatcher (the snapshot is immutable).
+        val (ids, flags, persistedCurrentIndex) = withContext(Dispatchers.Default) {
+            val ids = ArrayList<Long>(state.queue.size)
+            val flags = ArrayList<Boolean>(state.queue.size)
+            // Auxiliary entries may precede the current track, so its saved index is counted among main entries only.
+            var persistedCurrentIndex = 0
+            state.queue.forEachIndexed { i, track ->
+                if (state.auxiliaryFlags.getOrNull(i) != true) {
+                    if (i < state.queueIndex) persistedCurrentIndex++
+                    ids.add(track.id)
+                    flags.add(state.queueSourceFlags.getOrNull(i) == true)
+                }
             }
+            Triple(ids, flags, persistedCurrentIndex)
         }
         if (ids.isEmpty()) return
         hasSessionSaved = true
@@ -860,7 +1088,7 @@ class AudioEngine @Inject constructor(
             PersistedPlayback(
                 trackIds = ids,
                 sourceFlags = flags,
-                currentIndex = state.queueIndex.coerceIn(0, ids.lastIndex),
+                currentIndex = persistedCurrentIndex.coerceIn(0, ids.lastIndex),
                 positionMs = _positionMs.value,
                 isShuffle = state.isShuffle,
                 repeatMode = state.repeatMode,
@@ -900,7 +1128,7 @@ class AudioEngine @Inject constructor(
 
         val entryIds = List(tracks.size) { allocateEntryId() } +
                 List(AUXILIARY_QUEUE_LENGTH) { allocateEntryId() }
-        val newQueue = tracks + drawAuxiliaryTracks(emptySet(), AUXILIARY_QUEUE_LENGTH)
+        val newQueue = tracks + drawAuxiliaryTracks(queueTrackIds(tracks), AUXILIARY_QUEUE_LENGTH)
 
         pendingWindowResync = false
         _playbackState.value = _playbackState.value.copy(
@@ -959,8 +1187,10 @@ class AudioEngine @Inject constructor(
     }
 
     /**
-     * Plays [tracks] from a list pick: keeps played history, replaces the upcoming main-queue
-     * tracks with [tracks] and jumps to [startIndex]. The auxiliary pool is kept.
+     * Plays [tracks] from a list pick. The incoming list replaces the current track and every
+     * upcoming main-queue track, and becomes the only content of the main queue. Everything
+     * before the current track is kept as history but flagged auxiliary, so it no longer
+     * belongs to the main queue. The trailing auxiliary pool is kept.
      */
     fun playListReplacingUpcoming(
         tracks: List<TrackEntity>,
@@ -978,29 +1208,39 @@ class AudioEngine @Inject constructor(
         cancelPendingTransitions()
 
         val flags = current.auxiliaryFlags
+        // Trailing auxiliary pool: kept, but never reaching back into the replaced current track.
         var auxStart = current.queue.size
         while (auxStart > current.queueIndex + 1 && flags.getOrNull(auxStart - 1) == true) {
             auxStart--
         }
 
-        val keptCount = current.queueIndex + 1
-        val newQueue = current.queue.take(keptCount) + tracks +
+        // Entries before the current track stay, demoted to the auxiliary queue.
+        val historyCount = current.queueIndex
+        val tailCount = current.queue.size - auxStart
+        val newQueue = current.queue.take(historyCount) + tracks +
                 current.queue.subList(auxStart, current.queue.size)
+
+        val newIndex = historyCount + startIndex.coerceIn(0, tracks.lastIndex)
+        val newTrack = newQueue[newIndex]
 
         _playbackState.value = current.copy(
             queue = newQueue,
-            queueEntryIds = current.queueEntryIds.take(keptCount) +
+            queueIndex = newIndex,
+            currentTrack = newTrack,
+            durationMs = newTrack.duration,
+            queueEntryIds = current.queueEntryIds.take(historyCount) +
                     List(tracks.size) { allocateEntryId() } +
                     current.queueEntryIds.subList(auxStart, current.queueEntryIds.size),
-            auxiliaryFlags = flags.take(keptCount) + List(tracks.size) { false } +
-                    flags.subList(auxStart, flags.size),
+            auxiliaryFlags = List(historyCount) { true } +
+                    List(tracks.size) { false } +
+                    List(tailCount) { true },
             queueSourceId = sourceCollectionId,
-            queueSourceFlags = List(keptCount) { false } +
+            queueSourceFlags = List(historyCount) { false } +
                     List(tracks.size) { sourceCollectionId != null } +
-                    List(current.queue.size - auxStart) { false }
+                    List(tailCount) { false }
         )
 
-        jumpWindowTo(keptCount + startIndex.coerceIn(0, tracks.lastIndex), forcePlay = true)
+        jumpWindowTo(newIndex, forcePlay = true)
     }
 
     /** Inserts [track] at [requestedIndex] and patches the loaded timeline in place. */
@@ -1132,10 +1372,12 @@ class AudioEngine @Inject constructor(
                 tracks.subList(windowStart, windowEnd + 1).map { it.toMediaItem() }
             }
             if (jumpId != windowJumpId) return@launch
+            // Set BEFORE touching the player: ExoPlayer dispatches its listener callbacks
+            // synchronously inside setMediaItems, and they resolve queue indices through loadedRange.
+            loadedRange = windowStart..windowEnd
             player.setMediaItems(windowItems, centerIndex - windowStart, 0L)
             if (playAfterPrepare) player.play() else player.pause()
             player.prepare()
-            loadedRange = windowStart..windowEnd
         }
     }
 
@@ -1151,6 +1393,9 @@ class AudioEngine @Inject constructor(
 
             var start = loadedRange.first
             var end = loadedRange.last
+            // The queue can be reordered while a chunk is being built (queue shuffle); a chunk
+            // from the old order must not reach the timeline. A later transition re-adjusts.
+            fun queueChanged() = _playbackState.value.queue !== tracks
 
             if (end < tracks.lastIndex && end - currentIndex < EDGE_TRIGGER_MARGIN) {
                 val newEnd = (end + CHUNK_SIZE).coerceAtMost(tracks.lastIndex)
@@ -1158,8 +1403,10 @@ class AudioEngine @Inject constructor(
                     tracks.subList(end + 1, newEnd + 1).map { it.toMediaItem() }
                 }
                 awaitFrame()
+                if (queueChanged()) return@withLock
                 player.addMediaItems(chunk)
                 end = newEnd
+                loadedRange = start..end
             }
 
             if (start > 0 && currentIndex - start < EDGE_TRIGGER_MARGIN) {
@@ -1168,8 +1415,10 @@ class AudioEngine @Inject constructor(
                     tracks.subList(newStart, start).map { it.toMediaItem() }
                 }
                 awaitFrame()
+                if (queueChanged()) return@withLock
                 player.addMediaItems(0, chunk)
                 start = newStart
+                loadedRange = start..end
             }
 
             val overhang = WINDOW_RADIUS + CHUNK_SIZE
@@ -1177,15 +1426,19 @@ class AudioEngine @Inject constructor(
                 val newStart = currentIndex - WINDOW_RADIUS
                 val removeCount = newStart - start
                 awaitFrame()
+                if (queueChanged()) return@withLock
                 player.removeMediaItems(0, removeCount)
                 start = newStart
+                loadedRange = start..end
             }
             if (end - currentIndex > overhang) {
                 val newEnd = currentIndex + WINDOW_RADIUS
                 val keepCount = newEnd - start + 1
                 awaitFrame()
+                if (queueChanged()) return@withLock
                 player.removeMediaItems(keepCount, player.mediaItemCount)
                 end = newEnd
+                loadedRange = start..end
             }
 
             loadedRange = start..end
@@ -1233,6 +1486,38 @@ class AudioEngine @Inject constructor(
     fun previous() {
         cancelPendingTransitions()
         val state = _playbackState.value
+        // Repeat-all wrap: previous at the primary queue's head (within the restart
+        // window, like any other previous step) goes back to the primary queue's end,
+        // stepping backward over known-failed tracks. Auxiliary entries before the
+        // primary queue are skipped by the wrap.
+        if (state.repeatMode == RepeatMode.ALL &&
+            state.queueIndex >= 0 &&
+            state.queueIndex == primaryQueueFirstIndex(state) &&
+            player.contentPosition <= 5000L
+        ) {
+            // Repeat-all + shuffle: settle the wrap landing (the queue's last slot) first.
+            prepareWrapLanding(forward = false)
+            val state = _playbackState.value
+            var target = primaryQueueLastIndex(state)
+            while (target > state.queueIndex && state.queue[target].id in failedTrackIds) {
+                target--
+            }
+            if (target > state.queueIndex) {
+                if (fadeEngine.quickFadeEnabled && player.isPlaying &&
+                    fadeEngine.startCrossfade(target, 0L, fadeEngine.quickFadeDurationMs)
+                ) {
+                    return
+                }
+                loadWindowAndPlay(state.queue, target)
+                return
+            }
+            // Sole primary track or all of them failed: fall through to the default behavior.
+        }
+        if (pendingWindowResync && state.queueIndex > 0 && player.contentPosition <= 5000L) {
+            // The loaded timeline no longer matches the queue: step along the queue itself.
+            loadWindowAndPlay(state.queue, state.queueIndex - 1)
+            return
+        }
         if (player.hasPreviousMediaItem()) {
             if (player.contentPosition <= 5000L) {
                 // TODO: Make this an app parameter.
@@ -1302,11 +1587,28 @@ class AudioEngine @Inject constructor(
         val queue = _playbackState.value.queue
         if (index !in queue.indices) return
 
+        val state = _playbackState.value
+        val primaryFirst = primaryQueueFirstIndex(state)
+        val primaryLast = primaryQueueLastIndex(state)
         var target = index
-        while (target in queue.indices && queue[target].id in failedTrackIds) {
-            target += if (forward) 1 else -1
+        if (state.repeatMode == RepeatMode.ALL && primaryFirst < primaryLast && index in primaryFirst..primaryLast) {
+            // Repeat-all: the primary queue is a loop, so stepping over failed tracks wraps
+            // around its ends instead of leaking into the auxiliary pool.
+            var guard = 0
+            while (queue[target].id in failedTrackIds && guard++ <= primaryLast - primaryFirst) {
+                target = if (forward) {
+                    if (target >= primaryLast) primaryFirst else target + 1
+                } else {
+                    if (target <= primaryFirst) primaryLast else target - 1
+                }
+            }
+            if (queue[target].id in failedTrackIds) target = index
+        } else {
+            while (target in queue.indices && queue[target].id in failedTrackIds) {
+                target += if (forward) 1 else -1
+            }
+            if (target !in queue.indices) target = index
         }
-        if (target !in queue.indices) target = index
 
         cancelPendingTransitions()
 
@@ -1376,12 +1678,40 @@ class AudioEngine @Inject constructor(
         player.seekTo(positionMs)
     }
 
-    /** Advances to the next item, crossfading when [useFade] and quick fades are enabled. */
+    /**
+     * Advances to the next item, crossfading when [useFade] and quick fades are enabled.
+     * Repeat-all wraps at the primary queue's end (the auxiliary pool is only entered by
+     * manual navigation); repeat-off also advances into the pool.
+     */
     private fun advanceToNext(useFade: Boolean) {
         val state = _playbackState.value
+        // Repeat-all wrap, decided from the LOGICAL queue position rather than from the
+        // player's timeline: on the last primary track, next always restarts the primary
+        // queue and never flows on into the auxiliary pool, whatever the window holds.
+        if (state.repeatMode == RepeatMode.ALL && state.queueIndex >= 0) {
+            val primaryLast = primaryQueueLastIndex(state)
+            if (primaryLast >= 0 && state.queueIndex >= primaryLast) {
+                wrapToQueueStart(useFade)
+                return
+            }
+        }
+        if (pendingWindowResync && state.queueIndex + 1 in state.queue.indices) {
+            // The loaded timeline no longer matches the queue: step along the queue itself.
+            loadWindowAndPlay(state.queue, state.queueIndex + 1)
+            return
+        }
         if (player.hasNextMediaItem()) {
+            val targetQueueIndex = player.nextMediaItemIndex + loadedRange.first
+            // Safety net: a timeline next landing on the first auxiliary entry past
+            // the primary queue restarts the queue instead.
+            if (state.repeatMode == RepeatMode.ALL &&
+                targetQueueIndex == primaryQueueLastIndex(state) + 1 &&
+                state.auxiliaryFlags.getOrNull(targetQueueIndex) == true
+            ) {
+                wrapToQueueStart(useFade)
+                return
+            }
             if (useFade) {
-                val targetQueueIndex = player.nextMediaItemIndex + loadedRange.first
                 val targetId = state.queue.getOrNull(targetQueueIndex)?.id
                 if (fadeEngine.quickFadeEnabled && player.isPlaying && targetId != null &&
                     targetId !in failedTrackIds &&
@@ -1392,34 +1722,56 @@ class AudioEngine @Inject constructor(
             }
             player.seekToNextMediaItem()
         } else {
-            val nextIndex = state.queueIndex + 1
-            if (nextIndex in state.queue.indices) {
-                if (useFade) {
-                    val targetId = state.queue[nextIndex].id
-                    if (fadeEngine.quickFadeEnabled && player.isPlaying && targetId !in failedTrackIds &&
-                        fadeEngine.startCrossfade(nextIndex, 0L, fadeEngine.quickFadeDurationMs)
-                    ) {
-                        return
-                    }
+            var nextIndex = state.queueIndex + 1
+            val primaryLast = primaryQueueLastIndex(state)
+            if (nextIndex > primaryLast) {
+                if (state.repeatMode == RepeatMode.ALL && primaryLast >= 0) {
+                    nextIndex = primaryQueueFirstIndex(state)
+                } else if (nextIndex >= state.queue.size) {
+                    return
                 }
-                loadWindowAndPlay(state.queue, nextIndex)
+                // Else: repeat-off flows on into the auxiliary pool (up-next content).
             }
+            if (useFade) {
+                val targetId = state.queue[nextIndex].id
+                if (fadeEngine.quickFadeEnabled && player.isPlaying && targetId !in failedTrackIds &&
+                    fadeEngine.startCrossfade(nextIndex, 0L, fadeEngine.quickFadeDurationMs)
+                ) {
+                    return
+                }
+            }
+            loadWindowAndPlay(state.queue, nextIndex)
         }
     }
 
     private fun entryIndexOf(entryId: Long): Int =
         _playbackState.value.queueEntryIds.indexOf(entryId)
 
-    private fun candidateIndexesFor(trackId: Long): List<Int> =
-        _playbackState.value.queue
-            .withIndex()
-            .filter { (_, t) -> t.id == trackId }
-            .map { (i, _) -> i }
+    private fun candidateIndexesFor(trackId: Long): List<Int> {
+        val queue = _playbackState.value.queue
+        var result: ArrayList<Int>? = null
+        for (i in queue.indices) {
+            if (queue[i].id == trackId) {
+                if (result == null) result = ArrayList(2)
+                result.add(i)
+            }
+        }
+        return result ?: emptyList()
+    }
 
-    /** Manual pick from the queue screen: moves the entry next and plays it, even over a paused session. */
+    /**
+     * Manual pick from the queue screen. In repeat-all it just moves the playhead to the
+     * entry, keeping the queue order intact; otherwise it moves the entry next and plays
+     * it, even over a paused session.
+     */
     fun playQueueEntry(entryId: Long) {
         val fromIndex = entryIndexOf(entryId)
         if (fromIndex == -1) return
+        if (_playbackState.value.repeatMode == RepeatMode.ALL) {
+            skipToIndex(fromIndex)
+            player.play()
+            return
+        }
         val nextIndex = (_playbackState.value.queueIndex + 1).coerceAtLeast(0)
         if (fromIndex != nextIndex) {
             moveQueueItem(fromIndex, nextIndex)
@@ -1448,15 +1800,23 @@ class AudioEngine @Inject constructor(
     /**
      * The queue screen's swipe-right action: moves the entry to the first upcoming slot
      * and, when it came from the auxiliary pool, clears its flag so it joins the primary
-     * queue (the pool refills right away).
+     * queue (the pool refills right away). Entries from the played history (repeat-all's
+     * full-queue view) are moved there too. The playing entry itself is left alone.
      */
     fun promoteQueueEntry(entryId: Long) {
         val fromIndex = entryIndexOf(entryId)
         if (fromIndex == -1) return
         val current = _playbackState.value
-        if (fromIndex <= current.queueIndex) return
+        if (fromIndex == current.queueIndex) return
         val wasAuxiliary = current.auxiliaryFlags.getOrNull(fromIndex) == true
-        val nextIndex = (current.queueIndex + 1).coerceAtLeast(0)
+        // moveQueueItem's target is the entry's FINAL index. From behind the playhead,
+        // taking the entry out shifts the playing track down one slot, so the first
+        // upcoming slot is queueIndex itself, not queueIndex + 1.
+        val nextIndex = if (fromIndex < current.queueIndex) {
+            current.queueIndex
+        } else {
+            (current.queueIndex + 1).coerceAtLeast(0)
+        }
 
         if (fromIndex != nextIndex) {
             moveQueueItem(fromIndex, nextIndex)
@@ -1502,9 +1862,11 @@ class AudioEngine @Inject constructor(
                 )
             }
             .shuffled()
+        // Auxiliary slots are being replaced, so only the rest of the queue (history included) counts.
+        val replacedAuxiliary = upcomingRange.filter { flags.getOrNull(it) == true }
         val freshAuxiliary = drawAuxiliaryTracks(
-            existing = upcomingTrackIds(queue, current.queueIndex),
-            count = upcomingRange.count { flags.getOrNull(it) == true }
+            existing = queueTrackIds(queue, replacedAuxiliary.toSet()),
+            count = replacedAuxiliary.size
         )
 
         val newQueue = queue.toMutableList()
@@ -1706,27 +2068,41 @@ class AudioEngine @Inject constructor(
         }
     }
 
+    /**
+     * Toggles queue shuffle. Only effective in repeat-all: wrapping past the end (next) or the
+     * start (previous) of the main queue reshuffles it (see [prepareWrapLanding]).
+     */
     fun toggleShuffle() {
         val newShuffle = !_playbackState.value.isShuffle
-        player.shuffleModeEnabled = newShuffle
+        player.shuffleModeEnabled = false
+        clearQueueShufflePending()
         _playbackState.value = _playbackState.value.copy(isShuffle = newShuffle)
     }
 
-    /** Cycles repeat mode: NONE -> ALL -> ONE. */
+    /** Cycles repeat mode: NONE -> ONE -> ALL. */
     fun toggleRepeat() {
         val nextMode = when (_playbackState.value.repeatMode) {
-            RepeatMode.NONE -> RepeatMode.ALL
-            RepeatMode.ALL -> RepeatMode.ONE
-            RepeatMode.ONE -> RepeatMode.NONE
+            RepeatMode.NONE -> RepeatMode.ONE
+            RepeatMode.ONE -> RepeatMode.ALL
+            RepeatMode.ALL -> RepeatMode.NONE
         }
-        player.repeatMode = when (nextMode) {
-            RepeatMode.NONE -> Player.REPEAT_MODE_OFF
-            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
-            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
-        }
+        player.repeatMode = playerRepeatMode(nextMode)
         // Repeat-one loops the item itself, so the pause-at-end signal must stay armed off.
         applyPauseAtEndOfMediaItems()
+        clearQueueShufflePending()
         _playbackState.value = _playbackState.value.copy(repeatMode = nextMode)
+    }
+
+    /**
+     * Session repeat mode as an ExoPlayer mode. ALL deliberately maps to OFF: the app-level
+     * loop wraps only the primary queue (see [maybeStartTrackCrossfade] and the STATE_ENDED
+     * wrap in [startProgressTracker]), while the player's REPEAT_MODE_ALL would also loop the
+     * random auxiliary pool appended after the user's queue.
+     */
+    private fun playerRepeatMode(mode: RepeatMode): Int = when (mode) {
+        RepeatMode.NONE -> Player.REPEAT_MODE_OFF
+        RepeatMode.ALL -> Player.REPEAT_MODE_OFF
+        RepeatMode.ONE -> Player.REPEAT_MODE_ONE
     }
 
     /** Queue index of the playing track from the player's timeline position, falling back to the nearest occurrence. */
@@ -1758,6 +2134,312 @@ class AudioEngine @Inject constructor(
     private fun normalizeAuxiliaryFlags(flags: List<Boolean>, queueSize: Int): List<Boolean> =
         if (flags.size == queueSize) flags else List(queueSize) { false }
 
+    /**
+     * Repeat-all wrap: restarts the primary queue. Plays index 0 through the standard
+     * window loader; the transition's listen bookkeeping fires from the player callback.
+     */
+    private fun wrapToQueueStart(useFade: Boolean = false) {
+        // Repeat-all + shuffle: settle the wrap landing (the queue's first slot) first.
+        prepareWrapLanding(forward = true)
+        val state = _playbackState.value
+        if (state.queue.isEmpty()) return
+        crossfadeArmedForTrackId = null
+        silenceGapArmedForTrackId = null
+
+        // First primary track that did not fail to load (known-failed ones are stepped over).
+        val first = primaryQueueFirstIndex(state)
+        val last = primaryQueueLastIndex(state)
+        var target = first
+        while (target < last && state.queue[target].id in failedTrackIds) {
+            target++
+        }
+
+        if (useFade && fadeEngine.quickFadeEnabled && player.isPlaying &&
+            state.queue[target].id !in failedTrackIds &&
+            fadeEngine.startCrossfade(target, 0L, fadeEngine.quickFadeDurationMs)
+        ) {
+            return
+        }
+        loadWindowAndPlay(state.queue, target)
+    }
+
+    /**
+     * Queue shuffle, step 1 (repeat-all + shuffle enabled only). When the playing track is on the
+     * last primary slot and the next move wraps forward (or on the first slot and it wraps
+     * backward), settles which entry the wrap lands on: a random other main entry is swapped into
+     * the landing slot (first slot going next, last slot going previous). The playing entry keeps
+     * its slot, so nothing visible moves, yet the pager's ghost page already shows the real
+     * upcoming track. Safe to call repeatedly; also called by the full player when a swipe starts
+     * ([prepareQueueShuffle]). The actual reshuffle follows once the pager rests ([trackLandedForQueueShuffle]).
+     */
+    private fun prepareWrapLanding(forward: Boolean) {
+        val state = _playbackState.value
+        if (!state.isShuffle || state.repeatMode != RepeatMode.ALL) return
+        if (pendingFadeWindowStart != null) return
+        val current = state.queueIndex
+        val queue = state.queue
+        if (current !in queue.indices) return
+
+        val first = primaryQueueFirstIndex(state)
+        val last = primaryQueueLastIndex(state)
+        if (last <= first) return
+        if (current != (if (forward) last else first)) return
+
+        val entryIds = state.queueEntryIds
+        val sourceFlags = state.queueSourceFlags
+        if (entryIds.size != queue.size || sourceFlags.size != queue.size) return
+        val mark = Triple(entryIds[current], last - first + 1, forward)
+        if (preparedWrap == mark) return
+
+        val flags = state.auxiliaryFlags
+        val from = pickRandomPrimarySlot(first, last, current, flags)
+        if (from < 0) return
+        preparedWrap = mark
+
+        val landingSlot = if (forward) first else last
+        postWrapLandingEntryId = entryIds[from]
+        if (from == landingSlot) return
+
+        val newQueue = queue.toMutableList()
+        val newEntryIds = entryIds.toMutableList()
+        val newSourceFlags = sourceFlags.toMutableList()
+        newQueue[landingSlot] = queue[from]
+        newQueue[from] = queue[landingSlot]
+        newEntryIds[landingSlot] = entryIds[from]
+        newEntryIds[from] = entryIds[landingSlot]
+        newSourceFlags[landingSlot] = sourceFlags[from]
+        newSourceFlags[from] = sourceFlags[landingSlot]
+        _playbackState.value = state.copy(
+            queue = newQueue,
+            queueEntryIds = newEntryIds,
+            queueSourceFlags = newSourceFlags
+        )
+        patchTimelineAroundCurrent(newQueue, current)
+    }
+
+    /**
+     * Random primary slot in [first]..[last] other than [exclude] and not auxiliary, or -1.
+     * Rejection sampling keeps this O(1) on long queues (no boxed candidate list); the
+     * exhaustive reservoir scan only runs for tiny or auxiliary-heavy ranges.
+     */
+    private fun pickRandomPrimarySlot(first: Int, last: Int, exclude: Int, flags: List<Boolean>): Int {
+        val span = last - first + 1
+        if (span <= 0) return -1
+        repeat(16) {
+            val i = first + Random.nextInt(span)
+            if (i != exclude && flags.getOrNull(i) != true) return i
+        }
+        var seen = 0
+        var pick = -1
+        for (i in first..last) {
+            if (i == exclude || flags.getOrNull(i) == true) continue
+            seen++
+            if (Random.nextInt(seen) == 0) pick = i
+        }
+        return pick
+    }
+
+    /** Full player hook: a swipe started, so the wrap landing is settled before its ghost page is revealed. */
+    fun prepareQueueShuffle() {
+        val state = _playbackState.value
+        val last = primaryQueueLastIndex(state)
+        val first = primaryQueueFirstIndex(state)
+        when (state.queueIndex) {
+            last -> prepareWrapLanding(forward = true)
+            first -> prepareWrapLanding(forward = false)
+        }
+    }
+
+    private fun clearQueueShufflePending() {
+        preparedWrap = null
+        postWrapLandingEntryId = null
+        postWrapLanded = false
+        postWrapRestPending = false
+    }
+
+    /**
+     * Called whenever a track becomes current (natural transition, window load, crossfade switch
+     * and swap). Marks the wrap landing as reached; the reshuffle itself waits for the full
+     * player's hero pager to come to rest ([onHeroPagerRested]), because reordering earlier would
+     * change the outgoing page while it is still sliding away. If the user moves on before that
+     * (or the full player isn't showing), the shuffle is applied here instead, keeping both the
+     * left and the new track in place.
+     */
+    private fun trackLandedForQueueShuffle() {
+        resolveLandedForQueueShuffle()
+        settleBoundaryLandingEarly()
+    }
+
+    /**
+     * Settles the wrap landing as soon as the playing track sits on a primary boundary slot,
+     * instead of waiting for the next swipe to start. The pager's ghost page (and its artwork /
+     * palette prefetch) then already targets the real landing track while the user is still
+     * listening, so the art is loaded before the swipe reveals it. Skipped while a wrap's own
+     * reshuffle is pending, so it can't overwrite that landing entry.
+     */
+    private fun settleBoundaryLandingEarly() {
+        if (postWrapLandingEntryId != null) return
+        prepareQueueShuffle()
+    }
+
+    private fun resolveLandedForQueueShuffle() {
+        val landing = postWrapLandingEntryId ?: return
+        val state = _playbackState.value
+        val entry = state.queueEntryIds.getOrNull(state.queueIndex)
+        if (entry == landing) {
+            postWrapLanded = true
+            applyShuffleIfPagerRested()
+            return
+        }
+        if (postWrapLanded && entry != null) applyPostWrapShuffle(setOf(landing, entry))
+        clearQueueShufflePending()
+    }
+
+    /** Full player hook: the hero pager rests on the playing page, so no outgoing page is left to disturb. */
+    fun onHeroPagerRested() {
+        val landing = postWrapLandingEntryId ?: return
+        if (!postWrapLanded) return
+        val state = _playbackState.value
+        if (state.queueEntryIds.getOrNull(state.queueIndex) != landing) return
+        postWrapRestPending = true
+        applyShuffleIfPagerRested()
+    }
+
+    private fun applyShuffleIfPagerRested() {
+        val landing = postWrapLandingEntryId ?: return
+        if (!postWrapLanded || !postWrapRestPending) return
+        // A crossfade still owns the timeline; the swap hook comes back here.
+        if (pendingFadeWindowStart != null) return
+        applyPostWrapShuffle(setOf(landing))
+        clearQueueShufflePending()
+        // The track we rest on may itself be a boundary slot (e.g. just wrapped onto slot 0).
+        settleBoundaryLandingEarly()
+    }
+
+    /**
+     * Queue shuffle, step 2: after a repeat-all wrap the main queue changes order. Entries in
+     * [pinned] (the track now playing, and possibly the one just left) keep their slots; every
+     * other main entry is shuffled among the primary slots. The auxiliary queue is never touched.
+     */
+    private fun applyPostWrapShuffle(pinned: Set<Long>) {
+        val state = _playbackState.value
+        if (pendingFadeWindowStart != null) return
+        if (!state.isShuffle || state.repeatMode != RepeatMode.ALL) return
+        val current = state.queueIndex
+        val queue = state.queue
+        val entryIds = state.queueEntryIds
+        val sourceFlags = state.queueSourceFlags
+        if (current !in queue.indices) return
+        if (entryIds.size != queue.size || sourceFlags.size != queue.size) return
+
+        val first = primaryQueueFirstIndex(state)
+        val last = primaryQueueLastIndex(state)
+        val flags = state.auxiliaryFlags
+        // Primitive arrays: boxed List<Int> filter/shuffle was the main cost on queues of
+        // thousands of tracks, and this runs on the Main dispatcher.
+        val slotBuffer = IntArray((last - first + 1).coerceAtLeast(0))
+        var slotCount = 0
+        for (i in first..last) {
+            if (i != current && flags.getOrNull(i) != true && entryIds[i] !in pinned) {
+                slotBuffer[slotCount++] = i
+            }
+        }
+        if (slotCount < 2) return
+        val slots = slotBuffer.copyOf(slotCount)
+        val order = slots.copyOf()
+        for (i in slotCount - 1 downTo 1) {
+            val j = Random.nextInt(i + 1)
+            val tmp = order[i]; order[i] = order[j]; order[j] = tmp
+        }
+        if (order.contentEquals(slots)) {
+            val tmp = order[0]; order[0] = order[1]; order[1] = tmp
+        }
+
+        val newQueue = queue.toMutableList()
+        val newEntryIds = entryIds.toMutableList()
+        val newSourceFlags = sourceFlags.toMutableList()
+        for (i in 0 until slotCount) {
+            val from = order[i]
+            val to = slots[i]
+            newQueue[to] = queue[from]
+            newEntryIds[to] = entryIds[from]
+            newSourceFlags[to] = sourceFlags[from]
+        }
+        _playbackState.value = state.copy(
+            queue = newQueue,
+            queueEntryIds = newEntryIds,
+            queueSourceFlags = newSourceFlags
+        )
+        patchTimelineAroundCurrent(newQueue, current)
+    }
+
+    /**
+     * Rewrites every loaded media item except the playing one from [newQueue], without
+     * interrupting playback. Falls back to a lazy window rebuild when the timeline can't be
+     * trusted (the player is not on [currentIndex]).
+     */
+    private fun patchTimelineAroundCurrent(newQueue: List<TrackEntity>, currentIndex: Int) {
+        if (pendingWindowResync || loadedRange == IntRange.EMPTY) return
+        val currentPlayerIndex = currentIndex - loadedRange.first
+        if (currentPlayerIndex !in 0 until player.mediaItemCount ||
+            player.currentMediaItemIndex != currentPlayerIndex
+        ) {
+            windowJumpId++
+            windowJumpJob?.cancel()
+            pendingWindowResync = true
+            return
+        }
+        val start = loadedRange.first
+        val end = loadedRange.last.coerceAtMost(newQueue.lastIndex)
+        // Each side is swapped with a single atomic replace: the playing item never leaves the
+        // timeline, so listeners (MediaSession) never observe an index outside it.
+        val afterCount = player.mediaItemCount - (currentPlayerIndex + 1)
+        if (afterCount > 0 && currentIndex + 1 <= end &&
+            end - currentIndex == afterCount
+        ) {
+            player.replaceMediaItems(
+                currentPlayerIndex + 1,
+                player.mediaItemCount,
+                newQueue.subList(currentIndex + 1, end + 1).map { it.toMediaItem() }
+            )
+        } else if (afterCount > 0) {
+            windowJumpId++
+            windowJumpJob?.cancel()
+            pendingWindowResync = true
+            return
+        }
+        if (currentPlayerIndex > 0) {
+            player.replaceMediaItems(
+                0,
+                currentPlayerIndex,
+                newQueue.subList(start, currentIndex).map { it.toMediaItem() }
+            )
+        }
+        loadedRange = start..end
+    }
+
+    /**
+     * First index of the PRIMARY queue: auxiliary history demoted by a list pick can precede
+     * it. Repeat-all wraps here. 0 when the queue has no primary tracks.
+     */
+    private fun primaryQueueFirstIndex(state: PlaybackState): Int {
+        val index = state.auxiliaryFlags.indexOfFirst { !it }
+        return if (index >= 0) index else 0
+    }
+
+    /**
+     * Last index of the PRIMARY queue (the user's own tracks), i.e. before the random
+     * auxiliary pool. -1 when the queue has no primary tracks. Repeat-all wraps at this
+     * boundary; the auxiliary tail is only ever reached by manual navigation.
+     */
+    private fun primaryQueueLastIndex(state: PlaybackState): Int {
+        var index = state.queue.lastIndex
+        while (index >= 0 && state.auxiliaryFlags.getOrNull(index) == true) {
+            index--
+        }
+        return index
+    }
+
     private fun normalizeQueueSourceFlags(flags: List<Boolean>, queueSize: Int): List<Boolean> =
         if (flags.size == queueSize) flags else List(queueSize) { false }
 
@@ -1769,22 +2451,34 @@ class AudioEngine @Inject constructor(
         return count >= AUXILIARY_QUEUE_LENGTH
     }
 
-    private fun upcomingTrackIds(queue: List<TrackEntity>, queueIndex: Int): Set<Long> =
-        queue.drop(queueIndex + 1).mapTo(HashSet()) { it.id }
+    /**
+     * Ids of every track in the queue (played history, current track and upcoming entries),
+     * optionally ignoring the slots in [ignoredIndices] (e.g. auxiliary slots about to be replaced).
+     */
+    private fun queueTrackIds(
+        queue: List<TrackEntity>,
+        ignoredIndices: Set<Int> = emptySet()
+    ): Set<Long> {
+        val ids = HashSet<Long>(queue.size * 2)
+        queue.forEachIndexed { i, track -> if (i !in ignoredIndices) ids += track.id }
+        return ids
+    }
 
-    /** Draws [count] random tracks, preferring ids not in [existing]. Repeats only when the library is exhausted. */
+    /**
+     * Draws [count] random tracks. Tracks not in [existing] are used first, each at most once
+     * per call. Only when the library has too few such tracks are repeats allowed: the rest is
+     * filled by cycling through reshuffled copies of the whole library, so a track repeats
+     * only after every other one has been drawn.
+     */
     private fun drawAuxiliaryTracks(existing: Collection<Long>, count: Int): List<TrackEntity> {
         val pool = allTracks
         if (pool.isEmpty() || count <= 0) return emptyList()
 
-        val fresh = pool.filter { it.id !in existing }
+        val excluded = existing as? Set<Long> ?: existing.toHashSet()
         val draws = ArrayList<TrackEntity>(count)
+        draws += pool.filter { it.id !in excluded }.shuffled().take(count)
         while (draws.size < count) {
-            draws += if (fresh.isNotEmpty()) {
-                fresh[Random.nextInt(fresh.size)]
-            } else {
-                pool[Random.nextInt(pool.size)]
-            }
+            draws += pool.shuffled().take(count - draws.size)
         }
         return draws
     }
@@ -1801,7 +2495,10 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    /** Appends random tracks so the auxiliary pool after the current track is full. */
+    /**
+     * Appends random tracks so the auxiliary pool after the current track is full. Tracks already
+     * anywhere in the queue are avoided unless the library is too small.
+     */
     private fun refillAuxiliary() {
         val current = _playbackState.value
         val flags = current.auxiliaryFlags
@@ -1809,10 +2506,8 @@ class AudioEngine @Inject constructor(
         if (hasFullAuxiliaryPool(flags, current.queueIndex)) return
 
         val needed = AUXILIARY_QUEUE_LENGTH - flags.drop(current.queueIndex + 1).count { it }
-        val additions = drawAuxiliaryTracks(
-            upcomingTrackIds(current.queue, current.queueIndex),
-            needed
-        )
+        // Whole queue: played history, current track and upcoming entries.
+        val additions = drawAuxiliaryTracks(queueTrackIds(current.queue), needed)
         if (additions.isEmpty()) return
 
         _playbackState.value = current.copy(
@@ -1825,13 +2520,15 @@ class AudioEngine @Inject constructor(
 
     /**
      * Starts the automatic crossfade into the next track when the current one nears its end.
-     * Skipped for repeat-one, at the queue end, and when the next track failed to load.
-     * Re-evaluated on every progress tick.
+     * Skipped for repeat-one and when the next track failed to load. At the primary queue's
+     * end, repeat-all wraps to its start (the auxiliary pool is only entered by manual
+     * navigation); repeat-off keeps flowing into the pool. Re-evaluated on every progress tick.
      */
     private fun maybeStartTrackCrossfade() {
         if (silenceBetweenTracksMs > 0L) return
         if (fadeEngine.isFading) return
         if (!fadeEngine.normalFadeEnabled) return
+        prepareWrapLanding(forward = true)
         val state = _playbackState.value
         if (state.repeatMode == RepeatMode.ONE) return
 
@@ -1841,8 +2538,17 @@ class AudioEngine @Inject constructor(
         val duration = player.duration
         if (duration <= 0L || duration == C.TIME_UNSET) return
 
-        val nextIndex = state.queueIndex + 1
-        if (nextIndex !in state.queue.indices) return
+        var nextIndex = state.queueIndex + 1
+        val primaryLast = primaryQueueLastIndex(state)
+        if (nextIndex > primaryLast) {
+            when {
+                state.repeatMode == RepeatMode.ALL && primaryLast >= 0 &&
+                        (nextIndex == primaryLast + 1 || nextIndex >= state.queue.size) ->
+                    nextIndex = primaryQueueFirstIndex(state)
+                nextIndex >= state.queue.size -> return
+                // Else: repeat-off flows on into the auxiliary pool (up-next content).
+            }
+        }
         if (state.queue[nextIndex].id in failedTrackIds) return
 
         val normalFadeMs = fadeEngine.normalFadeDurationMs
@@ -1881,15 +2587,18 @@ class AudioEngine @Inject constructor(
         if (silenceCountdownJob != null) return
         if (fadeEngine.isFading) return
 
+        prepareWrapLanding(forward = true)
         val state = _playbackState.value
         if (state.repeatMode == RepeatMode.ONE) return
 
         val trackId = player.currentMediaItem?.mediaId?.toLongOrNull() ?: return
         if (silenceGapArmedForTrackId == trackId) return
 
+        val primaryLast = primaryQueueLastIndex(state)
         val nextIndex = when {
+            state.queueIndex + 1 <= primaryLast -> state.queueIndex + 1
+            state.repeatMode == RepeatMode.ALL && primaryLast >= 0 -> primaryQueueFirstIndex(state)
             state.queueIndex + 1 < state.queue.size -> state.queueIndex + 1
-            state.repeatMode == RepeatMode.ALL && state.queue.isNotEmpty() -> 0
             else -> return
         }
         if (state.queue[nextIndex].id in failedTrackIds) return
@@ -2087,7 +2796,7 @@ class AudioEngine @Inject constructor(
                 if (audible) {
                     awaitFrame()
                 } else {
-                    delay(PAUSED_POLL_INTERVAL_MS)
+                    delay(PAUSED_POLL_INTERVAL_MS.milliseconds)
                 }
             }
         }

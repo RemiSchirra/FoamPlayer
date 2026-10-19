@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.foamplayer.app.audio.device.OutputDeviceManager
+import com.foamplayer.app.data.distant.DistantRepository
+import com.foamplayer.app.data.distant.PlayOnDeviceRepository
 import com.foamplayer.app.data.db.AppDatabase
 import com.foamplayer.app.data.db.dao.CachedLyricsDao
 import com.foamplayer.app.data.db.dao.ListenHistoryDao
@@ -14,6 +17,7 @@ import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.LocalAudioScanner
 import com.foamplayer.app.data.scanner.PlaylistCoverProvider
+import com.foamplayer.app.data.scanner.RemoteLibraryScanner
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -40,6 +44,7 @@ object RepositoryModule {
         database: AppDatabase,
         trackDao: TrackDao,
         scanner: LocalAudioScanner,
+        remoteScanner: RemoteLibraryScanner,
         settingsRepository: SettingsRepository,
         cachedLyricsDao: CachedLyricsDao,
         listenHistoryDao: ListenHistoryDao
@@ -48,6 +53,7 @@ object RepositoryModule {
             database,
             trackDao,
             scanner,
+            remoteScanner,
             settingsRepository,
             cachedLyricsDao,
             listenHistoryDao
@@ -67,4 +73,13 @@ object RepositoryModule {
     @Singleton
     fun provideSettingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         context.settingsDataStore
+
+    @Provides
+    @Singleton
+    fun providePlayOnDeviceRepository(
+        outputDeviceManager: OutputDeviceManager,
+        distantRepository: DistantRepository
+    ): PlayOnDeviceRepository {
+        return PlayOnDeviceRepository(outputDeviceManager, distantRepository)
+    }
 }

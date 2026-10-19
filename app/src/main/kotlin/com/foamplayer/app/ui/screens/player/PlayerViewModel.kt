@@ -12,13 +12,18 @@ import com.foamplayer.app.data.canvas.CanvasProvider
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
+import com.foamplayer.app.data.distant.DistantRepository
+import com.foamplayer.app.data.distant.PlayOnDeviceRepository
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.app.ui.modals.PlayOnDevice
+import com.foamplayer.distant.DistantUris
 import com.foamplayer.canvas.CanvasArtwork
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -32,8 +37,57 @@ class PlayerViewModel @Inject constructor(
     private val audioEngine: AudioEngine,
     private val settingsRepository: SettingsRepository,
     private val trackRepository: TrackRepository,
-    private val canvasProvider: CanvasProvider
+    private val canvasProvider: CanvasProvider,
+    private val playOnDeviceRepository: PlayOnDeviceRepository
 ) : ViewModel() {
+
+    val playOnDevices: StateFlow<List<PlayOnDevice>> =
+        playOnDeviceRepository.devices
+            .combine(playOnDeviceRepository.sessionPoll) { devices, _ -> devices }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = listOf(PlayOnDevice.ThisDevice)
+            )
+
+    /** What the "Play on" sheet shows as selected: the resolved routing target. */
+    val selectedPlayOnDeviceId: StateFlow<String?> = audioEngine.selectedPlayOnDeviceId
+
+    /**
+     * Commits the "Play on" pick. Two transports behind the ids:
+     *  - local output (this device / a Bluetooth output): pins the phone's audio
+     *    route, returns false when the target is not attached;
+     *  - a "remote:" id (media-server session): hands the current queue to the
+     *    server's player (Jellyfin remote play) and pauses local playback.
+     *    Returns false when no resolvable session/track supports it.
+     */
+    fun routePlayOn(deviceId: String): Boolean {
+        if (!deviceId.startsWith("remote:")) {
+            return audioEngine.routeTo(deviceId)
+        }
+        val session = playOnDeviceRepository.remoteSessionFor(deviceId) ?: return false
+        val state = audioEngine.playbackState.value
+        val fromIndex = state.queueIndex.coerceIn(0, (state.queue.size - 1).coerceAtLeast(0))
+
+        val targetServerId = deviceId.split(':', limit = 4)[2]
+        val itemIds = state.queue.drop(fromIndex).mapNotNull { track ->
+            val parsed = DistantUris.parse(track.path)
+            parsed?.takeIf { it.serverId == targetServerId }?.remoteId
+        }
+        if (itemIds.isEmpty()) return false
+
+        // The hand-off is async; the modal closes on pick regardless.
+        viewModelScope.launch {
+            val played = runCatching { playOnDeviceRepository.remotePlay(session, itemIds) }
+                .getOrDefault(false)
+            if (played) audioEngine.pause()
+        }
+        return true
+    }
+
+    /** The server-backed sessions behind the "remote:" ids (for error reporting later). */
+    fun activeRemoteSession(deviceId: String): DistantRepository.DistantRemoteSession? =
+        playOnDeviceRepository.remoteSessionFor(deviceId)
 
     val playbackState: StateFlow<PlaybackState> = audioEngine.playbackState
 
@@ -205,6 +259,15 @@ class PlayerViewModel @Inject constructor(
 
     fun seekTo(positionMs: Long) = audioEngine.seekTo(positionMs)
     fun toggleShuffle() = audioEngine.toggleShuffle()
+
+    /**
+     * Called when a hero-pager swipe starts: at the main queue's start/end (repeat-all + shuffle)
+     * settles the wrap landing so the revealed ghost page shows the track that will really play.
+     */
+    fun prepareQueueShuffle() = audioEngine.prepareQueueShuffle()
+
+    /** The full player's hero pager came to rest on the playing page: queue shuffle may reorder now. */
+    fun onHeroPagerRested() = audioEngine.onHeroPagerRested()
     fun toggleRepeat() = audioEngine.toggleRepeat()
 
     // Track details modal: the queue entities held in PlaybackState are snapshots and go

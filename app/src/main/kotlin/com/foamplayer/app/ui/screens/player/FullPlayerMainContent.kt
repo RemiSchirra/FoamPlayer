@@ -5,11 +5,16 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -50,6 +55,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -60,6 +67,7 @@ import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
+import coil.imageLoader
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
@@ -90,7 +98,6 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 
 /** Layer 1 content: handle, hi-res badge, the track hero pager, playback controls, subview shortcuts. */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun SharedTransitionScope.MainPlayerContent(
     track: TrackEntity,
@@ -132,7 +139,9 @@ internal fun SharedTransitionScope.MainPlayerContent(
     onSetScore: (Long, Int) -> Unit,
     onOpenAlbum: (TrackEntity) -> Unit,
     onOpenArtist: (TrackEntity) -> Unit,
-    flightGeometry: PlayerFlightGeometryState? = null
+    flightGeometry: PlayerFlightGeometryState? = null,
+    /** Reports a transport-button skip (true = previous) so a repeat-all wrap animates in the right direction. */
+    onSkipIntent: (backward: Boolean) -> Unit = {}
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(top = PlayerDimens.screenPadding),
@@ -195,7 +204,10 @@ internal fun SharedTransitionScope.MainPlayerContent(
                     )
                 ) {
                     PreviousAction.RESTART_CURRENT -> viewModel.seekTo(0L)
-                    PreviousAction.SKIP_TO_PREVIOUS -> viewModel.previous()
+                    PreviousAction.SKIP_TO_PREVIOUS -> {
+                        onSkipIntent(true)
+                        viewModel.previous()
+                    }
                 }
             },
             onPlayPause = { if (isPlaying()) viewModel.pause() else viewModel.play() },
@@ -206,6 +218,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
                     fromBlend = envelopeMorphProgress(),
                     fromPageIndex = queueIndex
                 )
+                onSkipIntent(false)
                 viewModel.next()
             }
         )
@@ -224,7 +237,6 @@ private class EntryMarqueeStates {
  * Renders the album art + title/artist for the current queue, and drives the transition
  * between them and the mini player / subview header when swiping.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun SharedTransitionScope.TrackHeroPager(
     track: TrackEntity,
@@ -251,16 +263,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
 ) {
     val anchorPage = queueIndex.coerceAtLeast(0)
 
-    val showHero by remember(anchorPage, immersive) {
-        derivedStateOf {
-            if (immersive) {
-                true
-            } else {
-                val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
-                abs(offset) < 1f
-            }
-        }
-    }
 
     // Marquee scroll state per queue ENTRY, shared by the pager page and the hero overlay
     // showing that entry: the page drives it (it is composed for as long as the entry is
@@ -277,6 +279,28 @@ internal fun SharedTransitionScope.TrackHeroPager(
     // be running or they may be mid-scroll. After this, an incoming title only starts
     // scrolling if the swipe is held long enough for its own pause to elapse.
     val currentEntryKey by rememberUpdatedState(entryKey)
+
+    // Entry-aware: a pure renumbering (repeat mode toggled, a row removed before the playing one)
+    // changes anchorPage in composition one frame before the pager's own position follows at measure.
+    // Comparing raw page numbers there reads "pager far from anchor", drops the hero for that frame
+    // and flashes the art + title. The pager's last-measured page is resolved to its entry key, so
+    // both sides always describe the same entry.
+    val showHero by remember(anchorPage, immersive, pagerState) {
+        derivedStateOf {
+            if (immersive) {
+                true
+            } else {
+                val pageKey = pagerState.layoutInfo.visiblePagesInfo
+                    .firstOrNull { it.index == pagerState.currentPage }?.key
+                val offset = if (pageKey == currentEntryKey(anchorPage)) {
+                    pagerState.currentPageOffsetFraction
+                } else {
+                    pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
+                }
+                abs(offset) < 1f
+            }
+        }
+    }
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.isScrollInProgress }
             .distinctUntilChanged()
@@ -331,6 +355,21 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 EaseInCubic.transform(rawHeader)
             }
             (outerFraction * (1f - headerFraction)).coerceIn(0f, 1f)
+        }
+    }
+
+    val prefetchContext = LocalContext.current
+    LaunchedEffect(pagerState, queue) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            for (p in (page - 2)..(page + 2)) {
+                val path = queue.getOrNull(p)?.albumArtPath ?: continue
+                prefetchContext.imageLoader.enqueue(
+                    ImageRequest.Builder(prefetchContext)
+                        .data(EmbeddedAlbumArt(path.toUri()))
+                        .size(AlbumArtRequestSize)
+                        .build()
+                )
+            }
         }
     }
 
@@ -668,7 +707,6 @@ internal fun TrackMoreButton(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun SharedTransitionScope.PlaybackControls(
     track: TrackEntity,
@@ -757,7 +795,6 @@ internal fun SharedTransitionScope.PlaybackControls(
  * to itself instead of also dragging the Prev/Next icons and shared-element
  * bounds along with it.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun SharedTransitionScope.PlayPauseButton(
     track: TrackEntity,
@@ -770,6 +807,23 @@ internal fun SharedTransitionScope.PlayPauseButton(
     // deferred provider keeps the controls row and the pager above it uninvalidated.
     val isPlaying = isPlaying()
     val playInteractions = remember { MutableInteractionSource() }
+
+    val isPressed by playInteractions.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) PLAY_BUTTON_PRESSED_SCALE else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        label = "playButtonPressScale"
+    )
+
+    // 0f = play icon showing, 1f = pause icon showing. Both icons ride this one value
+    // in opposite directions, so they always crossfade in lockstep.
+    val pauseFraction by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0f,
+        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
+        label = "playPauseCrossfade"
+    )
+
+    val description = stringResource(if (isPlaying) R.string.pause else R.string.play)
     Box(
         modifier = modifier
             .size(PlayerDimens.playButtonSize)
@@ -777,7 +831,11 @@ internal fun SharedTransitionScope.PlayPauseButton(
                 rememberSharedContentState(key = "play_button_${track.id}"),
                 animatedVisibilityScope = outerVisibilityScope
             )
-            .pressShrink(playInteractions)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
+            .semantics { contentDescription = description }
             .clickable(
                 interactionSource = playInteractions,
                 indication = null,
@@ -785,17 +843,43 @@ internal fun SharedTransitionScope.PlayPauseButton(
             ),
         contentAlignment = Alignment.Center
     ) {
+        // Play icon: 100% -> 20% scale and 100% -> 0% opacity when switching to pause.
         Icon(
-            imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
-            contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
+            imageVector = FoamTheme.icons.current.play,
+            contentDescription = null,
             tint = FoamTheme.colors.textPrimary,
-            modifier = Modifier.size(PlayerDimens.playButtonIconSize)
+            modifier = Modifier
+                .size(PlayerDimens.playButtonIconSize)
+                .graphicsLayer {
+                    val visible = 1f - pauseFraction
+                    alpha = visible
+                    val iconScale = 0.2f + 0.8f * visible
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
+        )
+        // Pause icon: the exact reverse (20% -> 100% scale, 0% -> 100% opacity).
+        Icon(
+            imageVector = FoamTheme.icons.current.pause,
+            contentDescription = null,
+            tint = FoamTheme.colors.textPrimary,
+            modifier = Modifier
+                .size(PlayerDimens.playButtonIconSize)
+                .graphicsLayer {
+                    alpha = pauseFraction
+                    val iconScale = 0.2f + 0.8f * pauseFraction
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
         )
     }
 }
 
+private const val PLAY_BUTTON_PRESSED_SCALE = 0.88f
+private const val PLAY_PAUSE_CROSSFADE_MS = 250
+
 /**
- * Progress bar + elapsed/remaining labels. [seekBarStyle] picks the rendering:
+ * Progress bar + optional elapsed/remaining labels. [seekBarStyle] picks the rendering:
  * the classic [FoamSlider] track, or the full player's [WaveformSeekBar] whose
  * bars trace the audio's amplitude envelope (see [rememberWaveform] for the
  * data source). Both share the same drag-to-seek contract and release callback.
@@ -822,6 +906,7 @@ internal fun PlaybackProgressSlider(
     trackChangeProgress: () -> Float = { 0f },
     modifier: Modifier = Modifier,
     labelSpacing: Dp = PlayerDimens.seekBarLabelSpacing,
+    showTimeLabels: Boolean = true,
     audioInfoText: String? = null,
     onAudioInfoClick: () -> Unit = {}
 ) {
@@ -868,37 +953,39 @@ internal fun PlaybackProgressSlider(
                 inactiveColor = FoamTheme.accentColor.copy(alpha = 0.4f)
             )
         }
-        Spacer(modifier = Modifier.height(labelSpacing))
-        val labelStyle = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
-        val infoInteractions = remember { MutableInteractionSource() }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ElapsedTimeLabel(
-                durationMs = durationMs,
-                dragValue = { dragValue },
-                positionMs = { seekBarProgress.positionMs },
-                style = labelStyle
-            )
-            if (audioInfoText != null) {
-                BasicText(
-                    text = audioInfoText,
-                    style = labelStyle.copy(color = FoamTheme.typography.body.color),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .padding(horizontal = 8.dp)
-                        .pressShrink(infoInteractions)
-                        .clickable(
-                            interactionSource = infoInteractions,
-                            indication = null,
-                            onClick = onAudioInfoClick
-                        )
+        if (showTimeLabels) {
+            Spacer(modifier = Modifier.height(labelSpacing))
+            val labelStyle = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
+            val infoInteractions = remember { MutableInteractionSource() }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ElapsedTimeLabel(
+                    durationMs = durationMs,
+                    dragValue = { dragValue },
+                    positionMs = { seekBarProgress.positionMs },
+                    style = labelStyle
                 )
+                if (audioInfoText != null) {
+                    BasicText(
+                        text = audioInfoText,
+                        style = labelStyle.copy(color = FoamTheme.typography.body.color),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(horizontal = 8.dp)
+                            .pressShrink(infoInteractions)
+                            .clickable(
+                                interactionSource = infoInteractions,
+                                indication = null,
+                                onClick = onAudioInfoClick
+                            )
+                    )
+                }
+                BasicText(text = TimeUtils.formatDurationCompact(durationMs), style = labelStyle)
             }
-            BasicText(text = TimeUtils.formatDurationCompact(durationMs), style = labelStyle)
         }
     }
 }

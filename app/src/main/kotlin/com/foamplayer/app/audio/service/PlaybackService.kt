@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.os.Bundle
 import android.util.Log
 import androidx.core.content.ContextCompat
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.session.CommandButton
@@ -97,6 +98,9 @@ class PlaybackService : MediaSessionService() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    @Inject
+    lateinit var distantRepository: com.foamplayer.app.data.distant.DistantRepository
+
     private var mediaSession: MediaSession? = null
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -153,6 +157,25 @@ class PlaybackService : MediaSessionService() {
                             .build()
                     )
                     .build()
+
+            @Suppress("OVERRIDE_DEPRECATION", "DEPRECATION")
+            override fun onPlayerCommandRequest(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                playerCommand: Int
+            ): Int = when (playerCommand) {
+                Player.COMMAND_SEEK_TO_NEXT,
+                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
+                    audioEngine.next()
+                    SessionResult.RESULT_INFO_SKIPPED
+                }
+                Player.COMMAND_SEEK_TO_PREVIOUS,
+                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> {
+                    audioEngine.previous()
+                    SessionResult.RESULT_INFO_SKIPPED
+                }
+                else -> super.onPlayerCommandRequest(session, controller, playerCommand)
+            }
 
             override fun onCustomCommand(
                 session: MediaSession,
@@ -232,7 +255,12 @@ class PlaybackService : MediaSessionService() {
 
         val session = MediaSession.Builder(this, audioEngine.player)
             .setCallback(callback)
-            .setBitmapLoader(EmbeddedAlbumArtBitmapLoader(this))
+            .setBitmapLoader(
+                EmbeddedAlbumArtBitmapLoader(this) { uri ->
+                    com.foamplayer.distant.DistantUris.parse(uri.toString())
+                        ?.let { distantRepository.artworkUrlFor(it) }
+                }
+            )
             .setSessionActivity(pendingIntent)
             .build()
 

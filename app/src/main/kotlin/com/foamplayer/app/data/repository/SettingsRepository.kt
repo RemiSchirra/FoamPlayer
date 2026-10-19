@@ -37,8 +37,10 @@ import com.foamplayer.app.constants.deserializeHomeSectionOrder
 import com.foamplayer.app.constants.deserializeLyricsProviderOrder
 import com.foamplayer.app.constants.deserializeLyricsSourceOrder
 import com.foamplayer.app.constants.deserializeNavBarItemOrder
+import com.foamplayer.app.data.distant.DistantServersCodec
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.BackgroundMode
+import com.foamplayer.distant.DistantServer
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
@@ -100,6 +102,9 @@ class SettingsRepository @Inject constructor(
     suspend fun setImmersiveModeEnabled(enabled: Boolean) = update { it.copy(immersiveModeEnabled = enabled) }
     suspend fun setAnimateSeekBarEnabled(enabled: Boolean) = update { it.copy(animateSeekBarEnabled = enabled) }
     suspend fun setSeekBarStyle(style: SeekBarStyle) = update { it.copy(seekBarStyle = style) }
+    suspend fun setPreferredOutputDeviceId(deviceId: String?) = update {
+        it.copy(preferredOutputDeviceId = deviceId)
+    }
     suspend fun setAutoOpenPlayerEnabled(enabled: Boolean) = update { it.copy(autoOpenPlayerEnabled = enabled) }
     suspend fun setAnimatedCoverEnabled(enabled: Boolean) = update { it.copy(animatedCoverEnabled = enabled) }
     suspend fun setAnimatedCoverAllowMobileData(enabled: Boolean) = update {
@@ -128,6 +133,18 @@ class SettingsRepository @Inject constructor(
     }
     suspend fun addFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders + path) }
     suspend fun removeFolder(path: String) = update { it.copy(libraryFolders = it.libraryFolders - path) }
+
+    /** Connects a distant server (replacing any server with the same id). */
+    suspend fun upsertDistantServer(server: DistantServer) = update { settings ->
+        settings.copy(
+            distantServers = settings.distantServers.filterNot { it.id == server.id } + server
+        )
+    }
+
+    /** Disconnects a distant server and forgets its folders. */
+    suspend fun removeDistantServer(serverId: String) = update { settings ->
+        settings.copy(distantServers = settings.distantServers.filterNot { it.id == serverId })
+    }
     suspend fun setArtistSeparators(separators: Set<String>) = update { it.copy(artistSeparators = separators) }
     suspend fun setGenreSeparators(separators: Set<String>) = update { it.copy(genreSeparators = separators) }
 
@@ -259,6 +276,10 @@ class SettingsRepository @Inject constructor(
         it.copy(onboardingCompleted = completed)
     }
 
+    suspend fun setAutoUpdateCheckEnabled(enabled: Boolean) = update {
+        it.copy(autoUpdateCheckEnabled = enabled)
+    }
+
     suspend fun setDiscordPresenceEnabled(enabled: Boolean) = update {
         it.copy(discordPresenceEnabled = enabled)
     }
@@ -313,6 +334,7 @@ class SettingsRepository @Inject constructor(
         silenceBetweenTracksSeconds = this[Keys.SILENCE_BETWEEN_TRACKS_SECONDS]
             ?: AppSettings().silenceBetweenTracksSeconds,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
+        distantServers = DistantServersCodec.decode(this[Keys.DISTANT_SERVERS]),
         iconStyle = this[Keys.ICON_STYLE]
             ?.let { runCatching { FoamIconStyle.valueOf(it) }.getOrNull() }
             ?: AppSettings().iconStyle,
@@ -402,6 +424,7 @@ class SettingsRepository @Inject constructor(
         collectionLayoutPlaylist = CollectionHeroLayout.fromName(this[Keys.COLLECTION_LAYOUT_PLAYLIST])
             ?: AppSettings().collectionLayoutPlaylist,
         onboardingCompleted = this[Keys.ONBOARDING_COMPLETED] ?: AppSettings().onboardingCompleted,
+        autoUpdateCheckEnabled = this[Keys.AUTO_UPDATE_CHECK_ENABLED] ?: AppSettings().autoUpdateCheckEnabled,
         discordPresenceEnabled = this[Keys.DISCORD_PRESENCE_ENABLED] ?: AppSettings().discordPresenceEnabled,
         discordOnlineArt = this[Keys.DISCORD_ONLINE_ART] ?: AppSettings().discordOnlineArt,
         artistImageResolveEnabled = this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] ?: AppSettings().artistImageResolveEnabled,
@@ -415,7 +438,8 @@ class SettingsRepository @Inject constructor(
             ?: AppSettings().notificationButtonRight,
         dspStateSerialized = this[Keys.DSP_STATE].orEmpty(),
         dspUserPresets = this[Keys.DSP_USER_PRESETS].orEmpty(),
-        deviceAudioConfigs = deserializeDeviceAudioConfigs(this[Keys.DEVICE_AUDIO_CONFIGS])
+        deviceAudioConfigs = deserializeDeviceAudioConfigs(this[Keys.DEVICE_AUDIO_CONFIGS]),
+        preferredOutputDeviceId = this[Keys.PREFERRED_OUTPUT_DEVICE_ID]?.takeIf { it.isNotBlank() }
     ).sanitized()
 
     private fun MutablePreferences.write(settings: AppSettings) {
@@ -425,6 +449,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.QUICK_FADE_SECONDS] = settings.quickFadeSeconds
         this[Keys.SILENCE_BETWEEN_TRACKS_SECONDS] = settings.silenceBetweenTracksSeconds
         this[Keys.SELECTED_FOLDERS] = settings.libraryFolders
+        this[Keys.DISTANT_SERVERS] = DistantServersCodec.encode(settings.distantServers)
         this[Keys.ICON_STYLE] = settings.iconStyle.name
         this[Keys.MINI_PLAYER_ROUNDING] = settings.miniPlayerRounding
         this[Keys.FULL_PLAYER_ROUNDING] = settings.fullPlayerRounding
@@ -476,6 +501,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.COLLECTION_LAYOUT_ALBUM] = settings.collectionLayoutAlbum.name
         this[Keys.COLLECTION_LAYOUT_PLAYLIST] = settings.collectionLayoutPlaylist.name
         this[Keys.ONBOARDING_COMPLETED] = settings.onboardingCompleted
+        this[Keys.AUTO_UPDATE_CHECK_ENABLED] = settings.autoUpdateCheckEnabled
         this[Keys.DISCORD_PRESENCE_ENABLED] = settings.discordPresenceEnabled
         this[Keys.DISCORD_ONLINE_ART] = settings.discordOnlineArt
         this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] = settings.artistImageResolveEnabled
@@ -485,6 +511,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.NOTIFICATION_BUTTON_RIGHT] = settings.notificationButtonRight.name
         this[Keys.DSP_STATE] = settings.dspStateSerialized
         this[Keys.DSP_USER_PRESETS] = settings.dspUserPresets
+        this[Keys.PREFERRED_OUTPUT_DEVICE_ID] = settings.preferredOutputDeviceId.orEmpty()
         this[Keys.DEVICE_AUDIO_CONFIGS] = serializeDeviceAudioConfigs(settings.deviceAudioConfigs)
     }
 
@@ -495,6 +522,7 @@ class SettingsRepository @Inject constructor(
         val QUICK_FADE_SECONDS = floatPreferencesKey("quick_fade_seconds")
         val SILENCE_BETWEEN_TRACKS_SECONDS = floatPreferencesKey("silence_between_tracks_seconds")
         val SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
+        val DISTANT_SERVERS = stringPreferencesKey("distant_servers")
         val ICON_STYLE = stringPreferencesKey("icon_style")
         val MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")
         val FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")
@@ -550,6 +578,7 @@ class SettingsRepository @Inject constructor(
         val COLLECTION_LAYOUT_ALBUM = CollectionLayoutAlbumKey
         val COLLECTION_LAYOUT_PLAYLIST = CollectionLayoutPlaylistKey
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val AUTO_UPDATE_CHECK_ENABLED = booleanPreferencesKey("auto_update_check_enabled")
         val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
         val DISCORD_ONLINE_ART = booleanPreferencesKey("discord_online_art")
         val ARTIST_IMAGE_RESOLVE_ENABLED = booleanPreferencesKey("artist_image_resolve_enabled")
@@ -560,6 +589,7 @@ class SettingsRepository @Inject constructor(
         val DSP_STATE = stringPreferencesKey("dsp_state")
         val DSP_USER_PRESETS = stringPreferencesKey("dsp_user_presets")
         val DEVICE_AUDIO_CONFIGS = stringPreferencesKey("device_audio_configs")
+        val PREFERRED_OUTPUT_DEVICE_ID = stringPreferencesKey("preferred_output_device_id")
     }
 }
 

@@ -6,15 +6,22 @@ package com.foamplayer.app.lyrics
  */
 const val INSTRUMENTAL_ONLY_MARKER = "[Instrumental Only]"
 
+/** Chinese equivalent sources emit for an instrumental-only track. */
+const val INSTRUMENTAL_ONLY_MARKER_ZH = "纯音乐，请欣赏"
+
+private val INSTRUMENTAL_ONLY_MARKERS = listOf(INSTRUMENTAL_ONLY_MARKER, INSTRUMENTAL_ONLY_MARKER_ZH)
+
 /** LRC metadata header line ([ti:...] / [ar:...] / [al:...] / [by:...] / ...). */
 private val LRC_METADATA_HEADER_LINE_REGEX = Regex("""^\[[a-z]+:.*]\s*$""", RegexOption.IGNORE_CASE)
 
 private val WHITESPACE_REGEX = "\\s+".toRegex()
 
-private const val NBSP = ' '
+private const val NBSP = ' '
 
-private fun String.containsInstrumentalMarker(): Boolean =
-    replace(WHITESPACE_REGEX, " ").contains(INSTRUMENTAL_ONLY_MARKER, ignoreCase = true)
+private fun String.containsInstrumentalMarker(): Boolean {
+    val collapsed = replace(WHITESPACE_REGEX, " ")
+    return INSTRUMENTAL_ONLY_MARKERS.any { collapsed.contains(it, ignoreCase = true) }
+}
 
 /**
  * True when [lyrics] self-declares the track instrumental-only. For LRC and

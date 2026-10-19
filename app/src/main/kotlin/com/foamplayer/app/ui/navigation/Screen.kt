@@ -35,6 +35,7 @@ sealed class Screen(val route: String, val title: String) {
     }
     object SettingsMisc : Screen("settings/misc", "Misc Settings")
     object SettingsNotification : Screen("settings/misc/notification", "Notification Settings")
+    object SettingsAbout : Screen("settings/about", "About")
     object SettingsTest : Screen("settings/test", "Component Test")
 
     object ArtistDetail : Screen("artist/{artistName}?image={image}&embedded={embedded}", "Artist") {

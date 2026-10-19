@@ -27,6 +27,10 @@ data class FoamIconSet(
     val previous: ImageVector,
     val lyrics: ImageVector,
     val queue: ImageVector,
+    val cast: ImageVector,
+    val radio: ImageVector,
+    val repeat: ImageVector,
+    val repeatOne: ImageVector,
     val home: ImageVector,
     val library: ImageVector,
     val playlists: ImageVector,
@@ -40,7 +44,9 @@ data class FoamIconSet(
     val delete: ImageVector,
     val arrowForward: ImageVector,
     val shuffle: ImageVector,
-    val misc: ImageVector
+    val misc: ImageVector,
+    val ui: ImageVector,
+    val info: ImageVector,
 )
 
 /** The three icon styles and which one is active. */
@@ -67,6 +73,10 @@ val DefaultFoamIcons = FoamIcons(
         previous = Icons.Filled.FastRewind,
         lyrics = Icons.Filled.Lyrics,
         queue = Icons.AutoMirrored.Filled.PlaylistPlay,
+        cast = Icons.Filled.Cast,
+        radio = Icons.Filled.Radio,
+        repeat = Icons.Filled.Repeat,
+        repeatOne = Icons.Filled.RepeatOne,
         home = Icons.Filled.Home,
         library = Icons.Filled.LibraryMusic,
         playlists = Icons.AutoMirrored.Filled.QueueMusic,
@@ -80,7 +90,9 @@ val DefaultFoamIcons = FoamIcons(
         delete = Icons.Filled.Delete,
         arrowForward = Icons.AutoMirrored.Filled.ArrowForward,
         shuffle = Icons.Filled.Shuffle,
-        misc = Icons.Filled.Extension
+        misc = Icons.Filled.Extension,
+        ui = Icons.Filled.Palette,
+        info = Icons.Filled.Info
     ),
     outline = FoamIconSet(
         play = Icons.Outlined.PlayArrow,
@@ -89,6 +101,10 @@ val DefaultFoamIcons = FoamIcons(
         previous = Icons.Outlined.FastRewind,
         lyrics = Icons.Outlined.Lyrics,
         queue = Icons.AutoMirrored.Outlined.PlaylistPlay,
+        cast = Icons.Outlined.Cast,
+        radio = Icons.Outlined.Radio,
+        repeat = Icons.Outlined.Repeat,
+        repeatOne = Icons.Outlined.RepeatOne,
         home = Icons.Outlined.Home,
         library = Icons.Outlined.LibraryMusic,
         playlists = Icons.AutoMirrored.Outlined.QueueMusic,
@@ -102,7 +118,9 @@ val DefaultFoamIcons = FoamIcons(
         delete = Icons.Outlined.Delete,
         arrowForward = Icons.AutoMirrored.Outlined.ArrowForward,
         shuffle = Icons.Outlined.Shuffle,
-        misc = Icons.Outlined.Extension
+        misc = Icons.Outlined.Extension,
+        ui = Icons.Outlined.Palette,
+        info = Icons.Outlined.Info
     ),
     flat = FoamIconSet(
         play = Icons.Rounded.PlayArrow,
@@ -111,6 +129,10 @@ val DefaultFoamIcons = FoamIcons(
         previous = Icons.Rounded.FastRewind,
         lyrics = Icons.Rounded.Lyrics,
         queue = Icons.AutoMirrored.Rounded.PlaylistPlay,
+        cast = Icons.Rounded.Cast,
+        radio = Icons.Rounded.Radio,
+        repeat = Icons.Rounded.Repeat,
+        repeatOne = Icons.Rounded.RepeatOne,
         home = Icons.Rounded.Home,
         library = Icons.Rounded.LibraryMusic,
         playlists = Icons.AutoMirrored.Rounded.QueueMusic,
@@ -124,7 +146,9 @@ val DefaultFoamIcons = FoamIcons(
         delete = Icons.Rounded.Delete,
         arrowForward = Icons.AutoMirrored.Rounded.ArrowForward,
         shuffle = Icons.Rounded.Shuffle,
-        misc = Icons.Rounded.Extension
+        misc = Icons.Rounded.Extension,
+        ui = Icons.Rounded.Palette,
+        info = Icons.Rounded.Info
     ),
     currentStyle = FoamIconStyle.FLAT
 )

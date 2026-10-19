@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.browse
 
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +9,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
@@ -54,22 +54,38 @@ import com.foamplayer.app.ui.components.rememberCollectionSearchState
 import com.foamplayer.app.ui.components.rememberFilteredList
 import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.components.rememberSortedTracks
+import com.foamplayer.app.ui.components.scrollSectionLetter
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.distant.DistantUris
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Horizontal inset of one list row; grid cells get their own symmetric padding instead. */
 private fun Modifier.listRowInset(density: MediaDensity): Modifier =
-    padding(horizontal = if (density.isGrid) 0.dp else 16.dp)
+    padding(horizontal = if (density.isGrid) 0.dp else 6.dp)
+
+/**
+ * Fast-scroll section-letter source for a name-alphabetical collection list:
+ * maps a lazy item index (item 0 is the hero header) onto [items]' [text].
+ * Null when [mode] isn't alphabetical, which hides the scrollbar's bubble.
+ */
+private fun <T> alphabeticalCollectionLabels(
+    mode: CollectionSortMode,
+    items: List<T>,
+    text: (T) -> String?
+): ((Int) -> String?)? = if (mode == CollectionSortMode.NAME) {
+    { index -> scrollSectionLetter(items.getOrNull(index - 1)?.let(text)) }
+} else {
+    null
+}
 
 /**
  * Album/artist browse screens: each screen scopes its artwork kind once
  * ([MediaArtKindScope]) so every row's cover/portrait loads under the
  * collection's own placeholder icon — no per-row parameter threading.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AlbumsBrowseScreen(
     onAlbumClick: (AlbumSearchResult) -> Unit,
@@ -127,7 +143,8 @@ fun AlbumsBrowseScreen(
             onSortChange = onSortChange,
             sortInverted = sortInverted,
             onSortInvertedChange = onSortInvertedChange,
-            searchState = searchState
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedAlbums) { it.album }
         ) {
             items(sortedAlbums, key = { "browse_album_${it.album}" }) { album ->
                 Box(modifier = Modifier.listRowInset(density)) {
@@ -166,7 +183,6 @@ fun AlbumsBrowseScreen(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistsBrowseScreen(
     onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
@@ -210,7 +226,8 @@ fun ArtistsBrowseScreen(
             onSortChange = onSortChange,
             sortInverted = sortInverted,
             onSortInvertedChange = onSortInvertedChange,
-            searchState = searchState
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedArtists) { it }
         ) {
             items(sortedArtists, key = { "browse_artist_$it" }) { artist ->
                 Box(modifier = Modifier.listRowInset(density)) {
@@ -288,19 +305,20 @@ fun ComposersBrowseScreen(
     }
 
     CollectionListScreen(
-        title = stringResource(R.string.composers),
-        itemCount = sortedComposers.size,
-        onBack = onBack,
-        headerIcon = Icons.Rounded.Person,
-        density = density,
-        onDensityChange = onDensityChange,
-        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
-        currentSort = sortMode,
-        onSortChange = onSortChange,
-        sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange,
-        searchState = searchState
-    ) {
+            title = stringResource(R.string.composers),
+            itemCount = sortedComposers.size,
+            onBack = onBack,
+            headerIcon = Icons.Rounded.Person,
+            density = density,
+            onDensityChange = onDensityChange,
+            sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+            currentSort = sortMode,
+            onSortChange = onSortChange,
+            sortInverted = sortInverted,
+            onSortInvertedChange = onSortInvertedChange,
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedComposers) { it }
+        ) {
         items(sortedComposers, key = { "browse_composer_$it" }) { composer ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
@@ -357,19 +375,20 @@ fun GenresBrowseScreen(
     }
 
     CollectionListScreen(
-        title = stringResource(R.string.genres),
-        itemCount = sortedGenres.size,
-        onBack = onBack,
-        headerIcon = Icons.Rounded.Category,
-        density = density,
-        onDensityChange = onDensityChange,
-        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
-        currentSort = sortMode,
-        onSortChange = onSortChange,
-        sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange,
-        searchState = searchState
-    ) {
+            title = stringResource(R.string.genres),
+            itemCount = sortedGenres.size,
+            onBack = onBack,
+            headerIcon = Icons.Rounded.Category,
+            density = density,
+            onDensityChange = onDensityChange,
+            sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+            currentSort = sortMode,
+            onSortChange = onSortChange,
+            sortInverted = sortInverted,
+            onSortInvertedChange = onSortInvertedChange,
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedGenres) { it }
+        ) {
         items(sortedGenres, key = { "browse_genre_$it" }) { genre ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
@@ -430,19 +449,20 @@ fun YearsBrowseScreen(
     }
 
     CollectionListScreen(
-        title = stringResource(R.string.years),
-        itemCount = sortedYears.size,
-        onBack = onBack,
-        headerIcon = Icons.Rounded.CalendarToday,
-        density = density,
-        onDensityChange = onDensityChange,
-        sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
-        currentSort = sortMode,
-        onSortChange = onSortChange,
-        sortInverted = sortInverted,
-        onSortInvertedChange = onSortInvertedChange,
-        searchState = searchState
-    ) {
+            title = stringResource(R.string.years),
+            itemCount = sortedYears.size,
+            onBack = onBack,
+            headerIcon = Icons.Rounded.CalendarToday,
+            density = density,
+            onDensityChange = onDensityChange,
+            sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+            currentSort = sortMode,
+            onSortChange = onSortChange,
+            sortInverted = sortInverted,
+            onSortInvertedChange = onSortInvertedChange,
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedYears) { it.toString() }
+        ) {
         items(sortedYears, key = { "browse_year_$it" }) { year ->
             Box(modifier = Modifier.listRowInset(density)) {
                 CollectionListItem(
@@ -470,7 +490,6 @@ fun YearsBrowseScreen(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AllTracksBrowseScreen(
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
@@ -515,7 +534,6 @@ fun AllTracksBrowseScreen(
     )
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun GenreTracksScreen(
     genre: String,
@@ -570,7 +588,6 @@ fun GenreTracksScreen(
     )
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun YearTracksScreen(
     year: Int,
@@ -625,7 +642,6 @@ fun YearTracksScreen(
     )
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ComposerTracksScreen(
     composer: String,
@@ -696,21 +712,14 @@ fun FolderBrowseScreen(
     onSortInvertedChange: ((Boolean) -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel()
 ) {
-    // Kicked during composition, not in a frame effect: a LaunchedEffect only
-    // runs after the first frame is committed, which is exactly the blank
-    // frame this screen used to flash. Any pre-built listing for this folder
-    // (a previous visit, or click-time pre-caching in the parent screen) is
-    // already in the StateFlow when this scope first reads it.
     remember(path) { viewModel.loadFolderContent(path); viewModel }
     val content by viewModel.folderContent.collectAsState()
     val collectionModalState = LocalCollectionFoamModalState.current
     val longPressScope = rememberCoroutineScope()
 
-    val foldersFallback = stringResource(R.string.folders)
-    val title = path
-        ?.substringAfterLast('/')
-        ?.ifEmpty { path.substringAfterLast(':') }
-        ?: foldersFallback
+    // Distant server roots get a "Jellyfin:example.com" title derived from the
+    // server URL's domain instead of the raw server id segment of their URI.
+    val title = path?.let { viewModel.folderTitle(it) } ?: stringResource(R.string.folders)
 
     val folders = content?.folders.orEmpty()
     val searchState = rememberCollectionSearchState()
@@ -733,7 +742,11 @@ fun FolderBrowseScreen(
         title = title,
         itemCount = sortedFolders.size + shownTracks.size,
         onBack = onBack,
-        headerIcon = Icons.Rounded.Folder,
+        headerIcon = if (path != null && DistantUris.isDistant(path)) {
+            Icons.Rounded.Cloud
+        } else {
+            Icons.Rounded.Folder
+        },
         density = density,
         onDensityChange = onDensityChange,
         sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
@@ -741,7 +754,23 @@ fun FolderBrowseScreen(
         onSortChange = onSortChange,
         sortInverted = sortInverted,
         onSortInvertedChange = onSortInvertedChange,
-        searchState = searchState
+        searchState = searchState,
+        // Folders come first (alphabetical), then the folder's own tracks.
+        labelForIndex = if (sortMode == CollectionSortMode.NAME) {
+            { index ->
+                val pos = index - 1
+                val folder = sortedFolders.getOrNull(pos)
+                scrollSectionLetter(
+                    if (folder != null) {
+                        folder.name
+                    } else {
+                        shownTracks.getOrNull(pos - sortedFolders.size)?.title
+                    }
+                )
+            }
+        } else {
+            null
+        }
     ) {
         items(sortedFolders, key = { "browse_folder_${it.path}" }) { folder ->
             val folderSubtitle = pluralTrackCount(folder.trackCount)
@@ -749,7 +778,7 @@ fun FolderBrowseScreen(
                 CollectionListItem(
                     title = folder.name,
                     subtitle = folderSubtitle,
-                    icon = Icons.Rounded.Folder,
+                    icon = if (folder.isDistant) Icons.Rounded.Cloud else Icons.Rounded.Folder,
                     onClick = {
                         // Build the destination's listing from this screen's
                         // warm snapshot now, so its first frame has content.
@@ -764,7 +793,7 @@ fun FolderBrowseScreen(
                                 CollectionInfo(
                                     title = folder.name,
                                     subtitle = folderSubtitle,
-                                    icon = Icons.Rounded.Folder,
+                                    icon = if (folder.isDistant) Icons.Rounded.Cloud else Icons.Rounded.Folder,
                                     kind = CollectionKind.Folder,
                                     tracks = viewModel.tracksForFolder(folder.path),
                                     location = folder.path
@@ -829,8 +858,12 @@ private fun List<TrackEntity>.toCollectionArtistRows(): List<CollectionArtistRow
             CollectionArtistRow(name, albumCount)
         }
 
-private fun collectionMembersTitle(kind: String, key: String): String = when (kind) {
-    CollectionKind.Folder.name -> key.substringAfterLast('/').ifEmpty { key.substringAfterLast(':') }
+private fun collectionMembersTitle(
+    kind: String,
+    key: String,
+    viewModel: BrowseViewModel
+): String = when (kind) {
+    CollectionKind.Folder.name -> viewModel.folderTitle(key)
     else -> key
 }
 
@@ -846,7 +879,6 @@ private suspend fun BrowseViewModel.tracksForSource(kind: String, key: String): 
  * opened from the collection modal's "See Artist" row when the collection
  * spans several artists. Tapping a row opens the artist's album list.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CollectionArtistsScreen(
     kind: String,
@@ -887,7 +919,7 @@ fun CollectionArtistsScreen(
 
     MediaArtKindScope(MediaArtKind.ARTIST) {
         CollectionListScreen(
-            title = collectionMembersTitle(kind, key),
+            title = collectionMembersTitle(kind, key, viewModel),
             subtitle = stringResource(R.string.artists),
             itemCount = sortedRows.size,
             onBack = onBack,
@@ -898,7 +930,8 @@ fun CollectionArtistsScreen(
             onSortChange = onSortChange,
             sortInverted = sortInverted,
             onSortInvertedChange = onSortInvertedChange,
-            searchState = searchState
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedRows) { it.name }
         ) {
             items(sortedRows, key = { "artists_in_${kind}_${it.name}" }) { row ->
                 Box(modifier = Modifier.listRowInset(density)) {
@@ -999,7 +1032,7 @@ fun CollectionAlbumsScreen(
 
     MediaArtKindScope(MediaArtKind.ALBUM) {
         CollectionListScreen(
-            title = collectionMembersTitle(kind, key),
+            title = collectionMembersTitle(kind, key, viewModel),
             subtitle = stringResource(R.string.albums),
             itemCount = sortedRows.size,
             onBack = onBack,
@@ -1014,7 +1047,8 @@ fun CollectionAlbumsScreen(
             onSortChange = onSortChange,
             sortInverted = sortInverted,
             onSortInvertedChange = onSortInvertedChange,
-            searchState = searchState
+            searchState = searchState,
+            labelForIndex = alphabeticalCollectionLabels(sortMode, sortedRows) { it.album }
         ) {
             items(sortedRows, key = { "albums_in_${kind}_${it.album}" }) { entry ->
                 Box(modifier = Modifier.listRowInset(density)) {

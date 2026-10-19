@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
+import com.foamplayer.app.audio.engine.RepeatMode
 import com.foamplayer.app.ui.components.TrackListItem
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -54,11 +55,15 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 
 /**
- * The queue subview: upcoming tracks (current excluded) with drag-reorder and
- * row swipes. Mutations go through the engine by entry id. The header row acts
- * on the whole upcoming list: reshuffle it (auxiliary slots included are
- * swapped for fresh random tracks) or clear it (the auxiliary pool refills
- * itself right away).
+ * The queue subview. In repeat-all mode it lists the whole main queue — played
+ * history, playing track and upcoming — with the auxiliary tracks hidden and
+ * the playing row highlighted; drag-reorder maps display slots back to
+ * absolute queue indices. In every other mode the list is the upcoming tracks
+ * (current excluded) with auxiliary rows kept, rendered translucent.
+ * Mutations go through the engine by entry id. The header row acts on the
+ * whole upcoming list: reshuffle it (auxiliary slots included are swapped for
+ * fresh random tracks) or clear it (the auxiliary pool refills itself right
+ * away).
  *
  * Row gestures: tap plays the entry now; swiping right locks at the max
  * travel and on release springs back and plays the track next (auxiliary rows
@@ -75,26 +80,52 @@ fun QueueScreen(
     val state by viewModel.playbackState.collectAsState()
     val lazyListState = rememberLazyListState()
 
-    // Display the queue starting at the next track, and hide previous songs
-    val upcomingItems = remember(state.queue, state.queueIndex, state.queueEntryIds, state.auxiliaryFlags) {
-        val offset = (state.queueIndex + 1).coerceAtLeast(0)
-        val previousUpcomingSize = state.queue.size - offset
-        state.queue.drop(offset).mapIndexed { i, track ->
-            val abs = offset + i
-            QueueItem(
-                // Put negative artificial id if the id is invalid
-                entryId = state.queueEntryIds.getOrNull(abs) ?: -(abs + 1).toLong(),
-                absoluteIndex = abs,
-                track = track,
-                isAuxiliary = state.auxiliaryFlags.getOrNull(abs) == true,
-                isFreshFromRefill = i >= previousUpcomingSize
-            )
+    // Repeat-all lists the whole main queue (auxiliary tracks hidden) instead
+    // of just the upcoming tracks; every other mode keeps the upcoming view.
+    val repeatAll = state.repeatMode == RepeatMode.ALL
+
+    // Display items of the queue: upcoming tracks (current excluded), or the
+    // whole main queue in repeat-all. In repeat-all the auxiliary tracks are
+    // hidden; elsewhere they render dimmed.
+    val upcomingItems = remember(state.queue, state.queueIndex, state.queueEntryIds, state.auxiliaryFlags, repeatAll) {
+        if (repeatAll) {
+            state.queue.mapIndexed { abs, track ->
+                QueueItem(
+                    // Put negative artificial id if the id is invalid
+                    entryId = state.queueEntryIds.getOrNull(abs) ?: -(abs + 1).toLong(),
+                    absoluteIndex = abs,
+                    track = track,
+                    isAuxiliary = state.auxiliaryFlags.getOrNull(abs) == true,
+                    isFreshFromRefill = false,
+                    isPlaying = abs == state.queueIndex
+                )
+            }.filterNot { it.isAuxiliary }
+        } else {
+            val offset = (state.queueIndex + 1).coerceAtLeast(0)
+            val previousUpcomingSize = state.queue.size - offset
+            state.queue.drop(offset).mapIndexed { i, track ->
+                val abs = offset + i
+                QueueItem(
+                    entryId = state.queueEntryIds.getOrNull(abs) ?: -(abs + 1).toLong(),
+                    absoluteIndex = abs,
+                    track = track,
+                    isAuxiliary = state.auxiliaryFlags.getOrNull(abs) == true,
+                    isFreshFromRefill = i >= previousUpcomingSize,
+                    isPlaying = false
+                )
+            }
         }
     }
 
     var displayedItems by remember { mutableStateOf(upcomingItems) }
     var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
     var dragOriginEntryId by remember { mutableStateOf<Long?>(null) }
+    // The list as it was when the drag started. onMove reorders displayedItems live, so
+    // by drop time displayedItems[to] is the DRAGGED row itself (carrying its own
+    // original absoluteIndex) and resolving the engine target through it asks the
+    // engine to move the entry onto its own slot: a no-op. The pre-drag list's slot
+    // `to` is the row that was displaced, whose absolute index is the final index.
+    var dragOriginItems by remember { mutableStateOf<List<QueueItem>>(emptyList()) }
 
     val latestUpcomingItems by rememberUpdatedState(upcomingItems)
 
@@ -113,6 +144,22 @@ fun QueueScreen(
         }
     )
 
+    // Repeat-all opens on the playing row rather than the queue's head, so the
+    // full-queue list starts where playback is instead of in the played history.
+    // Once per repeat-all activation: later queue changes never yank the scroll.
+    var scrolledToPlaying by remember { mutableStateOf(false) }
+    LaunchedEffect(repeatAll) {
+        if (!repeatAll) {
+            scrolledToPlaying = false
+        } else if (!scrolledToPlaying) {
+            scrolledToPlaying = true
+            val playingIndex = upcomingItems.indexOfFirst { it.isPlaying }
+            if (playingIndex > 0) {
+                lazyListState.scrollToItem(index = playingIndex)
+            }
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -120,7 +167,7 @@ fun QueueScreen(
             .padding(horizontal = 16.dp)
     ) {
         QueueHeaderRow(
-            tracks = displayedItems.filterNot { it.isAuxiliary },
+            tracks = displayedItems,
             onShuffle = viewModel::shuffleUpcoming,
             onClear = viewModel::clearUpcoming,
             modifier = Modifier.fillMaxWidth()
@@ -148,9 +195,13 @@ fun QueueScreen(
                 TrackListItem(
                     track = item.track,
                     onClick = {
-                        viewModel.playQueueEntry(item.entryId)
+                        // The playing row is already active; re-tapping it would
+                        // restart it and reorder the queue, so it does nothing.
+                        if (!item.isPlaying) {
+                            viewModel.playQueueEntry(item.entryId)
+                        }
                     },
-                    active = false, // Current track is not in this list
+                    active = item.isPlaying,
                     auxiliary = item.isAuxiliary,
                     modifier = Modifier
                         .let { if (isDragging) it else it.animateItem() }
@@ -172,6 +223,7 @@ fun QueueScreen(
                             onDragStart = {
                                 dragOriginIndex = currentIndex.value
                                 dragOriginEntryId = displayedItems.getOrNull(currentIndex.value)?.entryId
+                                dragOriginItems = displayedItems
                                 dragDropListState.onDragStart(currentIndex.value)
                             },
                             onDrag = { change, dragAmount ->
@@ -186,7 +238,15 @@ fun QueueScreen(
                                 dragOriginIndex = null
                                 dragOriginEntryId = null
                                 if (from != null && to != null && from != to && originEntryId != null) {
-                                    viewModel.moveQueueEntry(originEntryId, to)
+                                    // Display slots map to engine upcoming positions, which
+                                    // count from the track after the current one; in
+                                    // repeat-all, past/current rows land before it and go
+                                    // negative.
+                                    val targetUpcoming = dragOriginItems.getOrNull(to)
+                                        ?.absoluteIndex?.let { abs ->
+                                            abs - (state.queueIndex + 1).coerceAtLeast(0)
+                                        } ?: to
+                                    viewModel.moveQueueEntry(originEntryId, targetUpcoming)
                                 }
                             },
                             onDragCancel = {
@@ -197,8 +257,24 @@ fun QueueScreen(
                             }
                         )
                     },
-                    onRemove = { viewModel.removeQueueEntry(item.entryId) },
-                    onPlayNext = { viewModel.promoteQueueEntry(item.entryId) }
+                    onRemove = if (!item.isPlaying) {
+                        { viewModel.removeQueueEntry(item.entryId) }
+                    } else {
+                        // Removing the playing entry would pull the current item
+                        // out from under the player; the row keeps no swipe
+                        // actions at all.
+                        null
+                    },
+                    // Swipe-right puts the track in the next position. The engine
+                    // handles upcoming entries (auxiliary ones join the main queue)
+                    // and played-history entries (repeat-all's full-queue view)
+                    // alike. Only the playing row is withheld, rather than ticking
+                    // and doing nothing.
+                    onPlayNext = if (item.isPlaying || item.absoluteIndex == state.queueIndex) {
+                        null
+                    } else {
+                        { viewModel.promoteQueueEntry(item.entryId) }
+                    }
                 )
             }
         }
@@ -219,8 +295,9 @@ private fun QueueHeaderRow(
     onClear: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val trackCount = tracks.size
-    val durationMs = tracks.sumOf { it.track.duration }
+    val counted = tracks.filterNot { it.isAuxiliary }
+    val trackCount = counted.size
+    val durationMs = counted.sumOf { it.track.duration }
     val durationText = remember(durationMs) { TimeUtils.formatDurationLong(durationMs) }
 
     Row(

@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
 
 /** Horizontal inset of one list row; grid cells get their own symmetric padding instead. */
 private fun Modifier.listRowInset(density: MediaDensity): Modifier =
-    padding(horizontal = if (density.isGrid) 0.dp else 16.dp)
+    padding(horizontal = if (density.isGrid) 0.dp else 6.dp)
 
 /**
  * "See all" page behind one of the stats overview's ranked cards (top tracks /
@@ -59,7 +59,6 @@ private fun Modifier.listRowInset(density: MediaDensity): Modifier =
  * load their portraits under the person placeholder, album rows their covers
  * under the album disc — no per-row parameter threading.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun StatsSeeAllScreen(
     onBack: () -> Unit,
@@ -121,10 +120,6 @@ fun StatsSeeAllScreen(
         StatsTopKind.ARTISTS -> {
             val artistImages by viewModel.artistImages.collectAsState()
             val searchState = rememberCollectionSearchState()
-            // Search filtering keeps the incoming list identity while the bar
-            // is closed/blank (see rememberFilteredList): an unconditional
-            // .filter here re-allocated the ranked list on every recomposition
-            // and re-launched the async sort below each time.
             val searchedArtists = rememberFilteredList(artists, searchState) {
                 searchState.matches(it.name)
             }

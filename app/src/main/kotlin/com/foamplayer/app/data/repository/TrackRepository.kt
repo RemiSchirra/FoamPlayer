@@ -1,6 +1,8 @@
 package com.foamplayer.app.data.repository
 
+import android.provider.DocumentsContract
 import android.util.Log
+import androidx.core.net.toUri
 import androidx.room.withTransaction
 import com.foamplayer.app.data.db.AppDatabase
 import com.foamplayer.app.data.db.dao.AlbumRecommendation
@@ -20,9 +22,12 @@ import com.foamplayer.app.data.db.dao.TrackPlayStatsRow
 import com.foamplayer.app.data.db.entities.ListenHistoryEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.scanner.LocalAudioScanner
+import com.foamplayer.app.data.scanner.RemoteLibraryScanner
 import com.foamplayer.app.data.scanner.ScanStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,6 +68,7 @@ class TrackRepository @Inject constructor(
     private val db: AppDatabase,
     private val trackDao: TrackDao,
     private val scanner: LocalAudioScanner,
+    private val remoteScanner: RemoteLibraryScanner,
     private val settingsRepository: SettingsRepository,
     private val cachedLyricsDao: CachedLyricsDao,
     private val listenHistoryDao: ListenHistoryDao
@@ -84,6 +90,9 @@ class TrackRepository @Inject constructor(
     // per-navigation-destination, so without these every screen open would pay
     // a cold Room round-trip. Aggregation runs off the main thread.
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Latest detached scan ([rescanLibraryDetached] / [scanServerDetached]); guards double-starts. */
+    private var scanJob: Job? = null
 
     /** All tracks, kept warm process-wide and replayed to new subscribers. */
     private val allTracksShared = trackDao.getAllTracks()
@@ -206,6 +215,24 @@ class TrackRepository @Inject constructor(
         return trackIds.mapNotNull { byId[it] }
     }
 
+    /**
+     * Radio-qualified track ids for the "; "-multi-value seeds of a track:
+     * the union of ids sharing any of its genre values plus ids crediting any
+     * of its artist / album-artist credits, deduplicated. Id-only projection
+     * queries keep a radio build from materializing the whole track table.
+     */
+    suspend fun getSimilarTrackIds(
+        excludeId: Long,
+        genreSeeds: List<String>,
+        artistSeeds: List<String>
+    ): List<Long> {
+        val matched = buildList {
+            genreSeeds.forEach { addAll(trackDao.getTrackIdsMatchingGenre(excludeId, it)) }
+            artistSeeds.forEach { addAll(trackDao.getTrackIdsMatchingArtist(excludeId, it)) }
+        }
+        return matched.distinct()
+    }
+
     fun searchTracks(query: String): Flow<List<TrackEntity>> = trackDao.searchTracks(escapeLike(query))
 
     /** Searches credited artists (the "; " convention split apart), matching filtered. */
@@ -258,9 +285,99 @@ class TrackRepository @Inject constructor(
     fun getRecentlyAddedArtistRows(): Flow<List<ArtistAddRow>> = trackDao.getRecentlyAddedArtistRows()
 
     /** Rescans the configured library folders. */
-    suspend fun rescanLibrary() {
+    suspend fun rescanLibrary(automatic: Boolean = false) {
         val folders = settingsRepository.settings.first().libraryFolders
-        startScan(folders)
+        startScan(folders, automatic)
+    }
+
+    /**
+     * Launches [rescanLibrary] on the repository's process-lifetime scope. A
+     * scan must outlive the screen that started it: launched from a ViewModel
+     * scope, leaving Settings (or finishing onboarding) cancelled the scan
+     * mid-flight and left [scanStatus] stuck on "Scanning". No-op while another
+     * detached scan is still running.
+     */
+    fun rescanLibraryDetached() {
+        if (scanJob?.isActive == true) return
+        scanJob = repositoryScope.launch { rescanLibrary() }
+    }
+
+    /** Detached variant of [scanServerAndMerge]; see [rescanLibraryDetached]. */
+    fun scanServerDetached(serverId: String) {
+        if (scanJob?.isActive == true) return
+        scanJob = repositoryScope.launch { scanServerAndMerge(serverId) }
+    }
+
+    /**
+     * Scans the library on app open: the same full rescan as the manual one,
+     * on the process-lifetime scope, flagged automatic so the scan-progress
+     * notification is skipped (in-app indicators still update). Skipped when
+     * no source is configured yet (fresh install / pending onboarding) —
+     * there is nothing to scan.
+     */
+    fun autoScanOnOpen() {
+        repositoryScope.launch {
+            val settings = settingsRepository.settings.first()
+            if (settings.libraryFolders.isNotEmpty() || settings.distantServers.isNotEmpty()) {
+                rescanLibrary(automatic = true)
+            }
+        }
+    }
+
+    /**
+     * Removes [folder] from the configured library folders and immediately
+     * drops every track stored under it, plus their cached lyrics — removed
+     * folders' tracks used to linger until the next full rescan's orphan
+     * cleanup. Deletions run chunked and transactional like [startScan].
+     * (Removing a folder while a scan is in flight can re-add its tracks;
+     * the next full rescan prunes them again.)
+     */
+    suspend fun removeFolderAndPruneTracks(folder: String) {
+        settingsRepository.removeFolder(folder)
+
+        val root = treeDocumentIdOf(folder) ?: return
+        val prefix = "$root/"
+        val removedPaths = trackDao.getAllTrackPaths()
+            .filter { documentIdOf(it).startsWith(prefix) }
+
+        db.withTransaction {
+            removedPaths.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
+                trackDao.deleteTracksByPaths(chunk)
+            }
+
+            // Mirrors startScan's orphan cleanup: drop cached lyrics whose
+            // track row no longer exists.
+            val liveTrackIds = trackDao.getAllTrackIds().toHashSet()
+            val orphanedCachedIds = cachedLyricsDao.getCachedTrackIds().filterNot { it in liveTrackIds }
+            orphanedCachedIds.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
+                cachedLyricsDao.deleteByTrackIds(chunk)
+            }
+        }
+    }
+
+    /** Detached variant of [removeFolderAndPruneTracks]: pruning survives leaving Settings. */
+    fun removeFolderDetached(folder: String) {
+        repositoryScope.launch { removeFolderAndPruneTracks(folder) }
+    }
+
+    /** Document id of a track path (content document id, file path, or the raw string). */
+    private fun documentIdOf(trackPath: String): String = try {
+        val uri = trackPath.toUri()
+        when (uri.scheme) {
+            "content" -> DocumentsContract.getDocumentId(uri)
+            "file" -> uri.path ?: trackPath
+            else -> trackPath
+        }
+    } catch (_: Exception) {
+        trackPath
+    }
+
+    /** Tree document id of a picked library folder (content tree URI or file path). */
+    private fun treeDocumentIdOf(folderUri: String): String? = try {
+        val uri = folderUri.toUri()
+        if (uri.scheme == "content") DocumentsContract.getTreeDocumentId(uri) else uri.path
+    } catch (_: Exception) {
+        null
     }
 
     /**
@@ -301,23 +418,40 @@ class TrackRepository @Inject constructor(
         }
     }
 
-    /** Scans [folders], replacing the library with the results (orphans removed). */
-    suspend fun startScan(folders: Set<String>) {
-        if (folders.isEmpty()) {
-            _scanStatus.value = ScanStatus.Finished(0)
+    /**
+     * Scans [folders] (local) plus every connected distant server, replacing
+     * the library with the results (orphans removed). [automatic] is carried
+     * on the emitted [ScanStatus] so notification observers can skip it.
+     */
+    suspend fun startScan(folders: Set<String>, automatic: Boolean = false) {
+        val settings = settingsRepository.settings.first()
+        val servers = settings.distantServers
+        if (folders.isEmpty() && servers.isEmpty()) {
+            _scanStatus.value = ScanStatus.Finished(0, automatic)
             return
         }
 
-        val settings = settingsRepository.settings.first()
         val artistSeps = settings.artistSeparators
         val genreSeps = settings.genreSeparators
         val knownTracks = reusableTracks(artistSeps, genreSeps)
 
-        _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
-        val scannedTracks = scanner.scanFoldersSync(folders, artistSeps, genreSeps, knownTracks) { progress, currentFile ->
-            _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
+        _scanStatus.value = ScanStatus.Scanning(0f, "Starting...", automatic)
+        remoteScanner.refreshTokens()
+
+        val localTracks = if (folders.isEmpty()) {
+            emptyList()
+        } else {
+            scanner.scanFoldersSync(folders, artistSeps, genreSeps, knownTracks) { progress, currentFile ->
+                _scanStatus.value = ScanStatus.Scanning(progress, currentFile, automatic)
+            }
         }
         settingsRepository.markScanSeparators(artistSeps, genreSeps)
+
+        val remoteTracks = remoteScanner.scan(servers) { progress, label ->
+            _scanStatus.value = ScanStatus.Scanning(progress, label, automatic)
+        }
+
+        val scannedTracks = localTracks + remoteTracks
 
         // insertTracks() replaces rows on conflict, which would wipe the listen
         // stats and score: re-attach the existing ones (with their row id, so
@@ -345,21 +479,51 @@ class TrackRepository @Inject constructor(
             }
         }
 
-        _scanStatus.value = ScanStatus.Finished(scannedTracks.size)
+        _scanStatus.value = ScanStatus.Finished(scannedTracks.size, automatic)
     }
 
-    /** Scans one folder and merges the result without deleting tracks from other folders. */
+    /**
+     * Scans one folder and merges the result without deleting tracks from
+     * other folders. Unlike the detached scans this runs on the caller's
+     * scope (the playlist-import flow needs its result), so a cancellation
+     * (its ViewModel dying mid-import) resets the status to Idle instead of
+     * leaving a "Scanning" value spinning every indicator forever.
+     */
     suspend fun scanFolderAndMerge(folder: String) {
-        val settings = settingsRepository.settings.first()
-        val artistSeps = settings.artistSeparators
-        val genreSeps = settings.genreSeparators
-        val knownTracks = reusableTracks(artistSeps, genreSeps)
+        try {
+            val settings = settingsRepository.settings.first()
+            val artistSeps = settings.artistSeparators
+            val genreSeps = settings.genreSeparators
+            val knownTracks = reusableTracks(artistSeps, genreSeps)
+
+            _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
+            val scannedTracks = scanner.scanFoldersSync(setOf(folder), artistSeps, genreSeps, knownTracks) { progress, currentFile ->
+                _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
+            }
+            settingsRepository.markScanSeparators(artistSeps, genreSeps)
+
+            val existingStats = trackDao.getPlayStats().associateBy { it.path }
+            val mergedTracks = scannedTracks.map { scanned ->
+                mergeStats(scanned, existingStats[scanned.path])
+            }
+
+            trackDao.insertTracks(mergedTracks)
+            _scanStatus.value = ScanStatus.Finished(mergedTracks.size)
+        } catch (cancellation: CancellationException) {
+            _scanStatus.value = ScanStatus.Idle
+            throw cancellation
+        }
+    }
+
+    /** Scans one distant server's folders and merges the result without touching other sources. */
+    suspend fun scanServerAndMerge(serverId: String) {
+        val server = settingsRepository.settings.first().distantServers.firstOrNull { it.id == serverId } ?: return
+        remoteScanner.refreshTokens()
 
         _scanStatus.value = ScanStatus.Scanning(0f, "Starting...")
-        val scannedTracks = scanner.scanFoldersSync(setOf(folder), artistSeps, genreSeps, knownTracks) { progress, currentFile ->
-            _scanStatus.value = ScanStatus.Scanning(progress, currentFile)
+        val scannedTracks = remoteScanner.scan(listOf(server)) { progress, label ->
+            _scanStatus.value = ScanStatus.Scanning(progress, label)
         }
-        settingsRepository.markScanSeparators(artistSeps, genreSeps)
 
         val existingStats = trackDao.getPlayStats().associateBy { it.path }
         val mergedTracks = scannedTracks.map { scanned ->

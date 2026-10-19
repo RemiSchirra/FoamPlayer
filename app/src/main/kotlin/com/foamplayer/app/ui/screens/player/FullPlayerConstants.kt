@@ -12,9 +12,20 @@ internal object PlayerDimens {
     val fullPlayerArtElevation = 8.dp
 
     // Bottom control cluster in the subview (selector row + mini play button + seek bar).
-    val selectorRowRise = 36.dp
-    val playButtonRise = 28.dp
+    val selectorRowRise = 12.dp
+
+    /**
+     * The rise the bottom cluster's layout height (selector row slot) was originally sized
+     * for. The selector row is moved by translation only, so when [selectorRowRise] drops
+     * below this, the lyrics/queue content would stop short of the lowered row; it is
+     * extended downward by the difference to keep its bottom edge (and fade) hugging the row.
+     */
+    val selectorRowRiseLayoutBasis = 36.dp
+    val subViewContentBottomExtension = (selectorRowRiseLayoutBasis - selectorRowRise).coerceAtLeast(0.dp)
     val seekBarRise = 12.dp
+
+    /** Extra downward nudge of the subview seek bar toward the navbar once the subview is open. */
+    val seekBarNavbarDrop = 8.dp
 
     val subViewSwipeThreshold = 420.dp
 
@@ -25,10 +36,34 @@ internal object PlayerDimens {
     val seekBarRowVerticalPadding = 12.dp
 
     /** Gap between the subview seek bar's timings and the navbar below. */
-    val seekBarRowBottomPadding = 4.dp
+    val seekBarRowBottomPadding = 0.dp
 
     /** Gap between the lyrics/queue selector row and the navbar when the subview is closed. */
     val selectorRowBottomPadding = 4.dp
+
+    /**
+     * The transport cluster is bottom-aligned in the same box as the selector row, with the
+     * same bottom padding, so rising by the same amount keeps its bottom edge level with the
+     * selector buttons' bottom edge.
+     */
+    val playButtonRise = selectorRowRise
+
+    /**
+     * Extra lift for the transport cluster so the play button circle's bottom edge lands on
+     * the bottom of the lyrics/queue *icons*, not on the bottom of their touch targets. The
+     * lyrics icon is 24dp inside a 48dp touch target (12dp padding), so the visible glyph
+     * ends 12dp above the selector row's bottom edge. Set to 0.dp to align with the touch
+     * targets instead.
+     */
+    val transportBottomInset = 12.dp
+
+    /**
+     * How far the selector row sinks below its layout slot at rest (main player), landing
+     * its icons just above the navbar's surface. Unwound as the subview opens to make
+     * room for the seek bar, and cancelled by the navbar's extra-row growth (fed in as
+     * [FullPlayerScreen.navbarExpandHeight]).
+     */
+    val selectorRowNavbarDrop = 12.dp
 
     /** Space between the seek bar and its position/duration labels. */
     val seekBarLabelSpacing = 4.dp

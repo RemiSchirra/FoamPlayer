@@ -24,6 +24,7 @@ import com.foamplayer.app.constants.LyricsSource
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.constants.completeNavBarItemOrder
 import com.foamplayer.app.constants.defaultSortMode
+import com.foamplayer.distant.DistantServer
 import kotlin.math.pow
 
 /** The complete, validated set of user-configurable application preferences. */
@@ -86,6 +87,8 @@ data class AppSettings(
     /** Dead air between the end of a track and the start of the next one, in seconds. 0 disables. */
     val silenceBetweenTracksSeconds: Float = DEFAULT_SILENCE_BETWEEN_TRACKS_SECONDS,
     val libraryFolders: Set<String> = emptySet(),
+    /** Connected distant servers (Plex/Jellyfin) and the folders scanned from them. */
+    val distantServers: List<DistantServer> = emptyList(),
     val iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
     val miniPlayerRounding: Int = 40,
     val fullPlayerRounding: Int = 40,
@@ -155,6 +158,8 @@ data class AppSettings(
     val collectionLayoutAlbum: CollectionHeroLayout = CollectionHeroLayout.Immersive,
     val collectionLayoutPlaylist: CollectionHeroLayout = CollectionHeroLayout.CompactImmersive,
     val onboardingCompleted: Boolean = false,
+    /** Checks GitHub for a newer release when the app starts (Settings > About). */
+    val autoUpdateCheckEnabled: Boolean = true,
     val discordPresenceEnabled: Boolean = false,
     val discordOnlineArt: Boolean = true,
     /** Resolves a picture for the library's artists from Spotify (Settings > Library scan). */
@@ -174,7 +179,13 @@ data class AppSettings(
     /** User-saved EQ presets, serialized by [DspPersistence]. */
     val dspUserPresets: String = "",
     /** Per-output-device audio configuration, keyed by device id. */
-    val deviceAudioConfigs: Map<String, DeviceAudioConfig> = emptyMap()
+    val deviceAudioConfigs: Map<String, DeviceAudioConfig> = emptyMap(),
+    /**
+     * The user's "Play on" routing pick: an AudioOutputDevice id, "this_device"
+     * (pin the phone's local outputs), or null for the platform's default
+     * routing. Persisted so the route survives process restarts.
+     */
+    val preferredOutputDeviceId: String? = null
 ) {
     /**
      * Items of the main bar, in the user's configured order. Includes the [NavBarItem.MORE]
@@ -238,6 +249,9 @@ data class AppSettings(
 
         return copy(
             libraryFolders = libraryFolders.map(String::trim).filter(String::isNotEmpty).toSet(),
+            distantServers = distantServers
+                .filter { it.id.isNotBlank() && (!it.type.requiresBaseUrl || it.baseUrl.isNotBlank()) }
+                .distinctBy { it.id },
             listenedThresholdPercent = listenedThresholdPercent.coerceIn(
                 MIN_LISTENED_THRESHOLD_PERCENT,
                 MAX_LISTENED_THRESHOLD_PERCENT

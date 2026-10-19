@@ -11,6 +11,7 @@ import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.data.backup.BackupFeature
 import com.foamplayer.app.data.backup.BackupResult
 import com.foamplayer.app.data.backup.SettingsBackupManager
+import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ArtistImageScanState
@@ -23,6 +24,10 @@ import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
+import com.foamplayer.distant.DistantFolder
+import com.foamplayer.distant.DistantFolderEntry
+import com.foamplayer.distant.DistantProviderType
+import com.foamplayer.distant.DistantServer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
@@ -30,14 +35,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.milliseconds
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val trackRepository: TrackRepository,
+    private val distantRepository: DistantRepository,
     private val artistImageScanner: ArtistImageScanner,
     private val settingsBackupManager: SettingsBackupManager
 ) : ViewModel() {
@@ -75,7 +84,47 @@ class SettingsViewModel @Inject constructor(
     fun setFullPlayerRounding(rounding: Int) = launch { settingsRepository.setFullPlayerRounding(rounding) }
     fun setMarqueeMode(mode: MarqueeMode) = launch { settingsRepository.setMarqueeMode(mode) }
     fun addFolder(path: String) = launch { settingsRepository.addFolder(path) }
-    fun removeFolder(path: String) = launch { settingsRepository.removeFolder(path) }
+    fun removeFolder(path: String) = trackRepository.removeFolderDetached(path)
+
+    // ----------------------------- distant providers
+
+    /** Message of the last distant provider failure, surfaced by the setup modal. */
+    @Volatile
+    var lastDistantError: String? = null
+        private set
+
+    fun removeServer(serverId: String) = launch { distantRepository.removeServer(serverId) }
+
+    fun scanServer(serverId: String) = trackRepository.scanServerDetached(serverId)
+
+    suspend fun connectMediaServer(
+        type: DistantProviderType,
+        name: String,
+        baseUrl: String,
+        username: String,
+        password: String,
+        token: String
+    ): DistantServer? = runCatching {
+        distantRepository.connectMediaServer(type, name, baseUrl, username, password, token)
+    }.onFailure { lastDistantError = it.message }.getOrNull()
+
+    suspend fun beginOAuth(type: DistantProviderType, name: String, baseUrl: String): String? =
+        runCatching { distantRepository.beginOAuth(type, name, baseUrl).authorizationUrl }
+            .onFailure { lastDistantError = it.message }
+            .getOrNull()
+
+    suspend fun awaitOAuthConnection(type: DistantProviderType): DistantServer? =
+        withTimeoutOrNull(OAUTH_TIMEOUT_MS.milliseconds) { distantRepository.connectionEvents.first { it.type == type } }
+
+    suspend fun listFolders(server: DistantServer): List<DistantFolderEntry>? =
+        runCatching { distantRepository.listFolders(server) }
+            .onFailure { lastDistantError = it.message }
+            .getOrNull()
+
+    suspend fun saveServerFolders(server: DistantServer, folders: List<DistantFolder>): Boolean =
+        runCatching { distantRepository.saveFolders(server, folders) }
+            .onFailure { lastDistantError = it.message }
+            .isSuccess
     fun setArtistSeparators(separators: Set<String>) = launch { settingsRepository.setArtistSeparators(separators) }
     fun setGenreSeparators(separators: Set<String>) = launch { settingsRepository.setGenreSeparators(separators) }
     fun setAutomaticColorEnabled(enabled: Boolean) = launch { settingsRepository.setAutomaticColorEnabled(enabled) }
@@ -126,7 +175,7 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setOnboardingCompleted(completed)
     }
 
-    fun startScan() = launch { trackRepository.rescanLibrary() }
+    fun startScan() = trackRepository.rescanLibraryDetached()
 
     fun setArtistImageResolveEnabled(enabled: Boolean) = launch {
         settingsRepository.setArtistImageResolveEnabled(enabled)
@@ -271,5 +320,9 @@ class SettingsViewModel @Inject constructor(
 
     private fun launch(block: suspend () -> Unit) {
         viewModelScope.launch { block() }
+    }
+
+    private companion object {
+        const val OAUTH_TIMEOUT_MS = 120_000L
     }
 }

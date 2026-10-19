@@ -158,6 +158,29 @@ val CollectionScrollTopBarTitleHorizontalPadding = 56.dp
 val CollectionHeroImmersiveListTopPadding = 16.dp
 
 /**
+ * Horizontal edge inset the grid containers apply to their items; row lists
+ * re-apply it per item (the row containers carry no horizontal padding), and
+ * full-bleed grid items cancel it via [collectionGridEdgeCancel].
+ */
+val CollectionGridEdgePadding = 6.dp
+
+/**
+ * Cancels [CollectionGridEdgePadding] on a full-bleed item of a grid whose
+ * contentPadding insets items by that constant: the layout draws the item
+ * [CollectionGridEdgePadding] beyond both edges, restoring full screen width.
+ * Measured width is the full container width, so %-based artwork sizing
+ * inside is unaffected.
+ */
+fun Modifier.collectionGridEdgeCancel(): Modifier = layout { measurable, constraints ->
+    val extraPx = CollectionGridEdgePadding.roundToPx()
+    val width = constraints.maxWidth + extraPx * 2
+    val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+    layout(width, placeable.height) {
+        placeable.placeRelative(x = -extraPx, y = 0)
+    }
+}
+
+/**
  * Where the hero's shuffle/play/search row lands below the list's top when
  * search opens: the floating back row covers the list's first 48dp plus 8dp of
  * breathing room, so the open search bar ends up right below the floating
@@ -364,7 +387,6 @@ private fun collectionHeroOverlayFraction(layout: CollectionHeroLayout): Float =
  * [onVisibleHeightPx] reports the measured total (px) once laid out, so the
  * host can hand the hero artwork's 1:1 scroll-away over to the same constant.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CollectionHeroImmersiveHeader(
     layout: CollectionHeroLayout,
@@ -525,7 +547,6 @@ fun CollectionHeroImmersiveHeader(
  * close the drawn side is the source row instead — which is why the row side
  * carries its own mirrored morph (see [collectionFlightArtwork]).
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun CollectionHero(
     layout: CollectionHeroLayout,
@@ -616,7 +637,6 @@ fun CollectionHero(
  * search-open scroll (the bar's container top is reported instead of the
  * button row's).
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun CollectionHeroCompact(
     title: String,
@@ -693,11 +713,6 @@ private fun CollectionHeroCompact(
                             Spacer(modifier = Modifier.width(12.dp))
                         }
                         if (onPlayAllClick != null) {
-                            // fill = false: the fixed toggles are measured
-                            // before any weighted child, so a too-narrow column
-                            // squeezes the PILL (which collapses to an
-                            // icon-only circle) instead of starving the search
-                            // toggle's icon.
                             CollectionHeroPlayButton(
                                 onClick = onPlayAllClick,
                                 accentColor = accentColor,
@@ -725,7 +740,6 @@ private fun CollectionHeroCompact(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun CollectionHeroNormal(
     title: String,
@@ -826,7 +840,6 @@ private fun CollectionHeroNormal(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun CollectionHeroImmersiveArtwork(
     layout: CollectionHeroLayout,
@@ -949,7 +962,6 @@ private fun heroArtworkShape(fullyRounded: Boolean): Shape =
  * play pill. Composed by [CollectionHeroImmersiveHeader] as the list's real
  * interactive header item.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun CollectionHeroOverlayContent(
     title: String,
@@ -1196,7 +1208,6 @@ private fun CollectionHeroExpandableTitle(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun CollectionHeroTexts(
     title: String,
@@ -1471,17 +1482,11 @@ private fun CollectionHeroSearchBar(
         exit = fadeOut() + shrinkVertically()
     ) {
         val focusRequester = remember { FocusRequester() }
-        // The query is cleared HERE — when the field is gone from composition
-        // after a close — and not in close() (see [CollectionSearchState.close]).
-        // Guarded on the bar being closed: a disposal from the header scrolling
-        // out of the viewport (bar still open) must keep the query.
         DisposableEffect(Unit) {
             onDispose {
                 if (!searchState.open) searchState.query = ""
             }
         }
-        // The flag lives on the screen-level state, so it survives this field
-        // being disposed and recomposed; only [open] resets it.
         LaunchedEffect(Unit) {
             if (!searchState.focusGranted) {
                 focusRequester.requestFocus()
@@ -1520,7 +1525,6 @@ private fun CollectionHeroSearchBar(
  * duration/easing tween as the NavHost's screen fade and [AlbumArtBoundsTransform],
  * so chrome fading with the flight lands on the same frame as the screen fade.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun rememberCollectionHeroFlightFraction(
     sharedTransitionScope: SharedTransitionScope?,
@@ -1554,7 +1558,6 @@ fun rememberCollectionHeroFlightFraction(
  * `(1f - rememberCollectionHeroFlightFraction(...).value) * scrollAlpha` — so
  * the chrome fades with the flight.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 fun Modifier.collectionHeroOverlayLayer(
     sharedTransitionScope: SharedTransitionScope?,
     zIndexInOverlay: Float = 1f,
@@ -1585,7 +1588,6 @@ fun AnimatedVisibilityScope.isNavTransitionInProgress(): Boolean =
     transition.currentState != EnterExitState.Visible ||
             transition.targetState != EnterExitState.Visible
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun Modifier.collectionHeroSharedArtwork(
     sharedTransitionScope: SharedTransitionScope?,
@@ -1622,7 +1624,6 @@ private fun Modifier.collectionHeroSharedArtwork(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun Modifier.collectionHeroSharedText(
     key: String,

@@ -2,6 +2,7 @@
     <string name="playback_channel_name">Lecture FoamPlayer</string>
     <string name="action_shuffle">Aléatoire</string>
     <string name="action_repeat">Répéter</string>
+    <string name="action_radio">Radio</string>
     <string name="play">Lecture</string>
     <string name="pause">Pause</string>
     <string name="previous">Précédent</string>
@@ -44,7 +45,32 @@
 
     <string name="library_folders">Dossiers de la bibliothèque</string>
     <string name="add_folder">Ajouter un dossier</string>
+    <string name="add_provider">Ajouter une source</string>
     <string name="no_folders_selected">Aucun dossier sélectionné</string>
+    <string name="connected_servers">Serveurs connectés</string>
+    <string name="choose_source">Ajouter une source</string>
+    <string name="source_local_folder">Dossier local</string>
+    <string name="source_local_folder_desc">Analyser l\'audio stocké sur cet appareil</string>
+    <string name="source_distant_server">Serveur distant</string>
+    <string name="source_distant_server_desc">Diffuser depuis Plex ou Jellyfin</string>
+    <string name="choose_provider">Choisir un fournisseur</string>
+    <string name="provider_server_name">Nom du serveur</string>
+    <string name="provider_address">Adresse du serveur</string>
+    <string name="provider_token">Jeton d\'accès</string>
+    <string name="provider_username">Nom d\'utilisateur</string>
+    <string name="provider_password">Mot de passe</string>
+    <string name="connect">Se connecter</string>
+    <string name="sign_in">Connexion</string>
+    <string name="provider_login_with">Se connecter avec %1$s</string>
+    <string name="waiting_for_sign_in">En attente de connexion…</string>
+    <string name="choose_folders">Choisir les dossiers</string>
+    <string name="provider_folder_count">%1$d dossier(s)</string>
+    <string name="provider_connection_failed">Connexion impossible : %1$s</string>
+    <string name="provider_not_configured">Ce fournisseur n\'est pas configuré dans cette version</string>
+    <string name="provider_error_unavailable">fournisseur indisponible</string>
+    <string name="provider_error_timeout">délai de connexion dépassé</string>
+    <string name="provider_error_save">échec de l\'enregistrement des dossiers</string>
+    <string name="done">Terminé</string>
     <string name="metadata_separators">Séparateurs de métadonnées</string>
     <string name="artist_separators">Séparateurs d\'artistes</string>
     <string name="genre_separators">Séparateurs de genres</string>
@@ -248,6 +274,15 @@
 
     <string name="queue_shuffle">Mélanger la file d\'attente</string>
     <string name="queue_clear">Vider la file d\'attente</string>
+
+    <!-- Play on (cast / appareils distants) -->
+    <string name="play_on">Lire sur</string>
+    <string name="play_on_this_device">Cet appareil</string>
+    <string name="play_on_this_device_desc">Android</string>
+    <string name="play_on_bluetooth_desc">Bluetooth</string>
+    <string name="play_on_chromecast_desc">Chromecast</string>
+    <string name="play_on_remote_player_desc">Serveur multimédia %1$s</string>
+    <string name="play_on_upnp_desc">UPnP</string>
     <string name="track_count_duration">%1$d Pistes • %2$s</string>
     <string name="add_separator">Ajouter un séparateur…</string>
 
@@ -359,6 +394,36 @@
     <string name="notification_button_close">Fermer</string>
     <string name="notification_button_score">Score</string>
 
+    <!-- À propos / mises à jour -->
+    <string name="settings_about">À propos</string>
+    <string name="about_settings_subtitle">Version et mises à jour</string>
+    <string name="about_current_version">Version actuelle</string>
+    <string name="about_available_version">Version disponible</string>
+    <string name="about_release_notes">Notes de version</string>
+    <string name="about_release_notes_title">Version %1$s</string>
+    <string name="about_no_release_notes">Aucune note de version pour cette version.</string>
+    <string name="about_check_for_update">Rechercher les mises à jour</string>
+    <string name="about_checking">Recherche de mise à jour…</string>
+    <string name="about_up_to_date">Vous êtes sur la dernière version</string>
+    <string name="about_check_failed">Impossible de vérifier les mises à jour</string>
+    <string name="about_auto_check">Vérification automatique</string>
+    <string name="about_auto_check_desc">Rechercher une nouvelle version sur GitHub au démarrage de l\'application</string>
+    <string name="about_download_update">Télécharger la mise à jour</string>
+    <string name="about_download_progress">Téléchargement… %1$d%%</string>
+    <string name="about_cancel_download">Annuler le téléchargement</string>
+    <string name="about_install_update">Installer la mise à jour</string>
+    <string name="about_download_failed">Échec du téléchargement</string>
+    <string name="update_notification_channel_name">Mises à jour de l\'application</string>
+    <string name="update_notification_channel_desc">Progression du téléchargement des mises à jour</string>
+    <string name="notif_update_downloading_title">Téléchargement de la mise à jour</string>
+    <string name="notif_update_preparing">Préparation du téléchargement…</string>
+    <string name="notif_update_progress">%1$d%%</string>
+    <string name="update_available_title">Nouvelle mise à jour disponible</string>
+    <string name="update_available_version">Version %1$s</string>
+    <string name="update_install_ready_title">Installer la mise à jour</string>
+    <string name="update_install_ready_text">La mise à jour a été téléchargée. L\'installer maintenant ?</string>
+    <string name="update_install_later">Plus tard</string>
+
     <!-- Écran de verrouillage -->
     <string name="lock_screen_section">Écran de verrouillage</string>
     <string name="display_on_lock_screen">Afficher sur l\'écran de verrouillage</string>
@@ -447,6 +512,8 @@
     <string name="see_artist">Voir l\'artiste</string>
     <string name="see_album">Voir l\'album</string>
     <string name="see_albums">Voir les albums</string>
+    <string name="see_radio">Voir la radio</string>
+    <string name="radio_no_similar_tracks">Aucune piste similaire trouvée</string>
     <string name="add_to_playlist">Ajouter à une playlist</string>
     <string name="reset_listen_stats">Réinitialiser les stats d\'écoute</string>
     <string name="details_collection">Collection</string>

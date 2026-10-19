@@ -2,6 +2,7 @@
     <string name="playback_channel_name">FoamPlayer Playback</string>
     <string name="action_shuffle">Shuffle</string>
     <string name="action_repeat">Repeat</string>
+    <string name="action_radio">Radio</string>
     <string name="play">Play</string>
     <string name="pause">Pause</string>
     <string name="previous">Previous</string>
@@ -44,7 +45,32 @@
 
     <string name="library_folders">Library Folders</string>
     <string name="add_folder">Add Folder</string>
+    <string name="add_provider">Add provider</string>
     <string name="no_folders_selected">No folders selected</string>
+    <string name="connected_servers">Connected servers</string>
+    <string name="choose_source">Add a source</string>
+    <string name="source_local_folder">Local folder</string>
+    <string name="source_local_folder_desc">Scan audio stored on this device</string>
+    <string name="source_distant_server">Distant server</string>
+    <string name="source_distant_server_desc">Stream from Plex or Jellyfin</string>
+    <string name="choose_provider">Choose a provider</string>
+    <string name="provider_server_name">Server name</string>
+    <string name="provider_address">Server address</string>
+    <string name="provider_token">Access token</string>
+    <string name="provider_username">Username</string>
+    <string name="provider_password">Password</string>
+    <string name="connect">Connect</string>
+    <string name="sign_in">Login</string>
+    <string name="provider_login_with">Login with %1$s</string>
+    <string name="waiting_for_sign_in">Waiting for sign-in…</string>
+    <string name="choose_folders">Choose folders</string>
+    <string name="provider_folder_count">%1$d folder(s)</string>
+    <string name="provider_connection_failed">Could not connect: %1$s</string>
+    <string name="provider_not_configured">This provider is not configured in this build</string>
+    <string name="provider_error_unavailable">provider unavailable</string>
+    <string name="provider_error_timeout">connection timed out</string>
+    <string name="provider_error_save">saving folders failed</string>
+    <string name="done">Done</string>
     <string name="metadata_separators">Metadata Separators</string>
     <string name="artist_separators">Artist Separators</string>
     <string name="genre_separators">Genre Separators</string>
@@ -248,6 +274,15 @@
 
     <string name="queue_shuffle">Shuffle queue</string>
     <string name="queue_clear">Clear queue</string>
+
+    <!-- Play on (cast / remote devices) -->
+    <string name="play_on">Play on</string>
+    <string name="play_on_this_device">This device</string>
+    <string name="play_on_this_device_desc">Android</string>
+    <string name="play_on_bluetooth_desc">Bluetooth</string>
+    <string name="play_on_chromecast_desc">Chromecast</string>
+    <string name="play_on_remote_player_desc">%1$s media server</string>
+    <string name="play_on_upnp_desc">UPnP</string>
     <string name="track_count_duration">%1$d Tracks • %2$s</string>
     <string name="add_separator">Add separator…</string>
 
@@ -361,6 +396,36 @@
     <string name="notification_button_close">Close</string>
     <string name="notification_button_score">Score</string>
 
+    <!-- About / updates -->
+    <string name="settings_about">About</string>
+    <string name="about_settings_subtitle">Version and updates</string>
+    <string name="about_current_version">Current version</string>
+    <string name="about_available_version">Available version</string>
+    <string name="about_release_notes">Release notes</string>
+    <string name="about_release_notes_title">Version %1$s</string>
+    <string name="about_no_release_notes">No release notes for this version.</string>
+    <string name="about_check_for_update">Check for update</string>
+    <string name="about_checking">Checking for update…</string>
+    <string name="about_up_to_date">You are on the latest version</string>
+    <string name="about_check_failed">Could not check for updates</string>
+    <string name="about_auto_check">Automatic update check</string>
+    <string name="about_auto_check_desc">Check GitHub for a new release when the app starts</string>
+    <string name="about_download_update">Download update</string>
+    <string name="about_download_progress">Downloading… %1$d%%</string>
+    <string name="about_cancel_download">Cancel download</string>
+    <string name="about_install_update">Install update</string>
+    <string name="about_download_failed">Download failed</string>
+    <string name="update_notification_channel_name">App updates</string>
+    <string name="update_notification_channel_desc">Download progress of app updates</string>
+    <string name="notif_update_downloading_title">Downloading update</string>
+    <string name="notif_update_preparing">Preparing download…</string>
+    <string name="notif_update_progress">%1$d%%</string>
+    <string name="update_available_title">New update available</string>
+    <string name="update_available_version">Version %1$s</string>
+    <string name="update_install_ready_title">Install update</string>
+    <string name="update_install_ready_text">The update has been downloaded. Install it now?</string>
+    <string name="update_install_later">Later</string>
+
     <!-- Lock screen player -->
     <string name="lock_screen_section">Lock screen</string>
     <string name="display_on_lock_screen">Display on lock screen</string>
@@ -445,6 +510,8 @@
     <string name="see_artist">See Artist</string>
     <string name="see_album">See Album</string>
     <string name="see_albums">See Albums</string>
+    <string name="see_radio">See Radio</string>
+    <string name="radio_no_similar_tracks">No similar tracks found</string>
     <string name="add_to_playlist">Add to Playlist</string>
     <string name="reset_listen_stats">Reset listen stats</string>
     <string name="details_collection">Collection</string>

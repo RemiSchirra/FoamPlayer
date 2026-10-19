@@ -55,6 +55,7 @@ fun SettingsScreen(
     onNavigateToLibrary: () -> Unit,
     onNavigateToLyrics: () -> Unit,
     onNavigateToMisc: () -> Unit,
+    onNavigateToAbout: () -> Unit,
     onNavigateToTest: (() -> Unit)? = null,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -105,7 +106,7 @@ fun SettingsScreen(
                 SettingsCategoryItem(
                     title = stringResource(R.string.user_interface),
                     subtitle = stringResource(R.string.ui_settings_subtitle),
-                    icon = FoamTheme.icons.current.settings,
+                    icon = FoamTheme.icons.current.ui,
                     onClick = onNavigateToUI
                 )
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
@@ -137,6 +138,16 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.misc_settings_subtitle),
                     icon = FoamTheme.icons.current.misc,
                     onClick = onNavigateToMisc
+                )
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+            }
+
+            item {
+                SettingsCategoryItem(
+                    title = stringResource(R.string.settings_about),
+                    subtitle = stringResource(R.string.about_settings_subtitle),
+                    icon = FoamTheme.icons.current.info,
+                    onClick = onNavigateToAbout
                 )
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }

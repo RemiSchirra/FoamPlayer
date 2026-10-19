@@ -404,7 +404,12 @@ fun TrackListItem(
                     // travel; left (remove) keeps following the finger so it can
                     // fly all the way out.
                     dismissOffsetValue = nextOffsetPx(nextDragTotal)
-                    val committed = nextDragTotal >= nextCommitPx - 0.5f
+                    // Only a row with a play-next action commits (and ticks) on a
+                    // right swipe; remove-only rows just follow and spring back.
+                    // Read through the updated-state holder: pointerInput(Unit)
+                    // keeps the first composition's parameter capture.
+                    val committed = latestOnPlayNext != null &&
+                            nextDragTotal >= nextCommitPx - 0.5f
                     if (committed && !nextSwipeCommitted) {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     }
@@ -414,8 +419,10 @@ fun TrackListItem(
                     when {
                         // Committed: fire the move at once and spring back in parallel —
                         // the entry animates to the top of the list while the row
-                        // returns to rest, instead of one after the other.
-                        onPlayNext != null && dismissOffsetValue >= nextCommitPx - 0.5f -> {
+                        // returns to rest, instead of one after the other. Read
+                        // through the updated-state holder: pointerInput(Unit)
+                        // keeps the first composition's parameter capture.
+                        latestOnPlayNext != null && dismissOffsetValue >= nextCommitPx - 0.5f -> {
                             latestOnPlayNext?.invoke()
                             animateSwipeTo(0f, SwipeReturnDurationMs)
                         }

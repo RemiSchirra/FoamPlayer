@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import androidx.core.net.toUri
 import android.util.LruCache
 import androidx.core.graphics.scale
 import androidx.media3.common.util.BitmapLoader
@@ -17,10 +18,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Loads cover art embedded in audio files for Media3 notifications, on IO.
+ * Loads cover art for Media3 notifications, on IO.
+ *
+ * Artwork is resolved from the [Uri] the same way the in-app UI resolves it
+ * (see `EmbeddedAlbumArtFetcher`): a remote http(s) URL is downloaded, a
+ * local image file (distant providers cache cover art as a JPEG at scan time)
+ * is read from disk, and anything else falls back to the picture embedded in
+ * the audio file's tags. This covers local tracks (audio file URI) and
+ * distant/server tracks (cached image URI) alike.
  *
  * Every request resolves to the artwork of the requested URI exactly: cache
  * hit → immediate, confirmed missing picture → null, otherwise the pending
@@ -35,7 +45,10 @@ import java.util.concurrent.ConcurrentHashMap
  * case). Bitmaps are resized small.
  */
 @UnstableApi
-class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
+class EmbeddedAlbumArtBitmapLoader(
+    context: Context,
+    private val distantArtworkUrl: (Uri) -> String? = { null }
+) : BitmapLoader {
 
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -63,7 +76,7 @@ class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
         // Always hand back the future of THIS artwork, even while it decodes.
         // The previously shown bitmap must never be returned as a completed
         // future: it would be adopted for the new song and never corrected.
-        return inFlight[key] ?: loadAsync(key) { readEmbeddedArtwork(uri) }
+        return inFlight[key] ?: loadAsync(key) { readArtwork(uri) }
     }
 
     private fun loadAsync(key: String, block: suspend () -> Bitmap?): ListenableFuture<Bitmap> {
@@ -89,13 +102,64 @@ class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
         return result
     }
 
-    private fun readEmbeddedArtwork(uri: Uri): Bitmap? {
+    private fun readArtwork(uri: Uri): Bitmap? {
+        val remote = uri.scheme == "http" || uri.scheme == "https"
+        val bytes = when {
+            remote -> readRemote(uri)
+            isImageFile(uri) -> readFileBytes(uri)
+            else -> readEmbeddedPicture(uri) ?: readDistantArtwork(uri)
+        }
+        return bytes?.let { decodeAndResize(it) }
+    }
+
+    /**
+     * Distant audio URIs (foam-distant://) have no embedded picture and no
+     * readable media file; when their scan-time image cache entry is gone,
+     * fetch the provider's live artwork URL instead of advertising a dead path.
+     */
+    private fun readDistantArtwork(uri: Uri): ByteArray? {
+        if (uri.scheme != com.foamplayer.distant.DistantUris.SCHEME) return null
+        val url = distantArtworkUrl(uri) ?: return null
+        return readRemote(url.toUri())
+    }
+
+    private fun isImageFile(uri: Uri): Boolean {
+        if (uri.scheme != null && uri.scheme != "file") return false
+        val extension = uri.path.orEmpty().substringAfterLast('.', "").lowercase()
+        return extension in IMAGE_EXTENSIONS
+    }
+
+    private fun readFileBytes(uri: Uri): ByteArray? = try {
+        appContext.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun readRemote(uri: Uri): ByteArray? {
+        val connection = try {
+            URL(uri.toString()).openConnection() as HttpURLConnection
+        } catch (_: Exception) {
+            return null
+        }
+        return try {
+            connection.instanceFollowRedirects = true
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 30_000
+            connection.setRequestProperty("User-Agent", "FoamPlayer/1.0")
+            if (connection.responseCode !in 200..299) return null
+            connection.inputStream.use { it.readBytes() }
+        } catch (_: Exception) {
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun readEmbeddedPicture(uri: Uri): ByteArray? {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(appContext, uri)
-            retriever.embeddedPicture?.let { bytes ->
-                decodeAndResize(bytes)
-            }
+            retriever.embeddedPicture
         } catch (_: Exception) {
             null
         } finally {
@@ -143,5 +207,6 @@ class EmbeddedAlbumArtBitmapLoader(context: Context) : BitmapLoader {
         private const val MAX_ARTWORK_SIZE = 512
         private const val BITMAP_CACHE_ENTRIES = 8
         private const val MISS_CACHE_ENTRIES = 256
+        private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
     }
 }

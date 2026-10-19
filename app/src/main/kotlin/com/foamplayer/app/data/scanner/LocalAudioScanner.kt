@@ -24,8 +24,13 @@ import androidx.core.net.toUri
 /** State of a library scan as observed by the progress UI. */
 sealed class ScanStatus {
     object Idle : ScanStatus()
-    data class Scanning(val progress: Float, val currentFile: String) : ScanStatus()
-    data class Finished(val count: Int) : ScanStatus()
+    data class Scanning(
+        val progress: Float,
+        val currentFile: String,
+        /** Auto-scan on app open: progress mirrors in-app only, no notification. */
+        val automatic: Boolean = false
+    ) : ScanStatus()
+    data class Finished(val count: Int, val automatic: Boolean = false) : ScanStatus()
 }
 
 /** An audio file found during enumeration, with its size and mtime already resolved. */

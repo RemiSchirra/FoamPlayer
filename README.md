@@ -37,6 +37,7 @@ for some features (see more).
 * Independent audio settings for each output device.
 * Playback fidelity score with a clear audio pipeline breakdown.
 * Audio cross-fading at track ends.
+* Stream audio from your Plex or Jellyfin server.
 
 ### Lyrics
 * Supports word-synced, line-synced, and plain lyrics.

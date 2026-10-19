@@ -69,6 +69,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.components.LibraryFoldersCard
 import com.foamplayer.app.ui.components.LibraryScanCard
+import com.foamplayer.app.ui.modals.AddProviderModal
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -91,6 +92,7 @@ fun OnboardingScreen(
 
     var audioGranted by remember { mutableStateOf(context.hasAudioPermission()) }
     var notificationsGranted by remember { mutableStateOf(context.hasNotificationPermission()) }
+    var showAddProvider by remember { mutableStateOf(false) }
 
     val refreshPermissions = {
         audioGranted = context.hasAudioPermission()
@@ -151,9 +153,12 @@ fun OnboardingScreen(
                 )
                 else -> LibraryPage(
                     folders = settings.libraryFolders,
+                    servers = settings.distantServers,
                     scanStatus = scanStatus,
+                    onAddProvider = { showAddProvider = true },
                     onPickFolder = { folderPickerLauncher.launch(null) },
                     onRemoveFolder = viewModel::removeFolder,
+                    onRemoveServer = viewModel::removeServer,
                     onStartScan = viewModel::startScan
                 )
             }
@@ -179,6 +184,14 @@ fun OnboardingScreen(
             }
         )
     }
+
+    AddProviderModal(
+        viewModel = viewModel,
+        visible = showAddProvider,
+        onDismiss = { showAddProvider = false },
+        onPickLocalFolder = { folderPickerLauncher.launch(null) },
+        onServerScanned = viewModel::scanServer
+    )
 }
 
 // ---- Page 1: Welcome ----------------------------------------------------------
@@ -344,9 +357,12 @@ private fun PermissionCard(
 @Composable
 private fun LibraryPage(
     folders: Set<String>,
+    servers: List<com.foamplayer.distant.DistantServer>,
     scanStatus: ScanStatus,
+    onAddProvider: () -> Unit,
     onPickFolder: () -> Unit,
     onRemoveFolder: (String) -> Unit,
+    onRemoveServer: (String) -> Unit,
     onStartScan: () -> Unit
 ) {
     Box(
@@ -373,8 +389,10 @@ private fun LibraryPage(
 
             LibraryFoldersCard(
                 folders = folders,
-                onPickFolder = onPickFolder,
-                onRemoveFolder = onRemoveFolder
+                servers = servers,
+                onAddProvider = onAddProvider,
+                onRemoveFolder = onRemoveFolder,
+                onRemoveServer = onRemoveServer
             )
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
             LibraryScanCard(

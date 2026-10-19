@@ -8,27 +8,51 @@ import coil.ImageLoaderFactory
 import coil.key.Keyer
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.media.EmbeddedAlbumArtFetcher
+import com.foamplayer.app.data.distant.DistantRepository
+import com.foamplayer.app.data.repository.SettingsRepository
+import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.notification.ScanProgressNotifier
+import com.foamplayer.app.update.UpdateManager
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 /** Application entry point: Hilt, the playback notification channel and Coil setup. */
 @HiltAndroidApp
 class FoamApplication : Application(), ImageLoaderFactory {
 
     @Inject lateinit var scanProgressNotifier: ScanProgressNotifier
+    @Inject lateinit var updateManager: UpdateManager
+    @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var distantRepository: DistantRepository
+    @Inject lateinit var trackRepository: TrackRepository
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         scanProgressNotifier.start()
+        trackRepository.autoScanOnOpen()
+        checkForUpdateOnStartup()
     }
 
     // Lets AsyncImage(model = EmbeddedAlbumArt(...)) load cover art from audio files.
+    // Distant audio URIs (foam-distant://) resolve through the provider when the
+    // scan-time cached image is missing.
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
             .components {
-                add(EmbeddedAlbumArtFetcher.Factory(this@FoamApplication))
+                add(
+                    EmbeddedAlbumArtFetcher.Factory(this@FoamApplication) { uri ->
+                        com.foamplayer.distant.DistantUris.parse(uri.toString())
+                            ?.let { distantRepository.artworkUrlFor(it) }
+                    }
+                )
                 add(Keyer<EmbeddedAlbumArt> { data, _ -> data.trackUri.toString() })
             }
             .build()
@@ -45,6 +69,15 @@ class FoamApplication : Application(), ImageLoaderFactory {
         }
         val manager = getSystemService(NotificationManager::class.java)
         manager?.createNotificationChannel(channel)
+    }
+
+    /** When auto-check is enabled, looks GitHub for a newer release on launch. */
+    private fun checkForUpdateOnStartup() {
+        appScope.launch {
+            val autoCheck = runCatching { settingsRepository.settings.first().autoUpdateCheckEnabled }
+                .getOrDefault(true)
+            if (autoCheck) updateManager.checkForUpdateOnStartup()
+        }
     }
 
     companion object {

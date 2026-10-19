@@ -60,7 +60,7 @@ class ScanProgressNotifier @Inject constructor(
         trackRepository.scanStatus.collect { status ->
             finishedDismissJob?.cancel()
             when (status) {
-                is ScanStatus.Scanning -> {
+                is ScanStatus.Scanning -> if (!status.automatic) {
                     val now = SystemClock.elapsedRealtime()
                     if (now - lastUpdateAt < UPDATE_INTERVAL_MS && status.progress < 1f) return@collect
                     lastUpdateAt = now
@@ -76,7 +76,7 @@ class ScanProgressNotifier @Inject constructor(
                             .setOngoing(true)
                     }
                 }
-                is ScanStatus.Finished -> {
+                is ScanStatus.Finished -> if (!status.automatic) {
                     notify(LIBRARY_NOTIFICATION_ID) {
                         setContentTitle(context.getString(R.string.notif_scan_finished_title))
                             .setContentText(context.getString(R.string.scan_finished, status.count))
