@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -30,14 +31,16 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
  * Minimal GitHub-flavored markdown renderer for release notes: headings,
- * bullet / numbered lists, fenced code blocks, blockquotes, horizontal rules
- * and inline bold / italic / strikethrough / inline code / links. Unrecognized
- * syntax renders as plain text, so unusual release bodies never break layout.
+ * bullet / numbered lists, fenced code blocks, blockquotes, horizontal rules,
+ * block-level images and inline bold / italic / strikethrough / inline code /
+ * links. Unrecognized syntax renders as plain text, so unusual release bodies
+ * never break layout.
  */
 @Composable
 fun MarkdownText(
@@ -139,6 +142,13 @@ fun MarkdownText(
                         .height(1.dp)
                         .background(colors.borderOverlay)
                 )
+
+                is Block.Image -> AsyncImage(
+                    model = block.url,
+                    contentDescription = block.alt.ifBlank { null },
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.FillWidth
+                )
             }
         }
     }
@@ -156,6 +166,7 @@ private sealed interface Block {
     data class ListBlock(val items: List<ListItem>) : Block
     data class Quote(val text: String) : Block
     data class Code(val code: String) : Block
+    data class Image(val url: String, val alt: String) : Block
     data object Rule : Block
 }
 
@@ -166,6 +177,7 @@ private val RULE = Regex("^\\s*(?:-{3,}|\\*{3,}|_{3,})\\s*$")
 private val BULLET = Regex("^(\\s*)[-*+]\\s+(.*)$")
 private val NUMBERED = Regex("^(\\s*)(\\d{1,3})[.)]\\s+(.*)$")
 private val FENCE = Regex("^\\s*```")
+private val IMAGE = Regex("^!\\[([^]\\n]*)]\\(([^)\\n]+?)\\)$")
 
 private fun parseMarkdown(source: String): List<Block> {
     val blocks = mutableListOf<Block>()
@@ -196,6 +208,12 @@ private fun parseMarkdown(source: String): List<Block> {
 
             RULE.matches(line) -> {
                 blocks += Block.Rule
+                index++
+            }
+
+            IMAGE.matches(line) -> {
+                val match = IMAGE.find(line)!!
+                blocks += Block.Image(url = match.groupValues[2], alt = match.groupValues[1])
                 index++
             }
 
@@ -261,6 +279,7 @@ private fun isBlockStart(line: String): Boolean =
         RULE.containsMatchIn(line) ||
         BULLET.containsMatchIn(line) ||
         NUMBERED.containsMatchIn(line) ||
+        IMAGE.containsMatchIn(line) ||
         line.trimStart().startsWith(">")
 
 // endregion
