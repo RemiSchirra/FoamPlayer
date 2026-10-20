@@ -97,6 +97,7 @@ import com.foamplayer.app.ui.modals.LocalOpenPlaylistPickerForPlaylist
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.MiniPlayer
+import com.foamplayer.app.ui.components.ToastStack
 import com.foamplayer.app.ui.modals.PlaylistPickerModal
 import com.foamplayer.app.ui.modals.TrackFoamModal
 import com.foamplayer.app.ui.modals.TrackRadioModal
@@ -226,6 +227,12 @@ private const val BottomChromeNavBarOverlayZIndex = 10f
  * ATTACHED mode, where the card sinks into the bar's surface extension).
  */
 private const val BottomChromeMiniPlayerOverlayZIndex = 11f
+
+/**
+ * Gap between the mini player's top and the bottom of the toast stack sitting
+ * above it.
+ */
+private val ToastsAboveMiniPlayerGap = 12.dp
 
 /**
  * The stored background-blur percentage rendered as an actual Gaussian radius:
@@ -519,6 +526,8 @@ fun FoamNavHost(
     val updateStartupRelease by updateManager.startupRelease.collectAsState()
     val updateDownloadState by updateManager.downloadState.collectAsState()
     val updateInstallFile by updateManager.installPrompt.collectAsState()
+
+    val toastViewModel: ToastViewModel = hiltViewModel()
 
     val searchFocusRequest = remember { SearchFocusRequest() }
 
@@ -2434,6 +2443,16 @@ fun FoamNavHost(
                         }
                     }
                 }
+
+                // In-app toasts notifications
+                ToastStack(
+                    toasts = toastViewModel.toastCenter.toasts,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(bottom = miniPlayerBottomPadding + miniPlayerBoxHeight + ToastsAboveMiniPlayerGap)
+                )
             }
 
             // In-app update sheets: startup "new update available" (auto-check)

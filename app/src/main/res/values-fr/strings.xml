@@ -75,6 +75,12 @@
     <string name="provider_error_unavailable">fournisseur indisponible</string>
     <string name="provider_error_timeout">délai de connexion dépassé</string>
     <string name="provider_error_save">échec de l\'enregistrement des dossiers</string>
+
+    <!-- Toasts (in-app transient messages, see ToastCenter / ToastStack). -->
+    <string name="toast_track_not_in_library">Piste pas encore dans la bibliothèque : %1$s</string>
+    <string name="toast_distant_track_unavailable">Piste distante indisponible : %1$s</string>
+    <string name="toast_failed_to_load">Échec du chargement de %1$s</string>
+    <string name="toast_playback_stopped">Lecture arrêtée : trop de pistes n\'ont pas pu être chargées</string>
     <string name="done">Terminé</string>
     <string name="metadata_separators">Séparateurs de métadonnées</string>
     <string name="artist_separators">Séparateurs d\'artistes</string>

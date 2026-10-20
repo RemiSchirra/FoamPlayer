@@ -75,6 +75,12 @@
     <string name="provider_error_unavailable">provider unavailable</string>
     <string name="provider_error_timeout">connection timed out</string>
     <string name="provider_error_save">saving folders failed</string>
+
+    <!-- Toasts (in-app transient messages, see ToastCenter / ToastStack). -->
+    <string name="toast_track_not_in_library">Track not in the library yet: %1$s</string>
+    <string name="toast_distant_track_unavailable">Distant track unavailable: %1$s</string>
+    <string name="toast_failed_to_load">Failed to load %1$s</string>
+    <string name="toast_playback_stopped">Playback stopped: too many tracks failed to load</string>
     <string name="done">Done</string>
     <string name="metadata_separators">Metadata Separators</string>
     <string name="artist_separators">Artist Separators</string>
