@@ -6,6 +6,7 @@ import com.foamplayer.app.data.db.dao.PlaylistTrackCount
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.PlaylistTrackCrossRef
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.scanner.PlaylistCoverStore
 import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.data.scanner.PlaylistCoverProvider
 import kotlinx.coroutines.flow.Flow
@@ -25,7 +26,8 @@ enum class PlaylistInsertPosition { START, END, RANDOM }
 @Singleton
 class PlaylistRepository @Inject constructor(
     private val playlistDao: PlaylistDao,
-    private val playlistCoverProvider: PlaylistCoverProvider
+    private val playlistCoverProvider: PlaylistCoverProvider,
+    private val coverStore: PlaylistCoverStore
 ) {
     fun getAllPlaylists(): Flow<List<PlaylistEntity>> = playlistDao.getAllPlaylists()
 
@@ -53,12 +55,17 @@ class PlaylistRepository @Inject constructor(
         if (trackIds.isEmpty()) flowOf(emptySet())
         else playlistDao.playlistIdsContainingAllTracks(trackIds, trackIds.size).map { it.toSet() }
 
-    /** Creates a playlist and returns its id. */
+    /**
+     * Creates a playlist, optionally with a cover: an external image ref (a
+     * just-picked document URI) is first copied into the app-private cover
+     * store — same rationale as [setPlaylistImage] — while a plain path
+     * passes through unchanged.
+     */
     suspend fun createPlaylist(name: String, imageUrl: String? = null): Long =
         playlistDao.createPlaylist(
             PlaylistEntity(
                 name = name,
-                imageUrl = imageUrl,
+                imageUrl = imageUrl?.let { coverStore.resolveStoredRef(it) },
                 sortOrder = playlistDao.nextPlaylistSortOrder()
             )
         )
@@ -74,8 +81,15 @@ class PlaylistRepository @Inject constructor(
         playlistDao.renamePlaylist(playlistId, name)
     }
 
+    /**
+     * Sets the playlist's custom cover. A [imageUrl] that references an
+     * external source (a just-picked document URI) is first copied into the
+     * app-private cover store — a persisted grant dies with app data, so the
+     * private copy is what survives a backup/restore round-trip. Passing a
+     * path (or null to clear) stores it as-is.
+     */
     suspend fun setPlaylistImage(playlistId: Long, imageUrl: String?) {
-        playlistDao.setPlaylistImage(playlistId, imageUrl)
+        playlistDao.setPlaylistImage(playlistId, imageUrl?.let { coverStore.resolveStoredRef(it) })
     }
 
     fun getPlaylistTrackCounts(): Flow<List<PlaylistTrackCount>> =
@@ -162,7 +176,14 @@ class PlaylistRepository @Inject constructor(
         )
     }
 
+    /**
+     * Deletes a playlist and, when it carried a private-cover path, that
+     * file too — the store only holds files some playlist still references
+     * (external refs are left alone by [PlaylistCoverStore.deleteIfOwned]).
+     */
     suspend fun deletePlaylist(playlistId: Long) {
+        val image = playlistDao.getPlaylistById(playlistId)?.imageUrl
         playlistDao.deletePlaylist(playlistId)
+        coverStore.deleteIfOwned(image)
     }
 }

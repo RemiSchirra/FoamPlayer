@@ -21,6 +21,10 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlists ORDER BY sortOrder ASC, name ASC")
     fun getAllPlaylists(): Flow<List<PlaylistEntity>>
 
+    /** One playlist by id, for cover-file cleanup on delete (null when gone). */
+    @Query("SELECT * FROM playlists WHERE playlistId = :playlistId")
+    suspend fun getPlaylistById(playlistId: Long): PlaylistEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun createPlaylist(playlist: PlaylistEntity): Long
 
