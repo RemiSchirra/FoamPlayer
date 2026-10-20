@@ -254,9 +254,8 @@ interface TrackDao {
     fun getOldFavoriteAlbums(cutoff: Long): Flow<List<AlbumRecommendation>>
 
     /**
-     * Home "Recently added albums": albums ranked by the latest file
-     * modification date among their tracks (the album's last-touched file,
-     * matching the "file dates" definition of "added"), newest first.
+     * Home "Recently added albums": albums ranked by the most recently added
+     * (first-seen) track among them, newest first.
      */
     @Query("""
         SELECT album, 
@@ -271,8 +270,8 @@ interface TrackDao {
     fun getRecentlyAddedAlbums(): Flow<List<AlbumRecommendation>>
 
     /**
-     * Home "Recently added artists": credited artists ranked by the latest
-     * file modification date among their tracks, newest first.
+     * Home "Recently added artists": credited artists ranked by their most
+     * recently added (first-seen) track, newest first.
      */
     @Query("""
         SELECT artist, 0 as totalPlayCount, MAX(dateAdded) as dateAdded 
@@ -353,7 +352,7 @@ interface TrackDao {
      * every listen_history row pointing at the old id (the stats screens'
      * only data source).
      */
-    @Query("SELECT id, path, playCount, lastPlayedAt, score, instrumental FROM tracks")
+    @Query("SELECT id, path, playCount, lastPlayedAt, score, instrumental, dateAdded FROM tracks")
     suspend fun getPlayStats(): List<TrackPlayStatsRow>
 
     @Query("""
@@ -422,5 +421,6 @@ data class TrackPlayStatsRow(
     val playCount: Int,
     val lastPlayedAt: Long?,
     val score: Int = 0,
-    val instrumental: Boolean = false
+    val instrumental: Boolean = false,
+    val dateAdded: Long = 0
 )

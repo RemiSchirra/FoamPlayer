@@ -488,7 +488,7 @@ fun OldFavoriteAlbumsSeeAllScreen(
 
 /**
  * "See all" page behind the Home "Recently added albums" row: up to 50 albums
- * newest-first by their earliest scanned track.
+ * newest-first by their most recently added (first-seen) track.
  */
 @Composable
 fun RecentlyAddedAlbumsSeeAllScreen(
@@ -527,8 +527,8 @@ fun RecentlyAddedAlbumsSeeAllScreen(
 
 /**
  * "See all" page behind the Home "Recently added artists" row: up to 50
- * artists newest-first by their earliest scanned track, mirroring the
- * favorite-artists page.
+ * artists newest-first by their most recently added (first-seen) track,
+ * mirroring the favorite-artists page.
  */
 @Composable
 fun RecentlyAddedArtistsSeeAllScreen(

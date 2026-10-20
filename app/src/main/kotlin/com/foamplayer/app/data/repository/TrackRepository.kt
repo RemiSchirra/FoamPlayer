@@ -307,10 +307,10 @@ class TrackRepository @Inject constructor(
      */
     fun getOldFavoriteAlbums(cutoff: Long): Flow<List<AlbumRecommendation>> = trackDao.getOldFavoriteAlbums(cutoff)
 
-    /** Albums newest-first by the latest file modification date among their tracks. */
+    /** Albums newest-first by their most recently added (first-seen) track. */
     fun getRecentlyAddedAlbums(): Flow<List<AlbumRecommendation>> = trackDao.getRecentlyAddedAlbums()
 
-    /** Credited artists newest-first by the latest file modification date among their tracks. */
+    /** Credited artists newest-first by their most recently added (first-seen) track. */
     fun getRecentlyAddedArtistRows(): Flow<List<ArtistAddRow>> = trackDao.getRecentlyAddedArtistRows()
 
     /** Rescans the configured library folders. */
@@ -445,7 +445,8 @@ class TrackRepository @Inject constructor(
                 playCount = existing.playCount,
                 lastPlayedAt = existing.lastPlayedAt,
                 score = existing.score,
-                instrumental = existing.instrumental
+                instrumental = existing.instrumental,
+                dateAdded = if (existing.dateAdded > 0) existing.dateAdded else scanned.dateAdded
             )
         } else {
             scanned

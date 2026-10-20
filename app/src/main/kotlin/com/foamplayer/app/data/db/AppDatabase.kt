@@ -39,7 +39,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun cachedLyricsDao(): CachedLyricsDao
     abstract fun listenHistoryDao(): ListenHistoryDao
 
-    /** 10 -> 11: the tracks table gains the file-mtime "dateAdded" column. */
+    /** 10 -> 11: the tracks table gains the "dateAdded" column (file mtime at first scan). */
     companion object {
         val MIGRATION_10_11: Migration = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {

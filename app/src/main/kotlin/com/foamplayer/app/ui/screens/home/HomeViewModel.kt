@@ -116,7 +116,7 @@ class HomeViewModel @Inject constructor(
         trackRepository.getOldFavoriteAlbums(System.currentTimeMillis() - OldFavoritesCutoffMs)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** Albums newest-first by the latest file modification date among their tracks. */
+    /** Albums newest-first by their most recently added (first-seen) track. */
     val recentlyAddedAlbums: StateFlow<List<AlbumRecommendation>> =
         trackRepository.getRecentlyAddedAlbums()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
