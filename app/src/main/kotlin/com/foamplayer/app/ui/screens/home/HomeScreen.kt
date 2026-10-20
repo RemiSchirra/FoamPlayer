@@ -93,6 +93,7 @@ private object HomeRowTag {
     const val PLAYLISTS = "home_row_playlists"
     const val ALBUMS = "home_row_albums"
     const val RECENT_TRACKS = "home_row_recent"
+    const val RECOMMENDED_TRACKS = "home_row_recommended_tracks"
     const val FAVORITE_TRACKS = "home_row_favorites"
     const val OLD_FAVORITES = "home_row_old_favorites"
     const val OLD_FAVORITE_ALBUMS = "home_row_old_favorite_albums"
@@ -148,6 +149,7 @@ fun HomeScreen(
     onSeeAllFavorites: () -> Unit,
     onSeeAllArtists: () -> Unit,
     onSeeAllFavoriteTracks: () -> Unit,
+    onSeeAllRecommendedTracks: () -> Unit,
     onSeeAllOldFavoriteAlbums: () -> Unit,
     onSeeAllRecentlyAddedAlbums: () -> Unit,
     onSeeAllRecentlyAddedArtists: () -> Unit,
@@ -165,6 +167,7 @@ fun HomeScreen(
     val playlistCovers by viewModel.playlistCovers.collectAsState()
     val albums by viewModel.recommendedAlbums.collectAsState()
     val recentTracks by viewModel.recentTracks.collectAsState()
+    val recommendedTracks by viewModel.recommendedTracks.collectAsState()
     val favoriteTracks by viewModel.favoriteTracks.collectAsState()
     val oldFavoriteTracks by viewModel.oldFavoriteTracks.collectAsState()
     val oldFavoriteAlbums by viewModel.oldFavoriteAlbums.collectAsState()
@@ -191,6 +194,7 @@ fun HomeScreen(
             HomeSection.RECOMMENDED_PLAYLISTS -> playlists.isNotEmpty()
             HomeSection.RECOMMENDED_ALBUMS -> albums.isNotEmpty()
             HomeSection.RECENT_TRACKS -> recentTracks.isNotEmpty()
+            HomeSection.RECOMMENDED_TRACKS -> recommendedTracks.isNotEmpty()
             HomeSection.FAVORITE_TRACKS -> favoriteTracks.isNotEmpty()
             HomeSection.OLD_FAVORITES -> oldFavoriteTracks.isNotEmpty()
             HomeSection.OLD_FAVORITE_ALBUMS -> oldFavoriteAlbums.isNotEmpty()
@@ -449,6 +453,38 @@ fun HomeScreen(
                     trackModalState?.show(viewModel.freshTrack(track))
                 }
             },
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = playerTransitionVisibilityScope,
+                            sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
+                            sharedTitleKey = "track_title_${track.id}".takeIf { inPlayerFlight },
+                            sharedInPlayerTransition = true,
+                            modifier = Modifier
+                                .let { if (inPlayerFlight) it else it.animateItem() }
+                        )
+                    }
+                }
+                HomeSection.RECOMMENDED_TRACKS -> homeSectionItem(key = "home_row_recommended_tracks", visible = recommendedTracks.isNotEmpty()) {
+                    HomeRow(
+                        title = stringResource(R.string.home_row_recommended_tracks),
+                        items = recommendedTracks.take(HomeRowItemCount),
+                        onSeeAllClick = onSeeAllRecommendedTracks,
+                        key = { it.id }
+                    ) { track ->
+                        val inPlayerFlight = track.id == sharedTrackId &&
+                                clickedRowTag == HomeRowTag.RECOMMENDED_TRACKS
+                        HomeRowCard(
+                            title = track.title,
+                            imageUrl = track.albumArtPath,
+                            width = HomeRowCardSmallWidth,
+                            onClick = {
+                                clickedRowTag = HomeRowTag.RECOMMENDED_TRACKS
+                                onTrackClick(track)
+                            },
+                            onLongClick = {
+                                longPressScope.launch {
+                                    trackModalState?.show(viewModel.freshTrack(track))
+                                }
+                            },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
                             sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },

@@ -129,6 +129,7 @@ import com.foamplayer.app.ui.screens.home.RecentlyAddedAlbumsSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecentlyAddedArtistsSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecommendedAlbumsSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecommendedPlaylistsSeeAllScreen
+import com.foamplayer.app.ui.screens.home.RecommendedTracksSeeAllScreen
 import com.foamplayer.app.ui.screens.onboarding.OnboardingScreen
 import com.foamplayer.app.ui.screens.library.AlbumDetailScreen
 import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
@@ -1331,6 +1332,7 @@ fun FoamNavHost(
                                             onSeeAllFavorites = { navController.navigate(Screen.HomeSeeAllTopTracks.route) },
                                             onSeeAllArtists = { navController.navigate(Screen.HomeSeeAllArtists.route) },
                                             onSeeAllFavoriteTracks = { navController.navigate(Screen.HomeSeeAllFavoriteTracks.route) },
+                                            onSeeAllRecommendedTracks = { navController.navigate(Screen.HomeSeeAllRecommendedTracks.route) },
                                             onSeeAllOldFavoriteAlbums = { navController.navigate(Screen.HomeSeeAllOldFavoriteAlbums.route) },
                                             onSeeAllRecentlyAddedAlbums = { navController.navigate(Screen.HomeSeeAllRecentlyAddedAlbums.route) },
                                             onSeeAllRecentlyAddedArtists = { navController.navigate(Screen.HomeSeeAllRecentlyAddedArtists.route) },
@@ -1425,6 +1427,26 @@ fun FoamNavHost(
                                             onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS, it) },
                                             sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS),
                                             onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS, it) },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Default),
+                                            viewModel = homeViewModel
+                                        )
+                                    }
+                                    composable(Screen.HomeSeeAllRecommendedTracks.route) {
+                                        RecommendedTracksSeeAllScreen(
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index)
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            activeTrackId = activeTrackId,
+                                            density = densityFor(MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS),
+                                            onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS, it) },
+                                            sortMode = sortModeFor(MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS),
+                                            onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS, it) },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,

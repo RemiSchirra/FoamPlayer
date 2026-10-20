@@ -184,15 +184,23 @@ interface TrackDao {
     """)
     fun getRecentlyPlayed(): Flow<List<TrackEntity>>
 
+    /** Tracks with at least one listen, most-listened first (Home "Recommended tracks"). */
+    @Query("""
+        SELECT * FROM tracks 
+        WHERE playCount > 0 
+        ORDER BY playCount DESC, title ASC 
+        LIMIT 50
+    """)
+    fun getRecommendedTracks(): Flow<List<TrackEntity>>
+
     /**
-     * Home "Favorite tracks": tracks ranked by aggregate play count + likes,
-     * regardless of when they were last played.
+     * Home "Favorite tracks": liked (score >= 1) or super-liked tracks, ranked
+     * by score then listen count, regardless of when they were last played.
      */
     @Query("""
         SELECT * FROM tracks 
-        WHERE playCount > 0 OR score > 0 
-        ORDER BY (playCount + MAX(score, 0) * 10) DESC, playCount DESC, title ASC 
-        LIMIT 50
+        WHERE score >= 1 
+        ORDER BY score DESC, playCount DESC, title ASC 
     """)
     fun getFavoriteTracks(): Flow<List<TrackEntity>>
 

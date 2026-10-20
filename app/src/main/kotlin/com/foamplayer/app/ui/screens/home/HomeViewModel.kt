@@ -96,7 +96,12 @@ class HomeViewModel @Inject constructor(
         trackRepository.getRecentlyPlayed()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** Tracks ranked by aggregate play count + likes, any last-played date. */
+    /** Most-listened tracks, descending by listen count. */
+    val recommendedTracks: StateFlow<List<TrackEntity>> =
+        trackRepository.getRecommendedTracks()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Liked tracks (score >= 1), ranked by score then listen count. */
     val favoriteTracks: StateFlow<List<TrackEntity>> =
         trackRepository.getFavoriteTracks()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

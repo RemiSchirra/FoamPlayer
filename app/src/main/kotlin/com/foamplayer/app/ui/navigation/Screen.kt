@@ -97,6 +97,7 @@ sealed class Screen(val route: String, val title: String) {
     object HomeSeeAllPlaylists : Screen("browse/home/playlists", "Recommended Playlists")
     object HomeSeeAllAlbums : Screen("browse/home/albums", "Recommended Albums")
     object HomeSeeAllRecentTracks : Screen("browse/home/recent", "Recent Listens")
+    object HomeSeeAllRecommendedTracks : Screen("browse/home/recommended-tracks", "Recommended Tracks")
     object HomeSeeAllFavoriteTracks : Screen("browse/home/favorite-tracks", "Favorite Tracks")
     object HomeSeeAllTopTracks : Screen("browse/home/favorites", "Old Favorites")
     object HomeSeeAllOldFavoriteAlbums : Screen("browse/home/old-favorite-albums", "Old Favorite Albums")

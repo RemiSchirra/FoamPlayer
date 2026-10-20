@@ -54,6 +54,7 @@ enum class MediaListView {
     HOME_SEE_ALL_PLAYLISTS,
     HOME_SEE_ALL_ALBUMS,
     HOME_SEE_ALL_RECENT_TRACKS,
+    HOME_SEE_ALL_RECOMMENDED_TRACKS,
     HOME_SEE_ALL_FAVORITE_TRACKS,
     HOME_SEE_ALL_ARTISTS,
     HOME_SEE_ALL_TOP_TRACKS,
@@ -112,12 +113,13 @@ fun MediaListView.defaultSortMode(): CollectionSortMode = when (this) {
     MediaListView.PLAYLIST_DETAIL -> CollectionSortMode.CUSTOM
     MediaListView.BROWSE_YEAR_TRACKS -> CollectionSortMode.ALBUM
     MediaListView.HOME_SEE_ALL_RECENT_TRACKS -> CollectionSortMode.LISTEN_DATE
-    MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS,
+    MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS,
     MediaListView.HOME_SEE_ALL_TOP_TRACKS,
     MediaListView.STATS_SEE_ALL_TRACKS -> CollectionSortMode.LISTEN_COUNT
     MediaListView.HOME_SEE_ALL_PLAYLISTS,
     MediaListView.HOME_SEE_ALL_ALBUMS,
     MediaListView.HOME_SEE_ALL_ARTISTS,
+    MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS,
     MediaListView.HOME_SEE_ALL_OLD_FAVORITE_ALBUMS,
     MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ALBUMS,
     MediaListView.HOME_SEE_ALL_RECENTLY_ADDED_ARTISTS -> CollectionSortMode.RECOMMENDED
@@ -136,6 +138,7 @@ enum class HomeSection(val labelRes: Int, val seeAll: Boolean, val enabledByDefa
     RECOMMENDED_PLAYLISTS(R.string.home_row_recommended_playlists, true, true),
     RECOMMENDED_ALBUMS(R.string.home_row_recommended_albums, true, true),
     RECENT_TRACKS(R.string.home_row_recent_listens, true, true),
+    RECOMMENDED_TRACKS(R.string.home_row_recommended_tracks, true, false),
     FAVORITE_TRACKS(R.string.home_row_favorite_tracks, true, true),
     OLD_FAVORITES(R.string.home_row_old_favorites, true, true),
     OLD_FAVORITE_ALBUMS(R.string.home_row_old_favorite_albums, true, false),

@@ -33,6 +33,7 @@
     <string name="home_row_recommended_playlists">Playlists recommandées</string>
     <string name="home_row_recommended_albums">Albums recommandés</string>
     <string name="home_row_recent_listens">Écoutes récentes</string>
+    <string name="home_row_recommended_tracks">Titres recommandés</string>
     <string name="home_row_favorite_tracks">Titres favoris</string>
     <string name="home_row_old_favorites">Anciens favoris</string>
     <string name="home_row_old_favorite_albums">Anciens albums favoris</string>

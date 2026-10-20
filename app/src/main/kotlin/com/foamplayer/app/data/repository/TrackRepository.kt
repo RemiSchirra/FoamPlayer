@@ -289,7 +289,10 @@ class TrackRepository @Inject constructor(
     /** Most recently listened tracks (Home "Recent listens" row). */
     fun getRecentlyPlayed(): Flow<List<TrackEntity>> = trackDao.getRecentlyPlayed()
 
-    /** Home "Favorite tracks": aggregate play count + likes, any last-played date. */
+    /** Most-listened tracks (Home "Recommended tracks" row). */
+    fun getRecommendedTracks(): Flow<List<TrackEntity>> = trackDao.getRecommendedTracks()
+
+    /** Home "Favorite tracks": liked tracks (score >= 1), any last-played date. */
     fun getFavoriteTracks(): Flow<List<TrackEntity>> = trackDao.getFavoriteTracks()
 
     /** Long-standing favorites (Home "Old favorites" row); [cutoff] bounds what counts as "not recent". */
