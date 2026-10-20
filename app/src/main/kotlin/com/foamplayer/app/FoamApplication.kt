@@ -12,6 +12,7 @@ import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.notification.ScanProgressNotifier
+import com.foamplayer.app.data.scanner.PlaylistCoverStore
 import com.foamplayer.app.update.UpdateManager
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -30,6 +31,7 @@ class FoamApplication : Application(), ImageLoaderFactory {
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var distantRepository: DistantRepository
     @Inject lateinit var trackRepository: TrackRepository
+    @Inject lateinit var playlistCoverStore: PlaylistCoverStore
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -38,7 +40,8 @@ class FoamApplication : Application(), ImageLoaderFactory {
         createNotificationChannel()
         scanProgressNotifier.start()
         trackRepository.autoScanOnOpen()
-        checkForUpdateOnStartup()
+        startUpdateMaintenance()
+        appScope.launch { playlistCoverStore.migrateLegacyUriCovers() }
     }
 
     // Lets AsyncImage(model = EmbeddedAlbumArt(...)) load cover art from audio files.
@@ -71,9 +74,14 @@ class FoamApplication : Application(), ImageLoaderFactory {
         manager?.createNotificationChannel(channel)
     }
 
-    /** When auto-check is enabled, looks GitHub for a newer release on launch. */
-    private fun checkForUpdateOnStartup() {
+    /**
+     * Startup update maintenance: wipes the downloaded-installer cache left
+     * over from previous sessions, then (when auto-check is enabled) looks
+     * GitHub for a newer release.
+     */
+    private fun startUpdateMaintenance() {
         appScope.launch {
+            updateManager.clearUpdateCache()
             val autoCheck = runCatching { settingsRepository.settings.first().autoUpdateCheckEnabled }
                 .getOrDefault(true)
             if (autoCheck) updateManager.checkForUpdateOnStartup()

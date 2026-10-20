@@ -90,10 +90,14 @@ import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.ui.modals.CollectionFoamModal
 import com.foamplayer.app.ui.components.CollectionId
+import com.foamplayer.app.ui.modals.CollectionInfo
+import com.foamplayer.app.ui.modals.CollectionKind
 import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
+import com.foamplayer.app.ui.modals.LocalOpenPlaylistPickerForPlaylist
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.MiniPlayer
+import com.foamplayer.app.ui.components.ToastStack
 import com.foamplayer.app.ui.modals.PlaylistPickerModal
 import com.foamplayer.app.ui.modals.TrackFoamModal
 import com.foamplayer.app.ui.modals.TrackRadioModal
@@ -125,6 +129,7 @@ import com.foamplayer.app.ui.screens.home.RecentlyAddedAlbumsSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecentlyAddedArtistsSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecommendedAlbumsSeeAllScreen
 import com.foamplayer.app.ui.screens.home.RecommendedPlaylistsSeeAllScreen
+import com.foamplayer.app.ui.screens.home.RecommendedTracksSeeAllScreen
 import com.foamplayer.app.ui.screens.onboarding.OnboardingScreen
 import com.foamplayer.app.ui.screens.library.AlbumDetailScreen
 import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
@@ -223,6 +228,12 @@ private const val BottomChromeNavBarOverlayZIndex = 10f
  * ATTACHED mode, where the card sinks into the bar's surface extension).
  */
 private const val BottomChromeMiniPlayerOverlayZIndex = 11f
+
+/**
+ * Gap between the mini player's top and the bottom of the toast stack sitting
+ * above it.
+ */
+private val ToastsAboveMiniPlayerGap = 12.dp
 
 /**
  * The stored background-blur percentage rendered as an actual Gaussian radius:
@@ -478,6 +489,13 @@ fun FoamNavHost(
     val trackModalState = rememberTrackFoamModalState()
     var playlistPickerTrack by remember { mutableStateOf<TrackEntity?>(null) }
 
+    var pickerBatchCollection by remember { mutableStateOf<CollectionInfo?>(null) }
+    var pickerBatchTracks by remember { mutableStateOf<List<TrackEntity>?>(null) }
+
+    // In playlist -> add to playlist, the source playlist itself is hidden from the
+    // picker.
+    var pickerExcludedPlaylistId by remember { mutableStateOf<Long?>(null) }
+
     // Lyrics details sheet: a separate Dialog stacked on the open track sheet.
     var lyricsModalTrack by remember { mutableStateOf<TrackEntity?>(null) }
     var lastLyricsModalTrack by remember { mutableStateOf<TrackEntity?>(null) }
@@ -498,12 +516,19 @@ fun FoamNavHost(
         playlistsViewModel.playlistIdsContainingTrack(pickerTrackId)
     }.collectAsState(initial = emptySet())
 
+    val batchTrackIds = pickerBatchTracks?.map { it.id } ?: emptyList()
+    val playlistIdsWithBatch by remember(batchTrackIds) {
+        playlistsViewModel.playlistIdsContainingAllTracks(batchTrackIds)
+    }.collectAsState(initial = emptySet())
+
     val collectionModalState = rememberCollectionFoamModalState()
 
     val updateManager: UpdateManager = hiltViewModel<UpdateViewModel>().updateManager
     val updateStartupRelease by updateManager.startupRelease.collectAsState()
     val updateDownloadState by updateManager.downloadState.collectAsState()
     val updateInstallFile by updateManager.installPrompt.collectAsState()
+
+    val toastViewModel: ToastViewModel = hiltViewModel()
 
     val searchFocusRequest = remember { SearchFocusRequest() }
 
@@ -517,6 +542,7 @@ fun FoamNavHost(
     val isPlaybackActive = isPlaying || isPlaybackRequested
     val playerSettings by playerViewModel.settings.collectAsState()
     val scoreOverrides by playerViewModel.scoreOverrides.collectAsState()
+    val libraryGenres by playerViewModel.genres.collectAsState()
     val isAnimateSeekBarEnabled = playerSettings.animateSeekBarEnabled
     val isAutoOpenPlayerEnabled = playerSettings.autoOpenPlayerEnabled
     val backgroundMode = backgroundSettingsPreview.mode ?: playerSettings.backgroundMode
@@ -831,6 +857,22 @@ fun FoamNavHost(
         CompositionLocalProvider(
             LocalTrackFoamModalState provides trackModalState,
             LocalCollectionFoamModalState provides collectionModalState,
+            LocalOpenPlaylistPickerForPlaylist provides { source ->
+                pickerExcludedPlaylistId = source.playlistId
+                scope.launch {
+                    val tracks = playlistsViewModel.playlistTracks(source.playlistId)
+                    if (tracks.isEmpty()) return@launch
+                    pickerBatchCollection = CollectionInfo(
+                        title = source.name,
+                        subtitle = null,
+                        imageUrl = null,
+                        imageIsEmbeddedArt = false,
+                        kind = CollectionKind.Playlist,
+                        tracks = tracks
+                    )
+                    pickerBatchTracks = tracks
+                }
+            },
             LocalBottomBarClearance provides bottomBarClearance,
             LocalCollectionHeroLayoutLookup provides heroLayoutFor,
             LocalActiveSharedCollection provides activeSharedCollection,
@@ -1290,9 +1332,12 @@ fun FoamNavHost(
                                             onSeeAllFavorites = { navController.navigate(Screen.HomeSeeAllTopTracks.route) },
                                             onSeeAllArtists = { navController.navigate(Screen.HomeSeeAllArtists.route) },
                                             onSeeAllFavoriteTracks = { navController.navigate(Screen.HomeSeeAllFavoriteTracks.route) },
+                                            onSeeAllRecommendedTracks = { navController.navigate(Screen.HomeSeeAllRecommendedTracks.route) },
                                             onSeeAllOldFavoriteAlbums = { navController.navigate(Screen.HomeSeeAllOldFavoriteAlbums.route) },
                                             onSeeAllRecentlyAddedAlbums = { navController.navigate(Screen.HomeSeeAllRecentlyAddedAlbums.route) },
                                             onSeeAllRecentlyAddedArtists = { navController.navigate(Screen.HomeSeeAllRecentlyAddedArtists.route) },
+                                            onOpenHomeSettings = { navController.navigate(Screen.SettingsUIHome.route) },
+                                            onOpenLibrarySettings = { navController.navigate(Screen.SettingsLibrary.route) },
                                             sections = playerSettings.homeSections,
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             animatedVisibilityScope = this,
@@ -1382,6 +1427,26 @@ fun FoamNavHost(
                                             onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS, it) },
                                             sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS),
                                             onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_FAVORITE_TRACKS, it) },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+                                            sharedTrackId = trackListTransitionTrackId,
+                                            heroLayout = heroLayoutFor(CollectionHeroTarget.Default),
+                                            viewModel = homeViewModel
+                                        )
+                                    }
+                                    composable(Screen.HomeSeeAllRecommendedTracks.route) {
+                                        RecommendedTracksSeeAllScreen(
+                                            onTrackClick = { tracks, index ->
+                                                playTrackFromList(tracks, index)
+                                            },
+                                            onBack = { navController.popBackStack() },
+                                            activeTrackId = activeTrackId,
+                                            density = densityFor(MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS),
+                                            onDensityChange = { setDensity(MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS, it) },
+                                            sortMode = sortModeFor(MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS),
+                                            onSortChange = { setSortMode(MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS, it) },
+                                            sortInverted = sortInvertedFor(MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS),
+                                            onSortInvertedChange = { setSortInverted(MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS, it) },
                                             sharedTransitionScope = this@SharedTransitionLayout,
                                             playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                             sharedTrackId = trackListTransitionTrackId,
@@ -2400,6 +2465,16 @@ fun FoamNavHost(
                         }
                     }
                 }
+
+                // In-app toasts notifications
+                ToastStack(
+                    toasts = toastViewModel.toastCenter.toasts,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(bottom = miniPlayerBottomPadding + miniPlayerBoxHeight + ToastsAboveMiniPlayerGap)
+                )
             }
 
             // In-app update sheets: startup "new update available" (auto-check)
@@ -2445,33 +2520,72 @@ fun FoamNavHost(
                     playerViewModel.resetPlayStats(track.id)
                     trackModalState.updateCurrentTrack { it.copy(playCount = 0, lastPlayedAt = null) }
                 },
+                onApplyMetadata = { track, edit ->
+                    playerViewModel.updateTrackMetadata(track, edit)
+                    trackModalState.updateCurrentTrack {
+                        it.copy(
+                            title = edit.title,
+                            artist = edit.artist,
+                            album = edit.album,
+                            albumArtist = edit.albumArtist,
+                            genre = edit.genre.ifEmpty { null },
+                            composer = edit.composer,
+                            year = edit.year,
+                            trackNumber = edit.trackNumber,
+                            discNumber = edit.discNumber
+                        )
+                    }
+                },
                 onSetInstrumental = { track, instrumental ->
                     playerViewModel.setTrackInstrumental(track.id, instrumental)
                     trackModalState.updateCurrentTrack { it.copy(instrumental = instrumental) }
                 },
                 scoreOverrides = scoreOverrides,
+                existingGenres = libraryGenres,
                 onSetScore = playerViewModel::setTrackScore,
                 useAlbumArtAccent = playerSettings.automaticColorEnabled
             )
 
             PlaylistPickerModal(
                 track = playlistPickerTrack,
-                playlists = playlists,
+                playlists = pickerExcludedPlaylistId
+                    ?.let { excluded -> playlists.filterNot { it.playlistId == excluded } }
+                    ?: playlists,
                 playlistCovers = playlistCovers,
-                playlistIdsWithTrack = playlistIdsWithTrack,
+                playlistIdsWithTrack = if (pickerBatchCollection != null) {
+                    playlistIdsWithBatch
+                } else {
+                    playlistIdsWithTrack
+                },
                 insertPosition = addTrackInsertPosition,
                 onToggle = { playlist, checked ->
-                    playlistPickerTrack?.let { track ->
+                    val batchTrackList = pickerBatchTracks
+                    if (pickerBatchCollection != null && batchTrackList != null) {
                         if (checked) {
-                            playlistsViewModel.addTrackToPlaylist(playlist.playlistId, track.id)
+                            playlistsViewModel.addTracksToPlaylist(playlist.playlistId, batchTrackList.map { it.id })
                         } else {
-                            playlistsViewModel.removeTrackFromPlaylist(playlist.playlistId, track.id)
+                            playlistsViewModel.removeTracksFromPlaylist(playlist.playlistId, batchTrackList.map { it.id })
+                        }
+                    } else {
+                        playlistPickerTrack?.let { track ->
+                            if (checked) {
+                                playlistsViewModel.addTrackToPlaylist(playlist.playlistId, track.id)
+                            } else {
+                                playlistsViewModel.removeTrackFromPlaylist(playlist.playlistId, track.id)
+                            }
                         }
                     }
                 },
                 onInsertPositionChange = playlistsViewModel::setAddTrackInsertPosition,
                 onCreatePlaylist = { name -> playlistsViewModel.createPlaylist(name) },
-                onDismiss = { playlistPickerTrack = null }
+                onDismiss = {
+                    playlistPickerTrack = null
+                    pickerBatchCollection = null
+                    pickerBatchTracks = null
+                    pickerExcludedPlaylistId = null
+                },
+                collection = pickerBatchCollection,
+                collectionTracks = pickerBatchTracks ?: emptyList()
             )
 
             TrackRadioModal(
@@ -2513,6 +2627,13 @@ fun FoamNavHost(
                 state = collectionModalState,
                 onPlayNext = { collection -> playerViewModel.playNext(collection.tracks) },
                 onAddToQueue = { collection -> playerViewModel.addToQueue(collection.tracks) },
+                onAddToPlaylist = { collection ->
+                    // Nothing to add for a track-less collection
+                    if (collection.tracks.isNotEmpty()) {
+                        pickerBatchCollection = collection
+                        pickerBatchTracks = collection.tracks
+                    }
+                },
                 onSeeArtist = { artist ->
                     activeSharedCollection = sharedCollectionTag("artist", artist)
                     navController.navigate(Screen.ArtistDetail.createRoute(artist))

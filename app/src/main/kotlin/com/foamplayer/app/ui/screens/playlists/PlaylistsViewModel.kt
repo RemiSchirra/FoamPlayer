@@ -10,6 +10,8 @@ import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.PlaylistImporter
 import com.foamplayer.app.data.repository.PlaylistInsertPosition
+import com.foamplayer.app.data.repository.PlaylistRepairResult
+import com.foamplayer.app.data.repository.PlaylistRepairer
 import com.foamplayer.app.data.repository.PlaylistRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
@@ -68,6 +70,7 @@ class PlaylistsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val importer: PlaylistImporter,
     private val exporter: PlaylistExporter,
+    private val playlistRepairer: PlaylistRepairer,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -98,6 +101,14 @@ class PlaylistsViewModel @Inject constructor(
 
     private val _exportRunning = MutableStateFlow(false)
     val exportRunning: StateFlow<Boolean> = _exportRunning.asStateFlow()
+
+    /** True while a playlist repair is running; guards against double taps. */
+    private val _repairRunning = MutableStateFlow(false)
+    val repairRunning: StateFlow<Boolean> = _repairRunning.asStateFlow()
+
+    /** Result of the last repair run; consumed by the result sheet. */
+    private val _repairResult = MutableStateFlow<PlaylistRepairResult?>(null)
+    val repairResult: StateFlow<PlaylistRepairResult?> = _repairResult.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -220,6 +231,26 @@ class PlaylistsViewModel @Inject constructor(
         runExport { exporter.exportAll(folderUri) }
     }
 
+    /**
+     * Re-links playlist entries whose track ids a rescan invalidated (moved
+     * files); the run's outcome lands in [repairResult] for the result sheet.
+     */
+    fun repairPlaylists() {
+        if (_repairRunning.value) return
+        viewModelScope.launch {
+            _repairRunning.value = true
+            try {
+                _repairResult.value = playlistRepairer.repair()
+            } finally {
+                _repairRunning.value = false
+            }
+        }
+    }
+
+    fun consumeRepairResult() {
+        _repairResult.value = null
+    }
+
     private fun runExport(export: suspend () -> Unit) {
         if (_exportRunning.value) return
         viewModelScope.launch {
@@ -268,6 +299,27 @@ class PlaylistsViewModel @Inject constructor(
     fun playlistIdsContainingTrack(trackId: Long?): Flow<Set<Long>> =
         if (trackId == null) flowOf(emptySet())
         else playlistRepository.playlistIdsContainingTrack(trackId)
+
+    /**
+     * Live ids of the playlists that contain EVERY track of [trackIds];
+     * drives the picker's checkboxes when a whole collection is added.
+     */
+    fun playlistIdsContainingAllTracks(trackIds: List<Long>): Flow<Set<Long>> =
+        playlistRepository.playlistIdsContainingAllTracks(trackIds)
+
+    /** Adds a whole list of tracks (a collection) to a playlist, skipping ones it already has. */
+    fun addTracksToPlaylist(playlistId: Long, trackIds: List<Long>) {
+        viewModelScope.launch {
+            playlistRepository.addTracksToPlaylist(playlistId, trackIds, _addTrackInsertPosition.value)
+        }
+    }
+
+    /** Removes a whole list of tracks from a playlist (unchecking a row in a batch add). */
+    fun removeTracksFromPlaylist(playlistId: Long, trackIds: List<Long>) {
+        viewModelScope.launch {
+            playlistRepository.removeTracksFromPlaylist(playlistId, trackIds)
+        }
+    }
 
     fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {
         viewModelScope.launch {

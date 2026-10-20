@@ -30,3 +30,7 @@
 -keepclasseswithmembers class com.foamplayer.discord.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
+
+# jaudiotagger: audio tag writing (track metadata edit page).
+-keep class org.jaudiotagger.** { *; }
+-dontwarn org.jaudiotagger.**

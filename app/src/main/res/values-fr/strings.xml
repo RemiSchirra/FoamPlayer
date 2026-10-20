@@ -33,6 +33,7 @@
     <string name="home_row_recommended_playlists">Playlists recommandées</string>
     <string name="home_row_recommended_albums">Albums recommandés</string>
     <string name="home_row_recent_listens">Écoutes récentes</string>
+    <string name="home_row_recommended_tracks">Titres recommandés</string>
     <string name="home_row_favorite_tracks">Titres favoris</string>
     <string name="home_row_old_favorites">Anciens favoris</string>
     <string name="home_row_old_favorite_albums">Anciens albums favoris</string>
@@ -42,6 +43,11 @@
 
     <string name="home_settings_title">Accueil</string>
     <string name="home_settings_subtitle">Réordonner et afficher ou masquer les sections de l\'Accueil</string>
+
+    <string name="home_empty_title">Rien à afficher</string>
+    <string name="home_empty_body">Toutes les sections de l\'Accueil sont masquées. Réactivez celles que vous voulez voir.</string>
+    <string name="home_empty_open_settings">Ouvrir les réglages de l\'Accueil</string>
+    <string name="home_empty_open_library">Ouvrir les réglages de la Bibliothèque</string>
 
     <string name="library_folders">Dossiers de la bibliothèque</string>
     <string name="add_folder">Ajouter un dossier</string>
@@ -70,6 +76,12 @@
     <string name="provider_error_unavailable">fournisseur indisponible</string>
     <string name="provider_error_timeout">délai de connexion dépassé</string>
     <string name="provider_error_save">échec de l\'enregistrement des dossiers</string>
+
+    <!-- Toasts (in-app transient messages, see ToastCenter / ToastStack). -->
+    <string name="toast_track_not_in_library">Piste pas encore dans la bibliothèque : %1$s</string>
+    <string name="toast_distant_track_unavailable">Piste distante indisponible : %1$s</string>
+    <string name="toast_failed_to_load">Échec du chargement de %1$s</string>
+    <string name="toast_playback_stopped">Lecture arrêtée : trop de pistes n\'ont pas pu être chargées</string>
     <string name="done">Terminé</string>
     <string name="metadata_separators">Séparateurs de métadonnées</string>
     <string name="artist_separators">Séparateurs d\'artistes</string>
@@ -104,6 +116,8 @@
     <string name="clear_search_history">Effacer l\'historique de recherche</string>
 
     <string name="appearance">Apparence</string>
+    <string name="application">Application</string>
+    <string name="screens">Écrans</string>
     <string name="dynamic_effects">Effets dynamiques</string>
     <string name="icon_style">Style d\'icône</string>
     <string name="visuals">Visuels</string>
@@ -419,7 +433,6 @@
     <string name="notif_update_preparing">Préparation du téléchargement…</string>
     <string name="notif_update_progress">%1$d%%</string>
     <string name="update_available_title">Nouvelle mise à jour disponible</string>
-    <string name="update_available_version">Version %1$s</string>
     <string name="update_install_ready_title">Installer la mise à jour</string>
     <string name="update_install_ready_text">La mise à jour a été téléchargée. L\'installer maintenant ?</string>
     <string name="update_install_later">Plus tard</string>
@@ -455,6 +468,12 @@
     <!-- Export de playlists (.m3u8) -->
     <string name="playlist_export_all">Exporter les playlists</string>
     <string name="playlist_export_one">Exporter la playlist</string>
+    <string name="playlist_repair">Réparer les playlists</string>
+    <string name="playlist_repair_description">Réassocier les morceaux disparus des playlists après un déplacement ou un renommage de fichiers suivi d\'un nouveau scan de la bibliothèque</string>
+    <string name="playlist_repair_caps">RÉPARER</string>
+    <string name="playlist_repairing_caps">RÉPARATION…</string>
+    <string name="playlist_repair_nothing">Rien à réparer.</string>
+    <string name="playlist_repair_done">%1$d entrées de playlist réassociées, %2$d obsolètes supprimées ; %3$d introuvables.</string>
     <string name="playlist_export_folder_hint">Choisissez où écrire les fichiers .m3u8</string>
 
     <!-- Sections bibliothèque -->
@@ -538,6 +557,10 @@
     <string name="details_album_artist">Artiste de l\'album</string>
     <string name="details_album">Album</string>
     <string name="details_composer">Compositeur</string>
+    <string name="details_title">Titre</string>
+    <string name="apply">Appliquer</string>
+    <string name="add_genre">Ajouter un genre</string>
+    <string name="show_existing_genres">Afficher les genres existants</string>
     <string name="details_file_path">Chemin du fichier</string>
     <string name="details_format">Format</string>
     <string name="instrumental">Instrumental</string>

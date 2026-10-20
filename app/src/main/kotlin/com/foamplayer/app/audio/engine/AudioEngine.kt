@@ -30,7 +30,9 @@ import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ScanStatus
+import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.app.toast.ToastCenter
 import com.foamplayer.distant.DistantUris
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -80,6 +82,7 @@ class AudioEngine @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val trackRepository: TrackRepository,
     private val distantRepository: DistantRepository,
+    private val toastCenter: ToastCenter,
     private val fadeEngine: FadeEngine,
     private val queuePersistence: QueuePersistence
 ) {
@@ -741,9 +744,15 @@ class AudioEngine @Inject constructor(
             Log.w("AudioEngine", "Too many consecutive load errors; stopping playback")
             consecutiveLoadErrors = 0
             player.pause()
+            toastCenter.pushRes(R.string.toast_playback_stopped)
             return
         }
         trackId?.let { failedTrackIds.add(it) }
+
+        // Tell the user what was skipped and why: a distant track whose provider
+        // cannot serve it right now, or a local/distant load failure (decoder,
+        // missing file, provider error...).
+        failedTrack?.let(::pushTrackUnavailableToast)
 
         val queue = _playbackState.value.queue
         val canAdvance = player.hasNextMediaItem() ||
@@ -756,6 +765,16 @@ class AudioEngine @Inject constructor(
             player.prepare()
             if (resumeAfterError) player.play()
         }
+    }
+
+    /** Pushes the "this track didn't play" toast for [track] into [toastCenter]. */
+    private fun pushTrackUnavailableToast(track: TrackEntity) {
+        val res = if (DistantUris.isDistant(track.path)) {
+            R.string.toast_distant_track_unavailable
+        } else {
+            R.string.toast_failed_to_load
+        }
+        toastCenter.pushRes(res, track.title)
     }
 
     /** Re-evaluates the output path and publishes it to [PlaybackState.audioOutputInfo] when it changed. */
@@ -1591,11 +1610,15 @@ class AudioEngine @Inject constructor(
         val primaryFirst = primaryQueueFirstIndex(state)
         val primaryLast = primaryQueueLastIndex(state)
         var target = index
+        // Known-failed tracks stepped over while resolving [target]; the player
+        // never attempts them, so without this the skip is completely silent.
+        val steppedOverFailed = mutableListOf<TrackEntity>()
         if (state.repeatMode == RepeatMode.ALL && primaryFirst < primaryLast && index in primaryFirst..primaryLast) {
             // Repeat-all: the primary queue is a loop, so stepping over failed tracks wraps
             // around its ends instead of leaking into the auxiliary pool.
             var guard = 0
             while (queue[target].id in failedTrackIds && guard++ <= primaryLast - primaryFirst) {
+                steppedOverFailed.add(queue[target])
                 target = if (forward) {
                     if (target >= primaryLast) primaryFirst else target + 1
                 } else {
@@ -1605,10 +1628,13 @@ class AudioEngine @Inject constructor(
             if (queue[target].id in failedTrackIds) target = index
         } else {
             while (target in queue.indices && queue[target].id in failedTrackIds) {
+                steppedOverFailed.add(queue[target])
                 target += if (forward) 1 else -1
             }
             if (target !in queue.indices) target = index
         }
+
+        steppedOverFailed.distinctBy { it.id }.forEach(::pushTrackUnavailableToast)
 
         cancelPendingTransitions()
 

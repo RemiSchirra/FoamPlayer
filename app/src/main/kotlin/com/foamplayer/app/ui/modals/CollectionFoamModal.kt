@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.modals
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -40,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.core.net.toUri
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Person
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
@@ -59,7 +63,8 @@ enum class CollectionKind(val displayName: String) {
     Genre("Genre"),
     Year("Year"),
     Folder("Folder"),
-    Composer("Composer")
+    Composer("Composer"),
+    Playlist("Playlist")
 }
 
 /** Localized label of a [CollectionKind] ("Album", "Artist", ...). */
@@ -72,6 +77,7 @@ fun CollectionKind.label(): String = stringResource(
         CollectionKind.Year -> R.string.kind_year
         CollectionKind.Folder -> R.string.kind_folder
         CollectionKind.Composer -> R.string.kind_composer
+        CollectionKind.Playlist -> R.string.kind_playlist
     }
 )
 
@@ -130,14 +136,15 @@ fun rememberCollectionFoamModalState(): CollectionFoamModalState = remember { Co
 /**
  * Bottom sheet shown when the user long-presses a collection (album, artist,
  * genre, year, folder, composer). The track modal's counterpart, minus what
- * collections have no use for: no score heart in the header, no Playlist
- * button. Layout, top to bottom:
+ * collections have no use for: no score heart in the header. Layout, top to
+ * bottom:
  * - A header on a darker container: artwork (or icon/letter fallback) with the
  *   collection title and its artist underneath. It stays mounted across page
  *   switches.
- * - The actions page: two side-by-side buttons ("Next" = queue the collection
- *   right after the current track, "Queue" = append it to the end of the main
- *   queue), then navigation rows — "See Artist" for albums, "See Albums" for
+ * - The actions page: three side-by-side buttons ("Next" = queue the
+ *   collection right after the current track, "Queue" = append it to the end
+ *   of the main queue, "Playlist" = add every track of the collection to a
+ *   playlist via the playlist picker), then navigation rows — "See Artist" for albums, "See Albums" for
  *   artists, and both "See Artist" + "See Album" for folders/genres/years/
  *   composers (when such a collection spans several artists/albums, the row
  *   opens a list screen of them via [onSeeArtistList] / [onSeeAlbumList]) —
@@ -153,6 +160,7 @@ fun CollectionFoamModal(
     state: CollectionFoamModalState,
     onPlayNext: (CollectionInfo) -> Unit = {},
     onAddToQueue: (CollectionInfo) -> Unit = {},
+    onAddToPlaylist: (CollectionInfo) -> Unit = {},
     onSeeArtist: (String) -> Unit = {},
     onSeeAlbum: (album: String, albumArtPath: String?, artist: String?) -> Unit = { _, _, _ -> },
     onSeeArtistList: (sourceKind: CollectionKind, sourceKey: String) -> Unit = { _, _ -> },
@@ -216,6 +224,12 @@ fun CollectionFoamModal(
         visible = state.isVisible,
         onDismissRequest = onDismiss
     ) {
+        // Match the track modal: system back while on the details page returns
+        // to the actions page instead of dismissing the whole sheet.
+        BackHandler(enabled = state.isVisible && showDetails) {
+            showDetails = false
+        }
+
         if (displayCollection != null) {
             Column(
                 modifier = Modifier.padding(bottom = FoamDimens.spacingSmall),
@@ -281,6 +295,12 @@ fun CollectionFoamModal(
                                     onClick = { perform(onAddToQueue) },
                                     modifier = Modifier.weight(1f)
                                 )
+                                ModalActionButton(
+                                    icon = FoamTheme.icons.current.playlists,
+                                    label = stringResource(R.string.playlist),
+                                    onClick = { perform(onAddToPlaylist) },
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
 
                             // distinctArtistNames()/distinctCollectionAlbums() scan the
@@ -321,6 +341,7 @@ fun CollectionFoamModal(
                                         if (index > 0) ModalSectionDivider()
                                         ModalRowButton(
                                             label = row.label,
+                                            icon = row.icon,
                                             onClick = row.onClick
                                         )
                                     }
@@ -567,6 +588,7 @@ private fun CollectionDetailsContent(
 /** One navigation row on the actions page: label plus the action to run on tap. */
 private data class CollectionModalNavRow(
     val label: String,
+    val icon: ImageVector? = null,
     val onClick: () -> Unit
 )
 
@@ -598,7 +620,9 @@ private fun collectionNavigationRows(
 ): List<CollectionModalNavRow> = when (collection.kind) {
     // The artist detail screen IS the artist's album list.
     CollectionKind.Artist -> listOf(
-        CollectionModalNavRow(labels.seeAlbums) { perform { onSeeArtist(collection.title) } }
+        CollectionModalNavRow(labels.seeAlbums, icon = Icons.Rounded.Album) {
+            perform { onSeeArtist(collection.title) }
+        }
     )
     else -> buildList {
         when (collection.kind) {
@@ -608,7 +632,11 @@ private fun collectionNavigationRows(
                 collection.artist?.split("; ")
                     ?.firstOrNull { it.isNotBlank() }
                     ?.let { name ->
-                        add(CollectionModalNavRow(labels.seeArtist) { perform { onSeeArtist(name) } })
+                        add(
+                            CollectionModalNavRow(labels.seeArtist, icon = Icons.Rounded.Person) {
+                                perform { onSeeArtist(name) }
+                            }
+                        )
                     }
             }
             else -> {
@@ -617,10 +645,14 @@ private fun collectionNavigationRows(
 
                 when {
                     artistNames.size == 1 -> add(
-                        CollectionModalNavRow(labels.seeArtist) { perform { onSeeArtist(artistNames.first()) } }
+                        CollectionModalNavRow(labels.seeArtist, icon = Icons.Rounded.Person) {
+                            perform { onSeeArtist(artistNames.first()) }
+                        }
                     )
                     artistNames.size > 1 && sourceKind != null -> add(
-                        CollectionModalNavRow(labels.seeArtist) { perform { onSeeArtistList(sourceKind, sourceKey) } }
+                        CollectionModalNavRow(labels.seeArtist, icon = Icons.Rounded.Person) {
+                            perform { onSeeArtistList(sourceKind, sourceKey) }
+                        }
                     )
                 }
 
@@ -628,13 +660,15 @@ private fun collectionNavigationRows(
                     albums.size == 1 -> {
                         val entry = albums.first()
                         add(
-                            CollectionModalNavRow(labels.seeAlbum) {
+                            CollectionModalNavRow(labels.seeAlbum, icon = Icons.Rounded.Album) {
                                 perform { onSeeAlbum(entry.album, entry.albumArtPath, entry.artist) }
                             }
                         )
                     }
                     albums.size > 1 && sourceKind != null -> add(
-                        CollectionModalNavRow(labels.seeAlbum) { perform { onSeeAlbumList(sourceKind, sourceKey) } }
+                        CollectionModalNavRow(labels.seeAlbum, icon = Icons.Rounded.Album) {
+                            perform { onSeeAlbumList(sourceKind, sourceKey) }
+                        }
                     )
                 }
             }

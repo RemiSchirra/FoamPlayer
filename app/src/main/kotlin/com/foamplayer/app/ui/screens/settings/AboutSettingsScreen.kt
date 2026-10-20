@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.FoamSwitchItem
+import com.foamplayer.app.ui.components.MarkdownText
 import com.foamplayer.app.ui.modals.FoamBottomModal
 import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -449,13 +450,10 @@ private fun ReleaseNotesModal(
         if (release == null) return@FoamBottomModal
         Column(modifier = Modifier.fillMaxWidth()) {
             BasicText(
-                text = stringResource(R.string.about_release_notes_title, release.version),
+                text = release.name?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.about_release_notes_title, release.version),
                 style = FoamTheme.typography.titleLarge
             )
-            release.name?.takeIf { it.isNotBlank() }?.let { title ->
-                Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
-                BasicText(text = title, style = FoamTheme.typography.body)
-            }
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
             Box(
                 modifier = Modifier
@@ -468,9 +466,8 @@ private fun ReleaseNotesModal(
             val scrollState = rememberScrollState()
             val notes = release.body?.takeIf { it.isNotBlank() }
                 ?: stringResource(R.string.about_no_release_notes)
-            BasicText(
-                text = notes,
-                style = FoamTheme.typography.body,
+            MarkdownText(
+                markdown = notes,
                 modifier = Modifier
                     .height(300.dp)
                     .verticalScroll(scrollState)

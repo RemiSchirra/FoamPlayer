@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import com.foamplayer.app.data.db.entities.TrackDeletionLogEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -183,15 +184,23 @@ interface TrackDao {
     """)
     fun getRecentlyPlayed(): Flow<List<TrackEntity>>
 
+    /** Tracks with at least one listen, most-listened first (Home "Recommended tracks"). */
+    @Query("""
+        SELECT * FROM tracks 
+        WHERE playCount > 0 
+        ORDER BY playCount DESC, title ASC 
+        LIMIT 50
+    """)
+    fun getRecommendedTracks(): Flow<List<TrackEntity>>
+
     /**
-     * Home "Favorite tracks": tracks ranked by aggregate play count + likes,
-     * regardless of when they were last played.
+     * Home "Favorite tracks": liked (score >= 1) or super-liked tracks, ranked
+     * by score then listen count, regardless of when they were last played.
      */
     @Query("""
         SELECT * FROM tracks 
-        WHERE playCount > 0 OR score > 0 
-        ORDER BY (playCount + MAX(score, 0) * 10) DESC, playCount DESC, title ASC 
-        LIMIT 50
+        WHERE score >= 1 
+        ORDER BY score DESC, playCount DESC, title ASC 
     """)
     fun getFavoriteTracks(): Flow<List<TrackEntity>>
 
@@ -245,9 +254,8 @@ interface TrackDao {
     fun getOldFavoriteAlbums(cutoff: Long): Flow<List<AlbumRecommendation>>
 
     /**
-     * Home "Recently added albums": albums ranked by the latest file
-     * modification date among their tracks (the album's last-touched file,
-     * matching the "file dates" definition of "added"), newest first.
+     * Home "Recently added albums": albums ranked by the most recently added
+     * (first-seen) track among them, newest first.
      */
     @Query("""
         SELECT album, 
@@ -262,8 +270,8 @@ interface TrackDao {
     fun getRecentlyAddedAlbums(): Flow<List<AlbumRecommendation>>
 
     /**
-     * Home "Recently added artists": credited artists ranked by the latest
-     * file modification date among their tracks, newest first.
+     * Home "Recently added artists": credited artists ranked by their most
+     * recently added (first-seen) track, newest first.
      */
     @Query("""
         SELECT artist, 0 as totalPlayCount, MAX(dateAdded) as dateAdded 
@@ -307,6 +315,33 @@ interface TrackDao {
     @Query("UPDATE tracks SET instrumental = :instrumental WHERE id = :trackId")
     suspend fun setInstrumental(trackId: Long, instrumental: Boolean)
 
+    /** Overwrites one track's user-editable metadata block (track modal's edit page). */
+    @Query("""
+        UPDATE tracks
+        SET title = :title,
+            artist = :artist,
+            album = :album,
+            albumArtist = :albumArtist,
+            genre = :genre,
+            composer = :composer,
+            year = :year,
+            trackNumber = :trackNumber,
+            discNumber = :discNumber
+        WHERE id = :trackId
+    """)
+    suspend fun updateMetadata(
+        trackId: Long,
+        title: String,
+        artist: String,
+        album: String,
+        albumArtist: String?,
+        genre: String?,
+        composer: String?,
+        year: Int?,
+        trackNumber: Int?,
+        discNumber: Int?
+    )
+
     @Query("SELECT instrumental FROM tracks WHERE id = :trackId")
     fun observeInstrumental(trackId: Long): Flow<Boolean>
 
@@ -317,7 +352,7 @@ interface TrackDao {
      * every listen_history row pointing at the old id (the stats screens'
      * only data source).
      */
-    @Query("SELECT id, path, playCount, lastPlayedAt, score, instrumental FROM tracks")
+    @Query("SELECT id, path, playCount, lastPlayedAt, score, instrumental, dateAdded FROM tracks")
     suspend fun getPlayStats(): List<TrackPlayStatsRow>
 
     @Query("""
@@ -337,6 +372,26 @@ interface TrackDao {
 
     @Query("DELETE FROM tracks WHERE path IN (:paths)")
     suspend fun deleteTracksByPaths(paths: List<String>)
+
+    /** Full rows of the tracks about to be deleted by [deleteTracksByPaths], for the deletion log snapshot. */
+    @Query("SELECT * FROM tracks WHERE path IN (:paths)")
+    suspend fun getTracksByPaths(paths: List<String>): List<TrackEntity>
+
+    /** Replaces any previous snapshot of the same id (a deleted id can be re-inserted). */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDeletionLogEntries(entries: List<TrackDeletionLogEntity>)
+
+    /** Identity snapshots of the tracks previous scans deleted, keyed by [TrackDeletionLogEntity.trackId]. */
+    @Query("SELECT * FROM track_deletion_log")
+    suspend fun getDeletionLog(): List<TrackDeletionLogEntity>
+
+    /** Drops the log rows a repair run re-linked. */
+    @Query("DELETE FROM track_deletion_log WHERE trackId IN (:trackIds)")
+    suspend fun deleteDeletionLogByTrackIds(trackIds: List<Long>)
+
+    /** Drops log rows older than [cutoff] (their references are repaired or hopeless by then). */
+    @Query("DELETE FROM track_deletion_log WHERE deletedAt < :cutoff")
+    suspend fun pruneDeletionLog(cutoff: Long)
 }
 
 data class AlbumSearchResult(
@@ -366,5 +421,6 @@ data class TrackPlayStatsRow(
     val playCount: Int,
     val lastPlayedAt: Long?,
     val score: Int = 0,
-    val instrumental: Boolean = false
+    val instrumental: Boolean = false,
+    val dateAdded: Long = 0
 )

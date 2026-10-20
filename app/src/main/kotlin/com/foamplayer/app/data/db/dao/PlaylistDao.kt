@@ -21,6 +21,10 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlists ORDER BY sortOrder ASC, name ASC")
     fun getAllPlaylists(): Flow<List<PlaylistEntity>>
 
+    /** One playlist by id, for cover-file cleanup on delete (null when gone). */
+    @Query("SELECT * FROM playlists WHERE playlistId = :playlistId")
+    suspend fun getPlaylistById(playlistId: Long): PlaylistEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun createPlaylist(playlist: PlaylistEntity): Long
 
@@ -139,6 +143,19 @@ interface PlaylistDao {
     fun playlistIdsContainingTrack(trackId: Long): Flow<List<Long>>
 
     /**
+     * Ids of the playlists that contain EVERY one of [trackIds]; pre-checks
+     * their rows in the add-to-playlist picker when whole collections are
+     * added. The caller passes the distinct id list and its size.
+     */
+    @Query("""
+        SELECT playlistId FROM playlist_track_cross_ref 
+        WHERE trackId IN (:trackIds) 
+        GROUP BY playlistId 
+        HAVING COUNT(DISTINCT trackId) = :trackCount
+    """)
+    fun playlistIdsContainingAllTracks(trackIds: List<Long>, trackCount: Int): Flow<List<Long>>
+
+    /**
      * Home "Recommended playlists": playlists ranked by the aggregate play
      * count + likes of the songs they contain. Empty playlists (no tracks) are
      * excluded — they have nothing to recommend.
@@ -171,6 +188,32 @@ interface PlaylistDao {
 
     @Query("DELETE FROM playlist_track_cross_ref WHERE playlistId = :playlistId")
     suspend fun clearPlaylistTracks(playlistId: Long)
+
+    /**
+     * Memberships whose track row no longer exists — a rescan orphaned them
+     * by re-scanning a moved file under a fresh id and deleting the old row
+     * (getTracksForPlaylist's INNER JOIN silently hides them while
+     * getPlaylistTrackCounts still counts them).
+     */
+    @Query("""
+        SELECT ref.* FROM playlist_track_cross_ref ref 
+        LEFT JOIN tracks t ON t.id = ref.trackId 
+        WHERE t.id IS NULL
+    """)
+    suspend fun getOrphanedTrackRefs(): List<PlaylistTrackCrossRef>
+
+    /**
+     * Re-points one membership at the re-scanned row of the same file. The
+     * caller must guarantee (playlistId, newTrackId) isn't already a row (or
+     * the upsert would drop the old order index) — the repairer claims ids
+     * per playlist before writing.
+     */
+    @Query("""
+        UPDATE playlist_track_cross_ref 
+        SET trackId = :newTrackId 
+        WHERE playlistId = :playlistId AND trackId = :oldTrackId
+    """)
+    suspend fun retargetPlaylistTrack(playlistId: Long, oldTrackId: Long, newTrackId: Long)
 }
 
 /** One row of [PlaylistDao.getRecommendedPlaylists]: a playlist plus its aggregate listen/like score. */

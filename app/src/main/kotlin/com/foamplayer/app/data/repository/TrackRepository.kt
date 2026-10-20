@@ -21,6 +21,8 @@ import com.foamplayer.app.data.db.dao.ArtistPlayRow
 import com.foamplayer.app.data.db.dao.TrackPlayStatsRow
 import com.foamplayer.app.data.db.entities.ListenHistoryEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.db.entities.toDeletionLogEntry
+import com.foamplayer.app.data.scanner.AudioTagWriter
 import com.foamplayer.app.data.scanner.LocalAudioScanner
 import com.foamplayer.app.data.scanner.RemoteLibraryScanner
 import com.foamplayer.app.data.scanner.ScanStatus
@@ -57,6 +59,29 @@ private data class TrackStatsUpdate(
     val score: Int
 )
 
+/** Store format of multi-value text columns (genres, credited artists, composers): values "; "-joined. */
+const val MULTI_VALUE_SEPARATOR = "; "
+
+/**
+ * A track's user-editable metadata, as gathered by the track modal's edit page.
+ * Blank optional fields are stored as null; [genres] is stored "; "-joined in the
+ * genre column (see [MULTI_VALUE_SEPARATOR]).
+ */
+data class TrackMetadataEdit(
+    val title: String,
+    val artist: String,
+    val album: String,
+    val albumArtist: String?,
+    val genres: List<String>,
+    val composer: String?,
+    val year: Int?,
+    val trackNumber: Int?,
+    val discNumber: Int?
+) {
+    /** The genre string as stored in the genre column (empty list → empty string). */
+    val genre: String get() = genres.joinToString(MULTI_VALUE_SEPARATOR)
+}
+
 /**
  * Library data layer: Room access, library scanning and listening-stats
  * persistence. Keeps the main browse listings (tracks, albums, artists,
@@ -67,6 +92,7 @@ private data class TrackStatsUpdate(
 class TrackRepository @Inject constructor(
     private val db: AppDatabase,
     private val trackDao: TrackDao,
+    private val audioTagWriter: AudioTagWriter,
     private val scanner: LocalAudioScanner,
     private val remoteScanner: RemoteLibraryScanner,
     private val settingsRepository: SettingsRepository,
@@ -114,7 +140,7 @@ class TrackRepository @Inject constructor(
 
     /** All credited artist names, kept warm process-wide and replayed to new subscribers. */
     private val allArtistsShared = trackDao.getAllArtistNames().map { rawArtists ->
-        rawArtists.flatMap { it.split("; ") }
+        rawArtists.flatMap { it.split(MULTI_VALUE_SEPARATOR) }
             .filter { it.isNotBlank() }
             .distinct()
             .sortedWith(String.CASE_INSENSITIVE_ORDER)
@@ -128,7 +154,7 @@ class TrackRepository @Inject constructor(
 
     /** All credited composer names, kept warm process-wide and replayed to new subscribers. */
     private val allComposersShared = trackDao.getAllComposerNames().map { rawComposers ->
-        rawComposers.flatMap { it.split("; ") }
+        rawComposers.flatMap { it.split(MULTI_VALUE_SEPARATOR) }
             .filter { it.isNotBlank() }
             .distinct()
             .sortedWith(String.CASE_INSENSITIVE_ORDER)
@@ -142,7 +168,7 @@ class TrackRepository @Inject constructor(
 
     /** All credited genre names, kept warm process-wide and replayed to new subscribers. */
     private val allGenresShared = trackDao.getAllGenres().map { rawGenres ->
-        rawGenres.flatMap { it.split("; ") }
+        rawGenres.flatMap { it.split(MULTI_VALUE_SEPARATOR) }
             .filter { it.isNotBlank() }
             .distinct()
             .sortedWith(String.CASE_INSENSITIVE_ORDER)
@@ -237,7 +263,7 @@ class TrackRepository @Inject constructor(
 
     /** Searches credited artists (the "; " convention split apart), matching filtered. */
     fun searchArtists(query: String): Flow<List<String>> = trackDao.searchArtists(escapeLike(query)).map { rawArtists ->
-        rawArtists.flatMap { it.split("; ") }
+        rawArtists.flatMap { it.split(MULTI_VALUE_SEPARATOR) }
             .filter { it.contains(query, ignoreCase = true) }
             .distinct()
             .sorted()
@@ -263,7 +289,10 @@ class TrackRepository @Inject constructor(
     /** Most recently listened tracks (Home "Recent listens" row). */
     fun getRecentlyPlayed(): Flow<List<TrackEntity>> = trackDao.getRecentlyPlayed()
 
-    /** Home "Favorite tracks": aggregate play count + likes, any last-played date. */
+    /** Most-listened tracks (Home "Recommended tracks" row). */
+    fun getRecommendedTracks(): Flow<List<TrackEntity>> = trackDao.getRecommendedTracks()
+
+    /** Home "Favorite tracks": liked tracks (score >= 1), any last-played date. */
     fun getFavoriteTracks(): Flow<List<TrackEntity>> = trackDao.getFavoriteTracks()
 
     /** Long-standing favorites (Home "Old favorites" row); [cutoff] bounds what counts as "not recent". */
@@ -278,10 +307,10 @@ class TrackRepository @Inject constructor(
      */
     fun getOldFavoriteAlbums(cutoff: Long): Flow<List<AlbumRecommendation>> = trackDao.getOldFavoriteAlbums(cutoff)
 
-    /** Albums newest-first by the latest file modification date among their tracks. */
+    /** Albums newest-first by their most recently added (first-seen) track. */
     fun getRecentlyAddedAlbums(): Flow<List<AlbumRecommendation>> = trackDao.getRecentlyAddedAlbums()
 
-    /** Credited artists newest-first by the latest file modification date among their tracks. */
+    /** Credited artists newest-first by their most recently added (first-seen) track. */
     fun getRecentlyAddedArtistRows(): Flow<List<ArtistAddRow>> = trackDao.getRecentlyAddedArtistRows()
 
     /** Rescans the configured library folders. */
@@ -341,7 +370,12 @@ class TrackRepository @Inject constructor(
             .filter { documentIdOf(it).startsWith(prefix) }
 
         db.withTransaction {
+            val deletedAt = System.currentTimeMillis()
             removedPaths.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
+                val doomed = trackDao.getTracksByPaths(chunk)
+                if (doomed.isNotEmpty()) {
+                    trackDao.insertDeletionLogEntries(doomed.map { it.toDeletionLogEntry(deletedAt) })
+                }
                 trackDao.deleteTracksByPaths(chunk)
             }
 
@@ -411,7 +445,8 @@ class TrackRepository @Inject constructor(
                 playCount = existing.playCount,
                 lastPlayedAt = existing.lastPlayedAt,
                 score = existing.score,
-                instrumental = existing.instrumental
+                instrumental = existing.instrumental,
+                dateAdded = if (existing.dateAdded > 0) existing.dateAdded else scanned.dateAdded
             )
         } else {
             scanned
@@ -468,7 +503,12 @@ class TrackRepository @Inject constructor(
             // 999 host-variable limit on API 29.
             val scannedPathSet = mergedTracks.mapTo(HashSet()) { it.path }
             val stalePaths = trackDao.getAllTrackPaths().filterNot { it in scannedPathSet }
+            val deletedAt = System.currentTimeMillis()
             stalePaths.chunked(SQL_VARIABLE_CHUNK).forEach { chunk ->
+                val doomed = trackDao.getTracksByPaths(chunk)
+                if (doomed.isNotEmpty()) {
+                    trackDao.insertDeletionLogEntries(doomed.map { it.toDeletionLogEntry(deletedAt) })
+                }
                 trackDao.deleteTracksByPaths(chunk)
             }
 
@@ -562,6 +602,31 @@ class TrackRepository @Inject constructor(
     /** Stores the user-set instrumental flag (lyrics view shows a music note instead). */
     suspend fun setInstrumental(trackId: Long, instrumental: Boolean) =
         trackDao.setInstrumental(trackId, instrumental)
+
+    /**
+     * Applies the track modal's edit page: writes [edit] into the track's file
+     * tags (so a rescan reads the same values back), then overwrites the
+     * database row. The file write is best-effort — when it fails (unsupported
+     * container, read-only document…) the database still updates, but the next
+     * scan will read the old tags back.
+     */
+    suspend fun updateMetadata(track: TrackEntity, edit: TrackMetadataEdit) {
+        withContext(Dispatchers.IO) {
+            audioTagWriter.writeTags(track.path.toUri(), track.format, edit)
+        }
+        trackDao.updateMetadata(
+            trackId = track.id,
+            title = edit.title,
+            artist = edit.artist,
+            album = edit.album,
+            albumArtist = edit.albumArtist,
+            genre = edit.genre.ifEmpty { null },
+            composer = edit.composer,
+            year = edit.year,
+            trackNumber = edit.trackNumber,
+            discNumber = edit.discNumber
+        )
+    }
 
     /** Emits the user-set instrumental flag for [trackId], updating whenever it changes. */
     fun observeInstrumental(trackId: Long): Flow<Boolean> = trackDao.observeInstrumental(trackId)

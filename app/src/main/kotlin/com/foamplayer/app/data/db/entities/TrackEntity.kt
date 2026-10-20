@@ -45,7 +45,8 @@ data class TrackEntity(
     /** User-set flag: the track has no lyrics (the lyrics view shows a music note instead). */
     val instrumental: Boolean = false,
     /**
-     * File's last-modified timestamp (epoch ms). 0 when unknown.
+     * When the track entered the library: the file's mtime at first scan
+     * (epoch ms), preserved across rescans. 0 when unknown.
      */
     @ColumnInfo(defaultValue = "0") val dateAdded: Long = 0
 )

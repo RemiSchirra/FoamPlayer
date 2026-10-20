@@ -68,6 +68,7 @@ class PlaylistCoverProvider @Inject constructor(
                 for (playlist in playlists) {
                     val custom = playlist.imageUrl?.takeIf { it.isNotBlank() }
                     if (custom != null) {
+                        if (custom.contains("://")) continue
                         map[playlist.playlistId] = PlaylistCover(custom, isEmbeddedArt = false)
                     } else {
                         fallbacks[playlist.playlistId]?.let {

@@ -22,7 +22,7 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = 1
-        versionName = "1.1.0"
+        versionName = "1.1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -104,6 +104,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+    implementation(libs.jaudiotagger)
 
     // Compose BOM 2026.08.00+ (Compose 1.12.0) requires compileSdk 37 / AGP 9.1.0 — staying on 2026.06.00 (Compose 1.11.x) to match compileSdk 36 / AGP 9.0.1
     implementation(platform(libs.androidx.compose.bom))

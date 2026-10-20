@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.modals
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -30,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,6 +86,15 @@ class PlaylistFoamModalState {
 fun rememberPlaylistFoamModalState(): PlaylistFoamModalState = remember { PlaylistFoamModalState() }
 
 /**
+ * Provided by [com.foamplayer.app.ui.navigation.FoamNavHost] at the app root;
+ * opens the root-hosted [PlaylistPickerModal] pre-loaded with the given
+ * playlist's tracks, so the "Add to Playlist" row works from any screen
+ * without each one threading picker state through.
+ */
+val LocalOpenPlaylistPickerForPlaylist =
+    staticCompositionLocalOf<(PlaylistEntity) -> Unit> { {} }
+
+/**
  * Bottom sheet shown when the user long-presses a playlist. Same layout
  * language as the collection modal: a header on a darker container, then
  * grouped sections on lighter containers.
@@ -92,11 +103,12 @@ fun rememberPlaylistFoamModalState(): PlaylistFoamModalState = remember { Playli
  * cover (opens a file selector to change the image) and a pencil to the right
  * of the name (opens the rename sheet). The actions page holds the queue
  * actions ("Next" = queue the playlist right after the current track, "Queue"
- * = append it to the end of the main queue), then a Details row plus a Delete
- * row at the end; the details page shows the playlist's metadata with a
- * push-style slide, the header persisting across the switch. Delete dismisses
- * this sheet; the host is expected to then show the confirmation sheet
- * ([DeletePlaylistConfirmModal]) before actually deleting.
+ * = append it to the end of the main queue, "Playlist" = open the playlist
+ * picker for this playlist's whole track list), then a Details row plus a
+ * Delete row at the end; the details page shows the playlist's
+ * metadata with a push-style slide, the header persisting across the switch.
+ * Delete dismisses this sheet; the host is expected to then show the
+ * confirmation sheet ([DeletePlaylistConfirmModal]) before actually deleting.
  *
  * The queue actions receive the playlist entity; the host resolves the
  * playlist's tracks (and no-ops for an empty playlist).
@@ -108,6 +120,7 @@ fun PlaylistFoamModal(
     state: PlaylistFoamModalState,
     onPlayNext: (PlaylistEntity) -> Unit = {},
     onAddToQueue: (PlaylistEntity) -> Unit = {},
+    onAddToPlaylist: (PlaylistEntity) -> Unit = {},
     onEditImage: (PlaylistEntity) -> Unit = {},
     onEditName: (PlaylistEntity) -> Unit = {},
     onDelete: (PlaylistEntity) -> Unit = {},
@@ -161,6 +174,12 @@ fun PlaylistFoamModal(
         visible = state.isVisible,
         onDismissRequest = onDismiss
     ) {
+        // Match the track modal: system back while on the details page returns
+        // to the actions page instead of dismissing the whole sheet.
+        BackHandler(enabled = state.isVisible && showDetails) {
+            showDetails = false
+        }
+
         if (displayPlaylist != null) {
             Column(
                 modifier = Modifier.padding(bottom = FoamDimens.spacingSmall),
@@ -224,6 +243,12 @@ fun PlaylistFoamModal(
                                     icon = FoamTheme.icons.current.queue,
                                     label = stringResource(R.string.queue),
                                     onClick = { perform(onAddToQueue) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                ModalActionButton(
+                                    icon = FoamTheme.icons.current.playlists,
+                                    label = stringResource(R.string.playlist),
+                                    onClick = { perform(onAddToPlaylist) },
                                     modifier = Modifier.weight(1f)
                                 )
                             }

@@ -80,6 +80,13 @@ private val RecommendedSortOptions = listOf(
 private val RecentlyAddedSortOptions = RecommendedSortOptions
 
 /**
+ * Sort options of the Home "Favorite tracks" page: the row's score-first
+ * ranking first, then the standard track orderings.
+ */
+private val FavoriteTracksSortOptions =
+    listOf(CollectionSortMode.RECOMMENDED) + TrackSortOptions
+
+/**
  * "See all" page behind the Home "Recommended playlists" row: up to 50
  * playlists in the row's aggregate play/like order (the default, kept by
  * [CollectionSortMode].RECOMMENDED]). Playlist covers resolve through the
@@ -297,9 +304,55 @@ fun RecentTracksSeeAllScreen(
     )
 }
 
+/** "See all" page behind the Home "Recommended tracks" row: up to 50 most-listened tracks. */
+@Composable
+fun RecommendedTracksSeeAllScreen(
+    onTrackClick: (List<TrackEntity>, Int) -> Unit,
+    onBack: () -> Unit,
+    activeTrackId: Long?,
+    density: MediaDensity = MediaDensity.ROW_NORMAL,
+    onDensityChange: ((MediaDensity) -> Unit)? = null,
+    sortMode: CollectionSortMode = CollectionSortMode.LISTEN_COUNT,
+    onSortChange: ((CollectionSortMode) -> Unit)? = null,
+    sortInverted: Boolean = false,
+    onSortInvertedChange: ((Boolean) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
+    sharedTrackId: Long? = null,
+    heroLayout: CollectionHeroLayout = CollectionHeroLayout.Compact,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
+    val tracks by viewModel.recommendedTracks.collectAsState()
+    val sortedTracks = rememberSortedTracks(tracks, sortMode, sortInverted)
+
+    TrackListScreen(
+        title = stringResource(R.string.home_row_recommended_tracks),
+        tracks = sortedTracks,
+        onTrackClick = onTrackClick,
+        onPlayAllClick = { if (sortedTracks.isNotEmpty()) onTrackClick(sortedTracks, 0) },
+        onShuffleAllClick = { shuffled ->
+            if (shuffled.isNotEmpty()) onTrackClick(shuffled, 0)
+        },
+        onBack = onBack,
+        activeTrackId = activeTrackId,
+        density = density,
+        onDensityChange = onDensityChange,
+        sortOptions = TrackSortOptions,
+        currentSort = sortMode,
+        onSortChange = onSortChange,
+        sortInverted = sortInverted,
+        onSortInvertedChange = onSortInvertedChange,
+        sharedTransitionScope = sharedTransitionScope,
+        playerTransitionVisibilityScope = playerTransitionVisibilityScope,
+        sharedTrackId = sharedTrackId,
+        heroLayout = heroLayout
+    )
+}
+
 /**
- * "See all" page behind the Home "Favorite tracks" row: up to 50 tracks in
- * the row's aggregate play/like order.
+ * "See all" page behind the Home "Favorite tracks" row: all liked tracks
+ * (score >= 1) in the row's score-first order (the default, kept by
+ * [CollectionSortMode.RECOMMENDED]).
  */
 @Composable
 fun FavoriteTracksSeeAllScreen(
@@ -308,7 +361,7 @@ fun FavoriteTracksSeeAllScreen(
     activeTrackId: Long?,
     density: MediaDensity = MediaDensity.ROW_NORMAL,
     onDensityChange: ((MediaDensity) -> Unit)? = null,
-    sortMode: CollectionSortMode = CollectionSortMode.LISTEN_COUNT,
+    sortMode: CollectionSortMode = CollectionSortMode.RECOMMENDED,
     onSortChange: ((CollectionSortMode) -> Unit)? = null,
     sortInverted: Boolean = false,
     onSortInvertedChange: ((Boolean) -> Unit)? = null,
@@ -333,7 +386,7 @@ fun FavoriteTracksSeeAllScreen(
         activeTrackId = activeTrackId,
         density = density,
         onDensityChange = onDensityChange,
-        sortOptions = TrackSortOptions,
+        sortOptions = FavoriteTracksSortOptions,
         currentSort = sortMode,
         onSortChange = onSortChange,
         sortInverted = sortInverted,
@@ -435,7 +488,7 @@ fun OldFavoriteAlbumsSeeAllScreen(
 
 /**
  * "See all" page behind the Home "Recently added albums" row: up to 50 albums
- * newest-first by their earliest scanned track.
+ * newest-first by their most recently added (first-seen) track.
  */
 @Composable
 fun RecentlyAddedAlbumsSeeAllScreen(
@@ -474,8 +527,8 @@ fun RecentlyAddedAlbumsSeeAllScreen(
 
 /**
  * "See all" page behind the Home "Recently added artists" row: up to 50
- * artists newest-first by their earliest scanned track, mirroring the
- * favorite-artists page.
+ * artists newest-first by their most recently added (first-seen) track,
+ * mirroring the favorite-artists page.
  */
 @Composable
 fun RecentlyAddedArtistsSeeAllScreen(

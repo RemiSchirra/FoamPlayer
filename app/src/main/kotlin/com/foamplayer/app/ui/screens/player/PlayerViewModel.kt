@@ -11,6 +11,7 @@ import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.data.canvas.CanvasProvider
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.SettingsRepository
+import com.foamplayer.app.data.repository.TrackMetadataEdit
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.distant.PlayOnDeviceRepository
@@ -276,6 +277,10 @@ class PlayerViewModel @Inject constructor(
     suspend fun freshTrack(track: TrackEntity): TrackEntity =
         trackRepository.getTrackById(track.id) ?: track
 
+    // Existing genres across all files
+    val genres: StateFlow<List<String>> = trackRepository.getAllGenres()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     // Track details modal: reset the listen counter and last-listen date.
     fun resetPlayStats(trackId: Long) {
         viewModelScope.launch { trackRepository.resetPlayStats(trackId) }
@@ -284,6 +289,11 @@ class PlayerViewModel @Inject constructor(
     // Track details modal: toggle the user-set instrumental flag (lyrics view override).
     fun setTrackInstrumental(trackId: Long, instrumental: Boolean) {
         viewModelScope.launch { trackRepository.setInstrumental(trackId, instrumental) }
+    }
+
+    // Track details modal: apply the metadata edit page's changes (file tags + db).
+    fun updateTrackMetadata(track: TrackEntity, edit: TrackMetadataEdit) {
+        viewModelScope.launch { trackRepository.updateMetadata(track, edit) }
     }
 
     // Track scores (-1 dislike / 0 not noted / 1 like / 2 super like): the in-memory

@@ -6,9 +6,11 @@ import com.foamplayer.app.data.db.dao.PlaylistTrackCount
 import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.PlaylistTrackCrossRef
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.scanner.PlaylistCoverStore
 import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.data.scanner.PlaylistCoverProvider
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,7 +26,8 @@ enum class PlaylistInsertPosition { START, END, RANDOM }
 @Singleton
 class PlaylistRepository @Inject constructor(
     private val playlistDao: PlaylistDao,
-    private val playlistCoverProvider: PlaylistCoverProvider
+    private val playlistCoverProvider: PlaylistCoverProvider,
+    private val coverStore: PlaylistCoverStore
 ) {
     fun getAllPlaylists(): Flow<List<PlaylistEntity>> = playlistDao.getAllPlaylists()
 
@@ -43,12 +46,26 @@ class PlaylistRepository @Inject constructor(
     fun playlistIdsContainingTrack(trackId: Long): Flow<Set<Long>> =
         playlistDao.playlistIdsContainingTrack(trackId).map { it.toSet() }
 
-    /** Creates a playlist and returns its id. */
+    /**
+     * Live ids of the playlists that contain EVERY track of [trackIds]
+     * (empty list → no playlists); pre-checks their rows in the picker when
+     * whole collections are added.
+     */
+    fun playlistIdsContainingAllTracks(trackIds: List<Long>): Flow<Set<Long>> =
+        if (trackIds.isEmpty()) flowOf(emptySet())
+        else playlistDao.playlistIdsContainingAllTracks(trackIds, trackIds.size).map { it.toSet() }
+
+    /**
+     * Creates a playlist, optionally with a cover: an external image ref (a
+     * just-picked document URI) is first copied into the app-private cover
+     * store — same rationale as [setPlaylistImage] — while a plain path
+     * passes through unchanged.
+     */
     suspend fun createPlaylist(name: String, imageUrl: String? = null): Long =
         playlistDao.createPlaylist(
             PlaylistEntity(
                 name = name,
-                imageUrl = imageUrl,
+                imageUrl = imageUrl?.let { coverStore.resolveStoredRef(it) },
                 sortOrder = playlistDao.nextPlaylistSortOrder()
             )
         )
@@ -64,8 +81,15 @@ class PlaylistRepository @Inject constructor(
         playlistDao.renamePlaylist(playlistId, name)
     }
 
+    /**
+     * Sets the playlist's custom cover. A [imageUrl] that references an
+     * external source (a just-picked document URI) is first copied into the
+     * app-private cover store — a persisted grant dies with app data, so the
+     * private copy is what survives a backup/restore round-trip. Passing a
+     * path (or null to clear) stores it as-is.
+     */
     suspend fun setPlaylistImage(playlistId: Long, imageUrl: String?) {
-        playlistDao.setPlaylistImage(playlistId, imageUrl)
+        playlistDao.setPlaylistImage(playlistId, imageUrl?.let { coverStore.resolveStoredRef(it) })
     }
 
     fun getPlaylistTrackCounts(): Flow<List<PlaylistTrackCount>> =
@@ -111,6 +135,35 @@ class PlaylistRepository @Inject constructor(
         addTrackToPlaylist(playlistId, trackId, playlistDao.nextOrderIndex(playlistId))
     }
 
+    /**
+     * Adds several tracks to a playlist at [position]'s slot, keeping the
+     * list order: start inserts them reversed at index 0 (each insert pushes
+     * the previous ones down, so the original order survives), end appends
+     * them in order, random drops each at its own uniform slot. Tracks the
+     * playlist already contains are skipped — whole-collection adds must not
+     * duplicate the memberships the playlist happens to have already.
+     */
+    suspend fun addTracksToPlaylist(playlistId: Long, trackIds: List<Long>, position: PlaylistInsertPosition) {
+        val existing = playlistDao.getTrackIdsForPlaylistOnce(playlistId).toSet()
+        val missing = trackIds.filterNot { it in existing }
+        when (position) {
+            PlaylistInsertPosition.START ->
+                missing.asReversed().forEach { trackId ->
+                    playlistDao.insertTrackAtIndex(playlistId, trackId, 0)
+                }
+            PlaylistInsertPosition.END ->
+                missing.forEach { trackId -> appendTrackToPlaylist(playlistId, trackId) }
+            PlaylistInsertPosition.RANDOM ->
+                missing.forEach { trackId -> addTrackToPlaylist(playlistId, trackId, position) }
+        }
+    }
+
+    suspend fun removeTracksFromPlaylist(playlistId: Long, trackIds: List<Long>) {
+        trackIds.forEach { trackId ->
+            playlistDao.removeTrackFromPlaylist(playlistId, trackId)
+        }
+    }
+
     suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {
         playlistDao.removeTrackFromPlaylist(playlistId, trackId)
     }
@@ -123,7 +176,14 @@ class PlaylistRepository @Inject constructor(
         )
     }
 
+    /**
+     * Deletes a playlist and, when it carried a private-cover path, that
+     * file too — the store only holds files some playlist still references
+     * (external refs are left alone by [PlaylistCoverStore.deleteIfOwned]).
+     */
     suspend fun deletePlaylist(playlistId: Long) {
+        val image = playlistDao.getPlaylistById(playlistId)?.imageUrl
         playlistDao.deletePlaylist(playlistId)
+        coverStore.deleteIfOwned(image)
     }
 }

@@ -33,6 +33,7 @@
     <string name="home_row_recommended_playlists">Recommended playlists</string>
     <string name="home_row_recommended_albums">Recommended albums</string>
     <string name="home_row_recent_listens">Recent listens</string>
+    <string name="home_row_recommended_tracks">Recommended tracks</string>
     <string name="home_row_favorite_tracks">Favorite tracks</string>
     <string name="home_row_old_favorites">Old favorites</string>
     <string name="home_row_old_favorite_albums">Old favorite albums</string>
@@ -42,6 +43,11 @@
 
     <string name="home_settings_title">Home</string>
     <string name="home_settings_subtitle">Reorder and show or hide the Home page sections</string>
+
+    <string name="home_empty_title">Nothing to show</string>
+    <string name="home_empty_body">All Home sections are hidden. Re-enable the ones you want to see.</string>
+    <string name="home_empty_open_settings">Open Home settings</string>
+    <string name="home_empty_open_library">Open Library settings</string>
 
     <string name="library_folders">Library Folders</string>
     <string name="add_folder">Add Folder</string>
@@ -70,6 +76,12 @@
     <string name="provider_error_unavailable">provider unavailable</string>
     <string name="provider_error_timeout">connection timed out</string>
     <string name="provider_error_save">saving folders failed</string>
+
+    <!-- Toasts (in-app transient messages, see ToastCenter / ToastStack). -->
+    <string name="toast_track_not_in_library">Track not in the library yet: %1$s</string>
+    <string name="toast_distant_track_unavailable">Distant track unavailable: %1$s</string>
+    <string name="toast_failed_to_load">Failed to load %1$s</string>
+    <string name="toast_playback_stopped">Playback stopped: too many tracks failed to load</string>
     <string name="done">Done</string>
     <string name="metadata_separators">Metadata Separators</string>
     <string name="artist_separators">Artist Separators</string>
@@ -104,6 +116,8 @@
     <string name="clear_search_history">Clear search history</string>
 
     <string name="appearance">Appearance</string>
+    <string name="application">Application</string>
+    <string name="screens">Screens</string>
     <string name="dynamic_effects">Dynamic Effects</string>
     <string name="icon_style">Icon Style</string>
     <string name="visuals">Visuals</string>
@@ -421,7 +435,6 @@
     <string name="notif_update_preparing">Preparing download…</string>
     <string name="notif_update_progress">%1$d%%</string>
     <string name="update_available_title">New update available</string>
-    <string name="update_available_version">Version %1$s</string>
     <string name="update_install_ready_title">Install update</string>
     <string name="update_install_ready_text">The update has been downloaded. Install it now?</string>
     <string name="update_install_later">Later</string>
@@ -458,6 +471,14 @@
     <string name="playlist_export_all">Export playlists</string>
     <string name="playlist_export_one">Export playlist</string>
     <string name="playlist_export_folder_hint">Choose where the .m3u8 files are written</string>
+
+    <!-- Playlist repair: re-links entries orphaned by moved files + rescans -->
+    <string name="playlist_repair">Repair playlists</string>
+    <string name="playlist_repair_description">Re-link songs that disappeared from playlists after their files were moved or renamed and the library was rescanned</string>
+    <string name="playlist_repair_caps">REPAIR</string>
+    <string name="playlist_repairing_caps">REPAIRING…</string>
+    <string name="playlist_repair_nothing">Nothing to repair.</string>
+    <string name="playlist_repair_done">Re-linked %1$d playlist entries, removed %2$d stale ones; %3$d could not be matched.</string>
 
     <!-- Browse / library sections -->
     <string name="artists">Artists</string>
@@ -536,6 +557,10 @@
     <string name="details_album_artist">Album artist</string>
     <string name="details_album">Album</string>
     <string name="details_composer">Composer</string>
+    <string name="details_title">Title</string>
+    <string name="apply">Apply</string>
+    <string name="add_genre">Add genre</string>
+    <string name="show_existing_genres">Show existing genres</string>
     <string name="details_file_path">File path</string>
     <string name="details_format">Format</string>
     <string name="instrumental">Instrumental</string>

@@ -321,7 +321,7 @@ private fun BackupLinkRow(
             )
             .padding(
                 horizontal = FoamDimens.paddingMedium,
-                vertical = FoamDimens.spacingStandard
+                vertical = FoamDimens.spacingMedium
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {

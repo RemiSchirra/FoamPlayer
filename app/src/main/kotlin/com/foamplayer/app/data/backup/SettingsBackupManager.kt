@@ -2,6 +2,7 @@ package com.foamplayer.app.data.backup
 
 import android.content.Context
 import android.net.Uri
+import android.util.Base64
 import android.provider.DocumentsContract
 import androidx.core.net.toUri
 import com.foamplayer.app.data.db.dao.ListenHistoryDao
@@ -12,6 +13,7 @@ import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.PlaylistTrackCrossRef
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.repository.SettingsRepository
+import com.foamplayer.app.data.scanner.PlaylistCoverStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -44,7 +46,8 @@ class SettingsBackupManager @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val trackDao: TrackDao,
     private val playlistDao: PlaylistDao,
-    private val listenHistoryDao: ListenHistoryDao
+    private val listenHistoryDao: ListenHistoryDao,
+    private val coverStore: PlaylistCoverStore
 ) {
 
     // ------------------------------------------------------------------ export
@@ -111,7 +114,14 @@ class SettingsBackupManager @Inject constructor(
             array.put(
                 JSONObject().apply {
                     put("name", playlist.name)
-                    playlist.imageUrl?.let { put("imageUrl", it) }
+                    playlist.imageUrl?.let { ref ->
+                        put("imageUrl", ref)
+                        if (!ref.contains("://")) {
+                            coverStore.readCoverBytes(ref)?.let { bytes ->
+                                put("coverData", Base64.encodeToString(bytes, Base64.NO_WRAP))
+                            }
+                        }
+                    }
                     put("sortOrder", playlist.sortOrder)
                     put("tracks", tracks)
                 }
@@ -297,7 +307,7 @@ class SettingsBackupManager @Inject constructor(
                 ?: playlistDao.createPlaylist(
                     PlaylistEntity(
                         name = name,
-                        imageUrl = entry.optString("imageUrl").takeIf { it.isNotEmpty() },
+                        imageUrl = restoredCoverRef(entry),
                         sortOrder = entry.optInt("sortOrder", playlistDao.nextPlaylistSortOrder())
                     )
                 )
@@ -306,6 +316,30 @@ class SettingsBackupManager @Inject constructor(
                 playlistDao.addTrackToPlaylist(PlaylistTrackCrossRef(playlistId, trackId, index))
             }
         }
+    }
+
+    /**
+     * Cover ref for a newly created (import-side) playlist: embedded
+     * "coverData" wins — materialized into the cover store — so the restored
+     * cover survives even though the original file was wiped with app data.
+     * Without it, a path-based ref from another device points at a file that
+     * does not exist here and is dropped (the playlist falls back to first-
+     * track art), while an external document URI is kept as-is: its grant may
+     * still be alive on THIS device, and [migrateLegacyUriCovers] will
+     * privatize it at the next launch if so.
+     */
+    private suspend fun restoredCoverRef(entry: JSONObject): String? {
+        val coverData = entry.optString("coverData").takeIf { it.isNotEmpty() }
+        if (coverData != null) {
+            val bytes = runCatching {
+                Base64.decode(coverData, Base64.NO_WRAP)
+            }.getOrNull()
+            if (bytes != null) {
+                coverStore.writeCoverBytes(bytes)?.let { return it }
+            }
+        }
+        val imageRef = entry.optString("imageUrl").takeIf { it.isNotEmpty() } ?: return null
+        return imageRef.takeIf { it.contains("://") }
     }
 
     /**

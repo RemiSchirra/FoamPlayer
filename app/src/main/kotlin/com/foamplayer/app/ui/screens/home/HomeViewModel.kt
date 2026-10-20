@@ -63,6 +63,14 @@ class HomeViewModel @Inject constructor(
     /** Live library scan status (Idle / Scanning / Finished), for the header's scanning indicator. */
     val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus
 
+    /**
+     * Re-reads a track from the DB right before the track modal opens: home rows
+     * are collected snapshots, so an edited track's metadata can be stale in the
+     * row list. Falls back to the snapshot when the row can't be found.
+     */
+    suspend fun freshTrack(track: TrackEntity): TrackEntity =
+        trackRepository.getTrackById(track.id) ?: track
+
     /** All playlists, for resolving a recommendation into its real entity (long-press modal). */
     val playlists: StateFlow<List<PlaylistEntity>> =
         playlistRepository.getAllPlaylists()
@@ -88,7 +96,12 @@ class HomeViewModel @Inject constructor(
         trackRepository.getRecentlyPlayed()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** Tracks ranked by aggregate play count + likes, any last-played date. */
+    /** Most-listened tracks, descending by listen count. */
+    val recommendedTracks: StateFlow<List<TrackEntity>> =
+        trackRepository.getRecommendedTracks()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Liked tracks (score >= 1), ranked by score then listen count. */
     val favoriteTracks: StateFlow<List<TrackEntity>> =
         trackRepository.getFavoriteTracks()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -103,7 +116,7 @@ class HomeViewModel @Inject constructor(
         trackRepository.getOldFavoriteAlbums(System.currentTimeMillis() - OldFavoritesCutoffMs)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** Albums newest-first by the latest file modification date among their tracks. */
+    /** Albums newest-first by their most recently added (first-seen) track. */
     val recentlyAddedAlbums: StateFlow<List<AlbumRecommendation>> =
         trackRepository.getRecentlyAddedAlbums()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -178,6 +191,16 @@ class HomeViewModel @Inject constructor(
     /** Library snapshot backing the random sections' grids. */
     private var libraryTracks: List<TrackEntity> = emptyList()
 
+    private val _libraryLoaded = MutableStateFlow(false)
+
+    /** True once the first library snapshot has arrived; Home's empty state waits for it. */
+    val libraryLoaded: StateFlow<Boolean> = _libraryLoaded.asStateFlow()
+
+    private val _libraryEmpty = MutableStateFlow(true)
+
+    /** True when the library holds no tracks at all. */
+    val libraryEmpty: StateFlow<Boolean> = _libraryEmpty.asStateFlow()
+
     private val _randomTracks = MutableStateFlow<List<TrackEntity>>(emptyList())
 
     /** The "Random tracks" grid: six random songs, repicked by [reshuffleRandomTracks]. */
@@ -218,6 +241,8 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             trackRepository.getAllTracks().collect { tracks ->
                 libraryTracks = tracks
+                _libraryEmpty.value = tracks.isEmpty()
+                _libraryLoaded.value = true
                 // First load seeds the grids; later library changes don't
                 // silently replace the items the user is looking at.
                 if (_randomTracks.value.isEmpty()) reshuffleRandomTracks()

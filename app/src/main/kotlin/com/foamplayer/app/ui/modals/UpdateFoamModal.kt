@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
 import com.foamplayer.app.update.DownloadState
 import com.foamplayer.app.update.GitHubRelease
+import com.foamplayer.app.ui.components.MarkdownText
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import java.io.File
@@ -57,14 +58,9 @@ fun UpdateFoamModal(
                 text = stringResource(R.string.update_available_title),
                 style = FoamTheme.typography.titleLarge
             )
-            Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
-            BasicText(
-                text = stringResource(R.string.update_available_version, release.version),
-                style = FoamTheme.typography.titleMedium
-            )
-            release.name?.takeIf { it.isNotBlank() }?.let { title ->
+            release.name?.takeIf { it.isNotBlank() }?.let { name ->
                 Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
-                BasicText(text = title, style = FoamTheme.typography.body)
+                BasicText(text = name, style = FoamTheme.typography.titleMedium)
             }
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
             Box(
@@ -139,6 +135,7 @@ fun UpdateFoamModal(
                 filled = true,
                 onClick = { installFile?.let(onInstall) }
             )
+            Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
             ModalButton(
                 label = stringResource(R.string.update_install_later),
                 filled = false,
@@ -153,9 +150,8 @@ private fun ReleaseNotesBody(notes: String?) {
     val text = notes?.takeIf { it.isNotBlank() }
         ?: stringResource(R.string.about_no_release_notes)
     val scrollState = rememberScrollState()
-    BasicText(
-        text = text,
-        style = FoamTheme.typography.body,
+    MarkdownText(
+        markdown = text,
         modifier = Modifier
             .height(280.dp)
             .verticalScroll(scrollState)

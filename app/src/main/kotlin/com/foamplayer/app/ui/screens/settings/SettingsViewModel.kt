@@ -12,6 +12,8 @@ import com.foamplayer.app.data.backup.BackupFeature
 import com.foamplayer.app.data.backup.BackupResult
 import com.foamplayer.app.data.backup.SettingsBackupManager
 import com.foamplayer.app.data.distant.DistantRepository
+import com.foamplayer.app.data.repository.PlaylistRepairResult
+import com.foamplayer.app.data.repository.PlaylistRepairer
 import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.ArtistImageScanState
@@ -48,7 +50,8 @@ class SettingsViewModel @Inject constructor(
     private val trackRepository: TrackRepository,
     private val distantRepository: DistantRepository,
     private val artistImageScanner: ArtistImageScanner,
-    private val settingsBackupManager: SettingsBackupManager
+    private val settingsBackupManager: SettingsBackupManager,
+    private val playlistRepairer: PlaylistRepairer
 ) : ViewModel() {
 
     /** One observable state for every settings screen and the application theme. */
@@ -176,6 +179,34 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun startScan() = trackRepository.rescanLibraryDetached()
+
+    /** True while a playlist repair is running; disables the repair pill. */
+    private val _repairRunning = MutableStateFlow(false)
+    val repairRunning: StateFlow<Boolean> = _repairRunning.asStateFlow()
+
+    /** Result of the last repair run; consumed by the result sheet. */
+    private val _repairResult = MutableStateFlow<PlaylistRepairResult?>(null)
+    val repairResult: StateFlow<PlaylistRepairResult?> = _repairResult.asStateFlow()
+
+    /**
+     * Re-links playlist entries whose track ids a rescan invalidated (moved
+     * files); the run's outcome lands in [repairResult] for the result sheet.
+     */
+    fun repairPlaylists() {
+        if (_repairRunning.value) return
+        viewModelScope.launch {
+            _repairRunning.value = true
+            try {
+                _repairResult.value = playlistRepairer.repair()
+            } finally {
+                _repairRunning.value = false
+            }
+        }
+    }
+
+    fun consumeRepairResult() {
+        _repairResult.value = null
+    }
 
     fun setArtistImageResolveEnabled(enabled: Boolean) = launch {
         settingsRepository.setArtistImageResolveEnabled(enabled)

@@ -1,8 +1,6 @@
 package com.foamplayer.app.ui.modals
 
-import android.content.res.Resources
-import android.net.Uri
-import android.provider.DocumentsContract
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -13,7 +11,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Checkbox
@@ -31,7 +27,6 @@ import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Person
@@ -52,10 +47,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -65,53 +58,20 @@ import com.foamplayer.app.data.db.entities.PlaylistEntity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.repository.PlaylistInsertPosition
+import com.foamplayer.app.data.repository.TrackMetadataEdit
 import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.adaptAccentForTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
-import com.foamplayer.app.ui.utils.TimeUtils
 import androidx.core.net.toUri
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.distant.DistantUris
 import com.foamplayer.app.ui.components.TrackScoreHeart
 import com.foamplayer.app.ui.components.albumArtCornerRadius
-import java.util.Locale
 
-// Hoisted: this was compiled inside simplifiedDisplayPath on every composition pass.
-private val StoragePrefixRegex = Regex("^/storage/emulated/\\d+/")
-
-/**
- * Pre-resolved localized channel labels, built once per composition. The
- * mono/stereo words resolve eagerly; multi-channel counts resolve per call
- * (plural selection needs the actual channel count, so it is read at render
- * time from the hosting composable's context).
- */
-internal class ChannelLabels(
-    val mono: String,
-    val stereo: String,
-    private val resources: Resources
-) {
-    fun count(n: Int): String = resources.getQuantityString(R.plurals.channels_count, n, n)
-}
-
-@Composable
-internal fun rememberChannelLabels(): ChannelLabels {
-    val resources = LocalResources.current
-    return remember(resources) {
-        ChannelLabels(
-            mono = resources.getString(R.string.channels_mono),
-            stereo = resources.getString(R.string.channels_stereo),
-            resources = resources
-        )
-    }
-}
-
-/** Localized channel layout label ("Mono" / "Stereo" / "N channels"). */
-private fun formatChannels(channels: Int, labels: ChannelLabels): String = when (channels) {
-    1 -> labels.mono
-    2 -> labels.stereo
-    else -> labels.count(channels)
-}
+/** The track modal's in-sheet pages, slid through in ordinal order (push) or back. */
+private enum class TrackModalPage { ACTIONS, DETAILS, EDIT }
 
 /**
  * Holds the track currently shown in a [TrackFoamModal]. A screen owns one of
@@ -158,7 +118,8 @@ fun rememberTrackFoamModalState(): TrackFoamModalState = remember { TrackFoamMod
  *   metadata (tags, file info), reached from the Details button with a
  *   push-style slide — the header never leaves the composition, so the
  *   transition reads as one continuous sheet; a Lyrics row opens the lyrics
- *   details sheet on top of the track sheet, and a Back button returns to the
+ *   details sheet on top of the track sheet, an Edit row opens the metadata
+ *   edit page (the third in-sheet page), and a Back button returns to the
  *   actions.
  *
  * Every queue/navigation action dismisses the sheet before invoking its
@@ -175,24 +136,21 @@ fun TrackFoamModal(
     onSeeAlbum: (TrackEntity) -> Unit = {},
     onSeeRadio: (TrackEntity) -> Unit = {},
     onOpenLyrics: (TrackEntity) -> Unit = {},
+    onApplyMetadata: (TrackEntity, TrackMetadataEdit) -> Unit = { _, _ -> },
     onResetPlayStats: (TrackEntity) -> Unit = {},
     onSetInstrumental: (TrackEntity, Boolean) -> Unit = { _, _ -> },
     scoreOverrides: Map<Long, Int> = emptyMap(),
+    existingGenres: List<String> = emptyList(),
     onSetScore: (Long, Int) -> Unit = { _, _ -> },
     useAlbumArtAccent: Boolean = false,
     onDismiss: () -> Unit = { state.dismiss() }
 ) {
-    // FoamBottomModal stays mounted while its exit animation plays, but state.track
-    // is already null by then. Keep the last shown track around so the sheet keeps
-    // rendering its content while it slides away instead of collapsing to empty.
     var lastShownTrack by remember { mutableStateOf<TrackEntity?>(null) }
     SideEffect {
         if (state.track != null) lastShownTrack = state.track
     }
     val displayTrack = state.track ?: lastShownTrack
 
-    // Accent for the shared header + details page: the viewed track's own album
-    // art color when the automatic-color setting is on, else the app accent.
     val context = LocalContext.current
     LaunchedEffect(useAlbumArtAccent, displayTrack?.albumArtPath) {
         if (useAlbumArtAccent) {
@@ -206,18 +164,12 @@ fun TrackFoamModal(
     }
     val accentColor = artAccent?.adaptAccentForTheme(FoamTheme.isDark) ?: FoamTheme.accentColor
 
-    // Details is a second page of the SAME sheet (one Dialog window), so the
-    // header can genuinely persist across the switch instead of being cloned
-    // into another dialog. Reset when the sheet closes or changes track (keyed
-    // on the id: stat updates copy the track but keep the details page open).
-    var showDetails by remember { mutableStateOf(false) }
+    var page by remember { mutableStateOf(TrackModalPage.ACTIONS) }
     LaunchedEffect(state.track?.id) {
-        showDetails = false
+        page = TrackModalPage.ACTIONS
     }
 
-    // Horizontal gap kept between the outgoing and incoming pages while they
-    // slide (both travel one width + gap in lockstep), so their contents never
-    // touch mid-transition; at rest neither offset applies.
+    // Horizontal gap kept between the outgoing and incoming pages while they slide
     val pageGapPx = with(LocalDensity.current) { FoamDimens.spacingSmall.roundToPx() }
 
     fun perform(action: (TrackEntity) -> Unit) {
@@ -230,13 +182,18 @@ fun TrackFoamModal(
         visible = state.isVisible,
         onDismissRequest = onDismiss
     ) {
+        BackHandler(enabled = state.isVisible && page != TrackModalPage.ACTIONS) {
+            page = when (page) {
+                TrackModalPage.EDIT -> TrackModalPage.DETAILS
+                else -> TrackModalPage.ACTIONS
+            }
+        }
+
         if (displayTrack != null) {
             Column(
                 modifier = Modifier.padding(bottom = FoamDimens.spacingSmall),
                 verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
             ) {
-                // Shared across both pages: it stays mounted while the content
-                // below it animates, so it reads as one continuous header.
                 TrackModalHeader(
                     track = displayTrack,
                     accentColor = accentColor,
@@ -245,26 +202,22 @@ fun TrackFoamModal(
                 )
 
                 AnimatedContent(
-                    targetState = showDetails,
+                    targetState = page,
                     transitionSpec = {
-                        if (targetState) {
-                            // Push: details slides in from the right...
+                        if (targetState.ordinal > initialState.ordinal) {
                             slideInHorizontally { it + pageGapPx } togetherWith
                                     slideOutHorizontally { -it - pageGapPx }
                         } else {
-                            // ...pop: back to the actions.
                             slideInHorizontally { -it - pageGapPx } togetherWith
                                     slideOutHorizontally { it + pageGapPx }
                         }
                     },
                     label = "TrackModalPage"
-                ) { isDetails ->
+                ) { currentPage ->
                     Column(
                         verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
                     ) {
-                        if (isDetails) {
-                            // Pure formatting over the track; the modal recomposes per
-                            // animation frame while the dynamic accent animates.
+                        if (currentPage == TrackModalPage.DETAILS) {
                             val channelLabels = rememberChannelLabels()
                             val trackSummary = remember(displayTrack, channelLabels) {
                                 audioSummaryText(displayTrack, channelLabels)
@@ -282,6 +235,8 @@ fun TrackFoamModal(
                                 onSetInstrumental = { onSetInstrumental(displayTrack, it) }
                             )
 
+                            // Np tag edition for streamed tracks
+                            val isDistantTrack = DistantUris.isDistant(displayTrack.path)
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -292,6 +247,13 @@ fun TrackFoamModal(
                                     label = stringResource(R.string.lyrics),
                                     onClick = { onOpenLyrics(displayTrack) }
                                 )
+                                if (!isDistantTrack) {
+                                    ModalSectionDivider()
+                                    ModalRowButton(
+                                        label = stringResource(R.string.edit),
+                                        onClick = { page = TrackModalPage.EDIT }
+                                    )
+                                }
                             }
 
                             Column(
@@ -300,8 +262,19 @@ fun TrackFoamModal(
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
                                     .background(FoamTheme.colors.surfaceVariant)
                             ) {
-                                ModalBackButton(onBack = { showDetails = false })
+                                ModalBackButton(onBack = { page = TrackModalPage.ACTIONS })
                             }
+                        } else if (currentPage == TrackModalPage.EDIT) {
+                            TrackEditContent(
+                                track = displayTrack,
+                                accentColor = accentColor,
+                                existingGenres = existingGenres,
+                                onApply = { edit ->
+                                    onApplyMetadata(displayTrack, edit)
+                                    page = TrackModalPage.DETAILS
+                                },
+                                onCancel = { page = TrackModalPage.DETAILS }
+                            )
                         } else {
                             Row(
                                 modifier = Modifier
@@ -366,7 +339,7 @@ fun TrackFoamModal(
                             ) {
                                 ModalRowButton(
                                     label = stringResource(R.string.details),
-                                    onClick = { showDetails = true }
+                                    onClick = { page = TrackModalPage.DETAILS }
                                 )
                             }
                         }
@@ -396,6 +369,12 @@ val LocalTrackFoamModalState = staticCompositionLocalOf<TrackFoamModalState?> { 
  * is expected to stay live, so a toggle is reflected as soon as it persists.
  * [onToggle] reports a row's new checked state.
  *
+ * Whole collections (an album/playlist/etc. added at once from the collection
+ * modal's "Add to Playlist" row) come through [collection] +
+ * [collectionTracks] instead: the header shows the collection's name, a
+ * playlist's checkbox is checked only when it already contains EVERY track of
+ * the list, and toggling applies to the whole list at once.
+ *
  * The header's trailing buttons sit on the title's row, aligned right:
  * - `+` opens [NewPlaylistDialog], a small name-only creation dialog.
  * - The sort button opens [InsertPositionDialog] to choose where toggled
@@ -416,7 +395,9 @@ fun PlaylistPickerModal(
     onInsertPositionChange: (PlaylistInsertPosition) -> Unit,
     onCreatePlaylist: (String) -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    collection: CollectionInfo? = null,
+    collectionTracks: List<TrackEntity> = emptyList()
 ) {
     // Same exit-animation preservation as TrackFoamModal: keep rendering the
     // track while the sheet slides away after a pick or dismissal.
@@ -426,18 +407,26 @@ fun PlaylistPickerModal(
     }
     val displayTrack = track ?: lastShownTrack
 
+    // Batch (whole-collection) adds keep their header alive the same way.
+    var lastShownCollection by remember { mutableStateOf<CollectionInfo?>(null) }
+    SideEffect {
+        if (collection != null) lastShownCollection = collection
+    }
+    val displayCollection = collection ?: lastShownCollection
+    val headerTrack = displayTrack ?: displayCollection?.tracks?.firstOrNull()
+
     var showCreateDialog by remember { mutableStateOf(false) }
     var showInsertPositionDialog by remember { mutableStateOf(false) }
 
     FoamBottomModal(
-        visible = track != null,
+        visible = track != null || collection != null,
         onDismissRequest = onDismiss,
         // The name dialog stacked on this sheet owns the soft keyboard; if this
         // sheet padded for the IME it would ride up in lock-step with typing.
         liftAboveKeyboard = false,
         modifier = modifier
     ) {
-        if (displayTrack != null) {
+        if (headerTrack != null) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
             ) {
@@ -469,6 +458,15 @@ fun PlaylistPickerModal(
                         icon = Icons.Rounded.Add,
                         contentDescription = stringResource(R.string.create_playlist_title),
                         onClick = { showCreateDialog = true }
+                    )
+                }
+
+                // Whole-collection add: name the collection under the title.
+                if (displayCollection != null) {
+                    BasicText(
+                        text = displayCollection.title,
+                        style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
+                        modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
                     )
                 }
 
@@ -626,7 +624,7 @@ internal fun ModalSectionDivider() {
 
 /** Header block: album art on the left, title with the album underneath, score heart on the right, on a darker container. */
 @Composable
-private fun TrackModalHeader(
+internal fun TrackModalHeader(
     track: TrackEntity,
     modifier: Modifier = Modifier,
     accentColor: Color = FoamTheme.accentColor,
@@ -790,145 +788,6 @@ internal fun ModalRowButton(
     }
 }
 
-/**
- * Full metadata sheet for a track. Also embedded as the second page of
- * [TrackFoamModal] (see its details button), where the header persists across
- * the switch; this standalone hosting is kept for direct use.
- * Same visual language: the track header on a darker container, then grouped
- * label/value sections on lighter containers.
- */
-@Composable
-fun TrackDetailsModal(
-    track: TrackEntity?,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-    onResetPlayStats: (TrackEntity) -> Unit = {},
-    onSetInstrumental: (TrackEntity, Boolean) -> Unit = { _, _ -> },
-    scoreOverrides: Map<Long, Int> = emptyMap(),
-    onSetScore: (Long, Int) -> Unit = { _, _ -> },
-    useAlbumArtAccent: Boolean = false
-) {
-    // Same exit-animation preservation as the other modals in this file.
-    var lastShownTrack by remember { mutableStateOf<TrackEntity?>(null) }
-    SideEffect {
-        if (track != null) lastShownTrack = track
-    }
-    val displayTrack = track ?: lastShownTrack
-
-    // Accent texts take the color of the VIEWED track's own album art (when the
-    // automatic-color setting is on), not the playing track's dynamic accent.
-    // Extraction runs through the shared palette cache; until it lands -- or when
-    // the setting is off -- the app accent is used instead.
-    val context = LocalContext.current
-    LaunchedEffect(useAlbumArtAccent, displayTrack?.albumArtPath) {
-        if (useAlbumArtAccent) {
-            AlbumArtPaletteCache.ensure(this, context, displayTrack?.albumArtPath)
-        }
-    }
-    val artAccent = if (useAlbumArtAccent) {
-        displayTrack?.albumArtPath?.let { AlbumArtPaletteCache.colors[it] }
-    } else {
-        null
-    }
-    val accentColor = artAccent?.adaptAccentForTheme(FoamTheme.isDark) ?: FoamTheme.accentColor
-
-    FoamBottomModal(
-        visible = track != null,
-        onDismissRequest = onDismiss,
-        modifier = modifier
-    ) {
-        if (displayTrack != null) {
-            Column(
-                modifier = Modifier.padding(bottom = FoamDimens.spacingSmall),
-                verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
-            ) {
-                TrackModalHeader(
-                    track = displayTrack,
-                    accentColor = accentColor,
-                    score = scoreOverrides[displayTrack.id] ?: displayTrack.score,
-                    onSetScore = { onSetScore(displayTrack.id, it) }
-                )
-
-                val channelLabels = rememberChannelLabels()
-                BasicText(
-                    text = remember(displayTrack, channelLabels) { audioSummaryText(displayTrack, channelLabels) },
-                    style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
-                    modifier = Modifier.padding(horizontal = FoamDimens.paddingSmall)
-                )
-
-                TrackDetailsContent(
-                    track = displayTrack,
-                    accentColor = accentColor,
-                    onResetPlayStats = { onResetPlayStats(displayTrack) },
-                    onSetInstrumental = { onSetInstrumental(displayTrack, it) }
-                )
-            }
-        }
-    }
-}
-
-/** The Tags + File sections shared by the standalone details modal and the details page of [TrackFoamModal]. */
-@Composable
-private fun TrackDetailsContent(
-    track: TrackEntity,
-    accentColor: Color,
-    onResetPlayStats: () -> Unit,
-    onSetInstrumental: (Boolean) -> Unit
-) {
-    val hasStats = track.playCount > 0 || track.lastPlayedAt != null
-
-    DetailsSection(
-        title = stringResource(R.string.details_stats),
-        accentColor = accentColor,
-        trailing = {
-            if (hasStats) {
-                TrackStatsResetButton(onClick = onResetPlayStats)
-            }
-        }
-    ) {
-        DetailRow(stringResource(R.string.details_listens), track.playCount.takeIf { it > 0 }?.toString())
-        DetailRow(
-            stringResource(R.string.details_last_played),
-            track.lastPlayedAt?.let { TimeUtils.formatDateTime(it) }
-        )
-    }
-
-    DetailsSection(title = stringResource(R.string.details_tags), accentColor = accentColor) {
-        DetailRow(stringResource(R.string.details_track_number), track.trackNumber?.toString())
-        DetailRow(stringResource(R.string.details_disc_number), track.discNumber?.toString())
-        DetailRow(stringResource(R.string.details_year), track.year?.toString())
-        DetailRow(stringResource(R.string.details_genre), track.genre)
-        DetailRow(stringResource(R.string.details_artist), track.artist)
-        DetailRow(stringResource(R.string.details_album_artist), track.albumArtist)
-        DetailRow(stringResource(R.string.details_album), track.album)
-        DetailRow(stringResource(R.string.details_composer), track.composer)
-        DetailCheckboxRow(
-            label = stringResource(R.string.instrumental),
-            checked = track.instrumental,
-            onCheckedChange = onSetInstrumental
-        )
-    }
-
-    DetailsSection(title = stringResource(R.string.details_file), accentColor = accentColor) {
-        DetailStackedValue(stringResource(R.string.details_file_path), simplifiedDisplayPath(track.path), accentColor)
-        DetailRow(stringResource(R.string.details_format), track.format)
-        DetailRow(
-            stringResource(R.string.album_art),
-            if (track.albumArtPath != null) stringResource(R.string.embedded_in_file) else null
-        )
-    }
-}
-
-/** One-line technical summary of a track; [labels] carries the localized channel words. */
-internal fun audioSummaryText(track: TrackEntity, labels: ChannelLabels): String = listOfNotNull(
-    TimeUtils.formatDurationLong(track.duration),
-    formatSampleRate(track.sampleRate),
-    "${track.bitDepth} bit",
-    formatChannels(track.channels, labels),
-    track.bitrate.takeIf { it > 0 }?.let { "$it kbps" },
-    formatFileSize(track.size).takeIf { track.size > 0 }
-).joinToString("  ·  ")
-
 /** Row button with a leading back arrow, used to return from the details page. */
 @Composable
 internal fun ModalBackButton(onBack: () -> Unit) {
@@ -956,224 +815,5 @@ internal fun ModalBackButton(onBack: () -> Unit) {
             text = stringResource(R.string.back),
             style = FoamTheme.typography.titleMedium
         )
-    }
-}
-
-@Composable
-internal fun DetailsSection(
-    title: String,
-    accentColor: Color,
-    trailing: (@Composable () -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(FoamTheme.colors.surfaceVariant)
-            .padding(vertical = FoamDimens.spacingTiny)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = FoamDimens.paddingMedium,
-                    vertical = FoamDimens.spacingTiny
-                ),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BasicText(
-                text = title,
-                style = FoamTheme.typography.caption.copy(color = accentColor),
-                modifier = Modifier.weight(1f)
-            )
-            trailing?.invoke()
-        }
-        content()
-    }
-}
-
-/** Small cross button that resets a track's listen counter and last-listen date. */
-@Composable
-private fun TrackStatsResetButton(onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-
-    Box(
-        modifier = Modifier
-            .size(FoamDimens.iconMedium)
-            .clip(CircleShape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Close,
-            contentDescription = stringResource(R.string.reset_listen_stats),
-            tint = FoamTheme.colors.textSecondary,
-            modifier = Modifier.size(FoamDimens.iconSmall)
-        )
-    }
-}
-
-/** Detail row whose value is a checkbox (user-set booleans like "Instrumental"). */
-@Composable
-private fun DetailCheckboxRow(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .toggleable(
-                value = checked,
-                interactionSource = interactionSource,
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                role = Role.Checkbox,
-                onValueChange = onCheckedChange
-            )
-            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingTiny),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        BasicText(
-            text = label,
-            style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
-            modifier = Modifier.weight(1f)
-        )
-        Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
-        Checkbox(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            // 20dp = the checkbox's own drawn size; drops its 48dp built-in
-            // touch padding so the row height matches the other detail rows.
-            modifier = Modifier.size(20.dp),
-            colors = CheckboxDefaults.colors(
-                checkedColor = FoamTheme.accentColor,
-                uncheckedColor = FoamTheme.colors.textSecondary
-            )
-        )
-    }
-}
-
-@Composable
-internal fun DetailRow(label: String, value: String?) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingTiny),
-        verticalAlignment = Alignment.Top
-    ) {
-        BasicText(
-            text = label,
-            style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textSecondary),
-            modifier = Modifier.weight(1f)
-        )
-        Spacer(modifier = Modifier.width(FoamDimens.paddingMedium))
-        BasicText(
-            text = value.takeUnless { it.isNullOrBlank() } ?: "—",
-            style = FoamTheme.typography.body.copy(
-                color = FoamTheme.colors.textPrimary,
-                textAlign = TextAlign.End
-            ),
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-/** Label above the value, for long content (file paths) that should wrap freely. */
-@Composable
-internal fun DetailStackedValue(
-    label: String,
-    value: String,
-    accentColor: Color = FoamTheme.accentColor
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingTiny)
-    ) {
-        BasicText(
-            text = label,
-            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
-        )
-        Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
-        BasicText(
-            text = value,
-            style = FoamTheme.typography.monospace.copy(color = accentColor)
-        )
-    }
-}
-
-private fun formatSampleRate(hz: Int): String {
-    val khz = hz / 1000.0
-    val value = if (khz % 1.0 == 0.0) {
-        String.format(Locale.getDefault(), "%.0f", khz)
-    } else {
-        String.format(Locale.getDefault(), "%.1f", khz)
-    }
-    return "$value kHz"
-}
-
-/**
- * Turns the stored playback URI into a short, readable path that starts at the
- * scanned folder, e.g. "library/subfolder/name of the song.mp3".
- *
- * SAF content URIs carry the scanned tree root and the document id as separate
- * segments (".../tree/primary%3AMusic/document/primary%3AMusic%2FSub%2Fsong.mp3");
- * pulling both through DocumentsContract decodes the %2F/%3A/%20 escapes, and the
- * document path is then made relative to the tree and prefixed with the scanned
- * folder's own name. Legacy file:// paths are decoded and trimmed of
- * device-specific storage prefixes. Falls back to the raw path on any surprise.
- */
-internal fun simplifiedDisplayPath(path: String): String {
-    return runCatching {
-        val uri = path.toUri()
-        when (uri.scheme) {
-            "content" -> {
-                val docPath = DocumentsContract.getDocumentId(uri)
-                    .substringAfter(':')
-                    .trimStart('/')
-                val treePath = runCatching { DocumentsContract.getTreeDocumentId(uri) }
-                    .getOrNull()
-                    ?.substringAfter(':')
-                    ?.trimStart('/')
-                val treeName = treePath?.substringAfterLast('/')
-
-                val relative = when {
-                    treePath.isNullOrEmpty() -> docPath
-                    docPath.startsWith("$treePath/") -> docPath.removePrefix("$treePath/")
-                    else -> docPath.substringAfterLast('/')
-                }
-
-                listOfNotNull(
-                    treeName?.takeIf { it.isNotBlank() },
-                    relative.takeIf { it.isNotBlank() }
-                ).joinToString("/").ifEmpty { path }
-            }
-            "file" -> {
-                val decoded = Uri.decode(uri.path ?: return@runCatching path)
-                decoded
-                    .replace(StoragePrefixRegex, "")
-                    .removePrefix("/sdcard/")
-                    .trimStart('/')
-                    .ifEmpty { path }
-            }
-            else -> Uri.decode(path)
-        }
-    }.getOrDefault(path)
-}
-
-private fun formatFileSize(bytes: Long): String {
-    if (bytes <= 0L) return "—"
-    val mb = bytes / (1024.0 * 1024.0)
-    return if (mb >= 1.0) {
-        String.format(Locale.getDefault(), "%.1f MB", mb)
-    } else {
-        String.format(Locale.getDefault(), "%.0f KB", bytes / 1024.0)
     }
 }

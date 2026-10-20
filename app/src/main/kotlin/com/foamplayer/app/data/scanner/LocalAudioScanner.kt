@@ -89,7 +89,9 @@ class LocalAudioScanner @Inject constructor(
                             runCatching { retriever.release() }
                         }
                     } else {
-                        results[index] = cached.copy(dateAdded = file.lastModified)
+                        // Update the date only if the track has no date yet
+                        results[index] =
+                            if (cached.dateAdded == 0L) cached.copy(dateAdded = file.lastModified) else cached
                     }
                     freshTrack[index] = cached == null
                     val done = processed.incrementAndGet()

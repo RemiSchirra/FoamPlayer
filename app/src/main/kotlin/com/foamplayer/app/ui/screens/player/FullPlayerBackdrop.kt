@@ -455,7 +455,7 @@ private fun ImmersiveAlbumArtBackdrop(
             frontArtPath = frontArtPath,
             backArtPath = backArtPath,
             crossfadeFraction = crossfadeFraction,
-            modifier = Modifier.fillMaxSize().performantBlur(35.dp)
+            modifier = Modifier.fillMaxSize().performantBlur(100.dp)
         )
         Box(
             modifier = Modifier
