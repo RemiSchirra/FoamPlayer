@@ -76,7 +76,7 @@ fun UISettingsScreen(
         ) {
             item {
                 Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
-                    BasicText(text = stringResource(R.string.appearance), style = FoamTheme.typography.titleMedium)
+                    BasicText(text = stringResource(R.string.application), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
                     Box(
@@ -98,9 +98,9 @@ fun UISettingsScreen(
                                     .background(FoamTheme.colors.borderOverlay)
                             )
                             FoamNavigationButton(
-                                title = stringResource(R.string.player),
-                                description = stringResource(R.string.player_desc),
-                                onClick = onNavigateToPlayer,
+                                title = stringResource(R.string.background),
+                                description = stringResource(R.string.background_desc),
+                                onClick = onNavigateToBackground,
                             )
                             Box(
                                 modifier = Modifier
@@ -113,27 +113,28 @@ fun UISettingsScreen(
                                 description = stringResource(R.string.navbar_desc),
                                 onClick = onNavigateToNavBar,
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
-                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+
+            item {
+                Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
+                    BasicText(text = stringResource(R.string.screens), style = FoamTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                            .background(FoamTheme.colors.surface)
+                    ) {
+                        Column {
                             FoamNavigationButton(
-                                title = stringResource(R.string.background),
-                                description = stringResource(R.string.background_desc),
-                                onClick = onNavigateToBackground,
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
-                            )
-                            FoamNavigationButton(
-                                title = stringResource(R.string.collections),
-                                description = stringResource(R.string.collections_desc),
-                                onClick = onNavigateToCollections,
+                                title = stringResource(R.string.player),
+                                description = stringResource(R.string.player_desc),
+                                onClick = onNavigateToPlayer,
                             )
                             Box(
                                 modifier = Modifier
@@ -145,6 +146,17 @@ fun UISettingsScreen(
                                 title = stringResource(R.string.home),
                                 description = stringResource(R.string.home_settings_subtitle),
                                 onClick = onNavigateToHome,
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(FoamDimens.separatorHeight)
+                                    .background(FoamTheme.colors.borderOverlay)
+                            )
+                            FoamNavigationButton(
+                                title = stringResource(R.string.collections),
+                                description = stringResource(R.string.collections_desc),
+                                onClick = onNavigateToCollections,
                             )
                         }
                     }

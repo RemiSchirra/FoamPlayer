@@ -115,6 +115,8 @@
     <string name="clear_search_history">Clear search history</string>
 
     <string name="appearance">Appearance</string>
+    <string name="application">Application</string>
+    <string name="screens">Screens</string>
     <string name="dynamic_effects">Dynamic Effects</string>
     <string name="icon_style">Icon Style</string>
     <string name="visuals">Visuals</string>
