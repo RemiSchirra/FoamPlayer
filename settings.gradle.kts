@@ -26,6 +26,7 @@ rootProject.name = "FoamPlayer"
 include(":app")
 include(":spotify")
 include(":discord")
+include(":lastfm")
 include(":canvas:core")
 include(":canvas:apple")
 include(":canvas:echomusic")

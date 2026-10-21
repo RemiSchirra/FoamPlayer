@@ -133,6 +133,14 @@ class AudioEngine @Inject constructor(
     )
     val seekEvents: SharedFlow<Long> = _seekEvents.asSharedFlow()
 
+    /** Emits once per playback occurrence when it reaches the listen threshold. */
+    private val _listenedTrackEvents = MutableSharedFlow<ListenedTrackEvent>(
+        extraBufferCapacity = 4,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val listenedTrackEvents: SharedFlow<ListenedTrackEvent> =
+        _listenedTrackEvents.asSharedFlow()
+
     private var onPlayerSwappedListener: (() -> Unit)? = null
     private var onDisplayPlayerChangedListener: ((Player) -> Unit)? = null
 
@@ -1021,7 +1029,9 @@ class AudioEngine @Inject constructor(
 
         listenedElapsedMs += delta
         if (listenedElapsedMs >= listenThresholdMs(pendingId)) {
+            val playedMs = listenedElapsedMs
             pendingListenTrackId = null
+            _listenedTrackEvents.tryEmit(ListenedTrackEvent(pendingId, playedMs))
             scope.launch {
                 trackRepository.incrementPlayCount(pendingId, System.currentTimeMillis())
             }

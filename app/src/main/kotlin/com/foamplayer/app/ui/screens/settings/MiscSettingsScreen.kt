@@ -63,6 +63,7 @@ import kotlinx.coroutines.delay
 fun MiscSettingsScreen(
     onBack: () -> Unit,
     onNavigateToNotification: () -> Unit,
+    onNavigateToLastFm: () -> Unit,
     viewModel: MiscSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
@@ -119,6 +120,21 @@ fun MiscSettingsScreen(
                         .background(FoamTheme.colors.surface)
                 ) {
                     FoamNavigationButton(
+                        title = stringResource(R.string.lastfm_entry),
+                        description = stringResource(R.string.lastfm_entry_desc),
+                        onClick = onNavigateToLastFm
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    FoamNavigationButton(
                         title = stringResource(R.string.notification_entry),
                         description = stringResource(R.string.notification_entry_desc),
                         onClick = onNavigateToNotification
@@ -168,7 +184,7 @@ fun MiscSettingsScreen(
                             style = FoamTheme.typography.body
                         )
                         Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                        DiscordActionButton(
+                        SettingsActionButton(
                             label = stringResource(R.string.lock_screen_open_permission),
                             onClick = { viewModel.openOverlaySettings(context) }
                         )
@@ -261,7 +277,7 @@ fun MiscSettingsScreen(
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                                    DiscordActionButton(
+                                    SettingsActionButton(
                                         label = stringResource(R.string.discord_log_out),
                                         onClick = viewModel::disconnect
                                     )
@@ -277,7 +293,7 @@ fun MiscSettingsScreen(
                                         style = FoamTheme.typography.titleMedium
                                     )
                                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                                    DiscordActionButton(
+                                    SettingsActionButton(
                                         label = stringResource(R.string.discord_log_in),
                                         enabled = authState !is DiscordAuthUiState.Waiting,
                                         onClick = { viewModel.startAuthorization(context) }
@@ -287,7 +303,7 @@ fun MiscSettingsScreen(
                         }
 
                         when (val state = authState) {
-                            is DiscordAuthUiState.Waiting -> DiscordStatusRow(
+                            is DiscordAuthUiState.Waiting -> SettingsStatusRow(
                                 text = stringResource(R.string.discord_waiting_authorization),
                                 icon = {
                                     CircularProgressIndicator(
@@ -297,7 +313,7 @@ fun MiscSettingsScreen(
                                     )
                                 }
                             )
-                            is DiscordAuthUiState.Success -> DiscordStatusRow(
+                            is DiscordAuthUiState.Success -> SettingsStatusRow(
                                 text = stringResource(R.string.discord_connected),
                                 icon = {
                                     Icon(
@@ -308,7 +324,7 @@ fun MiscSettingsScreen(
                                     )
                                 }
                             )
-                            is DiscordAuthUiState.Failure -> DiscordStatusRow(
+                            is DiscordAuthUiState.Failure -> SettingsStatusRow(
                                 text = state.message
                                     ?: stringResource(R.string.discord_authorization_failed),
                                 icon = {
@@ -376,9 +392,9 @@ private fun SettingsExpandVisibility(
     )
 }
 
-/** Filled accent button used for Discord login/logout and permission entries. */
+/** Filled accent button used for account and permission actions in settings. */
 @Composable
-private fun DiscordActionButton(
+internal fun SettingsActionButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -411,9 +427,9 @@ private fun DiscordActionButton(
     }
 }
 
-/** Status line under the Discord section: spinner, check or error icon + text. */
+/** Status line under an account section: spinner, check or error icon + text. */
 @Composable
-private fun DiscordStatusRow(
+internal fun SettingsStatusRow(
     text: String,
     icon: @Composable () -> Unit
 ) {

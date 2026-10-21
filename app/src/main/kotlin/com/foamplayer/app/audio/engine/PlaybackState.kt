@@ -7,6 +7,16 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 enum class RepeatMode { NONE, ALL, ONE }
 
 /**
+ * Emitted by [com.foamplayer.app.audio.engine.AudioEngine] when a track's
+ * forward playback reaches the configured listen threshold. [playedMs] is the
+ * accumulated playback time, used to estimate when the track started.
+ */
+data class ListenedTrackEvent(
+    val trackId: Long,
+    val playedMs: Long
+)
+
+/**
  * Full playback snapshot published by [AudioEngine], replaced wholesale and
  * never mutated. Collections are compared by identity in equals/hashCode so
  * composables skip when nothing visible changed.

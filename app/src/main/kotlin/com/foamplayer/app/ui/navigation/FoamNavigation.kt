@@ -165,6 +165,7 @@ import com.foamplayer.app.ui.screens.settings.EqualizerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.HomeSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.LyricsSettingsScreen
+import com.foamplayer.app.ui.screens.settings.LastFmSettingsScreen
 import com.foamplayer.app.ui.screens.settings.MiscSettingsScreen
 import com.foamplayer.app.ui.screens.settings.NavBarSettingsScreen
 import com.foamplayer.app.ui.screens.settings.NotificationSettingsScreen
@@ -2060,11 +2061,17 @@ fun FoamNavHost(
                                             onBack = { navController.popBackStack() },
                                             onNavigateToNotification = {
                                                 navController.navigate(Screen.SettingsNotification.route)
+                                            },
+                                            onNavigateToLastFm = {
+                                                navController.navigate(Screen.SettingsLastFm.route)
                                             }
                                         )
                                     }
                                     composable(Screen.SettingsNotification.route) {
                                         NotificationSettingsScreen(onBack = { navController.popBackStack() })
+                                    }
+                                    composable(Screen.SettingsLastFm.route) {
+                                        LastFmSettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     composable(Screen.SettingsAbout.route) {
                                         AboutSettingsScreen(onBack = { navController.popBackStack() })

@@ -50,6 +50,7 @@ for some features (see more).
 * Animated video canvas support.
 * Artist images fetched from Spotify.
 * Discord Rich Presence status.
+* Last.fm scrobbling.
 
 ### Equalizer
 *Currently in development.*
@@ -74,12 +75,12 @@ for some features (see more).
 
 ## 🏛️ Architecture
 
-FoamPlayer is an Android app written in Kotlin, split into a main `:app` module and small library modules that isolate every online integration (lyrics, canvas, Spotify, Discord).
+FoamPlayer is an Android app written in Kotlin, split into a main `:app` module and small library modules that isolate every online integration (lyrics, canvas, Spotify, Discord, Last.fm).
 
 - **UI / Design** — Jetpack Compose.
 - **Audio engine** — Media3/ExoPlayer + custom DSP chain, bit-perfect.
 - **Data & Storage** — Room + DataStore.
-- **Network** — Ktor (lyrics, canvas, Spotify, Discord).
+- **Network** — Ktor (lyrics, canvas, Spotify, Discord, Last.fm).
 
 More details in [docs/architecture.md](docs/architecture.md).
 

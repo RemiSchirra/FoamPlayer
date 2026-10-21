@@ -393,6 +393,33 @@
     <string name="discord_online_art">Récupérer les pochettes en ligne</string>
     <string name="discord_online_art_desc">Recherche chaque titre sur Spotify (par titre et artiste) et utilise sa pochette d\'album sur Discord, avec repli sur les miniatures YouTube. Les titres et noms d\'artiste sont envoyés à ces services.</string>
 
+    <!-- Last.fm -->
+    <string name="lastfm_section">Last.fm</string>
+    <string name="lastfm_entry">Last.fm</string>
+    <string name="lastfm_entry_desc">Scrobblez votre historique d\'écoute</string>
+    <string name="lastfm_log_in">Se connecter avec Last.fm</string>
+    <string name="lastfm_log_out">Se déconnecter</string>
+    <string name="lastfm_logged_in_as">Connecté en tant que %1$s</string>
+    <string name="lastfm_not_connected">Non connecté à Last.fm</string>
+    <string name="lastfm_waiting_authorization">En attente de l\'autorisation Last.fm…</string>
+    <string name="lastfm_connected">Connecté à Last.fm</string>
+    <string name="lastfm_authorization_failed">Échec de l\'autorisation Last.fm</string>
+    <string name="lastfm_not_configured">Last.fm n\'est pas configuré. Choisissez une clé API ci-dessus ou définissez LASTFM_API_KEY et LASTFM_API_SECRET dans local.properties.</string>
+    <string name="lastfm_scrobble">Scrobbler avec Last.fm</string>
+    <string name="lastfm_scrobble_desc">Envoie chaque titre à Last.fm lorsqu\'il atteint le seuil d\'écoute (%1$d%%)</string>
+    <string name="lastfm_scrobble_connect_first">Connectez votre compte Last.fm ci-dessus pour commencer à scrobbler.</string>
+    <string name="lastfm_api_key">Clé API</string>
+    <string name="lastfm_api_key_app">Clé fournie par l\'application</string>
+    <string name="lastfm_api_key_app_desc">Utilise la clé API Last.fm configurée pour cette version.</string>
+    <string name="lastfm_api_key_app_missing">Aucune clé API n\'est configurée pour cette version.</string>
+    <string name="lastfm_api_key_custom">Clé personnalisée</string>
+    <string name="lastfm_api_key_custom_desc">Utilisez votre propre clé API Last.fm et votre secret partagé.</string>
+    <string name="lastfm_api_key_modal_title">Clé API Last.fm</string>
+    <string name="lastfm_api_key_modal_desc">Choisissez les identifiants avec lesquels FoamPlayer signe les requêtes Last.fm. Modifier la clé ou le secret déconnecte le compte actuel.</string>
+    <string name="lastfm_api_key_label">Clé API</string>
+    <string name="lastfm_api_secret_label">Secret partagé</string>
+    <string name="lastfm_api_key_create">Créez un compte API sur last.fm/api/account/create</string>
+
     <!-- Boutons de notification -->
     <string name="notification_entry">Notification</string>
     <string name="notification_entry_desc">Boutons de la notification de lecture</string>

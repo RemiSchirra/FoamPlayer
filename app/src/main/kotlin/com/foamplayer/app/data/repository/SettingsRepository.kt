@@ -288,6 +288,10 @@ class SettingsRepository @Inject constructor(
         it.copy(discordOnlineArt = enabled)
     }
 
+    suspend fun setLastFmScrobblingEnabled(enabled: Boolean) = update {
+        it.copy(lastFmScrobblingEnabled = enabled)
+    }
+
     suspend fun setArtistImageResolveEnabled(enabled: Boolean) = update {
         it.copy(artistImageResolveEnabled = enabled)
     }
@@ -427,6 +431,8 @@ class SettingsRepository @Inject constructor(
         autoUpdateCheckEnabled = this[Keys.AUTO_UPDATE_CHECK_ENABLED] ?: AppSettings().autoUpdateCheckEnabled,
         discordPresenceEnabled = this[Keys.DISCORD_PRESENCE_ENABLED] ?: AppSettings().discordPresenceEnabled,
         discordOnlineArt = this[Keys.DISCORD_ONLINE_ART] ?: AppSettings().discordOnlineArt,
+        lastFmScrobblingEnabled = this[Keys.LASTFM_SCROBBLING_ENABLED]
+            ?: AppSettings().lastFmScrobblingEnabled,
         artistImageResolveEnabled = this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] ?: AppSettings().artistImageResolveEnabled,
         displayOnLockScreen = this[Keys.DISPLAY_ON_LOCK_SCREEN] ?: AppSettings().displayOnLockScreen,
         fastLockScreenEnabled = this[Keys.FAST_LOCK_SCREEN_ENABLED] ?: AppSettings().fastLockScreenEnabled,
@@ -504,6 +510,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.AUTO_UPDATE_CHECK_ENABLED] = settings.autoUpdateCheckEnabled
         this[Keys.DISCORD_PRESENCE_ENABLED] = settings.discordPresenceEnabled
         this[Keys.DISCORD_ONLINE_ART] = settings.discordOnlineArt
+        this[Keys.LASTFM_SCROBBLING_ENABLED] = settings.lastFmScrobblingEnabled
         this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] = settings.artistImageResolveEnabled
         this[Keys.DISPLAY_ON_LOCK_SCREEN] = settings.displayOnLockScreen
         this[Keys.FAST_LOCK_SCREEN_ENABLED] = settings.fastLockScreenEnabled
@@ -581,6 +588,7 @@ class SettingsRepository @Inject constructor(
         val AUTO_UPDATE_CHECK_ENABLED = booleanPreferencesKey("auto_update_check_enabled")
         val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
         val DISCORD_ONLINE_ART = booleanPreferencesKey("discord_online_art")
+        val LASTFM_SCROBBLING_ENABLED = booleanPreferencesKey("lastfm_scrobbling_enabled")
         val ARTIST_IMAGE_RESOLVE_ENABLED = booleanPreferencesKey("artist_image_resolve_enabled")
         val DISPLAY_ON_LOCK_SCREEN = booleanPreferencesKey("display_on_lock_screen")
         val FAST_LOCK_SCREEN_ENABLED = booleanPreferencesKey("fast_lock_screen_enabled")
