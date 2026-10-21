@@ -161,6 +161,7 @@ import com.foamplayer.app.ui.screens.settings.AudioDevicesSettingsScreen
 import com.foamplayer.app.ui.screens.settings.BackgroundSettingsScreen
 import com.foamplayer.app.ui.screens.settings.CollectionsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
+import com.foamplayer.app.ui.screens.settings.DiscordSettingsScreen
 import com.foamplayer.app.ui.screens.settings.EqualizerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.HomeSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
@@ -2064,6 +2065,9 @@ fun FoamNavHost(
                                             },
                                             onNavigateToLastFm = {
                                                 navController.navigate(Screen.SettingsLastFm.route)
+                                            },
+                                            onNavigateToDiscord = {
+                                                navController.navigate(Screen.SettingsDiscord.route)
                                             }
                                         )
                                     }
@@ -2072,6 +2076,9 @@ fun FoamNavHost(
                                     }
                                     composable(Screen.SettingsLastFm.route) {
                                         LastFmSettingsScreen(onBack = { navController.popBackStack() })
+                                    }
+                                    composable(Screen.SettingsDiscord.route) {
+                                        DiscordSettingsScreen(onBack = { navController.popBackStack() })
                                     }
                                     composable(Screen.SettingsAbout.route) {
                                         AboutSettingsScreen(onBack = { navController.popBackStack() })

@@ -380,7 +380,10 @@
     <!-- Divers / Discord -->
     <string name="settings_misc">Divers</string>
     <string name="misc_settings_subtitle">Intégrations et autres options</string>
+    <string name="integrations_section">Intégrations</string>
     <string name="discord_section">Discord</string>
+    <string name="discord_entry">Discord</string>
+    <string name="discord_entry_desc">Rich Presence et pochettes en ligne</string>
     <string name="discord_presence">Discord Rich Presence</string>
     <string name="discord_presence_desc">Affiche ce que vous écoutez sur votre profil Discord</string>
     <string name="discord_log_in">Se connecter avec Discord</string>

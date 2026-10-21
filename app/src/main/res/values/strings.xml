@@ -382,7 +382,10 @@
     <!-- Misc / Discord -->
     <string name="settings_misc">Misc</string>
     <string name="misc_settings_subtitle">Integrations and other options</string>
+    <string name="integrations_section">Integrations</string>
     <string name="discord_section">Discord</string>
+    <string name="discord_entry">Discord</string>
+    <string name="discord_entry_desc">Rich Presence and online cover art</string>
     <string name="discord_presence">Discord Rich Presence</string>
     <string name="discord_presence_desc">Show what you\'re listening to on your Discord profile</string>
     <string name="discord_log_in">Log in with Discord</string>
