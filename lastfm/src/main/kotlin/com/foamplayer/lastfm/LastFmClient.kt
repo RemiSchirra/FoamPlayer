@@ -11,8 +11,12 @@ import io.ktor.http.HttpHeaders
 import java.net.URLEncoder
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -105,6 +109,54 @@ class LastFmClient(
     ): Result<Unit> {
         if (!track.isValid) return Result.failure(IllegalArgumentException("Invalid Last.fm track"))
         return callWithSession("track.updateNowPlaying", session, track.toParameters())
+    }
+
+    /**
+     * Fetches one page of [username]'s scrobble history, newest first.
+     * `user.getRecentTracks` does not need a session key, but is still signed
+     * like every other call. The currently playing track (which has no date)
+     * is omitted, so every returned item is a completed listen.
+     */
+    suspend fun fetchRecentTracks(
+        username: String,
+        page: Int = 1,
+        limit: Int = MAX_RECENT_TRACKS_PAGE_SIZE
+    ): Result<LastFmRecentTracksPage> = withContext(Dispatchers.IO) {
+        for (attempt in 0..MAX_RATE_LIMIT_RETRIES) {
+            try {
+                require(username.isNotBlank()) { "Last.fm username is missing" }
+                val body = execute(
+                    "user.getRecentTracks",
+                    mapOf(
+                        "user" to username,
+                        "page" to page.coerceAtLeast(1).toString(),
+                        "limit" to limit.coerceIn(1, MAX_RECENT_TRACKS_PAGE_SIZE).toString()
+                    )
+                )
+                parseError(body)?.let { throw it }
+                return@withContext Result.success(parseRecentTracksPage(body))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: LastFmApiException) {
+                // Large history downloads are sequential; back off when Last.fm
+                // says we are going too fast instead of failing the whole import.
+                if (e.code == LastFmApi.ERROR_RATE_LIMIT &&
+                    attempt < MAX_RATE_LIMIT_RETRIES
+                ) {
+                    logger?.log(
+                        "user.getRecentTracks rate limited; retrying (attempt ${attempt + 1})"
+                    )
+                    delay(RATE_LIMIT_RETRY_MS * (attempt + 1))
+                    continue
+                }
+                logger?.log("user.getRecentTracks failed: ${e.message}")
+                return@withContext Result.failure(e)
+            } catch (e: Exception) {
+                logger?.log("user.getRecentTracks failed: ${e.message}")
+                return@withContext Result.failure(e)
+            }
+        }
+        Result.failure(IllegalStateException("Last.fm request failed"))
     }
 
     /** Submits one completed listen. */
@@ -205,6 +257,73 @@ class LastFmClient(
         const val NOT_CONFIGURED_MESSAGE =
             "Last.fm API key and secret are not configured"
 
+        /** `user.getRecentTracks` returns at most 200 scrobbles per page. */
+        const val MAX_RECENT_TRACKS_PAGE_SIZE = 200
+
         private const val REQUEST_TIMEOUT_MS = 12_000L
+        private const val MAX_RATE_LIMIT_RETRIES = 3
+        private const val RATE_LIMIT_RETRY_MS = 1_000L
     }
+}
+
+private val lastFmJson = Json { ignoreUnknownKeys = true }
+
+/**
+ * Parses one `user.getRecentTracks` JSON response. Only completed scrobbles
+ * (entries carrying a `date.uts`) are returned; the now-playing entry is
+ * skipped. Last.fm wraps text values as either a plain string or an object
+ * with a `#text` field, so both shapes are accepted.
+ */
+internal fun parseRecentTracksPage(body: String): LastFmRecentTracksPage {
+    val root = lastFmJson.parseToJsonElement(body).jsonObject
+    val recent = root["recenttracks"]?.jsonObject
+        ?: throw IllegalStateException("Last.fm did not return recent tracks")
+    val attribute = recent["@attr"]?.jsonObject
+    val totalPages = attribute?.get("totalPages").asInt() ?: 0
+    val page = attribute?.get("page").asInt() ?: 1
+    val total = attribute?.get("total").asInt() ?: 0
+
+    val trackElements = when (val element = recent["track"]) {
+        is JsonArray -> element
+        is JsonObject -> JsonArray(listOf(element))
+        else -> JsonArray(emptyList())
+    }
+
+    val tracks = trackElements.mapNotNull { element ->
+        val track = element as? JsonObject ?: return@mapNotNull null
+        // The now-playing entry has no `date`; only completed listens count.
+        val date = track["date"] as? JsonObject ?: return@mapNotNull null
+        val timestamp = date["uts"].asText()?.toLongOrNull()
+            ?.takeIf { it > 0 } ?: return@mapNotNull null
+        val artist = track["artist"].creditedText() ?: return@mapNotNull null
+        val title = track["name"].creditedText() ?: return@mapNotNull null
+        LastFmScrobbledTrack(
+            artist = artist,
+            title = title,
+            album = track["album"].creditedText(),
+            timestampSeconds = timestamp
+        )
+    }
+
+    return LastFmRecentTracksPage(
+        tracks = tracks,
+        page = page,
+        totalPages = totalPages,
+        total = total
+    )
+}
+
+/** Last.fm wraps most text values as either a string or `{"#text": "..."}`. */
+private fun JsonElement?.creditedText(): String? = when (this) {
+    is JsonObject -> this["#text"].creditedText()
+    is JsonPrimitive -> contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+    else -> null
+}
+
+private fun JsonElement?.asText(): String? =
+    (this as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+
+private fun JsonElement?.asInt(): Int? = when (this) {
+    is JsonPrimitive -> intOrNull ?: contentOrNull?.toIntOrNull()
+    else -> null
 }

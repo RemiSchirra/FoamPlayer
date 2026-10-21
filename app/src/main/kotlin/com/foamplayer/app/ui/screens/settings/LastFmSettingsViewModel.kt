@@ -11,12 +11,16 @@ import com.foamplayer.app.lastfm.LastFmClientFactory
 import com.foamplayer.app.lastfm.LastFmCredentialSource
 import com.foamplayer.app.lastfm.LastFmCredentials
 import com.foamplayer.app.lastfm.LastFmCredentialsStore
+import com.foamplayer.app.lastfm.LastFmHistoryImporter
+import com.foamplayer.app.lastfm.LastFmImportProgress
+import com.foamplayer.app.lastfm.LastFmImportResult
 import com.foamplayer.app.lastfm.LastFmTokenStore
 import com.foamplayer.lastfm.LastFmClient
 import com.foamplayer.lastfm.LastFmSession
 import com.foamplayer.lastfm.LastFmSessionResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,12 +38,23 @@ sealed interface LastFmAuthUiState {
     data class Failure(val message: String?) : LastFmAuthUiState
 }
 
+/** State of the "import my Last.fm history" sheet flow. */
+sealed interface LastFmImportUiState {
+    data object Idle : LastFmImportUiState
+    data class Running(
+        val progress: LastFmImportProgress = LastFmImportProgress()
+    ) : LastFmImportUiState
+    data class Finished(val result: LastFmImportResult) : LastFmImportUiState
+    data class Failed(val message: String?) : LastFmImportUiState
+}
+
 @HiltViewModel
 class LastFmSettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val tokenStore: LastFmTokenStore,
     private val credentialsStore: LastFmCredentialsStore,
-    private val clientFactory: LastFmClientFactory
+    private val clientFactory: LastFmClientFactory,
+    private val historyImporter: LastFmHistoryImporter
 ) : ViewModel() {
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
@@ -64,10 +79,14 @@ class LastFmSettingsViewModel @Inject constructor(
     private val _authState = MutableStateFlow<LastFmAuthUiState>(LastFmAuthUiState.Idle)
     val authState: StateFlow<LastFmAuthUiState> = _authState.asStateFlow()
 
+    private val _importState = MutableStateFlow<LastFmImportUiState>(LastFmImportUiState.Idle)
+    val importState: StateFlow<LastFmImportUiState> = _importState.asStateFlow()
+
     /** Whether this build was compiled with usable app-provided credentials. */
     val appCredentialsConfigured: Boolean get() = LastFmCredentialsStore.appCredentials().isConfigured
 
     private var authJob: Job? = null
+    private var importJob: Job? = null
 
     fun setScrobblingEnabled(enabled: Boolean) {
         viewModelScope.launch {
@@ -180,8 +199,65 @@ class LastFmSettingsViewModel @Inject constructor(
 
     fun disconnect() {
         cancelAuthorization()
+        cancelImport()
         viewModelScope.launch {
             tokenStore.clear()
+        }
+    }
+
+    /**
+     * Downloads the connected account's complete scrobble history and applies it
+     * to the library. [eraseHistory] clears every track's listen count,
+     * last-played date and the local listen history before importing; scores are
+     * left untouched either way.
+     */
+    fun importHistory(eraseHistory: Boolean) {
+        if (importJob?.isActive == true) return
+        val session = session.value ?: return
+
+        importJob = viewModelScope.launch {
+            val credentials = credentialsStore.current()
+            if (!credentials.isConfigured) {
+                _importState.value =
+                    LastFmImportUiState.Failed(LastFmClient.NOT_CONFIGURED_MESSAGE)
+                return@launch
+            }
+
+            _importState.value = LastFmImportUiState.Running()
+            val client = clientFactory.create(credentials)
+            try {
+                val result = historyImporter.import(
+                    client = client,
+                    username = session.username,
+                    eraseHistory = eraseHistory,
+                    onProgress = { progress ->
+                        _importState.value = LastFmImportUiState.Running(progress)
+                    }
+                )
+                _importState.value = LastFmImportUiState.Finished(result)
+            } catch (e: CancellationException) {
+                _importState.value = LastFmImportUiState.Idle
+                throw e
+            } catch (e: Exception) {
+                _importState.value = LastFmImportUiState.Failed(e.message)
+            } finally {
+                client.close()
+            }
+        }
+    }
+
+    fun cancelImport() {
+        importJob?.cancel()
+        importJob = null
+        if (_importState.value is LastFmImportUiState.Running) {
+            _importState.value = LastFmImportUiState.Idle
+        }
+    }
+
+    /** Closes the success/failure sheet; a running import is left alone. */
+    fun dismissImportResult() {
+        if (_importState.value !is LastFmImportUiState.Running) {
+            _importState.value = LastFmImportUiState.Idle
         }
     }
 

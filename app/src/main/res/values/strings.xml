@@ -401,7 +401,7 @@
     <!-- Last.fm -->
     <string name="lastfm_section">Last.fm</string>
     <string name="lastfm_entry">Last.fm</string>
-    <string name="lastfm_entry_desc">Scrobble your listening history</string>
+    <string name="lastfm_entry_desc">Scrobble and import your listening history</string>
     <string name="lastfm_log_in">Log in with Last.fm</string>
     <string name="lastfm_log_out">Disconnect</string>
     <string name="lastfm_logged_in_as">Connected as %1$s</string>
@@ -424,6 +424,25 @@
     <string name="lastfm_api_key_label">API key</string>
     <string name="lastfm_api_secret_label">Shared secret</string>
     <string name="lastfm_api_key_create">Create an API account at last.fm/api/account/create</string>
+    <string name="lastfm_import_history_title">Import listening history</string>
+    <string name="lastfm_import_history_desc">Bring your last.fm scrobbles into your library\'s listen counts, last-played dates and listening stats.</string>
+    <string name="lastfm_import_history_desc_logged_out">Connect your Last.fm account above to import your listening history.</string>
+    <string name="lastfm_import_history_button">Import history</string>
+    <string name="lastfm_import_choice_title">Import Last.fm history</string>
+    <string name="lastfm_import_choice_desc">Your all-time scrobbles will be matched against the tracks in this library.</string>
+    <string name="lastfm_import_erase_warning">Erasing clears every track\'s listen count, last-played date and listening stats before importing. Likes and dislikes are kept.</string>
+    <string name="lastfm_import_erase_and_import">Erase listening history and import</string>
+    <string name="lastfm_import_without_erasing">Import without erasing history</string>
+    <string name="lastfm_import_progress_title">Importing Last.fm history</string>
+    <string name="lastfm_import_progress">Fetched %1$d scrobbles (page %2$d of %3$d)…</string>
+    <string name="lastfm_import_saving">Saving to your library…</string>
+    <string name="lastfm_import_complete_title">Import complete</string>
+    <string name="lastfm_import_result_summary">Matched %1$d of %2$d scrobbles across %3$d tracks in your library.</string>
+    <string name="lastfm_import_unmatched_title">Tracks not found in your library (%1$d)</string>
+    <string name="lastfm_import_unmatched_more">… and %1$d more</string>
+    <string name="lastfm_import_plays">×%1$d</string>
+    <string name="lastfm_import_failed_title">Import failed</string>
+    <string name="lastfm_import_failed_generic">Could not import your Last.fm history.</string>
 
     <!-- Notification buttons -->
     <string name="notification_entry">Notification</string>

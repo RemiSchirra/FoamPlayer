@@ -297,6 +297,29 @@ interface TrackDao {
     suspend fun resetAllPlayStats()
 
     /**
+     * Clears every track's listen counter and last-listen date, leaving user
+     * scores (likes/dislikes) untouched — used before a history import.
+     */
+    @Query("UPDATE tracks SET playCount = 0, lastPlayedAt = NULL")
+    suspend fun resetAllPlayCounts()
+
+    /**
+     * Adds [plays] imported listens to a track's counter and moves its
+     * last-listen date to [lastPlayedAt] only when that date is newer.
+     */
+    @Query("""
+        UPDATE tracks
+        SET playCount = playCount + :plays,
+            lastPlayedAt = CASE
+                WHEN lastPlayedAt IS NULL OR lastPlayedAt < :lastPlayedAt
+                THEN :lastPlayedAt
+                ELSE lastPlayedAt
+            END
+        WHERE id = :trackId
+    """)
+    suspend fun addImportedPlays(trackId: Long, plays: Int, lastPlayedAt: Long)
+
+    /**
      * Overwrites one track's whole stats block (count, last-listen date,
      * score) — the dev "generate random data" tool's per-track write.
      */

@@ -44,15 +44,18 @@ import com.foamplayer.app.R
 import com.foamplayer.app.lastfm.LastFmCredentialSource
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.modals.LastFmCredentialsModal
+import com.foamplayer.app.ui.modals.LastFmImportChoiceModal
+import com.foamplayer.app.ui.modals.LastFmImportProgressModal
+import com.foamplayer.app.ui.modals.LastFmImportResultModal
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.delay
 
 /**
- * Settings > Misc > Last.fm: connect an account and enable scrobbling. Tracks
- * are submitted once they pass the listening threshold configured in
- * Settings > Library.
+ * Settings > Misc > Last.fm: connect an account, enable scrobbling and import
+ * the account's scrobble history. Tracks are submitted once they pass the
+ * listening threshold configured in Settings > Library.
  */
 @Composable
 fun LastFmSettingsScreen(
@@ -65,9 +68,11 @@ fun LastFmSettingsScreen(
     val customApiKey by viewModel.customApiKey.collectAsState()
     val customApiSecret by viewModel.customApiSecret.collectAsState()
     val authState by viewModel.authState.collectAsState()
+    val importState by viewModel.importState.collectAsState()
     val context = LocalContext.current
     val isConfigured = credentials.isConfigured
     var showCredentialsModal by remember { mutableStateOf(false) }
+    var showImportChoiceModal by remember { mutableStateOf(false) }
 
     BackHandler(enabled = authState is LastFmAuthUiState.Waiting) {
         viewModel.cancelAuthorization()
@@ -216,6 +221,46 @@ fun LastFmSettingsScreen(
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
                         .background(FoamTheme.colors.surface)
                 ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(FoamDimens.paddingMedium)
+                    ) {
+                        BasicText(
+                            text = stringResource(R.string.lastfm_import_history_title),
+                            style = FoamTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
+                        BasicText(
+                            text = stringResource(
+                                if (session != null) {
+                                    R.string.lastfm_import_history_desc
+                                } else {
+                                    R.string.lastfm_import_history_desc_logged_out
+                                }
+                            ),
+                            style = FoamTheme.typography.body
+                        )
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                        SettingsActionButton(
+                            label = stringResource(R.string.lastfm_import_history_button),
+                            enabled = session != null &&
+                                    importState !is LastFmImportUiState.Running,
+                            onClick = { showImportChoiceModal = true }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+            }
+
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
                     FoamSwitchItem(
                         title = stringResource(R.string.lastfm_scrobble),
                         description = if (session != null) {
@@ -243,6 +288,29 @@ fun LastFmSettingsScreen(
         onDismiss = { showCredentialsModal = false },
         onUseAppCredentials = viewModel::useAppCredentials,
         onSaveCustomCredentials = viewModel::saveCustomCredentials
+    )
+
+    LastFmImportChoiceModal(
+        visible = showImportChoiceModal,
+        onDismiss = { showImportChoiceModal = false },
+        onEraseAndImport = {
+            showImportChoiceModal = false
+            viewModel.importHistory(eraseHistory = true)
+        },
+        onImportWithoutErasing = {
+            showImportChoiceModal = false
+            viewModel.importHistory(eraseHistory = false)
+        }
+    )
+
+    LastFmImportProgressModal(
+        state = importState,
+        onCancel = viewModel::cancelImport
+    )
+
+    LastFmImportResultModal(
+        state = importState,
+        onDismiss = viewModel::dismissImportResult
     )
 }
 

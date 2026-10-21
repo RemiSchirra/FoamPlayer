@@ -50,7 +50,7 @@ for some features (see more).
 * Animated video canvas support.
 * Artist images fetched from Spotify.
 * Discord Rich Presence status.
-* Last.fm scrobbling.
+* Last.fm scrobbling and full listening-history import.
 
 ### Equalizer
 *Currently in development.*

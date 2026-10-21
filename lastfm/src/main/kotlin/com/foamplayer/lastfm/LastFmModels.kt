@@ -34,6 +34,26 @@ data class LastFmScrobble(
     val timestampSeconds: Long
 )
 
+/**
+ * One historical scrobble returned by `user.getRecentTracks`.
+ * [timestampSeconds] is the `date.uts` value; the currently playing track has no
+ * date and is therefore never represented here.
+ */
+data class LastFmScrobbledTrack(
+    val artist: String,
+    val title: String,
+    val album: String? = null,
+    val timestampSeconds: Long
+)
+
+/** One page of a `user.getRecentTracks` response. */
+data class LastFmRecentTracksPage(
+    val tracks: List<LastFmScrobbledTrack>,
+    val page: Int,
+    val totalPages: Int,
+    val total: Int
+)
+
 /** Result of polling `auth.getSession` for a pending token. */
 sealed interface LastFmSessionResult {
     data class Authorized(val session: LastFmSession) : LastFmSessionResult
