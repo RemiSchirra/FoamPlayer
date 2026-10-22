@@ -52,6 +52,17 @@ internal class FoamNavGraphContext(
         navController.popBackStack()
     }
 
+    /**
+     * Navigates to [route] that was not opened from a collection row, dropping
+     * any tag left by the previous collection click. Without this, returning
+     * from a detail page and then opening e.g. a "See all" list would pair the
+     * list's row with the row that was clicked before the return flight.
+     */
+    fun navigateUnshared(route: String) {
+        onActiveSharedCollectionChange(null)
+        navController.navigate(route)
+    }
+
     /** Opens an artist page, tagging the route pair for the shared-element flight. */
     fun openArtist(name: String, image: String? = null, imageIsEmbeddedArt: Boolean = false) {
         onActiveSharedCollectionChange(sharedCollectionTag("artist", name))

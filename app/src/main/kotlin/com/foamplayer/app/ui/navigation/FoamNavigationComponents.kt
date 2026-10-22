@@ -108,7 +108,8 @@ val LocalBottomBarClearance = compositionLocalOf { 0.dp }
  * other rows that happen to also exist on the destination (e.g. the artist's
  * albums already visible on the home page) never join the flight. The tag is
  * overwritten by every collection click, which also drops stale tags from
- * earlier flights.
+ * earlier flights, and cleared by navigations that do not start from a
+ * collection row (see [FoamNavGraphContext.navigateUnshared]).
  */
 val LocalActiveSharedCollection = compositionLocalOf { null as String? }
 

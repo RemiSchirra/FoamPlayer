@@ -17,7 +17,7 @@ internal fun NavGraphBuilder.statsDestinations(context: FoamNavGraphContext) {
                 context.openAlbum(album, artUrl, artist)
             },
             onSeeAll = { kind, period ->
-                context.navController.navigate(
+                context.navigateUnshared(
                     Screen.StatsSeeAll.createRoute(kind.name, period.name)
                 )
             },
