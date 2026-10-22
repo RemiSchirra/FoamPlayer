@@ -21,7 +21,9 @@ internal fun NavGraphBuilder.statsDestinations(context: FoamNavGraphContext) {
                     Screen.StatsSeeAll.createRoute(kind.name, period.name)
                 )
             },
-            onTrackClick = { tracks, index -> context.onPlayTracks(tracks, index, null) }
+            onTrackClick = { tracks, index -> context.onPlayTracks(tracks, index, null) },
+            sharedTransitionScope = context.sharedTransitionScope,
+            animatedVisibilityScope = this
         )
     }
     composable(Screen.StatsSeeAll.route) { backStackEntry ->

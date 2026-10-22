@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -224,12 +223,11 @@ internal fun DetailListBackdrop(
         label = "listBackdropAlpha"
     )
     val display = listBackdropArt ?: lastListBackdropArt
-    val show by remember(backgroundMode, forceDynamic) {
-        derivedStateOf {
-            (backgroundMode == BackgroundMode.DYNAMIC || forceDynamic) &&
-                (listBackdropArt ?: lastListBackdropArt) != null && listBackdropAlpha > 0f
-        }
-    }
+    // Plain expression, not a remembered derivedStateOf: the art/alpha values
+    // above are read during composition, and a remembered derived state would
+    // keep capturing the FIRST composition's null art and stay false forever.
+    val show = (backgroundMode == BackgroundMode.DYNAMIC || forceDynamic) &&
+        display != null && listBackdropAlpha > 0f
     if (show) {
         DynamicAlbumArtBackground(
             frontArtPath = (state.crossfadeFrom ?: display)?.path,
