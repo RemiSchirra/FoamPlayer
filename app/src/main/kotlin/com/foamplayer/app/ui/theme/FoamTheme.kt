@@ -5,8 +5,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -140,6 +144,30 @@ val LocalIsDarkTheme = staticCompositionLocalOf { true }
 // non-static local keeps that invalidation scoped to accent readers only.
 val LocalPrimaryAccentColor = compositionLocalOf { DefaultPrimaryAccent }
 
+/**
+ * Live-preview override for the mini player rounding — the stored 0..100
+ * percent pushed by the player settings screen while its slider is dragged.
+ * Every [FoamTheme.shapes] reader applies it on top of the persisted shapes, so
+ * the bottom chrome (mini player and the nav bar attached to it) follows the
+ * slider in real time while the setting itself keeps its commit-on-release
+ * cadence. `null` = no override.
+ *
+ * Owned and provided by [FoamTheme]; the settings screen clears it when it
+ * leaves composition so the rest of the app only ever sees the committed value.
+ */
+@Stable
+class MiniPlayerRoundingPreviewState {
+    var miniPlayerRounding by mutableStateOf<Int?>(null)
+
+    /** Drops the override; the persisted rounding drives the shapes again. */
+    fun clear() {
+        miniPlayerRounding = null
+    }
+}
+
+val LocalMiniPlayerRoundingPreview =
+    staticCompositionLocalOf { MiniPlayerRoundingPreviewState() }
+
 // Whether the accent derives from album art; row highlights read it to pick
 // between their own extracted art color and the single app accent.
 val LocalAutomaticColorEnabled = compositionLocalOf { true }
@@ -155,8 +183,24 @@ object FoamTheme {
     val icons: FoamIcons
         @Composable get() = LocalFoamIcons.current
 
+    /**
+     * The theme's shapes, with the settings screen's live rounding preview (see
+     * [MiniPlayerRoundingPreviewState]) applied when one is pushed. The
+     * persisted shapes still come from a static local; only the preview field is
+     * tracked, so a slider drag recomposes the shape readers (bottom chrome)
+     * alone instead of the navigation tree.
+     */
     val shapes: FoamShapes
-        @Composable get() = LocalFoamShapes.current
+        @Composable get() {
+            val themeShapes = LocalFoamShapes.current
+            val previewPercent = LocalMiniPlayerRoundingPreview.current.miniPlayerRounding
+            return remember(themeShapes, previewPercent) {
+                val rounding =
+                    previewPercent?.let { it / 100f } ?: themeShapes.miniPlayerRounding
+                if (rounding == themeShapes.miniPlayerRounding) themeShapes
+                else themeShapes.copy(miniPlayerRounding = rounding)
+            }
+        }
 
     /** Whether the current palette is the dark one (Light theme = false). */
     val isDark: Boolean
@@ -214,12 +258,17 @@ fun FoamTheme(
         (accentColor ?: DefaultPrimaryAccent).adaptAccentForTheme(darkTheme)
     }
 
+    // Live overrides pushed by the settings screens (see
+    // [MiniPlayerRoundingPreviewState]); the holder itself never changes.
+    val roundingPreview = remember { MiniPlayerRoundingPreviewState() }
+
     CompositionLocalProvider(
         LocalFoamColors provides colors,
         LocalFoamTypography provides typography,
         LocalIsDarkTheme provides darkTheme,
         LocalFoamIcons provides icons,
         LocalFoamShapes provides shapes,
+        LocalMiniPlayerRoundingPreview provides roundingPreview,
         LocalPrimaryAccentColor provides targetAccentColor,
         content = content
     )

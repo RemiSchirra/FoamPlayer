@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,7 @@ import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.LocalMiniPlayerRoundingPreview
 import kotlin.math.roundToInt
 
 @Composable
@@ -63,6 +65,11 @@ fun PlayerSettingsScreen(
     // Slider min/max labels ("Square"/"Circle") resolve once per composition.
     val roundingMin = stringResource(R.string.square)
     val roundingMax = stringResource(R.string.circle)
+
+    val roundingPreview = LocalMiniPlayerRoundingPreview.current
+    DisposableEffect(Unit) {
+        onDispose { roundingPreview.clear() }
+    }
 
     Column(
         modifier = Modifier
@@ -227,6 +234,7 @@ fun PlayerSettingsScreen(
                                 onValueChangeFinished = {
                                     viewModel.setMiniPlayerRounding(it.roundToInt())
                                 },
+                                onValueChange = { roundingPreview.miniPlayerRounding = it.roundToInt() },
                                 steps = 9,
                                 valueRange = 0f..100f,
                                 formatValue = { "${it.roundToInt()}%" },
