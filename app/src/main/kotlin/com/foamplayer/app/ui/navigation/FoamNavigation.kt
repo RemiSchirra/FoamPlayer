@@ -1,8 +1,6 @@
 package com.foamplayer.app.ui.navigation
 
-import android.os.Bundle
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -37,12 +35,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -52,12 +48,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -67,9 +61,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
-import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -85,9 +77,7 @@ import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.data.db.entities.TrackEntity
-import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.BackgroundMode
-import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.ui.modals.CollectionFoamModal
 import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.modals.CollectionInfo
@@ -135,12 +125,10 @@ import com.foamplayer.app.ui.screens.library.AlbumDetailScreen
 import com.foamplayer.app.ui.screens.library.ArtistDetailScreen
 import com.foamplayer.app.ui.screens.library.ArtistSongsScreen
 import com.foamplayer.app.ui.screens.player.AlbumArtBackdrop
-import com.foamplayer.app.ui.screens.player.CustomImageBackground
 import com.foamplayer.app.ui.screens.player.DownSwipeCommitVelocityPxPerSec
 import com.foamplayer.app.ui.screens.player.FullPlayerBackdropState
 import com.foamplayer.app.ui.screens.player.FullPlayerScreen
 import com.foamplayer.app.ui.screens.player.DynamicAlbumArtBackground
-import com.foamplayer.app.ui.screens.player.GradientBackground
 import com.foamplayer.app.ui.screens.player.MiniPlayerSwipeController
 import com.foamplayer.app.ui.screens.player.PlayerDimens
 import com.foamplayer.app.ui.screens.player.PlayerFlightGeometryState
@@ -191,280 +179,12 @@ import kotlin.math.abs
 const val SharedElementTransitionDurationMs = 350
 val SharedElementEasing = FastOutSlowInEasing
 
-/** Longest a programmatic mini<->full player transition may take. */
-private const val PlayerTransitionMaxDurationMs = 500
-
-/**
- * Duration budget for a programmatic close flight (no finger on screen),
- * longer than a gesture close so it never reads as an instant snap.
- */
-private const val AutoCloseFlightDurationMs = 700
-
-/** Shortest a flick-committed close flight may take. */
-private const val MinGestureCloseFlightMs = 240
-
-/** Fade duration for non-shared-element screen-to-screen navigation. */
-private const val NavScreenFadeDurationMs = 400
-
-/** Settings and browse subscreens slide by a fraction of their width when pushed/popped. */
-private const val SubScreenSlideDivisor = 3
-
-/**
- * Peak alpha of the theme-aware scrim drawn behind the bottom chrome (app nav
- * bar, mini player card and the system navigation bar's inset). 0.5 at the very
- * bottom edge of the screen, fading to fully transparent at the top of the bar
- * zone (see the layer in [FoamNavHost]).
- */
-private const val BottomChromeScrimMaxAlpha = 0.9f
-
-/**
- * zIndex of the nav bar while lifted into the shared-element overlay (see
- * [FoamNavHost]'s bottom-chrome lift): above the flying artwork (0f), texts
- * (1f) and every screen-lifted chrome layer (0.5f/1f).
- */
-private const val BottomChromeNavBarOverlayZIndex = 10f
-
-/**
- * zIndex of the mini player card while lifted: above the lifted nav bar, so
- * the card keeps its at-rest position on top of the bar (they touch in
- * ATTACHED mode, where the card sinks into the bar's surface extension).
- */
-private const val BottomChromeMiniPlayerOverlayZIndex = 11f
-
-/**
- * Gap between the mini player's top and the bottom of the toast stack sitting
- * above it.
- */
-private val ToastsAboveMiniPlayerGap = 12.dp
-
-/**
- * The stored background-blur percentage rendered as an actual Gaussian radius:
- * the slider value is perceptual (see [AppSettings.backgroundBlurRadiusDp]), so
- * every backdrop layer converts it through that mapping instead of treating
- * percent as dp.
- */
-private fun backgroundBlurRadius(blurPercent: Int): Dp =
-    AppSettings.backgroundBlurRadiusDp(blurPercent).dp
-
-/**
- * Live-preview overrides pushed by the background settings screen while it is
- * open. Every field is null = "use the persisted setting"; the app-wide backdrop
- * layers ([rememberAnimatedBackground], [StaticBackgroundLayers]) read them
- * inside their own recompose scopes, so per-frame edits (gradient dots mid-drag,
- * blur / intensity sliders mid-drag) redraw only the backdrop and never the
- * navigation tree — the settings themselves stay commit-on-release.
- *
- * Cleared when the settings screen leaves composition, handing control back to
- * the persisted values.
- */
-@Stable
-class BackgroundSettingsPreviewState {
-    var mode by mutableStateOf<BackgroundMode?>(null)
-    var gradientStops by mutableStateOf<List<GradientStop>?>(null)
-    var backgroundBlur by mutableStateOf<Int?>(null)
-    var appBackgroundIntensity by mutableStateOf<Int?>(null)
-
-    /** Drops every override; the persisted settings drive the layers again. */
-    fun clear() {
-        mode = null
-        gradientStops = null
-        backgroundBlur = null
-        appBackgroundIntensity = null
-    }
-}
-
-/** Provided by [FoamNavHost]; the background settings screen pushes into it. */
-val LocalBackgroundSettingsPreview = staticCompositionLocalOf { BackgroundSettingsPreviewState() }
-
-/**
- * Destination wrapper that applies the status-bar inset INSIDE each destination.
- *
- * The inset used to be applied once, around the whole NavHost. The NavHost's
- * enter/exit fades (graphicsLayer alpha < 1) render each destination into an
- * offscreen layer sized to the destination's bounds, so anything a screen draws
- * above its top edge — the immersive hero artwork bleeding under the status bar —
- * was cropped for the duration of every fade (album <-> artist, etc.) and the
- * dimmed root backdrop showed through instead. With the padding moved inside,
- * the fading layer spans the full screen and the bleed survives the transition.
- * Layout of the screens is unchanged: they still start below the inset.
- */
-private fun NavGraphBuilder.composable(
-    route: String,
-    arguments: List<NamedNavArgument> = emptyList(),
-    content: @Composable AnimatedContentScope.(NavBackStackEntry) -> Unit
-) {
-    // Settings pages are opaque and sit on the plain theme background (the root
-    // art/custom/gradient layers are hidden on settings routes). Painting that
-    // background BEFORE the status-bar padding makes the page cover the status
-    // bar zone too, so it slides/fades as one surface instead of leaving the
-    // root backdrop visible behind the status bar during the transition.
-    // The layer is also flattened offscreen so the NavHost fade applies to the
-    // background and the items as ONE bitmap; otherwise each is blended at the
-    // fade alpha on its own and the items read as fading in after the background.
-    //
-    // EXCEPTION — the background settings page: it is the one place where the
-    // backdrop layers must stay visible (they ARE the live preview of the
-    // parameters being edited), so it gets no opaque surface; its content
-    // composes straight over whatever the root backdrop draws.
-    val isSettings = isSettingsRoute(route)
-    val paintsOpaqueSurface = isSettings && !isBackgroundSettingsRoute(route)
-    navComposable(route = route, arguments = arguments) { entry ->
-        val contentScope = this
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .then(
-                    if (paintsOpaqueSurface) {
-                        Modifier
-                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                            .background(FoamTheme.colors.background)
-                    } else {
-                        Modifier
-                    }
-                )
-                .statusBarsPadding()
-        ) {
-            contentScope.content(entry)
-        }
-    }
-}
-
-private fun isSharedElementRoute(route: String?): Boolean {
-    if (route == null) return false
-    return route == Screen.Home.route ||
-            route == Screen.Search.route ||
-            route == Screen.Playlists.route ||
-            route.startsWith("artist/") ||
-            route.startsWith("album/") ||
-            route.startsWith("playlist/")
-}
-
-private fun isSettingsRoute(route: String?): Boolean {
-    return route != null && (route == Screen.Settings.route || route.startsWith("settings/"))
-}
-
-/** The one settings page that previews the backdrop layers live. */
-private fun isBackgroundSettingsRoute(route: String?): Boolean =
-    route == Screen.SettingsBackground.route
-
-/** Stats overview and its see-all pages slide like the settings stack. */
-private fun isStatsRoute(route: String?): Boolean =
-    route != null && (route == Screen.Stats.route || route.startsWith("stats/"))
-
-/** Browse list pages (plus their sub-pages) slide over the screen they leave. */
-private fun isBrowseRoute(route: String?): Boolean = route != null && route.startsWith("browse/")
-
-/** Detail screens whose list background is drawn full-bleed at the root. */
-private fun isDetailListRoute(route: String?): Boolean =
-    route == Screen.AlbumDetail.route ||
-            route == Screen.PlaylistDetail.route ||
-            route == Screen.ArtistDetail.route ||
-            route == Screen.ArtistSongs.route
-
-/**
- * True when the page on top of the back stack IS the collection the queue was
- * started from — the only case where a player dismiss can fly the artwork into
- * that page's playing row instead of the mini player.
- */
-private fun isOriginCollectionPage(
-    route: String?,
-    arguments: Bundle?,
-    activeCollectionId: String?
-): Boolean {
-    if (activeCollectionId == null || route == null) return false
-    val routeCollectionId = when {
-        route.startsWith("playlist/") -> CollectionId.playlist(arguments?.getLong("playlistId") ?: -1L)
-        route.startsWith("browse/genre/") -> CollectionId.genre(arguments?.getString("genre").orEmpty())
-        route.startsWith("browse/year/") -> CollectionId.year(arguments?.getInt("year") ?: 0)
-        else -> null
-    }
-    return routeCollectionId == activeCollectionId
-}
-
-/** Art feeding the detail-list backdrop: the path plus how Coil must load it. */
-private data class ListBackdropArt(val path: String, val isEmbeddedArt: Boolean)
-
-/**
- * App-wide animated album-art backdrop. Returns a setter
- * (front, back, fraction) whose frames draw without recomposing the caller.
- *
- * Blur and app intensity come from the persisted settings, overridden per frame
- * by [preview] while the background settings screen edits them — the reads
- * happen inside this function's own recompose scope, so slider drags never
- * invalidate [FoamNavHost]'s body.
- */
-@Composable
-private fun rememberAnimatedBackground(
-    enabled: Boolean,
-    initialFrontArtPath: () -> String?,
-    persistedBlur: Int,
-    persistedAppIntensity: Int,
-    preview: BackgroundSettingsPreviewState,
-    modifier: Modifier = Modifier
-): (frontArtPath: String?, backArtPath: String?, fraction: Float) -> Unit {
-    var frontArtPath by remember { mutableStateOf(initialFrontArtPath()) }
-    var backArtPath by remember { mutableStateOf<String?>(null) }
-    val crossfadeFraction = remember { mutableStateOf(0f) }
-
-    if (enabled) {
-        DynamicAlbumArtBackground(
-            frontArtPath = frontArtPath,
-            backArtPath = backArtPath,
-            crossfadeFraction = { crossfadeFraction.value },
-            blur = backgroundBlurRadius(preview.backgroundBlur ?: persistedBlur),
-            intensity = (preview.appBackgroundIntensity ?: persistedAppIntensity) / 100f,
-            modifier = modifier,
-        )
-    }
-
-    return remember {
-        { front, back, fraction ->
-            frontArtPath = front
-            backArtPath = back
-            crossfadeFraction.value = fraction
-        }
-    }
-}
-
-/**
- * The user-configured static backdrop layers (custom blurred image / gradient)
- * for the non-dynamic modes, with the background settings page's live overrides
- * applied. Reads [preview] INSIDE this scope so per-frame edits (gradient dots,
- * sliders) recompose only this layer, never the navigation tree.
- */
-@Composable
-private fun StaticBackgroundLayers(
-    mode: BackgroundMode,
-    customBackgroundUri: String?,
-    persistedGradientStops: List<GradientStop>,
-    persistedBackgroundBlur: Int,
-    persistedAppIntensity: Int,
-    preview: BackgroundSettingsPreviewState,
-    modifier: Modifier = Modifier
-) {
-    when (mode) {
-        BackgroundMode.CUSTOM -> CustomImageBackground(
-            imageUri = customBackgroundUri,
-            blur = backgroundBlurRadius(preview.backgroundBlur ?: persistedBackgroundBlur),
-            intensity = (preview.appBackgroundIntensity ?: persistedAppIntensity) / 100f,
-            modifier = modifier
-        )
-        BackgroundMode.GRADIENT -> GradientBackground(
-            stops = preview.gradientStops ?: persistedGradientStops,
-            intensity = (preview.appBackgroundIntensity ?: persistedAppIntensity) / 100f,
-            modifier = modifier
-        )
-        BackgroundMode.DYNAMIC -> Unit
-    }
-}
-
 /**
  * Root navigation host: every screen of the app, the mini/full player
  * transition (a [SeekableTransitionState] driven by both taps and drags),
  * shared-element artwork flights, the app-wide backdrop, the nav bar and the
  * global action modals.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun FoamNavHost(
     modifier: Modifier = Modifier,
