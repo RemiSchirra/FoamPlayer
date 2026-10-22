@@ -1,15 +1,12 @@
 package com.foamplayer.app.audio.engine
 
 import android.content.Context
-import android.net.Uri
 import android.util.Log
 import android.view.Choreographer
 import androidx.annotation.OptIn
-import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -18,13 +15,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import com.foamplayer.app.audio.bitperfect.AudioOutputInfo
-import com.foamplayer.app.audio.bitperfect.AudioStreamInfo
 import com.foamplayer.app.audio.bitperfect.BitPerfectDetector
 import com.foamplayer.app.audio.device.OutputDeviceManager
 import com.foamplayer.app.audio.dsp.DspAudioProcessor
 import com.foamplayer.app.audio.dsp.DspEngine
-import com.foamplayer.app.audio.dsp.DspState
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.repository.SettingsRepository
@@ -53,11 +47,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
-import kotlin.math.roundToLong
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -133,6 +125,14 @@ class AudioEngine @Inject constructor(
     )
     val seekEvents: SharedFlow<Long> = _seekEvents.asSharedFlow()
 
+    /** Emits once per playback occurrence when it reaches the listen threshold. */
+    private val _listenedTrackEvents = MutableSharedFlow<ListenedTrackEvent>(
+        extraBufferCapacity = 4,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val listenedTrackEvents: SharedFlow<ListenedTrackEvent> =
+        _listenedTrackEvents.asSharedFlow()
+
     private var onPlayerSwappedListener: (() -> Unit)? = null
     private var onDisplayPlayerChangedListener: ((Player) -> Unit)? = null
 
@@ -141,6 +141,27 @@ class AudioEngine @Inject constructor(
         .setUsage(C.USAGE_MEDIA)
         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
         .build()
+
+    /** Output path subsystem: bit-perfect verdict, "Play on" pinning and volume (see [AudioOutputRouter]). */
+    private val audioRouter = AudioOutputRouter(
+        playerProvider = { activePlayerField },
+        fadeEngine = fadeEngine,
+        outputDeviceManager = outputDeviceManager,
+        dspEngine = dspEngine,
+        bitPerfectDetector = bitPerfectDetector,
+        settingsRepository = settingsRepository,
+        distantRepository = distantRepository,
+        mediaAudioAttributes = mediaAudioAttributes,
+        scope = scope,
+        currentTrack = { _playbackState.value.currentTrack },
+        latestSettings = { latestSettings },
+        onOutputInfo = { info ->
+            _playbackState.value = _playbackState.value.copy(audioOutputInfo = info)
+        },
+        onPlaybackResumed = {
+            _playbackState.value = _playbackState.value.copy(isPlaying = true)
+        }
+    )
 
     /** DSP mirror of the active player when it was promoted from a crossfade secondary. */
     private var activeMirrorField: DspAudioProcessor? = null
@@ -182,20 +203,11 @@ class AudioEngine @Inject constructor(
 
     private var refillScheduled: Boolean = false
 
-    /**
-     * Listen accounting: a track counts as listened once [listenedElapsedMs] (forward playback
-     * accumulated by [tickListenCount]) reaches the configured share of its duration.
-     * [pendingListenTrackId] is cleared once counted, so pauses and seeks never count twice.
-     * It is position-driven rather than timer-driven: timers stall in Doze.
-     */
-    private var pendingListenTrackId: Long? = null
-    private var listenedElapsedMs: Long = 0L
+    /** Counts the forward playback of each occurrence toward the listened threshold (see [ListenAccounting]). */
+    private val listen = ListenAccounting()
 
-    /** Position at the previous accumulation tick, -1 until the first tick of an occurrence. */
-    private var lastListenedPositionMs: Long = -1L
-
-    /** (trackId, elapsed) of the outgoing occurrence, restored if a crossfade aborts. */
-    private var stashedListenOccurrence: Pair<Long, Long>? = null
+    /** Maps database rows onto player media items (artwork rules included). */
+    private val mediaItemMapper = MediaItemMapper { distantRepository.artworkUrlFor(it) }
 
     /** Guards `clear()` so an empty queue at process start never wipes the previous process's resumption snapshot. */
     private var hasSessionSaved: Boolean = false
@@ -209,8 +221,6 @@ class AudioEngine @Inject constructor(
 
     @Volatile
     private var latestSettings: AppSettings = AppSettings()
-
-    private var lastAudioOutputInfo: AudioOutputInfo? = null
 
     private var consecutiveLoadErrors: Int = 0
 
@@ -236,19 +246,7 @@ class AudioEngine @Inject constructor(
         private const val AUXILIARY_QUEUE_LENGTH = PlaybackState.AUXILIARY_QUEUE_LENGTH
         /** Poll interval when no frames are delivered (background). */
         private const val POSITION_POLL_SLOW_INTERVAL_MS = 250L
-        /** Poll interval while paused; bounds the latency to notice a play or an external seek. */
-        private const val PAUSED_POLL_INTERVAL_MS = 50L
         private const val FRAME_WAIT_TIMEOUT_MS = POSITION_POLL_SLOW_INTERVAL_MS
-        /** Residual error beyond which a position sample is a discontinuity and re-anchors immediately. */
-        private const val POSITION_SNAP_MS = 120.0
-        /** Share of each sample's residual error absorbed by the dead-reckoning anchor. */
-        private const val POSITION_ERROR_SLEW = 0.25
-        /** Max wait for a stream clock to start moving before dead-reckoning resumes anyway. */
-        private const val SETTLE_TIMEOUT_MS = 300L
-        /** Largest backward correction absorbed by holding the position instead of stepping back. */
-        private const val MONOTONIC_HOLD_MAX_MS = 60L
-        /** Larger forward jumps are seeks, not played audio, and don't count as listened. */
-        private const val MAX_LISTENED_TICK_GAP_MS = 2_000L
         private const val MAX_CONSECUTIVE_LOAD_ERRORS = 10
         private const val PERSIST_DEBOUNCE_MS = 1_000L
         private const val POSITION_SAVE_INTERVAL_MS = 15_000L
@@ -312,7 +310,7 @@ class AudioEngine @Inject constructor(
 
         @androidx.annotation.OptIn(UnstableApi::class)
         override fun applyOutputRouting(player: ExoPlayer) {
-            applyPreferredAudioDeviceTo(player)
+            audioRouter.applyTo(player)
         }
 
         override fun buildFadeWindow(centerQueueIndex: Int): FadeEngine.FadeWindow? {
@@ -346,11 +344,8 @@ class AudioEngine @Inject constructor(
             pendingFadeWindowEnd = windowEnd
 
             // Listen counting moves to the incoming track; the outgoing progress is stashed in case the fade aborts.
-            val outgoingId = pendingListenTrackId
-            if (outgoingId != null && outgoingId != targetTrackId) {
-                stashedListenOccurrence = outgoingId to listenedElapsedMs
-            }
-            beginListenOccurrence(targetTrackId)
+            listen.stashOutgoing(targetTrackId)
+            listen.begin(targetTrackId)
 
             activePlayerField.removeListener(playerListener)
         }
@@ -379,7 +374,7 @@ class AudioEngine @Inject constructor(
             _positionMs.value = positionMs
             _seekEvents.tryEmit(positionMs)
 
-            recomputeAudioOutputInfo()
+            audioRouter.recompute()
             if (wasAuxiliary) scheduleAuxiliaryRefill()
 
             trackLandedForQueueShuffle()
@@ -394,7 +389,7 @@ class AudioEngine @Inject constructor(
             }
             pendingFadeWindowStart = null
             pendingFadeWindowEnd = null
-            stashedListenOccurrence = null
+            listen.discardStash()
 
             // Session modes toggled mid-fade would otherwise be lost.
             player.repeatMode = playerRepeatMode(_playbackState.value.repeatMode)
@@ -434,21 +429,11 @@ class AudioEngine @Inject constructor(
                 }
                 _positionMs.value = player.currentPosition
                 _seekEvents.tryEmit(player.currentPosition)
-                recomputeAudioOutputInfo()
+                audioRouter.recompute()
             }
 
             val trackId = player.currentMediaItem?.mediaId?.toLongOrNull()
-            val stash = stashedListenOccurrence
-            stashedListenOccurrence = null
-            if (trackId != null) {
-                if (stash != null && stash.first == trackId) {
-                    pendingListenTrackId = trackId
-                    listenedElapsedMs = stash.second
-                    lastListenedPositionMs = -1L
-                } else {
-                    beginListenOccurrence(trackId)
-                }
-            }
+            if (trackId != null) listen.resume(trackId) else listen.discardStash()
 
             _playbackState.value = _playbackState.value.copy(
                 isPlaying = player.isPlaying,
@@ -477,7 +462,7 @@ class AudioEngine @Inject constructor(
         observeLibraryForAuxiliaryRefill()
         observeListenedThreshold()
         observeSessionForPersistence()
-        startAudioPathObservers()
+        audioRouter.start()
     }
 
     /**
@@ -494,49 +479,7 @@ class AudioEngine @Inject constructor(
         }
     }
 
-    private fun TrackEntity.toMediaItem(): MediaItem {
-        // The session's artwork must always be loadable: a distant track points at
-        // its cached image file (albumArtPath), but that file can be gone (cleared
-        // storage, failed download, restored DB) — advertising a dead path makes
-        // every notification surface log a load error ("Unable to load bitmap").
-        // Verify the file exists and otherwise fall back to the live artwork URL;
-        // only give up when there is nothing loadable at all. Local tracks carry
-        // their art embedded, so their audio URI is the right artwork URI.
-        val isDistant = com.foamplayer.distant.DistantUris.isDistant(path)
-        val artwork = when {
-            isDistant -> artworkUriForDistantTrack()
-            else -> path.toUri()
-        }
-        return MediaItem.Builder()
-            .setUri(path.toUri())
-            .setMediaId(id.toString())
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(title)
-                    .setArtist(artist)
-                    .setArtworkUri(artwork)
-                    .build()
-            )
-            .build()
-    }
-
-    /**
-     * Loadable artwork for a distant track. The metadata artwork URI is consumed
-     * out-of-process too (SystemUI's media controls), which cannot read this
-     * app's private files — so prefer the provider's live http(s) URL and only
-     * fall back to the scan-time cached image (verified to exist) when the
-     * provider gives nothing. Never advertise the audio URI itself: no surface
-     * can open a `foam-distant://` data source.
-     */
-    private fun TrackEntity.artworkUriForDistantTrack(): Uri? {
-        DistantUris.parse(path)
-            ?.let { distantRepository.artworkUrlFor(it) }
-            ?.let { return it.toUri() }
-        albumArtPath?.takeIf { it.isNotBlank() && !it.startsWith("http") }?.let { artPath ->
-            if (File(artPath.toUri().path ?: "").isFile) return artPath.toUri()
-        }
-        return null
-    }
+    private fun TrackEntity.toMediaItem(): MediaItem = mediaItemMapper.toMediaItem(this)
 
     /** Called after a crossfade promoted a new player, so the MediaSession can re-bind. */
     fun setOnPlayerSwappedListener(listener: (() -> Unit)?) {
@@ -570,7 +513,7 @@ class AudioEngine @Inject constructor(
         if (tracks.isEmpty()) return emptyList()
 
         cancelPendingTransitions()
-        clearListenOccurrence()
+        listen.clear()
         windowJumpJob?.cancel()
         failedTrackIds.clear()
 
@@ -673,7 +616,7 @@ class AudioEngine @Inject constructor(
     ) {
         val currentQueue = _playbackState.value.queue
 
-        beginListenOccurrence(trackId)
+        listen.begin(trackId)
 
         val index = resolveExactQueueIndex(trackId) ?: fallbackIndex ?: return
         val track = currentQueue[index]
@@ -695,7 +638,7 @@ class AudioEngine @Inject constructor(
         crossfadeArmedForTrackId = null
         silenceGapArmedForTrackId = null
 
-        recomputeAudioOutputInfo()
+        audioRouter.recompute()
 
         if (pendingWindowResync) {
             pendingWindowResync = false
@@ -777,217 +720,8 @@ class AudioEngine @Inject constructor(
         toastCenter.pushRes(res, track.title)
     }
 
-    /** Re-evaluates the output path and publishes it to [PlaybackState.audioOutputInfo] when it changed. */
-    private fun recomputeAudioOutputInfo() {
-        val track = _playbackState.value.currentTrack
-        if (track == null) {
-            if (lastAudioOutputInfo != null) {
-                lastAudioOutputInfo = null
-                _playbackState.value = _playbackState.value.copy(audioOutputInfo = null)
-            }
-            return
-        }
-        val info = bitPerfectDetector.evaluate(
-            BitPerfectDetector.Input(
-                sourceSampleRate = track.sampleRate,
-                sourceBitDepth = track.bitDepth,
-                sourceFormat = track.format,
-                sourceChannels = track.channels,
-                sourceBitrateKbps = track.bitrate,
-                dspState = dspEngine.state.value,
-                masterBitPerfectEnabled = latestSettings.bitPerfectEnabled,
-                isStreaming = com.foamplayer.distant.DistantUris.isDistant(track.path),
-                stream = streamInfoFor(track),
-                deviceConfig = latestSettings.deviceAudioConfig(outputDeviceManager.activeDevice.value?.id)
-            )
-        )
-        if (info != lastAudioOutputInfo) {
-            lastAudioOutputInfo = info
-            _playbackState.value = _playbackState.value.copy(audioOutputInfo = info)
-        }
-    }
-
-    /** Resolves the transport facts of a distant track for the pipeline's Transport stage. */
-    private fun streamInfoFor(track: TrackEntity): AudioStreamInfo? {
-        if (!DistantUris.isDistant(track.path)) return null
-        val parsed = DistantUris.parse(track.path) ?: return null
-        val endpoint = runCatching { distantRepository.streamFor(track.path) }
-            .getOrNull()
-            ?.url
-            ?.let(::endpointOf)
-            .orEmpty()
-        return AudioStreamInfo(provider = parsed.type.displayName, endpoint = endpoint)
-    }
-
-    /** Scheme + authority of a stream URL (drops the path/query so no token leaks). */
-    private fun endpointOf(url: String): String {
-        val schemeEnd = url.indexOf("://")
-        if (schemeEnd < 0) return ""
-        val rest = url.substring(schemeEnd + 3)
-        val slash = rest.indexOf('/')
-        val authority = if (slash < 0) rest else rest.substring(0, slash)
-        return url.substring(0, schemeEnd + 3) + authority
-    }
-
-    private fun startAudioPathObservers() {
-        outputDeviceManager.start()
-
-        player.setAudioAttributes(mediaAudioAttributes, /* handleAudioFocus = */ true)
-
-        scope.launch {
-            dspEngine.state.collect { state ->
-                applyVolumePath(state)
-                recomputeAudioOutputInfo()
-            }
-        }
-        scope.launch {
-            outputDeviceManager.activeDevice.collect {
-                recomputeAudioOutputInfo()
-            }
-        }
-        // User-picked routing ("Play on" sheet): re-resolve and re-apply the
-        // preferred device whenever the override changes OR the device set changes
-        // (a detached headset must drop the override; a re-attached one must
-        // reclaim it). setPreferredAudioDevice pins the sink and every AudioTrack
-        // it creates afterwards, so both players and future tracks follow. The
-        // persisted pick is restored first (before the collectors can act on a
-        // null it would briefly read), then the observers take over.
-        scope.launch {
-            val persisted = settingsRepository.settings.first().preferredOutputDeviceId
-            if (persisted != null &&
-                outputDeviceManager.preferredDeviceId.value == null
-            ) {
-                outputDeviceManager.setPreferredDevice(persisted)
-            }
-        }
-        scope.launch {
-            outputDeviceManager.devices.collect {
-                applyPreferredAudioDevice()
-                recomputeAudioOutputInfo()
-            }
-        }
-        scope.launch {
-            outputDeviceManager.preferredDeviceId.collect {
-                applyPreferredAudioDevice()
-                recomputeAudioOutputInfo()
-            }
-        }
-    }
-
-    /**
-     * Applies the resolved routing target to the active player's audio sink.
-     * Three cases:
-     *  - no explicit pick yet -> clear the pin, the platform routes by its own
-     *    priority (BT attached => BT, matching pre-"Play on" behavior);
-     *  - "this device" pick -> pin the best LOCAL output (USB, wired, speaker) so
-     *    an attached BT headset does NOT steal the route;
-     *  - a concrete device pick -> pin that device.
-     * A target that detached between the state flip and this call leaves the
-     * previous route untouched (the override state itself self-corrects in
-     * [OutputDeviceManager.refresh]).
-     */
-    private fun applyPreferredAudioDevice() {
-        applyPreferredAudioDeviceTo(activePlayerField)
-        // Mid-crossfade the AUDIBLE stream is the not-yet-promoted secondary: pin
-        // it too, or the incoming stream stays on the platform's default route.
-        fadeEngine.activeSecondaryPlayer?.let { applyPreferredAudioDeviceTo(it) }
-    }
-
-    /**
-     * Pins [target]'s audio sink to the resolved routing target. Three cases:
-     *  - no explicit pick yet -> clear the pin, the platform routes by its own
-     *    priority (BT attached => BT, matching pre-"Play on" behavior);
-     *  - "this device" pick -> pin the best LOCAL output (USB, wired, speaker) so
-     *    an attached BT headset does NOT steal the route;
-     *  - a concrete device pick -> pin that device.
-     * A target that detached between the state flip and this call leaves the
-     * previous route untouched (the override state itself self-corrects in
-     * [OutputDeviceManager.refresh]).
-     */
-    private fun applyPreferredAudioDeviceTo(target: ExoPlayer) {
-        val preferredId = outputDeviceManager.preferredDeviceId.value
-        if (preferredId == null) {
-            target.setPreferredAudioDevice(null)
-            return
-        }
-        val resolvedId = if (preferredId == OutputDeviceManager.ThisDevicePickId) {
-            // "This device" is a virtual target: the best local output stands in
-            // for it. No local output attached -> nothing to pin.
-            outputDeviceManager.localDevice?.id ?: return
-        } else {
-            preferredId
-        }
-        val deviceInfo = outputDeviceManager.systemDeviceInfoForId(resolvedId) ?: return
-        target.setPreferredAudioDevice(deviceInfo)
-    }
-
-    /**
-     * Explicit "Play on" routing from the device picker. Returns false when the
-     * target is not (or no longer) attached, so the UI can keep its previous
-     * selection. The pick persists across process restarts.
-     *
-     * After pinning the sink the player is flushed and re-prepared at the current
-     * position: several OEM AudioFlinger implementations only honor
-     * AudioTrack.setPreferredDevice at track CREATION, silently ignoring a live
-     * re-route of a playing track (which is why the switch otherwise only "works"
-     * after the next track change creates a fresh AudioTrack). Recreating the
-     * track makes the first switch deterministic; the brief gap is the same one a
-     * seek produces.
-     */
-    fun routeTo(deviceId: String): Boolean {
-        if (fadeEngine.isFading) fadeEngine.completeCrossfadeNow()
-        val applied = outputDeviceManager.setPreferredDevice(deviceId)
-        if (!applied) {
-            recomputeAudioOutputInfo()
-            return false
-        }
-        applyPreferredAudioDevice()
-        scope.launch { settingsRepository.setPreferredOutputDeviceId(deviceId) }
-        recomputeAudioOutputInfo()
-
-        // Force the fresh AudioTrack unless playback is idle anyway (nothing to
-        // re-create; the pin applies when the next track is prepared). stop()
-        // tears the renderer's AudioTrack down (STATE_IDLE) and prepare() rebuilds
-        // it with the just-pinned preferred device, at the same position.
-        if (player.playbackState != Player.STATE_IDLE) {
-            val resume = player.playWhenReady
-            val positionMs = player.currentPosition
-            player.stop()
-            player.seekTo(positionMs)
-            player.prepare()
-            if (resume) {
-                player.play()
-                _playbackState.value = _playbackState.value.copy(isPlaying = true)
-            }
-        }
-        return true
-    }
-
-    /**
-     * With direct volume control the gain is applied in the float DSP chain and the AudioTrack
-     * stays at full scale. Skipped during a fade, which reads the base volume itself.
-     */
-    private fun applyVolumePath(state: DspState) {
-        if (fadeEngine.isFading) return
-        player.volume = if (state.directVolumeControl) {
-            1f
-        } else {
-            state.volumePercent / 100f
-        }
-    }
-
-    private fun beginListenOccurrence(trackId: Long) {
-        pendingListenTrackId = trackId
-        listenedElapsedMs = 0L
-        lastListenedPositionMs = -1L
-    }
-
-    private fun clearListenOccurrence() {
-        pendingListenTrackId = null
-        listenedElapsedMs = 0L
-        lastListenedPositionMs = -1L
-        stashedListenOccurrence = null
-    }
+    /** Explicit "Play on" routing from the device picker (see [AudioOutputRouter.routeTo]). */
+    fun routeTo(deviceId: String): Boolean = audioRouter.routeTo(deviceId)
 
     /** Playback time after which [trackId] counts as listened. */
     private fun listenThresholdMs(trackId: Long): Long {
@@ -1003,28 +737,17 @@ class AudioEngine @Inject constructor(
     /**
      * Accumulates played time toward the listen threshold of the pending occurrence.
      * Only forward motion counts: pauses add nothing, a backward seek replays, and a forward
-     * jump or a gap over [MAX_LISTENED_TICK_GAP_MS] adds nothing.
+     * jump or a gap over [ListenAccounting.MAX_TICK_GAP_MS] adds nothing.
      */
     private fun tickListenCount(displayPlayer: Player, positionMs: Long) {
-        val pendingId = pendingListenTrackId ?: return
+        val pendingId = listen.pendingTrackId ?: return
         if (!displayPlayer.isPlaying) return
         if (displayPlayer.currentMediaItem?.mediaId?.toLongOrNull() != pendingId) return
 
-        val last = lastListenedPositionMs
-        val delta = if (last >= 0L) {
-            (positionMs - last).takeIf { it in 1..MAX_LISTENED_TICK_GAP_MS } ?: 0L
-        } else {
-            0L
-        }
-        lastListenedPositionMs = positionMs
-        if (delta <= 0L) return
-
-        listenedElapsedMs += delta
-        if (listenedElapsedMs >= listenThresholdMs(pendingId)) {
-            pendingListenTrackId = null
-            scope.launch {
-                trackRepository.incrementPlayCount(pendingId, System.currentTimeMillis())
-            }
+        val playedMs = listen.accumulate(positionMs, ::listenThresholdMs) ?: return
+        _listenedTrackEvents.tryEmit(ListenedTrackEvent(pendingId, playedMs))
+        scope.launch {
+            trackRepository.incrementPlayCount(pendingId, System.currentTimeMillis())
         }
     }
 
@@ -1040,7 +763,7 @@ class AudioEngine @Inject constructor(
                         latestSettings.deviceAudioConfigs != settings.deviceAudioConfigs
                 latestSettings = settings
                 if (silenceChanged) applyPauseAtEndOfMediaItems()
-                if (configChanged) recomputeAudioOutputInfo()
+                if (configChanged) audioRouter.recompute()
             }
         }
     }
@@ -1053,7 +776,10 @@ class AudioEngine @Inject constructor(
                 if (status is ScanStatus.Finished) {
                     allTracks = trackRepository.getAllTracksOnce()
                     if (_playbackState.value.queue.isNotEmpty()) {
-                        refillAuxiliary()
+                        pruneMissingQueueTracks(allTracks.mapTo(HashSet()) { it.id })
+                        if (_playbackState.value.queue.isNotEmpty()) {
+                            refillAuxiliary()
+                        }
                     }
                 }
             }
@@ -1087,27 +813,14 @@ class AudioEngine @Inject constructor(
 
     private suspend fun saveSessionSnapshot(state: PlaybackState) {
         // O(queue) walk: kept off the Main dispatcher (the snapshot is immutable).
-        val (ids, flags, persistedCurrentIndex) = withContext(Dispatchers.Default) {
-            val ids = ArrayList<Long>(state.queue.size)
-            val flags = ArrayList<Boolean>(state.queue.size)
-            // Auxiliary entries may precede the current track, so its saved index is counted among main entries only.
-            var persistedCurrentIndex = 0
-            state.queue.forEachIndexed { i, track ->
-                if (state.auxiliaryFlags.getOrNull(i) != true) {
-                    if (i < state.queueIndex) persistedCurrentIndex++
-                    ids.add(track.id)
-                    flags.add(state.queueSourceFlags.getOrNull(i) == true)
-                }
-            }
-            Triple(ids, flags, persistedCurrentIndex)
-        }
-        if (ids.isEmpty()) return
+        val snapshot = withContext(Dispatchers.Default) { QueueSnapshot.from(state) }
+        if (snapshot.trackIds.isEmpty()) return
         hasSessionSaved = true
         queuePersistence.save(
             PersistedPlayback(
-                trackIds = ids,
-                sourceFlags = flags,
-                currentIndex = persistedCurrentIndex.coerceIn(0, ids.lastIndex),
+                trackIds = snapshot.trackIds,
+                sourceFlags = snapshot.sourceFlags,
+                currentIndex = snapshot.currentIndex,
                 positionMs = _positionMs.value,
                 isShuffle = state.isShuffle,
                 repeatMode = state.repeatMode,
@@ -1122,7 +835,7 @@ class AudioEngine @Inject constructor(
      */
     fun setQueue(tracks: List<TrackEntity>, startIndex: Int = 0, sourceCollectionId: String? = null) {
         cancelPendingTransitions()
-        clearListenOccurrence()
+        listen.clear()
         windowJumpJob?.cancel()
         failedTrackIds.clear()
 
@@ -1136,10 +849,12 @@ class AudioEngine @Inject constructor(
                 queueEntryIds = emptyList(),
                 auxiliaryFlags = emptyList(),
                 currentTrack = null,
+                isPlaying = false,
+                isPlaybackRequested = false,
                 queueSourceId = null,
                 queueSourceFlags = emptyList()
             )
-            recomputeAudioOutputInfo()
+            audioRouter.recompute()
             return
         }
 
@@ -1166,7 +881,7 @@ class AudioEngine @Inject constructor(
 
     /** Inserts [track] after the current one. Starts a new queue if empty. */
     fun playNext(track: TrackEntity) {
-        insertTrack(track, _playbackState.value.queueIndex + 1)
+        insertTracks(listOf(track), _playbackState.value.queueIndex + 1)
     }
 
     /** Appends [track] to the main queue, ahead of the auxiliary pool. */
@@ -1176,7 +891,7 @@ class AudioEngine @Inject constructor(
         while (index > 0 && current.auxiliaryFlags.getOrNull(index - 1) == true) {
             index--
         }
-        insertTrack(track, index)
+        insertTracks(listOf(track), index)
     }
 
     /** Inserts [tracks] after the current one, in order. Starts a new queue if empty. */
@@ -1263,59 +978,10 @@ class AudioEngine @Inject constructor(
     }
 
     /** Inserts [track] at [requestedIndex] and patches the loaded timeline in place. */
-    private fun insertTrack(track: TrackEntity, requestedIndex: Int) {
-        // Queue mutations shift the indices a fade captured.
-        cancelPendingTransitions()
-
-        val current = _playbackState.value
-        if (current.queue.isEmpty()) {
-            setQueue(listOf(track), 0)
-            return
-        }
-
-        val insertIndex = requestedIndex.coerceIn(0, current.queue.size)
-
-        val newQueue = current.queue.toMutableList().apply {
-            add(insertIndex, track)
-        }
-
-        val newEntryIds = current.queueEntryIds.toMutableList().apply {
-            add(insertIndex.coerceAtMost(size), allocateEntryId())
-        }
-
-        val newFlags = current.auxiliaryFlags.toMutableList().apply {
-            add(insertIndex.coerceAtMost(size), false)
-        }
-
-        val newSourceFlags = current.queueSourceFlags.toMutableList().apply {
-            add(insertIndex.coerceAtMost(size), false)
-        }
-
-        val newQueueIndex =
-            if (insertIndex <= current.queueIndex) current.queueIndex + 1 else current.queueIndex
-
-        _playbackState.value = current.copy(
-            queue = newQueue,
-            queueEntryIds = newEntryIds,
-            queueIndex = newQueueIndex,
-            auxiliaryFlags = newFlags,
-            queueSourceFlags = newSourceFlags
-        )
-
-        val window = loadedRange
-        if (pendingWindowResync || window == IntRange.EMPTY) return
-        when {
-            insertIndex < window.first ->
-                loadedRange = (window.first + 1)..(window.last + 1)
-            insertIndex <= window.last + 1 -> {
-                player.addMediaItem(insertIndex - window.first, track.toMediaItem())
-                loadedRange = window.first..(window.last + 1)
-            }
-            // Past the window: adjustWindow() loads it when playback gets close.
-        }
-    }
-
-    /** Bulk variant of [insertTrack]. */
+    /**
+     * Inserts [tracks] at [requestedIndex] (clamped), shifting the playing index and the loaded player
+     * window. Single-track inserts (playNext, ddToQueue) go through here too.
+     */
     private fun insertTracks(tracks: List<TrackEntity>, requestedIndex: Int) {
         if (tracks.isEmpty()) return
 
@@ -2087,11 +1753,35 @@ class AudioEngine @Inject constructor(
             queueSourceFlags = normalizeQueueSourceFlags(newSourceFlags, newQueue.size)
         )
 
-        if (newQueue.isEmpty()) recomputeAudioOutputInfo()
+        if (newQueue.isEmpty()) audioRouter.recompute()
 
         if (removedIsAuxiliary) {
             scheduleAuxiliaryRefill()
         }
+    }
+
+    /**
+     * Drops every queue entry whose track no longer exists in the library (a
+     * rescan removed its file), leaving the queue in the order it had.
+     *
+     * When the entry being played is one of them, playback cannot go on: the
+     * queue is cleared instead, which stops the player and closes the mini
+     * player (its presence keys off [PlaybackState.currentTrack]).
+     */
+    private fun pruneMissingQueueTracks(liveTrackIds: Set<Long>) {
+        val state = _playbackState.value
+        if (state.queue.isEmpty()) return
+
+        val missing = state.queue.indices.filter { state.queue[it].id !in liveTrackIds }
+        if (missing.isEmpty()) return
+
+        if (state.queueIndex in missing) {
+            setQueue(emptyList())
+            return
+        }
+
+        // Descending order keeps the indices still to visit valid.
+        missing.sortedDescending().forEach { removeQueueItem(it) }
     }
 
     /**
@@ -2155,10 +1845,10 @@ class AudioEngine @Inject constructor(
     }
 
     private fun normalizeEntryIds(entryIds: List<Long>, queueSize: Int): List<Long> =
-        if (entryIds.size == queueSize) entryIds else List(queueSize) { allocateEntryId() }
+        QueueShuffleMath.normalizeEntryIds(entryIds, queueSize, ::allocateEntryId)
 
     private fun normalizeAuxiliaryFlags(flags: List<Boolean>, queueSize: Int): List<Boolean> =
-        if (flags.size == queueSize) flags else List(queueSize) { false }
+        QueueShuffleMath.normalizeFlags(flags, queueSize)
 
     /**
      * Repeat-all wrap: restarts the primary queue. Plays index 0 through the standard
@@ -2218,7 +1908,12 @@ class AudioEngine @Inject constructor(
         if (preparedWrap == mark) return
 
         val flags = state.auxiliaryFlags
-        val from = pickRandomPrimarySlot(first, last, current, flags)
+        val from = QueueShuffleMath.pickRandomPrimarySlot(
+            first = first,
+            last = last,
+            exclude = current,
+            isAuxiliary = { flags.getOrNull(it) == true }
+        )
         if (from < 0) return
         preparedWrap = mark
 
@@ -2241,28 +1936,6 @@ class AudioEngine @Inject constructor(
             queueSourceFlags = newSourceFlags
         )
         patchTimelineAroundCurrent(newQueue, current)
-    }
-
-    /**
-     * Random primary slot in [first]..[last] other than [exclude] and not auxiliary, or -1.
-     * Rejection sampling keeps this O(1) on long queues (no boxed candidate list); the
-     * exhaustive reservoir scan only runs for tiny or auxiliary-heavy ranges.
-     */
-    private fun pickRandomPrimarySlot(first: Int, last: Int, exclude: Int, flags: List<Boolean>): Int {
-        val span = last - first + 1
-        if (span <= 0) return -1
-        repeat(16) {
-            val i = first + Random.nextInt(span)
-            if (i != exclude && flags.getOrNull(i) != true) return i
-        }
-        var seen = 0
-        var pick = -1
-        for (i in first..last) {
-            if (i == exclude || flags.getOrNull(i) == true) continue
-            seen++
-            if (Random.nextInt(seen) == 0) pick = i
-        }
-        return pick
     }
 
     /** Full player hook: a swipe started, so the wrap landing is settled before its ghost page is revealed. */
@@ -2372,14 +2045,7 @@ class AudioEngine @Inject constructor(
         }
         if (slotCount < 2) return
         val slots = slotBuffer.copyOf(slotCount)
-        val order = slots.copyOf()
-        for (i in slotCount - 1 downTo 1) {
-            val j = Random.nextInt(i + 1)
-            val tmp = order[i]; order[i] = order[j]; order[j] = tmp
-        }
-        if (order.contentEquals(slots)) {
-            val tmp = order[0]; order[0] = order[1]; order[1] = tmp
-        }
+        val order = QueueShuffleMath.shuffledSlots(slots)
 
         val newQueue = queue.toMutableList()
         val newEntryIds = entryIds.toMutableList()
@@ -2677,154 +2343,21 @@ class AudioEngine @Inject constructor(
      * Publishes [positionMs] once per frame and arms the auto-crossfade.
      *
      * The ExoPlayer clock is quantized (AudioTrack timestamps step ~16-30 ms), so the published
-     * position is dead-reckoned from an anchor that absorbs [POSITION_ERROR_SLEW] of each fresh
-     * sample's error. Errors above [POSITION_SNAP_MS] are discontinuities and re-anchor at once.
-     *
-     * While a stream is priming (fade switch, seek, buffering) its clock sits frozen at the
-     * target, so the position is held there and dead-reckoning resumes only once the clock
-     * really moves. Small backward corrections are held rather than published, so the position
-     * never visibly steps back.
+     * position is dead-reckoned from an anchor that absorbs a share of each fresh sample's error
+     * (see [PositionProjector]). Small backward corrections are held rather than published, so the
+     * position never visibly steps back. The sampling loop itself lives in [PositionClock].
      */
     private fun startProgressTracker() {
         progressJob?.cancel()
-        progressJob = scope.launch {
-            var lastPublishedMs = Long.MIN_VALUE
-            var lastSampleMs = -1L
-            var anchorMs = 0.0
-            var anchorNanos = 0L
-            var wasPriming = false
-            // Non-zero while waiting for the incoming clock to start moving.
-            var settlingSinceNanos = 0L
-            while (true) {
-                val displayPlayer = fadeEngine.displayPlayer ?: player
-                val sampleMs = displayPlayer.currentPosition.coerceAtLeast(0L)
-                val audible = displayPlayer.isPlaying || fadeEngine.isFading
-                val loading = fadeEngine.displayPlayer == null &&
-                        displayPlayer.playWhenReady &&
-                        displayPlayer.playbackState == Player.STATE_BUFFERING
-                val priming = loading ||
-                        (fadeEngine.displayPlayer != null && !displayPlayer.isPlaying)
-                // True on ticks where the position may legitimately step backward.
-                var allowBackward = false
-
-                // Settled pause: freeze the published clock. Publishing the raw sample here
-                // could step it backward at the end of a pause fade-out.
-                if (!audible && !loading && sampleMs == lastSampleMs) {
-                    val publishedMs = maxOf(sampleMs, lastPublishedMs)
-                    if (publishedMs != lastPublishedMs) {
-                        lastPublishedMs = publishedMs
-                        _positionMs.value = publishedMs
-                    }
-                    anchorMs = sampleMs.toDouble()
-                    anchorNanos = 0L
-                    lastSampleMs = sampleMs
-                    settlingSinceNanos = 0L
-                    delay(PAUSED_POLL_INTERVAL_MS)
-                    continue
-                }
-
-                if (priming) {
-                    allowBackward = true
-                    anchorMs = sampleMs.toDouble()
-                    anchorNanos = 0L
-                    lastSampleMs = sampleMs
-                    wasPriming = true
-                } else if (wasPriming) {
-                    // isPlaying only means READY + playWhenReady: the sink needs longer before
-                    // the clock really starts. Keep holding until it moves.
-                    wasPriming = false
-                    allowBackward = true
-                    settlingSinceNanos = System.nanoTime()
-                    anchorMs = sampleMs.toDouble()
-                    anchorNanos = 0L
-                    lastSampleMs = sampleMs
-                } else if (settlingSinceNanos != 0L) {
-                    if (sampleMs != lastSampleMs) {
-                        val jumpMs = abs(sampleMs - anchorMs)
-                        anchorMs = sampleMs.toDouble()
-                        lastSampleMs = sampleMs
-                        if (jumpMs > POSITION_SNAP_MS) {
-                            // Another seek while settling: re-anchor and keep waiting.
-                            allowBackward = true
-                            anchorNanos = 0L
-                            settlingSinceNanos = System.nanoTime()
-                        } else {
-                            anchorNanos = System.nanoTime()
-                            settlingSinceNanos = 0L
-                        }
-                    } else if ((System.nanoTime() - settlingSinceNanos) / 1_000_000L >
-                        SETTLE_TIMEOUT_MS
-                    ) {
-                        anchorNanos = System.nanoTime()
-                        settlingSinceNanos = 0L
-                    }
-                } else if (sampleMs != lastSampleMs) {
-                    // Fresh sample: slew the anchor toward it, or snap on a discontinuity.
-                    val elapsedMs =
-                        if (anchorNanos == 0L) 0.0 else (System.nanoTime() - anchorNanos) / 1_000_000.0
-                    val errorMs = sampleMs - (anchorMs + elapsedMs)
-                    val snapped = abs(errorMs) > POSITION_SNAP_MS
-                    if (snapped) allowBackward = true
-                    anchorMs =
-                        if (snapped) {
-                            sampleMs.toDouble()
-                        } else {
-                            anchorMs + elapsedMs + errorMs * POSITION_ERROR_SLEW
-                        }
-                    if (snapped && audible) {
-                        // Seek while playing: hold at the target until the clock moves.
-                        anchorNanos = 0L
-                        settlingSinceNanos = System.nanoTime()
-                    } else {
-                        // Dead-reckon only while audible, otherwise the position would run
-                        // ahead of a frozen clock and be pulled back later.
-                        anchorNanos = if (audible) System.nanoTime() else 0L
-                    }
-                    lastSampleMs = sampleMs
-                } else if (!audible) {
-                    // The sample moved while paused: external seek, the raw clock is the truth.
-                    allowBackward = true
-                    anchorMs = sampleMs.toDouble()
-                    anchorNanos = 0L
-                    lastSampleMs = sampleMs
-                }
-                // Audible with a frozen sample (quantization gap): keep dead-reckoning from the anchor.
-
-                val rawProjectedMs =
-                    (if (anchorNanos == 0L) {
-                        anchorMs
-                    } else {
-                        anchorMs + (System.nanoTime() - anchorNanos) / 1_000_000.0
-                    }).roundToLong().coerceAtLeast(0L)
-                // Monotonic guard: hold the published value on small backward corrections.
-                val deficitMs = lastPublishedMs - rawProjectedMs
-                val projectedMs =
-                    if (!allowBackward && lastPublishedMs != Long.MIN_VALUE &&
-                        deficitMs in 1..MONOTONIC_HOLD_MAX_MS
-                    ) {
-                        lastPublishedMs
-                    } else {
-                        rawProjectedMs
-                    }
-                if (projectedMs != lastPublishedMs) {
-                    lastPublishedMs = projectedMs
-                    _positionMs.value = projectedMs
-                }
-
-                tickListenCount(displayPlayer, projectedMs)
-
-                // Gated on the real primary: mid-fade the display player is a priming secondary.
-                if (player.isPlaying) {
-                    maybeStartTrackCrossfade()
-                }
-
-                // Per frame while audible. awaitFrame() falls back to a slow poll in the background.
-                if (audible) {
-                    awaitFrame()
-                } else {
-                    delay(PAUSED_POLL_INTERVAL_MS.milliseconds)
-                }
-            }
-        }
+        val clock = PositionClock(
+            player = { activePlayerField },
+            fadeDisplayPlayer = { fadeEngine.displayPlayer },
+            isFading = { fadeEngine.isFading },
+            onPosition = { _positionMs.value = it },
+            onTick = ::tickListenCount,
+            onPrimaryPlayingFrame = { maybeStartTrackCrossfade() },
+            awaitFrame = ::awaitFrame
+        )
+        progressJob = scope.launch { clock.run() }
     }
 }

@@ -250,6 +250,28 @@ class HomeViewModel @Inject constructor(
                 if (_randomArtists.value.isEmpty()) reshuffleRandomArtists()
             }
         }
+        viewModelScope.launch {
+            var previous: ScanStatus? = null
+            trackRepository.scanStatus.collect { status ->
+                val scanCompleted = status is ScanStatus.Finished && previous is ScanStatus.Scanning
+                previous = status
+                if (scanCompleted) refreshRandomSections()
+            }
+        }
+    }
+
+    /**
+     * Repicks every random grid from a fresh DB snapshot. Reads the DAO
+     * directly (instead of the warm flow) so the repick can't race the Room
+     * invalidation that follows the scan's commit.
+     */
+    private suspend fun refreshRandomSections() {
+        libraryTracks = trackRepository.getAllTracksOnce()
+        _libraryEmpty.value = libraryTracks.isEmpty()
+        _libraryLoaded.value = true
+        reshuffleRandomTracks()
+        reshuffleRandomAlbums()
+        reshuffleRandomArtists()
     }
 
     /** Repicks the "Random tracks" grid's six songs from the whole library. */

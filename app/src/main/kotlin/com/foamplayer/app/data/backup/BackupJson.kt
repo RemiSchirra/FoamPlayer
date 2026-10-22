@@ -104,6 +104,7 @@ object BackupJson {
         put("collectionLayoutPlaylist", settings.collectionLayoutPlaylist.name)
         put("discordPresenceEnabled", settings.discordPresenceEnabled)
         put("discordOnlineArt", settings.discordOnlineArt)
+        put("lastFmScrobblingEnabled", settings.lastFmScrobblingEnabled)
         put("artistImageResolveEnabled", settings.artistImageResolveEnabled)
         put("displayOnLockScreen", settings.displayOnLockScreen)
         put("fastLockScreenEnabled", settings.fastLockScreenEnabled)
@@ -215,6 +216,7 @@ object BackupJson {
         collectionLayoutPlaylist = decodeEnum(json.optString("collectionLayoutPlaylist"), CollectionHeroLayout.Compact),
         discordPresenceEnabled = json.optBoolean("discordPresenceEnabled", false),
         discordOnlineArt = json.optBoolean("discordOnlineArt", true),
+        lastFmScrobblingEnabled = json.optBoolean("lastFmScrobblingEnabled", false),
         artistImageResolveEnabled = json.optBoolean("artistImageResolveEnabled", false),
         displayOnLockScreen = json.optBoolean("displayOnLockScreen", false),
         fastLockScreenEnabled = json.optBoolean("fastLockScreenEnabled", true),

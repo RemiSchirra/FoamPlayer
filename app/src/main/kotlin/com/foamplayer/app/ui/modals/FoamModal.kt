@@ -95,6 +95,10 @@ fun FoamBottomModal(
     horizontalMargin: Dp = FoamDimens.paddingMedium,
     bottomEdgeMargin: Dp = FoamDimens.spacingMedium,
     liftAboveKeyboard: Boolean = true,
+    // Pinned below the scrollable content instead of scrolling with it, for
+    // sheets whose content can grow long (e.g. a result list with an OK button
+    // that must stay reachable).
+    footer: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     // Keep the Dialog mounted while the exit animation plays. currentState only
@@ -151,22 +155,39 @@ fun FoamBottomModal(
             // reports the full height even while the sheet clips it. 0 until the
             // first layout pass after (re)opening.
             var contentHeightPx by remember { mutableFloatStateOf(0f) }
+            // The footer sits outside the scroll child, so add its measured
+            // height back in when sizing the sheet.
+            var footerHeightPx by remember { mutableFloatStateOf(0f) }
 
             // Size the sheet rests at: exactly its content, capped just short of
             // the top. Starts at full for the first frame or two so nothing is
             // ever shown clipped; the measured fit takes over while the sheet is
             // still rising out of its slide-in.
-            val restingCapPx = if (contentHeightPx > 0f) minOf(contentHeightPx, fullPx) else fullPx
+            val restingCapPx = if (contentHeightPx > 0f) {
+                minOf(contentHeightPx + footerHeightPx, fullPx)
+            } else {
+                fullPx
+            }
 
             // Non-null while the user is dragging the sheet away from its resting
             // size (drag-down-to-dismiss and drag-back-up); null means "fit the
             // content".
             var draggedCapPx by remember { mutableStateOf<Float?>(null) }
 
+            // True once the inner list has moved during the current touch
+            // gesture. If a downward drag first scrolls the list back to the top,
+            // the leftover of that same drag must not start shrinking the sheet;
+            // the user has to start a fresh gesture at the top to dismiss it.
+            // Cleared when the gesture hands off to its fling.
+            var listMovedThisGesture by remember { mutableStateOf(false) }
+
             // A drag-dismiss springs the cap down to 0 (see settle() below); clear
             // the drag override on re-open so the sheet fits its content again.
             LaunchedEffect(visible) {
-                if (visible) draggedCapPx = null
+                if (visible) {
+                    draggedCapPx = null
+                    listMovedThisGesture = false
+                }
             }
 
             // NOTE: neither the cap nor the scrim alpha may be read in composition.
@@ -193,7 +214,11 @@ fun FoamBottomModal(
                     // delegates, so they read live; fullPx is read through the
                     // rememberUpdatedState proxy above.
                     fun restingPx(): Float =
-                        if (contentHeightPx > 0f) minOf(contentHeightPx, latestFullPx) else latestFullPx
+                        if (contentHeightPx > 0f) {
+                            minOf(contentHeightPx + footerHeightPx, latestFullPx)
+                        } else {
+                            latestFullPx
+                        }
 
                     fun currentCapPx(): Float = draggedCapPx ?: restingPx()
 
@@ -234,6 +259,12 @@ fun FoamBottomModal(
                     }
 
                     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                        // Only resize the sheet for direct drags. A fling that
+                        // reaches the top of the list dispatches its leftover
+                        // momentum as a SideEffect; consuming that here makes the
+                        // sheet close on the same gesture that just scrolled the
+                        // list back up.
+                        if (source != NestedScrollSource.UserInput) return Offset.Zero
                         val dy = available.y
                         // Dragging up after a shrink: restore toward the fitted
                         // size, but only while the content is still clipped --
@@ -254,29 +285,57 @@ fun FoamBottomModal(
                         available: Offset,
                         source: NestedScrollSource
                     ): Offset {
+                        // Same rule as above: only a real drag can shrink the
+                        // sheet. Otherwise a fling to the top would hand its
+                        // leftover delta to the sheet and dismiss it mid-scroll.
+                        if (source != NestedScrollSource.UserInput) return Offset.Zero
+
+                        // If this gesture already moved the list, the leftover
+                        // after reaching the top belongs to the same scroll -- do
+                        // not start dragging the sheet until a new gesture.
+                        if (consumed.y != 0f) {
+                            listMovedThisGesture = true
+                            return Offset.Zero
+                        }
+
                         val dy = available.y
                         // Dragging down and the content had nothing left to give
                         // (already at its top): shrink the sheet instead, bottom
                         // edge staying docked while the top follows the finger.
-                        if (dy > 0f) {
+                        if (dy > 0f && !listMovedThisGesture) {
                             val cap = currentCapPx()
                             if (cap > 0f) {
-                                val consumed = if (dy < cap) dy else cap
-                                draggedCapPx = cap - consumed
-                                return Offset(0f, consumed)
+                                val amount = if (dy < cap) dy else cap
+                                draggedCapPx = cap - amount
+                                return Offset(0f, amount)
                             }
                         }
                         return Offset.Zero
                     }
 
                     override suspend fun onPreFling(available: Velocity): Velocity {
-                        val restingMidContent =
-                            currentCapPx() >= restingPx() - 0.5f && scrollState.value > 0
-                        val innerListScrolls =
-                            currentCapPx() >= restingPx() - 0.5f && scrollState.maxValue == 0
+                        // A gesture that already scrolled the list stops there:
+                        // its leftover velocity must not carry on into a sheet
+                        // dismissal. Consume the flag so the next gesture can
+                        // dismiss normally from the top.
+                        val listMoved = listMovedThisGesture
+                        listMovedThisGesture = false
+
+                        val atRest = currentCapPx() >= restingPx() - 0.5f
+                        val listCannotScroll = scrollState.maxValue == 0
                         return when {
-                            innerListScrolls -> Velocity.Zero
-                            restingMidContent -> Velocity.Zero
+                            // The fling belongs to the list the gesture moved.
+                            listMoved -> Velocity.Zero
+                            // A partially dragged sheet must settle back or close.
+                            !atRest -> {
+                                settle(available.y)
+                                Velocity(0f, available.y)
+                            }
+                            // Mid-list: let the list fling in either direction.
+                            scrollState.value > 0f -> Velocity.Zero
+                            // At the top, an upward fling should still scroll the
+                            // list down instead of being eaten by the sheet.
+                            !listCannotScroll && available.y < 0f -> Velocity.Zero
                             else -> {
                                 settle(available.y)
                                 Velocity(0f, available.y)
@@ -285,9 +344,9 @@ fun FoamBottomModal(
                     }
 
                     override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                        val innerListScrolls =
+                        val listCannotScroll =
                             currentCapPx() >= restingPx() - 0.5f && scrollState.maxValue == 0
-                        if (innerListScrolls && available.y > 0f) {
+                        if (listCannotScroll && available.y > 0f) {
                             settle(available.y)
                         }
                         return Velocity.Zero
@@ -355,42 +414,62 @@ fun FoamBottomModal(
                             onClick = {}
                         )
                         .nestedScroll(nestedScrollConnection)
-                        // With a bounded max height this only kicks in once content
-                        // actually overflows what capPx currently allows.
-                        .verticalScroll(scrollState)
                 ) {
-                    // Measured to derive the sheet's fitted size. The scroll child
-                    // lays out unbounded, so this reports the full natural height
-                    // even while the sheet is clipped smaller.
+                    // Only the interior scrolls; an optional footer stays pinned
+                    // to the bottom of the sheet. weight(fill = false) lets the
+                    // sheet still wrap short content, while a long content column
+                    // is bounded to the remaining space and scrolls internally.
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .onSizeChanged { contentHeightPx = it.height.toFloat() }
+                            .then(if (footer != null) Modifier.weight(1f, fill = false) else Modifier)
+                            .verticalScroll(scrollState)
                     ) {
+                        // Measured to derive the sheet's fitted size. The scroll child
+                        // lays out unbounded, so this reports the full natural height
+                        // even while the sheet is clipped smaller.
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onSizeChanged { contentHeightPx = it.height.toFloat() }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        top = FoamDimens.spacingSmall,
+                                        bottom = FoamDimens.spacingTiny
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // Single horizontal grab bar, drawn directly so it stays
+                                // independent of the icon style setting.
+                                Box(
+                                    modifier = Modifier
+                                        .width(32.dp)
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(FoamTheme.colors.textSecondary)
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier.padding(
+                                    horizontal = FoamDimens.paddingMedium,
+                                    vertical = FoamDimens.paddingSmall
+                                )
+                            ) {
+                                content()
+                            }
+                        }
+                    }
+
+                    if (footer != null) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = FoamDimens.spacingSmall, bottom = FoamDimens.spacingTiny),
-                            contentAlignment = Alignment.Center
+                                .onSizeChanged { footerHeightPx = it.height.toFloat() }
                         ) {
-                            // Single horizontal grab bar, drawn directly so it stays
-                            // independent of the icon style setting.
-                            Box(
-                                modifier = Modifier
-                                    .width(32.dp)
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(FoamTheme.colors.textSecondary)
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier.padding(
-                                horizontal = FoamDimens.paddingMedium,
-                                vertical = FoamDimens.paddingSmall
-                            )
-                        ) {
-                            content()
+                            footer()
                         }
                     }
                 }

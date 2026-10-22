@@ -1,5 +1,6 @@
 import com.android.build.api.variant.FilterConfiguration
 import com.android.build.api.variant.impl.VariantOutputImpl
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -13,6 +14,18 @@ plugins {
 // set devMode=true in gradle.properties to compile the developer tests screens
 val devMode: Boolean = providers.gradleProperty("devMode").getOrElse("false").toBoolean()
 
+// Last.fm API credentials from local.properties
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
+}
+
+fun credential(name: String): String =
+    (localProperties.getProperty(name) ?: System.getenv(name)).orEmpty().trim()
+
+fun buildConfigString(value: String): String =
+    "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
 android {
     namespace = "com.foamplayer.app"
     compileSdk = 36
@@ -22,7 +35,7 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = 1
-        versionName = "1.1.2"
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -30,6 +43,8 @@ android {
         }
 
         buildConfigField("boolean", "DEV_MODE", devMode.toString())
+        buildConfigField("String", "LASTFM_API_KEY", buildConfigString(credential("LASTFM_API_KEY")))
+        buildConfigField("String", "LASTFM_API_SECRET", buildConfigString(credential("LASTFM_API_SECRET")))
     }
 
     splits {
@@ -164,6 +179,7 @@ dependencies {
 
     implementation(project(":spotify"))
     implementation(project(":discord"))
+    implementation(project(":lastfm"))
     implementation(project(":canvas:apple"))
     implementation(project(":canvas:echomusic"))
     implementation(project(":canvas:tidal"))

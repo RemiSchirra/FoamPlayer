@@ -125,7 +125,7 @@ fun LibrarySettingsScreen(
                 .padding(horizontal = FoamDimens.paddingMedium),
             contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
         ) {
-            // --- Library Folders ---
+            // Library Folders
             item {
                 LibraryFoldersCard(
                     folders = selectedFolders,
@@ -154,7 +154,7 @@ fun LibrarySettingsScreen(
                 Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
             }
 
-            // --- Metadata Separators ---
+            // Metadata Separators
             item {
                 BasicText(text = stringResource(R.string.metadata_separators), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
@@ -178,7 +178,7 @@ fun LibrarySettingsScreen(
                 Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
             }
 
-            // --- Statistics ---
+            // Statistics
             item {
                 BasicText(text = stringResource(R.string.statistics), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
@@ -196,9 +196,9 @@ fun LibrarySettingsScreen(
                             viewModel.setListenedThresholdPercent(it.roundToInt())
                         },
                         steps = 9,
-                        valueRange = 0f..100f,
+                        valueRange = 50f..100f,
                         formatValue = { "${it.roundToInt()}%" },
-                        minMaxDisplay = "0%" to "100%"
+                        minMaxDisplay = "50%" to "100%"
                     )
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))

@@ -2,7 +2,6 @@ package com.foamplayer.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
@@ -119,7 +118,6 @@ private class MiniEntryMarqueeStates {
  * frame while the accent color animates, and keeping the read here means only
  * this button recomposes per frame instead of the whole [MiniPlayer] body.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
     trackId: Long,
@@ -204,7 +202,6 @@ private fun MiniPlayerProgressSlider(
     )
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun MiniPlayer(
     playbackStateFlow: StateFlow<PlaybackState>,
@@ -224,9 +221,13 @@ fun MiniPlayer(
     marqueeMode: MarqueeMode = MarqueeMode.PING_PONG,
     skipTrackChangeAnimation: Boolean = false,
     showContainer: Boolean = true,
+    fallbackPlaybackState: PlaybackState? = null,
     modifier: Modifier = Modifier
 ) {
-    val playbackState by playbackStateFlow.collectAsState()
+    val livePlaybackState by playbackStateFlow.collectAsState()
+    val playbackState = livePlaybackState.takeIf { it.currentTrack != null }
+        ?: fallbackPlaybackState
+        ?: return
     val track = playbackState.currentTrack ?: return
     // In repeat-all the pager shows the primary queue as a closed loop (see LoopingPagerModel):
     // `queue`, `queueEntryIds` and `currentIndex` are the pager's page numbering, and engine
@@ -255,9 +256,6 @@ fun MiniPlayer(
 
     var pendingJump by remember { mutableStateOf<PendingJump?>(null) }
 
-    // A list pick replaces the queue under the pager: the old playing entry vanishes and its page
-    // suddenly holds a different track. Detect that synchronously (in composition, so not even one
-    // frame pops) and keep the old track on its page so it can slide out.
     val pageShadow = remember { PageShadow() }
     val departureCandidate = remember(currentEntryId) {
         val s = pageShadow
@@ -319,10 +317,6 @@ fun MiniPlayer(
             }
     }
 
-    // rememberSeekBarProgressState captures `liveProgress` once, so this lambda
-    // must read the live values through rememberUpdatedState proxies instead
-    // of closing over plain parameters, which would freeze on first-composition
-    // values.
     val latestPlaybackState by rememberUpdatedState(playbackState)
     val latestCurrentIndex by rememberUpdatedState(currentIndex)
     val latestSkipTrackChangeAnimation by rememberUpdatedState(skipTrackChangeAnimation)
@@ -330,9 +324,6 @@ fun MiniPlayer(
     val latestIsAnimateSeekBarEnabled by rememberUpdatedState(isAnimateSeekBarEnabled)
     val latestQueue by rememberUpdatedState(queue)
 
-    // Same live computation FoamSlider consumes below — read lazily per access,
-    // so it stays live while dragging/swiping and is only overridden by a
-    // settle tween after a release/transport-button track change.
     val seekBarProgress = rememberSeekBarProgressState(
         positionMsFlow = positionMsFlow,
         liveProgress = { livePositionMs ->
@@ -352,9 +343,6 @@ fun MiniPlayer(
         }
     )
 
-    // Ensure colors for nearby tracks (and any in-flight jump target) are
-    // available for interpolation. Only asks the shared cache for missing
-    // paths — never decodes on its own.
     LaunchedEffect(pagerState.currentPage, queue, pendingJump) {
         val indices = listOf(
             pagerState.currentPage - 1,
@@ -374,11 +362,6 @@ fun MiniPlayer(
         }
     }
 
-    // Drives the dynamic accent color transition while the pager is mid-drag.
-    // Keyed on pagerState only: pendingJump is snapshot state read inside the
-    // snapshotFlow lambda, and the queue is reached through a
-    // rememberUpdatedState proxy — keying on the List made every queue
-    // mutation tear down and resubscribe these collectors.
     LaunchedEffect(pagerState) {
         snapshotFlow {
             val jump = pendingJump
@@ -391,10 +374,6 @@ fun MiniPlayer(
                 (overrideTrackFor(jump, page, currentQueue) ?: currentQueue.getOrNull(page))?.albumArtPath
             }
         }.collect { interpolatedColor ->
-            // An artless page (or one still being extracted) yields no color.
-            // Keeping the last accent avoids flashing the static default
-            // mid-swipe and snapping back the next frame a colored page
-            // re-enters the interpolation.
             if (interpolatedColor != null) onColorChange(interpolatedColor)
         }
     }
@@ -623,19 +602,10 @@ fun MiniPlayer(
         }
     }
 
-    // Same driver as the corner radius above: 1 whenever this art is flying, 0
-    // once it rests. When the full player closes, THIS art is the morph's
-    // target — so the full player's drop shadow has to live here too, fading
-    // to zero as the art lands in the shadowless mini slot.
     val animatedArtElevationFraction by animatedVisibilityScope.transition.animateFloat(label = "miniArtElevation") { enterExitState ->
         if (enterExitState == EnterExitState.Visible) 0f else 1f
     }
 
-    // The full player hero's current paused shrink. This slot rests at 1f (a
-    // play/pause flip must not animate the mini art), but mid-flight this
-    // layer renders the shared-element overlay, so it must depart at the
-    // hero's current paused scale and relax to 1f as it lands — or a close
-    // flight taken while paused pops the art 3% at hand-off.
     val heroPausedArtScale by rememberPausedArtScale(
         playbackState.isPlaying || playbackState.isPlaybackRequested
     )
@@ -649,9 +619,6 @@ fun MiniPlayer(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = NavBarDimens.MiniPlayerCardVerticalPadding)
                 .then(
-                    // Elevation over the scrolling content, only when the card
-                    // paints its own surface: in ATTACHED mode the nav bar's
-                    // extension IS the card's surface and carries the elevation.
                     if (showContainer) {
                         Modifier.shadow(
                             elevation = 8.dp,
@@ -673,10 +640,6 @@ fun MiniPlayer(
                         state = pagerState,
                         modifier = Modifier.weight(1f),
                         beyondViewportPageCount = 1,
-                        // Keyed by queue ENTRY id, not track id: the same track
-                        // can legitimately appear twice in the queue ("play
-                        // next" on the playing track), and duplicate keys crash
-                        // the pager.
                         key = { index -> queueEntryIds.getOrNull(index) ?: -(index + 1).toLong() }
                     ) { page ->
                         val jump = pendingJump
@@ -687,15 +650,6 @@ fun MiniPlayer(
                                     ?: queue.getOrNull(page)
                                 ) ?: return@HorizontalPager
 
-                        // Only the page genuinely settled as the current track
-                        // may carry the shared-element continuity into the full
-                        // player: during a jump override, `track` can
-                        // transiently match either the page still on screen or
-                        // the override page that hasn't landed — neither is a
-                        // safe attach point. The page index must also match:
-                        // the queue can hold the same track twice, and an id
-                        // match alone would tag the duplicated neighbor page
-                        // too — two visible shared elements with one key.
                         val isSettledCurrentTrackPage =
                             jump == null && dep == null && page == currentIndex && pageTrack.id == track.id
                         val pageMarquee = statesFor(entryKey(page))
@@ -722,27 +676,20 @@ fun MiniPlayer(
                                                 .graphicsLayer { alpha = sharedArtFlightAlpha() }
                                         } else Modifier
                                     )
-                                    // The shared-element transition animates the
-                                    // corner radius every frame; consuming it
-                                    // inside graphicsLayer keeps that draw-only.
                                     .graphicsLayer {
-                                        shape = RoundedCornerShape(animatedCornerRadius)
+                                        val artTransition = animatedVisibilityScope.transition
+                                        shape = RoundedCornerShape(
+                                            if (artTransition.currentState == artTransition.targetState) {
+                                                miniImageRadius
+                                            } else {
+                                                animatedCornerRadius
+                                            }
+                                        )
                                         clip = true
-                                        // Play/pause shrink is the full player
-                                        // hero's rest look ONLY; mid-flight this
-                                        // layer renders the overlay and must
-                                        // depart at the hero's CURRENT paused
-                                        // scale, easing to this slot's unscaled
-                                        // rest along the shadow's curve.
                                         val scale =
                                             1f + (heroPausedArtScale - 1f) * animatedArtElevationFraction
                                         scaleX = scale
                                         scaleY = scale
-                                        // Only while this art is the morph's
-                                        // renderer; gated off in immersive so the
-                                        // fading sharedArtFlightAlpha never
-                                        // coexists with a shadow a layer's own
-                                        // alpha cannot fade.
                                         shadowElevation = if (!isImmersiveEnabled && useSharedElements && isSettledCurrentTrackPage) {
                                             PlayerDimens.fullPlayerArtElevation.toPx() * animatedArtElevationFraction
                                         } else {

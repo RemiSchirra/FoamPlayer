@@ -1,5 +1,8 @@
 package com.foamplayer.app.ui.screens.stats
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -61,24 +64,34 @@ import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.request.ImageRequest
 import com.foamplayer.app.R
+import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.db.dao.TopAlbumStat
 import com.foamplayer.app.data.db.dao.TopTrackStat
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.scanner.ArtistCover
+import com.foamplayer.app.ui.components.AlbumArtBoundsTransform
 import com.foamplayer.app.ui.components.AlbumArtImage
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.AlbumArtShape
 import com.foamplayer.app.ui.components.MediaArtKind
 import com.foamplayer.app.ui.components.MediaArtKindScope
 import com.foamplayer.app.ui.components.ScreenTitle
+import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.modals.CollectionInfo
 import com.foamplayer.app.ui.modals.CollectionKind
 import com.foamplayer.app.ui.components.FoamGlassCard
+import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
+import com.foamplayer.app.ui.components.MediaItemArtElevation
+import com.foamplayer.app.ui.components.MediaListRow
+import com.foamplayer.app.ui.components.collectionRowFlightArtwork
+import com.foamplayer.app.ui.components.listRowArtCornerRadius
+import com.foamplayer.app.ui.components.rememberCollectionCloseFlightActive
+import com.foamplayer.app.ui.components.rowSharedText
 import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
-import com.foamplayer.app.ui.components.MediaListRow
-import com.foamplayer.app.ui.components.listRowArtCornerRadius
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
+import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -103,12 +116,15 @@ private const val TopListDisplaySize = 10
  * track/artist/album/genre lists — all scoped to the selected period.
  * Reached from the nav bar's second bar by default.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun StatsScreen(
     onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
     onAlbumClick: (album: String, artUrl: String?, artist: String?) -> Unit,
     onSeeAll: (kind: StatsTopKind, period: StatsPeriod) -> Unit,
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     viewModel: StatsViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -366,7 +382,12 @@ fun StatsScreen(
                                     )
                                 )
                             }
-                        }
+                        },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        // Only the clicked row flies (see LocalActiveSharedCollection).
+                        sharedElementKey = artist.name
+                            .takeIf { isActiveSharedCollection("artist", artist.name) }
                     )
                 }
 
@@ -392,7 +413,12 @@ fun StatsScreen(
                                     )
                                 )
                             }
-                        }
+                        },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        // Only the clicked row flies (see LocalActiveSharedCollection).
+                        sharedElementKey = album.album
+                            .takeIf { isActiveSharedCollection("album", album.album) }
                     )
                 }
 
@@ -589,6 +615,7 @@ internal fun albumArtModel(artPath: String?): Any? {
         ImageRequest.Builder(context)
             .data(EmbeddedAlbumArt(artPath.toUri()))
             .size(AlbumArtRequestSize)
+            .memoryCacheKey(albumArtMemoryCacheKey(artPath))
             .build()
     }
 }
@@ -635,19 +662,43 @@ internal fun TopTrackRow(
  * artwork to [MediaArtKind.ARTIST], so the portrait loads under the person
  * placeholder.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun TopArtistRow(
     artist: ArtistStat,
     cover: ArtistCover?,
     onOpen: () -> Unit,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    sharedElementKey: String? = null
 ) {
+    val elementKey = sharedElementKey
+    val sharedArtModifier = Modifier
+        .collectionRowFlightArtwork(
+            key = "artist-art-$elementKey",
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            enabled = elementKey != null,
+            restShape = CircleShape,
+            immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                .current(CollectionHeroTarget.Artist)
+                .isImmersive,
+            fullyRounded = true
+        )
+        .background(FoamTheme.colors.surfaceVariant)
+    val sharedTitleModifier = Modifier.rowSharedText(
+        key = "artist-title-$elementKey",
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope,
+        enabled = elementKey != null,
+        boundsTransform = AlbumArtBoundsTransform
+    )
+
     MediaListRow(
         onClick = onOpen,
         onLongClick = onLongClick,
-        artworkModifier = Modifier
-            .clip(CircleShape)
-            .background(FoamTheme.colors.surfaceVariant),
+        artworkModifier = sharedArtModifier,
         artworkContent = {
             if (cover != null) {
                 val context = LocalContext.current
@@ -661,6 +712,7 @@ internal fun TopArtistRow(
                             }
                         )
                         .size(AlbumArtRequestSize)
+                        .memoryCacheKey(albumArtMemoryCacheKey(cover.imageUrl))
                         .build()
                 }
                 MediaArtKindScope(MediaArtKind.ARTIST) {
@@ -680,6 +732,7 @@ internal fun TopArtistRow(
         },
         title = artist.name,
         subtitle = formatListeningTime(artist.totalDurationMs),
+        titleModifier = sharedTitleModifier,
         // The monogram disc is circular: the scaffolds' rounded-square
         // album shadow would peek out behind its corners.
         artworkElevation = 0.dp,
@@ -692,18 +745,54 @@ internal fun TopArtistRow(
  * The row scopes its artwork to [MediaArtKind.ALBUM], so the cover loads
  * under the album disc placeholder.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun TopAlbumRow(
     entry: TopAlbumStat,
     onOpen: () -> Unit,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    sharedElementKey: String? = null
 ) {
+    val elementKey = sharedElementKey
+    val artShape = AlbumArtShape()
+    val closeFlightActive = rememberCollectionCloseFlightActive(
+        sharedTransitionScope = sharedTransitionScope?.takeIf { elementKey != null },
+        animatedVisibilityScope = animatedVisibilityScope
+    ).value
+    val sharedArtModifier = Modifier
+        .collectionRowFlightArtwork(
+            key = "album-art-$elementKey",
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            enabled = elementKey != null,
+            restShape = artShape,
+            immersiveFlightHero = LocalCollectionHeroLayoutLookup
+                .current(CollectionHeroTarget.Album)
+                .isImmersive,
+            castsFlightShadow = true
+        )
+        .background(FoamTheme.colors.surfaceVariant)
+    val sharedTitleModifier = Modifier.rowSharedText(
+        key = "album-title-$elementKey",
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope,
+        enabled = elementKey != null,
+        boundsTransform = AlbumArtBoundsTransform
+    )
+    val sharedSubtitleModifier = Modifier.rowSharedText(
+        key = "album-artist-$elementKey",
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope,
+        enabled = elementKey != null,
+        boundsTransform = AlbumArtBoundsTransform
+    )
+
     MediaListRow(
         onClick = onOpen,
         onLongClick = onLongClick,
-        artworkModifier = Modifier
-            .clip(RoundedCornerShape(listRowArtCornerRadius()))
-            .background(FoamTheme.colors.surfaceVariant),
+        artworkModifier = sharedArtModifier,
         artworkContent = {
             val model = albumArtModel(entry.albumArtPath)
             if (model != null) {
@@ -724,6 +813,10 @@ internal fun TopAlbumRow(
         },
         title = entry.album,
         subtitle = entry.artist,
+        titleModifier = sharedTitleModifier,
+        subtitleModifier = sharedSubtitleModifier,
+        artworkShape = artShape,
+        artworkElevation = if (closeFlightActive) 0.dp else MediaItemArtElevation,
         trailingContent = { RankedPlayBadge(entry.playCount) }
     )
 }

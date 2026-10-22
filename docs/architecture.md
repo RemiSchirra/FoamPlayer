@@ -42,6 +42,7 @@ FoamPlayer/
 │   ├── youlyplus/
 │   └── paxsenix/       # Aggregator (Apple Music, Musixmatch, Netease, Spotify, YouTube)
 ├── spotify/            # Anonymous auth, album and artist images
+├── lastfm/             # Last.fm auth and scrobbling
 ├── distant/
 │   ├── core/           # Provider interface, models, URI scheme, HTTP
 │   ├── plex/           # Plex media server
@@ -168,6 +169,7 @@ Providers that stream over the network are flagged as streaming in `BitPerfectDe
 
 - **`:spotify`** gets anonymous web-player tokens and resolves album art and artist images.
 - **`:discord`** is a custom client: OAuth login, a gateway client over WebSockets, and a presence client. Art comes from `:spotify`, with a YouTube thumbnail as fallback.
+- **`:lastfm`** owns the Last.fm Web API: the browser token flow (`auth.getToken` / `auth.getSession`) and signed `track.updateNowPlaying` / `track.scrobble` calls. `LastFmScrobbler` in `:app` feeds it from `AudioEngine`'s listen-threshold events. Build credentials come from `local.properties` (git-ignored) or the `LASTFM_API_KEY` / `LASTFM_API_SECRET` environment variables. Users can instead enter a custom API key and shared secret in Settings > Misc > Last.fm; that choice is stored device-local and never included in settings backups.
 - **`:distant:*`** list and stream remote libraries: Plex (browser PIN sign-in) and Jellyfin (credentials).
 - Thin controllers in `:app` (`DiscordPresenceController`, `ArtistImageStore`) connect both modules to `AudioEngine`'s playback state.
 

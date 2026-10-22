@@ -30,6 +30,7 @@ import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.settings.NotificationExtraButton
 import com.foamplayer.app.discord.DiscordPresenceController
+import com.foamplayer.app.lastfm.LastFmScrobbler
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
@@ -96,6 +97,9 @@ class PlaybackService : MediaSessionService() {
     lateinit var discordPresenceController: DiscordPresenceController
 
     @Inject
+    lateinit var lastFmScrobbler: LastFmScrobbler
+
+    @Inject
     lateinit var settingsRepository: SettingsRepository
 
     @Inject
@@ -138,6 +142,7 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         discordPresenceController.start()
+        lastFmScrobbler.start()
         registerScreenStateReceiver()
         observeLockScreenSetting()
         observeNotificationButtons()

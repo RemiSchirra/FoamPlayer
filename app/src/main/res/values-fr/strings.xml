@@ -380,7 +380,10 @@
     <!-- Divers / Discord -->
     <string name="settings_misc">Divers</string>
     <string name="misc_settings_subtitle">Intégrations et autres options</string>
+    <string name="integrations_section">Intégrations</string>
     <string name="discord_section">Discord</string>
+    <string name="discord_entry">Discord</string>
+    <string name="discord_entry_desc">Rich Presence et pochettes en ligne</string>
     <string name="discord_presence">Discord Rich Presence</string>
     <string name="discord_presence_desc">Affiche ce que vous écoutez sur votre profil Discord</string>
     <string name="discord_log_in">Se connecter avec Discord</string>
@@ -392,6 +395,52 @@
     <string name="discord_authorization_failed">Échec de l\'autorisation Discord</string>
     <string name="discord_online_art">Récupérer les pochettes en ligne</string>
     <string name="discord_online_art_desc">Recherche chaque titre sur Spotify (par titre et artiste) et utilise sa pochette d\'album sur Discord, avec repli sur les miniatures YouTube. Les titres et noms d\'artiste sont envoyés à ces services.</string>
+
+    <!-- Last.fm -->
+    <string name="lastfm_section">Last.fm</string>
+    <string name="lastfm_entry">Last.fm</string>
+    <string name="lastfm_entry_desc">Scrobblez et importez votre historique d\'écoute</string>
+    <string name="lastfm_log_in">Se connecter avec Last.fm</string>
+    <string name="lastfm_log_out">Se déconnecter</string>
+    <string name="lastfm_logged_in_as">Connecté en tant que %1$s</string>
+    <string name="lastfm_not_connected">Non connecté à Last.fm</string>
+    <string name="lastfm_waiting_authorization">En attente de l\'autorisation Last.fm…</string>
+    <string name="lastfm_connected">Connecté à Last.fm</string>
+    <string name="lastfm_authorization_failed">Échec de l\'autorisation Last.fm</string>
+    <string name="lastfm_not_configured">Last.fm n\'est pas configuré. Choisissez une clé API ci-dessus ou définissez LASTFM_API_KEY et LASTFM_API_SECRET dans local.properties.</string>
+    <string name="lastfm_scrobble">Scrobbler avec Last.fm</string>
+    <string name="lastfm_scrobble_desc">Envoie chaque titre à Last.fm lorsqu\'il atteint le seuil d\'écoute (%1$d%%)</string>
+    <string name="lastfm_scrobble_connect_first">Connectez votre compte Last.fm ci-dessus pour commencer à scrobbler.</string>
+    <string name="lastfm_api_key">Clé API</string>
+    <string name="lastfm_api_key_app">Clé fournie par l\'application</string>
+    <string name="lastfm_api_key_app_desc">Utilise la clé API Last.fm configurée pour cette version.</string>
+    <string name="lastfm_api_key_app_missing">Aucune clé API n\'est configurée pour cette version.</string>
+    <string name="lastfm_api_key_custom">Clé personnalisée</string>
+    <string name="lastfm_api_key_custom_desc">Utilisez votre propre clé API Last.fm et votre secret partagé.</string>
+    <string name="lastfm_api_key_modal_title">Clé API Last.fm</string>
+    <string name="lastfm_api_key_modal_desc">Choisissez les identifiants avec lesquels FoamPlayer signe les requêtes Last.fm. Modifier la clé ou le secret déconnecte le compte actuel.</string>
+    <string name="lastfm_api_key_label">Clé API</string>
+    <string name="lastfm_api_secret_label">Secret partagé</string>
+    <string name="lastfm_api_key_create">Créez un compte API sur last.fm/api/account/create</string>
+    <string name="lastfm_import_history_title">Importer l\'historique d\'écoute</string>
+    <string name="lastfm_import_history_desc">Ajoutez vos scrobbles Last.fm aux compteurs d\'écoute, aux dates de dernière lecture et aux statistiques d\'écoute de votre bibliothèque.</string>
+    <string name="lastfm_import_history_desc_logged_out">Connectez votre compte Last.fm ci-dessus pour importer votre historique d\'écoute.</string>
+    <string name="lastfm_import_history_button">Importer l\'historique</string>
+    <string name="lastfm_import_choice_title">Importer l\'historique Last.fm</string>
+    <string name="lastfm_import_choice_desc">Vos scrobbles de tous les temps seront associés aux titres de cette bibliothèque.</string>
+    <string name="lastfm_import_erase_warning">L\'effacement remet à zéro le nombre d\'écoutes, la date de dernière lecture et les statistiques d\'écoute de chaque titre avant l\'importation. Les likes et les dislikes sont conservés.</string>
+    <string name="lastfm_import_erase_and_import">Effacer l\'historique d\'écoute et importer</string>
+    <string name="lastfm_import_without_erasing">Importer sans effacer l\'historique</string>
+    <string name="lastfm_import_progress_title">Importation de l\'historique Last.fm</string>
+    <string name="lastfm_import_progress">%1$d scrobbles récupérés (page %2$d sur %3$d)…</string>
+    <string name="lastfm_import_saving">Enregistrement dans votre bibliothèque…</string>
+    <string name="lastfm_import_complete_title">Importation terminée</string>
+    <string name="lastfm_import_result_summary">%1$d scrobbles sur %2$d associés à %3$d titres de votre bibliothèque.</string>
+    <string name="lastfm_import_unmatched_title">Titres introuvables dans votre bibliothèque (%1$d)</string>
+    <string name="lastfm_import_unmatched_more">… et %1$d de plus</string>
+    <string name="lastfm_import_plays">×%1$d</string>
+    <string name="lastfm_import_failed_title">Échec de l\'importation</string>
+    <string name="lastfm_import_failed_generic">Impossible d\'importer votre historique Last.fm.</string>
 
     <!-- Boutons de notification -->
     <string name="notification_entry">Notification</string>
