@@ -21,6 +21,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -29,6 +35,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.Dp
+import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.ui.components.MiniPlayer
@@ -81,6 +88,12 @@ internal fun BoxScope.FoamBottomChrome(
     onMiniPlayerTopChange: (Float) -> Unit,
     onMiniPlayerHeightChange: (Int) -> Unit,
 ) {
+    val livePlaybackState by playerViewModel.playbackState.collectAsState()
+    var lastPlayingState by remember { mutableStateOf<PlaybackState?>(null) }
+    SideEffect {
+        if (livePlaybackState.currentTrack != null) lastPlayingState = livePlaybackState
+    }
+
     if (currentRoute != Screen.Onboarding.route) {
         val bottomScrimColor = backdropScrimColor()
         Box(
@@ -209,7 +222,9 @@ internal fun BoxScope.FoamBottomChrome(
             exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
         ) {
             val miniPlayerVisibilityScope = this
-            if (hasCurrentTrack && currentRoute != Screen.Onboarding.route) {
+            if (currentRoute != Screen.Onboarding.route &&
+                (hasCurrentTrack || cardPresenceFraction() > 0f)
+            ) {
                 MiniPlayer(
                     playbackStateFlow = playerViewModel.playbackState,
                     positionMsFlow = playerViewModel.positionMs,
@@ -249,8 +264,13 @@ internal fun BoxScope.FoamBottomChrome(
                     marqueeMode = settings.marqueeMode,
                     skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,
                     showContainer = navigationBarMode != NavigationBarMode.ATTACHED,
+                    fallbackPlaybackState = lastPlayingState,
                     modifier = Modifier
-                        .graphicsLayer { alpha = cardPresenceFraction() }
+                        .graphicsLayer {
+                            val presence = cardPresenceFraction()
+                            alpha = presence
+                            translationY = (1f - presence) * (miniPlayerBoxHeight / 2).toPx()
+                        }
                         .onGloballyPositioned { onMiniPlayerTopChange(it.positionInRoot().y) }
                         .onSizeChanged { onMiniPlayerHeightChange(it.height) }
                         .draggable(

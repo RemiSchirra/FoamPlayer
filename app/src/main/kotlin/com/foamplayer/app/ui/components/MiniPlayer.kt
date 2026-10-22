@@ -221,9 +221,13 @@ fun MiniPlayer(
     marqueeMode: MarqueeMode = MarqueeMode.PING_PONG,
     skipTrackChangeAnimation: Boolean = false,
     showContainer: Boolean = true,
+    fallbackPlaybackState: PlaybackState? = null,
     modifier: Modifier = Modifier
 ) {
-    val playbackState by playbackStateFlow.collectAsState()
+    val livePlaybackState by playbackStateFlow.collectAsState()
+    val playbackState = livePlaybackState.takeIf { it.currentTrack != null }
+        ?: fallbackPlaybackState
+        ?: return
     val track = playbackState.currentTrack ?: return
     // In repeat-all the pager shows the primary queue as a closed loop (see LoopingPagerModel):
     // `queue`, `queueEntryIds` and `currentIndex` are the pager's page numbering, and engine

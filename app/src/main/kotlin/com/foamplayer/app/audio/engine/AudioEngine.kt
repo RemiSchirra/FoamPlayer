@@ -776,7 +776,10 @@ class AudioEngine @Inject constructor(
                 if (status is ScanStatus.Finished) {
                     allTracks = trackRepository.getAllTracksOnce()
                     if (_playbackState.value.queue.isNotEmpty()) {
-                        refillAuxiliary()
+                        pruneMissingQueueTracks(allTracks.mapTo(HashSet()) { it.id })
+                        if (_playbackState.value.queue.isNotEmpty()) {
+                            refillAuxiliary()
+                        }
                     }
                 }
             }
@@ -846,6 +849,8 @@ class AudioEngine @Inject constructor(
                 queueEntryIds = emptyList(),
                 auxiliaryFlags = emptyList(),
                 currentTrack = null,
+                isPlaying = false,
+                isPlaybackRequested = false,
                 queueSourceId = null,
                 queueSourceFlags = emptyList()
             )
@@ -1753,6 +1758,30 @@ class AudioEngine @Inject constructor(
         if (removedIsAuxiliary) {
             scheduleAuxiliaryRefill()
         }
+    }
+
+    /**
+     * Drops every queue entry whose track no longer exists in the library (a
+     * rescan removed its file), leaving the queue in the order it had.
+     *
+     * When the entry being played is one of them, playback cannot go on: the
+     * queue is cleared instead, which stops the player and closes the mini
+     * player (its presence keys off [PlaybackState.currentTrack]).
+     */
+    private fun pruneMissingQueueTracks(liveTrackIds: Set<Long>) {
+        val state = _playbackState.value
+        if (state.queue.isEmpty()) return
+
+        val missing = state.queue.indices.filter { state.queue[it].id !in liveTrackIds }
+        if (missing.isEmpty()) return
+
+        if (state.queueIndex in missing) {
+            setQueue(emptyList())
+            return
+        }
+
+        // Descending order keeps the indices still to visit valid.
+        missing.sortedDescending().forEach { removeQueueItem(it) }
     }
 
     /**

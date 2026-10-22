@@ -402,7 +402,14 @@ fun FoamNavHost(
                 val isOnboardingRoute = currentRoute == Screen.Onboarding.route
                 LaunchedEffect(hasCurrentTrack, isOnboardingRoute) {
                     when {
-                        isOnboardingRoute || !hasCurrentTrack -> miniPlayerPresence.snapTo(0f)
+                        isOnboardingRoute -> miniPlayerPresence.snapTo(0f)
+                        !hasCurrentTrack -> miniPlayerPresence.animateTo(
+                            targetValue = 0f,
+                            animationSpec = tween(
+                                durationMillis = SharedElementTransitionDurationMs,
+                                easing = SharedElementEasing
+                            )
+                        )
                         playerTransitionState.targetState -> miniPlayerPresence.snapTo(1f)
                         else -> miniPlayerPresence.animateTo(
                             targetValue = 1f,
@@ -415,6 +422,16 @@ fun FoamNavHost(
                 }
                 LaunchedEffect(isPlayerOpen) {
                     if (isPlayerOpen && hasCurrentTrack) miniPlayerPresence.snapTo(1f)
+                }
+                var hadCurrentTrack by remember { mutableStateOf(false) }
+                LaunchedEffect(hasCurrentTrack) {
+                    if (hasCurrentTrack) {
+                        hadCurrentTrack = true
+                    } else if (hadCurrentTrack &&
+                        (playerTransitionState.currentState || playerTransitionState.targetState)
+                    ) {
+                        playerTransition.animate(open = false)
+                    }
                 }
 
                 // Expandable nav-bar second row
