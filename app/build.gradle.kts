@@ -121,7 +121,6 @@ dependencies {
     implementation(libs.material)
     implementation(libs.jaudiotagger)
 
-    // Compose BOM 2026.08.00+ (Compose 1.12.0) requires compileSdk 37 / AGP 9.1.0 — staying on 2026.06.00 (Compose 1.11.x) to match compileSdk 36 / AGP 9.0.1
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -141,6 +140,10 @@ dependencies {
     implementation(libs.androidx.media3.common)
     implementation(libs.androidx.media3.extractor)
 
+    // Chromecast
+    implementation(libs.play.services.cast.framework)
+    implementation(libs.androidx.mediarouter)
+
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
@@ -149,7 +152,6 @@ dependencies {
     ksp(libs.hilt.compiler)
     ksp(libs.kotlin.metadata.jvm) // Correctif Hilt
 
-    // hilt-navigation-compose 1.4.0 requires compileSdk 37 / AGP 9.1.0 — staying on 1.3.0
     implementation(libs.androidx.hilt.navigation.compose)
 
     implementation(libs.androidx.datastore.preferences)

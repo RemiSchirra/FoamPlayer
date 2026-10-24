@@ -141,6 +141,15 @@ fun FullPlayerScreen(
 
     val playOnDevices by viewModel.playOnDevices.collectAsState()
     val selectedPlayOnDeviceId by viewModel.selectedPlayOnDeviceId.collectAsState()
+    val castScanning by viewModel.castScanning.collectAsState()
+
+    // Chromecast discovery is opt-in: it only runs while the sheet is open.
+    DisposableEffect(showPlayOnModal) {
+        if (showPlayOnModal) viewModel.startPlayOnDiscovery()
+        onDispose {
+            if (showPlayOnModal) viewModel.stopPlayOnDiscovery()
+        }
+    }
 
     val audioInfoText = run {
         val format = audioOutputInfo?.sourceFormat?.takeIf { it.isNotBlank() } ?: track.format
@@ -851,6 +860,7 @@ fun FullPlayerScreen(
         onDismiss = { showPlayOnModal = false },
         devices = playOnDevices,
         selectedDeviceId = selectedPlayOnDeviceId ?: PlayOnDevice.ThisDeviceId,
+        scanning = castScanning,
         onDeviceSelected = { device ->
             showPlayOnModal = false
             if (device.id != (selectedPlayOnDeviceId ?: PlayOnDevice.ThisDeviceId)) {

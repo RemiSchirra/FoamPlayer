@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
@@ -450,6 +451,35 @@ class MainActivity : AppCompatActivity() {
         // Fast lock countdown, keeping the player visible while the user is
         // actively interacting.
         if (lockDisplaySessionActive) restartFastLock()
+    }
+
+    /** True while a volume key the app took over is held, so its ACTION_UP is swallowed too. */
+    private var volumeKeyHandled = false
+
+    /**
+     * Hardware volume keys belong to whatever plays the sound, not to the phone:
+     * while casting they move the receiver's own volume, and while the phone's
+     * output is pinned in front of an attached Bluetooth headset they move the
+     * phone speaker (see [PlayerViewModel.adjustOutputVolume]). Everything else is
+     * left to the platform, which already targets the playing device and shows its
+     * volume panel.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val volumeKey = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
+            event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
+        if (volumeKey) {
+            if (event.action == KeyEvent.ACTION_UP && volumeKeyHandled) {
+                volumeKeyHandled = false
+                return true
+            }
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                volumeKeyHandled = playerViewModel.adjustOutputVolume(
+                    up = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP
+                )
+                if (volumeKeyHandled) return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     /**

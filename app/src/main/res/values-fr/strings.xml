@@ -82,6 +82,9 @@
     <string name="toast_distant_track_unavailable">Piste distante indisponible : %1$s</string>
     <string name="toast_failed_to_load">Échec du chargement de %1$s</string>
     <string name="toast_playback_stopped">Lecture arrêtée : trop de pistes n\'ont pas pu être chargées</string>
+    <string name="toast_cast_unavailable">Chromecast indisponible sur cet appareil (services Google Play requis)</string>
+    <string name="toast_cast_load_failed">Impossible de lire %1$s sur le Chromecast</string>
+    <string name="toast_cast_connect_failed">Impossible de se connecter à ce Chromecast</string>
     <string name="done">Terminé</string>
     <string name="metadata_separators">Séparateurs de métadonnées</string>
     <string name="artist_separators">Séparateurs d\'artistes</string>
@@ -297,6 +300,7 @@
     <string name="play_on_chromecast_desc">Chromecast</string>
     <string name="play_on_remote_player_desc">Serveur multimédia %1$s</string>
     <string name="play_on_upnp_desc">UPnP</string>
+    <string name="play_on_scanning">Recherche de Chromecast…</string>
     <string name="track_count_duration">%1$d Pistes • %2$s</string>
     <string name="add_separator">Ajouter un séparateur…</string>
 

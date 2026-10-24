@@ -21,11 +21,22 @@ internal class PositionClock(
     private val onTick: (displayPlayer: Player, positionMs: Long) -> Unit,
     private val onPrimaryPlayingFrame: () -> Unit,
     private val awaitFrame: suspend () -> Unit,
+    /** Non-null while a Chromecast owns playback: the position to publish instead of the player's. */
+    private val castPositionMs: () -> Long? = { null },
+    /** Per-poll hook while a Chromecast owns playback (listen accounting). */
+    private val onCastTick: (positionMs: Long) -> Unit = {},
     private val projector: PositionProjector = PositionProjector()
 ) {
 
     suspend fun run() {
         while (true) {
+            val castMs = castPositionMs()
+            if (castMs != null) {
+                onPosition(castMs)
+                onCastTick(castMs)
+                delay(CAST_POLL_INTERVAL_MS.milliseconds)
+                continue
+            }
             val displayPlayer = fadeDisplayPlayer() ?: player()
             val sampleMs = displayPlayer.currentPosition.coerceAtLeast(0L)
             val audible = displayPlayer.isPlaying || isFading()
@@ -55,5 +66,8 @@ internal class PositionClock(
     companion object {
         /** Poll interval while paused; bounds the latency to notice a play or an external seek. */
         const val PAUSED_POLL_INTERVAL_MS = 50L
+
+        /** Poll interval while a Chromecast plays: the receiver reports at roughly 1 Hz. */
+        const val CAST_POLL_INTERVAL_MS = 500L
     }
 }

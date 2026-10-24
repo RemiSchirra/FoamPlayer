@@ -253,6 +253,17 @@ class OutputDeviceManager(
             false
         }
 
+    /**
+     * The music stream volume as 0..100, i.e. the level the hardware keys move.
+     * With a Bluetooth output attached the platform keeps that level bound to the
+     * headset, which is why the phone-speaker override in the engine seeds from it.
+     */
+    fun musicVolumePercent(): Int {
+        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        val current = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        return (current * 100 / max).coerceIn(0, 100)
+    }
+
     companion object {
         /** Virtual "play on this phone" target id (never a real AudioOutputDevice id). */
         const val ThisDevicePickId = "this_device"

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.foamplayer.app.audio.cast.ChromecastController
 import com.foamplayer.app.audio.device.OutputDeviceManager
 import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.distant.PlayOnDeviceRepository
@@ -83,8 +84,9 @@ object RepositoryModule {
     @Singleton
     fun providePlayOnDeviceRepository(
         outputDeviceManager: OutputDeviceManager,
-        distantRepository: DistantRepository
+        distantRepository: DistantRepository,
+        chromecastController: ChromecastController
     ): PlayOnDeviceRepository {
-        return PlayOnDeviceRepository(outputDeviceManager, distantRepository)
+        return PlayOnDeviceRepository(outputDeviceManager, distantRepository, chromecastController)
     }
 }

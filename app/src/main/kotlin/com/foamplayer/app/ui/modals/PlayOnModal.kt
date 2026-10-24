@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BluetoothAudio
@@ -52,6 +53,7 @@ fun PlayOnModal(
     onDismiss: () -> Unit,
     devices: List<PlayOnDevice>,
     selectedDeviceId: String?,
+    scanning: Boolean = false,
     onDeviceSelected: (PlayOnDevice) -> Unit
 ) {
     FoamBottomModal(
@@ -80,6 +82,33 @@ fun PlayOnModal(
                     isSelected = device.id == selectedDeviceId,
                     onClick = { onDeviceSelected(device) }
                 )
+            }
+
+            // The Cast SDK needs a few seconds of multicast before the first
+            // device shows up: say so instead of leaving the list looking empty.
+            if (scanning && devices.none { it.type == PlayOnDeviceType.CHROMECAST }) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = FoamDimens.paddingSmall,
+                            vertical = FoamDimens.spacingSmall
+                        ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = FoamTheme.accentColor,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(FoamDimens.spacingMedium))
+                    BasicText(
+                        text = stringResource(R.string.play_on_scanning),
+                        style = FoamTheme.typography.caption.copy(
+                            color = FoamTheme.colors.textSecondary
+                        )
+                    )
+                }
             }
         }
     }

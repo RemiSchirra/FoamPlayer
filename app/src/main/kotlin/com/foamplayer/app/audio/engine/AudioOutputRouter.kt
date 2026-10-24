@@ -20,6 +20,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/** One hardware volume-key press on the phone speaker while Bluetooth owns the stream volume. */
+private const val PHONE_VOLUME_STEP = 0.05f
+
+/**
+ * Where the phone-speaker gain starts: high enough that a silenced headset does not
+ * leave the phone inaudible, low enough to always leave room for "volume up"
+ * (the speaker's own index is unreachable from an app).
+ */
+private const val PHONE_VOLUME_SEED_MIN = 0.2f
+private const val PHONE_VOLUME_SEED_MAX = 0.9f
+
 /**
  * Owns the audio output path: the bit-perfect verdict published to the UI, the "Play on" device
  * pinning, and the volume path.
@@ -47,6 +58,12 @@ internal class AudioOutputRouter(
 ) {
     private var lastAudioOutputInfo: AudioOutputInfo? = null
 
+    /** Extra gain for the phone's own output while a Bluetooth one is attached. */
+    private var phoneSpeakerGain = 1f
+
+    /** True once [phoneSpeakerGain] was seeded for the current pinned-over-Bluetooth state. */
+    private var phoneSpeakerGainSeeded = false
+
     fun start() {
         outputDeviceManager.start()
 
@@ -68,11 +85,33 @@ internal class AudioOutputRouter(
             if (persisted != null &&
                 outputDeviceManager.preferredDeviceId.value == null
             ) {
-                outputDeviceManager.setPreferredDevice(persisted)
+                // "Play on this device" must not outlive a Bluetooth output the
+                // phone connected on its own (headset already paired at launch):
+                // the sheet and the audio follow the headset instead.
+                val attachedBluetooth = outputDeviceManager.devices.value.firstOrNull { it.isBluetooth }
+                if (persisted == OutputDeviceManager.ThisDevicePickId && attachedBluetooth != null) {
+                    outputDeviceManager.setPreferredDevice(attachedBluetooth.id)
+                    settingsRepository.setPreferredOutputDeviceId(attachedBluetooth.id)
+                } else {
+                    outputDeviceManager.setPreferredDevice(persisted)
+                }
             }
         }
         scope.launch {
-            outputDeviceManager.devices.collect {
+            var knownIds = emptySet<String>()
+            outputDeviceManager.devices.collect { devices ->
+                val attachedIds = devices.mapTo(HashSet()) { it.id }
+                // A Bluetooth output that just attached (headphones switched on,
+                // car kit in range) takes over from a "this device" pin, so the
+                // "Play on" sheet shows where the sound actually goes.
+                val connected = devices.firstOrNull { it.isBluetooth && it.id !in knownIds }
+                knownIds = attachedIds
+                if (connected != null &&
+                    outputDeviceManager.preferredDeviceId.value == OutputDeviceManager.ThisDevicePickId
+                ) {
+                    outputDeviceManager.setPreferredDevice(connected.id)
+                    settingsRepository.setPreferredOutputDeviceId(connected.id)
+                }
                 applyPreferredAudioDevice()
                 recompute()
             }
@@ -171,6 +210,65 @@ internal class AudioOutputRouter(
         // Mid-crossfade the AUDIBLE stream is the not-yet-promoted secondary: pin
         // it too, or the incoming stream stays on the platform's default route.
         fadeEngine.activeSecondaryPlayer?.let { applyTo(it) }
+        syncPhoneSpeakerGain()
+    }
+
+    /**
+     * True when the phone's own output is the routing target while a Bluetooth
+     * output is attached. Android keeps the music stream volume bound to the
+     * attached headset in that case, so the hardware keys would raise the (silent)
+     * headset and leave the phone's speaker untouched; the engine moves
+     * [phoneOutputGain] instead. Every other combination is left to the platform.
+     */
+    fun localOutputIsPhoneOverBluetooth(): Boolean {
+        val pinnedId = outputDeviceManager.preferredDeviceId.value ?: return false
+        val pinned = if (pinnedId == OutputDeviceManager.ThisDevicePickId) {
+            outputDeviceManager.localDevice
+        } else {
+            outputDeviceManager.devices.value.firstOrNull { it.id == pinnedId }
+        } ?: return false
+        if (pinned.isBluetooth) return false
+        return outputDeviceManager.devices.value.any { it.isBluetooth }
+    }
+
+    /** The gain currently applied on top of the DSP volume (1 when the platform owns the volume). */
+    val phoneOutputGain: Float
+        get() = if (localOutputIsPhoneOverBluetooth()) phoneSpeakerGain else 1f
+
+    /**
+     * Moves the phone speaker's volume by [steps] key presses of [PHONE_VOLUME_STEP].
+     * Returns false when this output is not the pinned-over-Bluetooth case, i.e.
+     * when the platform adjusts the right device itself.
+     */
+    fun adjustPhoneOutputVolume(steps: Int): Boolean {
+        if (!localOutputIsPhoneOverBluetooth()) return false
+        syncPhoneSpeakerGain()
+        phoneSpeakerGain = (phoneSpeakerGain + steps * PHONE_VOLUME_STEP).coerceIn(0f, 1f)
+        applyVolumePath(dspEngine.state.value)
+        return true
+    }
+
+    /**
+     * Seeds/clears the phone-speaker gain when the routing target changes. The
+     * phone speaker's own volume knob cannot be addressed while the headset owns
+     * the stream volume, so the gain starts where that volume currently sits
+     * (with headroom upward) and reverts to unity as soon as the headset becomes
+     * the target again, so no hidden attenuation survives the switch.
+     */
+    private fun syncPhoneSpeakerGain() {
+        if (!localOutputIsPhoneOverBluetooth()) {
+            if (phoneSpeakerGainSeeded || phoneSpeakerGain != 1f) {
+                phoneSpeakerGainSeeded = false
+                phoneSpeakerGain = 1f
+                applyVolumePath(dspEngine.state.value)
+            }
+            return
+        }
+        if (phoneSpeakerGainSeeded) return
+        phoneSpeakerGainSeeded = true
+        phoneSpeakerGain = (outputDeviceManager.musicVolumePercent() / 100f)
+            .coerceIn(PHONE_VOLUME_SEED_MIN, PHONE_VOLUME_SEED_MAX)
+        applyVolumePath(dspEngine.state.value)
     }
 
     /**
@@ -207,11 +305,8 @@ internal class AudioOutputRouter(
      */
     private fun applyVolumePath(state: DspState) {
         if (fadeEngine.isFading) return
-        playerProvider().volume = if (state.directVolumeControl) {
-            1f
-        } else {
-            state.volumePercent / 100f
-        }
+        val dspGain = if (state.directVolumeControl) 1f else state.volumePercent / 100f
+        playerProvider().volume = dspGain * phoneOutputGain
     }
 
     /** Resolves the transport facts of a distant track for the pipeline's Transport stage. */

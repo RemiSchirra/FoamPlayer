@@ -1,5 +1,6 @@
 package com.foamplayer.app.data.distant
 
+import com.foamplayer.app.audio.cast.ChromecastController
 import com.foamplayer.app.audio.device.AudioOutputDevice
 import com.foamplayer.app.audio.device.OutputDeviceManager
 import com.foamplayer.app.ui.modals.PlayOnDevice
@@ -21,16 +22,22 @@ import kotlinx.coroutines.delay
 /**
  * Assembles the "Play on" target list: the always-present local playback, every
  * Bluetooth output currently attached to the system (live through
- * [OutputDeviceManager]'s audio-device callback), and the controllable remote
- * players of the configured media servers (Jellyfin's remote-control session
- * API: the server plays the queue on its device, no audio flows through this
- * app). Chromecast and UPnP/DLNA renderers need their own discovery protocol;
- * they join this list once that lands.
+ * [OutputDeviceManager]'s audio-device callback), the Chromecasts discovered on
+ * the LAN by [ChromecastController], and the controllable remote players of the
+ * configured media servers (Jellyfin's remote-control session API: the server
+ * plays the queue on its device, no audio flows through this app).
+ *
+ * Discovery only runs while the sheet is open (see [startChromecastDiscovery]),
+ * so a closed sheet costs no multicast traffic.
+ *
+ * UPnP/DLNA renderers need their own discovery protocol; they join this list
+ * once that lands.
  */
 @Singleton
 class PlayOnDeviceRepository @Inject constructor(
     private val outputDeviceManager: OutputDeviceManager,
-    private val distantRepository: DistantRepository
+    private val distantRepository: DistantRepository,
+    private val chromecastController: ChromecastController
 ) {
 
     /** Latest remote-session snapshot; refreshed only while [sessionPoll] is collected. */
@@ -41,14 +48,30 @@ class PlayOnDeviceRepository @Inject constructor(
     var lastPolledSessions: List<DistantRepository.DistantRemoteSession> = emptyList()
         private set
 
+    /** True while the LAN is being scanned for Chromecasts. */
+    val scanningForChromecasts: StateFlow<Boolean> = chromecastController.scanning
+
     /** Every selectable target, in display order: this device first, then the rest. */
     val devices: Flow<List<PlayOnDevice>> =
         combine(
             outputDeviceManager.devices,
-            remoteSessions.asStateFlow()
-        ) { outputs, remotes ->
-            listOf(PlayOnDevice.ThisDevice) + outputs.toBluetoothTargets() + remotes
+            remoteSessions.asStateFlow(),
+            chromecastController.devices
+        ) { outputs, remotes, casts ->
+            listOf(PlayOnDevice.ThisDevice) +
+                outputs.toBluetoothTargets() +
+                casts.map { PlayOnDevice.chromecast(name = it.name, id = it.id) } +
+                remotes
         }.distinctUntilChanged()
+
+    /** Opens the Chromecast scan (called when the "Play on" sheet appears). */
+    fun startChromecastDiscovery() = chromecastController.startDiscovery()
+
+    /** Closes the Chromecast scan (called when the "Play on" sheet goes away). */
+    fun stopChromecastDiscovery() = chromecastController.stopDiscovery()
+
+    /** True while a Chromecast session is live; the sheet then shows it as the selection. */
+    val chromecastDeviceId: StateFlow<String?> = chromecastController.connectedDeviceId
 
     /**
      * Polls the configured servers for controllable sessions at [POLL_MS] and

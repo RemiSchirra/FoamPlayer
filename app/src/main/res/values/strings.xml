@@ -82,6 +82,9 @@
     <string name="toast_distant_track_unavailable">Distant track unavailable: %1$s</string>
     <string name="toast_failed_to_load">Failed to load %1$s</string>
     <string name="toast_playback_stopped">Playback stopped: too many tracks failed to load</string>
+    <string name="toast_cast_unavailable">Chromecast is not available on this device (Google Play services required)</string>
+    <string name="toast_cast_load_failed">Could not play %1$s on the Chromecast</string>
+    <string name="toast_cast_connect_failed">Could not connect to that Chromecast</string>
     <string name="done">Done</string>
     <string name="metadata_separators">Metadata Separators</string>
     <string name="artist_separators">Artist Separators</string>
@@ -297,6 +300,7 @@
     <string name="play_on_chromecast_desc">Chromecast</string>
     <string name="play_on_remote_player_desc">%1$s media server</string>
     <string name="play_on_upnp_desc">UPnP</string>
+    <string name="play_on_scanning">Looking for Chromecasts…</string>
     <string name="track_count_duration">%1$d Tracks • %2$s</string>
     <string name="add_separator">Add separator…</string>
 
