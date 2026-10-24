@@ -23,6 +23,7 @@ import com.foamplayer.app.AppForegroundState
 import com.foamplayer.app.FoamApplication
 import com.foamplayer.app.MainActivity
 import com.foamplayer.app.R
+import com.foamplayer.app.audio.cast.ChromecastController
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.QueuePersistence
 import com.foamplayer.app.audio.engine.RepeatMode
@@ -65,6 +66,13 @@ import javax.inject.Inject
  * update arrives with playback active, the closed flag is lifted and Media3
  * re-posts the notification and re-promotes the service to the foreground.
  *
+ * While a Chromecast is connected the receiver owns playback and the Cast SDK
+ * posts its own "Casting to ..." notification: that one is the media
+ * notification for the session, so the local playback notification is dropped
+ * and every update is swallowed (see [onUpdateNotificationAsync]) until the
+ * session ends. Two notifications for the same track -- one of them driving the
+ * parked phone player -- would only confuse the user.
+ *
  * Playback resumption: Media3 retires the paused foreground state after 10
  * minutes, and the system always destroys the service (or the whole process).
  * [QueuePersistence] keeps the playing session on disk; when this service is
@@ -104,6 +112,9 @@ class PlaybackService : MediaSessionService() {
 
     @Inject
     lateinit var distantRepository: com.foamplayer.app.data.distant.DistantRepository
+
+    @Inject
+    lateinit var chromecastController: ChromecastController
 
     private var mediaSession: MediaSession? = null
 
@@ -146,6 +157,7 @@ class PlaybackService : MediaSessionService() {
         registerScreenStateReceiver()
         observeLockScreenSetting()
         observeNotificationButtons()
+        observeCastSession()
 
         val callback = object : MediaSession.Callback {
             override fun onConnect(
@@ -319,11 +331,20 @@ class PlaybackService : MediaSessionService() {
      * The first update that arrives while playback is active clears the closed
      * state instead, letting the normal flow re-post the notification and
      * re-promote the service to the foreground.
+     *
+     * While a Chromecast is connected the local notification is suppressed for
+     * the whole session: the Cast SDK's own notification is the media
+     * notification of what is actually playing, and this session's player is
+     * parked (so its notification would only offer controls that do nothing on
+     * the receiver).
      */
     override fun onUpdateNotificationAsync(
         session: MediaSession,
         startInForegroundRequired: Boolean
     ): ListenableFuture<Void?> {
+        if (chromecastController.connectedDeviceId.value != null) {
+            return Futures.immediateVoidFuture()
+        }
         if (notificationClosed) {
             if (audioEngine.playbackState.value.isPlaying) {
                 notificationClosed = false
@@ -336,15 +357,16 @@ class PlaybackService : MediaSessionService() {
 
     /**
      * Drops the foreground state and cancels the playback notification while
-     * keeping the service (and the session) alive. Both calls are defensive:
-     * stopForeground throws if the service isn't foreground, and the cancel is
-     * a belt-and-suspenders against a still-pending bitmap callback re-posting
-     * the dismissed notification.
+     * keeping the service (and the session) alive. Used by "Close" and while a
+     * Chromecast owns playback. Both calls are defensive: stopForeground throws
+     * if the service isn't foreground, and the cancel is a belt-and-suspenders
+     * against a still-pending bitmap callback re-posting the dismissed
+     * notification.
      */
     private fun hideNotification() {
         runCatching { Util.stopForeground(this, /* removeNotification= */ true) }
         runCatching {
-            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
                 .cancel(DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID)
         }
     }
@@ -356,6 +378,23 @@ class PlaybackService : MediaSessionService() {
             IntentFilter(Intent.ACTION_SCREEN_ON),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+    }
+
+    /**
+     * Steps the local notification aside while a Chromecast owns playback: the
+     * Cast SDK's own notification is the one the user should see. Cancelled as
+     * soon as a receiver is actually connected (not while a route is only being
+     * selected, so a failed connect leaves the local notification untouched) and
+     * restored when the session ends.
+     */
+    private fun observeCastSession() {
+        serviceScope.launch {
+            // StateFlow only emits on changes, so no distinctUntilChanged() here.
+            chromecastController.connectedDeviceId
+                .collect { deviceId ->
+                    if (deviceId != null) hideNotification() else triggerNotificationUpdate()
+                }
+        }
     }
 
     /** Keeps the cached "display on lock screen" flag in sync with settings. */
