@@ -61,7 +61,10 @@ fun PlayOnModal(
         onDismissRequest = onDismiss
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Icon(
                     imageVector = FoamTheme.icons.current.cast,
                     contentDescription = null,
@@ -71,8 +74,16 @@ fun PlayOnModal(
                 Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
                 BasicText(
                     text = stringResource(R.string.play_on),
-                    style = FoamTheme.typography.titleMedium
+                    style = FoamTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
                 )
+                if (scanning && devices.none { it.type == PlayOnDeviceType.CHROMECAST }) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = FoamTheme.accentColor,
+                        strokeWidth = 2.dp
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(FoamDimens.spacingStandard))
 
@@ -82,33 +93,6 @@ fun PlayOnModal(
                     isSelected = device.id == selectedDeviceId,
                     onClick = { onDeviceSelected(device) }
                 )
-            }
-
-            // The Cast SDK needs a few seconds of multicast before the first
-            // device shows up: say so instead of leaving the list looking empty.
-            if (scanning && devices.none { it.type == PlayOnDeviceType.CHROMECAST }) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            horizontal = FoamDimens.paddingSmall,
-                            vertical = FoamDimens.spacingSmall
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        color = FoamTheme.accentColor,
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(FoamDimens.spacingMedium))
-                    BasicText(
-                        text = stringResource(R.string.play_on_scanning),
-                        style = FoamTheme.typography.caption.copy(
-                            color = FoamTheme.colors.textSecondary
-                        )
-                    )
-                }
             }
         }
     }

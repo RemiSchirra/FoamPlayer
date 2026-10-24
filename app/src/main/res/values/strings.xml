@@ -300,7 +300,6 @@
     <string name="play_on_chromecast_desc">Chromecast</string>
     <string name="play_on_remote_player_desc">%1$s media server</string>
     <string name="play_on_upnp_desc">UPnP</string>
-    <string name="play_on_scanning">Looking for Chromecasts…</string>
     <string name="track_count_duration">%1$d Tracks • %2$s</string>
     <string name="add_separator">Add separator…</string>
 

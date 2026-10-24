@@ -12,6 +12,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.toast.ToastCenter
+import com.google.android.gms.cast.CastDevice
 import com.google.android.gms.cast.CastMediaControlIntent
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaMetadata
@@ -22,6 +23,7 @@ import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
 import com.google.android.gms.cast.framework.media.RemoteMediaClient
+import com.google.android.gms.common.images.WebImage
 import com.foamplayer.distant.DistantUris
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -106,6 +108,25 @@ class ChromecastController @Inject constructor(
     /** Main-thread scheduler for the delayed queue fallback (Cast SDK callbacks live here too). */
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    /** Separate from [mainHandler], whose callbacks a session teardown wipes. */
+    private val discoveryHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * Safety net for discovery: re-reads the route list on a timer instead of
+     * trusting `onRouteAdded` alone, which some receiver/firmware combinations
+     * deliver late (or not at all) to a manually registered callback.
+     */
+    private val discoveryRefresh = object : Runnable {
+        override fun run() {
+            if (!discovering) return
+            refreshDevices()
+            discoveryHandler.postDelayed(this, DISCOVERY_REFRESH_MS)
+        }
+    }
+
+    /** Number of receivers last published, so the discovery log only prints on change. */
+    private var publishedDeviceCount = -1
+
     /**
      * False once the receiver refused a media queue. Some receivers (the Default
      * Media Receiver among them) only accept single-item loads, so playback then
@@ -139,7 +160,7 @@ class ChromecastController @Inject constructor(
         }.getOrNull()
     }
 
-    // ---------------------------------------------------------------- discovery
+    // discovery
 
     private val routerCallback = object : MediaRouter.Callback() {
         override fun onRouteAdded(router: MediaRouter, route: MediaRouter.RouteInfo) = refreshDevices()
@@ -153,11 +174,15 @@ class ChromecastController @Inject constructor(
     @Synchronized
     fun startDiscovery() {
         if (!ensureInitialized()) {
+            Log.w(TAG, "Cast SDK unavailable; cannot discover receivers")
             _devices.value = emptyList()
             return
         }
         if (discovering) return
-        val router = mediaRouter ?: return
+        val router = mediaRouter ?: run {
+            Log.w(TAG, "MediaRouter unavailable; cannot discover receivers")
+            return
+        }
         val routeSelector = selector ?: return
         discovering = true
         _scanning.value = true
@@ -167,8 +192,10 @@ class ChromecastController @Inject constructor(
                 routerCallback,
                 MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY
             )
-        }
+        }.onFailure { Log.w(TAG, "Cannot register the discovery callback", it) }
         refreshDevices()
+        discoveryHandler.removeCallbacks(discoveryRefresh)
+        discoveryHandler.postDelayed(discoveryRefresh, DISCOVERY_REFRESH_MS)
     }
 
     /** Stops scanning; the device list is kept so the sheet does not flash empty on reopen. */
@@ -177,6 +204,7 @@ class ChromecastController @Inject constructor(
         if (!discovering) return
         discovering = false
         _scanning.value = false
+        discoveryHandler.removeCallbacks(discoveryRefresh)
         val router = mediaRouter ?: return
         runCatching { router.removeCallback(routerCallback) }
     }
@@ -184,13 +212,27 @@ class ChromecastController @Inject constructor(
     private fun refreshDevices() {
         val router = mediaRouter ?: return
         val routeSelector = selector ?: return
-        _devices.value = router.routes
-            .filter { it.matchesSelector(routeSelector) }
-            .map { route -> Device(route.id, route.name) }
-            .distinctBy { it.id }
+
+        val byDevice = LinkedHashMap<String, Pair<MediaRouter.RouteInfo, Device>>()
+        for (route in router.routes) {
+            val cast = runCatching { CastDevice.getFromBundle(route.extras) }.getOrNull()
+            if (cast == null && !route.matchesSelector(routeSelector)) continue
+            val key = cast?.deviceId?.takeIf { it.isNotBlank() } ?: route.name
+            val known = byDevice[key]
+            if (known == null || (route.isSelected && !known.first.isSelected)) {
+                byDevice[key] = route to Device(route.id, route.name)
+            }
+        }
+        val devices = byDevice.values.map { it.second }
+
+        if (devices.size != publishedDeviceCount) {
+            publishedDeviceCount = devices.size
+            Log.d(TAG, "Cast discovery: ${devices.size} receiver(s) ${devices.map { it.name }}")
+        }
+        _devices.value = devices
     }
 
-    // ------------------------------------------------------------------ session
+    // session
 
     /**
      * Connects to [routeId]. Selecting the route is what starts the Cast session:
@@ -306,7 +348,7 @@ class ChromecastController @Inject constructor(
         return router.routes.firstOrNull { it.isSelected && it.matchesSelector(routeSelector) }?.id
     }
 
-    // ---------------------------------------------------------------- playback
+    // playback
 
     /**
      * Publishes [tracks] as the receiver's media queue. [startIndex] is the absolute
@@ -510,7 +552,7 @@ class ChromecastController @Inject constructor(
             return state == MediaStatus.PLAYER_STATE_IDLE
         }
 
-    // -------------------------------------------------------------- media URLs
+    // media URLs
 
     /** Builds the Cast [MediaInfo] for [track], publishing local files over HTTP. */
     private fun mediaInfo(track: TrackEntity): MediaInfo? {
@@ -532,6 +574,9 @@ class ChromecastController @Inject constructor(
             putString(MediaMetadata.KEY_TITLE, track.title)
             putString(MediaMetadata.KEY_ARTIST, track.artist)
             putString(MediaMetadata.KEY_ALBUM_TITLE, track.album)
+            mediaServer.publishArtwork(track.albumArtPath)?.let { url ->
+                addImage(WebImage(Uri.parse(url)))
+            }
         }
         return MediaInfo.Builder(url)
             .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
@@ -583,12 +628,15 @@ class ChromecastController @Inject constructor(
 
     private fun ensureInitialized(): Boolean {
         if (initialized) return castContext != null
-        initialized = true
-        castContext = runCatching { CastContext.getSharedInstance(context) }
+        // Transient Play services failures must not poison the controller for the
+        // rest of the process: only a successful init is remembered.
+        val resolved = runCatching { CastContext.getSharedInstance(context) }
             .onFailure { Log.w(TAG, "Cast is unavailable on this device", it) }
             .getOrNull()
             ?: return false
-        castContext?.sessionManager?.addSessionManagerListener(sessionListener, CastSession::class.java)
+        castContext = resolved
+        initialized = true
+        resolved.sessionManager.addSessionManagerListener(sessionListener, CastSession::class.java)
         return true
     }
 
@@ -608,6 +656,13 @@ class ChromecastController @Inject constructor(
 
         /** Grace period before retrying a refused queue as a single-item load. */
         private const val QUEUE_FALLBACK_DELAY_MS = 700L
+
+        /**
+         * How often the "Play on" scan re-reads the MediaRouter route list. Cast
+         * discovery itself is mDNS-driven and takes a few seconds; this only makes
+         * sure a missed route callback cannot leave the sheet empty forever.
+         */
+        private const val DISCOVERY_REFRESH_MS = 1_500L
 
         /** Device volume moved per hardware key press (5%: 20 steps over the range). */
         private const val VOLUME_STEP = 0.05

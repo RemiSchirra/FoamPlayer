@@ -1,9 +1,13 @@
 package com.foamplayer.app.audio.cast
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -18,6 +22,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+import androidx.core.graphics.scale
+import androidx.core.net.toUri
 
 /**
  * Tiny HTTP server that lets a Chromecast fetch what this phone holds.
@@ -33,30 +39,59 @@ import javax.inject.Singleton
  * and are handed to the receiver unchanged by
  * [ChromecastController]. Only the ones that need request headers go through
  * the small proxy path here, which relays the range request upstream.
+ *
+ * The same server also publishes cover art: pictures embedded in an audio file
+ * (or cached as an image by a distant provider) are invisible to the receiver
+ * too, so they are extracted on demand and served under their own URL
+ * ([publishArtwork]).
  */
 @Singleton
 class LocalCastMediaServer @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    private sealed interface Entry {
-        val mime: String
-    }
+    private sealed interface Entry
 
     private class LocalEntry(
         val uri: String,
         /** Snapshot length from the scanner; `AssetFileDescriptor.length` wins when known. */
         val length: Long,
-        override val mime: String
+        val mime: String
     ) : Entry
 
     private class RemoteEntry(
         val url: String,
         val headers: Map<String, String>,
-        override val mime: String
+        val mime: String
     ) : Entry
 
+    /**
+     * Cover art that is only read on the receiver's first request (publishing a
+     * whole queue must stay instant) and kept for the rest of the session.
+     */
+    private class ArtworkEntry(private val read: () -> Cover?) : Entry {
+        @Volatile private var loaded: Cover? = null
+        @Volatile private var resolved = false
+
+        fun cover(): Cover? {
+            if (resolved) return loaded
+            synchronized(this) {
+                if (!resolved) {
+                    loaded = runCatching(read).getOrNull()
+                    resolved = true
+                }
+                return loaded
+            }
+        }
+    }
+
+    private class Cover(val bytes: ByteArray, val mime: String)
+
     private val entries = ConcurrentHashMap<String, Entry>()
+
+    /** `albumArtPath` → already published URL, so a republished queue reuses its tokens. */
+    private val artworkUrls = ConcurrentHashMap<String, String>()
+
     private val counter = AtomicLong(0L)
     private val salt = UUID.randomUUID().toString().take(8)
     private val workers = Executors.newFixedThreadPool(4) { runnable ->
@@ -80,13 +115,34 @@ class LocalCastMediaServer @Inject constructor(
     fun publishRemote(url: String, mime: String, headers: Map<String, String>): String? =
         publish(RemoteEntry(url, headers, mime), titleFrom(url))
 
+    /**
+     * Publishes the cover art behind [artworkPath] and returns a URL the
+     * receiver can fetch, or null when the track has no usable picture.
+     *
+     * Local tracks point at the audio file itself (the picture lives in its
+     * tags) and distant tracks at an image cached on disk at scan time, so the
+     * bytes are extracted when the receiver first asks for the URL. A remote
+     * http(s) image is handed over untouched.
+     */
+    fun publishArtwork(artworkPath: String?): String? {
+        val source = artworkPath?.takeIf { it.isNotBlank() } ?: return null
+        val uri = runCatching { source.toUri() }.getOrNull() ?: return null
+        val scheme = uri.scheme?.lowercase()
+        if (scheme == "http" || scheme == "https") return source
+        artworkUrls[source]?.let { return it }
+        val url = publish(ArtworkEntry { readCover(uri) }, "cover.jpg") ?: return null
+        artworkUrls[source] = url
+        return url
+    }
+
     /** Forgets every published track (called when the cast session ends). */
     fun clear() {
         entries.clear()
+        artworkUrls.clear()
     }
 
     fun shutdown() {
-        entries.clear()
+        clear()
         runCatching { serverSocket?.close() }
         serverSocket = null
         port = 0
@@ -127,7 +183,7 @@ class LocalCastMediaServer @Inject constructor(
         while (!socket.isClosed) {
             val client = try {
                 socket.accept()
-            } catch (e: IOException) {
+            } catch (_: IOException) {
                 return
             }
             workers.execute {
@@ -161,7 +217,7 @@ class LocalCastMediaServer @Inject constructor(
         }
 
         val output = client.getOutputStream()
-        val segments = runCatching { Uri.parse(target).pathSegments }.getOrNull().orEmpty()
+        val segments = runCatching { target.toUri().pathSegments }.getOrNull().orEmpty()
         val castIndex = segments.indexOf("cast")
         val token = if (castIndex >= 0) segments.getOrNull(castIndex + 1) else null
         val entry = token?.let { entries[it] }
@@ -173,12 +229,13 @@ class LocalCastMediaServer @Inject constructor(
         when (entry) {
             is LocalEntry -> serveLocal(entry, rangeHeader, output, method == "HEAD")
             is RemoteEntry -> serveRemote(entry, rangeHeader, output, method == "HEAD")
+            is ArtworkEntry -> serveArtwork(entry, output, method == "HEAD")
         }
     }
 
     private fun serveLocal(entry: LocalEntry, rangeHeader: String?, output: OutputStream, headOnly: Boolean) {
         val descriptor = try {
-            context.contentResolver.openAssetFileDescriptor(Uri.parse(entry.uri), "r")
+            context.contentResolver.openAssetFileDescriptor(entry.uri.toUri(), "r")
         } catch (e: Exception) {
             Log.w(TAG, "Cannot open ${entry.uri}: ${e.message}")
             null
@@ -301,6 +358,115 @@ class LocalCastMediaServer @Inject constructor(
         }
     }
 
+    /** Serves a cover picture (no ranges: images are small and fetched whole). */
+    private fun serveArtwork(entry: ArtworkEntry, output: OutputStream, headOnly: Boolean) {
+        val cover = entry.cover()
+        if (cover == null) {
+            writeHeaders(output, 404, "Not Found", emptyList())
+            return
+        }
+        val headers = listOf(
+            "Content-Type" to cover.mime,
+            "Content-Length" to cover.bytes.size.toString(),
+            // The receiver caches by URL; a re-request of the same track is legit.
+            "Cache-Control" to "public, max-age=86400"
+        )
+        writeHeaders(output, 200, "OK", headers)
+        if (headOnly) return
+        output.write(cover.bytes)
+        output.flush()
+    }
+
+    /** Extracts [uri]'s picture: a cached image file, else the audio file's embedded tag. */
+    private fun readCover(uri: Uri): Cover? {
+        val bytes = if (isImageFile(uri)) readFileBytes(uri) else readEmbeddedPicture(uri)
+        return bytes?.let { normalizeCover(it) }
+    }
+
+    private fun isImageFile(uri: Uri): Boolean {
+        val scheme = uri.scheme
+        if (scheme != null && scheme != "file" && scheme != "content") return false
+        val extension = uri.path.orEmpty().substringAfterLast('.', "").lowercase()
+        return extension in IMAGE_EXTENSIONS
+    }
+
+    private fun readFileBytes(uri: Uri): ByteArray? = try {
+        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+    } catch (e: Exception) {
+        Log.w(TAG, "Cannot read cover art $uri: ${e.message}")
+        null
+    }
+
+    private fun readEmbeddedPicture(uri: Uri): ByteArray? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, uri)
+            retriever.embeddedPicture
+        } catch (e: Exception) {
+            Log.d(TAG, "No embedded cover art in $uri: ${e.message}")
+            null
+        } finally {
+            runCatching { retriever.release() }
+        }
+    }
+
+    /**
+     * Hands the receiver a picture it can decode cheaply: an already small image
+     * is served untouched, a large one (embedded covers go up to several MB) is
+     * downscaled and re-encoded to JPEG. Entries live until the session ends, so
+     * keeping them small matters.
+     */
+    private fun normalizeCover(bytes: ByteArray): Cover? {
+        val mime = imageMimeType(bytes) ?: return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= MAX_COVER_PX && bounds.outHeight <= MAX_COVER_PX) {
+            return Cover(bytes, mime)
+        }
+
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight, MAX_COVER_PX)
+        }
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+            ?: return Cover(bytes, mime)
+        val longest = maxOf(bitmap.width, bitmap.height)
+        val scaled = if (longest > MAX_COVER_PX) {
+            val ratio = MAX_COVER_PX.toFloat() / longest
+            bitmap.scale(
+                (bitmap.width * ratio).toInt().coerceAtLeast(1),
+                (bitmap.height * ratio).toInt().coerceAtLeast(1)
+            ).also { if (it !== bitmap) bitmap.recycle() }
+        } else {
+            bitmap
+        }
+        val out = ByteArrayOutputStream()
+        scaled.compress(Bitmap.CompressFormat.JPEG, COVER_QUALITY, out)
+        scaled.recycle()
+        return Cover(out.toByteArray(), "image/jpeg")
+    }
+
+    /** Closest power-of-two sampling that keeps both sides at or above [max]. */
+    private fun sampleSizeFor(width: Int, height: Int, max: Int): Int {
+        var sample = 1
+        while (width / (sample * 2) >= max && height / (sample * 2) >= max) sample *= 2
+        return sample
+    }
+
+    /** Content type from the picture's magic bytes; null when it is not an image. */
+    private fun imageMimeType(bytes: ByteArray): String? {
+        if (bytes.size < 12) return null
+        fun byteAt(index: Int) = bytes[index].toInt() and 0xFF
+        return when {
+            byteAt(0) == 0xFF && byteAt(1) == 0xD8 -> "image/jpeg"
+            byteAt(0) == 0x89 && byteAt(1) == 0x50 && byteAt(2) == 0x4E -> "image/png"
+            byteAt(0) == 0x47 && byteAt(1) == 0x49 -> "image/gif"
+            byteAt(0) == 0x42 && byteAt(1) == 0x4D -> "image/bmp"
+            byteAt(0) == 0x52 && byteAt(1) == 0x49 &&
+                byteAt(8) == 0x57 && byteAt(9) == 0x45 -> "image/webp"
+            else -> null
+        }
+    }
+
     private fun writeHeaders(
         output: OutputStream,
         code: Int,
@@ -362,5 +528,11 @@ class LocalCastMediaServer @Inject constructor(
         const val TAG = "LocalCastMediaServer"
         const val BUFFER_SIZE = 64 * 1024
         const val REQUEST_TIMEOUT_MS = 20_000
+
+        /** Longest side of a served cover; a TV never needs more and big art is MBs. */
+        const val MAX_COVER_PX = 1024
+        const val COVER_QUALITY = 88
+
+        val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp")
     }
 }
