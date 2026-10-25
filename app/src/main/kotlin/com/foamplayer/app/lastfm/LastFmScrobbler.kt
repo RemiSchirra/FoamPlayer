@@ -18,7 +18,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -31,6 +30,8 @@ import kotlinx.coroutines.launch
  * - Sends `track.updateNowPlaying` when the playing track changes.
  * - Submits `track.scrobble` once per track, driven by the same listen
  *   threshold as the library's play counter ([AudioEngine.listenedTrackEvents]).
+ * - When the device is offline, scrobbles that could not be sent are kept in
+ *   [LastFmScrobbleQueue] and submitted in batches once connectivity returns.
  *
  * An invalid session key clears the stored session so the settings screen
  * falls back to its disconnected state.
@@ -41,6 +42,8 @@ class LastFmScrobbler @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val tokenStore: LastFmTokenStore,
     private val credentialsStore: LastFmCredentialsStore,
+    private val scrobbleQueue: LastFmScrobbleQueue,
+    private val connectivityObserver: ConnectivityObserver,
     private val clientFactory: LastFmClientFactory
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
