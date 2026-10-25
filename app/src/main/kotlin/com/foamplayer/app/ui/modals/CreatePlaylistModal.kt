@@ -57,6 +57,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -622,14 +623,18 @@ internal fun ModalButton(
                 enabled = enabled,
                 onClick = onClick
             )
-            .padding(vertical = FoamDimens.spacingStandard),
+            .padding(
+                horizontal = FoamDimens.spacingStandard,
+                vertical = FoamDimens.spacingStandard
+            ),
         contentAlignment = Alignment.Center
     ) {
         BasicText(
             text = label,
             style = FoamTheme.typography.body.copy(
                 color = if (filled) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
             )
         )
     }
