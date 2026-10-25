@@ -414,6 +414,8 @@
     <string name="lastfm_scrobble">Scrobbler avec Last.fm</string>
     <string name="lastfm_scrobble_desc">Envoie chaque titre à Last.fm lorsqu\'il atteint le seuil d\'écoute (%1$d%%)</string>
     <string name="lastfm_scrobble_connect_first">Connectez votre compte Last.fm ci-dessus pour commencer à scrobbler.</string>
+    <string name="lastfm_scrobble_first_artist">Scrobber uniquement le premier artiste</string>
+    <string name="lastfm_scrobble_first_artist_desc">Seul le premier nom crédité est envoyé à Last.fm.</string>
     <string name="lastfm_api_key">Clé API</string>
     <string name="lastfm_api_key_app">Clé fournie par l\'application</string>
     <string name="lastfm_api_key_app_desc">Utilise la clé API Last.fm configurée pour cette version.</string>

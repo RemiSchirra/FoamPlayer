@@ -292,6 +292,10 @@ class SettingsRepository @Inject constructor(
         it.copy(lastFmScrobblingEnabled = enabled)
     }
 
+    suspend fun setScrobbleOnlyFirstArtist(enabled: Boolean) = update {
+        it.copy(scrobbleOnlyFirstArtist = enabled)
+    }
+
     suspend fun setArtistImageResolveEnabled(enabled: Boolean) = update {
         it.copy(artistImageResolveEnabled = enabled)
     }
@@ -433,6 +437,8 @@ class SettingsRepository @Inject constructor(
         discordOnlineArt = this[Keys.DISCORD_ONLINE_ART] ?: AppSettings().discordOnlineArt,
         lastFmScrobblingEnabled = this[Keys.LASTFM_SCROBBLING_ENABLED]
             ?: AppSettings().lastFmScrobblingEnabled,
+        scrobbleOnlyFirstArtist = this[Keys.LASTFM_SCROBBLE_ONLY_FIRST_ARTIST]
+            ?: AppSettings().scrobbleOnlyFirstArtist,
         artistImageResolveEnabled = this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] ?: AppSettings().artistImageResolveEnabled,
         displayOnLockScreen = this[Keys.DISPLAY_ON_LOCK_SCREEN] ?: AppSettings().displayOnLockScreen,
         fastLockScreenEnabled = this[Keys.FAST_LOCK_SCREEN_ENABLED] ?: AppSettings().fastLockScreenEnabled,
@@ -511,6 +517,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.DISCORD_PRESENCE_ENABLED] = settings.discordPresenceEnabled
         this[Keys.DISCORD_ONLINE_ART] = settings.discordOnlineArt
         this[Keys.LASTFM_SCROBBLING_ENABLED] = settings.lastFmScrobblingEnabled
+        this[Keys.LASTFM_SCROBBLE_ONLY_FIRST_ARTIST] = settings.scrobbleOnlyFirstArtist
         this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] = settings.artistImageResolveEnabled
         this[Keys.DISPLAY_ON_LOCK_SCREEN] = settings.displayOnLockScreen
         this[Keys.FAST_LOCK_SCREEN_ENABLED] = settings.fastLockScreenEnabled
@@ -589,6 +596,7 @@ class SettingsRepository @Inject constructor(
         val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
         val DISCORD_ONLINE_ART = booleanPreferencesKey("discord_online_art")
         val LASTFM_SCROBBLING_ENABLED = booleanPreferencesKey("lastfm_scrobbling_enabled")
+        val LASTFM_SCROBBLE_ONLY_FIRST_ARTIST = booleanPreferencesKey("lastfm_scrobble_only_first_artist")
         val ARTIST_IMAGE_RESOLVE_ENABLED = booleanPreferencesKey("artist_image_resolve_enabled")
         val DISPLAY_ON_LOCK_SCREEN = booleanPreferencesKey("display_on_lock_screen")
         val FAST_LOCK_SCREEN_ENABLED = booleanPreferencesKey("fast_lock_screen_enabled")

@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Bridges [AudioEngine] playback to Last.fm while the feature is enabled and a
@@ -30,6 +31,9 @@ import kotlinx.coroutines.launch
  * - Sends `track.updateNowPlaying` when the playing track changes.
  * - Submits `track.scrobble` once per track, driven by the same listen
  *   threshold as the library's play counter ([AudioEngine.listenedTrackEvents]).
+ * - When "scrobble only the first artist" is enabled, multi-artist tracks
+ *   (the app-wide "; " convention) are submitted with their first credited
+ *   artist only.
  * - When the device is offline, scrobbles that could not be sent are kept in
  *   [LastFmScrobbleQueue] and submitted in batches once connectivity returns.
  *
@@ -65,6 +69,7 @@ class LastFmScrobbler @Inject constructor(
             ) { settings, session, credentials ->
                 ScrobblingState(
                     enabled = settings.lastFmScrobblingEnabled,
+                    scrobbleOnlyFirstArtist = settings.scrobbleOnlyFirstArtist,
                     session = session,
                     credentials = credentials
                 )
@@ -78,7 +83,7 @@ class LastFmScrobbler @Inject constructor(
                     }
                     val client = clientFactory.create(state.credentials)
                     try {
-                        monitorPlayback(session, client)
+                        monitorPlayback(session, client, state.scrobbleOnlyFirstArtist)
                     } finally {
                         client.close()
                     }
@@ -96,7 +101,8 @@ class LastFmScrobbler @Inject constructor(
 
     private suspend fun monitorPlayback(
         session: LastFmSession,
-        client: LastFmClient
+        client: LastFmClient,
+        scrobbleOnlyFirstArtist: Boolean
     ) = coroutineScope {
         launch {
             audioEngine.playbackState.collectLatest { state ->
@@ -109,8 +115,11 @@ class LastFmScrobbler @Inject constructor(
                 if (signature == lastNowPlayingSignature) return@collectLatest
 
                 // Collapse rapid skips into a single now-playing update.
-                delay(NOW_PLAYING_DEBOUNCE_MS)
-                val result = client.updateNowPlaying(session, track.toLastFmTrack())
+                delay(NOW_PLAYING_DEBOUNCE_MS.milliseconds)
+                val result = client.updateNowPlaying(
+                    session,
+                    track.toLastFmTrack(scrobbleOnlyFirstArtist)
+                )
                 if (result.isSuccess) {
                     lastNowPlayingSignature = signature
                     Log.d(LOG_TAG, "now playing: ${track.artist} - ${track.title}")
@@ -137,7 +146,7 @@ class LastFmScrobbler @Inject constructor(
                 val result = client.scrobble(
                     session = session,
                     scrobble = LastFmScrobble(
-                        track = track.toLastFmTrack(),
+                        track = track.toLastFmTrack(scrobbleOnlyFirstArtist),
                         timestampSeconds = timestampSeconds
                     )
                 )
@@ -166,13 +175,28 @@ class LastFmScrobbler @Inject constructor(
         }
     }
 
+    /** First artist credited on the track (the app-wide "; " convention). */
+    private val TrackEntity.firstCreditedArtist: String?
+        get() = artist.split("; ")
+            .map(String::trim)
+            .firstOrNull(String::isNotEmpty)
+
     /** Last.fm ignores tracks shorter than 30 seconds. */
     private val TrackEntity.canScrobble: Boolean
         get() = title.isNotBlank() && artist.isNotBlank() &&
                 duration >= MIN_SCROBBLE_DURATION_MS
 
-    private fun TrackEntity.toLastFmTrack(): LastFmTrack = LastFmTrack(
-        artist = artist.trim(),
+    /**
+     * Maps the track to its Last.fm payload. With [firstArtistOnly] only the
+     * first credited artist (the app-wide "; " convention) is submitted, since
+     * Last.fm treats the whole string as a single artist name.
+     */
+    private fun TrackEntity.toLastFmTrack(firstArtistOnly: Boolean): LastFmTrack = LastFmTrack(
+        artist = if (firstArtistOnly) {
+            firstCreditedArtist ?: artist.trim()
+        } else {
+            artist.trim()
+        },
         title = title.trim(),
         album = album.trim().takeIf { it.isNotEmpty() },
         albumArtist = albumArtist?.trim()?.takeIf { it.isNotEmpty() },
@@ -182,6 +206,7 @@ class LastFmScrobbler @Inject constructor(
 
     private data class ScrobblingState(
         val enabled: Boolean,
+        val scrobbleOnlyFirstArtist: Boolean,
         val session: LastFmSession?,
         val credentials: LastFmCredentials
     )

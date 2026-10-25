@@ -94,6 +94,12 @@ class LastFmSettingsViewModel @Inject constructor(
         }
     }
 
+    fun setScrobbleOnlyFirstArtist(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setScrobbleOnlyFirstArtist(enabled)
+        }
+    }
+
     /** Switches to the API credentials bundled with the build. */
     fun useAppCredentials() {
         switchCredentials {

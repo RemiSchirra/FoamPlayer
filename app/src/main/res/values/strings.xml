@@ -416,6 +416,8 @@
     <string name="lastfm_scrobble">Scrobble with Last.fm</string>
     <string name="lastfm_scrobble_desc">Send each track to Last.fm once it passes the listening threshold (%1$d%%)</string>
     <string name="lastfm_scrobble_connect_first">Connect your Last.fm account above to start scrobbling.</string>
+    <string name="lastfm_scrobble_first_artist">Scrobble only the first artist</string>
+    <string name="lastfm_scrobble_first_artist_desc">Only the first credited name is submitted to Last.fm.</string>
     <string name="lastfm_api_key">API key</string>
     <string name="lastfm_api_key_app">App-provided key</string>
     <string name="lastfm_api_key_app_desc">Use the Last.fm API key configured for this build.</string>

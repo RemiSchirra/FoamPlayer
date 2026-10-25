@@ -276,6 +276,24 @@ fun LastFmSettingsScreen(
                     )
                 }
             }
+
+            item {
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    FoamSwitchItem(
+                        title = stringResource(R.string.lastfm_scrobble_first_artist),
+                        description = stringResource(R.string.lastfm_scrobble_first_artist_desc),
+                        checked = settings.scrobbleOnlyFirstArtist,
+                        onCheckedChange = viewModel::setScrobbleOnlyFirstArtist
+                    )
+                }
+            }
         }
     }
 

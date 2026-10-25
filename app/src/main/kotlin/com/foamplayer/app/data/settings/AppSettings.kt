@@ -162,8 +162,8 @@ data class AppSettings(
     val autoUpdateCheckEnabled: Boolean = true,
     val discordPresenceEnabled: Boolean = false,
     val discordOnlineArt: Boolean = true,
-    /** Sends each listened track to Last.fm after the listen threshold is reached. */
     val lastFmScrobblingEnabled: Boolean = false,
+    val scrobbleOnlyFirstArtist: Boolean = true,
     /** Resolves a picture for the library's artists from Spotify (Settings > Library scan). */
     val artistImageResolveEnabled: Boolean = false,
     /**
