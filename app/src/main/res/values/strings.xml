@@ -273,7 +273,7 @@
     <string name="new_playlist_fallback">New playlist</string>
     <string name="playlist_name_value">Playlist: %1$s</string>
     <string name="from_m3u_playlist">From M3U playlist</string>
-    <string name="from_m3u_subtitle">Choose a .m3u file</string>
+    <string name="from_m3u_subtitle">Choose one or more files</string>
     <string name="from_folder">From folder</string>
     <string name="from_folder_subtitle">Pick a folder of music</string>
     <string name="create">Create</string>
@@ -561,6 +561,10 @@
     <plurals name="channels_count">
         <item quantity="one">%1$d channel</item>
         <item quantity="other">%1$d channels</item>
+    </plurals>
+    <plurals name="from_m3u_files_selected">
+        <item quantity="one">%1$d file selected</item>
+        <item quantity="other">%1$d files selected</item>
     </plurals>
 
     <!-- Collection kinds & hero targets -->
