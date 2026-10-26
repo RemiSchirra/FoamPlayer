@@ -64,6 +64,8 @@ class ChromecastController @Inject constructor(
         /** True when the receiver is expected to (or is trying to) play, i.e. not paused/idle. */
         val isPlaybackRequested: Boolean,
         val positionMs: Long,
+        /** The receiver is fetching/priming the current item. */
+        val isBuffering: Boolean,
         /** The receiver ran out of queue (end of the slice that was cast). */
         val finished: Boolean
     )
@@ -621,6 +623,7 @@ class ChromecastController @Inject constructor(
                 isPlaying = client.isPlaying && !finished,
                 isPlaybackRequested = !paused && !finished,
                 positionMs = if (finished) 0L else client.approximateStreamPosition.coerceAtLeast(0L),
+                isBuffering = playerState == MediaStatus.PLAYER_STATE_BUFFERING,
                 finished = finished
             )
         )

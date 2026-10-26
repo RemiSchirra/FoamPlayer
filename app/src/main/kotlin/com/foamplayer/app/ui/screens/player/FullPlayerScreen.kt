@@ -131,6 +131,7 @@ fun FullPlayerScreen(
     val durationMs by remember { derivedStateOf { state.durationMs } }
     val audioOutputInfo by remember { derivedStateOf { state.audioOutputInfo } }
     val isPlayingProvider = { state.isPlaying }
+    val isLoadingProvider = { state.isLoading }
     val isPlaybackActiveProvider = { state.isPlaying || state.isPlaybackRequested }
     val track = currentTrack ?: return
     val queueSize = queue.size
@@ -730,6 +731,7 @@ fun FullPlayerScreen(
                             queueIndex = queueIndex,
                             queueEntryIds = queueEntryIds,
                             isPlaying = isPlayingProvider,
+                            isLoading = isLoadingProvider,
                             isPlaybackActive = isPlaybackActiveProvider,
                             durationMs = durationMs,
                             pagerState = pagerState,
@@ -810,6 +812,7 @@ fun FullPlayerScreen(
                     subControlsProgress = subControlsProgress,
                     navbarExpandHeight = navbarExpandHeight,
                     isPlayingProvider = isPlayingProvider,
+                    isLoadingProvider = isLoadingProvider,
                     seekBarProgress = seekBarProgress,
                     settleSeekBarAnimated = settleSeekBarAnimated,
                     isWaveformSeek = isWaveformSeek,

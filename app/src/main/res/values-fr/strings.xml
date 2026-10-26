@@ -5,6 +5,7 @@
     <string name="action_radio">Radio</string>
     <string name="play">Lecture</string>
     <string name="pause">Pause</string>
+    <string name="loading">Chargement</string>
     <string name="previous">Précédent</string>
     <string name="next">Suivant</string>
     <string name="back">Retour</string>
