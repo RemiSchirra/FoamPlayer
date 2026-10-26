@@ -177,4 +177,72 @@ class PositionProjectorTest {
             lastPublished = published
         }
     }
+
+    // Cast tuning: the receiver reports its clock at roughly 1 Hz, a network hop late,
+    // so a fresh status regularly disagrees with the dead-reckoned clock by up to a
+    // few hundred milliseconds. Those corrections must be absorbed, not jumped onto.
+
+    private fun castProjector() = PositionProjector(
+        snapMs = PositionProjector.CAST_SNAP_MS,
+        errorSlew = PositionProjector.CAST_ERROR_SLEW,
+        monotonicHoldMaxMs = PositionProjector.CAST_MONOTONIC_HOLD_MS
+    )
+
+    @Test
+    fun `cast clock slews a late status correction instead of jumping`() {
+        val projector = castProjector()
+        var now = t0
+        var sample = 10_000L
+        var published = projector.project(sample, audible = true, loading = false, priming = false, nowNanos = now)
+
+        // Ten frames of the receiver clock arriving a hair late.
+        repeat(10) {
+            now += ms(16)
+            sample += 16
+            published = projector.project(sample, audible = true, loading = false, priming = false, nowNanos = now)
+        }
+
+        // A new status lands 400 ms behind the extrapolated clock.
+        val corrected = projector.project(
+            sample - 400,
+            audible = true,
+            loading = false,
+            priming = false,
+            nowNanos = now + ms(16)
+        )
+
+        // Absorbed: never steps back, and the step forward is a fraction of the error.
+        assertTrue("stepped back from $published to $corrected", corrected >= published)
+        assertTrue("jumped by ${corrected - published} ms", corrected - published <= 100)
+    }
+
+    @Test
+    fun `cast clock still snaps on a real seek`() {
+        val projector = castProjector()
+        var now = t0
+        projector.project(10_000, audible = true, loading = false, priming = false, nowNanos = now)
+        repeat(10) {
+            now += ms(16)
+            projector.project(10_000L + it * 16, audible = true, loading = false, priming = false, nowNanos = now)
+        }
+
+        // Jumping back three seconds is a seek from the TV remote, not status jitter.
+        assertEquals(
+            7_000L,
+            projector.project(7_000, audible = true, loading = false, priming = false, nowNanos = now + ms(16))
+        )
+    }
+
+    @Test
+    fun `reset drops the previous clock so a new source starts clean`() {
+        val projector = PositionProjector()
+        projector.project(10_000, audible = true, loading = false, priming = false, nowNanos = t0)
+
+        projector.reset()
+
+        assertEquals(
+            500L,
+            projector.project(500, audible = true, loading = false, priming = false, nowNanos = t0 + ms(5_000))
+        )
+    }
 }

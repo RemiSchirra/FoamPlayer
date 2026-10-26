@@ -3,6 +3,7 @@ package com.foamplayer.app.ui.screens.player
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.foamplayer.app.audio.cast.ChromecastController
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.constants.CollectionSortMode
@@ -24,7 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -44,25 +45,66 @@ class PlayerViewModel @Inject constructor(
 
     val playOnDevices: StateFlow<List<PlayOnDevice>> =
         playOnDeviceRepository.devices
-            .combine(playOnDeviceRepository.sessionPoll) { devices, _ -> devices }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000),
                 initialValue = listOf(PlayOnDevice.ThisDevice)
             )
 
+    /** True while the "Play on" sheet is open; the server-session poll rides on it. */
+    private val playOnSheetOpen = MutableStateFlow(false)
+
     /** What the "Play on" sheet shows as selected: the resolved routing target. */
     val selectedPlayOnDeviceId: StateFlow<String?> = audioEngine.selectedPlayOnDeviceId
 
+    /** True while the LAN is being scanned for Chromecasts (the sheet is open). */
+    val castScanning: StateFlow<Boolean> = playOnDeviceRepository.scanningForChromecasts
+
+    /** The Chromecast a session is connected to, or null. */
+    val castDeviceId: StateFlow<String?> = playOnDeviceRepository.chromecastDeviceId
+
+    /** Opens the Chromecast scan: called when the "Play on" sheet becomes visible. */
+    fun startPlayOnDiscovery() {
+        playOnSheetOpen.value = true
+        playOnDeviceRepository.startChromecastDiscovery()
+    }
+
+    /** Closes the Chromecast scan: called when the "Play on" sheet goes away. */
+    fun stopPlayOnDiscovery() {
+        playOnSheetOpen.value = false
+        playOnDeviceRepository.stopChromecastDiscovery()
+    }
+
     /**
-     * Commits the "Play on" pick. Two transports behind the ids:
+     * A hardware volume-key press. Returns true when the app moved the volume of
+     * the selected "Play on" device itself (a Chromecast receiver, or the phone's
+     * speaker while a headset holds the platform's music volume); false means the
+     * platform owns that key, which is the normal case.
+     */
+    fun adjustOutputVolume(up: Boolean): Boolean = audioEngine.adjustOutputVolume(up)
+
+    /**
+     * Commits the "Play on" pick. Three transports behind the ids:
+     *  - a "chromecast:" id: connects the receiver and hands it the current queue;
+     *    any previous local playback is parked;
      *  - local output (this device / a Bluetooth output): pins the phone's audio
-     *    route, returns false when the target is not attached;
+     *    route (and takes playback back from a Chromecast), returns false when the
+     *    target is not attached;
      *  - a "remote:" id (media-server session): hands the current queue to the
      *    server's player (Jellyfin remote play) and pauses local playback.
      *    Returns false when no resolvable session/track supports it.
      */
     fun routePlayOn(deviceId: String): Boolean {
+        if (deviceId.startsWith(ChromecastController.ID_PREFIX)) {
+            return audioEngine.castTo(deviceId)
+        }
+
+        // Leaving the Chromecast for another target: the phone takes the queue back
+        // where the receiver left it, then the new route is applied.
+        if (castDeviceId.value != null) {
+            audioEngine.stopCasting(resumeOnDevice = true)
+        }
+
         if (!deviceId.startsWith("remote:")) {
             return audioEngine.routeTo(deviceId)
         }
@@ -186,6 +228,15 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             audioEngine.restoreSession()
             _sessionRestoreSettled.value = true
+        }
+
+        // The server-session poll is collection-driven (one GET per server per
+        // tick) and only runs while the sheet is open. Kept off the device list:
+        // a slow server must never hold back the Chromecasts MediaRouter found.
+        viewModelScope.launch {
+            playOnSheetOpen.collectLatest { open ->
+                if (open) playOnDeviceRepository.sessionPoll.collect { }
+            }
         }
     }
 

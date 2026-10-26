@@ -18,11 +18,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Bridges [AudioEngine] playback to Last.fm while the feature is enabled and a
@@ -31,6 +32,13 @@ import kotlinx.coroutines.launch
  * - Sends `track.updateNowPlaying` when the playing track changes.
  * - Submits `track.scrobble` once per track, driven by the same listen
  *   threshold as the library's play counter ([AudioEngine.listenedTrackEvents]).
+ * - When "scrobble only the first artist" is enabled, multi-artist tracks
+ *   (the app-wide "; " convention) are submitted with their first credited
+ *   artist only.
+ * - Scrobbles that could not be submitted (offline, service outage) are kept
+ *   in [LastFmScrobbleQueue] and drained in batches of up to
+ *   [LastFmClient.MAX_SCROBBLES_PER_REQUEST] once connectivity returns;
+ *   scrobbles are never queued when the session itself is invalid.
  *
  * An invalid session key clears the stored session so the settings screen
  * falls back to its disconnected state.
@@ -41,6 +49,8 @@ class LastFmScrobbler @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val tokenStore: LastFmTokenStore,
     private val credentialsStore: LastFmCredentialsStore,
+    private val scrobbleQueue: LastFmScrobbleQueue,
+    private val connectivityObserver: ConnectivityObserver,
     private val clientFactory: LastFmClientFactory
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -62,6 +72,7 @@ class LastFmScrobbler @Inject constructor(
             ) { settings, session, credentials ->
                 ScrobblingState(
                     enabled = settings.lastFmScrobblingEnabled,
+                    scrobbleOnlyFirstArtist = settings.scrobbleOnlyFirstArtist,
                     session = session,
                     credentials = credentials
                 )
@@ -75,7 +86,7 @@ class LastFmScrobbler @Inject constructor(
                     }
                     val client = clientFactory.create(state.credentials)
                     try {
-                        monitorPlayback(session, client)
+                        monitorPlayback(session, client, state.scrobbleOnlyFirstArtist)
                     } finally {
                         client.close()
                     }
@@ -93,7 +104,8 @@ class LastFmScrobbler @Inject constructor(
 
     private suspend fun monitorPlayback(
         session: LastFmSession,
-        client: LastFmClient
+        client: LastFmClient,
+        scrobbleOnlyFirstArtist: Boolean
     ) = coroutineScope {
         launch {
             audioEngine.playbackState.collectLatest { state ->
@@ -106,8 +118,11 @@ class LastFmScrobbler @Inject constructor(
                 if (signature == lastNowPlayingSignature) return@collectLatest
 
                 // Collapse rapid skips into a single now-playing update.
-                delay(NOW_PLAYING_DEBOUNCE_MS)
-                val result = client.updateNowPlaying(session, track.toLastFmTrack())
+                delay(NOW_PLAYING_DEBOUNCE_MS.milliseconds)
+                val result = client.updateNowPlaying(
+                    session,
+                    track.toLastFmTrack(scrobbleOnlyFirstArtist)
+                )
                 if (result.isSuccess) {
                     lastNowPlayingSignature = signature
                     Log.d(LOG_TAG, "now playing: ${track.artist} - ${track.title}")
@@ -131,19 +146,60 @@ class LastFmScrobbler @Inject constructor(
                 val timestampSeconds = ((now - event.playedMs) / 1000L)
                     .coerceIn(0L, now / 1000L)
 
-                val result = client.scrobble(
-                    session = session,
-                    scrobble = LastFmScrobble(
-                        track = track.toLastFmTrack(),
-                        timestampSeconds = timestampSeconds
-                    )
+                val scrobble = LastFmScrobble(
+                    track = track.toLastFmTrack(scrobbleOnlyFirstArtist),
+                    timestampSeconds = timestampSeconds
                 )
+                val result = client.scrobble(session = session, scrobble = scrobble)
                 if (result.isSuccess) {
                     Log.d(LOG_TAG, "scrobbled: ${track.artist} - ${track.title}")
                 } else {
-                    handleFailure("scrobble", session, result.exceptionOrNull())
+                    val error = result.exceptionOrNull()
+                    if (error !is LastFmApiException || !error.isInvalidSession) {
+                        scrobbleQueue.enqueue(scrobble)
+                    }
+                    handleFailure("scrobble", session, error)
                 }
             }
+        }
+
+        launch {
+            combine(scrobbleQueue.pending, connectivityObserver.isOnline) { pending, isOnline ->
+                pending to isOnline
+            }
+                .collectLatest { (pending, isOnline) ->
+                    if (pending.isEmpty() || !isOnline) return@collectLatest
+                    var consecutiveFailures = 0
+                    while (true) {
+                        val current = scrobbleQueue.pending.first()
+                        if (current.isEmpty()) return@collectLatest
+
+                        val batch = current.take(LastFmClient.MAX_SCROBBLES_PER_REQUEST)
+                        val (valid, invalid) = batch.partition { it.track.isValid }
+                        if (invalid.isNotEmpty()) {
+                            Log.w(LOG_TAG, "dropping ${invalid.size} corrupt queued scrobbles")
+                            scrobbleQueue.removeAll(invalid)
+                        }
+                        if (valid.isEmpty()) continue
+
+                        val result = client.scrobbleBatch(session, valid)
+                        if (result.isSuccess) {
+                            consecutiveFailures = 0
+                            scrobbleQueue.removeAll(batch)
+                        } else {
+                            consecutiveFailures++
+                            handleFailure("flush", session, result.exceptionOrNull())
+                            if (consecutiveFailures >= MAX_FLUSH_ATTEMPTS) {
+                                Log.w(
+                                    LOG_TAG,
+                                    "flush paused after $consecutiveFailures failed attempts"
+                                )
+                                return@collectLatest
+                            }
+                            delay(FLUSH_RETRY_MS.milliseconds)
+                        }
+                    }
+                }
         }
     }
 
@@ -163,13 +219,28 @@ class LastFmScrobbler @Inject constructor(
         }
     }
 
+    /** First artist credited on the track (the app-wide "; " convention). */
+    private val TrackEntity.firstCreditedArtist: String?
+        get() = artist.split("; ")
+            .map(String::trim)
+            .firstOrNull(String::isNotEmpty)
+
     /** Last.fm ignores tracks shorter than 30 seconds. */
     private val TrackEntity.canScrobble: Boolean
         get() = title.isNotBlank() && artist.isNotBlank() &&
                 duration >= MIN_SCROBBLE_DURATION_MS
 
-    private fun TrackEntity.toLastFmTrack(): LastFmTrack = LastFmTrack(
-        artist = artist.trim(),
+    /**
+     * Maps the track to its Last.fm payload. With [firstArtistOnly] only the
+     * first credited artist (the app-wide "; " convention) is submitted, since
+     * Last.fm treats the whole string as a single artist name.
+     */
+    private fun TrackEntity.toLastFmTrack(firstArtistOnly: Boolean): LastFmTrack = LastFmTrack(
+        artist = if (firstArtistOnly) {
+            firstCreditedArtist ?: artist.trim()
+        } else {
+            artist.trim()
+        },
         title = title.trim(),
         album = album.trim().takeIf { it.isNotEmpty() },
         albumArtist = albumArtist?.trim()?.takeIf { it.isNotEmpty() },
@@ -179,6 +250,7 @@ class LastFmScrobbler @Inject constructor(
 
     private data class ScrobblingState(
         val enabled: Boolean,
+        val scrobbleOnlyFirstArtist: Boolean,
         val session: LastFmSession?,
         val credentials: LastFmCredentials
     )
@@ -187,5 +259,12 @@ class LastFmScrobbler @Inject constructor(
         private const val LOG_TAG = "LastFmScrobbler"
         private const val NOW_PLAYING_DEBOUNCE_MS = 500L
         private const val MIN_SCROBBLE_DURATION_MS = 30_000L
+
+        /** Delay between flush attempts while a batch keeps failing. */
+        private const val FLUSH_RETRY_MS = 5_000L
+
+        /** Consecutive failed flush attempts before waiting for the next
+         *  queue or connectivity change instead of spinning. */
+        private const val MAX_FLUSH_ATTEMPTS = 3
     }
 }

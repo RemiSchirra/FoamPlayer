@@ -105,6 +105,7 @@ object BackupJson {
         put("discordPresenceEnabled", settings.discordPresenceEnabled)
         put("discordOnlineArt", settings.discordOnlineArt)
         put("lastFmScrobblingEnabled", settings.lastFmScrobblingEnabled)
+        put("scrobbleOnlyFirstArtist", settings.scrobbleOnlyFirstArtist)
         put("artistImageResolveEnabled", settings.artistImageResolveEnabled)
         put("displayOnLockScreen", settings.displayOnLockScreen)
         put("fastLockScreenEnabled", settings.fastLockScreenEnabled)
@@ -217,6 +218,7 @@ object BackupJson {
         discordPresenceEnabled = json.optBoolean("discordPresenceEnabled", false),
         discordOnlineArt = json.optBoolean("discordOnlineArt", true),
         lastFmScrobblingEnabled = json.optBoolean("lastFmScrobblingEnabled", false),
+        scrobbleOnlyFirstArtist = json.optBoolean("scrobbleOnlyFirstArtist", true),
         artistImageResolveEnabled = json.optBoolean("artistImageResolveEnabled", false),
         displayOnLockScreen = json.optBoolean("displayOnLockScreen", false),
         fastLockScreenEnabled = json.optBoolean("fastLockScreenEnabled", true),

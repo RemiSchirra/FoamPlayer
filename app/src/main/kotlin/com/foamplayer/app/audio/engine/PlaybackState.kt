@@ -26,6 +26,9 @@ data class PlaybackState(
     val currentTrack: TrackEntity? = null,
     val isPlaying: Boolean = false,
     val isPlaybackRequested: Boolean = false,
+    // True while the current track is still being fetched (distant stream) or prepared
+    // by a Chromecast receiver. Local files never report loading.
+    val isLoading: Boolean = false,
     val durationMs: Long = 0L,
     val queue: List<TrackEntity> = emptyList(),
     // Stable per-entry ids allocated by the engine (duplicates possible).
@@ -52,6 +55,7 @@ data class PlaybackState(
         return currentTrack == other.currentTrack &&
                 isPlaying == other.isPlaying &&
                 isPlaybackRequested == other.isPlaybackRequested &&
+                isLoading == other.isLoading &&
                 durationMs == other.durationMs &&
                 queue === other.queue &&
                 queueEntryIds === other.queueEntryIds &&
@@ -68,6 +72,7 @@ data class PlaybackState(
         var result = currentTrack?.hashCode() ?: 0
         result = 31 * result + isPlaying.hashCode()
         result = 31 * result + isPlaybackRequested.hashCode()
+        result = 31 * result + isLoading.hashCode()
         result = 31 * result + durationMs.hashCode()
         result = 31 * result + System.identityHashCode(queue)
         result = 31 * result + System.identityHashCode(queueEntryIds)

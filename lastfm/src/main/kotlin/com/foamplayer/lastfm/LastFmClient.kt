@@ -172,6 +172,25 @@ class LastFmClient(
         return callWithSession("track.scrobble", session, params)
     }
 
+    /**
+     * Submits up to [MAX_SCROBBLES_PER_REQUEST] completed listens in one
+     * `track.scrobble` call using Last.fm's array-style parameters
+     * (`artist[0]`, `track[0]`, `timestamp[0]`, ...). A top-level `error` in
+     * the response means the whole request failed (invalid session, for
+     * example); per-track ignores are accepted as-is so they are not retried
+     * forever.
+     */
+    suspend fun scrobbleBatch(
+        session: LastFmSession,
+        scrobbles: List<LastFmScrobble>
+    ): Result<Unit> {
+        if (scrobbles.isEmpty()) return Result.success(Unit)
+        val valid = scrobbles.size <= MAX_SCROBBLES_PER_REQUEST &&
+                scrobbles.all { it.track.isValid }
+        if (!valid) return Result.failure(IllegalArgumentException("Invalid scrobble batch"))
+        return callWithSession("track.scrobble", session, scrobbles.toBatchParameters())
+    }
+
     private suspend fun callWithSession(
         method: String,
         session: LastFmSession,
@@ -235,15 +254,6 @@ class LastFmClient(
         LastFmSession(username = username, sessionKey = key, subscriber = subscriber)
     }.getOrNull()
 
-    private fun LastFmTrack.toParameters(): Map<String, String> = buildMap {
-        put("artist", artist.trim())
-        put("track", title.trim())
-        album?.trim()?.takeIf { it.isNotEmpty() }?.let { put("album", it) }
-        albumArtist?.trim()?.takeIf { it.isNotEmpty() }?.let { put("albumArtist", it) }
-        durationSeconds?.takeIf { it > 0 }?.let { put("duration", it.toString()) }
-        trackNumber?.takeIf { it > 0 }?.let { put("trackNumber", it.toString()) }
-    }
-
     private fun String.formEncoded(): String =
         URLEncoder.encode(this, Charsets.UTF_8.name())
 
@@ -260,9 +270,30 @@ class LastFmClient(
         /** `user.getRecentTracks` returns at most 200 scrobbles per page. */
         const val MAX_RECENT_TRACKS_PAGE_SIZE = 200
 
+        /** `track.scrobble` accepts at most 50 scrobbles per request. */
+        const val MAX_SCROBBLES_PER_REQUEST = 50
+
         private const val REQUEST_TIMEOUT_MS = 12_000L
         private const val MAX_RATE_LIMIT_RETRIES = 3
         private const val RATE_LIMIT_RETRY_MS = 1_000L
+    }
+}
+
+/** Parameters for one completed listen, as Last.fm expects them. */
+internal fun LastFmTrack.toParameters(): Map<String, String> = buildMap {
+    put("artist", artist.trim())
+    put("track", title.trim())
+    album?.trim()?.takeIf { it.isNotEmpty() }?.let { put("album", it) }
+    albumArtist?.trim()?.takeIf { it.isNotEmpty() }?.let { put("albumArtist", it) }
+    durationSeconds?.takeIf { it > 0 }?.let { put("duration", it.toString()) }
+    trackNumber?.takeIf { it > 0 }?.let { put("trackNumber", it.toString()) }
+}
+
+/** Array-style parameters for one batched `track.scrobble` request. */
+internal fun List<LastFmScrobble>.toBatchParameters(): Map<String, String> = buildMap {
+    forEachIndexed { index, scrobble ->
+        scrobble.track.toParameters().forEach { (key, value) -> put("$key[$index]", value) }
+        put("timestamp[$index]", scrobble.timestampSeconds.toString())
     }
 }
 

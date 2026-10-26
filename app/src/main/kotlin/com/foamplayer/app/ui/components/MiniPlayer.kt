@@ -5,6 +5,8 @@ import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -23,6 +25,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +48,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -122,11 +127,27 @@ private class MiniEntryMarqueeStates {
 private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
     trackId: Long,
     isPlaying: Boolean,
+    isLoading: Boolean,
     animatedVisibilityScope: AnimatedVisibilityScope,
     useSharedElements: Boolean,
     onPlayPauseClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Same scale+fade convention as the full player's play/pause crossfade.
+    val loadingFraction by animateFloatAsState(
+        targetValue = if (isLoading) 1f else 0f,
+        animationSpec = tween(durationMillis = 250),
+        label = "miniPlayerLoadingCrossfade"
+    )
+    val transportAlpha = 1f - loadingFraction
+    val description = stringResource(
+        when {
+            isLoading -> R.string.loading
+            isPlaying -> R.string.pause
+            else -> R.string.play
+        }
+    )
+
     Box(
         modifier = modifier
             .size(36.dp)
@@ -140,19 +161,42 @@ private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
             )
             .clip(RoundedCornerShape(18.dp))
             .background(FoamTheme.accentColor)
+            .semantics { contentDescription = description }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                enabled = !isLoading,
                 onClick = onPlayPauseClick
             ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
-            contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
+            contentDescription = null,
             tint = FoamTheme.colors.background,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier
+                .size(20.dp)
+                .graphicsLayer {
+                    alpha = transportAlpha
+                    val iconScale = 1f - 0.8f * loadingFraction
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
         )
+        if (isLoading || loadingFraction > 0f) {
+            CircularProgressIndicator(
+                color = FoamTheme.colors.background,
+                strokeWidth = 2.dp,
+                modifier = Modifier
+                    .size(20.dp)
+                    .graphicsLayer {
+                        alpha = loadingFraction
+                        val circleScale = 0.2f + 0.8f * loadingFraction
+                        scaleX = circleScale
+                        scaleY = circleScale
+                    }
+            )
+        }
     }
 }
 
@@ -756,6 +800,7 @@ fun MiniPlayer(
                         MiniPlayerPlayPauseButton(
                             trackId = track.id,
                             isPlaying = playbackState.isPlaying,
+                            isLoading = playbackState.isLoading,
                             animatedVisibilityScope = animatedVisibilityScope,
                             useSharedElements = useSharedElements,
                             onPlayPauseClick = onPlayPauseClick

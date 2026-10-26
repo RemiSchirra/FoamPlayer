@@ -12,6 +12,7 @@ import com.foamplayer.distant.DistantTrack
 import com.foamplayer.distant.RemoteSession
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -19,6 +20,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
@@ -40,7 +42,7 @@ class JellyfinProvider(
         val password = server.credentials.secret.orEmpty()
         val response = client.post("${base(server)}/Users/AuthenticateByName") {
             contentType(ContentType.Application.Json)
-            header("X-Emby-Authorization", authHeader())
+            authorize()
             setBody(AuthRequest(Username = username, Pw = password))
         }
         ensureSuccess(response, "Jellyfin rejected the credentials")
@@ -53,7 +55,7 @@ class JellyfinProvider(
     override suspend fun listFolders(server: DistantServer): List<DistantFolderEntry> {
         val userId = userId(server)
         val response = client.get("${base(server)}/Users/$userId/Views") {
-            header("X-Emby-Authorization", authHeader(token(server)))
+            authorize(token(server))
         }
         ensureSuccess(response, "Could not read Jellyfin libraries")
         return response.body<ItemsResponse>().Items.orEmpty()
@@ -63,7 +65,7 @@ class JellyfinProvider(
     override suspend fun listTracks(server: DistantServer, folder: DistantFolder): List<DistantTrack> {
         val userId = userId(server)
         val response = client.get("${base(server)}/Items") {
-            header("X-Emby-Authorization", authHeader(token(server)))
+            authorize(token(server))
             parameter("userId", userId)
             parameter("parentId", folder.id)
             parameter("recursive", "true")
@@ -76,17 +78,17 @@ class JellyfinProvider(
     }
 
     override fun streamUrl(server: DistantServer, remoteId: String): String =
-        "${base(server)}/Audio/$remoteId/stream?static=true&api_key=${token(server)}"
+        "${base(server)}/Audio/$remoteId/stream?static=true&ApiKey=${token(server)}"
 
     override fun artUrl(server: DistantServer, track: DistantTrack): String? {
         val token = server.credentials.secret ?: return null
-        return "${base(server)}/Items/${track.remoteId}/Images/Primary?api_key=$token"
+        return "${base(server)}/Items/${track.remoteId}/Images/Primary?ApiKey=$token"
     }
 
     /** Sessions the app is allowed to remote-control right now. */
     override suspend fun listRemoteSessions(server: DistantServer): List<RemoteSession> {
         val response = client.get("${base(server)}/Sessions") {
-            header("X-Emby-Authorization", authHeader(token(server)))
+            authorize(token(server))
             parameter("activeWithinSeconds", "120")
         }
         ensureSuccess(response, "Could not read Jellyfin sessions")
@@ -113,7 +115,7 @@ class JellyfinProvider(
      */
     override suspend fun remotePlay(server: DistantServer, sessionId: String, itemIds: List<String>, positionTicks: Long?) {
         val response = client.post("${base(server)}/Sessions/$sessionId/Playing") {
-            header("X-Emby-Authorization", authHeader(token(server)))
+            authorize(token(server))
             contentType(ContentType.Application.Json)
             setBody(PlayRequest(ItemIds = itemIds, StartPositionTicks = positionTicks, PlayCommand = "PlayNow"))
         }
@@ -121,16 +123,16 @@ class JellyfinProvider(
     }
 
     override suspend fun remotePause(server: DistantServer, sessionId: String, pause: Boolean) {
-        val command = if (pause) "Play/Pause" else "Play/Unpause"
-        val response = client.post("${base(server)}/Sessions/$sessionId/$command") {
-            header("X-Emby-Authorization", authHeader(token(server)))
+        val command = if (pause) "Pause" else "Unpause"
+        val response = client.post("${base(server)}/Sessions/$sessionId/Playing/$command") {
+            authorize(token(server))
         }
         ensureSuccess(response, "Jellyfin rejected the pause command")
     }
 
     override suspend fun remoteStop(server: DistantServer, sessionId: String) {
         val response = client.post("${base(server)}/Sessions/$sessionId/Playing/Stop") {
-            header("X-Emby-Authorization", authHeader(token(server)))
+            authorize(token(server))
         }
         ensureSuccess(response, "Jellyfin rejected the stop command")
     }
@@ -144,6 +146,19 @@ class JellyfinProvider(
     private fun userId(server: DistantServer): String =
         server.credentials.userId?.takeIf { it.isNotBlank() }
             ?: throw DistantException("Jellyfin user id missing; reconnect the server")
+
+    /**
+     * Jellyfin only reads the standard `Authorization` header unless the server
+     * opted into legacy authorization, in which case it reads
+     * `X-Emby-Authorization`. Sending both keeps old and new servers happy; the
+     * payload itself is the `MediaBrowser` scheme Jellyfin parses for the client
+     * name, device id and version its session API requires.
+     */
+    private fun HttpRequestBuilder.authorize(token: String? = null) {
+        val value = authHeader(token)
+        header(HttpHeaders.Authorization, value)
+        header("X-Emby-Authorization", value)
+    }
 
     private fun authHeader(token: String? = null): String = buildString {
         append("MediaBrowser Client=\"FoamPlayer\", Device=\"Android\", DeviceId=\"foamplayer\", Version=\"1.0.0\"")

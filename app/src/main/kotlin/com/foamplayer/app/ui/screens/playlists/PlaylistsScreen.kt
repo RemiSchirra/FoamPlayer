@@ -481,9 +481,9 @@ fun PlaylistsScreen(
     CreatePlaylistModal(
         visible = showCreateModal,
         onDismiss = { showCreateModal = false },
-        onCreate = { name, m3uUri, folderUri, coverUri ->
+        onCreate = { name, m3uFiles, folderUri, coverUri ->
             showCreateModal = false
-            viewModel.createPlaylistFromSource(name, m3uUri, folderUri, coverUri)
+            viewModel.createPlaylistFromSource(name, m3uFiles, folderUri, coverUri)
         }
     )
 

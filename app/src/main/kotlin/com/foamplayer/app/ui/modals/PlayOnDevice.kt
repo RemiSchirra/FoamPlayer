@@ -54,8 +54,9 @@ data class PlayOnDevice(
             serverName = serverType
         )
 
-        fun chromecast(name: String, address: String) = PlayOnDevice(
-            id = "chromecast:$address:$name",
+        /** [id] is the Chromecast route id: the key the Cast SDK resolves to a session. */
+        fun chromecast(name: String, id: String) = PlayOnDevice(
+            id = "chromecast:$id",
             type = PlayOnDeviceType.CHROMECAST,
             title = name
         )

@@ -7,6 +7,11 @@ import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -53,10 +58,12 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -83,32 +90,41 @@ data class MissingSongsUiState(
     val scanProgress: Float
 )
 
+/** An .m3u file picked in the create sheet: its content URI and display name. */
+@Immutable
+data class M3uSelection(
+    val uri: String,
+    val name: String
+)
+
 /**
  * "Create Playlist" sheet: a name field, an optional cover image, two mutually
- * exclusive sources (.m3u file or device folder, each resettable) and a Create
- * button.
+ * exclusive sources (.m3u file(s) or device folder, each resettable) and a
+ * Create button.
  *
- * [onCreate] receives the name (picking a source prefills the field with the
+ * [onCreate] receives the name (picking one source prefills the field with the
  * source's name: the .m3u file name without extension, or the folder name;
  * "New playlist" an empty field creates "New playlist"), the cover image URI
- * if one was picked, plus whichever source URI is set, or null when none is
- * selected.
+ * if one was picked, plus whichever source is set, or null when none is
+ * selected. Picking several .m3u files imports one playlist per file, each
+ * named after its file: the name field and cover picker are hidden and
+ * [onCreate] receives an empty name and a null cover with all the picked files.
  */
 @Composable
 fun CreatePlaylistModal(
     visible: Boolean,
     onDismiss: () -> Unit,
-    onCreate: (name: String, m3uUri: String?, folderUri: String?, coverUri: String?) -> Unit,
+    onCreate: (name: String, m3uFiles: List<M3uSelection>, folderUri: String?, coverUri: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var name by remember { mutableStateOf("") }
     var autoName by remember { mutableStateOf<String?>(null) }
     var coverUri by remember { mutableStateOf<String?>(null) }
     var coverName by remember { mutableStateOf<String?>(null) }
-    var m3uUri by remember { mutableStateOf<String?>(null) }
-    var m3uName by remember { mutableStateOf<String?>(null) }
+    var m3uFiles by remember { mutableStateOf<List<M3uSelection>>(emptyList()) }
     var folderUri by remember { mutableStateOf<String?>(null) }
     var folderName by remember { mutableStateOf<String?>(null) }
+    var animateReappearance by remember { mutableStateOf(false) }
 
     LaunchedEffect(visible) {
         if (visible) {
@@ -116,8 +132,8 @@ fun CreatePlaylistModal(
             autoName = null
             coverUri = null
             coverName = null
-            m3uUri = null
-            m3uName = null
+            m3uFiles = emptyList()
+            animateReappearance = false
             folderUri = null
             folderName = null
         }
@@ -142,16 +158,26 @@ fun CreatePlaylistModal(
             coverName = queryDisplayName(context, uri) ?: uri.lastPathSegment
         }
     }
-    val m3uPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    val m3uPicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            if (uris.isNotEmpty()) {
+                val picked = uris.map { uri ->
+                    runCatching {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+                    M3uSelection(
+                        uri = uri.toString(),
+                        name = queryDisplayName(context, uri) ?: uri.lastPathSegment.orEmpty()
+                    )
+                }
+                animateReappearance = false
+                m3uFiles = picked
+                if (picked.size == 1) prefillName(picked.first().name.substringBeforeLast('.'))
             }
-            m3uUri = uri.toString()
-            m3uName = queryDisplayName(context, uri) ?: uri.lastPathSegment
-            prefillName(m3uName?.substringBeforeLast('.'))
         }
-    }
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             runCatching {
@@ -162,6 +188,8 @@ fun CreatePlaylistModal(
             prefillName(folderName?.substringAfterLast('/'))
         }
     }
+
+    val showSinglePlaylistFields = m3uFiles.size <= 1
 
     FoamBottomModal(
         visible = visible,
@@ -178,27 +206,39 @@ fun CreatePlaylistModal(
                 )
             )
 
-            PlaylistNameField(
-                value = name,
-                onValueChange = { name = it }
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                    .background(FoamTheme.colors.surfaceVariant)
+            AnimatedVisibility(
+                visible = showSinglePlaylistFields,
+                enter = if (animateReappearance) {
+                    fadeIn() + expandVertically(expandFrom = Alignment.Top)
+                } else {
+                    EnterTransition.None
+                },
+                exit = ExitTransition.None
             ) {
-                CoverImageRow(
-                    imageUri = coverUri,
-                    title = stringResource(R.string.playlist_cover_image),
-                    subtitle = coverName ?: stringResource(R.string.playlist_cover_hint),
-                    onClick = { coverPicker.launch(ImageMimeTypes) },
-                    onReset = {
-                        coverUri = null
-                        coverName = null
+                Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
+                    PlaylistNameField(
+                        value = name,
+                        onValueChange = { name = it }
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(FoamDimens.itemRounding))
+                            .background(FoamTheme.colors.surfaceVariant)
+                    ) {
+                        CoverImageRow(
+                            imageUri = coverUri,
+                            title = stringResource(R.string.playlist_cover_image),
+                            subtitle = coverName ?: stringResource(R.string.playlist_cover_hint),
+                            onClick = { coverPicker.launch(ImageMimeTypes) },
+                            onReset = {
+                                coverUri = null
+                                coverName = null
+                            }
+                        )
                     }
-                )
+                }
             }
 
             Column(
@@ -209,13 +249,17 @@ fun CreatePlaylistModal(
             ) {
                 SourceOptionRow(
                     title = stringResource(R.string.from_m3u_playlist),
-                    subtitle = m3uName ?: stringResource(R.string.from_m3u_subtitle),
-                    selected = m3uUri != null,
-                    enabled = m3uUri != null || folderUri == null,
+                    subtitle = when (val count = m3uFiles.size) {
+                        0 -> stringResource(R.string.from_m3u_subtitle)
+                        1 -> m3uFiles.first().name
+                        else -> pluralStringResource(R.plurals.from_m3u_files_selected, count, count)
+                    },
+                    selected = m3uFiles.isNotEmpty(),
+                    enabled = m3uFiles.isNotEmpty() || folderUri == null,
                     onClick = { m3uPicker.launch(M3uMimeTypes) },
                     onReset = {
-                        m3uUri = null
-                        m3uName = null
+                        animateReappearance = m3uFiles.size > 1
+                        m3uFiles = emptyList()
                     }
                 )
                 ModalSectionDivider()
@@ -223,7 +267,7 @@ fun CreatePlaylistModal(
                     title = stringResource(R.string.from_folder),
                     subtitle = folderName ?: stringResource(R.string.from_folder_subtitle),
                     selected = folderUri != null,
-                    enabled = folderUri != null || m3uUri == null,
+                    enabled = folderUri != null || m3uFiles.isEmpty(),
                     onClick = { folderPicker.launch(null) },
                     onReset = {
                         folderUri = null
@@ -236,12 +280,18 @@ fun CreatePlaylistModal(
                 label = stringResource(R.string.create),
                 filled = true,
                 onClick = {
+                    val singleM3u = m3uFiles.singleOrNull()
                     val defaultName = when {
-                        m3uUri != null -> m3uName?.substringBeforeLast('.')
+                        singleM3u != null -> singleM3u.name.substringBeforeLast('.')
                         folderUri != null -> folderName?.substringAfterLast('/')
                         else -> null
                     }
-                    onCreate(name.trim().ifEmpty { defaultName.orEmpty() }, m3uUri, folderUri, coverUri)
+                    onCreate(
+                        if (m3uFiles.size > 1) "" else name.trim().ifEmpty { defaultName.orEmpty() },
+                        m3uFiles,
+                        folderUri,
+                        if (m3uFiles.size > 1) null else coverUri
+                    )
                 }
             )
         }
@@ -622,14 +672,18 @@ internal fun ModalButton(
                 enabled = enabled,
                 onClick = onClick
             )
-            .padding(vertical = FoamDimens.spacingStandard),
+            .padding(
+                horizontal = FoamDimens.spacingStandard,
+                vertical = FoamDimens.spacingStandard
+            ),
         contentAlignment = Alignment.Center
     ) {
         BasicText(
             text = label,
             style = FoamTheme.typography.body.copy(
                 color = if (filled) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
             )
         )
     }

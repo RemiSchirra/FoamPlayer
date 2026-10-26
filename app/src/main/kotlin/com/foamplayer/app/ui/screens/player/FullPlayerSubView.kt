@@ -7,6 +7,8 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -27,6 +29,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.ripple
@@ -44,6 +47,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp as lerpFloat
 import androidx.core.net.toUri
@@ -497,14 +502,31 @@ private fun SharedTransitionScope.MiniPlayerHeader(
 @Composable
 internal fun MiniPlayPauseButton(
     isPlaying: () -> Boolean,
+    isLoading: () -> Boolean,
     progress: () -> Float,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Read in this leaf's scope: a play/pause flip recomposes only this button.
     val isPlaying = isPlaying()
+    val isLoading = isLoading()
     val isEnabled by remember(progress) { derivedStateOf { progress() > PlayerDimens.visibilityEpsilon } }
     val playInteractions = remember { MutableInteractionSource() }
+
+    // Same scale+fade convention as the full player's play/pause crossfade.
+    val loadingFraction by animateFloatAsState(
+        targetValue = if (isLoading) 1f else 0f,
+        animationSpec = tween(durationMillis = 250),
+        label = "miniPlayLoadingCrossfade"
+    )
+    val transportAlpha = 1f - loadingFraction
+    val description = stringResource(
+        when {
+            isLoading -> R.string.loading
+            isPlaying -> R.string.pause
+            else -> R.string.play
+        }
+    )
 
     Box(
         modifier = modifier
@@ -513,20 +535,42 @@ internal fun MiniPlayPauseButton(
             .graphicsLayer { alpha = progress() }
             .clip(CircleShape)
             .background(FoamTheme.accentColor)
+            .semantics { contentDescription = description }
             .clickable(
                 interactionSource = playInteractions,
                 indication = null,
-                enabled = isEnabled,
+                enabled = isEnabled && !isLoading,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
-            contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
+            contentDescription = null,
             tint = FoamTheme.colors.background,
-            modifier = Modifier.size(PlayerDimens.miniPlayIconSize)
+            modifier = Modifier
+                .size(PlayerDimens.miniPlayIconSize)
+                .graphicsLayer {
+                    alpha = transportAlpha
+                    val iconScale = 1f - 0.8f * loadingFraction
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
         )
+        if (isLoading || loadingFraction > 0f) {
+            CircularProgressIndicator(
+                color = FoamTheme.colors.background,
+                strokeWidth = 2.dp,
+                modifier = Modifier
+                    .size(PlayerDimens.miniPlayIconSize)
+                    .graphicsLayer {
+                        alpha = loadingFraction
+                        val circleScale = 0.2f + 0.8f * loadingFraction
+                        scaleX = circleScale
+                        scaleY = circleScale
+                    }
+            )
+        }
     }
 }
 

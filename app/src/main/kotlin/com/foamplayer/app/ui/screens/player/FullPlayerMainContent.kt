@@ -32,6 +32,7 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.ripple
@@ -108,6 +109,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
     queueIndex: Int,
     queueEntryIds: List<Long>,
     isPlaying: () -> Boolean,
+    isLoading: () -> Boolean,
     isPlaybackActive: () -> Boolean,
     durationMs: Long,
     pagerState: PagerState,
@@ -182,6 +184,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
         PlaybackControls(
             track = track,
             isPlaying = isPlaying,
+            isLoading = isLoading,
             durationMs = durationMs,
             outerVisibilityScope = outerVisibilityScope,
             seekBarProgress = seekBarProgress,
@@ -712,6 +715,7 @@ internal fun SharedTransitionScope.PlaybackControls(
     track: TrackEntity,
     // Deferred: forwarded to PlayPauseButton, which reads it in its own scope.
     isPlaying: () -> Boolean,
+    isLoading: () -> Boolean,
     durationMs: Long,
     outerVisibilityScope: AnimatedVisibilityScope,
     seekBarProgress: SeekBarProgressState,
@@ -768,6 +772,7 @@ internal fun SharedTransitionScope.PlaybackControls(
             PlayPauseButton(
                 track = track,
                 isPlaying = isPlaying,
+                isLoading = isLoading,
                 outerVisibilityScope = outerVisibilityScope,
                 onClick = onPlayPause
             )
@@ -799,6 +804,7 @@ internal fun SharedTransitionScope.PlaybackControls(
 internal fun SharedTransitionScope.PlayPauseButton(
     track: TrackEntity,
     isPlaying: () -> Boolean,
+    isLoading: () -> Boolean,
     outerVisibilityScope: AnimatedVisibilityScope,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -806,6 +812,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
     // Read in this leaf's scope: a play/pause flip recomposes only this button -- the
     // deferred provider keeps the controls row and the pager above it uninvalidated.
     val isPlaying = isPlaying()
+    val isLoading = isLoading()
     val playInteractions = remember { MutableInteractionSource() }
 
     val isPressed by playInteractions.collectIsPressedAsState()
@@ -823,7 +830,22 @@ internal fun SharedTransitionScope.PlayPauseButton(
         label = "playPauseCrossfade"
     )
 
-    val description = stringResource(if (isPlaying) R.string.pause else R.string.play)
+    // The loading circle replaces the play/pause glyph with the same scale+fade
+    // convention the two icons use: 0f = transport showing, 1f = circle showing.
+    val loadingFraction by animateFloatAsState(
+        targetValue = if (isLoading) 1f else 0f,
+        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
+        label = "playLoadingCrossfade"
+    )
+    val transportAlpha = 1f - loadingFraction
+
+    val description = stringResource(
+        when {
+            isLoading -> R.string.loading
+            isPlaying -> R.string.pause
+            else -> R.string.play
+        }
+    )
     Box(
         modifier = modifier
             .size(PlayerDimens.playButtonSize)
@@ -839,6 +861,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
             .clickable(
                 interactionSource = playInteractions,
                 indication = null,
+                enabled = !isLoading,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center
@@ -851,9 +874,10 @@ internal fun SharedTransitionScope.PlayPauseButton(
             modifier = Modifier
                 .size(PlayerDimens.playButtonIconSize)
                 .graphicsLayer {
-                    val visible = 1f - pauseFraction
+                    val visible = (1f - pauseFraction) * transportAlpha
                     alpha = visible
-                    val iconScale = 0.2f + 0.8f * visible
+                    val iconScale = (0.2f + 0.8f * (1f - pauseFraction)) *
+                            (1f - 0.8f * loadingFraction)
                     scaleX = iconScale
                     scaleY = iconScale
                 }
@@ -866,12 +890,27 @@ internal fun SharedTransitionScope.PlayPauseButton(
             modifier = Modifier
                 .size(PlayerDimens.playButtonIconSize)
                 .graphicsLayer {
-                    alpha = pauseFraction
-                    val iconScale = 0.2f + 0.8f * pauseFraction
+                    alpha = pauseFraction * transportAlpha
+                    val iconScale = (0.2f + 0.8f * pauseFraction) *
+                            (1f - 0.8f * loadingFraction)
                     scaleX = iconScale
                     scaleY = iconScale
                 }
         )
+        if (isLoading || loadingFraction > 0f) {
+            CircularProgressIndicator(
+                color = FoamTheme.colors.textPrimary,
+                strokeWidth = 3.dp,
+                modifier = Modifier
+                    .size(PlayerDimens.playLoadingSize)
+                    .graphicsLayer {
+                        alpha = loadingFraction
+                        val circleScale = 0.2f + 0.8f * loadingFraction
+                        scaleX = circleScale
+                        scaleY = circleScale
+                    }
+            )
+        }
     }
 }
 

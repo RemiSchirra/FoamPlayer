@@ -5,6 +5,7 @@
     <string name="action_radio">Radio</string>
     <string name="play">Lecture</string>
     <string name="pause">Pause</string>
+    <string name="loading">Chargement</string>
     <string name="previous">Précédent</string>
     <string name="next">Suivant</string>
     <string name="back">Retour</string>
@@ -82,6 +83,9 @@
     <string name="toast_distant_track_unavailable">Piste distante indisponible : %1$s</string>
     <string name="toast_failed_to_load">Échec du chargement de %1$s</string>
     <string name="toast_playback_stopped">Lecture arrêtée : trop de pistes n\'ont pas pu être chargées</string>
+    <string name="toast_cast_unavailable">Chromecast indisponible sur cet appareil (services Google Play requis)</string>
+    <string name="toast_cast_load_failed">Impossible de lire %1$s sur le Chromecast</string>
+    <string name="toast_cast_connect_failed">Impossible de se connecter à ce Chromecast</string>
     <string name="done">Terminé</string>
     <string name="metadata_separators">Séparateurs de métadonnées</string>
     <string name="artist_separators">Séparateurs d\'artistes</string>
@@ -270,7 +274,7 @@
     <string name="new_playlist_fallback">Nouvelle playlist</string>
     <string name="playlist_name_value">Playlist : %1$s</string>
     <string name="from_m3u_playlist">Depuis une playlist M3U</string>
-    <string name="from_m3u_subtitle">Choisir un fichier .m3u</string>
+    <string name="from_m3u_subtitle">Choisir un ou plusieurs fichiers</string>
     <string name="from_folder">Depuis un dossier</string>
     <string name="from_folder_subtitle">Choisir un dossier de musique</string>
     <string name="create">Créer</string>
@@ -411,6 +415,8 @@
     <string name="lastfm_scrobble">Scrobbler avec Last.fm</string>
     <string name="lastfm_scrobble_desc">Envoie chaque titre à Last.fm lorsqu\'il atteint le seuil d\'écoute (%1$d%%)</string>
     <string name="lastfm_scrobble_connect_first">Connectez votre compte Last.fm ci-dessus pour commencer à scrobbler.</string>
+    <string name="lastfm_scrobble_first_artist">Scrobber uniquement le premier artiste</string>
+    <string name="lastfm_scrobble_first_artist_desc">Seul le premier nom crédité est envoyé à Last.fm.</string>
     <string name="lastfm_api_key">Clé API</string>
     <string name="lastfm_api_key_app">Clé fournie par l\'application</string>
     <string name="lastfm_api_key_app_desc">Utilise la clé API Last.fm configurée pour cette version.</string>
@@ -556,6 +562,11 @@
         <item quantity="one">%1$d canal</item>
         <item quantity="many">%1$d de canaux</item>
         <item quantity="other">%1$d canaux</item>
+    </plurals>
+    <plurals name="from_m3u_files_selected">
+        <item quantity="one">%1$d fichier sélectionné</item>
+        <item quantity="many">%1$d de fichiers sélectionnés</item>
+        <item quantity="other">%1$d fichiers sélectionnés</item>
     </plurals>
 
     <!-- Types de collections & cibles des héros -->

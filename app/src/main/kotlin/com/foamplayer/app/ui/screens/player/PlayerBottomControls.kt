@@ -41,6 +41,7 @@ internal fun PlayerBottomControls(
     subControlsProgress: () -> Float,
     navbarExpandHeight: () -> Float,
     isPlayingProvider: () -> Boolean,
+    isLoadingProvider: () -> Boolean,
     seekBarProgress: SeekBarProgressState,
     settleSeekBarAnimated: Boolean,
     isWaveformSeek: Boolean,
@@ -138,6 +139,7 @@ internal fun PlayerBottomControls(
 
                 MiniPlayPauseButton(
                     isPlaying = isPlayingProvider,
+                    isLoading = isLoadingProvider,
                     progress = subControlsProgress,
                     onClick = { if (isPlayingProvider()) viewModel.pause() else viewModel.play() }
                 )

@@ -17,6 +17,7 @@ import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.app.data.repository.TrackRepository
 import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.data.scanner.ScanStatus
+import com.foamplayer.app.ui.modals.M3uSelection
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -35,11 +36,11 @@ import javax.inject.Inject
 sealed interface CreatePlaylistState {
     data object Idle : CreatePlaylistState
 
-    /** M3U import finished; the playlist exists (found tracks were added) and [missing] could not be matched. */
+    /** M3U import finished; the playlists exist (found tracks were added) and [missing] could not be matched. */
     data class M3uSongsMissing(
-        val playlistId: Long,
+        val playlistIds: List<Long>,
         val playlistName: String,
-        val missing: List<String>
+        val missing: List<String>,
     ) : CreatePlaylistState
 
     /** Folder import would miss [missing] files; playlist creation waits for the user's decision. */
@@ -123,12 +124,23 @@ class PlaylistsViewModel @Inject constructor(
         }
     }
 
-    /** Creates a playlist, optionally importing from an M3U file or folder first. */
-    fun createPlaylistFromSource(name: String, m3uUri: String?, folderUri: String?, imageUri: String? = null) {
+    /**
+     * Creates a playlist, optionally importing from M3U file(s) or a folder
+     * first. One picked .m3u file is imported as the named playlist the name
+     * field and cover describe; several files import one playlist per file,
+     * each named after its file and without a cover.
+     */
+    fun createPlaylistFromSource(
+        name: String,
+        m3uFiles: List<M3uSelection>,
+        folderUri: String?,
+        imageUri: String? = null
+    ) {
         viewModelScope.launch {
             val resolvedName = name.trim().ifEmpty { context.getString(R.string.new_playlist_fallback) }
             when {
-                m3uUri != null -> createFromM3u(resolvedName, m3uUri, imageUri)
+                m3uFiles.size > 1 -> createFromM3uFiles(m3uFiles)
+                m3uFiles.size == 1 -> createFromM3u(resolvedName, m3uFiles.first().uri, imageUri)
                 folderUri != null -> createFromFolder(resolvedName, folderUri, imageUri)
                 else -> playlistRepository.createPlaylist(resolvedName, imageUri)
             }
@@ -202,13 +214,13 @@ class PlaylistsViewModel @Inject constructor(
         }
     }
 
-    /** Cancels the pending creation: deletes the just-imported M3U playlist, or discards the folder selection. */
+    /** Cancels the pending creation: deletes the just-imported M3U playlist(s), or discards the folder selection. */
     fun cancelMissingSongs() {
         val state = _createState.value
         _createState.value = CreatePlaylistState.Idle
         if (state is CreatePlaylistState.M3uSongsMissing) {
             viewModelScope.launch {
-                playlistRepository.deletePlaylist(state.playlistId)
+                state.playlistIds.forEach { playlistRepository.deletePlaylist(it) }
             }
         }
     }
@@ -270,7 +282,28 @@ class PlaylistsViewModel @Inject constructor(
             playlistRepository.appendTrackToPlaylist(playlistId, track.id)
         }
         if (result.missing.isNotEmpty()) {
-            _createState.value = CreatePlaylistState.M3uSongsMissing(playlistId, name, result.missing)
+            _createState.value = CreatePlaylistState.M3uSongsMissing(listOf(playlistId), name, result.missing)
+        }
+    }
+
+    /** Imports every picked .m3u file as its own playlist, each named after its file. */
+    private suspend fun createFromM3uFiles(files: List<M3uSelection>) {
+        val fallback = context.getString(R.string.new_playlist_fallback)
+        val tracks = trackRepository.getAllTracksOnce()
+        val playlistIds = mutableListOf<Long>()
+        val missing = mutableListOf<String>()
+        files.forEach { file ->
+            val result = importer.importM3u(file.uri, tracks)
+            val name = file.name.substringBeforeLast('.').trim().ifEmpty { fallback }
+            val playlistId = playlistRepository.createPlaylist(name, null)
+            playlistIds += playlistId
+            result.matched.forEach { track ->
+                playlistRepository.appendTrackToPlaylist(playlistId, track.id)
+            }
+            missing += result.missing
+        }
+        if (missing.isNotEmpty()) {
+            _createState.value = CreatePlaylistState.M3uSongsMissing(playlistIds, "", missing)
         }
     }
 

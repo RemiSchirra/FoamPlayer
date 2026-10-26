@@ -16,6 +16,7 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.foamplayer.app.audio.bitperfect.BitPerfectDetector
+import com.foamplayer.app.audio.cast.ChromecastController
 import com.foamplayer.app.audio.device.OutputDeviceManager
 import com.foamplayer.app.audio.dsp.DspAudioProcessor
 import com.foamplayer.app.audio.dsp.DspEngine
@@ -37,10 +38,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
@@ -76,7 +80,8 @@ class AudioEngine @Inject constructor(
     private val distantRepository: DistantRepository,
     private val toastCenter: ToastCenter,
     private val fadeEngine: FadeEngine,
-    private val queuePersistence: QueuePersistence
+    private val queuePersistence: QueuePersistence,
+    private val chromecast: ChromecastController
 ) {
     /** The active player. Replaced at each crossfade swap. */
     val player: ExoPlayer
@@ -109,10 +114,66 @@ class AudioEngine @Inject constructor(
     val preferredOutputDeviceId: StateFlow<String?> = outputDeviceManager.preferredDeviceId
 
     /** The routing target folded to a "Play on" sheet id (what the UI shows as selected). */
-    val selectedPlayOnDeviceId: StateFlow<String?> = outputDeviceManager.selectedPlayOnDeviceId
+    val selectedPlayOnDeviceId: StateFlow<String?> =
+        combine(
+            outputDeviceManager.selectedPlayOnDeviceId,
+            chromecast.connectedDeviceId
+        ) { local, cast -> cast ?: local }
+            .stateIn(
+                scope = scope,
+                started = SharingStarted.Eagerly,
+                initialValue = outputDeviceManager.selectedPlayOnDeviceId.value
+            )
 
     private val _playbackState = MutableStateFlow(PlaybackState())
     val playbackState: StateFlow<PlaybackState> = _playbackState
+
+    /**
+     * True while a plain seek is settling: buffering caused by the seek itself must not
+     * show the loading indicator (only a genuinely new remote track does).
+     */
+    private var suppressLoadingUntilReady: Boolean = false
+
+    /**
+     * Set by [play] on a distant track: ExoPlayer may already report STATE_READY (it
+     * buffers the item while paused) long before the decoder/sink actually render
+     * audio, so the loader has to survive that first READY and drop on isPlaying
+     * instead. Consumed by the first READY (or any stop), so it can never linger and
+     * mask a later load.
+     */
+    private var playStartPending: Boolean = false
+
+    /**
+     * A Chromecast load (or play request) is in flight and expected to start playing
+     * (see [onCastStatus]).
+     */
+    private var castLoadingExpected: Boolean = false
+
+    /** Publishes [loading] into the playback snapshot, only when it actually changes. */
+    private fun setLoading(loading: Boolean) {
+        if (!loading) playStartPending = false
+        if (_playbackState.value.isLoading == loading) return
+        _playbackState.value = _playbackState.value.copy(isLoading = loading)
+    }
+
+    /**
+     * Loading applies to remote sources only: a distant track still being fetched, or
+     * (through [onCastStatus]) a receiver preparing the next item. Local files never
+     * show it, and a plain seek opts out through [suppressLoadingUntilReady].
+     */
+    private fun updateLoadingForTrack(
+        track: TrackEntity?,
+        playbackState: Int = player.playbackState
+    ) {
+        if (chromecast.isCasting) return
+        val requested = _playbackState.value.isPlaying || _playbackState.value.isPlaybackRequested
+        setLoading(
+            requested &&
+                track != null &&
+                DistantUris.isDistant(track.path) &&
+                playbackState != Player.STATE_READY
+        )
+    }
 
     /** Playback position, updated every frame. Separate from [playbackState] to avoid recomposing its collectors. */
     private val _positionMs = MutableStateFlow(0L)
@@ -227,6 +288,15 @@ class AudioEngine @Inject constructor(
     /** Tracks that failed to load. Navigation skips them in both directions. */
     private val failedTrackIds = mutableSetOf<Long>()
 
+    /** Chromecast picked while its session was still starting (see [castTo]). */
+    private var pendingCastDeviceId: String? = null
+
+    /** Queue index the receiver already reported as stopped (see [onCastStatus]). */
+    private var castStoppedAt: Int = -1
+
+    /** Set when a "Play on" pick supersedes the cast session: playback resumes on this device. */
+    private var castHandoffResume: Boolean = false
+
     /** Latch so the auto-crossfade triggers once per track. */
     private var crossfadeArmedForTrackId: Long? = null
 
@@ -250,12 +320,42 @@ class AudioEngine @Inject constructor(
         private const val MAX_CONSECUTIVE_LOAD_ERRORS = 10
         private const val PERSIST_DEBOUNCE_MS = 1_000L
         private const val POSITION_SAVE_INTERVAL_MS = 15_000L
+
+        /** Upcoming tracks pushed to a Chromecast in one queueLoad (the receiver's next/seek window). */
+        private const val CAST_QUEUE_WINDOW = ChromecastController.QUEUE_WINDOW
+
+        /**
+         * Grace period for a receiver to start the next item of its own queue before
+         * the app presumes it stopped and reloads (see [onCastStatus]).
+         */
+        private const val CAST_STOP_GRACE_MS = 800L
     }
 
     private val playerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_READY) {
-                consecutiveLoadErrors = 0
+            if (chromecast.isCasting) return
+            when (playbackState) {
+                Player.STATE_READY -> {
+                    consecutiveLoadErrors = 0
+                    suppressLoadingUntilReady = false
+                    if (playStartPending) {
+                        playStartPending = false
+                    } else {
+                        setLoading(false)
+                    }
+                }
+
+                Player.STATE_BUFFERING -> {
+                    if (!suppressLoadingUntilReady) {
+                        updateLoadingForTrack(_playbackState.value.currentTrack, playbackState)
+                    }
+                }
+
+                Player.STATE_IDLE -> {
+                    suppressLoadingUntilReady = false
+                    playStartPending = false
+                    setLoading(false)
+                }
             }
         }
 
@@ -264,18 +364,33 @@ class AudioEngine @Inject constructor(
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            // While casting, the local player is parked: its state must not
+            // overwrite the receiver's mirror in _playbackState.
+            if (chromecast.isCasting) return
             _playbackState.value = _playbackState.value.copy(isPlaying = isPlaying)
+            if (isPlaying) {
+                playStartPending = false
+                setLoading(false)
+            }
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (chromecast.isCasting) return
             _playbackState.value =
                 _playbackState.value.copy(isPlaybackRequested = playWhenReady)
+            if (!playWhenReady) {
+                playStartPending = false
+                setLoading(false)
+            }
             if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
                 maybeBeginSilenceGap()
             }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // Window maintenance on the parked player rewrites its timeline; the
+            // cast status listener owns the queue position while casting.
+            if (chromecast.isCasting) return
             val trackId = mediaItem?.mediaId?.toLongOrNull() ?: return
 
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
@@ -340,6 +455,9 @@ class AudioEngine @Inject constructor(
             windowJumpId++
             windowJumpJob?.cancel()
             pendingWindowResync = false
+            if (targetQueueIndex != _playbackState.value.queueIndex) {
+                suppressLoadingUntilReady = false
+            }
             pendingFadeWindowStart = windowStart
             pendingFadeWindowEnd = windowEnd
 
@@ -374,6 +492,11 @@ class AudioEngine @Inject constructor(
             _positionMs.value = positionMs
             _seekEvents.tryEmit(positionMs)
 
+            playStartPending = false
+            if (!suppressLoadingUntilReady) {
+                updateLoadingForTrack(track, (displayPlayer ?: player).playbackState)
+            }
+
             audioRouter.recompute()
             if (wasAuxiliary) scheduleAuxiliaryRefill()
 
@@ -384,6 +507,8 @@ class AudioEngine @Inject constructor(
 
         override fun onCrossfadeSwapped(targetQueueIndex: Int, targetPositionMs: Long) {
             consecutiveLoadErrors = 0
+            suppressLoadingUntilReady = false
+            setLoading(false)
             pendingFadeWindowStart?.let { start ->
                 loadedRange = start..(pendingFadeWindowEnd ?: start)
             }
@@ -435,10 +560,13 @@ class AudioEngine @Inject constructor(
             val trackId = player.currentMediaItem?.mediaId?.toLongOrNull()
             if (trackId != null) listen.resume(trackId) else listen.discardStash()
 
+            suppressLoadingUntilReady = false
+
             _playbackState.value = _playbackState.value.copy(
                 isPlaying = player.isPlaying,
                 isPlaybackRequested = player.playWhenReady
             )
+            updateLoadingForTrack(_playbackState.value.currentTrack)
 
             // The session may have been bound to the secondary, which is now released.
             onDisplayPlayerChangedListener?.invoke(activePlayerField)
@@ -451,7 +579,10 @@ class AudioEngine @Inject constructor(
 
         override fun playerBaseVolume(): Float {
             val dsp = dspEngine.state.value
-            return if (dsp.directVolumeControl) 1f else dsp.volumePercent / 100f
+            val dspGain = if (dsp.directVolumeControl) 1f else dsp.volumePercent / 100f
+            // The phone-speaker gain only bites while Bluetooth owns the stream
+            // volume (see AudioOutputRouter.phoneOutputGain).
+            return dspGain * audioRouter.phoneOutputGain
         }
     }
 
@@ -463,6 +594,22 @@ class AudioEngine @Inject constructor(
         observeListenedThreshold()
         observeSessionForPersistence()
         audioRouter.start()
+        chromecast.onStatus = ::onCastStatus
+        chromecast.onSessionStarted = ::onCastSessionStarted
+        chromecast.onSessionLost = ::onCastSessionLost
+        observeVolumeForCast()
+    }
+
+    /**
+     * Mirrors the app's volume onto the receiver: the DSP gain is local-only, so
+     * without this the volume slider would do nothing while casting.
+     */
+    private fun observeVolumeForCast() {
+        scope.launch {
+            dspEngine.state.collect { state ->
+                if (chromecast.isCasting) chromecast.setVolume(state.volumePercent / 100f)
+            }
+        }
     }
 
     /**
@@ -516,6 +663,7 @@ class AudioEngine @Inject constructor(
         listen.clear()
         windowJumpJob?.cancel()
         failedTrackIds.clear()
+        suppressLoadingUntilReady = false
 
         val clampedStart = startIndex.coerceIn(0, tracks.lastIndex)
         val restoredPosition = positionMs.coerceAtLeast(0L)
@@ -534,6 +682,7 @@ class AudioEngine @Inject constructor(
             durationMs = newQueue[clampedStart].duration,
             isPlaying = false,
             isPlaybackRequested = false,
+            isLoading = false,
             isShuffle = isShuffle,
             repeatMode = repeatMode,
             queueSourceId = sourceCollectionId,
@@ -638,6 +787,11 @@ class AudioEngine @Inject constructor(
         crossfadeArmedForTrackId = null
         silenceGapArmedForTrackId = null
 
+        // A new song occurrence: any seek suppression from the previous track ends here.
+        suppressLoadingUntilReady = false
+        playStartPending = false
+        updateLoadingForTrack(track)
+
         audioRouter.recompute()
 
         if (pendingWindowResync) {
@@ -662,6 +816,9 @@ class AudioEngine @Inject constructor(
         syncCursorToPlayer: Boolean
     ) {
         val resumeAfterError = player.playWhenReady
+        suppressLoadingUntilReady = false
+        playStartPending = false
+        setLoading(false)
         val trackId = failedTrackId
             ?: player.currentMediaItem?.mediaId?.toLongOrNull()
         val failedTrack = trackId?.let { id ->
@@ -723,6 +880,258 @@ class AudioEngine @Inject constructor(
     /** Explicit "Play on" routing from the device picker (see [AudioOutputRouter.routeTo]). */
     fun routeTo(deviceId: String): Boolean = audioRouter.routeTo(deviceId)
 
+    // ------------------------------------------------------------------ casting
+
+    /**
+     * Sends the current queue to the Chromecast behind [deviceId]
+     * (`"chromecast:<routeId>"`).
+     *
+     * Connecting is asynchronous: the queue is published once the receiver's
+     * session reports in (see [onCastSessionStarted]). The phone's own playback is
+     * parked first, so the sound never comes out of both at once.
+     */
+    fun castTo(deviceId: String): Boolean {
+        if (!deviceId.startsWith(ChromecastController.ID_PREFIX)) return false
+        val state = _playbackState.value
+        if (state.currentTrack == null || state.queueIndex !in state.queue.indices) return false
+        if (chromecast.connectedDeviceId.value == deviceId) {
+            // Already on that receiver: re-publish the queue where the phone thinks it is.
+            return castLoad(state.queue, state.queueIndex, _positionMs.value, state.isPlaybackRequested)
+        }
+        pendingCastDeviceId = deviceId
+        detachLocalAudio()
+        // Waiting for the receiver to come up and take the queue is a real load.
+        castLoadingExpected = state.isPlaybackRequested
+        setLoading(state.isPlaybackRequested)
+        val routeId = deviceId.removePrefix(ChromecastController.ID_PREFIX)
+        if (chromecast.connect(routeId)) return true
+        // The route vanished before selection: give the phone its playback back.
+        pendingCastDeviceId = null
+        castLoadingExpected = false
+        setLoading(false)
+        toastCenter.pushRes(R.string.toast_cast_connect_failed)
+        resumeLocalPlayback(state, play = state.isPlaybackRequested)
+        return false
+    }
+
+    /** Ends the cast session; the queue stays paused on this device. */
+    fun stopCasting(resumeOnDevice: Boolean = false) {
+        pendingCastDeviceId = null
+        castHandoffResume = resumeOnDevice
+        castLoadingExpected = false
+        setLoading(false)
+        chromecast.disconnect()
+    }
+
+    /**
+     * One hardware volume-key press, aimed at the device the "Play on" sheet has
+     * selected rather than at the phone:
+     *  - a Chromecast plays => the receiver's own (device) volume moves, so the TV
+     *    shows its volume bar and its remote stays in sync;
+     *  - the phone's output is pinned while a Bluetooth headset is attached =>
+     *    Android would move the headset's volume, so the phone speaker's gain moves
+     *    instead;
+     *  - anything else (headset, wired, plain speaker) => returns false and the
+     *    platform handles the key, which already targets the playing device.
+     */
+    fun adjustOutputVolume(up: Boolean): Boolean {
+        val steps = if (up) 1 else -1
+        if (chromecast.isCasting) return chromecast.adjustVolume(steps)
+        return audioRouter.adjustPhoneOutputVolume(steps)
+    }
+
+    /** Silences the phone without touching the playback request, which the receiver inherits. */
+    private fun detachLocalAudio() {
+        cancelPendingTransitions()
+        fadeEngine.completeCrossfadeNow()
+        // The local listener is not guarded yet at this point (no pending route):
+        // pausing would otherwise clear the request the receiver must inherit.
+        val requested = _playbackState.value.isPlaybackRequested
+        player.pause()
+        _playbackState.value = _playbackState.value.copy(
+            isPlaying = false,
+            isPlaybackRequested = requested
+        )
+    }
+
+    /** The receiver's queue: at most [CAST_QUEUE_WINDOW] upcoming tracks, starting at [index]. */
+    private fun castLoad(
+        queue: List<TrackEntity>,
+        index: Int,
+        positionMs: Long,
+        play: Boolean
+    ): Boolean {
+        if (index !in queue.indices) return false
+        val state = _playbackState.value
+        // Repeat-all loops the primary queue: don't let the receiver run on into
+        // the auxiliary pool the way a plain window would.
+        val hardEnd = if (state.repeatMode == RepeatMode.ALL && queue === state.queue) {
+            primaryQueueLastIndex(state) + 1
+        } else {
+            queue.size
+        }
+        val end = (index + CAST_QUEUE_WINDOW).coerceAtMost(hardEnd).coerceAtLeast(index + 1)
+        val slice = queue.subList(index, end)
+        castLoadingExpected = play
+        setLoading(play)
+        val loaded = chromecast.loadQueue(slice, index, positionMs, play)
+        if (!loaded) {
+            castLoadingExpected = false
+            setLoading(false)
+            toastCenter.pushRes(R.string.toast_cast_load_failed, queue[index].title)
+        }
+        return loaded
+    }
+
+    /** Moves the receiver to [index], re-publishing the queue when it is outside the loaded slice. */
+    private fun castPlayIndex(
+        index: Int,
+        positionMs: Long,
+        play: Boolean,
+        emitSeekEvent: Boolean,
+        reload: Boolean = false
+    ) {
+        val state = _playbackState.value
+        if (index !in state.queue.indices) return
+        // A jump only works while the receiver still holds live media: after it
+        // went idle (end of a track/queue) the request is dropped, so [reload] --
+        // and an idle receiver -- force a fresh load instead of leaving the app
+        // "playing" silence.
+        val jumped = !reload && !chromecast.isReceiverIdle &&
+            chromecast.isIndexLoaded(index) &&
+            chromecast.jumpTo(index, positionMs, play)
+        if (!jumped && !castLoad(state.queue, index, positionMs, play)) return
+        // A jump is a new item on the receiver too: keep the loader up until its
+        // first non-buffering status arrives.
+        castLoadingExpected = play
+        setLoading(play)
+        publishCastTrack(index, positionMs, emitSeekEvent)
+    }
+
+    /** next/previous on the receiver, wrapping at the primary queue like local playback. */
+    private fun castAdvance(forward: Boolean, forcePlay: Boolean = false, reload: Boolean = false) {
+        val state = _playbackState.value
+        val index = state.queueIndex
+        if (index !in state.queue.indices) return
+        val play = forcePlay || state.isPlaybackRequested
+        if (state.repeatMode == RepeatMode.ONE && forward) {
+            castPlayIndex(index, 0L, play = true, emitSeekEvent = false, reload = reload)
+            return
+        }
+        val first = primaryQueueFirstIndex(state).coerceAtLeast(0)
+        val last = primaryQueueLastIndex(state)
+        var target = if (forward) index + 1 else index - 1
+        if (state.repeatMode == RepeatMode.ALL) {
+            if (forward && target > last) target = first
+            if (!forward && target < first) target = last
+        }
+        if (target !in state.queue.indices) return
+        castPlayIndex(target, 0L, play, emitSeekEvent = false, reload = reload)
+    }
+
+    /**
+     * Mirrors a position the receiver owns into the engine state. Deliberately
+     * independent of [applyTrackTransition]: no ExoPlayer window work and
+     * duplicate track ids can't resolve to the wrong queue slot.
+     */
+    private fun publishCastTrack(index: Int, positionMs: Long, emitSeekEvent: Boolean) {
+        val state = _playbackState.value
+        val track = state.queue.getOrNull(index) ?: return
+        // Every call is a new playback occurrence: a receiver-driven track change
+        // or a deliberate jump. Listen accounting starts over here.
+        listen.begin(track.id)
+        val flags = state.auxiliaryFlags
+        val wasAuxiliary = flags.getOrNull(index) == true
+        _playbackState.value = state.copy(
+            currentTrack = track,
+            queueIndex = index,
+            durationMs = track.duration,
+            auxiliaryFlags = if (wasAuxiliary) {
+                flags.toMutableList().also { it[index] = false }
+            } else flags
+        )
+        _positionMs.value = positionMs
+        if (emitSeekEvent) _seekEvents.tryEmit(positionMs)
+        audioRouter.recompute()
+    }
+
+    private fun onCastSessionStarted() {
+        val state = _playbackState.value
+        if (state.currentTrack == null || state.queueIndex !in state.queue.indices) return
+        pendingCastDeviceId = null
+        castStoppedAt = -1
+        chromecast.setVolume(dspEngine.state.value.volumePercent / 100f)
+        castLoad(state.queue, state.queueIndex, _positionMs.value, state.isPlaybackRequested)
+    }
+
+    private fun onCastSessionLost() {
+        // A session that never reported in was a failed connect.
+        val failedStart = pendingCastDeviceId != null
+        pendingCastDeviceId = null
+        castStoppedAt = -1
+        castLoadingExpected = false
+        setLoading(false)
+        val resumeOnDevice = castHandoffResume
+        castHandoffResume = false
+        val state = _playbackState.value
+        _playbackState.value = state.copy(isPlaying = false)
+        if (failedStart) toastCenter.pushRes(R.string.toast_cast_connect_failed)
+        // Give the phone its playback back on either hand-off (explicit stop or
+        // failed connect): otherwise a refused connection leaves it silent.
+        resumeLocalPlayback(state, play = resumeOnDevice || (failedStart && state.isPlaybackRequested))
+    }
+
+    /** The phone is the player again: rebuilds its timeline on the last cast position. */
+    private fun resumeLocalPlayback(state: PlaybackState, play: Boolean) {
+        if (state.currentTrack == null || state.queueIndex !in state.queue.indices) return
+        loadWindowAndPlay(
+            tracks = state.queue,
+            centerIndex = state.queueIndex,
+            forcePlay = play,
+            startPositionMs = _positionMs.value
+        )
+    }
+
+    private fun onCastStatus(status: ChromecastController.CastStatus) {
+        if (!chromecast.isCasting) return
+        if (status.finished) {
+            castLoadingExpected = false
+            setLoading(false)
+            if (status.queueIndex == castStoppedAt) return
+            castStoppedAt = status.queueIndex
+            val stoppedAt = status.queueIndex
+            val state = _playbackState.value
+            if (stoppedAt in state.queue.indices && stoppedAt != state.queueIndex) {
+                publishCastTrack(stoppedAt, status.positionMs, emitSeekEvent = false)
+            }
+            _playbackState.value = _playbackState.value.copy(isPlaying = false)
+            scope.launch {
+                delay(CAST_STOP_GRACE_MS)
+                if (!chromecast.isCasting || castStoppedAt != stoppedAt) return@launch
+                Log.d("AudioEngine", "cast stopped at $stoppedAt; reloading from the next track")
+                castAdvance(forward = true, forcePlay = true, reload = true)
+            }
+            return
+        }
+        castStoppedAt = -1
+        if (castLoadingExpected && (status.isPlaying || !status.isPlaybackRequested)) {
+            castLoadingExpected = false
+        }
+        setLoading(
+            castLoadingExpected &&
+                status.isPlaybackRequested &&
+                (status.isBuffering || !status.isPlaying)
+        )
+        val state = _playbackState.value
+        if (status.queueIndex in state.queue.indices && status.queueIndex != state.queueIndex) {
+            publishCastTrack(status.queueIndex, status.positionMs, emitSeekEvent = false)
+        }
+        _playbackState.value = _playbackState.value.copy(
+            isPlaying = status.isPlaying,
+            isPlaybackRequested = status.isPlaybackRequested
+        )
+    }
+
     /** Playback time after which [trackId] counts as listened. */
     private fun listenThresholdMs(trackId: Long): Long {
         val percent = listenedThresholdPercent
@@ -743,6 +1152,21 @@ class AudioEngine @Inject constructor(
         val pendingId = listen.pendingTrackId ?: return
         if (!displayPlayer.isPlaying) return
         if (displayPlayer.currentMediaItem?.mediaId?.toLongOrNull() != pendingId) return
+
+        val playedMs = listen.accumulate(positionMs, ::listenThresholdMs) ?: return
+        _listenedTrackEvents.tryEmit(ListenedTrackEvent(pendingId, playedMs))
+        scope.launch {
+            trackRepository.incrementPlayCount(pendingId, System.currentTimeMillis())
+        }
+    }
+
+    /**
+     * Listen accounting while a Chromecast plays: there is no local player to
+     * sample, so the receiver's position drives the same accumulator.
+     */
+    private fun tickListenCountWhileCasting(positionMs: Long) {
+        val pendingId = listen.pendingTrackId ?: return
+        if (_playbackState.value.currentTrack?.id != pendingId) return
 
         val playedMs = listen.accumulate(positionMs, ::listenThresholdMs) ?: return
         _listenedTrackEvents.tryEmit(ListenedTrackEvent(pendingId, playedMs))
@@ -838,6 +1262,7 @@ class AudioEngine @Inject constructor(
         listen.clear()
         windowJumpJob?.cancel()
         failedTrackIds.clear()
+        suppressLoadingUntilReady = false
 
         if (tracks.isEmpty()) {
             loadedRange = IntRange.EMPTY
@@ -851,6 +1276,7 @@ class AudioEngine @Inject constructor(
                 currentTrack = null,
                 isPlaying = false,
                 isPlaybackRequested = false,
+                isLoading = false,
                 queueSourceId = null,
                 queueSourceFlags = emptyList()
             )
@@ -1042,12 +1468,24 @@ class AudioEngine @Inject constructor(
     private fun loadWindowAndPlay(
         tracks: List<TrackEntity>,
         centerIndex: Int,
-        forcePlay: Boolean = false
+        forcePlay: Boolean = false,
+        startPositionMs: Long = 0L
     ) {
+        if (chromecast.isCasting) {
+            castLoad(tracks, centerIndex, startPositionMs, play = forcePlay || _playbackState.value.isPlaybackRequested)
+            return
+        }
         windowJumpJob?.cancel()
         val jumpId = ++windowJumpId
         pendingWindowResync = false
+        suppressLoadingUntilReady = false
         val playAfterPrepare = forcePlay || !switchStaysPaused()
+        val targetTrack = tracks.getOrNull(centerIndex)
+        setLoading(
+            playAfterPrepare &&
+                targetTrack != null &&
+                DistantUris.isDistant(targetTrack.path)
+        )
 
         val windowStart = (centerIndex - WINDOW_RADIUS).coerceAtLeast(0)
         val windowEnd = (centerIndex + WINDOW_RADIUS).coerceAtMost(tracks.lastIndex)
@@ -1060,7 +1498,7 @@ class AudioEngine @Inject constructor(
             // Set BEFORE touching the player: ExoPlayer dispatches its listener callbacks
             // synchronously inside setMediaItems, and they resolve queue indices through loadedRange.
             loadedRange = windowStart..windowEnd
-            player.setMediaItems(windowItems, centerIndex - windowStart, 0L)
+            player.setMediaItems(windowItems, centerIndex - windowStart, startPositionMs.coerceAtLeast(0L))
             if (playAfterPrepare) player.play() else player.pause()
             player.prepare()
         }
@@ -1131,7 +1569,19 @@ class AudioEngine @Inject constructor(
     }
 
     fun play() {
+        if (chromecast.isCasting) {
+            chromecast.play()
+            // The receiver takes a moment to actually start (and may rebuffer first):
+            // keep the loader up until its first playing status (see onCastStatus)
+            // rather than assuming the request took effect.
+            castLoadingExpected = true
+            setLoading(true)
+            _playbackState.value =
+                _playbackState.value.copy(isPlaying = true, isPlaybackRequested = true)
+            return
+        }
         cancelPendingTransitions()
+        suppressLoadingUntilReady = false
 
         if (player.playbackState == Player.STATE_IDLE) {
             player.prepare()
@@ -1144,12 +1594,30 @@ class AudioEngine @Inject constructor(
         }
         // Published last so the button reacts to the tap immediately.
         _playbackState.value = _playbackState.value.copy(isPlaying = true)
+        val resumedTrack = _playbackState.value.currentTrack
+        if (resumedTrack != null &&
+            DistantUris.isDistant(resumedTrack.path) &&
+            !player.isPlaying
+        ) {
+            playStartPending = true
+            setLoading(true)
+        }
     }
 
     fun pause() {
+        if (chromecast.isCasting) {
+            chromecast.pause()
+            castLoadingExpected = false
+            setLoading(false)
+            _playbackState.value =
+                _playbackState.value.copy(isPlaying = false, isPlaybackRequested = false)
+            return
+        }
         // Mid-crossfade, `player` is still the outgoing stream while the UI shows the incoming one.
         val settledCrossfade = fadeEngine.completeCrossfadeNow()
         cancelSilenceCountdown()
+        suppressLoadingUntilReady = false
+        setLoading(false)
 
         if (fadeEngine.quickFadeEnabled && player.isPlaying) {
             fadeEngine.fadeOutAndPause()
@@ -1164,17 +1632,29 @@ class AudioEngine @Inject constructor(
     }
 
     fun next() {
+        if (chromecast.isCasting) {
+            castAdvance(forward = true)
+            return
+        }
         cancelPendingTransitions()
+        suppressLoadingUntilReady = false
         advanceToNext(useFade = true)
     }
 
     fun previous() {
+        if (chromecast.isCasting) {
+            val state = _playbackState.value
+            val position = chromecast.positionMs() ?: 0L
+            if (position > 5_000L) {
+                castPlayIndex(state.queueIndex, 0L, state.isPlaybackRequested, emitSeekEvent = true)
+            } else {
+                castAdvance(forward = false)
+            }
+            return
+        }
         cancelPendingTransitions()
+        suppressLoadingUntilReady = false
         val state = _playbackState.value
-        // Repeat-all wrap: previous at the primary queue's head (within the restart
-        // window, like any other previous step) goes back to the primary queue's end,
-        // stepping backward over known-failed tracks. Auxiliary entries before the
-        // primary queue are skipped by the wrap.
         if (state.repeatMode == RepeatMode.ALL &&
             state.queueIndex >= 0 &&
             state.queueIndex == primaryQueueFirstIndex(state) &&
@@ -1272,6 +1752,16 @@ class AudioEngine @Inject constructor(
         val queue = _playbackState.value.queue
         if (index !in queue.indices) return
 
+        if (chromecast.isCasting) {
+            castPlayIndex(
+                index = index,
+                positionMs = 0L,
+                play = _playbackState.value.isPlaybackRequested,
+                emitSeekEvent = true
+            )
+            return
+        }
+
         val state = _playbackState.value
         val primaryFirst = primaryQueueFirstIndex(state)
         val primaryLast = primaryQueueLastIndex(state)
@@ -1303,6 +1793,8 @@ class AudioEngine @Inject constructor(
         steppedOverFailed.distinctBy { it.id }.forEach(::pushTrackUnavailableToast)
 
         cancelPendingTransitions()
+        // A real song switch is a new load; tapping the current entry (a restart) is not.
+        if (target != state.queueIndex) suppressLoadingUntilReady = false
 
         if (pendingWindowResync) {
             jumpWindowTo(target)
@@ -1332,21 +1824,43 @@ class AudioEngine @Inject constructor(
         val queue = _playbackState.value.queue
         if (centerIndex !in queue.indices) return
 
+        if (chromecast.isCasting) {
+            castLoad(
+                queue = queue,
+                index = centerIndex,
+                positionMs = 0L,
+                play = forcePlay || _playbackState.value.isPlaybackRequested
+            )
+            return
+        }
+
         windowJumpId++
         windowJumpJob?.cancel()
         pendingWindowResync = false
+        suppressLoadingUntilReady = false
 
         val windowStart = (centerIndex - WINDOW_RADIUS).coerceAtLeast(0)
         val windowEnd = (centerIndex + WINDOW_RADIUS).coerceAtMost(queue.lastIndex)
         val items = queue.subList(windowStart, windowEnd + 1).map { it.toMediaItem() }
+        val playAfterPrepare = forcePlay || !switchStaysPaused()
+        setLoading(playAfterPrepare && DistantUris.isDistant(queue[centerIndex].path))
         loadedRange = windowStart..windowEnd
         player.setMediaItems(items, centerIndex - windowStart, 0L)
-        if (forcePlay || !switchStaysPaused()) player.play() else player.pause()
+        if (playAfterPrepare) player.play() else player.pause()
         player.prepare()
     }
 
     fun seekTo(positionMs: Long) {
+        if (chromecast.isCasting) {
+            _positionMs.value = positionMs
+            _seekEvents.tryEmit(positionMs)
+            chromecast.seekTo(positionMs)
+            return
+        }
         cancelPendingTransitions()
+
+        // Seeking is not a new-song load: any buffering it causes must stay silent.
+        suppressLoadingUntilReady = true
 
         // Only the position flow is updated: playbackState collectors shouldn't recompose per drag pixel.
         _positionMs.value = positionMs
@@ -1459,6 +1973,10 @@ class AudioEngine @Inject constructor(
     fun playQueueEntry(entryId: Long) {
         val fromIndex = entryIndexOf(entryId)
         if (fromIndex == -1) return
+        if (chromecast.isCasting) {
+            castPlayIndex(fromIndex, 0L, play = true, emitSeekEvent = true)
+            return
+        }
         if (_playbackState.value.repeatMode == RepeatMode.ALL) {
             skipToIndex(fromIndex)
             player.play()
@@ -2345,7 +2863,10 @@ class AudioEngine @Inject constructor(
      * The ExoPlayer clock is quantized (AudioTrack timestamps step ~16-30 ms), so the published
      * position is dead-reckoned from an anchor that absorbs a share of each fresh sample's error
      * (see [PositionProjector]). Small backward corrections are held rather than published, so the
-     * position never visibly steps back. The sampling loop itself lives in [PositionClock].
+     * position never visibly steps back. While a Chromecast owns playback the receiver's clock
+     * (itself extrapolated by the Cast SDK between its ~1 Hz status updates) is sampled every
+     * frame instead, through a projector tuned for the coarser, delayed remote samples.
+     * The sampling loop itself lives in [PositionClock].
      */
     private fun startProgressTracker() {
         progressJob?.cancel()
@@ -2356,7 +2877,19 @@ class AudioEngine @Inject constructor(
             onPosition = { _positionMs.value = it },
             onTick = ::tickListenCount,
             onPrimaryPlayingFrame = { maybeStartTrackCrossfade() },
-            awaitFrame = ::awaitFrame
+            awaitFrame = ::awaitFrame,
+            castSample = {
+                if (!chromecast.isCasting) {
+                    null
+                } else {
+                    CastClockSample(
+                        positionMs = chromecast.positionMs() ?: _positionMs.value,
+                        isPlaying = chromecast.isReceiverPlaying,
+                        isBuffering = chromecast.isReceiverBuffering
+                    )
+                }
+            },
+            onCastTick = ::tickListenCountWhileCasting
         )
         progressJob = scope.launch { clock.run() }
     }

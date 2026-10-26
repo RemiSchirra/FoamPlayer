@@ -89,6 +89,7 @@ internal object PlayerDimens {
     // Transport / control sizes.
     val playButtonSize = 64.dp
     val playButtonIconSize = 64.dp
+    val playLoadingSize = 44.dp
     val miniPlayButtonSize = 50.dp
     val miniPlayIconSize = 28.dp
     val miniTransportButtonSize = 44.dp
