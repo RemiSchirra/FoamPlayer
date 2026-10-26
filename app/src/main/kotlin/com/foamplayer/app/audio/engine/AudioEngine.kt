@@ -1125,8 +1125,6 @@ class AudioEngine @Inject constructor(
         val state = _playbackState.value
         if (status.queueIndex in state.queue.indices && status.queueIndex != state.queueIndex) {
             publishCastTrack(status.queueIndex, status.positionMs, emitSeekEvent = false)
-        } else {
-            _positionMs.value = status.positionMs
         }
         _playbackState.value = _playbackState.value.copy(
             isPlaying = status.isPlaying,
@@ -2865,7 +2863,10 @@ class AudioEngine @Inject constructor(
      * The ExoPlayer clock is quantized (AudioTrack timestamps step ~16-30 ms), so the published
      * position is dead-reckoned from an anchor that absorbs a share of each fresh sample's error
      * (see [PositionProjector]). Small backward corrections are held rather than published, so the
-     * position never visibly steps back. The sampling loop itself lives in [PositionClock].
+     * position never visibly steps back. While a Chromecast owns playback the receiver's clock
+     * (itself extrapolated by the Cast SDK between its ~1 Hz status updates) is sampled every
+     * frame instead, through a projector tuned for the coarser, delayed remote samples.
+     * The sampling loop itself lives in [PositionClock].
      */
     private fun startProgressTracker() {
         progressJob?.cancel()
@@ -2877,8 +2878,16 @@ class AudioEngine @Inject constructor(
             onTick = ::tickListenCount,
             onPrimaryPlayingFrame = { maybeStartTrackCrossfade() },
             awaitFrame = ::awaitFrame,
-            castPositionMs = {
-                if (chromecast.isCasting) chromecast.positionMs() ?: _positionMs.value else null
+            castSample = {
+                if (!chromecast.isCasting) {
+                    null
+                } else {
+                    CastClockSample(
+                        positionMs = chromecast.positionMs() ?: _positionMs.value,
+                        isPlaying = chromecast.isReceiverPlaying,
+                        isBuffering = chromecast.isReceiverBuffering
+                    )
+                }
             },
             onCastTick = ::tickListenCountWhileCasting
         )

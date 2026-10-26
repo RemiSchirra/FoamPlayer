@@ -28,6 +28,7 @@ import com.foamplayer.distant.DistantUris
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -145,6 +146,14 @@ class ChromecastController @Inject constructor(
     /** Last volume commanded on the receiver, so rapid key presses accumulate. */
     private var volumeOverride: Double? = null
     private var volumeOverrideAt: Long = 0L
+
+    /**
+     * Position commanded on the receiver, published until the receiver's own status
+     * catches up (see [positionMs]). Without it a seek/jump would flash back to the
+     * old position for the network round trip.
+     */
+    private var positionOverrideMs: Long? = null
+    private var positionOverrideAt: Long = 0L
 
     /** Increments on every published queue; stale async failures must not clear a newer one. */
     private var loadGeneration: Int = 0
@@ -327,6 +336,7 @@ class ChromecastController @Inject constructor(
         loadedStart = 0
         loadedCount = 0
         volumeOverride = null
+        positionOverrideMs = null
         // Drops a pending single-item fallback of the session that is going away,
         // and re-arms the queue for the next receiver.
         loadGeneration++
@@ -396,6 +406,7 @@ class ChromecastController @Inject constructor(
         val generation = ++loadGeneration
         loadedStart = startIndex
         loadedCount = items.size
+        setPositionOverride(positionMs)
         return runCatching {
             client.queueLoad(
                 items.toTypedArray(),
@@ -442,6 +453,7 @@ class ChromecastController @Inject constructor(
         loadGeneration++
         loadedStart = startIndex
         loadedCount = 1
+        setPositionOverride(positionMs)
         return runCatching {
             client.load(info, play, positionMs.coerceAtLeast(0L), null)
                 .setResultCallback { result ->
@@ -470,6 +482,7 @@ class ChromecastController @Inject constructor(
     fun jumpTo(queueIndex: Int, positionMs: Long, play: Boolean): Boolean {
         val client = remoteClient ?: return false
         if (!queueSupported || !isIndexLoaded(queueIndex)) return false
+        setPositionOverride(positionMs)
         return runCatching {
             client.queueJumpToItem(queueIndex - loadedStart, positionMs.coerceAtLeast(0L), null)
             if (!play) client.pause()
@@ -490,10 +503,17 @@ class ChromecastController @Inject constructor(
 
     fun seekTo(positionMs: Long) {
         val client = remoteClient ?: return
+        setPositionOverride(positionMs)
         val options = MediaSeekOptions.Builder()
             .setPosition(positionMs.coerceAtLeast(0L))
             .build()
         runCatching { client.seek(options) }
+    }
+
+    /** Records a locally commanded position so [positionMs] does not report the old one meanwhile. */
+    private fun setPositionOverride(positionMs: Long) {
+        positionOverrideMs = positionMs.coerceAtLeast(0L)
+        positionOverrideAt = SystemClock.elapsedRealtime()
     }
 
     /**
@@ -540,6 +560,14 @@ class ChromecastController @Inject constructor(
     fun positionMs(): Long? {
         val client = remoteClient ?: return null
         if (!client.hasMediaSession()) return null
+        // A locally commanded seek/jump wins until the receiver's status catches up,
+        // so the UI does not flash back to the pre-seek position for the round trip.
+        positionOverrideMs?.let { override ->
+            if (SystemClock.elapsedRealtime() - positionOverrideAt <= POSITION_OVERRIDE_TTL_MS) {
+                return override
+            }
+            positionOverrideMs = null
+        }
         return client.approximateStreamPosition.coerceAtLeast(0L)
     }
 
@@ -553,6 +581,14 @@ class ChromecastController @Inject constructor(
             val state = remoteClient?.mediaStatus?.playerState ?: return true
             return state == MediaStatus.PLAYER_STATE_IDLE
         }
+
+    /** True while the receiver's playback clock is running (its position can be dead-reckoned). */
+    val isReceiverPlaying: Boolean
+        get() = remoteClient?.mediaStatus?.playerState == MediaStatus.PLAYER_STATE_PLAYING
+
+    /** True while the receiver is priming a newly loaded item. */
+    val isReceiverBuffering: Boolean
+        get() = remoteClient?.mediaStatus?.playerState == MediaStatus.PLAYER_STATE_BUFFERING
 
     // media URLs
 
@@ -617,12 +653,20 @@ class ChromecastController @Inject constructor(
         val idle = playerState == MediaStatus.PLAYER_STATE_IDLE
         val paused = playerState == MediaStatus.PLAYER_STATE_PAUSED
         val finished = idle && status.idleReason == MediaStatus.IDLE_REASON_FINISHED
+        val receiverPositionMs =
+            if (finished) 0L else client.approximateStreamPosition.coerceAtLeast(0L)
+        // The receiver answered the seek/jump: its position is authoritative again.
+        positionOverrideMs?.let { override ->
+            if (abs(receiverPositionMs - override) <= POSITION_OVERRIDE_MATCH_MS) {
+                positionOverrideMs = null
+            }
+        }
         onStatus?.invoke(
             CastStatus(
                 queueIndex = queueIndex,
                 isPlaying = client.isPlaying && !finished,
                 isPlaybackRequested = !paused && !finished,
-                positionMs = if (finished) 0L else client.approximateStreamPosition.coerceAtLeast(0L),
+                positionMs = receiverPositionMs,
                 isBuffering = playerState == MediaStatus.PLAYER_STATE_BUFFERING,
                 finished = finished
             )
@@ -672,6 +716,12 @@ class ChromecastController @Inject constructor(
 
         /** How long a locally commanded volume outranks the receiver's cached one. */
         private const val VOLUME_OVERRIDE_TTL_MS = 2_000L
+
+        /** How long a locally commanded position outranks the receiver's (seek round-trip window). */
+        private const val POSITION_OVERRIDE_TTL_MS = 2_000L
+
+        /** Receiver position within this distance of a commanded one means the receiver caught up. */
+        private const val POSITION_OVERRIDE_MATCH_MS = 1_500L
 
         /**
          * The Cast content type for a scanner [format] (the uppercased file

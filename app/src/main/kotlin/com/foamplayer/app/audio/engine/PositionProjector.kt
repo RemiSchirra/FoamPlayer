@@ -32,6 +32,16 @@ internal class PositionProjector(
     val publishedMs: Long
         get() = lastPublishedMs
 
+    /** Drops every anchor, e.g. when the sample source changes (local player vs. a receiver). */
+    fun reset() {
+        lastPublishedMs = Long.MIN_VALUE
+        lastSampleMs = -1L
+        anchorMs = 0.0
+        anchorNanos = 0L
+        wasPriming = false
+        settlingSinceNanos = 0L
+    }
+
     /**
      * Consumes one player sample and returns the position to publish.
      *
@@ -160,5 +170,18 @@ internal class PositionProjector(
 
         /** Largest backward correction absorbed by holding the position instead of stepping back. */
         const val MONOTONIC_HOLD_MAX_MS = 60L
+
+        /**
+         * Cast tuning: the receiver's clock is quantized to its ~1 Hz status updates and
+         * arrives a network hop late. A delta up to this size is status jitter, so it is
+         * slewed instead of snapped onto; a real seek is larger and still re-anchors.
+         */
+        const val CAST_SNAP_MS = 800.0
+
+        /** Share of a receiver sample's error absorbed per frame, so corrections are invisible. */
+        const val CAST_ERROR_SLEW = 0.15
+
+        /** Largest backward receiver correction absorbed by holding instead of stepping back. */
+        const val CAST_MONOTONIC_HOLD_MS = 500L
     }
 }
