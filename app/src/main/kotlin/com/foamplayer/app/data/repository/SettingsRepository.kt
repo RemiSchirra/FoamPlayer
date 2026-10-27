@@ -14,6 +14,7 @@ import com.foamplayer.app.audio.device.DeviceBitPerfectMode
 import com.foamplayer.app.audio.dsp.DspPersistence
 import com.foamplayer.app.audio.dsp.DspPreset
 import com.foamplayer.app.audio.dsp.DspState
+import com.foamplayer.app.audio.dsp.PresetAssignments
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionLayoutAlbumKey
 import com.foamplayer.app.constants.CollectionLayoutArtistKey
@@ -328,6 +329,11 @@ class SettingsRepository @Inject constructor(
         it.copy(dspUserPresets = DspPersistence.serializePresets(presets))
     }
 
+    /** Persists the EQ preset assignments (track/album/playlist/device). */
+    suspend fun setDspAssignments(assignments: PresetAssignments) = update {
+        it.copy(dspAssignments = assignments.serialize())
+    }
+
     /** Persists one output device's audio configuration. */
     suspend fun setDeviceAudioConfig(deviceId: String, config: DeviceAudioConfig) = update {
         it.copy(deviceAudioConfigs = it.deviceAudioConfigs + (deviceId to config))
@@ -450,6 +456,7 @@ class SettingsRepository @Inject constructor(
             ?: AppSettings().notificationButtonRight,
         dspStateSerialized = this[Keys.DSP_STATE].orEmpty(),
         dspUserPresets = this[Keys.DSP_USER_PRESETS].orEmpty(),
+        dspAssignments = this[Keys.DSP_ASSIGNMENTS].orEmpty(),
         deviceAudioConfigs = deserializeDeviceAudioConfigs(this[Keys.DEVICE_AUDIO_CONFIGS]),
         preferredOutputDeviceId = this[Keys.PREFERRED_OUTPUT_DEVICE_ID]?.takeIf { it.isNotBlank() }
     ).sanitized()
@@ -525,6 +532,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.NOTIFICATION_BUTTON_RIGHT] = settings.notificationButtonRight.name
         this[Keys.DSP_STATE] = settings.dspStateSerialized
         this[Keys.DSP_USER_PRESETS] = settings.dspUserPresets
+        this[Keys.DSP_ASSIGNMENTS] = settings.dspAssignments
         this[Keys.PREFERRED_OUTPUT_DEVICE_ID] = settings.preferredOutputDeviceId.orEmpty()
         this[Keys.DEVICE_AUDIO_CONFIGS] = serializeDeviceAudioConfigs(settings.deviceAudioConfigs)
     }
@@ -604,6 +612,7 @@ class SettingsRepository @Inject constructor(
         val NOTIFICATION_BUTTON_RIGHT = stringPreferencesKey("notification_button_right")
         val DSP_STATE = stringPreferencesKey("dsp_state")
         val DSP_USER_PRESETS = stringPreferencesKey("dsp_user_presets")
+        val DSP_ASSIGNMENTS = stringPreferencesKey("dsp_assignments")
         val DEVICE_AUDIO_CONFIGS = stringPreferencesKey("device_audio_configs")
         val PREFERRED_OUTPUT_DEVICE_ID = stringPreferencesKey("preferred_output_device_id")
     }

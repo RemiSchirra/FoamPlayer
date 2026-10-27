@@ -40,6 +40,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
@@ -112,11 +113,17 @@ fun EqualizerScreen(
 ) {
     val state by viewModel.dspState.collectAsState()
     val userPresets by viewModel.userPresets.collectAsState()
+    val playerState by viewModel.playbackState.collectAsState()
+    val currentPlaylistName by viewModel.currentPlaylistName.collectAsState()
+    val assignments by viewModel.assignments.collectAsState()
 
     var selectedSection by remember { mutableStateOf(DspMath.Section.GRAPHIC) }
     var selectedNodeId by remember { mutableStateOf<Long?>(null) }
     var showPresetsModal by remember { mutableStateOf(false) }
     var showSavePresetModal by remember { mutableStateOf(false) }
+    var showPresetMenuModal by remember { mutableStateOf(false) }
+    var showRenamePresetModal by remember { mutableStateOf(false) }
+    var showAssignPresetModal by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.graphicEq.enabled, state.parametricEq.enabled) {
         when {
@@ -138,17 +145,25 @@ fun EqualizerScreen(
     var trebleValue by rememberSaveable { mutableFloatStateOf(state.tone.trebleDb) }
     var trebleApplied by rememberSaveable { mutableStateOf(state.tone.trebleDb != 0f) }
 
-    // A neutral engine value only means the card is off, so it is never adopted.
+    // Non-neutral engine values are adopted (preset applies). A neutral one is
+    // adopted only while the card still shows applied — a preset reset the
+    // knob; after a manual toggle-off the knob keeps its own value.
     LaunchedEffect(state.tone.bassDb) {
         if (state.tone.bassDb != 0f) {
             bassValue = state.tone.bassDb
             bassApplied = true
+        } else if (bassApplied) {
+            bassApplied = false
+            bassValue = 0f
         }
     }
     LaunchedEffect(state.tone.trebleDb) {
         if (state.tone.trebleDb != 0f) {
             trebleValue = state.tone.trebleDb
             trebleApplied = true
+        } else if (trebleApplied) {
+            trebleApplied = false
+            trebleValue = 0f
         }
     }
 
@@ -257,7 +272,8 @@ fun EqualizerScreen(
                     Box(modifier = Modifier.weight(1f)) {
                         PresetChip(
                             currentPresetName = currentPreset?.name,
-                            onClick = { showPresetsModal = true }
+                            onClick = { showPresetsModal = true },
+                            onMoreClick = { showPresetMenuModal = true }
                         )
                     }
 
@@ -446,6 +462,48 @@ fun EqualizerScreen(
             showSavePresetModal = false
         }
     )
+
+    // The presets pill's more menu: rename + assign for the active preset.
+    PresetMenuModal(
+        visible = showPresetMenuModal && currentPreset != null,
+        presetName = currentPreset?.name,
+        onDismiss = { showPresetMenuModal = false },
+        onRename = {
+            showPresetMenuModal = false
+            showRenamePresetModal = true
+        },
+        onAssign = {
+            showPresetMenuModal = false
+            showAssignPresetModal = true
+        }
+    )
+
+    // Renames the user preset; every assignment to the old name is remapped.
+    RenamePresetModal(
+        visible = showRenamePresetModal,
+        presetName = currentPreset?.name,
+        onRename = { newName ->
+            currentPreset?.name?.let { viewModel.renameUserPreset(it, newName) }
+            showRenamePresetModal = false
+        },
+        onDismiss = { showRenamePresetModal = false }
+    )
+
+    // Assigns the active preset to what is playing (track/album/playlist) or
+    // to the output-device kinds; the auto-switch follows.
+    AssignPresetModal(
+        visible = showAssignPresetModal,
+        presetName = currentPreset?.name,
+        assignments = assignments,
+        currentTrack = playerState.currentTrack,
+        queueSourceId = playerState.queueSourceId,
+        currentPlaylistName = currentPlaylistName,
+        onDismiss = { showAssignPresetModal = false },
+        onSetTrack = { id, name -> viewModel.setTrackAssignment(id, name) },
+        onSetAlbum = { album, name -> viewModel.setAlbumAssignment(album, name) },
+        onSetPlaylist = { playlistId, name -> viewModel.setPlaylistAssignment(playlistId, name) },
+        onSetDevice = { kind, name -> viewModel.setDeviceAssignment(kind, name) }
+    )
 }
 
 @Composable
@@ -491,31 +549,57 @@ private fun List<DspPreset>.matching(state: DspState): DspPreset? = firstOrNull 
     }
 }
 
-/** Pill showing the applied preset name; opens the preset browser. */
+/** Pill showing the applied preset name; opens the preset browser. The more button left of it opens the preset menu (rename / assign). */
 @Composable
 private fun PresetChip(
     currentPresetName: String?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onMoreClick: () -> Unit
 ) {
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(FoamTheme.colors.surfaceVariant)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(color = FoamTheme.colors.textPrimary),
-                    onClick = onClick
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // More button: rename + assign, left of the pill.
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(FoamTheme.colors.surfaceVariant)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = onMoreClick
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.MoreHoriz,
+                    contentDescription = stringResource(R.string.eq_preset_more),
+                    tint = FoamTheme.colors.textPrimary,
+                    modifier = Modifier.size(20.dp)
                 )
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-        ) {
-            BasicText(
-                text = currentPresetName ?: stringResource(R.string.eq_preset_custom_hint),
-                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary, fontWeight = FontWeight.Bold)
-            )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(FoamTheme.colors.surfaceVariant)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = onClick
+                    )
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                BasicText(
+                    text = currentPresetName ?: stringResource(R.string.eq_preset_custom_hint),
+                    style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary, fontWeight = FontWeight.Bold)
+                )
+            }
         }
     }
 }
@@ -773,16 +857,24 @@ private fun ControlsRow(
         var balanceApplied by rememberSaveable { mutableStateOf(state.balance != 0f) }
         var widthApplied by rememberSaveable { mutableStateOf(state.stereoWidth != 1f) }
 
+        // Same adoption rule as the tone knobs: a neutral engine value resets
+        // the card only when it still shows applied (a preset reset the knob).
         LaunchedEffect(state.balance) {
             if (state.balance != 0f) {
                 balanceValue = state.balance
                 balanceApplied = true
+            } else if (balanceApplied) {
+                balanceApplied = false
+                balanceValue = 0f
             }
         }
         LaunchedEffect(state.stereoWidth) {
             if (state.stereoWidth != 1f) {
                 widthValue = state.stereoWidth
                 widthApplied = true
+            } else if (widthApplied) {
+                widthApplied = false
+                widthValue = 1f
             }
         }
 

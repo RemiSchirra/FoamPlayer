@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Controller of the whole DSP chain (the app's replacement for the platform
@@ -42,8 +43,18 @@ class DspEngine @Inject constructor(
     private val _userPresets = MutableStateFlow<List<DspPreset>>(emptyList())
     val userPresets: StateFlow<List<DspPreset>> = _userPresets.asStateFlow()
 
+    private val _assignments = MutableStateFlow(PresetAssignments())
+
+    /**
+     * Preset assignments per playback target (track/album/playlist/device).
+     * Seeded from DataStore with the chain state; read by the auto-switch and
+     * the assign modal.
+     */
+    val assignments: StateFlow<PresetAssignments> = _assignments.asStateFlow()
+
     private val scope = CoroutineScope(Dispatchers.Default + Job())
     private var persistJob: Job? = null
+    private var persistAssignmentsJob: Job? = null
     private var seeded = false
 
     /**
@@ -63,6 +74,7 @@ class DspEngine @Inject constructor(
                 val settings = settingsRepository.settings.first()
                 applySeed(DspPersistence.deserialize(settings.dspStateSerialized))
                 _userPresets.value = DspPersistence.deserializePresets(settings.dspUserPresets)
+                _assignments.value = PresetAssignments.deserialize(settings.dspAssignments)
             } catch (e: Exception) {
                 applySeed(DspState())
             } finally {
@@ -95,7 +107,7 @@ class DspEngine @Inject constructor(
         publishState(seededState)
     }
 
-    // ------------------------------------------------------------------ setters
+    // setters
 
     fun setEnabled(enabled: Boolean) = update { it.copy(enabled = enabled) }
 
@@ -239,17 +251,24 @@ class DspEngine @Inject constructor(
         it.copy(volumePercent = percent.coerceIn(0, DspState.MAX_VOLUME_PERCENT))
     }
 
-    // ----------------------------------------------------------------- presets
+    // presets
 
     /**
-     * Applies a preset. User presets (fullState set) restore their saved whole
-     * state, keeping the current volume; built-ins adjust their pre-amp and
-     * only their own EQ section — graphic or parametric — and disable the
-     * opposite section. Built-in graphic shapes are authored on a 31-band grid
+     * Applies a preset as a complete sound snapshot: user presets (fullState
+     * set) restore their saved whole state, keeping the current volume;
+     * built-ins restore their pre-amp, tone and own EQ section — graphic or
+     * parametric — disable the opposite section, and reset balance and stereo
+     * width to neutral. Built-in graphic shapes are authored on a 31-band grid
      * and resampled on the log-frequency axis to the user's band layout, so the
      * shape (not the per-band numbers) survives any band count.
      */
     fun applyPreset(preset: DspPreset) {
+        recordManualPreset(preset.name)
+        applyPresetInternal(preset)
+    }
+
+    /** The actual apply; the auto path skips the manual-choice recording. */
+    private fun applyPresetInternal(preset: DspPreset) {
         if (preset.fullState != null) {
             update { preset.fullState.copy(volumePercent = it.volumePercent) }
             return
@@ -260,6 +279,8 @@ class DspEngine @Inject constructor(
                     enabled = true,
                     preampDb = preset.preampDb.coerceIn(DspState.MIN_PREAMP_DB, DspState.MAX_PREAMP_DB),
                     tone = preset.tone,
+                    balance = 0f,
+                    stereoWidth = 1f,
                     graphicEq = it.graphicEq.copy(
                         enabled = true,
                         gainsDb = GraphicEqSettings.resampleGains(
@@ -275,6 +296,8 @@ class DspEngine @Inject constructor(
                     enabled = true,
                     preampDb = preset.preampDb.coerceIn(DspState.MIN_PREAMP_DB, DspState.MAX_PREAMP_DB),
                     tone = preset.tone,
+                    balance = 0f,
+                    stereoWidth = 1f,
                     parametricEq = ParametricEqSettings(
                         enabled = true,
                         nodes = preset.parametricNodes.map { node -> node.copy(id = nextNodeId++) }
@@ -308,9 +331,123 @@ class DspEngine @Inject constructor(
         val updated = _userPresets.value.filterNot { it.name == name }
         _userPresets.value = updated
         persistPresets(updated)
+        // A deleted preset can never resolve again: drop every assignment to it.
+        setAssignments { it.withoutPreset(name) }
     }
 
-    // ---------------------------------------------------------------- plumbing
+    /** Renames a user preset and remaps every assignment pointing at the old name. */
+    fun renameUserPreset(oldName: String, newName: String): Boolean {
+        val sanitized = DspPersistence.sanitizeName(newName)
+        if (sanitized.isEmpty()) return false
+        val presets = _userPresets.value
+        if (presets.none { it.name == oldName }) return false
+        val updated = presets.map {
+            if (it.name == oldName) it.copy(name = sanitized) else it
+        }
+        _userPresets.value = updated
+        persistPresets(updated)
+        setAssignments { it.withRenamedPreset(oldName, sanitized) }
+        return true
+    }
+
+    // assignments
+
+    fun setTrackAssignment(trackId: Long, presetName: String?) =
+        setAssignments { it.withAssignment(AssignedTarget.Track(trackId), presetName) }
+
+    fun setAlbumAssignment(album: String, presetName: String?) =
+        setAssignments { it.withAssignment(AssignedTarget.Album(album), presetName) }
+
+    fun setPlaylistAssignment(playlistId: Long, presetName: String?) =
+        setAssignments { it.withAssignment(AssignedTarget.Playlist(playlistId), presetName) }
+
+    fun setDeviceAssignment(kind: AssignedDeviceKind, presetName: String?) =
+        setAssignments { it.withAssignment(AssignedTarget.Device(kind), presetName) }
+
+    /**
+     * Records the manual (hand-picked) preset. A hand-pick also supersedes
+     * the pre-assignment baseline by clearing it: the user's explicit choice
+     * is what an unassigned track must fall back to when no baseline survives.
+     */
+    private fun recordManualPreset(name: String) {
+        preAssignmentState = null
+        if (_assignments.value.lastManualPresetName == name) return
+        setAssignments { it.copy(lastManualPresetName = name) }
+    }
+
+    private fun setAssignments(transform: (PresetAssignments) -> PresetAssignments) {
+        val updated = transform(_assignments.value)
+        if (updated == _assignments.value) return
+        _assignments.value = updated
+        persistAssignments(updated)
+    }
+
+    /**
+     * The chain state captured just before an assignment-driven apply first
+     * took over the sound (since the last manual choice or revert). This is
+     * the primary revert target — the sound the assignment actually
+     * displaced, even when the persisted last manual pick happens to name
+     * the same preset the assignment applied.
+     */
+    private var preAssignmentState: DspState? = null
+
+    /**
+     * The auto path: applies the preset [name] resolves to — built-in or user —
+     * WITHOUT recording it as a manual choice. The chain state is captured as
+     * the pre-assignment baseline before anything else, so a later revert can
+     * restore the exact sound this assignment took over — even when the state
+     * already matches and the apply itself is skipped. Returns false when no
+     * preset matches (e.g. a deleted preset still referenced by an assignment).
+     */
+    fun applyAssignedPreset(name: String): Boolean {
+        val preset = findPreset(name) ?: return false
+        // Capture the sound an assignment is taking over — once per takeover,
+        // so chained assigned tracks do not shadow the baseline — even when
+        // the apply itself is skipped below (the state already matches).
+        if (preAssignmentState == null) preAssignmentState = _state.value
+        if (preset.matchesState(state.value)) return true
+        applyPresetInternal(preset)
+        return true
+    }
+
+    /**
+     * The auto path for a track with no assignment: restores the chain state
+     * captured before an assignment took over (the displaced sound), falling
+     * back to the last hand-picked preset only when no baseline survives —
+     * e.g. the default EQ a playlist-assigned track displaced, or the
+     * hand-picked sound from an earlier session. Returns false when there is
+     * nothing to revert to: no baseline and no resolvable manual choice.
+     */
+    fun revertFromAssignment(): Boolean {
+        val baseline = preAssignmentState
+        if (baseline != null) {
+            preAssignmentState = null
+            val restored = baseline.copy(volumePercent = _state.value.volumePercent)
+            if (_state.value != restored) update { restored }
+            return true
+        }
+        // No baseline: fall back to the last hand-picked preset.
+        val manualName = _assignments.value.lastManualPresetName ?: return false
+        val preset = findPreset(manualName) ?: return false
+        if (!preset.matchesState(state.value)) applyPresetInternal(preset)
+        return true
+    }
+
+    /**
+     * The name of the preset (built-in or user) whose state the chain currently
+     * reflects, or null when the state matches no preset (Custom, or defaults
+     * no preset produces). Read by the auto-switcher to detect drift between
+     * what is assigned and what the chain actually sounds like.
+     */
+    fun statePresetName(): String? =
+        DspPreset.BUILT_INS.firstOrNull { it.matchesState(_state.value) }?.name
+            ?: _userPresets.value.firstOrNull { it.matchesState(_state.value) }?.name
+
+    private fun findPreset(name: String): DspPreset? =
+        DspPreset.BUILT_INS.firstOrNull { it.name == name }
+            ?: _userPresets.value.firstOrNull { it.name == name }
+
+    // plumbing
 
     private var nextNodeId = 1L
 
@@ -369,6 +506,19 @@ class DspEngine @Inject constructor(
             try {
                 settingsRepository.setDspUserPresets(presets)
             } catch (e: Exception) {
+            }
+        }
+    }
+
+    private fun persistAssignments(assignments: PresetAssignments) {
+        if (!seeded) return // don't write back defaults before the seed landed
+        persistAssignmentsJob?.cancel()
+        persistAssignmentsJob = scope.launch {
+            delay(PERSIST_DEBOUNCE_MS.milliseconds)
+            try {
+                settingsRepository.setDspAssignments(assignments)
+            } catch (e: Exception) {
+                // Persistence is best-effort; the audio path must never fail on it.
             }
         }
     }

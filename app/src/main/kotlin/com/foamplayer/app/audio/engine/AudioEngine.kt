@@ -18,8 +18,13 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.foamplayer.app.audio.bitperfect.BitPerfectDetector
 import com.foamplayer.app.audio.cast.ChromecastController
 import com.foamplayer.app.audio.device.OutputDeviceManager
+import com.foamplayer.app.audio.dsp.AssignedDeviceKind
 import com.foamplayer.app.audio.dsp.DspAudioProcessor
 import com.foamplayer.app.audio.dsp.DspEngine
+import com.foamplayer.app.audio.dsp.PresetAssignments
+import com.foamplayer.app.audio.dsp.PresetAutoSwitchController
+import com.foamplayer.app.audio.dsp.PresetPlaybackContext
+import com.foamplayer.app.audio.dsp.assignedPresetFor
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.distant.DistantRepository
 import com.foamplayer.app.data.repository.SettingsRepository
@@ -127,6 +132,9 @@ class AudioEngine @Inject constructor(
 
     private val _playbackState = MutableStateFlow(PlaybackState())
     val playbackState: StateFlow<PlaybackState> = _playbackState
+
+    /** EQ preset assignments (track/album/playlist/device), from the DSP engine. */
+    val dspAssignments: StateFlow<PresetAssignments> = dspEngine.assignments
 
     /**
      * True while a plain seek is settling: buffering caused by the seek itself must not
@@ -598,6 +606,7 @@ class AudioEngine @Inject constructor(
         chromecast.onSessionStarted = ::onCastSessionStarted
         chromecast.onSessionLost = ::onCastSessionLost
         observeVolumeForCast()
+        observePresetAutoSwitch()
     }
 
     /**
@@ -608,6 +617,79 @@ class AudioEngine @Inject constructor(
         scope.launch {
             dspEngine.state.collect { state ->
                 if (chromecast.isCasting) chromecast.setVolume(state.volumePercent / 100f)
+            }
+        }
+    }
+
+    /**
+     * Auto-switches the EQ preset with what is playing: the current track
+     * (its id or album), the queue's source playlist (only while the current
+     * track is still inside that playlist's own section — swiping onto a
+     * track outside the playlist drops the resolution) and the active output
+     * device resolve an assigned preset, applied on every track/device
+     * change; an assignment
+     * that disappears (moving to an unassigned track, unplugging the assigned
+     * device) reverts to the sound the assignment took over — the baseline
+     * captured before the first apply, or the last hand-picked preset when no
+     * baseline survives (a hand-pick while assigned clears it). The
+     * transition rules live in PresetAutoSwitchController: manual EQ edits
+     * while an assignment is active are never overwritten, a track change
+     * that resolves an already-active preset is churn-free, and drift
+     * introduced mid-track (a manual pick or a knob tweak) is re-asserted by
+     * the next track's resolution. The revert only fires on an actual
+     * transition (never at startup, so the restored chain state is not
+     * overwritten by the last manual choice). The output-device and cast
+     * flows are combine sources, so a device change re-resolves even when the
+     * track and assignments are unchanged.
+     */
+    private fun observePresetAutoSwitch() {
+        val controller = PresetAutoSwitchController()
+        scope.launch {
+            combine(
+                _playbackState,
+                dspEngine.assignments,
+                outputDeviceManager.activeDevice,
+                chromecast.connectedDeviceId
+            ) { state, assignments, _, _ ->
+                val context = PresetPlaybackContext(
+                    trackId = state.currentTrack?.id,
+                    album = state.currentTrack?.album,
+                    queueSourceId = state.queueSourceId,
+                    inQueueSourceSection =
+                        state.queueSourceFlags.getOrNull(state.queueIndex) == true
+                )
+                val triggerKey = "${state.currentTrack?.id}/${state.currentTrack?.album}"
+                Triple(
+                    triggerKey,
+                    assignedPresetFor(context, assignments, currentAssignedDeviceKind()),
+                    state
+                )
+            }
+                .collect { (triggerKey, resolved, _) ->
+                    when (controller.onResolved(
+                        triggerKey = triggerKey,
+                        resolved = resolved,
+                        reflectedName = dspEngine.statePresetName()
+                    )) {
+                        PresetAutoSwitchController.Action.APPLY_ASSIGNED ->
+                            dspEngine.applyAssignedPreset(resolved!!)
+                        PresetAutoSwitchController.Action.REVERT_TO_MANUAL ->
+                            dspEngine.revertFromAssignment()
+                        PresetAutoSwitchController.Action.NONE -> Unit
+                    }
+                }
+        }
+    }
+
+    /** The device kind the sound actually goes to, for device-preset resolution. */
+    private fun currentAssignedDeviceKind(): AssignedDeviceKind? = when {
+        chromecast.isCasting -> AssignedDeviceKind.CHROMECAST
+        else -> outputDeviceManager.activeDevice.value?.let { device ->
+            when {
+                device.isUsb || device.isWired -> AssignedDeviceKind.USB_DAC
+                device.isBluetooth -> AssignedDeviceKind.BLUETOOTH
+                device.isSpeaker -> AssignedDeviceKind.SPEAKER
+                else -> null
             }
         }
     }

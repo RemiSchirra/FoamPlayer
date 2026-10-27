@@ -271,6 +271,26 @@ data class DspPreset(
     val fullState: DspState? = null,
     val isBuiltIn: Boolean = false
 ) {
+    /**
+     * True when [state] already reflects this preset: an apply can be skipped
+     * without churn (the auto-switch guard). Built-in graphic presets define
+     * the whole knob set — tone plus neutral balance/width — so the match
+     * compares all of them, and any manual knob change drops back to Custom.
+     */
+    fun matchesState(state: DspState): Boolean = when {
+        fullState != null ->
+            fullState.copy(volumePercent = state.volumePercent) == state
+        kind == PresetKind.GRAPHIC ->
+            state.graphicEq.enabled &&
+                    state.preampDb == preampDb &&
+                    state.tone == tone &&
+                    state.balance == 0f &&
+                    state.stereoWidth == 1f &&
+                    GraphicEqSettings.resampleGains(graphicGainsDb, state.graphicEq.count) ==
+                    state.graphicEq.gainsDb
+        else -> false
+    }
+
     /** The [DspState] this preset represents, used for response previews and legacy applies. */
     fun previewState(): DspState = fullState ?: when (kind) {
         PresetKind.GRAPHIC -> DspState(
@@ -422,3 +442,6 @@ data class DspPreset(
         }
     }
 }
+
+/** The preset reflected by [state], if any. Shared by the EQ screen and the auto-switch. */
+fun List<DspPreset>.matching(state: DspState): DspPreset? = firstOrNull { it.matchesState(state) }

@@ -701,6 +701,21 @@
     <string name="eq_balance_center">CENTRE</string>
     <string name="eq_balance_left">G %.0f%%</string>
     <string name="eq_balance_right">D %.0f%%</string>
+    <string name="eq_preset_more">Plus d\'options</string>
+    <string name="eq_preset_menu_rename">Renommer</string>
+    <string name="eq_preset_menu_assign">Assigner</string>
+    <string name="eq_rename_preset_title">Renommer le préréglage</string>
+    <string name="eq_assign_preset_title">Assigner %1$s</string>
+    <string name="eq_assign_section_device">Appareil de sortie</string>
+    <string name="eq_assign_section_track">Piste</string>
+    <string name="eq_assign_note">L\'assignation de piste est toujours prioritaire sur celle de l\'appareil de sortie</string>
+    <string name="eq_assign_track">Piste : %1$s</string>
+    <string name="eq_assign_album">Album : %1$s</string>
+    <string name="eq_assign_playlist">Playlist : %1$s</string>
+    <string name="eq_assign_device_speaker">Haut-parleur</string>
+    <string name="eq_assign_device_bluetooth">Bluetooth</string>
+    <string name="eq_assign_device_usb">DAC USB</string>
+    <string name="eq_assign_device_chromecast">Chromecast</string>
 
     <!-- Égaliseur : écran de réglage -->
     <string name="eq_band_layout">Disposition des bandes</string>

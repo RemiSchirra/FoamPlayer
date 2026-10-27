@@ -683,6 +683,11 @@ internal fun TrackModalHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            // The EQ preset assigned to this track, if any.
+            AssignedPresetLine(
+                presetName = LocalDspAssignments.current.trackPresets[track.id],
+                modifier = Modifier.padding(top = FoamDimens.spacingTiny)
+            )
         }
 
         Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))

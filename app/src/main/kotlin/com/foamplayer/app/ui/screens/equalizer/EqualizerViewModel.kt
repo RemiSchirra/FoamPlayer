@@ -3,12 +3,21 @@ package com.foamplayer.app.ui.screens.equalizer
 import androidx.annotation.OptIn
 import androidx.lifecycle.ViewModel
 import androidx.media3.common.util.UnstableApi
+import com.foamplayer.app.audio.dsp.AssignedDeviceKind
 import com.foamplayer.app.audio.dsp.DspEngine
 import com.foamplayer.app.audio.dsp.DspPreset
 import com.foamplayer.app.audio.dsp.DspState
 import com.foamplayer.app.audio.dsp.ParametricNode
+import com.foamplayer.app.audio.dsp.PresetAssignments
+import com.foamplayer.app.audio.engine.AudioEngine
+import com.foamplayer.app.audio.engine.PlaybackState
+import com.foamplayer.app.data.repository.PlaylistRepository
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 /**
@@ -25,12 +34,32 @@ import javax.inject.Inject
 @HiltViewModel
 class EqualizerViewModel @OptIn(UnstableApi::class)
 @Inject constructor(
-    private val dspEngine: DspEngine
+    private val dspEngine: DspEngine,
+    private val audioEngine: AudioEngine,
+    playlistRepository: PlaylistRepository
 ) : ViewModel() {
 
     val dspState: StateFlow<DspState> = dspEngine.state
 
     val userPresets: StateFlow<List<DspPreset>> = dspEngine.userPresets
+
+    /** Preset assignments per playback target (track/album/playlist/device). */
+    val assignments: StateFlow<PresetAssignments> = dspEngine.assignments
+
+    /** The playback state driving the assign modal's track/album/playlist rows. */
+    val playbackState: StateFlow<PlaybackState> = audioEngine.playbackState
+
+    /** The name of the playlist the queue was started from, for the assign modal's row. */
+    val currentPlaylistName: StateFlow<String?> = combine(
+        audioEngine.playbackState,
+        playlistRepository.getAllPlaylists()
+    ) { state, playlists ->
+        val id = state.queueSourceId
+            ?.takeIf { it.startsWith("playlist:") }
+            ?.removePrefix("playlist:")
+            ?.toLongOrNull()
+        playlists.firstOrNull { it.playlistId == id }?.name
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     @OptIn(UnstableApi::class)
     fun setEnabled(enabled: Boolean) = dspEngine.setEnabled(enabled)
@@ -85,4 +114,24 @@ class EqualizerViewModel @OptIn(UnstableApi::class)
 
     @OptIn(UnstableApi::class)
     fun deleteUserPreset(name: String) = dspEngine.deleteUserPreset(name)
+
+    @OptIn(UnstableApi::class)
+    fun renameUserPreset(oldName: String, newName: String): Boolean =
+        dspEngine.renameUserPreset(oldName, newName)
+
+    @OptIn(UnstableApi::class)
+    fun setTrackAssignment(trackId: Long, presetName: String?) =
+        dspEngine.setTrackAssignment(trackId, presetName)
+
+    @OptIn(UnstableApi::class)
+    fun setAlbumAssignment(album: String, presetName: String?) =
+        dspEngine.setAlbumAssignment(album, presetName)
+
+    @OptIn(UnstableApi::class)
+    fun setPlaylistAssignment(playlistId: Long, presetName: String?) =
+        dspEngine.setPlaylistAssignment(playlistId, presetName)
+
+    @OptIn(UnstableApi::class)
+    fun setDeviceAssignment(kind: AssignedDeviceKind, presetName: String?) =
+        dspEngine.setDeviceAssignment(kind, presetName)
 }

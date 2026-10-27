@@ -703,6 +703,21 @@
     <string name="eq_balance_center">CENTER</string>
     <string name="eq_balance_left">L %.0f%%</string>
     <string name="eq_balance_right">R %.0f%%</string>
+    <string name="eq_preset_more">More options</string>
+    <string name="eq_preset_menu_rename">Rename</string>
+    <string name="eq_preset_menu_assign">Assign</string>
+    <string name="eq_rename_preset_title">Rename Preset</string>
+    <string name="eq_assign_preset_title">Assign %1$s</string>
+    <string name="eq_assign_section_device">Output device</string>
+    <string name="eq_assign_section_track">Track</string>
+    <string name="eq_assign_note">Track assignation is always prioritary over output-device assignation</string>
+    <string name="eq_assign_track">Track : %1$s</string>
+    <string name="eq_assign_album">Album : %1$s</string>
+    <string name="eq_assign_playlist">Playlist : %1$s</string>
+    <string name="eq_assign_device_speaker">Speaker</string>
+    <string name="eq_assign_device_bluetooth">Bluetooth</string>
+    <string name="eq_assign_device_usb">USB DAC</string>
+    <string name="eq_assign_device_chromecast">Chromecast</string>
 
     <!-- Equalizer settings subscreen -->
     <string name="eq_band_layout">Band Layout</string>
