@@ -1,19 +1,11 @@
 package com.foamplayer.app.ui.screens.equalizer
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.material.TextField
-import androidx.compose.material.TextFieldDefaults
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,19 +13,24 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.ImeAction
 import com.foamplayer.app.R
 import com.foamplayer.app.ui.modals.FoamBottomModal
+import com.foamplayer.app.ui.modals.ModalButton
+import com.foamplayer.app.ui.modals.PlaylistNameField
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
- * The rename sheet of the presets browser: a text-input bottom sheet that
- * renames a USER preset at once (built-ins cannot be renamed — the save
- * button stays disabled while the text matches the original or is blank).
- * The rename remaps every assignment pointing at the old preset name.
+ * The rename sheet of the presets browser: the same mini modal that renames
+ * a playlist — a pill input prefilled with the current name, full-width
+ * Save/Cancel with ripple, and an auto-focused field so the keyboard is
+ * already up when the sheet settles (Done submits). Renames a USER preset at
+ * once (built-ins cannot be renamed — the save button dims and swallows taps
+ * while the text matches the original or is blank). The rename remaps every
+ * assignment pointing at the old preset name.
  */
 @Composable
 internal fun RenamePresetModal(
@@ -42,68 +39,57 @@ internal fun RenamePresetModal(
     onRename: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var name by remember { mutableStateOf(presetName.orEmpty()) }
-    LaunchedEffect(visible, presetName) { if (visible) name = presetName.orEmpty() }
+    // Prefilled with the CURRENT name. Keyed on the stored name, not the field
+    // value, so user edits survive recompositions but a re-open (or a rename)
+    // re-seeds the field with the fresh name; the key is stable while the sheet
+    // plays its exit animation, so the text never visibly clears mid-slide.
+    var name by remember(presetName) { mutableStateOf(presetName.orEmpty()) }
+
+    // Valid rename: non-blank and different from the original (the engine
+    // still rejects duplicates and built-in targets behind the call).
+    val canRename = name.isNotBlank() && name != presetName
+
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(visible) {
+        if (visible) focusRequester.requestFocus()
+    }
 
     FoamBottomModal(
         visible = visible,
         onDismissRequest = onDismiss
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
             BasicText(
                 text = stringResource(R.string.eq_rename_preset_title),
-                style = FoamTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            TextField(
-                value = name,
-                onValueChange = { name = it },
-                placeholder = {
-                    BasicText(
-                        text = stringResource(R.string.eq_preset_name_hint),
-                        style = FoamTheme.typography.body
-                    )
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                colors = TextFieldDefaults.textFieldColors(
-                    backgroundColor = FoamTheme.colors.surfaceVariant,
-                    focusedIndicatorColor = FoamTheme.accentColor,
-                    unfocusedIndicatorColor = FoamTheme.colors.borderOverlay,
-                    textColor = FoamTheme.colors.textPrimary,
-                    cursorColor = FoamTheme.accentColor
+                style = FoamTheme.typography.titleMedium,
+                modifier = Modifier.padding(
+                    horizontal = FoamDimens.paddingSmall,
+                    vertical = FoamDimens.spacingTiny
                 )
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(onClick = onDismiss)
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                ) {
-                    BasicText(text = stringResource(R.string.cancel), style = FoamTheme.typography.body)
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(FoamTheme.accentColor)
-                        .clickable(enabled = name.isNotBlank() && name != presetName) { onRename(name.trim()) }
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                ) {
-                    BasicText(
-                        text = stringResource(R.string.save),
-                        style = FoamTheme.typography.body.copy(
-                            color = FoamTheme.colors.background,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
+
+            PlaylistNameField(
+                value = name,
+                onValueChange = { name = it },
+                hint = stringResource(R.string.eq_preset_name_hint),
+                focusRequester = focusRequester,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = { if (canRename) onRename(name.trim()) }
+                )
+            )
+
+            ModalButton(
+                label = stringResource(R.string.save),
+                filled = true,
+                enabled = canRename,
+                onClick = { onRename(name.trim()) }
+            )
+            ModalButton(
+                label = stringResource(R.string.cancel),
+                filled = false,
+                onClick = onDismiss
+            )
         }
     }
 }
