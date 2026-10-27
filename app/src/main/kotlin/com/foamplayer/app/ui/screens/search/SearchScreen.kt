@@ -276,6 +276,12 @@ fun SearchScreen(
         snapshotFlow { imeInsets.getBottom(density) }.first { it == 0 }
     }
 
+    val playTrack: (TrackEntity) -> Unit = { track ->
+        focusManager.clearFocus()
+        keyboardController?.hide()
+        onTrackClick(track)
+    }
+
     val showTrackModal: (TrackEntity) -> Unit = { track ->
         longPressScope.launch {
             awaitKeyboardClosed()
@@ -531,7 +537,7 @@ fun SearchScreen(
                                     track = track,
                                     onClick = {
                                         searchViewModel.addToHistory(track)
-                                        onTrackClick(track)
+                                        playTrack(track)
                                     },
                                     onLongClick = { showTrackModal(track) },
                                     active = track.id == activeTrackId,
@@ -563,7 +569,7 @@ fun SearchScreen(
                                     track = track,
                                     onClick = {
                                         searchViewModel.addToHistory(track)
-                                        onTrackClick(track)
+                                        playTrack(track)
                                     },
                                     onLongClick = { showTrackModal(track) },
                                     active = track.id == activeTrackId,
@@ -600,7 +606,7 @@ fun SearchScreen(
                                         track = entry.track,
                                         onClick = {
                                             searchViewModel.addToHistory(entry.track)
-                                            onTrackClick(entry.track)
+                                            playTrack(entry.track)
                                         },
                                         onRemove = { searchViewModel.removeFromHistory(entry) },
                                         onLongClick = { showTrackModal(entry.track) },
