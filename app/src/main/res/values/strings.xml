@@ -1,4 +1,5 @@
 <resources>
+    <string name="app_name" translatable="false">FoamPlayer</string>
     <string name="playback_channel_name">FoamPlayer Playback</string>
     <string name="action_shuffle">Shuffle</string>
     <string name="action_repeat">Repeat</string>
@@ -685,7 +686,7 @@
     <string name="eq_gain">GAIN</string>
     <string name="eq_q">Q</string>
     <string name="eq_presets">Presets</string>
-    <string name="eq_preset_custom_hint">Custom · tap to browse &amp; save</string>
+    <string name="eq_preset_custom_hint">Custom</string>
     <string name="eq_presets_desc">A preset drives either the graphic or the parametric EQ</string>
     <string name="eq_save_as_new">Save current as new preset</string>
     <string name="eq_preset_kind_parametric">PARAMETRIC</string>
@@ -702,6 +703,53 @@
     <string name="eq_balance_center">CENTER</string>
     <string name="eq_balance_left">L %.0f%%</string>
     <string name="eq_balance_right">R %.0f%%</string>
+    <string name="eq_preset_more">More options</string>
+    <string name="eq_preset_menu_rename">Rename</string>
+    <string name="eq_preset_menu_assign">Assign</string>
+    <string name="eq_rename_preset_title">Rename Preset</string>
+    <string name="eq_assign_preset_title">Assign %1$s</string>
+    <string name="eq_assign_section_device">Output device</string>
+    <string name="eq_assign_section_track">Track</string>
+    <string name="eq_assign_note">Track assignation is always prioritary over output-device assignation</string>
+    <string name="eq_assign_track">Track : %1$s</string>
+    <string name="eq_assign_album">Album : %1$s</string>
+    <string name="eq_assign_playlist">Playlist : %1$s</string>
+    <string name="eq_assign_device_speaker">Speaker</string>
+    <string name="eq_assign_device_bluetooth">Bluetooth</string>
+    <string name="eq_assign_device_usb">USB DAC</string>
+    <string name="eq_assign_device_chromecast">Chromecast</string>
+
+    <!-- Auto EQ (squig.link) -->
+    <string name="eq_tab_presets">Presets</string>
+    <string name="eq_tab_autoeq">Auto EQ</string>
+    <string name="eq_autoeq_desc">Pick a device and a target; the EQ is fitted automatically.</string>
+    <string name="eq_autoeq_database">Database</string>
+    <string name="eq_autoeq_from">From</string>
+    <string name="eq_autoeq_target">Target</string>
+    <string name="eq_autoeq_output">Output</string>
+    <string name="eq_autoeq_parametric">Parametric</string>
+    <string name="eq_autoeq_graphic">Graphic</string>
+    <string name="eq_autoeq_select_database">Select database</string>
+    <string name="eq_autoeq_select_device">Select device</string>
+    <string name="eq_autoeq_pick_database">Choose a squig.link database</string>
+    <string name="eq_autoeq_pick_from">Choose your device</string>
+    <string name="eq_autoeq_pick_target">Choose the target device</string>
+    <string name="eq_autoeq_search">Search devices</string>
+    <string name="eq_autoeq_generate">Generate EQ</string>
+    <string name="eq_autoeq_generating">Measuring…</string>
+    <string name="eq_autoeq_apply">Apply EQ</string>
+    <string name="eq_autoeq_loading">Loading…</string>
+    <string name="eq_autoeq_empty">No devices found</string>
+    <string name="eq_autoeq_back">Back</string>
+    <string name="eq_autoeq_result_title">Auto EQ - %1$s → %2$s</string>
+    <string name="eq_autoeq_result_stats">Pre-amp %1$s - %2$d filters - ±%3$s error</string>
+
+    <!-- Auto EQ devMode test screen (squig.link) -->
+    <string name="test_autoeq">Auto EQ (squig.link)</string>
+    <string name="test_autoeq_load_sites">Load squig.link sites</string>
+    <string name="test_autoeq_load_database">Load first database</string>
+    <string name="test_autoeq_site_count">Sites: %1$d</string>
+    <string name="test_autoeq_database_count">Database %1$s (%2$s): %3$d devices, %4$d targets</string>
 
     <!-- Equalizer settings subscreen -->
     <string name="eq_band_layout">Band Layout</string>

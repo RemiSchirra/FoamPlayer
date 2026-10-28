@@ -369,39 +369,44 @@ private fun PlaylistModalHeader(
 
         Spacer(modifier = Modifier.width(FoamDimens.spacingMedium))
 
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BasicText(
-                text = playlist.name,
-                style = FoamTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-
-            Spacer(modifier = Modifier.width(FoamDimens.spacingTiny))
-
-            // Pencil on the right of the text: rename via a text-input sheet.
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = ripple(color = FoamTheme.colors.textPrimary),
-                        onClick = onEditName
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = stringResource(R.string.edit_playlist_name),
-                    tint = FoamTheme.colors.textSecondary,
-                    modifier = Modifier.size(FoamDimens.iconSmall)
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BasicText(
+                    text = playlist.name,
+                    style = FoamTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+
+                Spacer(modifier = Modifier.width(FoamDimens.spacingTiny))
+
+                // Pencil on the right of the text: rename via a text-input sheet.
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(color = FoamTheme.colors.textPrimary),
+                            onClick = onEditName
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = stringResource(R.string.edit_playlist_name),
+                        tint = FoamTheme.colors.textSecondary,
+                        modifier = Modifier.size(FoamDimens.iconSmall)
+                    )
+                }
             }
+
+            // The EQ preset assigned to this playlist, if any.
+            AssignedPresetLine(
+                presetName = LocalDspAssignments.current.playlistPresets[playlist.playlistId],
+                modifier = Modifier.padding(top = FoamDimens.spacingTiny)
+            )
         }
     }
 }

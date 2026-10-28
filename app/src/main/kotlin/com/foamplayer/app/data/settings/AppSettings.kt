@@ -180,6 +180,8 @@ data class AppSettings(
     val dspStateSerialized: String = "",
     /** User-saved EQ presets, serialized by [DspPersistence]. */
     val dspUserPresets: String = "",
+    /** EQ preset assignments (track/album/playlist/device), serialized by [PresetAssignments]. */
+    val dspAssignments: String = "",
     /** Per-output-device audio configuration, keyed by device id. */
     val deviceAudioConfigs: Map<String, DeviceAudioConfig> = emptyMap(),
     /**

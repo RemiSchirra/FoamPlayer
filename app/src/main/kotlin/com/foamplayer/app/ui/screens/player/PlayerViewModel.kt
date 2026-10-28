@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.audio.cast.ChromecastController
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.PlaybackState
+import com.foamplayer.app.audio.dsp.PresetAssignments
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
@@ -56,6 +57,9 @@ class PlayerViewModel @Inject constructor(
 
     /** What the "Play on" sheet shows as selected: the resolved routing target. */
     val selectedPlayOnDeviceId: StateFlow<String?> = audioEngine.selectedPlayOnDeviceId
+
+    /** EQ preset assignments (track/album/playlist/device), from the DSP engine. */
+    val dspAssignments: StateFlow<PresetAssignments> = audioEngine.dspAssignments
 
     /** True while the LAN is being scanned for Chromecasts (the sheet is open). */
     val castScanning: StateFlow<Boolean> = playOnDeviceRepository.scanningForChromecasts

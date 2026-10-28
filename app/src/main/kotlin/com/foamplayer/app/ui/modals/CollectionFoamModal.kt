@@ -528,6 +528,16 @@ private fun CollectionModalHeader(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            // The EQ preset assigned to this album, if any (album-kind only: the
+            // assignment is keyed by album name).
+            AssignedPresetLine(
+                presetName = if (collection.kind == CollectionKind.Album) {
+                    LocalDspAssignments.current.albumPresets[collection.title]
+                } else {
+                    null
+                },
+                modifier = Modifier.padding(top = FoamDimens.spacingTiny)
+            )
         }
     }
 }

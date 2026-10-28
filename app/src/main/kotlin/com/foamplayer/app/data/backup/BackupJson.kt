@@ -113,6 +113,7 @@ object BackupJson {
         put("notificationButtonRight", settings.notificationButtonRight.name)
         put("dspState", settings.dspStateSerialized)
         put("dspUserPresets", settings.dspUserPresets)
+        put("dspAssignments", settings.dspAssignments)
         put("deviceAudioConfigs", deviceAudioConfigsToJson(settings.deviceAudioConfigs))
     }
 
@@ -232,6 +233,7 @@ object BackupJson {
         ),
         dspStateSerialized = json.optString("dspState", ""),
         dspUserPresets = json.optString("dspUserPresets", ""),
+        dspAssignments = json.optString("dspAssignments", ""),
         deviceAudioConfigs = deviceAudioConfigsFromJson(json.optJSONObject("deviceAudioConfigs"))
     )
 

@@ -684,7 +684,7 @@
     <string name="eq_gain">GAIN</string>
     <string name="eq_q">Q</string>
     <string name="eq_presets">Préréglages</string>
-    <string name="eq_preset_custom_hint">Personnalisé · toucher pour parcourir et enregistrer</string>
+    <string name="eq_preset_custom_hint">Personnalisé</string>
     <string name="eq_presets_desc">Un préréglage pilote soit l\'égaliseur graphique, soit le paramétrique</string>
     <string name="eq_save_as_new">Enregistrer le réglage actuel comme nouveau</string>
     <string name="eq_preset_kind_parametric">PARAMÉTRIQUE</string>
@@ -701,6 +701,53 @@
     <string name="eq_balance_center">CENTRE</string>
     <string name="eq_balance_left">G %.0f%%</string>
     <string name="eq_balance_right">D %.0f%%</string>
+    <string name="eq_preset_more">Plus d\'options</string>
+    <string name="eq_preset_menu_rename">Renommer</string>
+    <string name="eq_preset_menu_assign">Assigner</string>
+    <string name="eq_rename_preset_title">Renommer le préréglage</string>
+    <string name="eq_assign_preset_title">Assigner %1$s</string>
+    <string name="eq_assign_section_device">Appareil de sortie</string>
+    <string name="eq_assign_section_track">Piste</string>
+    <string name="eq_assign_note">L\'assignation de piste est toujours prioritaire sur celle de l\'appareil de sortie</string>
+    <string name="eq_assign_track">Piste : %1$s</string>
+    <string name="eq_assign_album">Album : %1$s</string>
+    <string name="eq_assign_playlist">Playlist : %1$s</string>
+    <string name="eq_assign_device_speaker">Haut-parleur</string>
+    <string name="eq_assign_device_bluetooth">Bluetooth</string>
+    <string name="eq_assign_device_usb">DAC USB</string>
+    <string name="eq_assign_device_chromecast">Chromecast</string>
+
+    <!-- Auto EQ (squig.link) -->
+    <string name="eq_tab_presets">Préréglages</string>
+    <string name="eq_tab_autoeq">Auto EQ</string>
+    <string name="eq_autoeq_desc">Choisissez un appareil et une cible : l\'EQ est calculé automatiquement.</string>
+    <string name="eq_autoeq_database">Base de données</string>
+    <string name="eq_autoeq_from">Source</string>
+    <string name="eq_autoeq_target">Cible</string>
+    <string name="eq_autoeq_output">Sortie</string>
+    <string name="eq_autoeq_parametric">Paramétrique</string>
+    <string name="eq_autoeq_graphic">Graphique</string>
+    <string name="eq_autoeq_select_database">Choisir une base de données</string>
+    <string name="eq_autoeq_select_device">Choisir un appareil</string>
+    <string name="eq_autoeq_pick_database">Choisissez une base de données squig.link</string>
+    <string name="eq_autoeq_pick_from">Choisissez votre appareil</string>
+    <string name="eq_autoeq_pick_target">Choisissez l\'appareil cible</string>
+    <string name="eq_autoeq_search">Rechercher des appareils</string>
+    <string name="eq_autoeq_generate">Générer l\'EQ</string>
+    <string name="eq_autoeq_generating">Mesures en cours…</string>
+    <string name="eq_autoeq_apply">Appliquer l\'EQ</string>
+    <string name="eq_autoeq_loading">Chargement…</string>
+    <string name="eq_autoeq_empty">Aucun appareil trouvé</string>
+    <string name="eq_autoeq_back">Retour</string>
+    <string name="eq_autoeq_result_title">Auto EQ - %1$s → %2$s</string>
+    <string name="eq_autoeq_result_stats">Pré-ampli %1$s - %2$d filtres - ±%3$s d\'erreur</string>
+
+    <!-- Auto EQ : écran de test (squig.link) -->
+    <string name="test_autoeq">Auto EQ (squig.link)</string>
+    <string name="test_autoeq_load_sites">Charger les sites squig.link</string>
+    <string name="test_autoeq_load_database">Charger la première base</string>
+    <string name="test_autoeq_site_count">Sites : %1$d</string>
+    <string name="test_autoeq_database_count">Base %1$s (%2$s) : %3$d appareils, %4$d cibles</string>
 
     <!-- Égaliseur : écran de réglage -->
     <string name="eq_band_layout">Disposition des bandes</string>

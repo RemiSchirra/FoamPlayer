@@ -37,10 +37,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -50,13 +48,11 @@ import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
-import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.data.db.entities.TrackEntity
-import com.foamplayer.app.data.settings.BackgroundMode
-import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.modals.CollectionInfo
 import com.foamplayer.app.ui.modals.CollectionKind
 import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
+import com.foamplayer.app.ui.modals.LocalDspAssignments
 import com.foamplayer.app.ui.modals.LocalOpenPlaylistPickerForPlaylist
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
@@ -329,9 +325,12 @@ fun FoamNavHost(
                             (playerTransitionState.targetState && playerTransition.trackListTransitionTrackId != null))
         }
 
+        val dspAssignments by playerViewModel.dspAssignments.collectAsState()
+
         CompositionLocalProvider(
             LocalTrackFoamModalState provides trackModalState,
             LocalCollectionFoamModalState provides collectionModalState,
+            LocalDspAssignments provides dspAssignments,
             LocalOpenPlaylistPickerForPlaylist provides { source ->
                 modalState.pickerExcludedPlaylistId = source.playlistId
                 scope.launch {
