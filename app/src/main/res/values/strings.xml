@@ -719,6 +719,38 @@
     <string name="eq_assign_device_usb">USB DAC</string>
     <string name="eq_assign_device_chromecast">Chromecast</string>
 
+    <!-- Auto EQ (squig.link) -->
+    <string name="eq_tab_presets">Presets</string>
+    <string name="eq_tab_autoeq">Auto EQ</string>
+    <string name="eq_autoeq_desc">Match the sound of any device measured on squig.link: pick the device you own and a target, and FoamPlayer fits an EQ from their difference.</string>
+    <string name="eq_autoeq_database">Database</string>
+    <string name="eq_autoeq_from">From</string>
+    <string name="eq_autoeq_target">Target</string>
+    <string name="eq_autoeq_output">Output</string>
+    <string name="eq_autoeq_parametric">Parametric</string>
+    <string name="eq_autoeq_graphic">Graphic</string>
+    <string name="eq_autoeq_select_database">Select database</string>
+    <string name="eq_autoeq_select_device">Select device</string>
+    <string name="eq_autoeq_pick_database">Choose a squig.link database</string>
+    <string name="eq_autoeq_pick_from">Choose your device</string>
+    <string name="eq_autoeq_pick_target">Choose the target device</string>
+    <string name="eq_autoeq_search">Search devices</string>
+    <string name="eq_autoeq_generate">Generate EQ</string>
+    <string name="eq_autoeq_generating">Measuring…</string>
+    <string name="eq_autoeq_apply">Apply EQ</string>
+    <string name="eq_autoeq_loading">Loading…</string>
+    <string name="eq_autoeq_empty">No devices found</string>
+    <string name="eq_autoeq_back">Back</string>
+    <string name="eq_autoeq_result_title">Auto EQ · %1$s → %2$s</string>
+    <string name="eq_autoeq_result_stats">Pre-amp −%1$s · %2$d filters · ±%3$s error</string>
+
+    <!-- Auto EQ devMode test screen (squig.link) -->
+    <string name="test_autoeq">Auto EQ (squig.link)</string>
+    <string name="test_autoeq_load_sites">Load squig.link sites</string>
+    <string name="test_autoeq_load_database">Load first database</string>
+    <string name="test_autoeq_site_count">Sites: %1$d</string>
+    <string name="test_autoeq_database_count">Database %1$s (%2$s): %3$d devices, %4$d targets</string>
+
     <!-- Equalizer settings subscreen -->
     <string name="eq_band_layout">Band Layout</string>
     <string name="eq_band_layout_desc">ISO-standard band number configuration</string>

@@ -197,6 +197,7 @@ dependencies {
     implementation(project(":lyrics:simpmusic"))
     implementation(project(":lyrics:unison"))
     implementation(project(":lyrics:youlyplus"))
+    implementation(project(":squig"))
 
     implementation(project(":distant:core"))
     implementation(project(":distant:plex"))

@@ -7,9 +7,16 @@ import android.content.IntentFilter
 import android.media.AudioManager
 import android.os.SystemClock
 import android.util.Log
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,9 +28,11 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -63,6 +72,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.layout
@@ -511,10 +521,25 @@ fun EqualizerScreen(
         Spacer(modifier = Modifier.height(24.dp))
     }
 
+    val autoEqState by viewModel.autoEqState.collectAsState()
+
     PresetsModal(
         visible = showPresetsModal,
         presets = allPresets,
         state = state,
+        autoEqState = autoEqState,
+        autoEqActions = AutoEqActions(
+            loadSites = viewModel::loadAutoEqSites,
+            selectDatabase = viewModel::selectAutoEqDatabase,
+            selectFrom = viewModel::selectAutoEqFrom,
+            selectTarget = viewModel::selectAutoEqTarget,
+            setOutputMode = viewModel::setAutoEqOutputMode,
+            generate = viewModel::generateAutoEq,
+            apply = {
+                viewModel.applyAutoEq()
+                showPresetsModal = false
+            }
+        ),
         onApply = { preset ->
             viewModel.applyPreset(preset)
             showPresetsModal = false
@@ -675,12 +700,14 @@ private fun PresetMoreButton(onClick: () -> Unit) {
     }
 }
 
-/** Bottom sheet listing presets with a live response preview. */
+/** Bottom sheet listing presets and the Auto EQ flow with a live response preview. */
 @Composable
 private fun PresetsModal(
     visible: Boolean,
     presets: List<DspPreset>,
     state: DspState,
+    autoEqState: AutoEqUiState,
+    autoEqActions: AutoEqActions,
     onApply: (DspPreset) -> Unit,
     onDelete: (DspPreset) -> Unit,
     onSaveAsNew: () -> Unit,
@@ -690,59 +717,188 @@ private fun PresetsModal(
         visible = visible,
         onDismissRequest = onDismiss
     ) {
+        var tab by remember { mutableStateOf("presets") }
+        LaunchedEffect(visible) { tab = "presets" }
+
         Column(modifier = Modifier.fillMaxWidth()) {
-            BasicText(text = stringResource(R.string.eq_presets), style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(4.dp))
-            BasicText(
-                text = stringResource(R.string.eq_presets_desc),
-                style = FoamTheme.typography.caption
-            )
+            PresetsTabs(selected = tab, onSelect = { tab = it })
             Spacer(modifier = Modifier.height(12.dp))
 
-            presets.forEach { preset ->
-                PresetRow(
-                    preset = preset,
-                    selected = presets.matching(state) == preset,
-                    onApply = { onApply(preset) },
-                    onDelete = { onDelete(preset) }
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(FoamTheme.colors.surfaceVariant)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = ripple(color = FoamTheme.colors.textPrimary),
-                        onClick = onSaveAsNew
-                    )
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Rounded.BookmarkAdd,
-                        contentDescription = null,
-                        tint = FoamTheme.accentColor,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    BasicText(
-                        text = stringResource(R.string.eq_save_as_new),
-                        style = FoamTheme.typography.caption.copy(
-                            color = FoamTheme.accentColor,
-                            fontWeight = FontWeight.Bold
-                        )
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    // autoeq sits to the right of presets: slide the incoming
+                    // surface in from the direction of travel, and let the
+                    // sheet's height animate between the two tab contents.
+                    val direction = if (targetState == "autoeq") 1 else -1
+                    (
+                        slideInHorizontally(tween(250)) { fullWidth -> direction * fullWidth } +
+                                fadeIn(tween(250))
+                        ) togetherWith
+                            (
+                            slideOutHorizontally(tween(250)) { fullWidth -> -direction * fullWidth } +
+                                    fadeOut(tween(250))
+                            )
+                },
+                label = "presetsTabContent"
+            ) { currentTab ->
+                when (currentTab) {
+                    "autoeq" -> AutoEqContent(state = autoEqState, actions = autoEqActions)
+                    else -> PresetsTab(
+                        presets = presets,
+                        state = state,
+                        onApply = onApply,
+                        onDelete = onDelete,
+                        onSaveAsNew = onSaveAsNew
                     )
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(8.dp))
+/** The presets tab: title, description, every preset row, and the save-as-new pill. */
+@Composable
+private fun PresetsTab(
+    presets: List<DspPreset>,
+    state: DspState,
+    onApply: (DspPreset) -> Unit,
+    onDelete: (DspPreset) -> Unit,
+    onSaveAsNew: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        BasicText(text = stringResource(R.string.eq_presets), style = FoamTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(4.dp))
+        BasicText(
+            text = stringResource(R.string.eq_presets_desc),
+            style = FoamTheme.typography.caption
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        presets.forEach { preset ->
+            PresetRow(
+                preset = preset,
+                selected = presets.matching(state) == preset,
+                onApply = { onApply(preset) },
+                onDelete = { onDelete(preset) }
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(FoamTheme.colors.surfaceVariant)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = FoamTheme.colors.textPrimary),
+                    onClick = onSaveAsNew
+                )
+                .padding(vertical = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.BookmarkAdd,
+                    contentDescription = null,
+                    tint = FoamTheme.accentColor,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                BasicText(
+                    text = stringResource(R.string.eq_save_as_new),
+                    style = FoamTheme.typography.caption.copy(
+                        color = FoamTheme.accentColor,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+/** Presets | Auto EQ pills choosing the preset modal's tab; the highlight slides. */
+@Composable
+private fun PresetsTabs(
+    selected: String,
+    onSelect: (String) -> Unit
+) {
+    val tabs = listOf(
+        "presets" to R.string.eq_tab_presets,
+        "autoeq" to R.string.eq_tab_autoeq
+    )
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(50))
+            .background(FoamTheme.colors.surfaceVariant)
+    ) {
+        val tabWidth = maxWidth / 2
+        val indicatorOffset by animateDpAsState(
+            targetValue = if (selected == "autoeq") tabWidth else 0.dp,
+            animationSpec = tween(250),
+            label = "presetsTabIndicator"
+        )
+
+        // Sliding selection highlight behind the labels; the labels define
+        // the pill's size, so matchParentSize matches them without influencing it.
+        Box(modifier = Modifier.matchParentSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.5f)
+                    .fillMaxHeight()
+                    .offset { IntOffset(x = indicatorOffset.roundToPx(), y = 0) }
+                    .padding(2.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(FoamTheme.accentColor)
+            )
+        }
+
+        Row(modifier = Modifier.padding(2.dp)) {
+            tabs.forEach { (tabKey, labelRes) ->
+                val isSelected = tabKey == selected
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(50))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(color = FoamTheme.colors.textPrimary),
+                            onClick = { onSelect(tabKey) }
+                        )
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AnimatedContent(
+                        targetState = isSelected,
+                        transitionSpec = {
+                            (
+                                slideInHorizontally(tween(250)) { it / -2 } +
+                                        fadeIn(tween(250))
+                                ) togetherWith
+                                    (
+                                    slideOutHorizontally(tween(250)) { it / 2 } +
+                                            fadeOut(tween(250))
+                                    )
+                        },
+                        label = "presetsTabLabel"
+                    ) { selectedNow ->
+                        BasicText(
+                            text = stringResource(labelRes),
+                            style = FoamTheme.typography.caption.copy(
+                                color = if (selectedNow) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+                                fontWeight = if (selectedNow) FontWeight.Bold else FontWeight.Normal
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 }

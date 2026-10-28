@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +32,10 @@ import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.squig.SquigDatabase
+import com.foamplayer.squig.SquigLink
+import com.foamplayer.squig.SquigSite
+import kotlinx.coroutines.launch
 
 /**
  * Developer screen, compiled in only when the build sets devMode=true
@@ -48,6 +53,13 @@ fun TestSettingsScreen(
     var switchState by remember { mutableStateOf(false) }
     var sliderValue by remember { mutableFloatStateOf(0.5f) }
     var snappedSliderValue by remember { mutableFloatStateOf(0.5f) }
+
+    // Auto EQ (squig.link) demo: live sites() and database() fetches.
+    val scope = rememberCoroutineScope()
+    var autoEqSites by remember { mutableStateOf<List<SquigSite>>(emptyList()) }
+    var autoEqDatabase by remember { mutableStateOf<SquigDatabase?>(null) }
+    var autoEqError by remember { mutableStateOf<String?>(null) }
+    var autoEqLoading by remember { mutableStateOf(false) }
 
     // Destructive action awaiting its confirmation sheet (null = none).
     var confirmAction by remember { mutableStateOf<DevAction?>(null) }
@@ -158,6 +170,97 @@ fun TestSettingsScreen(
                             valueDisplay = stringResource(R.string.test_slider_step, (snappedSliderValue * 5).toInt()),
                             minMaxDisplay = "0" to "5"
                         )
+                    }
+                }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+
+            // Auto EQ
+            item {
+                BasicText(text = stringResource(R.string.test_autoeq), style = FoamTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    Column(modifier = Modifier.padding(FoamDimens.paddingMedium)) {
+                        autoEqError?.let { error ->
+                            BasicText(
+                                text = error,
+                                style = FoamTheme.typography.caption
+                            )
+                            Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
+                        }
+
+                        if (autoEqSites.isEmpty()) {
+                            ModalButton(
+                                label = stringResource(R.string.test_autoeq_load_sites),
+                                filled = !autoEqLoading,
+                                onClick = {
+                                    if (!autoEqLoading) {
+                                        autoEqLoading = true
+                                        scope.launch {
+                                            runCatching { SquigLink.sites() }
+                                                .onSuccess { sites -> autoEqSites = sites }
+                                                .onFailure { error -> autoEqError = error.message }
+                                            autoEqLoading = false
+                                        }
+                                    }
+                                }
+                            )
+                        } else {
+                            BasicText(
+                                text = stringResource(R.string.test_autoeq_site_count, autoEqSites.size),
+                                style = FoamTheme.typography.body
+                            )
+                            Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
+                            autoEqSites.take(6).forEach { site ->
+                                BasicText(
+                                    text = "${site.name} · ${site.dbs.joinToString { it.type }}",
+                                    style = FoamTheme.typography.caption
+                                )
+                            }
+                            if (autoEqSites.size > 6) {
+                                BasicText(text = "…", style = FoamTheme.typography.caption)
+                            }
+                            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+
+                            val database = autoEqDatabase
+                            if (database == null) {
+                                ModalButton(
+                                    label = stringResource(R.string.test_autoeq_load_database),
+                                    filled = true,
+                                    onClick = {
+                                        val first = autoEqSites.firstOrNull() ?: return@ModalButton
+                                        val firstDb = first.dbs.firstOrNull() ?: return@ModalButton
+                                        scope.launch {
+                                            runCatching { SquigLink.database(first, firstDb) }
+                                                .onSuccess { autoEqDatabase = it }
+                                                .onFailure { error -> autoEqError = error.message }
+                                        }
+                                    }
+                                )
+                            } else {
+                                BasicText(
+                                    text = stringResource(
+                                        R.string.test_autoeq_database_count,
+                                        database.site.name,
+                                        database.db.type,
+                                        database.devices.size,
+                                        database.targets.size
+                                    ),
+                                    style = FoamTheme.typography.body
+                                )
+                                Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
+                                BasicText(
+                                    text = database.dataUrl,
+                                    style = FoamTheme.typography.caption
+                                )
+                            }
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
