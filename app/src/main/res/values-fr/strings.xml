@@ -720,7 +720,7 @@
     <!-- Auto EQ (squig.link) -->
     <string name="eq_tab_presets">Préréglages</string>
     <string name="eq_tab_autoeq">Auto EQ</string>
-    <string name="eq_autoeq_desc">Accordez le son de n\'importe quel appareil mesuré sur squig.link : choisissez l\'appareil que vous possédez et une cible, et FoamPlayer calcule un EQ à partir de leur différence.</string>
+    <string name="eq_autoeq_desc">Choisissez un appareil et une cible : l\'EQ est calculé automatiquement.</string>
     <string name="eq_autoeq_database">Base de données</string>
     <string name="eq_autoeq_from">Source</string>
     <string name="eq_autoeq_target">Cible</string>
@@ -739,8 +739,8 @@
     <string name="eq_autoeq_loading">Chargement…</string>
     <string name="eq_autoeq_empty">Aucun appareil trouvé</string>
     <string name="eq_autoeq_back">Retour</string>
-    <string name="eq_autoeq_result_title">Auto EQ · %1$s → %2$s</string>
-    <string name="eq_autoeq_result_stats">Pré-ampli −%1$s · %2$d filtres · ±%3$s d\'erreur</string>
+    <string name="eq_autoeq_result_title">Auto EQ - %1$s → %2$s</string>
+    <string name="eq_autoeq_result_stats">Pré-ampli %1$s - %2$d filtres - ±%3$s d\'erreur</string>
 
     <!-- Auto EQ : écran de test (squig.link) -->
     <string name="test_autoeq">Auto EQ (squig.link)</string>

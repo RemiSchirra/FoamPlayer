@@ -722,7 +722,7 @@
     <!-- Auto EQ (squig.link) -->
     <string name="eq_tab_presets">Presets</string>
     <string name="eq_tab_autoeq">Auto EQ</string>
-    <string name="eq_autoeq_desc">Match the sound of any device measured on squig.link: pick the device you own and a target, and FoamPlayer fits an EQ from their difference.</string>
+    <string name="eq_autoeq_desc">Pick a device and a target; the EQ is fitted automatically.</string>
     <string name="eq_autoeq_database">Database</string>
     <string name="eq_autoeq_from">From</string>
     <string name="eq_autoeq_target">Target</string>
@@ -741,8 +741,8 @@
     <string name="eq_autoeq_loading">Loading…</string>
     <string name="eq_autoeq_empty">No devices found</string>
     <string name="eq_autoeq_back">Back</string>
-    <string name="eq_autoeq_result_title">Auto EQ · %1$s → %2$s</string>
-    <string name="eq_autoeq_result_stats">Pre-amp −%1$s · %2$d filters · ±%3$s error</string>
+    <string name="eq_autoeq_result_title">Auto EQ - %1$s → %2$s</string>
+    <string name="eq_autoeq_result_stats">Pre-amp %1$s - %2$d filters - ±%3$s error</string>
 
     <!-- Auto EQ devMode test screen (squig.link) -->
     <string name="test_autoeq">Auto EQ (squig.link)</string>
