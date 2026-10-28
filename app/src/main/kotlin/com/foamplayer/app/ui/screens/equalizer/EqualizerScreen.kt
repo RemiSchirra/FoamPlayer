@@ -310,11 +310,16 @@ fun EqualizerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // More button: rename + assign for the active preset. Pinned
+                    // to the row's left edge so it doesn't drift with the pill.
+                    PresetMoreButton(onClick = { showPresetMenuModal = true })
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     Box(modifier = Modifier.weight(1f)) {
                         PresetChip(
                             currentPresetName = currentPreset?.name,
-                            onClick = { showPresetsModal = true },
-                            onMoreClick = { showPresetMenuModal = true }
+                            onClick = { showPresetsModal = true }
                         )
                     }
 
@@ -617,58 +622,56 @@ private fun List<DspPreset>.matching(state: DspState): DspPreset? = firstOrNull 
     }
 }
 
-/** Pill showing the applied preset name; opens the preset browser. The more button left of it opens the preset menu (rename / assign). */
+/** Pill showing the applied preset name; opens the preset browser. */
 @Composable
 private fun PresetChip(
     currentPresetName: String?,
-    onClick: () -> Unit,
-    onMoreClick: () -> Unit
+    onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // More button: rename + assign, left of the pill.
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(FoamTheme.colors.surfaceVariant)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = ripple(color = FoamTheme.colors.textPrimary),
-                        onClick = onMoreClick
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.MoreHoriz,
-                    contentDescription = stringResource(R.string.eq_preset_more),
-                    tint = FoamTheme.colors.textPrimary,
-                    modifier = Modifier.size(20.dp)
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(FoamTheme.colors.surfaceVariant)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = FoamTheme.colors.textPrimary),
+                    onClick = onClick
                 )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(FoamTheme.colors.surfaceVariant)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = ripple(color = FoamTheme.colors.textPrimary),
-                        onClick = onClick
-                    )
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-            ) {
-                BasicText(
-                    text = currentPresetName ?: stringResource(R.string.eq_preset_custom_hint),
-                    style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary, fontWeight = FontWeight.Bold)
-                )
-            }
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+        ) {
+            BasicText(
+                text = currentPresetName ?: stringResource(R.string.eq_preset_custom_hint),
+                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary, fontWeight = FontWeight.Bold)
+            )
         }
+    }
+}
+
+/** Round "more" button opening the preset menu (rename / assign). */
+@Composable
+private fun PresetMoreButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .clip(CircleShape)
+            .background(FoamTheme.colors.surfaceVariant)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.MoreHoriz,
+            contentDescription = stringResource(R.string.eq_preset_more),
+            tint = FoamTheme.colors.textPrimary,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
@@ -713,7 +716,11 @@ private fun PresetsModal(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(FoamTheme.colors.surfaceVariant)
-                    .clickable(onClick = onSaveAsNew)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = onSaveAsNew
+                    )
                     .padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -775,7 +782,11 @@ private fun PresetRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(if (selected) FoamTheme.accentColor.copy(alpha = 0.16f) else FoamTheme.colors.surfaceVariant)
-            .clickable(onClick = onApply)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onApply
+            )
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -817,7 +828,11 @@ private fun PresetRow(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onDelete),
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                        onClick = onDelete
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
