@@ -41,9 +41,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
-import androidx.compose.material.TextField
-import androidx.compose.material.TextFieldDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.BookmarkAdd
@@ -51,6 +51,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PowerSettingsNew
+import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -69,9 +70,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -104,7 +107,10 @@ import com.foamplayer.app.ui.components.ScreenTitle
 import com.foamplayer.app.ui.components.VerticalSlider
 import com.foamplayer.app.ui.components.onSeekBarReleased
 import com.foamplayer.app.ui.modals.FoamBottomModal
+import com.foamplayer.app.ui.modals.ModalButton
+import com.foamplayer.app.ui.modals.PlaylistNameField
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlin.math.exp
 import kotlin.math.ln
@@ -320,9 +326,16 @@ fun EqualizerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // More button: rename + assign for the active preset. Pinned
+                    // More button: rename + assign for the active preset, or
+                    // save-as-new in custom state (no preset matches). Pinned
                     // to the row's left edge so it doesn't drift with the pill.
-                    PresetMoreButton(onClick = { showPresetMenuModal = true })
+                    PresetMoreButton(
+                        isCustom = currentPreset == null,
+                        onClick = {
+                            if (currentPreset != null) showPresetMenuModal = true
+                            else showSavePresetModal = true
+                        }
+                    )
 
                     Spacer(modifier = Modifier.width(8.dp))
 
@@ -676,9 +689,13 @@ private fun PresetChip(
     }
 }
 
-/** Round "more" button opening the preset menu (rename / assign). */
+/** Round button opening the preset menu (rename / assign), or save-as-new
+ *  (save icon) when the current sound is a custom preset. */
 @Composable
-private fun PresetMoreButton(onClick: () -> Unit) {
+private fun PresetMoreButton(
+    isCustom: Boolean,
+    onClick: () -> Unit
+) {
     Box(
         modifier = Modifier
             .size(38.dp)
@@ -691,12 +708,21 @@ private fun PresetMoreButton(onClick: () -> Unit) {
             ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = Icons.Rounded.MoreHoriz,
-            contentDescription = stringResource(R.string.eq_preset_more),
-            tint = FoamTheme.colors.textPrimary,
-            modifier = Modifier.size(20.dp)
-        )
+        if (isCustom) {
+            Icon(
+                imageVector = Icons.Rounded.SaveAlt,
+                contentDescription = stringResource(R.string.eq_preset_more),
+                tint = FoamTheme.colors.textPrimary,
+                modifier = Modifier.size(20.dp)
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Rounded.MoreHoriz,
+                contentDescription = stringResource(R.string.eq_preset_more),
+                tint = FoamTheme.colors.textPrimary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }
 
@@ -1606,62 +1632,52 @@ private fun SavePresetModal(
     var name by remember { mutableStateOf("") }
     LaunchedEffect(visible) { if (visible) name = "" }
 
+    // Valid save: non-blank (the engine rejects duplicates behind the call).
+    val canSave = name.isNotBlank()
+
+    // Auto-focused field so the keyboard is already up when the sheet settles
+    // (Done submits), matching the rename modal.
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(visible) {
+        if (visible) focusRequester.requestFocus()
+    }
+
     FoamBottomModal(
         visible = visible,
         onDismissRequest = onDismiss
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            BasicText(text = stringResource(R.string.eq_save_preset_title), style = FoamTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(12.dp))
-            TextField(
-                value = name,
-                onValueChange = { name = it },
-                placeholder = {
-                    BasicText(
-                        text = stringResource(R.string.eq_preset_name_hint),
-                        style = FoamTheme.typography.body
-                    )
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                colors = TextFieldDefaults.textFieldColors(
-                    backgroundColor = FoamTheme.colors.surfaceVariant,
-                    focusedIndicatorColor = FoamTheme.accentColor,
-                    unfocusedIndicatorColor = FoamTheme.colors.borderOverlay,
-                    textColor = FoamTheme.colors.textPrimary,
-                    cursorColor = FoamTheme.accentColor
+        Column(verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)) {
+            BasicText(
+                text = stringResource(R.string.eq_save_preset_title),
+                style = FoamTheme.typography.titleMedium,
+                modifier = Modifier.padding(
+                    horizontal = FoamDimens.paddingSmall,
+                    vertical = FoamDimens.spacingTiny
                 )
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(onClick = onDismiss)
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                ) {
-                    BasicText(text = stringResource(R.string.cancel), style = FoamTheme.typography.body)
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(FoamTheme.accentColor)
-                        .clickable(enabled = name.isNotBlank()) { onSave(name) }
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                ) {
-                    BasicText(
-                        text = stringResource(R.string.save),
-                        style = FoamTheme.typography.body.copy(
-                            color = FoamTheme.colors.background,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
+
+            PlaylistNameField(
+                value = name,
+                onValueChange = { name = it },
+                hint = stringResource(R.string.eq_preset_name_hint),
+                focusRequester = focusRequester,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = { if (canSave) onSave(name.trim()) }
+                )
+            )
+
+            ModalButton(
+                label = stringResource(R.string.save),
+                filled = true,
+                enabled = canSave,
+                onClick = { onSave(name.trim()) }
+            )
+            ModalButton(
+                label = stringResource(R.string.cancel),
+                filled = false,
+                onClick = onDismiss
+            )
         }
     }
 }

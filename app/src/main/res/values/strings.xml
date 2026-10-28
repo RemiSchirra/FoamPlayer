@@ -686,7 +686,7 @@
     <string name="eq_gain">GAIN</string>
     <string name="eq_q">Q</string>
     <string name="eq_presets">Presets</string>
-    <string name="eq_preset_custom_hint">Custom · tap to browse &amp; save</string>
+    <string name="eq_preset_custom_hint">Custom</string>
     <string name="eq_presets_desc">A preset drives either the graphic or the parametric EQ</string>
     <string name="eq_save_as_new">Save current as new preset</string>
     <string name="eq_preset_kind_parametric">PARAMETRIC</string>

@@ -684,7 +684,7 @@
     <string name="eq_gain">GAIN</string>
     <string name="eq_q">Q</string>
     <string name="eq_presets">Préréglages</string>
-    <string name="eq_preset_custom_hint">Personnalisé · toucher pour parcourir et enregistrer</string>
+    <string name="eq_preset_custom_hint">Personnalisé</string>
     <string name="eq_presets_desc">Un préréglage pilote soit l\'égaliseur graphique, soit le paramétrique</string>
     <string name="eq_save_as_new">Enregistrer le réglage actuel comme nouveau</string>
     <string name="eq_preset_kind_parametric">PARAMÉTRIQUE</string>
