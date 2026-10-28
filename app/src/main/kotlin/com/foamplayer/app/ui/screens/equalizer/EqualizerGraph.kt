@@ -109,6 +109,14 @@ fun EqualizerGraph(
 ) {
     var dragNodeId by remember { mutableStateOf<Long?>(null) }
 
+    // Live proxies: the gesture handlers are created once (pointerInput is keyed
+    // on `enabled`), so they must read the current animated node list and
+    // callbacks instead of capturing stale ones.
+    val latestNodes by rememberUpdatedState(nodes)
+    val latestOnNodeSelect by rememberUpdatedState(onNodeSelect)
+    val latestOnNodesChange by rememberUpdatedState(onNodesChange)
+    val latestOnNodeCommit by rememberUpdatedState(onNodeCommit)
+
     val curve = remember(state, nodes) {
         DspMath.combinedResponse(
             state.copy(parametricEq = state.parametricEq.copy(nodes = nodes))
@@ -146,25 +154,25 @@ fun EqualizerGraph(
                         if (!enabled) return@detectDragGestures
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
-                        val hit = nodes
+                        val hit = latestNodes
                             .filter { (start - nodePosition(it, w, h)).getDistance() <= NODE_HIT_RADIUS_PX }
                             .minByOrNull { (start - nodePosition(it, w, h)).getDistance() }
                         dragNodeId = hit?.id
-                        if (hit != null) onNodeSelect(hit.id)
+                        if (hit != null) latestOnNodeSelect(hit.id)
                     },
                     onDrag = { change, _ ->
                         if (!enabled) return@detectDragGestures
                         change.consume()
                         val id = dragNodeId ?: return@detectDragGestures
-                        val node = nodes.firstOrNull { it.id == id } ?: return@detectDragGestures
+                        val node = latestNodes.firstOrNull { it.id == id } ?: return@detectDragGestures
                         val w = size.width.toFloat()
                         val freq = frequencyAtX(change.position.x.coerceIn(0f, w), w)
                         val gain = gainAtY(
                             change.position.y.coerceIn(0f, size.height.toFloat()),
                             size.height.toFloat()
                         )
-                        onNodesChange(
-                            nodes.map {
+                        latestOnNodesChange(
+                            latestNodes.map {
                                 if (it.id == id) {
                                     it.copy(
                                         frequencyHz = freq,
@@ -176,8 +184,8 @@ fun EqualizerGraph(
                     },
                     onDragEnd = {
                         val id = dragNodeId
-                        val node = nodes.firstOrNull { it.id == id }
-                        if (id != null && node != null) onNodeCommit(node)
+                        val node = latestNodes.firstOrNull { it.id == id }
+                        if (id != null && node != null) latestOnNodeCommit(node)
                         dragNodeId = null
                     },
                     onDragCancel = { dragNodeId = null }
@@ -188,10 +196,10 @@ fun EqualizerGraph(
                     onTap = { position ->
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
-                        val hit = nodes
+                        val hit = latestNodes
                             .filter { (position - nodePosition(it, w, h)).getDistance() <= NODE_HIT_RADIUS_PX }
                             .minByOrNull { (position - nodePosition(it, w, h)).getDistance() }
-                        onNodeSelect(hit?.id)
+                        latestOnNodeSelect(hit?.id)
                     }
                 )
             }

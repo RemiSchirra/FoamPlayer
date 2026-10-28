@@ -96,6 +96,7 @@ import com.foamplayer.app.ui.components.onSeekBarReleased
 import com.foamplayer.app.ui.modals.FoamBottomModal
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.log10
 import kotlin.math.pow
@@ -106,6 +107,7 @@ import kotlin.math.roundToInt
  * parametric EQ editor, tone/balance/virtualizer cards and system volume.
  *
  * Edits commit on release; graphs render from local working copies while dragging.
+ * Preset switches are eased on screen only — the engine applies them instantly.
  */
 @Composable
 fun EqualizerScreen(
@@ -137,8 +139,21 @@ fun EqualizerScreen(
 
     var workingGains by remember { mutableStateOf(state.graphicEq.gainsDb) }
     var workingNodes by remember { mutableStateOf(state.parametricEq.nodes) }
-    LaunchedEffect(state.graphicEq.gainsDb) { workingGains = state.graphicEq.gainsDb }
-    LaunchedEffect(state.parametricEq.nodes) { workingNodes = state.parametricEq.nodes }
+
+    // Preset changes hit the engine instantly; these eased copies are purely
+    // visual, so the faders, graph and mini map morph into the new shape instead
+    // of snapping. Live drags snap them (see below) to stay under the finger.
+    val displayedGains = remember { TweenedFloats(state.graphicEq.gainsDb) }
+    val displayedNodes = remember { TweenedNodes(state.parametricEq.nodes) }
+    LaunchedEffect(state.graphicEq.gainsDb) {
+        workingGains = state.graphicEq.gainsDb
+        displayedGains.animateTo(state.graphicEq.gainsDb)
+    }
+    LaunchedEffect(state.parametricEq.nodes) {
+        workingNodes = state.parametricEq.nodes
+        displayedNodes.animateTo(state.parametricEq.nodes)
+    }
+    val screenScope = rememberCoroutineScope()
 
     var bassValue by rememberSaveable { mutableFloatStateOf(state.tone.bassDb) }
     var bassApplied by rememberSaveable { mutableStateOf(state.tone.bassDb != 0f) }
@@ -167,29 +182,55 @@ fun EqualizerScreen(
         }
     }
 
-    val miniMapCurve = remember(selectedSection, state, workingGains, workingNodes) {
+    // Eased display copies of the tone knob values (bass/treble) and the fixed
+    // mid band, used by the knobs and the mini map's separated tone curves.
+    val bassDisplay = remember { TweenedFloat(bassValue) }
+    val trebleDisplay = remember { TweenedFloat(trebleValue) }
+    val midDisplay = remember { TweenedFloat(state.tone.midDb) }
+    LaunchedEffect(bassValue) { bassDisplay.animateTo(bassValue) }
+    LaunchedEffect(trebleValue) { trebleDisplay.animateTo(trebleValue) }
+    LaunchedEffect(state.tone.midDb) { midDisplay.animateTo(state.tone.midDb) }
+
+    // The pre-amp fader gets the same visual-only easing.
+    val preampDisplay = remember { TweenedFloat(state.preampDb) }
+    LaunchedEffect(state.preampDb) { preampDisplay.animateTo(state.preampDb) }
+
+    val tweenedGains = displayedGains.value
+    val tweenedNodes = displayedNodes.value
+
+    val miniMapCurve = remember(selectedSection, state, tweenedGains, tweenedNodes) {
         when (selectedSection) {
             DspMath.Section.GRAPHIC -> DspMath.sectionResponse(
                 state.copy(
-                    graphicEq = state.graphicEq.copy(enabled = true, gainsDb = workingGains)
+                    graphicEq = state.graphicEq.copy(enabled = true, gainsDb = tweenedGains)
                 ),
                 DspMath.Section.GRAPHIC
             )
             DspMath.Section.PARAMETRIC -> DspMath.sectionResponse(
-                state.copy(parametricEq = state.parametricEq.copy(nodes = workingNodes)),
+                state.copy(parametricEq = state.parametricEq.copy(nodes = tweenedNodes)),
                 DspMath.Section.PARAMETRIC
             )
         }
     }
 
+    val bassShownDb = bassDisplay.value
+    val trebleShownDb = trebleDisplay.value
+    val midShownDb = midDisplay.value
+
+    // The parametric graph's curve includes the fixed tone section, so feed it
+    // the eased tone values as well — a preset morphs the whole curve.
+    val tweenedToneState = state.copy(
+        tone = ToneSettings(bassDb = bassShownDb, midDb = midShownDb, trebleDb = trebleShownDb)
+    )
+
     val miniMapToneCurves = remember(
-        bassValue, bassApplied, trebleValue, trebleApplied, state.tone.midDb
+        bassShownDb, bassApplied, trebleShownDb, trebleApplied, midShownDb
     ) {
         DspMath.toneCurves(
             ToneSettings(
-                bassDb = bassValue,
-                midDb = state.tone.midDb,
-                trebleDb = trebleValue
+                bassDb = bassShownDb,
+                midDb = midShownDb,
+                trebleDb = trebleShownDb
             )
         ).map { (band, points) ->
             MiniMapToneCurve(
@@ -229,7 +270,7 @@ fun EqualizerScreen(
 
         EqMiniMap(
             combinedCurve = miniMapCurve,
-            nodes = if (selectedSection == DspMath.Section.PARAMETRIC) workingNodes else emptyList(),
+            nodes = if (selectedSection == DspMath.Section.PARAMETRIC) tweenedNodes else emptyList(),
             active = state.enabled,
             toneCurves = miniMapToneCurves,
             sectionActive = when (selectedSection) {
@@ -340,9 +381,14 @@ fun EqualizerScreen(
 
                 Row(modifier = Modifier.fillMaxWidth()) {
                     VerticalSlider(
-                        value = state.preampDb,
+                        value = preampDisplay.value,
                         onCommit = { viewModel.setPreampDb(it) },
-                        onValueChange = { viewModel.setPreampDb(it) },
+                        onValueChange = {
+                            viewModel.setPreampDb(it)
+                            screenScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                                preampDisplay.snapTo(it)
+                            }
+                        },
                         valueRange = DspState.MIN_PREAMP_DB..DspState.MAX_PREAMP_DB,
                         label = stringResource(R.string.eq_preamp),
                         valueText = { formatDb(it) },
@@ -354,25 +400,34 @@ fun EqualizerScreen(
 
                     when (selectedSection) {
                         DspMath.Section.GRAPHIC -> GraphicEqStrip(
-                            gains = workingGains,
+                            gains = tweenedGains,
                             enabled = state.graphicEq.enabled,
                             scrollState = stripScrollState,
                             onPreview = { index, gain ->
                                 workingGains = workingGains
                                     .toMutableList()
                                     .also { it[index] = gain }
+                                // A live drag overrides the preset easing.
+                                screenScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                                    displayedGains.snapTo(workingGains)
+                                }
                             },
                             onCommit = { viewModel.setGraphicGains(workingGains) },
                             onViewportWidthChanged = { stripViewportWidthPx = it },
                             modifier = Modifier.weight(1f)
                         )
                         DspMath.Section.PARAMETRIC -> EqualizerGraph(
-                            state = state,
-                            nodes = workingNodes,
+                            state = tweenedToneState,
+                            nodes = tweenedNodes,
                             enabled = state.parametricEq.enabled,
                             selectedNodeId = selectedNodeId,
                             onNodeSelect = { selectedNodeId = it },
-                            onNodesChange = { workingNodes = it },
+                            onNodesChange = { nodes ->
+                                workingNodes = nodes
+                                screenScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                                    displayedNodes.snapTo(nodes)
+                                }
+                            },
                             onNodeCommit = { node -> viewModel.updateParametricNode(node) },
                             modifier = Modifier.weight(1f)
                         )
@@ -410,11 +465,24 @@ fun EqualizerScreen(
             state = state,
             viewModel = viewModel,
             bassValue = bassValue,
-            onBassValueChange = { bassValue = it },
+            bassDisplayValue = bassShownDb,
+            onBassValueChange = { db ->
+                bassValue = db
+                // Live knob drag: follow the finger, don't ease.
+                screenScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    bassDisplay.snapTo(db)
+                }
+            },
             bassApplied = bassApplied,
             onBassAppliedChange = { bassApplied = it },
             trebleValue = trebleValue,
-            onTrebleValueChange = { trebleValue = it },
+            trebleDisplayValue = trebleShownDb,
+            onTrebleValueChange = { db ->
+                trebleValue = db
+                screenScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    trebleDisplay.snapTo(db)
+                }
+            },
             trebleApplied = trebleApplied,
             onTrebleAppliedChange = { trebleApplied = it },
             modifier = Modifier
@@ -837,10 +905,12 @@ private fun ControlsRow(
     viewModel: EqualizerViewModel,
     modifier: Modifier = Modifier,
     bassValue: Float,
+    bassDisplayValue: Float,
     onBassValueChange: (Float) -> Unit,
     bassApplied: Boolean,
     onBassAppliedChange: (Boolean) -> Unit,
     trebleValue: Float,
+    trebleDisplayValue: Float,
     onTrebleValueChange: (Float) -> Unit,
     trebleApplied: Boolean,
     onTrebleAppliedChange: (Boolean) -> Unit
@@ -850,6 +920,7 @@ private fun ControlsRow(
         val edgePadding = 8.dp
         val cardWidth = ((maxWidth - edgePadding * 2 - spacing * 2) / 3f) * 1.12f
         val knobSize = cardWidth - GlassCardPadding * 2
+        val scope = rememberCoroutineScope()
 
         var balanceValue by rememberSaveable { mutableFloatStateOf(state.balance) }
         var widthValue by rememberSaveable { mutableFloatStateOf(state.stereoWidth) }
@@ -878,6 +949,13 @@ private fun ControlsRow(
             }
         }
 
+        // Eased display copies for the balance/width knobs, so a preset morphs
+        // them; user drags snap them instead (see the callbacks below).
+        val balanceDisplay = remember { TweenedFloat(balanceValue) }
+        val widthDisplay = remember { TweenedFloat(widthValue) }
+        LaunchedEffect(balanceValue) { balanceDisplay.animateTo(balanceValue) }
+        LaunchedEffect(widthValue) { widthDisplay.animateTo(widthValue) }
+
         val balanceCenter = stringResource(R.string.eq_balance_center)
         val balanceLeft = stringResource(R.string.eq_balance_left)
         val balanceRight = stringResource(R.string.eq_balance_right)
@@ -896,7 +974,7 @@ private fun ControlsRow(
         ) {
             ControlCard(
                 name = stringResource(R.string.eq_bass_boost),
-                value = toneDbToPercent(bassValue),
+                value = toneDbToPercent(bassDisplayValue),
                 valueText = { formatPercent(it) },
                 minValue = 0f,
                 maxValue = KNOB_MAX_PERCENT,
@@ -918,7 +996,7 @@ private fun ControlsRow(
 
             ControlCard(
                 name = stringResource(R.string.eq_treble_boost),
-                value = toneDbToPercent(trebleValue),
+                value = toneDbToPercent(trebleDisplayValue),
                 valueText = { formatPercent(it) },
                 minValue = 0f,
                 maxValue = KNOB_MAX_PERCENT,
@@ -940,7 +1018,7 @@ private fun ControlsRow(
 
             ControlCard(
                 name = stringResource(R.string.eq_balance),
-                value = balanceValue,
+                value = balanceDisplay.value,
                 valueText = { balanceText(it) },
                 minValue = -DspState.MAX_BALANCE,
                 maxValue = DspState.MAX_BALANCE,
@@ -955,13 +1033,16 @@ private fun ControlsRow(
                     balanceValue = balance
                     balanceApplied = true
                     viewModel.setBalance(balance)
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                        balanceDisplay.snapTo(balance)
+                    }
                 },
                 modifier = Modifier.width(cardWidth)
             )
 
             ControlCard(
                 name = stringResource(R.string.eq_virtualizer),
-                value = widthValue,
+                value = widthDisplay.value,
                 valueText = { formatPercent(stereoWidthToPercent(it)) },
                 minValue = 1f,
                 maxValue = DspState.MAX_STEREO_WIDTH,
@@ -976,6 +1057,9 @@ private fun ControlsRow(
                     widthValue = width
                     widthApplied = true
                     viewModel.setStereoWidth(width)
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                        widthDisplay.snapTo(width)
+                    }
                 },
                 modifier = Modifier.width(cardWidth)
             )
@@ -1433,6 +1517,142 @@ private fun stereoWidthToPercent(width: Float): Float =
 private fun formatDb(db: Float): String = "%+.1f dB".format(db)
 
 private fun formatPercent(percent: Float): String = "%.0f%%".format(percent)
+
+// preset transition tween
+
+// A preset changes the engine instantly (as it must), but the screen should
+// morph into the new sound instead of snapping. These holders only own the
+// displayed value: the engine is never touched, and a live drag snaps them so
+// the controls stay locked to the finger.
+
+/** Duration of the visual-only preset transition across the EQ screen. */
+private const val PRESET_TRANSITION_MS = 200
+
+/** Displayed scalar eased toward preset changes, or snapped for live drags. */
+private class TweenedFloat(initial: Float) {
+    private val animatable = Animatable(initial)
+    private var target = initial
+
+    val value: Float get() = animatable.value
+
+    suspend fun animateTo(newTarget: Float) {
+        if (newTarget == target) return
+        target = newTarget
+        animatable.animateTo(
+            newTarget,
+            tween(durationMillis = PRESET_TRANSITION_MS, easing = FastOutSlowInEasing)
+        )
+    }
+
+    suspend fun snapTo(newValue: Float) {
+        if (newValue == target && animatable.value == newValue) return
+        target = newValue
+        animatable.snapTo(newValue)
+    }
+}
+
+/**
+ * Displayed float list eased toward preset changes. When the list length changes
+ * (band-layout switch) the target is shown directly — there is no sensible
+ * per-band pairing across layouts.
+ */
+private class TweenedFloats(initial: List<Float>) {
+    private val progress = Animatable(1f)
+    private var from by mutableStateOf(initial)
+    private var to by mutableStateOf(initial)
+
+    val value: List<Float>
+        get() {
+            val fraction = progress.value
+            if (fraction >= 1f || from.size != to.size) return to
+            return List(to.size) { index ->
+                val start = from[index]
+                start + (to[index] - start) * fraction
+            }
+        }
+
+    suspend fun animateTo(target: List<Float>) {
+        if (target == to) return
+        // No per-band pairing exists across a band-layout change: snap.
+        if (target.size != to.size) {
+            from = target
+            to = target
+            progress.snapTo(1f)
+            return
+        }
+        val start = value
+        from = start
+        to = target
+        progress.snapTo(0f)
+        progress.animateTo(
+            1f,
+            tween(durationMillis = PRESET_TRANSITION_MS, easing = FastOutSlowInEasing)
+        )
+    }
+
+    suspend fun snapTo(target: List<Float>) {
+        if (target == to && progress.value >= 1f) return
+        from = target
+        to = target
+        progress.snapTo(1f)
+    }
+}
+
+/**
+ * Displayed parametric node list eased toward preset changes. Nodes are paired
+ * by index (preset layouts have no stable ids across applies); a node's type and
+ * color switch with the target, while frequency, gain, Q and slope move.
+ */
+private class TweenedNodes(initial: List<ParametricNode>) {
+    private val progress = Animatable(1f)
+    private var from by mutableStateOf(initial)
+    private var to by mutableStateOf(initial)
+
+    val value: List<ParametricNode>
+        get() {
+            val fraction = progress.value
+            if (fraction >= 1f || from.size != to.size) return to
+            return List(to.size) { index -> tweenNode(from[index], to[index], fraction) }
+        }
+
+    suspend fun animateTo(target: List<ParametricNode>) {
+        if (target == to) return
+        // Adding/removing nodes has no per-node pairing: snap.
+        if (target.size != to.size) {
+            from = target
+            to = target
+            progress.snapTo(1f)
+            return
+        }
+        val start = value
+        from = start
+        to = target
+        progress.snapTo(0f)
+        progress.animateTo(
+            1f,
+            tween(durationMillis = PRESET_TRANSITION_MS, easing = FastOutSlowInEasing)
+        )
+    }
+
+    suspend fun snapTo(target: List<ParametricNode>) {
+        if (target == to && progress.value >= 1f) return
+        from = target
+        to = target
+        progress.snapTo(1f)
+    }
+}
+
+/** Lerps a node's movable parameters; identity fields come from [to]. */
+private fun tweenNode(from: ParametricNode, to: ParametricNode, fraction: Float): ParametricNode {
+    fun lerp(start: Float, end: Float) = start + (end - start) * fraction
+    return to.copy(
+        // Log-space so the node moves at a constant speed across the log axis.
+        frequencyHz = exp(lerp(ln(from.frequencyHz), ln(to.frequencyHz))),
+        gainDb = lerp(from.gainDb, to.gainDb),
+        q = lerp(from.q, to.q),
+        slope = lerp(from.slope, to.slope)
+    )
+}
 
 internal fun frequencyDisplay(hz: Float): String =
     if (hz >= 1000f) "%.1f kHz".format(hz / 1000f) else "%.0f Hz".format(hz)
