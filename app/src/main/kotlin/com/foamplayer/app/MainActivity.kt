@@ -20,7 +20,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,6 +38,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import com.foamplayer.app.audio.service.PlaybackService
 import com.foamplayer.app.constants.CollectionHeroTarget
+import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.ThemeMode
 import com.foamplayer.app.ui.components.LocalDefaultCollectionHeroLayout
 import com.foamplayer.app.ui.navigation.FoamNavHost
@@ -46,6 +46,7 @@ import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
+import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
@@ -601,31 +602,24 @@ private fun FoamApp(
         ThemeMode.LIGHT -> false
     }
 
-    val albumArtPath by playerViewModel.currentAlbumArtPath.collectAsState()
-    val dynamicAccentColor by playerViewModel.dynamicAccentColor.collectAsState()
-
-    val accentColor = rememberAccentColor(
-        isAutomaticColor = settings.automaticColorEnabled,
-        manualAccentColor = settings.accentColor,
-        dynamicAccentColor = dynamicAccentColor,
-        albumArtPath = albumArtPath
-    )
-
     CompositionLocalProvider(
         LocalAutomaticColorEnabled provides settings.automaticColorEnabled,
         LocalDefaultCollectionHeroLayout provides settings.collectionHeroLayout(CollectionHeroTarget.Default)
     ) {
-        FoamTheme(
+        AccentThemedApp(
             darkTheme = darkTheme,
             iconStyle = settings.iconStyle,
             miniPlayerRounding = settings.miniPlayerRounding / 100f,
             fullPlayerRounding = settings.fullPlayerRounding / 100f,
-            accentColor = accentColor
+            accentTintEnabled = settings.accentTintEnabled,
+            isAutomaticColor = settings.automaticColorEnabled,
+            manualAccentColor = settings.accentColor,
+            playerViewModel = playerViewModel
         ) {
             if (onboardingCompleted == null) {
                 // Hold a blank frame while settings load, never flash onboarding over
                 // an existing user's library.
-                Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
+                Box(modifier = Modifier.fillMaxSize().foamBackground())
             } else {
                 FoamNavHost(
                     modifier = Modifier.fillMaxSize(),
@@ -635,6 +629,47 @@ private fun FoamApp(
             }
         }
     }
+}
+
+/**
+ * Isolates the per-frame accent reads from the rest of the tree. The dynamic
+ * accent (and the album art path feeding its extraction) change every frame
+ * during a track swipe; reading them here -- in a scope that contains only
+ * the accent resolution and the theme -- keeps FoamApp's own scope and the
+ * navigation subtree from re-executing at display frequency. Per-frame
+ * recomposition is confined to this wrapper and [FoamTheme] itself.
+ */
+@Composable
+private fun AccentThemedApp(
+    darkTheme: Boolean,
+    iconStyle: FoamIconStyle,
+    miniPlayerRounding: Float,
+    fullPlayerRounding: Float,
+    accentTintEnabled: Boolean,
+    isAutomaticColor: Boolean,
+    manualAccentColor: Int,
+    playerViewModel: PlayerViewModel,
+    content: @Composable () -> Unit
+) {
+    val albumArtPath by playerViewModel.currentAlbumArtPath.collectAsState()
+    val dynamicAccentColor by playerViewModel.dynamicAccentColor.collectAsState()
+
+    val accentColor = rememberAccentColor(
+        isAutomaticColor = isAutomaticColor,
+        manualAccentColor = manualAccentColor,
+        dynamicAccentColor = dynamicAccentColor,
+        albumArtPath = albumArtPath
+    )
+
+    FoamTheme(
+        darkTheme = darkTheme,
+        iconStyle = iconStyle,
+        miniPlayerRounding = miniPlayerRounding,
+        fullPlayerRounding = fullPlayerRounding,
+        accentColor = accentColor,
+        accentTintEnabled = accentTintEnabled,
+        content = content
+    )
 }
 
 /**

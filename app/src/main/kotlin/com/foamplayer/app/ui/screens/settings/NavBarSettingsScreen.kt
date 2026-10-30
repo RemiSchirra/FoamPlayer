@@ -1,8 +1,7 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +52,9 @@ import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurfaceBlend
+import com.foamplayer.app.ui.theme.foamSurface
 
 /** Which of the two bars a drag gesture belongs to. */
 private enum class NavBarSection { PRIMARY, SECONDARY }
@@ -138,7 +140,7 @@ fun NavBarSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.navigation_bar),
@@ -180,7 +182,7 @@ fun NavBarSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                     ) {
                         FoamSwitchItem(
                             title = stringResource(R.string.transparent_when_player_open),
@@ -378,16 +380,19 @@ private fun NavBarSettingsItem(
     isDragging: Boolean,
     dragHandleModifier: Modifier
 ) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isDragging) FoamTheme.colors.surfaceVariant else FoamTheme.colors.surface,
-        label = "navBarItemDragBackground"
+    // Drag feedback blends surface -> surfaceVariant as a float; the blend and
+    // its accent tint are resolved in the draw pass (see [foamSurfaceBlend]),
+    // so neither the drag animation nor an animating accent recomposes the row.
+    val dragBlend by animateFloatAsState(
+        targetValue = if (isDragging) 1f else 0f,
+        label = "navBarItemDragBackgroundBlend"
     )
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(backgroundColor)
+            .foamSurfaceBlend(dragBlend)
     ) {
         Row(
             modifier = Modifier

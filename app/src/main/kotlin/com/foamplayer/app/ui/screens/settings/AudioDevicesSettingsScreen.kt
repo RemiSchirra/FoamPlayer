@@ -50,6 +50,8 @@ import com.foamplayer.app.audio.device.DeviceBitPerfectMode
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * Output devices subscreen of the Audio settings: every attached output with its
@@ -67,7 +69,7 @@ fun AudioDevicesSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.output_devices),
@@ -87,7 +89,7 @@ fun AudioDevicesSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                             .padding(FoamDimens.paddingMedium)
                     ) {
                         BasicText(
@@ -144,7 +146,7 @@ private fun DeviceConfigCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

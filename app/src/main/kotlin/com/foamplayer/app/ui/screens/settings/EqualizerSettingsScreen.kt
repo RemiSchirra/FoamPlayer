@@ -20,6 +20,7 @@ import com.foamplayer.app.ui.components.FoamEnumItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
 
 /**
  * Equalizer settings (subscreen of Settings > Audio): the ISO band layout of
@@ -37,7 +38,7 @@ fun EqualizerSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.equalizer_dsp),

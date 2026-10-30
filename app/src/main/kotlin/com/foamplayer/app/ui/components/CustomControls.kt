@@ -28,6 +28,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurface
 import kotlin.math.round
 
 /** Simple surface card with rounded corners. */
@@ -41,7 +42,7 @@ fun FoamGlassCard(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(cornerRadius))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .padding(contentPadding)
     ) {
         content()

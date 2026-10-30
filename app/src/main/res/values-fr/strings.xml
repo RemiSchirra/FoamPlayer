@@ -369,6 +369,8 @@
 
     <string name="automatic_color">Couleur automatique</string>
     <string name="automatic_color_desc">Extraire la couleur d\'accentuation de la pochette</string>
+    <string name="accent_tint">Teinte d\'accentuation</string>
+    <string name="accent_tint_desc">Mélanger la couleur d\'accentuation aux arrière-plans et aux conteneurs</string>
 
     <string name="theme">Thème</string>
     <string name="theme_follow_system">Suivre le système</string>

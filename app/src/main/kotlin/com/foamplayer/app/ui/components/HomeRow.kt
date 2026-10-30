@@ -49,6 +49,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 private val HomeRowEdgePadding = 24.dp
 private val HomeRowHeaderButtonGap = 16.dp
@@ -235,7 +236,7 @@ fun HomeRowCard(
                     else it.shadow(elevation = MediaItemArtElevation, shape = artShape)
                 }
                 .let { if (immersiveFlightHero) it else it.clip(artShape) }
-                .background(FoamTheme.colors.surfaceVariant),
+                .foamSurfaceVariant(),
             contentAlignment = Alignment.Center
         ) {
             if (imageUrl != null) {

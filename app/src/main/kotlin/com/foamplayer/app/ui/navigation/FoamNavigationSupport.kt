@@ -32,6 +32,7 @@ import com.foamplayer.app.ui.screens.player.CustomImageBackground
 import com.foamplayer.app.ui.screens.player.DynamicAlbumArtBackground
 import com.foamplayer.app.ui.screens.player.GradientBackground
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
 
 /**
  * Top-level support for [FoamNavHost]: transition timing, the background-layer subsystem and the
@@ -152,7 +153,7 @@ internal fun NavGraphBuilder.composable(
                     if (paintsOpaqueSurface) {
                         Modifier
                             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                            .background(FoamTheme.colors.background)
+                            .foamBackground()
                     } else {
                         Modifier
                     }

@@ -70,6 +70,7 @@ import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 import com.foamplayer.app.update.UpdateManager
 import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsDetailsViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -353,7 +354,7 @@ fun FoamNavHost(
             LocalSearchFocusRequest provides searchFocusRequest,
             LocalBackgroundSettingsPreview provides backgroundSettingsPreview
         ) {
-            Box(modifier = modifier.fillMaxSize().background(FoamTheme.colors.background)) {
+            Box(modifier = modifier.fillMaxSize().foamBackground()) {
 
                 var navZoneHeightPx by remember { mutableStateOf(0) }
                 val onBackgroundTransition = AppBackdrop(

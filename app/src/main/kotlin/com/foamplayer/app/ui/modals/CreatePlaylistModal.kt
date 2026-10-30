@@ -70,6 +70,8 @@ import coil.compose.AsyncImage
 import com.foamplayer.app.R
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 private val M3uMimeTypes = arrayOf(
     "audio/x-mpegurl",
@@ -225,7 +227,7 @@ fun CreatePlaylistModal(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                            .background(FoamTheme.colors.surfaceVariant)
+                            .foamSurfaceVariant()
                     ) {
                         CoverImageRow(
                             imageUri = coverUri,
@@ -245,7 +247,7 @@ fun CreatePlaylistModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                    .background(FoamTheme.colors.surfaceVariant)
+                    .foamSurfaceVariant()
             ) {
                 SourceOptionRow(
                     title = stringResource(R.string.from_m3u_playlist),
@@ -328,7 +330,7 @@ internal fun PlaylistNameField(
         modifier = modifier
             .fillMaxWidth()
             .clip(CircleShape)
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .padding(horizontal = FoamDimens.paddingLarge, vertical = FoamDimens.spacingStandard),
         contentAlignment = Alignment.CenterStart
     ) {
@@ -383,7 +385,7 @@ private fun CoverImageRow(
             modifier = Modifier
                 .size(40.dp)
                 .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                .background(FoamTheme.colors.background),
+                .foamBackground(),
             contentAlignment = Alignment.Center
         ) {
             if (imageUri != null) {
@@ -581,7 +583,7 @@ fun MissingSongsModal(
                         .fillMaxWidth()
                         .heightIn(max = 260.dp)
                         .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                        .background(FoamTheme.colors.surfaceVariant)
+                        .foamSurfaceVariant()
                         .verticalScroll(rememberScrollState())
                         .padding(vertical = FoamDimens.spacingSmall),
                     verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingTiny)
@@ -606,7 +608,7 @@ fun MissingSongsModal(
                             .fillMaxWidth()
                             .height(FoamDimens.spacingTiny)
                             .clip(RoundedCornerShape(FoamDimens.spacingTiny / 2))
-                            .background(FoamTheme.colors.surfaceVariant)
+                            .foamSurfaceVariant()
                     ) {
                         Box(
                             modifier = Modifier

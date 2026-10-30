@@ -64,6 +64,8 @@ import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.pressShrink
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
 
@@ -412,7 +414,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                 shape = RoundedCornerShape(containerRadius)
                 clip = true
             }
-            .background(FoamTheme.colors.background.copy(alpha = 0.2f))
+            .foamBackground(alpha = 0.2f)
             .clickable(
                 interactionSource = headerInteractions,
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -453,7 +455,7 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                                 0f
                             }
                         }
-                        .background(FoamTheme.colors.surfaceVariant)
+                        .foamSurfaceVariant()
                 ) {
                     if (headerTrack.albumArtPath != null) {
                         AsyncImage(

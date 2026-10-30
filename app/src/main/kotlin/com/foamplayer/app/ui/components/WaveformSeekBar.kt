@@ -32,6 +32,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.LocalAccentTintState
+import com.foamplayer.app.ui.theme.SurfaceVariantAccentTint
 import com.foamplayer.app.ui.utils.WaveformState
 import kotlinx.coroutines.delay
 import kotlin.math.max
@@ -113,6 +115,9 @@ fun WaveformSeekBar(
     growFactor: Float = 1.5f,
     isDragging: Boolean = false
 ) {
+    // The inactive bars pick up the live accent tint resolved at draw time so
+    // they match the tinted containers they sit on (see [AccentTintState]).
+    val tint = LocalAccentTintState.current
     val currentOnValueChange by rememberUpdatedState(onValueChange)
 
     // The bar tracks its own press state so the grow works even when the host
@@ -304,7 +309,7 @@ fun WaveformSeekBar(
                         }
                     }
 
-                    drawBars(inactiveColor)
+                    drawBars(tint.resolve(inactiveColor, SurfaceVariantAccentTint))
                     val fraction = value().coerceIn(0f, 1f)
                     if (fraction > 0f) {
                         // Full-height clip: the mask edge cuts the straddling

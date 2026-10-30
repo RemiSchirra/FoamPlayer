@@ -103,6 +103,12 @@ data class AppSettings(
     val genreSeparators: Set<String> = DEFAULT_SEPARATORS,
     val automaticColorEnabled: Boolean = true,
     val accentColor: Int = DEFAULT_ACCENT_COLOR,
+    /**
+     * Blends the current accent color into the app's backgrounds and containers.
+     * The base palette is kept; the accent only adds a subtle tint on top, which
+     * follows the live (per-track when Automatic Color is on) accent.
+     */
+    val accentTintEnabled: Boolean = true,
     val immersiveModeEnabled: Boolean = true,
     val animateSeekBarEnabled: Boolean = false,
     /** Visual style of the full player's seek bar (the mini player keeps the classic bar). */

@@ -73,6 +73,9 @@ import com.foamplayer.app.ui.modals.RepairPlaylistsResultModal
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlin.math.roundToInt
 
 /** Which separator list the add-separator dialog is open for; null = closed. */
@@ -111,7 +114,7 @@ fun LibrarySettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.library),
@@ -186,7 +189,7 @@ fun LibrarySettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     FoamSliderStateItem(
                         title = stringResource(R.string.listened_threshold),
@@ -216,7 +219,7 @@ fun LibrarySettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                         .indication(
                             interactionSource = switchInteraction,
                             indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary)
@@ -323,7 +326,7 @@ fun LibrarySettingsScreen(
                                             .fillMaxWidth()
                                             .height(FoamDimens.spacingTiny)
                                             .clip(RoundedCornerShape(FoamDimens.spacingTiny / 2))
-                                            .background(FoamTheme.colors.surfaceVariant)
+                                            .foamSurfaceVariant()
                                     ) {
                                         Box(
                                             modifier = Modifier
@@ -350,7 +353,7 @@ fun LibrarySettingsScreen(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                            .background(FoamTheme.colors.surfaceVariant)
+                                            .foamSurfaceVariant()
                                             .clickable(
                                                 interactionSource = remember { MutableInteractionSource() },
                                                 indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
@@ -435,7 +438,7 @@ private fun SeparatorListSection(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .padding(horizontal = FoamDimens.paddingMedium)
             .padding(top = FoamDimens.spacingSmall, bottom = FoamDimens.paddingMedium)
     ) {
@@ -495,7 +498,7 @@ private fun SeparatorChip(
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .padding(horizontal = FoamDimens.spacingMedium, vertical = FoamDimens.spacingTiny)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -544,7 +547,7 @@ private fun AddSeparatorDialog(
         Column(
             modifier = Modifier
                 .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                .background(FoamTheme.colors.surface)
+                .foamSurface()
                 .padding(FoamDimens.spacingMedium),
             verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
         ) {

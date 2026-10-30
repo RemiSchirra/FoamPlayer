@@ -24,6 +24,9 @@ import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * Behavior settings (subscreen of Settings > Audio): automatic playback
@@ -40,7 +43,7 @@ fun AudioBehaviorSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.audio_behavior),
@@ -60,7 +63,7 @@ fun AudioBehaviorSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     Column {
                         FoamSwitchItem(
@@ -97,6 +100,6 @@ private fun SectionDivider() {
         modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(FoamTheme.colors.borderOverlay)
+            .foamBorderOverlay()
     )
 }

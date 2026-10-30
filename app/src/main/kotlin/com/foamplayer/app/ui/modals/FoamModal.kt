@@ -60,6 +60,7 @@ import androidx.compose.ui.window.DialogWindowProvider
 import android.view.WindowManager
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurface
 import kotlin.math.abs
 
 /**
@@ -406,7 +407,7 @@ fun FoamBottomModal(
                             layout(placeable.width, placeable.height) { placeable.place(0, 0) }
                         }
                         .clip(RoundedCornerShape(cornerRadius))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                         // Swallow taps here so they don't fall through to the scrim below.
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },

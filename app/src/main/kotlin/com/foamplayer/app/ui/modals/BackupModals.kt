@@ -46,6 +46,8 @@ import com.foamplayer.app.R
 import com.foamplayer.app.data.backup.BackupFeature
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 /** Which backup sheet is open on the main settings screen. */
 enum class BackupModalType { NONE, EXPORT, IMPORT }
@@ -404,7 +406,7 @@ private fun PickerCard(content: @Composable () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
     ) {
         content()
     }
@@ -430,7 +432,7 @@ private fun FeatureList(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
     ) {
         BackupFeature.entries.forEachIndexed { index, feature ->
             if (index > 0) ModalSectionDivider()
@@ -534,7 +536,7 @@ private fun PickerRow(
             modifier = Modifier
                 .size(40.dp)
                 .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                .background(FoamTheme.colors.background),
+                .foamBackground(),
             contentAlignment = Alignment.Center
         ) {
             Icon(

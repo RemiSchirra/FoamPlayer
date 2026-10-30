@@ -107,6 +107,7 @@ class SettingsRepository @Inject constructor(
     suspend fun setMarqueeMode(mode: MarqueeMode) = update { it.copy(marqueeMode = mode) }
     suspend fun setAutomaticColorEnabled(enabled: Boolean) = update { it.copy(automaticColorEnabled = enabled) }
     suspend fun setAccentColor(color: Int) = update { it.copy(accentColor = color) }
+    suspend fun setAccentTintEnabled(enabled: Boolean) = update { it.copy(accentTintEnabled = enabled) }
     suspend fun setImmersiveModeEnabled(enabled: Boolean) = update { it.copy(immersiveModeEnabled = enabled) }
     suspend fun setAnimateSeekBarEnabled(enabled: Boolean) = update { it.copy(animateSeekBarEnabled = enabled) }
     suspend fun setSeekBarStyle(style: SeekBarStyle) = update { it.copy(seekBarStyle = style) }
@@ -373,6 +374,7 @@ class SettingsRepository @Inject constructor(
         genreSeparators = this[Keys.GENRE_SEPARATORS] ?: AppSettings.DEFAULT_SEPARATORS,
         automaticColorEnabled = this[Keys.AUTOMATIC_COLOR] ?: AppSettings().automaticColorEnabled,
         accentColor = this[Keys.ACCENT_COLOR] ?: AppSettings.DEFAULT_ACCENT_COLOR,
+        accentTintEnabled = this[Keys.ACCENT_TINT] ?: AppSettings().accentTintEnabled,
         immersiveModeEnabled = this[Keys.IMMERSIVE_MODE] ?: AppSettings().immersiveModeEnabled,
         animateSeekBarEnabled = this[Keys.ANIMATE_SEEK_BAR] ?: AppSettings().animateSeekBarEnabled,
         seekBarStyle = this[Keys.SEEK_BAR_STYLE]
@@ -492,6 +494,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.GENRE_SEPARATORS] = settings.genreSeparators
         this[Keys.AUTOMATIC_COLOR] = settings.automaticColorEnabled
         this[Keys.ACCENT_COLOR] = settings.accentColor
+        this[Keys.ACCENT_TINT] = settings.accentTintEnabled
         this[Keys.IMMERSIVE_MODE] = settings.immersiveModeEnabled
         this[Keys.ANIMATE_SEEK_BAR] = settings.animateSeekBarEnabled
         this[Keys.SEEK_BAR_STYLE] = settings.seekBarStyle.name
@@ -573,6 +576,7 @@ class SettingsRepository @Inject constructor(
         val LAST_GENRE_SEPARATORS = stringSetPreferencesKey("last_scan_genre_separators")
         val AUTOMATIC_COLOR = booleanPreferencesKey("automatic_color")
         val ACCENT_COLOR = intPreferencesKey("accent_color")
+        val ACCENT_TINT = booleanPreferencesKey("accent_tint")
         val IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
         val ANIMATE_SEEK_BAR = booleanPreferencesKey("animate_seek_bar")
         val SEEK_BAR_STYLE = stringPreferencesKey("seek_bar_style")

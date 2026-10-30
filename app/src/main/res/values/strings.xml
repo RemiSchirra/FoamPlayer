@@ -372,6 +372,8 @@
 
     <string name="automatic_color">Automatic Color</string>
     <string name="automatic_color_desc">Extract accent color from album art</string>
+    <string name="accent_tint">Accent Tint</string>
+    <string name="accent_tint_desc">Blend the accent color into backgrounds and containers</string>
 
     <string name="theme">Theme</string>
     <string name="theme_follow_system">Follow system</string>

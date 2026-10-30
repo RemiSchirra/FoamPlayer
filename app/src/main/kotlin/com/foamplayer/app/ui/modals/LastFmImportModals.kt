@@ -31,6 +31,7 @@ import com.foamplayer.app.lastfm.LastFmUnmatchedTrack
 import com.foamplayer.app.ui.screens.settings.LastFmImportUiState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 /**
  * First sheet of the import flow: choose whether the current listening history
@@ -318,7 +319,7 @@ private fun ImportProgressBar(progress: Float) {
             .padding(horizontal = FoamDimens.paddingSmall)
             .height(FoamDimens.spacingTiny)
             .clip(RoundedCornerShape(FoamDimens.spacingTiny / 2))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
     ) {
         Box(
             modifier = Modifier

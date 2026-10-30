@@ -7,7 +7,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -40,6 +39,9 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalMiniPlayerRoundingPreview
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 import kotlin.math.roundToInt
 
 @Composable
@@ -74,7 +76,7 @@ fun PlayerSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.player),
@@ -96,7 +98,7 @@ fun PlayerSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                     ) {
                         FoamSwitchItem(
                             title = stringResource(R.string.auto_open_player),
@@ -119,7 +121,7 @@ fun PlayerSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                     ) {
                         Column {
                             FoamSwitchItem(
@@ -135,7 +137,7 @@ fun PlayerSettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
+                                    .foamBorderOverlay()
                             )
                             FoamSwitchItem(
                                 title = stringResource(R.string.animate_seek_bar),
@@ -153,7 +155,7 @@ fun PlayerSettingsScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(FoamDimens.separatorHeight)
-                                            .background(FoamTheme.colors.borderOverlay)
+                                            .foamBorderOverlay()
                                     )
                                     FoamSwitchItem(
                                         title = stringResource(R.string.animated_cover),
@@ -174,7 +176,7 @@ fun PlayerSettingsScreen(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .height(FoamDimens.separatorHeight)
-                                                    .background(FoamTheme.colors.borderOverlay)
+                                                    .foamBorderOverlay()
                                             )
                                             FoamSwitchItem(
                                                 title = stringResource(R.string.animated_cover_mobile_data),
@@ -225,7 +227,7 @@ fun PlayerSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                     ) {
                         Column {
                             FoamSliderStateItem(
@@ -244,7 +246,7 @@ fun PlayerSettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
+                                    .foamBorderOverlay()
                             )
                             FoamSliderStateItem(
                                 title = stringResource(R.string.full_player),

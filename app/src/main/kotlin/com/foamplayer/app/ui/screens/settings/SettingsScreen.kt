@@ -47,6 +47,8 @@ import com.foamplayer.app.ui.modals.ImportSettingsModal
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurface
 
 @Composable
 fun SettingsScreen(
@@ -68,7 +70,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         Box(
             modifier = Modifier.padding(
@@ -231,7 +233,7 @@ fun SettingsCategoryItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -276,7 +278,7 @@ fun SettingsHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (transparent) Modifier else Modifier.background(FoamTheme.colors.background))
+            .then(if (transparent) Modifier else Modifier.foamBackground())
             .padding(vertical = FoamDimens.paddingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {

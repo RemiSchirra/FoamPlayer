@@ -63,6 +63,10 @@ import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.adaptAccentForTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import androidx.core.net.toUri
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
@@ -241,7 +245,7 @@ fun TrackFoamModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .foamSurfaceVariant()
                             ) {
                                 ModalRowButton(
                                     label = stringResource(R.string.lyrics),
@@ -260,7 +264,7 @@ fun TrackFoamModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .foamSurfaceVariant()
                             ) {
                                 ModalBackButton(onBack = { page = TrackModalPage.ACTIONS })
                             }
@@ -280,7 +284,7 @@ fun TrackFoamModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .foamSurfaceVariant()
                                     .padding(
                                         horizontal = FoamDimens.paddingSmall,
                                         vertical = FoamDimens.spacingTiny
@@ -310,7 +314,7 @@ fun TrackFoamModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .foamSurfaceVariant()
                             ) {
                                 ModalRowButton(
                                     label = stringResource(R.string.see_artist),
@@ -335,7 +339,7 @@ fun TrackFoamModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .foamSurfaceVariant()
                             ) {
                                 ModalRowButton(
                                     label = stringResource(R.string.details),
@@ -481,7 +485,7 @@ fun PlaylistPickerModal(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                            .background(FoamTheme.colors.surfaceVariant)
+                            .foamSurfaceVariant()
                     ) {
                         playlists.forEachIndexed { index, playlist ->
                             if (index > 0) ModalSectionDivider()
@@ -552,7 +556,7 @@ private fun PlaylistPickerRow(
             modifier = Modifier
                 .size(48.dp)
                 .clip(RoundedCornerShape(albumArtCornerRadius(48.dp)))
-                .background(FoamTheme.colors.surface),
+                .foamSurface(),
             contentAlignment = Alignment.Center
         ) {
             if (coverImageUrl != null) {
@@ -618,7 +622,7 @@ internal fun ModalSectionDivider() {
             .fillMaxWidth()
             .padding(horizontal = FoamDimens.paddingMedium)
             .height(FoamDimens.separatorHeight)
-            .background(FoamTheme.colors.borderOverlay)
+            .foamBorderOverlay()
     )
 }
 
@@ -635,7 +639,7 @@ internal fun TrackModalHeader(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(FoamTheme.colors.background)
+            .foamBackground()
             .padding(FoamDimens.spacingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -643,7 +647,7 @@ internal fun TrackModalHeader(
             modifier = Modifier
                 .size(64.dp)
                 .clip(RoundedCornerShape(albumArtCornerRadius(64.dp)))
-                .background(FoamTheme.colors.surfaceVariant),
+                .foamSurfaceVariant(),
             contentAlignment = Alignment.Center
         ) {
             if (track.albumArtPath != null) {

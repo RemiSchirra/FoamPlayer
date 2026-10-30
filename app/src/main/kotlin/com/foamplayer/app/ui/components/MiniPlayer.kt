@@ -61,6 +61,8 @@ import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.navigation.NavBarDimens
 import com.foamplayer.app.ui.screens.player.PlayerDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import kotlin.math.abs
@@ -230,7 +232,10 @@ private fun MiniPlayerProgressSlider(
         },
         trackHeight = 4.dp,
         activeColor = activeColor,
-        inactiveColor = FoamTheme.colors.surface,
+        // Tint-aware one-shot read: the track must match the tinted card it
+        // sits on. The slider scope already reads the accent (activeColor
+        // above), so this adds no recomposition beyond what already happens.
+        inactiveColor = FoamTheme.tintedSurface,
         growFactor = 1f,
         modifier = modifier.onSeekBarReleased {
             val released = dragValue
@@ -673,7 +678,7 @@ fun MiniPlayer(
                 .clip(RoundedCornerShape(containerRadius))
                 .then(
                     if (showContainer) {
-                        Modifier.background(FoamTheme.colors.surfaceVariant)
+                        Modifier.foamSurfaceVariant()
                     } else Modifier
                 )
                 .padding(containerPadding)
@@ -740,7 +745,7 @@ fun MiniPlayer(
                                             0f
                                         }
                                     }
-                                    .background(FoamTheme.colors.surface),
+                                    .foamSurface(),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (pageTrack.albumArtPath != null) {

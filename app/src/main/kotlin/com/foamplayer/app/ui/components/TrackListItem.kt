@@ -66,6 +66,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.TimeUtils
 import kotlin.math.abs
 import kotlin.math.max
@@ -227,11 +228,11 @@ fun TrackListItem(
                     immersive = immersiveArt,
                     restArtElevation = MediaItemArtElevation
                 )
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         } else {
             sharedArtworkBase
                 .clip(AlbumArtShape())
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         }
         Box(
             modifier = modifier
@@ -496,11 +497,11 @@ fun TrackListItem(
                     immersive = immersiveArt,
                     restArtElevation = MediaItemArtElevation
                 )
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         } else {
             sharedArtworkBase
                 .clip(RoundedCornerShape(listRowArtCornerRadius(density)))
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         }
     } else {
         Modifier

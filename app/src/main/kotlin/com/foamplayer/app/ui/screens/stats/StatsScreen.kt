@@ -93,6 +93,7 @@ import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -632,7 +633,7 @@ internal fun TopTrackRow(
         onLongClick = onLongClick,
         artworkModifier = Modifier
             .clip(RoundedCornerShape(listRowArtCornerRadius()))
-            .background(FoamTheme.colors.surfaceVariant),
+            .foamSurfaceVariant(),
         artworkContent = {
             val model = albumArtModel(entry.track.albumArtPath)
             if (model != null) {
@@ -686,7 +687,7 @@ internal fun TopArtistRow(
                 .isImmersive,
             fullyRounded = true
         )
-        .background(FoamTheme.colors.surfaceVariant)
+        .foamSurfaceVariant()
     val sharedTitleModifier = Modifier.rowSharedText(
         key = "artist-title-$elementKey",
         sharedTransitionScope = sharedTransitionScope,
@@ -773,7 +774,7 @@ internal fun TopAlbumRow(
                 .isImmersive,
             castsFlightShadow = true
         )
-        .background(FoamTheme.colors.surfaceVariant)
+        .foamSurfaceVariant()
     val sharedTitleModifier = Modifier.rowSharedText(
         key = "album-title-$elementKey",
         sharedTransitionScope = sharedTransitionScope,
@@ -859,7 +860,7 @@ private fun GenreBar(genre: GenreStat, maxPlays: Int) {
                 .fillMaxWidth()
                 .height(6.dp)
                 .clip(RoundedCornerShape(3.dp))
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         ) {
             Box(
                 modifier = Modifier

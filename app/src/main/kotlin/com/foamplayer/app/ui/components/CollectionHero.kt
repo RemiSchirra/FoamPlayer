@@ -107,6 +107,8 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 /** Immersive hero image height, as a fraction of the full screen height. */
 const val CollectionHeroImmersiveHeightFraction = 0.5f
@@ -675,7 +677,7 @@ private fun CollectionHeroCompact(
                         fullyRounded = fullyRoundedArtwork
                     )
                     .clip(heroArtworkShape(fullyRoundedArtwork))
-                    .background(FoamTheme.colors.surfaceVariant),
+                    .foamSurfaceVariant(),
                 contentAlignment = Alignment.Center
             ) {
                 CollectionHeroArtworkContent(
@@ -775,7 +777,7 @@ private fun CollectionHeroNormal(
                     fullyRounded = fullyRoundedArtwork
                 )
                 .clip(heroArtworkShape(fullyRoundedArtwork))
-                .background(FoamTheme.colors.surfaceVariant),
+                .foamSurfaceVariant(),
             contentAlignment = Alignment.Center
         ) {
             CollectionHeroArtworkContent(
@@ -917,7 +919,7 @@ private fun CollectionHeroImmersiveArtwork(
                         blendMode = BlendMode.DstIn
                     )
                 }
-                .background(FoamTheme.colors.surfaceVariant),
+                .foamSurfaceVariant(),
             contentAlignment = Alignment.Center
         ) {
             CollectionHeroArtworkContent(
@@ -1498,7 +1500,7 @@ private fun CollectionHeroSearchBar(
                 .fillMaxWidth()
                 .padding(top = 8.dp)
                 .clip(CircleShape)
-                .background(FoamTheme.colors.surface.copy(alpha = 0.55f))
+                .foamSurface(alpha = 0.55f)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

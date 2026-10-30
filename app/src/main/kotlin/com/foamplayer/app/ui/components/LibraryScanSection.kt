@@ -33,6 +33,9 @@ import com.foamplayer.app.R
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.distant.DistantServer
 
 /**
@@ -57,7 +60,7 @@ fun LibraryFoldersCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .padding(FoamDimens.paddingMedium)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -76,7 +79,7 @@ fun LibraryFoldersCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surfaceVariant)
+                        .foamSurfaceVariant()
                         .padding(vertical = FoamDimens.paddingLarge),
                     contentAlignment = Alignment.Center
                 ) {
@@ -119,7 +122,7 @@ private fun ServerRow(server: DistantServer, onRemove: (String) -> Unit) {
             .fillMaxWidth()
             .padding(vertical = FoamDimens.spacingTiny)
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
     ) {
         Row(
             Modifier
@@ -183,7 +186,7 @@ fun LibraryScanCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .padding(FoamDimens.paddingMedium)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -234,7 +237,7 @@ fun RepairPlaylistsCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .padding(FoamDimens.paddingMedium)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -321,7 +324,7 @@ private fun FolderRow(folder: String, onRemove: (String) -> Unit) {
             .fillMaxWidth()
             .padding(vertical = FoamDimens.spacingTiny)
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
     ) {
         Row(
             Modifier
@@ -422,7 +425,7 @@ private fun ScanProgressBar(progress: Float) {
             .fillMaxWidth()
             .height(FoamDimens.spacingTiny)
             .clip(RoundedCornerShape(FoamDimens.spacingTiny / 2))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
     ) {
         Box(
             modifier = Modifier

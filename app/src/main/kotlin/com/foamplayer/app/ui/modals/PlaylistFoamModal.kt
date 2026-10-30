@@ -52,6 +52,9 @@ import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.albumArtCornerRadius
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.TimeUtils
 
 /** Track count + total duration for a playlist's details page, loaded by the hosting screen. */
@@ -218,7 +221,7 @@ fun PlaylistFoamModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .foamSurfaceVariant()
                             ) {
                                 ModalBackButton(onBack = { showDetails = false })
                             }
@@ -227,7 +230,7 @@ fun PlaylistFoamModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .foamSurfaceVariant()
                                     .padding(
                                         horizontal = FoamDimens.paddingSmall,
                                         vertical = FoamDimens.spacingTiny
@@ -257,7 +260,7 @@ fun PlaylistFoamModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .foamSurfaceVariant()
                             ) {
                                 ModalRowButton(
                                     label = stringResource(R.string.details),
@@ -269,7 +272,7 @@ fun PlaylistFoamModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .foamSurfaceVariant()
                             ) {
                                 ModalRowButton(
                                     label = stringResource(R.string.delete),
@@ -301,7 +304,7 @@ private fun PlaylistModalHeader(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(FoamTheme.colors.background)
+            .foamBackground()
             .padding(FoamDimens.spacingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -311,7 +314,7 @@ private fun PlaylistModalHeader(
                 modifier = Modifier
                     .size(64.dp)
                     .clip(RoundedCornerShape(albumArtCornerRadius(64.dp)))
-                    .background(FoamTheme.colors.surfaceVariant),
+                    .foamSurfaceVariant(),
                 contentAlignment = Alignment.Center
             ) {
                 if (coverImageUrl != null) {
@@ -350,7 +353,7 @@ private fun PlaylistModalHeader(
                     .padding(3.dp)
                     .size(20.dp)
                     .clip(CircleShape)
-                    .background(FoamTheme.colors.surface)
+                    .foamSurface()
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = ripple(color = FoamTheme.colors.textPrimary),

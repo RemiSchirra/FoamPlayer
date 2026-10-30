@@ -63,6 +63,7 @@ object BackupJson {
         put("genreSeparators", JSONArray(settings.genreSeparators.toList()))
         put("automaticColorEnabled", settings.automaticColorEnabled)
         put("accentColor", settings.accentColor)
+        put("accentTintEnabled", settings.accentTintEnabled)
         put("immersiveModeEnabled", settings.immersiveModeEnabled)
         put("animateSeekBarEnabled", settings.animateSeekBarEnabled)
         put("seekBarStyle", settings.seekBarStyle.name)
@@ -151,6 +152,7 @@ object BackupJson {
             .ifEmpty { AppSettings.DEFAULT_SEPARATORS },
         automaticColorEnabled = json.optBoolean("automaticColorEnabled", true),
         accentColor = json.optInt("accentColor", AppSettings.DEFAULT_ACCENT_COLOR),
+        accentTintEnabled = json.optBoolean("accentTintEnabled", true),
         immersiveModeEnabled = json.optBoolean("immersiveModeEnabled", true),
         animateSeekBarEnabled = json.optBoolean("animateSeekBarEnabled", false),
         seekBarStyle = decodeEnum(json.optString("seekBarStyle"), SeekBarStyle.NORMAL),

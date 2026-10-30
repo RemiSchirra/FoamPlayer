@@ -50,6 +50,8 @@ import com.foamplayer.app.ui.modals.LastFmImportResultModal
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurface
 import kotlinx.coroutines.delay
 
 /**
@@ -81,7 +83,7 @@ fun LastFmSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.lastfm_section),
@@ -100,7 +102,7 @@ fun LastFmSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     ApiKeyRow(
                         title = stringResource(R.string.lastfm_api_key),
@@ -122,7 +124,7 @@ fun LastFmSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     Column(
                         modifier = Modifier
@@ -219,7 +221,7 @@ fun LastFmSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     Column(
                         modifier = Modifier
@@ -259,7 +261,7 @@ fun LastFmSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     FoamSwitchItem(
                         title = stringResource(R.string.lastfm_scrobble),
@@ -284,7 +286,7 @@ fun LastFmSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     FoamSwitchItem(
                         title = stringResource(R.string.lastfm_scrobble_first_artist),

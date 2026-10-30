@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.modals
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +42,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.data.repository.PlaylistInsertPosition
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * Small plain-[Dialog] (not a FoamModal sheet) asking only for a playlist
@@ -63,7 +63,7 @@ fun NewPlaylistDialog(
         Column(
             modifier = Modifier
                 .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                .background(FoamTheme.colors.surface)
+                .foamSurface()
                 .padding(FoamDimens.spacingMedium),
             verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
         ) {
@@ -121,7 +121,7 @@ fun InsertPositionDialog(
         Column(
             modifier = Modifier
                 .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                .background(FoamTheme.colors.surface)
+                .foamSurface()
                 .padding(vertical = FoamDimens.spacingSmall),
             verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingTiny)
         ) {

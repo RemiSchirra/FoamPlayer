@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -54,6 +53,9 @@ import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurfaceBlend
+import com.foamplayer.app.ui.theme.foamSurface
 
 @Composable
 fun LyricsSettingsScreen(
@@ -67,7 +69,7 @@ fun LyricsSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.lyrics),
@@ -101,7 +103,7 @@ fun LyricsSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .background(FoamTheme.colors.surface)
+                    .foamSurface()
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -138,7 +140,7 @@ fun LyricsSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .background(FoamTheme.colors.surface)
+                    .foamSurface()
             ) {
                 FoamSwitchItem(
                     title = stringResource(R.string.blur_inactive_lines),
@@ -154,7 +156,7 @@ fun LyricsSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .background(FoamTheme.colors.surface)
+                    .foamSurface()
             ) {
                 FoamSwitchItem(
                     title = stringResource(R.string.disable_word_sync),
@@ -173,7 +175,7 @@ fun LyricsSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .background(FoamTheme.colors.surface)
+                    .foamSurface()
             ) {
                 FoamNavigationButton(
                     title = stringResource(R.string.lyrics_manager),
@@ -292,16 +294,19 @@ private fun LyricsSourceItem(
     modifier: Modifier = Modifier,
     dragHandleModifier: Modifier = Modifier
 ) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isDragging) FoamTheme.colors.surfaceVariant else FoamTheme.colors.surface,
-        label = "dragBackgroundColor"
+    // Drag feedback blends surface -> surfaceVariant as a float; the blend and
+    // its accent tint are resolved in the draw pass (see [foamSurfaceBlend]),
+    // so neither the drag animation nor an animating accent recomposes the row.
+    val dragBlend by animateFloatAsState(
+        targetValue = if (isDragging) 1f else 0f,
+        label = "dragBackgroundBlend"
     )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(backgroundColor)
+            .foamSurfaceBlend(dragBlend)
     ) {
         Row(
             modifier = Modifier

@@ -112,6 +112,8 @@ import com.foamplayer.app.ui.modals.PlaylistNameField
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.log10
@@ -318,7 +320,7 @@ fun EqualizerScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
-                .background(FoamTheme.colors.surface)
+                .foamSurface()
                 .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp)
         ) {
             Column {
@@ -673,7 +675,7 @@ private fun PresetChip(
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -700,7 +702,7 @@ private fun PresetMoreButton(
         modifier = Modifier
             .size(38.dp)
             .clip(CircleShape)
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -817,7 +819,7 @@ private fun PresetsTab(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -863,7 +865,7 @@ private fun PresetsTabs(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(50))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
     ) {
         val tabWidth = maxWidth / 2
         val indicatorOffset by animateDpAsState(
@@ -1295,7 +1297,7 @@ private fun ParametricNodeEditor(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(FoamTheme.colors.surfaceVariant)
+                        .foamSurfaceVariant()
                         .clickable(onClick = onDelete),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1464,7 +1466,7 @@ private fun AddNodeRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .clickable(enabled = canAdd, onClick = onAdd)
             .padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.Center,

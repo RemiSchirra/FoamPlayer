@@ -116,6 +116,7 @@ import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlinx.coroutines.launch
 
 private val textFlightFadeSpec = tween<Float>(
@@ -681,7 +682,7 @@ private fun PlaylistItemRow(
         if (!isActiveCollection) {
             return Modifier
                 .clip(AlbumArtShape())
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         }
         return Modifier
             .collectionRowFlightArtwork(
@@ -693,7 +694,7 @@ private fun PlaylistItemRow(
                 immersiveFlightHero = flight,
                 castsFlightShadow = true
             )
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
     }
     @Composable
     fun Modifier.sharedTitle(): Modifier =

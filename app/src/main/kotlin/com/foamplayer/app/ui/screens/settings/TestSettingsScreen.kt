@@ -32,6 +32,9 @@ import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.squig.SquigDatabase
 import com.foamplayer.squig.SquigLink
 import com.foamplayer.squig.SquigSite
@@ -67,7 +70,7 @@ fun TestSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.test_components),
@@ -95,7 +98,7 @@ fun TestSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                         .padding(FoamDimens.paddingMedium)
                 ) {
                     ModalButton(
@@ -127,7 +130,7 @@ fun TestSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     FoamSwitchItem(
                         title = stringResource(R.string.test_switch),
@@ -147,7 +150,7 @@ fun TestSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     Column {
                         FoamSliderItem(
@@ -160,7 +163,7 @@ fun TestSettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(FoamDimens.separatorHeight)
-                                .background(FoamTheme.colors.borderOverlay)
+                                .foamBorderOverlay()
                         )
                         FoamSliderItem(
                             title = stringResource(R.string.test_slider_snapped),
@@ -184,7 +187,7 @@ fun TestSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     Column(modifier = Modifier.padding(FoamDimens.paddingMedium)) {
                         autoEqError?.let { error ->

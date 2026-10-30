@@ -47,6 +47,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.lastfm.LastFmCredentialSource
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 /**
  * Chooses which Last.fm API credentials the app signs requests with: the key
@@ -114,7 +115,7 @@ fun LastFmCredentialsModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                    .background(FoamTheme.colors.surfaceVariant)
+                    .foamSurfaceVariant()
             ) {
                 CredentialOptionRow(
                     title = stringResource(R.string.lastfm_api_key_app),
@@ -271,7 +272,7 @@ private fun CredentialTextField(
         modifier = Modifier
             .fillMaxWidth()
             .clip(CircleShape)
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .padding(horizontal = FoamDimens.paddingLarge, vertical = FoamDimens.spacingStandard),
         contentAlignment = Alignment.CenterStart
     ) {

@@ -45,6 +45,9 @@ import com.foamplayer.app.ui.modals.AudioPipelineModal
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * Audio settings: live fidelity score with itemized breakdown, engine
@@ -69,7 +72,7 @@ fun AudioSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.audio),
@@ -106,7 +109,7 @@ fun AudioSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     Column {
                         FoamSwitchItem(
@@ -134,7 +137,7 @@ fun AudioSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     Column {
                         FoamNavigationButton(
@@ -171,7 +174,7 @@ fun AudioSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -216,7 +219,7 @@ private fun SectionDivider() {
         modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(FoamTheme.colors.borderOverlay)
+            .foamBorderOverlay()
     )
 }
 

@@ -46,6 +46,10 @@ import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.update.DownloadState
 import com.foamplayer.app.update.GitHubRelease
 
@@ -69,7 +73,7 @@ fun AboutSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.settings_about),
@@ -90,7 +94,7 @@ fun AboutSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     Column(
                         modifier = Modifier
@@ -154,7 +158,7 @@ fun AboutSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     if (checking) {
                         Row(
@@ -191,7 +195,7 @@ fun AboutSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     FoamSwitchItem(
                         title = stringResource(R.string.about_auto_check),
@@ -240,7 +244,7 @@ private fun UpdateAvailableCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Full-bleed clickable row: the ripple is bounded by the card's clip.
@@ -366,7 +370,7 @@ private fun StatusRowCard(text: String, icon: ImageVector) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
     ) {
         Row(
             modifier = Modifier
@@ -416,7 +420,7 @@ private fun DownloadProgressRow(progress: Float) {
                 .fillMaxWidth()
                 .height(FoamDimens.spacingTiny)
                 .clip(RoundedCornerShape(FoamDimens.spacingTiny))
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         ) {
             Box(
                 modifier = Modifier
@@ -459,7 +463,7 @@ private fun ReleaseNotesModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(FoamTheme.colors.borderOverlay)
+                    .foamBorderOverlay()
             )
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 

@@ -73,6 +73,9 @@ import com.foamplayer.app.ui.modals.AddProviderModal
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.launch
@@ -131,7 +134,7 @@ fun OnboardingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -307,7 +310,7 @@ private fun PermissionCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -510,7 +513,7 @@ private fun OnboardingDots(scrollPosition: Float, pageCount: Int) {
                     modifier = Modifier
                         .size(dotSize)
                         .clip(CircleShape)
-                        .background(FoamTheme.colors.surfaceVariant)
+                        .foamSurfaceVariant()
                 )
             }
         }

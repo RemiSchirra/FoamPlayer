@@ -45,6 +45,8 @@ import com.foamplayer.app.audio.fidelity.FidelityScore
 import com.foamplayer.app.audio.fidelity.FidelityStatus
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * Live audio fidelity verdict with an itemized breakdown, shared between the
@@ -63,7 +65,7 @@ fun FidelityScoreCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .then(
                 if (expandable) {
                     Modifier.clickable(
@@ -154,7 +156,7 @@ private fun FidelitySectionDivider() {
         modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(FoamTheme.colors.borderOverlay)
+            .foamBorderOverlay()
     )
 }
 

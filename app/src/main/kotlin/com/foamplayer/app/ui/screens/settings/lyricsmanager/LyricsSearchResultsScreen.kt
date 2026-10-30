@@ -61,6 +61,9 @@ import com.foamplayer.app.ui.screens.settings.SettingsHeader
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.TimeUtils
 
 @Composable
@@ -93,7 +96,7 @@ fun LyricsSearchResultsScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         Column(
             modifier = Modifier
@@ -157,7 +160,7 @@ private fun LyricsResultTrackHeader(track: TrackEntity) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .padding(FoamDimens.paddingSmall),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -165,7 +168,7 @@ private fun LyricsResultTrackHeader(track: TrackEntity) {
             modifier = Modifier
                 .size(40.dp)
                 .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                .background(FoamTheme.colors.surfaceVariant),
+                .foamSurfaceVariant(),
             contentAlignment = Alignment.Center
         ) {
             if (track.albumArtPath != null) {
@@ -332,7 +335,7 @@ private fun LyricsResultItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .padding(FoamDimens.paddingSmall)
             .animateContentSize()
     ) {
@@ -358,7 +361,7 @@ private fun LyricsResultItem(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                    .background(FoamTheme.colors.surfaceVariant)
+                    .foamSurfaceVariant()
                     .padding(horizontal = FoamDimens.spacingSmall, vertical = FoamDimens.spacingTiny)
             ) {
                 BasicText(

@@ -118,6 +118,8 @@ import com.foamplayer.app.ui.navigation.SharedElementEasing
 import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import androidx.core.net.toUri
 import com.foamplayer.app.constants.CollectionHeroTarget
 import kotlin.math.abs
@@ -376,7 +378,7 @@ fun SearchScreen(
                 .fillMaxWidth()
                 .height(56.dp)
                 .clip(RoundedCornerShape(50))
-                .background(FoamTheme.colors.surface)
+                .foamSurface()
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -786,7 +788,7 @@ private fun SearchFilterChip(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(50))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = FoamTheme.accentColor),
@@ -868,7 +870,7 @@ fun ArtistSearchResultItem(
                         )
                     } else base.clip(CircleShape)
                 }
-                .background(FoamTheme.colors.surfaceVariant),
+                .foamSurfaceVariant(),
             contentAlignment = Alignment.Center
         ) {
             if (imageUrl != null) {
@@ -976,7 +978,7 @@ fun AlbumSearchResultItem(
                         )
                     } else base.clip(AlbumArtShape())
                 }
-                .background(FoamTheme.colors.surfaceVariant),
+                .foamSurfaceVariant(),
             contentAlignment = Alignment.Center
         ) {
             if (album.albumArtPath != null) {
