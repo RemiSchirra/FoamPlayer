@@ -213,6 +213,16 @@
     <string name="silence_between_tracks">Silence entre les pistes</string>
     <string name="silence_between_tracks_desc">Attendre entre la fin d\'une piste et le début de la suivante. Désactive l\'enchaînement fondu automatique</string>
 
+    <!-- Audio : comportement (reprise/pause au démarrage et lors des changements d\'appareil) -->
+    <string name="audio_behavior">Comportement</string>
+    <string name="audio_behavior_desc">Reprise et pause automatiques au démarrage et lors des changements d\'appareil</string>
+    <string name="resume_on_startup">Reprendre au démarrage</string>
+    <string name="resume_on_startup_desc">Reprendre automatiquement le dernier audio lu à l\'ouverture de l\'application</string>
+    <string name="resume_on_device_connected">Reprendre à la connexion d\'un appareil</string>
+    <string name="resume_on_device_connected_desc">Reprendre automatiquement la lecture lorsqu\'un appareil audio est connecté</string>
+    <string name="pause_on_device_disconnected">Mettre en pause à la déconnexion d\'un appareil</string>
+    <string name="pause_on_device_disconnected_desc">Mettre automatiquement la lecture en pause lorsque l\'appareil audio utilisé est déconnecté</string>
+
     <!-- Fondus -->
     <string name="crossfade">Enchaînement fondu</string>
     <string name="crossfade_desc">Fondu de fin de piste vers la suivante</string>

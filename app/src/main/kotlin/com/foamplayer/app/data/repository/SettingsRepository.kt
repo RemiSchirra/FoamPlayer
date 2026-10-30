@@ -94,6 +94,13 @@ class SettingsRepository @Inject constructor(
     suspend fun setSilenceBetweenTracksSeconds(seconds: Float) = update {
         it.copy(silenceBetweenTracksSeconds = seconds)
     }
+    suspend fun setResumeOnStartup(enabled: Boolean) = update { it.copy(resumeOnStartup = enabled) }
+    suspend fun setResumeOnDeviceConnected(enabled: Boolean) = update {
+        it.copy(resumeOnDeviceConnected = enabled)
+    }
+    suspend fun setPauseOnDeviceDisconnected(enabled: Boolean) = update {
+        it.copy(pauseOnDeviceDisconnected = enabled)
+    }
     suspend fun setIconStyle(style: FoamIconStyle) = update { it.copy(iconStyle = style) }
     suspend fun setMiniPlayerRounding(rounding: Int) = update { it.copy(miniPlayerRounding = rounding) }
     suspend fun setFullPlayerRounding(rounding: Int) = update { it.copy(fullPlayerRounding = rounding) }
@@ -347,6 +354,11 @@ class SettingsRepository @Inject constructor(
         quickFadeSeconds = this[Keys.QUICK_FADE_SECONDS] ?: AppSettings().quickFadeSeconds,
         silenceBetweenTracksSeconds = this[Keys.SILENCE_BETWEEN_TRACKS_SECONDS]
             ?: AppSettings().silenceBetweenTracksSeconds,
+        resumeOnStartup = this[Keys.RESUME_ON_STARTUP] ?: AppSettings().resumeOnStartup,
+        resumeOnDeviceConnected = this[Keys.RESUME_ON_DEVICE_CONNECTED]
+            ?: AppSettings().resumeOnDeviceConnected,
+        pauseOnDeviceDisconnected = this[Keys.PAUSE_ON_DEVICE_DISCONNECTED]
+            ?: AppSettings().pauseOnDeviceDisconnected,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
         distantServers = DistantServersCodec.decode(this[Keys.DISTANT_SERVERS]),
         iconStyle = this[Keys.ICON_STYLE]
@@ -467,6 +479,9 @@ class SettingsRepository @Inject constructor(
         this[Keys.NORMAL_FADE_SECONDS] = settings.normalFadeSeconds
         this[Keys.QUICK_FADE_SECONDS] = settings.quickFadeSeconds
         this[Keys.SILENCE_BETWEEN_TRACKS_SECONDS] = settings.silenceBetweenTracksSeconds
+        this[Keys.RESUME_ON_STARTUP] = settings.resumeOnStartup
+        this[Keys.RESUME_ON_DEVICE_CONNECTED] = settings.resumeOnDeviceConnected
+        this[Keys.PAUSE_ON_DEVICE_DISCONNECTED] = settings.pauseOnDeviceDisconnected
         this[Keys.SELECTED_FOLDERS] = settings.libraryFolders
         this[Keys.DISTANT_SERVERS] = DistantServersCodec.encode(settings.distantServers)
         this[Keys.ICON_STYLE] = settings.iconStyle.name
@@ -543,6 +558,9 @@ class SettingsRepository @Inject constructor(
         val NORMAL_FADE_SECONDS = floatPreferencesKey("normal_fade_seconds")
         val QUICK_FADE_SECONDS = floatPreferencesKey("quick_fade_seconds")
         val SILENCE_BETWEEN_TRACKS_SECONDS = floatPreferencesKey("silence_between_tracks_seconds")
+        val RESUME_ON_STARTUP = booleanPreferencesKey("resume_on_startup")
+        val RESUME_ON_DEVICE_CONNECTED = booleanPreferencesKey("resume_on_device_connected")
+        val PAUSE_ON_DEVICE_DISCONNECTED = booleanPreferencesKey("pause_on_device_disconnected")
         val SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
         val DISTANT_SERVERS = stringPreferencesKey("distant_servers")
         val ICON_STYLE = stringPreferencesKey("icon_style")

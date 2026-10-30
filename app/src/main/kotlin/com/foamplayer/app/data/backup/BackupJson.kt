@@ -52,6 +52,9 @@ object BackupJson {
         put("normalFadeSeconds", settings.normalFadeSeconds.toDouble())
         put("quickFadeSeconds", settings.quickFadeSeconds.toDouble())
         put("silenceBetweenTracksSeconds", settings.silenceBetweenTracksSeconds.toDouble())
+        put("resumeOnStartup", settings.resumeOnStartup)
+        put("resumeOnDeviceConnected", settings.resumeOnDeviceConnected)
+        put("pauseOnDeviceDisconnected", settings.pauseOnDeviceDisconnected)
         put("iconStyle", settings.iconStyle.name)
         put("miniPlayerRounding", settings.miniPlayerRounding)
         put("fullPlayerRounding", settings.fullPlayerRounding)
@@ -135,6 +138,9 @@ object BackupJson {
             "silenceBetweenTracksSeconds",
             AppSettings.DEFAULT_SILENCE_BETWEEN_TRACKS_SECONDS.toDouble()
         ).toFloat(),
+        resumeOnStartup = json.optBoolean("resumeOnStartup", false),
+        resumeOnDeviceConnected = json.optBoolean("resumeOnDeviceConnected", true),
+        pauseOnDeviceDisconnected = json.optBoolean("pauseOnDeviceDisconnected", true),
         iconStyle = decodeEnum(json.optString("iconStyle"), FoamIconStyle.FLAT),
         miniPlayerRounding = json.optInt("miniPlayerRounding", 40),
         fullPlayerRounding = json.optInt("fullPlayerRounding", 40),

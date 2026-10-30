@@ -5,6 +5,7 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.foamplayer.app.BuildConfig
 import com.foamplayer.app.ui.screens.settings.AboutSettingsScreen
+import com.foamplayer.app.ui.screens.settings.AudioBehaviorSettingsScreen
 import com.foamplayer.app.ui.screens.settings.AudioDevicesSettingsScreen
 import com.foamplayer.app.ui.screens.settings.AudioSettingsScreen
 import com.foamplayer.app.ui.screens.settings.BackgroundSettingsScreen
@@ -50,12 +51,16 @@ internal fun NavGraphBuilder.settingsDestinations(context: FoamNavGraphContext) 
         AudioSettingsScreen(
             onBack = { context.back() },
             onNavigateToPlayback = { context.navController.navigate(Screen.SettingsAudioPlayback.route) },
+            onNavigateToBehavior = { context.navController.navigate(Screen.SettingsAudioBehavior.route) },
             onNavigateToDevices = { context.navController.navigate(Screen.SettingsAudioDevices.route) },
             onNavigateToEqualizer = { context.navController.navigate(Screen.SettingsAudioEqualizer.route) }
         )
     }
     composable(Screen.SettingsAudioPlayback.route) {
         PlaybackSettingsScreen(onBack = { context.back() })
+    }
+    composable(Screen.SettingsAudioBehavior.route) {
+        AudioBehaviorSettingsScreen(onBack = { context.back() })
     }
     composable(Screen.SettingsAudioDevices.route) {
         AudioDevicesSettingsScreen(onBack = { context.back() })

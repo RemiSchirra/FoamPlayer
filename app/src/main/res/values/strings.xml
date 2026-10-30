@@ -214,6 +214,16 @@
     <string name="silence_between_tracks">Silence Between Tracks</string>
     <string name="silence_between_tracks_desc">Wait between the end of a track and the start of the next one. Disables the automatic crossfade</string>
 
+    <!-- Audio settings: behavior (resume/pause on startup and device changes) -->
+    <string name="audio_behavior">Behavior</string>
+    <string name="audio_behavior_desc">Automatic resume and pause on app start and device changes</string>
+    <string name="resume_on_startup">Resume on Startup</string>
+    <string name="resume_on_startup_desc">Automatically resume the last played audio when opening the app</string>
+    <string name="resume_on_device_connected">Resume on Device Connected</string>
+    <string name="resume_on_device_connected_desc">Automatically resume playback when an audio device is connected</string>
+    <string name="pause_on_device_disconnected">Pause on Device Disconnected</string>
+    <string name="pause_on_device_disconnected_desc">Automatically pause playback when the audio device in use is disconnected</string>
+
     <!-- Fades -->
     <string name="crossfade">Crossfade</string>
     <string name="crossfade_desc">Blend each track\'s ending into the next one</string>

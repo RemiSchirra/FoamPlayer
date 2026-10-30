@@ -55,6 +55,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 fun AudioSettingsScreen(
     onBack: () -> Unit,
     onNavigateToPlayback: () -> Unit,
+    onNavigateToBehavior: () -> Unit,
     onNavigateToDevices: () -> Unit,
     onNavigateToEqualizer: () -> Unit,
     viewModel: AudioSettingsViewModel = hiltViewModel()
@@ -139,6 +140,22 @@ fun AudioSettingsScreen(
                         title = stringResource(R.string.playback),
                         description = stringResource(R.string.playback_desc),
                         onClick = onNavigateToPlayback
+                    )
+                }
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
+
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .background(FoamTheme.colors.surface)
+                ) {
+                    FoamNavigationButton(
+                        title = stringResource(R.string.audio_behavior),
+                        description = stringResource(R.string.audio_behavior_desc),
+                        onClick = onNavigateToBehavior
                     )
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))

@@ -86,6 +86,12 @@ data class AppSettings(
     val quickFadeSeconds: Float = DEFAULT_QUICK_FADE_SECONDS,
     /** Dead air between the end of a track and the start of the next one, in seconds. 0 disables. */
     val silenceBetweenTracksSeconds: Float = DEFAULT_SILENCE_BETWEEN_TRACKS_SECONDS,
+    /** Automatically resumes the restored session when the app starts. */
+    val resumeOnStartup: Boolean = false,
+    /** Automatically resumes playback when an audio output device is connected. */
+    val resumeOnDeviceConnected: Boolean = true,
+    /** Automatically pauses playback when the audio output device in use is disconnected. */
+    val pauseOnDeviceDisconnected: Boolean = true,
     val libraryFolders: Set<String> = emptySet(),
     /** Connected distant servers (Plex/Jellyfin) and the folders scanned from them. */
     val distantServers: List<DistantServer> = emptyList(),
