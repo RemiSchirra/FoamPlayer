@@ -136,59 +136,31 @@ fun AudioSettingsScreen(
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
                         .background(FoamTheme.colors.surface)
                 ) {
-                    FoamNavigationButton(
-                        title = stringResource(R.string.playback),
-                        description = stringResource(R.string.playback_desc),
-                        onClick = onNavigateToPlayback
-                    )
-                }
-                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
-            }
-
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
-                ) {
-                    FoamNavigationButton(
-                        title = stringResource(R.string.audio_behavior),
-                        description = stringResource(R.string.audio_behavior_desc),
-                        onClick = onNavigateToBehavior
-                    )
-                }
-                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
-            }
-
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
-                ) {
-                    FoamNavigationButton(
-                        title = stringResource(R.string.output_devices),
-                        description = stringResource(R.string.audio_devices_desc),
-                        onClick = onNavigateToDevices
-                    )
-                }
-                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
-            }
-
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
-                ) {
-                    FoamNavigationButton(
-                        title = stringResource(R.string.equalizer_dsp),
-                        description = stringResource(R.string.equalizer_dsp_desc),
-                        onClick = onNavigateToEqualizer
-                    )
+                    Column {
+                        FoamNavigationButton(
+                            title = stringResource(R.string.playback),
+                            description = stringResource(R.string.playback_desc),
+                            onClick = onNavigateToPlayback
+                        )
+                        SectionDivider()
+                        FoamNavigationButton(
+                            title = stringResource(R.string.audio_behavior),
+                            description = stringResource(R.string.audio_behavior_desc),
+                            onClick = onNavigateToBehavior
+                        )
+                        SectionDivider()
+                        FoamNavigationButton(
+                            title = stringResource(R.string.output_devices),
+                            description = stringResource(R.string.audio_devices_desc),
+                            onClick = onNavigateToDevices
+                        )
+                        SectionDivider()
+                        FoamNavigationButton(
+                            title = stringResource(R.string.equalizer_dsp),
+                            description = stringResource(R.string.equalizer_dsp_desc),
+                            onClick = onNavigateToEqualizer
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
