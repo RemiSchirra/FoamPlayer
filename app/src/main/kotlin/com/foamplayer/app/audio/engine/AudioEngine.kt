@@ -1,9 +1,14 @@
 package com.foamplayer.app.audio.engine
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import android.util.Log
 import android.view.Choreographer
 import androidx.annotation.OptIn
+import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -17,6 +22,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.foamplayer.app.audio.bitperfect.BitPerfectDetector
 import com.foamplayer.app.audio.cast.ChromecastController
+import com.foamplayer.app.audio.device.AudioDeviceChange
 import com.foamplayer.app.audio.device.OutputDeviceManager
 import com.foamplayer.app.audio.dsp.AssignedDeviceKind
 import com.foamplayer.app.audio.dsp.DspAudioProcessor
@@ -204,6 +210,21 @@ class AudioEngine @Inject constructor(
 
     private var onPlayerSwappedListener: (() -> Unit)? = null
     private var onDisplayPlayerChangedListener: ((Player) -> Unit)? = null
+
+    /**
+     * Fires while an output route disappears (headphones unplugged, Bluetooth
+     * disconnected), before the platform reroutes to the speaker. Used to pause
+     * immediately instead of letting the normal quick-fade leak sound through
+     * the phone speaker for its full duration.
+     */
+    private val noisyAudioReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != AudioManager.ACTION_AUDIO_BECOMING_NOISY) return
+            if (!latestSettings.pauseOnDeviceDisconnected) return
+            if (chromecast.isCasting) return
+            if (_playbackState.value.isPlaying || player.playWhenReady) pauseForOutputLoss()
+        }
+    }
 
     /** Crossfade secondaries are built without focus handling; it is re-applied at each swap. */
     private val mediaAudioAttributes: AudioAttributes = AudioAttributes.Builder()
@@ -607,6 +628,54 @@ class AudioEngine @Inject constructor(
         chromecast.onSessionLost = ::onCastSessionLost
         observeVolumeForCast()
         observePresetAutoSwitch()
+        observeOutputDeviceBehavior()
+        registerNoisyAudioReceiver()
+    }
+
+    /** Registers for the system's "output is going away" broadcast (process-lifetime engine). */
+    private fun registerNoisyAudioReceiver() {
+        ContextCompat.registerReceiver(
+            context,
+            noisyAudioReceiver,
+            IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    }
+
+    /**
+     * Applies the two device-behavior preferences to playback:
+     *  - an output device connecting resumes a paused session (built-in
+     *    speaker announcements are ignored: only a real plug-in counts),
+     *  - the routing device disconnecting pauses the session so audio never
+     *    unexpectedly jumps to another output.
+     */
+    private fun observeOutputDeviceBehavior() {
+        scope.launch {
+            outputDeviceManager.deviceChanges.collect { change ->
+                when (change) {
+                    is AudioDeviceChange.Disconnected -> {
+                        if (!latestSettings.pauseOnDeviceDisconnected) return@collect
+                        if (!change.wasRoutingDevice) return@collect
+                        // A Chromecast owns playback: local outputs detaching
+                        // must not stop the receiver.
+                        if (chromecast.isCasting) return@collect
+                        if (_playbackState.value.isPlaying || player.playWhenReady) {
+                            pauseForOutputLoss()
+                        }
+                    }
+
+                    is AudioDeviceChange.Connected -> {
+                        if (!latestSettings.resumeOnDeviceConnected) return@collect
+                        if (change.devices.none { !it.isSpeaker }) return@collect
+                        val state = _playbackState.value
+                        if (state.currentTrack == null) return@collect
+                        if (state.isPlaying || state.isPlaybackRequested || player.playWhenReady) return@collect
+                        if (chromecast.isCasting) return@collect
+                        play()
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -1711,6 +1780,36 @@ class AudioEngine @Inject constructor(
             player.pause()
             if (settledCrossfade) player.volume = fadeHost.playerBaseVolume()
         }
+    }
+
+    /**
+     * Pause caused by losing the output route. Bypasses the quick fade: by the
+     * time the device callback or noisy broadcast arrives, the platform may
+     * already have rerouted audio to the phone speaker, and fading would leak
+     * the tail there. Mutes first, then pauses, then restores the base volume
+     * for the next play.
+     */
+    private fun pauseForOutputLoss() {
+        if (chromecast.isCasting) {
+            chromecast.pause()
+            castLoadingExpected = false
+            setLoading(false)
+            _playbackState.value = _playbackState.value.copy(
+                isPlaying = false,
+                isPlaybackRequested = false
+            )
+            return
+        }
+        cancelPendingTransitions()
+        suppressLoadingUntilReady = false
+        setLoading(false)
+        player.volume = 0f
+        player.pause()
+        _playbackState.value = _playbackState.value.copy(
+            isPlaying = false,
+            isPlaybackRequested = false
+        )
+        player.volume = fadeHost.playerBaseVolume()
     }
 
     fun next() {
