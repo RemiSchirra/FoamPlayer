@@ -5,6 +5,7 @@ import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +33,7 @@ internal fun PlayerPagerSyncEffects(
     markSkipIntent: (Boolean) -> Unit,
     backdropRenumberHold: () -> Boolean,
     isMainPagerVisible: () -> Boolean,
+    programmaticScrollPage: MutableState<Int?>,
     hopOffGhost: suspend () -> Unit
 ) {
     if (isProgressiveEnvelope) {
@@ -90,6 +92,13 @@ internal fun PlayerPagerSyncEffects(
         var wrapRequestedAtMs = 0L
         snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
+                if (programmaticScrollPage.value != null) {
+                    programmaticScrollPage.value = null
+                    if (settledPage == latestQueueIndex.value) {
+                        seekBarProgress.revertTrackChangeEnvelope()
+                    }
+                    return@collect
+                }
                 // A settled page read mid-renumbering is a stale number, not a user landing.
                 if (backdropRenumberHold()) return@collect
                 val model = latestHeroModel.value
@@ -131,7 +140,15 @@ internal fun PlayerPagerSyncEffects(
 
     LaunchedEffect(pagerState) {
         pagerState.interactionSource.interactions.collect { interaction ->
-            if (interaction is DragInteraction.Start) viewModel.prepareQueueShuffle()
+            when (interaction) {
+                is DragInteraction.Start -> {
+                    programmaticScrollPage.value = null
+                    viewModel.prepareQueueShuffle()
+                }
+                is DragInteraction.Stop, is DragInteraction.Cancel -> {
+                    programmaticScrollPage.value = null
+                }
+            }
         }
     }
 

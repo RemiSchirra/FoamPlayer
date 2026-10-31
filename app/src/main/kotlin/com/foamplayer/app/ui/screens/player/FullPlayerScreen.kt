@@ -401,6 +401,7 @@ fun FullPlayerScreen(
     val markSkipIntent: (Boolean) -> Unit = { backward ->
         lastBackwardSkipMs[0] = if (backward) System.currentTimeMillis() else 0L
     }
+    val programmaticScrollPage = remember { mutableStateOf<Int?>(null) }
 
     var backdropHopHold by remember { mutableStateOf(false) }
     suspend fun hopOffGhost() {
@@ -539,6 +540,7 @@ fun FullPlayerScreen(
         markSkipIntent = markSkipIntent,
         backdropRenumberHold = { backdropRenumberHold },
         isMainPagerVisible = { isMainPagerVisible() },
+        programmaticScrollPage = programmaticScrollPage,
         hopOffGhost = { hopOffGhost() }
     )
 
@@ -574,43 +576,50 @@ fun FullPlayerScreen(
     }
 
     LaunchedEffect(queueIndex, currentEntryId) {
-        if (queueIndex in 0 until queueSize &&
-            pagerState.currentPage != queueIndex &&
-            !pagerState.isScrollInProgress &&
-            !pagerRenumberingPending
+        fun clearSyncTarget() {
+            programmaticScrollPage.value = null
+        }
+
+        if (queueIndex !in 0 until queueSize || pagerRenumberingPending) {
+            clearSyncTarget()
+            return@LaunchedEffect
+        }
+        if (pagerState.currentPage == queueIndex) {
+            clearSyncTarget()
+            return@LaunchedEffect
+        }
+        val loop = latestHeroModel.value
+        if (loop.isGhostPage(pagerState.currentPage) &&
+            loop.ghostTwinPage(pagerState.currentPage) == queueIndex
         ) {
-            val loop = latestHeroModel.value
-            if (loop.isGhostPage(pagerState.currentPage) &&
-                loop.ghostTwinPage(pagerState.currentPage) == queueIndex
-            ) {
-                // Parked on the ghost of the playing track: the idle hop lands on its twin.
-                return@LaunchedEffect
-            }
-            if (isMainPagerVisible()) {
-                val transitPage = latestHeroModel.value.wrapTransitPage(
-                    fromPage = pagerState.currentPage,
-                    toPage = queueIndex,
-                    backward = System.currentTimeMillis() - lastBackwardSkipMs[0] < SKIP_INTENT_WINDOW_MS
-                )
-                if (transitPage != null) {
-                    try {
-                        pagerState.animateScrollToPage(
-                            page = transitPage,
-                            animationSpec = tween(TRANSITION_DURATION_MS)
-                        )
-                    } finally {
-                        // Also when cancelled by a rapid second skip: never leave the pager parked on a ghost.
-                        withContext(NonCancellable) { hopOffGhost() }
-                    }
-                } else {
+            clearSyncTarget()
+            return@LaunchedEffect
+        }
+        programmaticScrollPage.value = queueIndex
+        if (isMainPagerVisible()) {
+            val transitPage = loop.wrapTransitPage(
+                fromPage = pagerState.currentPage,
+                toPage = queueIndex,
+                backward = System.currentTimeMillis() - lastBackwardSkipMs[0] < SKIP_INTENT_WINDOW_MS
+            )
+            if (transitPage != null) {
+                try {
                     pagerState.animateScrollToPage(
-                        page = queueIndex,
+                        page = transitPage,
                         animationSpec = tween(TRANSITION_DURATION_MS)
                     )
+                } finally {
+                    withContext(NonCancellable) { hopOffGhost() }
                 }
             } else {
-                pagerState.scrollToPage(queueIndex)
+                pagerState.animateScrollToPage(
+                    page = queueIndex,
+                    animationSpec = tween(TRANSITION_DURATION_MS)
+                )
             }
+        } else {
+            pagerState.scrollToPage(queueIndex)
+            clearSyncTarget()
         }
     }
 

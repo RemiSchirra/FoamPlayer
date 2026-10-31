@@ -1812,11 +1812,24 @@ class AudioEngine @Inject constructor(
         player.volume = fadeHost.playerBaseVolume()
     }
 
+    /**
+     * Settles an in-flight crossfade before a skip, so a rapid second press advances from
+     * the incoming track instead of re-targeting it. Skipped before the logical switch,
+     * where cancelling already lands on the incoming track. Restores the volume the early
+     * swap leaves mid-ramp.
+     */
+    private fun settleCrossfadeForSkip() {
+        if (fadeEngine.displayPlayer != null && fadeEngine.completeCrossfadeNow()) {
+            player.volume = fadeHost.playerBaseVolume()
+        }
+    }
+
     fun next() {
         if (chromecast.isCasting) {
             castAdvance(forward = true)
             return
         }
+        settleCrossfadeForSkip()
         cancelPendingTransitions()
         suppressLoadingUntilReady = false
         advanceToNext(useFade = true)
@@ -1833,6 +1846,7 @@ class AudioEngine @Inject constructor(
             }
             return
         }
+        settleCrossfadeForSkip()
         cancelPendingTransitions()
         suppressLoadingUntilReady = false
         val state = _playbackState.value
