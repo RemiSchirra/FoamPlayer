@@ -46,6 +46,7 @@ import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.NotificationExtraButton
+import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
@@ -94,13 +95,22 @@ class SettingsRepository @Inject constructor(
     suspend fun setSilenceBetweenTracksSeconds(seconds: Float) = update {
         it.copy(silenceBetweenTracksSeconds = seconds)
     }
+    suspend fun setResumeOnStartup(enabled: Boolean) = update { it.copy(resumeOnStartup = enabled) }
+    suspend fun setResumeOnDeviceConnected(enabled: Boolean) = update {
+        it.copy(resumeOnDeviceConnected = enabled)
+    }
+    suspend fun setPauseOnDeviceDisconnected(enabled: Boolean) = update {
+        it.copy(pauseOnDeviceDisconnected = enabled)
+    }
     suspend fun setIconStyle(style: FoamIconStyle) = update { it.copy(iconStyle = style) }
     suspend fun setMiniPlayerRounding(rounding: Int) = update { it.copy(miniPlayerRounding = rounding) }
     suspend fun setFullPlayerRounding(rounding: Int) = update { it.copy(fullPlayerRounding = rounding) }
     suspend fun setMarqueeMode(mode: MarqueeMode) = update { it.copy(marqueeMode = mode) }
     suspend fun setAutomaticColorEnabled(enabled: Boolean) = update { it.copy(automaticColorEnabled = enabled) }
     suspend fun setAccentColor(color: Int) = update { it.copy(accentColor = color) }
-    suspend fun setImmersiveModeEnabled(enabled: Boolean) = update { it.copy(immersiveModeEnabled = enabled) }
+    suspend fun setAccentTintEnabled(enabled: Boolean) = update { it.copy(accentTintEnabled = enabled) }
+    /** Persists the full player's look (normal / immersive / vinyl). */
+    suspend fun setPlayerMode(mode: PlayerMode) = update { it.copy(playerMode = mode) }
     suspend fun setAnimateSeekBarEnabled(enabled: Boolean) = update { it.copy(animateSeekBarEnabled = enabled) }
     suspend fun setSeekBarStyle(style: SeekBarStyle) = update { it.copy(seekBarStyle = style) }
     suspend fun setPreferredOutputDeviceId(deviceId: String?) = update {
@@ -347,6 +357,11 @@ class SettingsRepository @Inject constructor(
         quickFadeSeconds = this[Keys.QUICK_FADE_SECONDS] ?: AppSettings().quickFadeSeconds,
         silenceBetweenTracksSeconds = this[Keys.SILENCE_BETWEEN_TRACKS_SECONDS]
             ?: AppSettings().silenceBetweenTracksSeconds,
+        resumeOnStartup = this[Keys.RESUME_ON_STARTUP] ?: AppSettings().resumeOnStartup,
+        resumeOnDeviceConnected = this[Keys.RESUME_ON_DEVICE_CONNECTED]
+            ?: AppSettings().resumeOnDeviceConnected,
+        pauseOnDeviceDisconnected = this[Keys.PAUSE_ON_DEVICE_DISCONNECTED]
+            ?: AppSettings().pauseOnDeviceDisconnected,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
         distantServers = DistantServersCodec.decode(this[Keys.DISTANT_SERVERS]),
         iconStyle = this[Keys.ICON_STYLE]
@@ -361,7 +376,10 @@ class SettingsRepository @Inject constructor(
         genreSeparators = this[Keys.GENRE_SEPARATORS] ?: AppSettings.DEFAULT_SEPARATORS,
         automaticColorEnabled = this[Keys.AUTOMATIC_COLOR] ?: AppSettings().automaticColorEnabled,
         accentColor = this[Keys.ACCENT_COLOR] ?: AppSettings.DEFAULT_ACCENT_COLOR,
-        immersiveModeEnabled = this[Keys.IMMERSIVE_MODE] ?: AppSettings().immersiveModeEnabled,
+        accentTintEnabled = this[Keys.ACCENT_TINT] ?: AppSettings().accentTintEnabled,
+        playerMode = this[Keys.PLAYER_MODE]
+            ?.let { runCatching { PlayerMode.valueOf(it) }.getOrNull() }
+            ?: AppSettings().playerMode,
         animateSeekBarEnabled = this[Keys.ANIMATE_SEEK_BAR] ?: AppSettings().animateSeekBarEnabled,
         seekBarStyle = this[Keys.SEEK_BAR_STYLE]
             ?.let { runCatching { SeekBarStyle.valueOf(it) }.getOrNull() }
@@ -467,6 +485,9 @@ class SettingsRepository @Inject constructor(
         this[Keys.NORMAL_FADE_SECONDS] = settings.normalFadeSeconds
         this[Keys.QUICK_FADE_SECONDS] = settings.quickFadeSeconds
         this[Keys.SILENCE_BETWEEN_TRACKS_SECONDS] = settings.silenceBetweenTracksSeconds
+        this[Keys.RESUME_ON_STARTUP] = settings.resumeOnStartup
+        this[Keys.RESUME_ON_DEVICE_CONNECTED] = settings.resumeOnDeviceConnected
+        this[Keys.PAUSE_ON_DEVICE_DISCONNECTED] = settings.pauseOnDeviceDisconnected
         this[Keys.SELECTED_FOLDERS] = settings.libraryFolders
         this[Keys.DISTANT_SERVERS] = DistantServersCodec.encode(settings.distantServers)
         this[Keys.ICON_STYLE] = settings.iconStyle.name
@@ -477,7 +498,11 @@ class SettingsRepository @Inject constructor(
         this[Keys.GENRE_SEPARATORS] = settings.genreSeparators
         this[Keys.AUTOMATIC_COLOR] = settings.automaticColorEnabled
         this[Keys.ACCENT_COLOR] = settings.accentColor
-        this[Keys.IMMERSIVE_MODE] = settings.immersiveModeEnabled
+        this[Keys.ACCENT_TINT] = settings.accentTintEnabled
+        this[Keys.PLAYER_MODE] = settings.playerMode.name
+        // No migration from the pre-enum boolean: the new key is the single source of
+        // truth, so the old key is cleared here to overwrite the old state.
+        this.remove(Keys.IMMERSIVE_MODE)
         this[Keys.ANIMATE_SEEK_BAR] = settings.animateSeekBarEnabled
         this[Keys.SEEK_BAR_STYLE] = settings.seekBarStyle.name
         this[Keys.AUTO_OPEN_PLAYER] = settings.autoOpenPlayerEnabled
@@ -543,6 +568,9 @@ class SettingsRepository @Inject constructor(
         val NORMAL_FADE_SECONDS = floatPreferencesKey("normal_fade_seconds")
         val QUICK_FADE_SECONDS = floatPreferencesKey("quick_fade_seconds")
         val SILENCE_BETWEEN_TRACKS_SECONDS = floatPreferencesKey("silence_between_tracks_seconds")
+        val RESUME_ON_STARTUP = booleanPreferencesKey("resume_on_startup")
+        val RESUME_ON_DEVICE_CONNECTED = booleanPreferencesKey("resume_on_device_connected")
+        val PAUSE_ON_DEVICE_DISCONNECTED = booleanPreferencesKey("pause_on_device_disconnected")
         val SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
         val DISTANT_SERVERS = stringPreferencesKey("distant_servers")
         val ICON_STYLE = stringPreferencesKey("icon_style")
@@ -555,6 +583,10 @@ class SettingsRepository @Inject constructor(
         val LAST_GENRE_SEPARATORS = stringSetPreferencesKey("last_scan_genre_separators")
         val AUTOMATIC_COLOR = booleanPreferencesKey("automatic_color")
         val ACCENT_COLOR = intPreferencesKey("accent_color")
+        val ACCENT_TINT = booleanPreferencesKey("accent_tint")
+        val PLAYER_MODE = stringPreferencesKey("player_mode")
+
+        // Legacy pre-enum boolean, kept only so write() can clear it.
         val IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
         val ANIMATE_SEEK_BAR = booleanPreferencesKey("animate_seek_bar")
         val SEEK_BAR_STYLE = stringPreferencesKey("seek_bar_style")

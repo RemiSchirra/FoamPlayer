@@ -213,6 +213,16 @@
     <string name="silence_between_tracks">Silence entre les pistes</string>
     <string name="silence_between_tracks_desc">Attendre entre la fin d\'une piste et le début de la suivante. Désactive l\'enchaînement fondu automatique</string>
 
+    <!-- Audio : comportement (reprise/pause au démarrage et lors des changements d\'appareil) -->
+    <string name="audio_behavior">Comportement</string>
+    <string name="audio_behavior_desc">Reprise et pause automatiques au démarrage et lors des changements d\'appareil</string>
+    <string name="resume_on_startup">Reprendre au démarrage</string>
+    <string name="resume_on_startup_desc">Reprendre automatiquement le dernier audio lu à l\'ouverture de l\'application</string>
+    <string name="resume_on_device_connected">Reprendre à la connexion d\'un appareil</string>
+    <string name="resume_on_device_connected_desc">Reprendre automatiquement la lecture lorsqu\'un appareil audio est connecté</string>
+    <string name="pause_on_device_disconnected">Mettre en pause à la déconnexion d\'un appareil</string>
+    <string name="pause_on_device_disconnected_desc">Mettre automatiquement la lecture en pause lorsque l\'appareil audio utilisé est déconnecté</string>
+
     <!-- Fondus -->
     <string name="crossfade">Enchaînement fondu</string>
     <string name="crossfade_desc">Fondu de fin de piste vers la suivante</string>
@@ -344,8 +354,11 @@
 
     <string name="auto_open_player">Ouvrir auto. le lecteur</string>
     <string name="auto_open_player_desc">Ouvrir le lecteur au lancement d\'une piste</string>
-    <string name="immersive_mode">Mode immersif</string>
-    <string name="immersive_mode_desc">La pochette d\'album remplit tout l\'écran</string>
+    <string name="player_mode">Mode du lecteur</string>
+    <string name="player_mode_desc">Apparence du lecteur complet</string>
+    <string name="player_mode_normal">Normal</string>
+    <string name="player_mode_immersive">Immersif</string>
+    <string name="player_mode_vinyl">Vinyle</string>
     <string name="animate_seek_bar">Animer la barre de progression</string>
     <string name="animate_seek_bar_desc">Mouvement fluide de la barre de progression</string>
     <string name="seek_bar_style">Style de barre de progression</string>
@@ -359,6 +372,8 @@
 
     <string name="automatic_color">Couleur automatique</string>
     <string name="automatic_color_desc">Extraire la couleur d\'accentuation de la pochette</string>
+    <string name="accent_tint">Teinte d\'accentuation</string>
+    <string name="accent_tint_desc">Mélanger la couleur d\'accentuation aux arrière-plans et aux conteneurs</string>
 
     <string name="theme">Thème</string>
     <string name="theme_follow_system">Suivre le système</string>

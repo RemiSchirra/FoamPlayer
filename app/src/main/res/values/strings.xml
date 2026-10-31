@@ -214,6 +214,16 @@
     <string name="silence_between_tracks">Silence Between Tracks</string>
     <string name="silence_between_tracks_desc">Wait between the end of a track and the start of the next one. Disables the automatic crossfade</string>
 
+    <!-- Audio settings: behavior (resume/pause on startup and device changes) -->
+    <string name="audio_behavior">Behavior</string>
+    <string name="audio_behavior_desc">Automatic resume and pause on app start and device changes</string>
+    <string name="resume_on_startup">Resume on Startup</string>
+    <string name="resume_on_startup_desc">Automatically resume the last played audio when opening the app</string>
+    <string name="resume_on_device_connected">Resume on Device Connected</string>
+    <string name="resume_on_device_connected_desc">Automatically resume playback when an audio device is connected</string>
+    <string name="pause_on_device_disconnected">Pause on Device Disconnected</string>
+    <string name="pause_on_device_disconnected_desc">Automatically pause playback when the audio device in use is disconnected</string>
+
     <!-- Fades -->
     <string name="crossfade">Crossfade</string>
     <string name="crossfade_desc">Blend each track\'s ending into the next one</string>
@@ -347,8 +357,11 @@
 
     <string name="auto_open_player">Auto Open Player</string>
     <string name="auto_open_player_desc">Open player screen when a track starts</string>
-    <string name="immersive_mode">Immersive Mode</string>
-    <string name="immersive_mode_desc">Album art fills the entire screen</string>
+    <string name="player_mode">Player Mode</string>
+    <string name="player_mode_desc">Look of the full player</string>
+    <string name="player_mode_normal">Normal</string>
+    <string name="player_mode_immersive">Immersive</string>
+    <string name="player_mode_vinyl">Vinyl</string>
     <string name="animate_seek_bar">Animate Seek Bar</string>
     <string name="animate_seek_bar_desc">Smooth progress bar movement</string>
     <string name="seek_bar_style">Seek Bar Style</string>
@@ -362,6 +375,8 @@
 
     <string name="automatic_color">Automatic Color</string>
     <string name="automatic_color_desc">Extract accent color from album art</string>
+    <string name="accent_tint">Accent Tint</string>
+    <string name="accent_tint_desc">Blend the accent color into backgrounds and containers</string>
 
     <string name="theme">Theme</string>
     <string name="theme_follow_system">Follow system</string>

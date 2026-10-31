@@ -135,14 +135,22 @@ val DefaultFoamShapes = FoamShapes(
 
 // Static locals: values rarely change after launch, so readers skip tracking
 // and simply recompose wholesale on the rare value replacement.
-val LocalFoamColors = staticCompositionLocalOf { DarkFoamColors }
 val LocalFoamTypography = staticCompositionLocalOf { DefaultFoamTypography }
 val LocalFoamShapes = staticCompositionLocalOf { DefaultFoamShapes }
 val LocalIsDarkTheme = staticCompositionLocalOf { true }
 
-// The accent animates per-frame (e.g. while swiping between tracks); a
-// non-static local keeps that invalidation scoped to accent readers only.
-val LocalPrimaryAccentColor = compositionLocalOf { DefaultPrimaryAccent }
+// The palette is the untouched static base: the accent tint on container
+// backgrounds is applied at draw time (see the foam* container modifiers in
+// FoamContainerModifiers.kt), so this local only ever changes on a theme
+// switch -- never while the accent animates.
+val LocalFoamColors = staticCompositionLocalOf { DarkFoamColors }
+
+// The live accent + tint toggle live in a stable holder provided through
+// [LocalAccentTintState] (see FoamContainerModifiers.kt): [FoamTheme] writes
+// into the holder on every recomposition and draw-phase readers observe it
+// there, so accent frames never recompose the palette consumers. Leaf readers
+// still get per-frame invalidation through [FoamTheme.accentColor], which
+// reads the same holder.
 
 /**
  * Live-preview override for the mini player rounding — the stored 0..100
@@ -174,6 +182,13 @@ val LocalAutomaticColorEnabled = compositionLocalOf { true }
 
 /** Access point for the theme values provided by [FoamTheme]. */
 object FoamTheme {
+    /**
+     * The static base palette: container tinting happens at draw time, so this
+     * never changes while the accent animates -- only on a theme switch. Use
+     * the foam* container modifiers (see FoamContainerModifiers.kt) for
+     * tint-aware container backgrounds; one-shot color reads (icon tints,
+     * canvas colors) get the base colors.
+     */
     val colors: FoamColors
         @Composable @ReadOnlyComposable get() = LocalFoamColors.current
 
@@ -208,7 +223,20 @@ object FoamTheme {
 
     /** The live, possibly per-frame-animated accent color (already theme-adapted). */
     val accentColor: Color
-        @Composable get() = LocalPrimaryAccentColor.current
+        @Composable get() = LocalAccentTintState.current.color
+
+    /**
+     * One-shot tint-aware surface read for leaf components (slider tracks, seek
+     * bars) that sit on tinted containers. Reads the live accent, so the
+     * reader's scope recomposes on accent frames -- use only alongside
+     * [accentColor] where that already happens; custom draw-phase blocks should
+     * resolve the tint inside their draw lambda instead (see
+     * [AccentTintState.resolve]).
+     */
+    val tintedSurface: Color
+        @Composable get() = LocalAccentTintState.current.resolve(
+            LocalFoamColors.current.surface, SurfaceAccentTint
+        )
 }
 
 /**
@@ -240,6 +268,8 @@ fun FoamTheme(
     miniPlayerRounding: Float = 0.4f,
     fullPlayerRounding: Float = 0.4f,
     accentColor: Color? = null,
+    /** Blends the accent into backgrounds and containers (Settings > Colors). */
+    accentTintEnabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
     // Remembered per input so the static locals' consumers skip when only the
@@ -251,25 +281,34 @@ fun FoamTheme(
             fullPlayerRounding = fullPlayerRounding
         )
     }
-    val colors = remember(darkTheme) { if (darkTheme) DarkFoamColors else LightFoamColors }
+    val baseColors = remember(darkTheme) { if (darkTheme) DarkFoamColors else LightFoamColors }
     val typography = remember(darkTheme) { if (darkTheme) DefaultFoamTypography else LightFoamTypography }
 
     val targetAccentColor = remember(accentColor, darkTheme) {
         (accentColor ?: DefaultPrimaryAccent).adaptAccentForTheme(darkTheme)
     }
 
+    // The tint is applied at draw time (see the foam* container modifiers):
+    // the palette stays the static base, so an accent frame only invalidates
+    // container draws -- no recomposition, no layout. The holder instance is
+    // remembered once and written into on every recomposition (same pattern
+    // as [MiniPlayerRoundingPreviewState]); equal-value writes are no-ops.
+    val accentTint = remember { AccentTintState() }
+    accentTint.color = targetAccentColor
+    accentTint.enabled = accentTintEnabled
+
     // Live overrides pushed by the settings screens (see
     // [MiniPlayerRoundingPreviewState]); the holder itself never changes.
     val roundingPreview = remember { MiniPlayerRoundingPreviewState() }
 
     CompositionLocalProvider(
-        LocalFoamColors provides colors,
+        LocalFoamColors provides baseColors,
         LocalFoamTypography provides typography,
         LocalIsDarkTheme provides darkTheme,
         LocalFoamIcons provides icons,
         LocalFoamShapes provides shapes,
         LocalMiniPlayerRoundingPreview provides roundingPreview,
-        LocalPrimaryAccentColor provides targetAccentColor,
+        LocalAccentTintState provides accentTint,
         content = content
     )
 }

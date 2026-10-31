@@ -39,6 +39,7 @@ import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.ui.components.CollectionTopBarIcon
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 /**
  * An extra action row shown at the top of [DensityOrganisationModal], above
@@ -91,7 +92,7 @@ fun DensityOrganisationModal(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                        .background(FoamTheme.colors.surfaceVariant)
+                        .foamSurfaceVariant()
                 ) {
                     actions.forEachIndexed { index, action ->
                         if (index > 0) ModalSectionDivider()
@@ -109,7 +110,7 @@ fun DensityOrganisationModal(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                        .background(FoamTheme.colors.surfaceVariant)
+                        .foamSurfaceVariant()
                 ) {
                     ModalGroupTitle(label = stringResource(R.string.sorting))
 
@@ -135,7 +136,7 @@ fun DensityOrganisationModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                    .background(FoamTheme.colors.surfaceVariant)
+                    .foamSurfaceVariant()
             ) {
                 ModalGroupTitle(label = stringResource(R.string.organisation))
 

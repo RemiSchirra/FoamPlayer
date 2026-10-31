@@ -85,6 +85,9 @@ import com.foamplayer.app.ui.navigation.LocalBackgroundSettingsPreview
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlinx.coroutines.flow.first
@@ -177,7 +180,7 @@ fun BackgroundSettingsScreen(
                     .fillMaxWidth()
                     .padding(horizontal = FoamDimens.paddingMedium)
                     .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .background(FoamTheme.colors.surface)
+                    .foamSurface()
             ) {
                 Column {
                     BackgroundMode.entries.forEachIndexed { index, modeOption ->
@@ -186,7 +189,7 @@ fun BackgroundSettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
+                                    .foamBorderOverlay()
                             )
                         }
                         ModeOptionRow(
@@ -255,7 +258,7 @@ fun BackgroundSettingsScreen(
                             .fillMaxWidth()
                             .padding(horizontal = FoamDimens.paddingMedium)
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                     ) {
                         Column {
                             Column(
@@ -288,7 +291,7 @@ fun BackgroundSettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
+                                    .foamBorderOverlay()
                             )
                             CompactSwitchRow(
                                 title = stringResource(R.string.player),
@@ -317,7 +320,7 @@ fun BackgroundSettingsScreen(
                     .fillMaxWidth()
                     .padding(horizontal = FoamDimens.paddingMedium)
                     .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .background(FoamTheme.colors.surface)
+                    .foamSurface()
             ) {
                 Column {
                     AnimatedVisibility(
@@ -345,7 +348,7 @@ fun BackgroundSettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
+                                    .foamBorderOverlay()
                             )
                         }
                     }
@@ -365,7 +368,7 @@ fun BackgroundSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(FoamDimens.separatorHeight)
-                            .background(FoamTheme.colors.borderOverlay)
+                            .foamBorderOverlay()
                     )
                     FoamSliderStateItem(
                         title = stringResource(R.string.player_color_intensity),
@@ -505,7 +508,7 @@ private fun CustomImageSection(
             .fillMaxWidth()
             .padding(horizontal = FoamDimens.paddingMedium)
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
     ) {
         Row(
             modifier = Modifier
@@ -522,7 +525,7 @@ private fun CustomImageSection(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                    .background(FoamTheme.colors.background),
+                    .foamBackground(),
                 contentAlignment = Alignment.Center
             ) {
                 if (imageUri != null) {
@@ -704,7 +707,7 @@ private fun GradientEditor(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .background(FoamTheme.colors.surface)
+                    .foamSurface()
             ) {
                 // Live rows plus the rows still animating out, spliced back at the
                 // slot they were removed from (latest removal first, so rows that
@@ -747,7 +750,7 @@ private fun GradientEditor(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(FoamDimens.separatorHeight)
-                                            .background(FoamTheme.colors.borderOverlay)
+                                            .foamBorderOverlay()
                                     )
                                 }
                                 StopRow(
@@ -782,7 +785,7 @@ private fun GradientEditor(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(FoamDimens.separatorHeight)
-                                .background(FoamTheme.colors.borderOverlay)
+                                .foamBorderOverlay()
                         )
                         AddStopButton(onAdd = { addStop() })
                     }

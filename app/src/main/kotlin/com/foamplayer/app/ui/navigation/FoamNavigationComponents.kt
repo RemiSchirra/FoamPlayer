@@ -61,6 +61,9 @@ import com.foamplayer.app.R
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.LocalAccentTintState
+import com.foamplayer.app.ui.theme.SurfaceAccentTint
+import com.foamplayer.app.ui.theme.SurfaceVariantAccentTint
 
 /** Duration of every nav-bar slot animation */
 private const val NavBarSlotAnimMillis = 250
@@ -810,7 +813,10 @@ fun FoamNavigationBar(
     expandFraction: Float = 0f,
     onToggleExpand: () -> Unit = {}
 ) {
+    // Base surface color; the live accent tint is resolved inside the draw
+    // lambda below so accent frames stay draw-only (see [AccentTintState]).
     val surfaceColor = FoamTheme.colors.surface
+    val accentTint = LocalAccentTintState.current
     val density = LocalDensity.current
     val navBarBottomInsetPx = WindowInsets.navigationBars.getBottom(density)
 
@@ -840,7 +846,7 @@ fun FoamNavigationBar(
                     // bottom of the screen: it extends down through the bottom
                     // margin and the system nav-bar inset.
                     drawRect(
-                        color = surfaceColor,
+                        color = accentTint.resolve(surfaceColor, SurfaceAccentTint),
                         size = Size(
                             width = size.width,
                             height = size.height +
@@ -929,7 +935,10 @@ internal fun FloatingNavigationBar(
     val miniImageRadius = (NavBarDimens.MiniPlayerArtSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val containerRadius = miniImageRadius + NavBarDimens.FloatingCornerOverhang
 
+    // Base surfaceVariant color; the live accent tint is resolved inside the
+    // draw lambda below so accent frames stay draw-only (see [AccentTintState]).
     val surfaceVariantColor = FoamTheme.colors.surfaceVariant
+    val accentTint = LocalAccentTintState.current
 
     // Measured top edge (root coordinates) of the surface column. Paired with the
     // card's measured top, it defines the attached extension directly: the surface is
@@ -1052,7 +1061,7 @@ internal fun FloatingNavigationBar(
                     } else 0f
 
                     drawRoundRect(
-                        color = surfaceVariantColor,
+                        color = accentTint.resolve(surfaceVariantColor, SurfaceVariantAccentTint),
                         topLeft = Offset(0f, -extensionPx),
                         size = Size(size.width, size.height + extensionPx),
                         cornerRadius = CornerRadius(radiusPx),

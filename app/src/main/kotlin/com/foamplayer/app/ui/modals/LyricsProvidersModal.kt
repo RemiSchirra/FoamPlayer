@@ -1,8 +1,7 @@
 package com.foamplayer.app.ui.modals
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +44,7 @@ import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceBlend
 
 /**
  * Bottom sheet for the lyrics providers: each row shows the provider's search
@@ -188,16 +188,19 @@ private fun LyricsProviderItem(
     modifier: Modifier = Modifier,
     dragHandleModifier: Modifier = Modifier
 ) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isDragging) FoamTheme.colors.surfaceVariant else FoamTheme.colors.surface,
-        label = "dragBackgroundColor"
+    // Drag feedback blends surface -> surfaceVariant as a float; the blend and
+    // its accent tint are resolved in the draw pass (see [foamSurfaceBlend]),
+    // so neither the drag animation nor an animating accent recomposes the row.
+    val dragBlend by animateFloatAsState(
+        targetValue = if (isDragging) 1f else 0f,
+        label = "dragBackgroundBlend"
     )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(backgroundColor)
+            .foamSurfaceBlend(dragBlend)
     ) {
         Row(
             modifier = Modifier

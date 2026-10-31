@@ -45,6 +45,13 @@ enum class SeekBarStyle(val label: String) {
     WAVEFORM("Waveform")
 }
 
+/** Overall look of the full player: classic art, immersive backdrop, or vinyl. */
+enum class PlayerMode(val label: String) {
+    NORMAL("Normal"),
+    IMMERSIVE("Immersive"),
+    VINYL("Vinyl")
+}
+
 /** Which color palette the UI renders with; FOLLOW_SYSTEM resolves per system dark mode. */
 enum class ThemeMode(val label: String) {
     FOLLOW_SYSTEM("Follow system"),
@@ -86,6 +93,12 @@ data class AppSettings(
     val quickFadeSeconds: Float = DEFAULT_QUICK_FADE_SECONDS,
     /** Dead air between the end of a track and the start of the next one, in seconds. 0 disables. */
     val silenceBetweenTracksSeconds: Float = DEFAULT_SILENCE_BETWEEN_TRACKS_SECONDS,
+    /** Automatically resumes the restored session when the app starts. */
+    val resumeOnStartup: Boolean = false,
+    /** Automatically resumes playback when an audio output device is connected. */
+    val resumeOnDeviceConnected: Boolean = true,
+    /** Automatically pauses playback when the audio output device in use is disconnected. */
+    val pauseOnDeviceDisconnected: Boolean = true,
     val libraryFolders: Set<String> = emptySet(),
     /** Connected distant servers (Plex/Jellyfin) and the folders scanned from them. */
     val distantServers: List<DistantServer> = emptyList(),
@@ -97,7 +110,13 @@ data class AppSettings(
     val genreSeparators: Set<String> = DEFAULT_SEPARATORS,
     val automaticColorEnabled: Boolean = true,
     val accentColor: Int = DEFAULT_ACCENT_COLOR,
-    val immersiveModeEnabled: Boolean = true,
+    /**
+     * Blends the current accent color into the app's backgrounds and containers.
+     * The base palette is kept; the accent only adds a subtle tint on top, which
+     * follows the live (per-track when Automatic Color is on) accent.
+     */
+    val accentTintEnabled: Boolean = true,
+    val playerMode: PlayerMode = PlayerMode.NORMAL,
     val animateSeekBarEnabled: Boolean = false,
     /** Visual style of the full player's seek bar (the mini player keeps the classic bar). */
     val seekBarStyle: SeekBarStyle = SeekBarStyle.NORMAL,

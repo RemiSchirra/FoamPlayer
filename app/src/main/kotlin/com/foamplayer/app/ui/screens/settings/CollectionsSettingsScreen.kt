@@ -48,6 +48,9 @@ import com.foamplayer.app.ui.components.CollectionHeroImmersiveOverlayFraction
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 /** Width of one layout-preview phone thumbnail; the 9:19.5 aspect fixes its height. */
 private val CollectionLayoutPreviewWidth = 96.dp
@@ -83,7 +86,7 @@ fun CollectionsSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.collections),
@@ -192,7 +195,7 @@ private fun CollectionLayoutPreview(
                 color = if (selected) FoamTheme.accentColor else FoamTheme.colors.borderOverlay,
                 shape = RoundedCornerShape(CollectionLayoutPreviewRounding)
             )
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -215,10 +218,6 @@ private fun CollectionLayoutPreview(
         }
     }
 }
-
-/** Image rectangle color of the skeleton previews (darker than the phone body). */
-private val PreviewImageColor: Color
-    @Composable get() = FoamTheme.colors.borderOverlay
 
 /** Thin skeleton line. */
 @Composable
@@ -252,7 +251,7 @@ private fun PreviewTrackRow() {
             modifier = Modifier
                 .size(14.dp)
                 .clip(RoundedCornerShape(4.dp))
-                .background(PreviewImageColor)
+                .foamBorderOverlay()
         )
         Spacer(modifier = Modifier.width(6.dp))
         Column {
@@ -296,7 +295,7 @@ private fun CompactPreview() {
                 modifier = Modifier
                     .size(36.dp)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(PreviewImageColor)
+                    .foamBorderOverlay()
             )
             Spacer(modifier = Modifier.width(7.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -324,7 +323,7 @@ private fun ImmersivePreview(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(imageHeightFraction)
-                .background(PreviewImageColor)
+                .foamBorderOverlay()
         )
         Box(
             modifier = Modifier
@@ -368,7 +367,7 @@ private fun NormalPreview() {
                 .weight(1f)
                 .aspectRatio(1f, matchHeightConstraintsFirst = true)
                 .clip(RoundedCornerShape(8.dp))
-                .background(PreviewImageColor)
+                .foamBorderOverlay()
         )
         Spacer(modifier = Modifier.height(4.dp))
         Column(

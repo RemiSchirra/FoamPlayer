@@ -7,7 +7,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.FoamEnumItem
 import com.foamplayer.app.ui.components.FoamSliderStateItem
@@ -40,6 +40,9 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalMiniPlayerRoundingPreview
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 import kotlin.math.roundToInt
 
 @Composable
@@ -48,7 +51,7 @@ fun PlayerSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
-    val isImmersiveEnabled = settings.immersiveModeEnabled
+    val playerMode = settings.playerMode
     val isAnimateSeekBarEnabled = settings.animateSeekBarEnabled
     val seekBarStyle = settings.seekBarStyle
     val isAutoOpenPlayerEnabled = settings.autoOpenPlayerEnabled
@@ -74,7 +77,7 @@ fun PlayerSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.player),
@@ -96,7 +99,7 @@ fun PlayerSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                     ) {
                         FoamSwitchItem(
                             title = stringResource(R.string.auto_open_player),
@@ -110,109 +113,109 @@ fun PlayerSettingsScreen(
             }
 
             item {
-                Column(
-                    modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-                ) {
-                    BasicText(text = stringResource(R.string.visuals), style = FoamTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                Column {
+                    Column(
+                        modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
                     ) {
-                        Column {
-                            FoamSwitchItem(
-                                title = stringResource(R.string.immersive_mode),
-                                description = stringResource(R.string.immersive_mode_desc),
-                                checked = isImmersiveEnabled,
-                                onCheckedChange = {
-                                    animateChanges = true
-                                    viewModel.setImmersiveModeEnabled(it)
-                                }
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
-                            )
-                            FoamSwitchItem(
-                                title = stringResource(R.string.animate_seek_bar),
-                                description = stringResource(R.string.animate_seek_bar_desc),
-                                checked = isAnimateSeekBarEnabled,
-                                onCheckedChange = { viewModel.setAnimateSeekBarEnabled(it) }
-                            )
-                            AnimatedVisibility(
-                                visible = isImmersiveEnabled,
-                                enter = enterTransition,
-                                exit = exitTransition
-                            ) {
-                                Column {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(FoamDimens.separatorHeight)
-                                            .background(FoamTheme.colors.borderOverlay)
-                                    )
-                                    FoamSwitchItem(
-                                        title = stringResource(R.string.animated_cover),
-                                        description = stringResource(R.string.animated_cover_desc),
-                                        checked = isAnimatedCoverEnabled,
-                                        onCheckedChange = {
-                                            animateChanges = true
-                                            viewModel.setAnimatedCoverEnabled(it)
-                                        }
-                                    )
-                                    AnimatedVisibility(
-                                        visible = isAnimatedCoverEnabled,
-                                        enter = enterTransition,
-                                        exit = exitTransition
-                                    ) {
-                                        Column {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(FoamDimens.separatorHeight)
-                                                    .background(FoamTheme.colors.borderOverlay)
-                                            )
-                                            FoamSwitchItem(
-                                                title = stringResource(R.string.animated_cover_mobile_data),
-                                                description = stringResource(R.string.animated_cover_mobile_data_desc),
-                                                checked = isAnimatedCoverAllowMobileData,
-                                                onCheckedChange = { viewModel.setAnimatedCoverAllowMobileData(it) }
-                                            )
+                        BasicText(text = stringResource(R.string.visuals), style = FoamTheme.typography.titleMedium)
+                        BasicText(text = stringResource(R.string.player_mode_desc), style = FoamTheme.typography.body)
+                    }
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                    PlayerModePicker(
+                        selected = playerMode,
+                        onSelect = {
+                            animateChanges = true
+                            viewModel.setPlayerMode(it)
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                    Column(
+                        modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                                .foamSurface()
+                        ) {
+                            Column {
+                                FoamSwitchItem(
+                                    title = stringResource(R.string.animate_seek_bar),
+                                    description = stringResource(R.string.animate_seek_bar_desc),
+                                    checked = isAnimateSeekBarEnabled,
+                                    onCheckedChange = { viewModel.setAnimateSeekBarEnabled(it) }
+                                )
+                                AnimatedVisibility(
+                                    visible = playerMode == PlayerMode.IMMERSIVE,
+                                    enter = enterTransition,
+                                    exit = exitTransition
+                                ) {
+                                    Column {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(FoamDimens.separatorHeight)
+                                                .foamBorderOverlay()
+                                        )
+                                        FoamSwitchItem(
+                                            title = stringResource(R.string.animated_cover),
+                                            description = stringResource(R.string.animated_cover_desc),
+                                            checked = isAnimatedCoverEnabled,
+                                            onCheckedChange = {
+                                                animateChanges = true
+                                                viewModel.setAnimatedCoverEnabled(it)
+                                            }
+                                        )
+                                        AnimatedVisibility(
+                                            visible = isAnimatedCoverEnabled,
+                                            enter = enterTransition,
+                                            exit = exitTransition
+                                        ) {
+                                            Column {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(FoamDimens.separatorHeight)
+                                                        .foamBorderOverlay()
+                                                )
+                                                FoamSwitchItem(
+                                                    title = stringResource(R.string.animated_cover_mobile_data),
+                                                    description = stringResource(R.string.animated_cover_mobile_data_desc),
+                                                    checked = isAnimatedCoverAllowMobileData,
+                                                    onCheckedChange = { viewModel.setAnimatedCoverAllowMobileData(it) }
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                        FoamEnumItem(
+                            title = stringResource(R.string.seek_bar_style),
+                            description = stringResource(R.string.seek_bar_style_desc),
+                            options = SeekBarStyle.entries.toTypedArray(),
+                            selectedOption = seekBarStyle,
+                            onOptionSelected = { viewModel.setSeekBarStyle(it) },
+                            getLabel = { style ->
+                                when (style) {
+                                    SeekBarStyle.NORMAL -> stringResource(R.string.seek_bar_style_normal)
+                                    SeekBarStyle.WAVEFORM -> stringResource(R.string.seek_bar_style_waveform)
+                                }
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                        FoamEnumItem(
+                            title = stringResource(R.string.marquee_title),
+                            description = stringResource(R.string.marquee_desc),
+                            options = MarqueeMode.entries.toTypedArray(),
+                            selectedOption = marqueeMode,
+                            onOptionSelected = { viewModel.setMarqueeMode(it) },
+                            getLabel = { it.label }
+                        )
                     }
+                    Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
                 }
-                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                FoamEnumItem(
-                    title = stringResource(R.string.seek_bar_style),
-                    description = stringResource(R.string.seek_bar_style_desc),
-                    options = SeekBarStyle.entries.toTypedArray(),
-                    selectedOption = seekBarStyle,
-                    onOptionSelected = { viewModel.setSeekBarStyle(it) },
-                    getLabel = { style ->
-                        when (style) {
-                            SeekBarStyle.NORMAL -> stringResource(R.string.seek_bar_style_normal)
-                            SeekBarStyle.WAVEFORM -> stringResource(R.string.seek_bar_style_waveform)
-                        }
-                    }
-                )
-                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                FoamEnumItem(
-                    title = stringResource(R.string.marquee_title),
-                    description = stringResource(R.string.marquee_desc),
-                    options = MarqueeMode.entries.toTypedArray(),
-                    selectedOption = marqueeMode,
-                    onOptionSelected = { viewModel.setMarqueeMode(it) },
-                    getLabel = { it.label }
-                )
-                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
             item {
@@ -225,7 +228,7 @@ fun PlayerSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                     ) {
                         Column {
                             FoamSliderStateItem(
@@ -244,7 +247,7 @@ fun PlayerSettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
+                                    .foamBorderOverlay()
                             )
                             FoamSliderStateItem(
                                 title = stringResource(R.string.full_player),

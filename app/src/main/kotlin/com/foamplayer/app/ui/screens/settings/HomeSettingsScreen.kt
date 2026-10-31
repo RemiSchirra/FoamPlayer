@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +43,8 @@ import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurfaceBlend
 
 /**
  * Settings > UI > Home: the Home page's sections in a drag-to-reorder list,
@@ -61,7 +62,7 @@ fun HomeSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.home),
@@ -188,16 +189,19 @@ private fun HomeSectionItem(
     modifier: Modifier = Modifier,
     dragHandleModifier: Modifier = Modifier
 ) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isDragging) FoamTheme.colors.surfaceVariant else FoamTheme.colors.surface,
-        label = "homeSectionDragBackgroundColor"
+    // Drag feedback blends surface -> surfaceVariant as a float; the blend and
+    // its accent tint are resolved in the draw pass (see [foamSurfaceBlend]),
+    // so neither the drag animation nor an animating accent recomposes the row.
+    val dragBlend by animateFloatAsState(
+        targetValue = if (isDragging) 1f else 0f,
+        label = "homeSectionDragBackgroundBlend"
     )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(backgroundColor)
+            .foamSurfaceBlend(dragBlend)
     ) {
         Row(
             modifier = Modifier

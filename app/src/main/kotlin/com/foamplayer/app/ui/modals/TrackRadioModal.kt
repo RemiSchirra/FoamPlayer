@@ -46,6 +46,7 @@ import com.foamplayer.app.ui.components.albumArtCornerRadius
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.adaptAccentForTheme
+import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 
 /** Vertical gap between the radio sheet's blocks, matching TrackFoamModal. */
@@ -150,7 +151,7 @@ private fun TrackRadioHeader(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(FoamTheme.colors.background)
+            .foamBackground()
             .padding(FoamDimens.spacingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {

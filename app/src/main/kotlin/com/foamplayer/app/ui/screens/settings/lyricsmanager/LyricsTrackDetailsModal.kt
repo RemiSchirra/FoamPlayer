@@ -46,6 +46,7 @@ import com.foamplayer.app.lyrics.LyricsUtils
 import com.foamplayer.app.ui.modals.FoamBottomModal
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.TimeUtils
 
 /**
@@ -122,7 +123,7 @@ private fun ModalHeader(track: TrackEntity) {
             modifier = Modifier
                 .size(48.dp)
                 .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                .background(FoamTheme.colors.surfaceVariant),
+                .foamSurfaceVariant(),
             contentAlignment = Alignment.Center
         ) {
             if (track.albumArtPath != null) {
@@ -173,7 +174,7 @@ private fun NoLyricsPrompt(onSearch: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary)
@@ -242,7 +243,7 @@ private fun MetaChip(label: String) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .padding(horizontal = FoamDimens.paddingSmall, vertical = FoamDimens.spacingTiny)
     ) {
         BasicText(
@@ -277,7 +278,7 @@ private fun LyricsScrollContainer(content: String?) {
                 .fillMaxWidth()
                 .heightIn(max = 320.dp)
                 .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
                 .verticalScroll(rememberScrollState())
                 .padding(FoamDimens.paddingSmall)
         ) {

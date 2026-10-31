@@ -80,6 +80,18 @@ class AudioSettingsViewModel @OptIn(UnstableApi::class)
         settingsRepository.setSilenceBetweenTracksSeconds(seconds)
     }
 
+    fun setResumeOnStartup(enabled: Boolean) = launch {
+        settingsRepository.setResumeOnStartup(enabled)
+    }
+
+    fun setResumeOnDeviceConnected(enabled: Boolean) = launch {
+        settingsRepository.setResumeOnDeviceConnected(enabled)
+    }
+
+    fun setPauseOnDeviceDisconnected(enabled: Boolean) = launch {
+        settingsRepository.setPauseOnDeviceDisconnected(enabled)
+    }
+
     @OptIn(UnstableApi::class)
     fun setDirectVolumeControl(enabled: Boolean) = launch {
         dspEngine.setDirectVolumeControl(enabled)

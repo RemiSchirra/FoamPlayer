@@ -43,6 +43,9 @@ import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 
 @Composable
 fun UISettingsScreen(
@@ -61,7 +64,7 @@ fun UISettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.user_interface),
@@ -83,7 +86,7 @@ fun UISettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                     ) {
                         Column {
                             FoamNavigationButton(
@@ -95,7 +98,7 @@ fun UISettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
+                                    .foamBorderOverlay()
                             )
                             FoamNavigationButton(
                                 title = stringResource(R.string.background),
@@ -106,7 +109,7 @@ fun UISettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
+                                    .foamBorderOverlay()
                             )
                             FoamNavigationButton(
                                 title = stringResource(R.string.navigation_bar),
@@ -128,7 +131,7 @@ fun UISettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                     ) {
                         Column {
                             FoamNavigationButton(
@@ -140,7 +143,7 @@ fun UISettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
+                                    .foamBorderOverlay()
                             )
                             FoamNavigationButton(
                                 title = stringResource(R.string.home),
@@ -151,7 +154,7 @@ fun UISettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(FoamDimens.separatorHeight)
-                                    .background(FoamTheme.colors.borderOverlay)
+                                    .foamBorderOverlay()
                             )
                             FoamNavigationButton(
                                 title = stringResource(R.string.collections),
@@ -247,7 +250,7 @@ private fun LanguageSelector(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),

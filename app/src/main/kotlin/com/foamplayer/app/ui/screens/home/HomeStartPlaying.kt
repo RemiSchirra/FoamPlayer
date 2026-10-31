@@ -56,6 +56,7 @@ import com.foamplayer.app.ui.components.MediaArtKind
 import com.foamplayer.app.ui.components.NoAlbumArtLetter
 import com.foamplayer.app.ui.components.mediaArtPlaceholderIcon
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlinx.coroutines.launch
 
 private val StartPlayingGridSpacing = 8.dp
@@ -296,7 +297,7 @@ private fun StartPlayingCard(
             modifier = Modifier
                 .size(StartPlayingCardSize)
                 .aspectRatio(1f)
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         ) {
             ShuffledArtwork(
                 art = ShuffledArt.Image(
@@ -354,7 +355,7 @@ private fun RandomAlbumCard(
             modifier = Modifier
                 .size(StartPlayingCardSize)
                 .aspectRatio(1f)
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         ) {
             ShuffledArtwork(
                 art = ShuffledArt.Image(
@@ -417,7 +418,7 @@ private fun RandomArtistCard(
             modifier = Modifier
                 .size(StartPlayingCardSize)
                 .aspectRatio(1f)
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         ) {
             ShuffledArtwork(
                 art = when {

@@ -119,6 +119,7 @@ import com.foamplayer.app.lyrics.LyricsUtils.parseTtml
 import com.foamplayer.app.lyrics.LyricsUtils.romanizeLyricsLine
 import com.foamplayer.app.lyrics.LyricsUtils.shouldRomanizeLyricsLine
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurface
 import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.text.iterator
@@ -2386,8 +2387,7 @@ fun Lyrics(
                 Row(
                     modifier =
                         Modifier
-                            .background(
-                                color = FoamTheme.colors.surface,
+                            .foamSurface(
                                 shape = RoundedCornerShape(24.dp),
                             ).clickable {
                                 isManualScrolling = false

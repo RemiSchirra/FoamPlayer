@@ -85,6 +85,8 @@ import com.foamplayer.app.data.repository.MULTI_VALUE_SEPARATOR
 import com.foamplayer.app.data.repository.TrackMetadataEdit
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 /**
  * Local draft of the edit page, seeded from the track once when the page opens
@@ -311,7 +313,7 @@ private fun MetadataField(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingSmall),
         contentAlignment = Alignment.CenterStart
     ) {
@@ -365,7 +367,7 @@ private fun GenreEditSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
                 .padding(
                     horizontal = FoamDimens.paddingMedium,
                     vertical = FoamDimens.spacingSmall
@@ -413,7 +415,7 @@ private fun GenreChip(genre: String, onRemove: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .padding(
                 start = FoamDimens.spacingMedium,
                 top = FoamDimens.spacingTiny,
@@ -539,7 +541,7 @@ private fun AddGenreDialog(
                     .widthIn(max = 480.dp)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                    .background(FoamTheme.colors.surface)
+                    .foamSurface()
                     .pointerInput(Unit) { detectTapGestures { } }
                     .padding(FoamDimens.spacingMedium),
                 verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
@@ -669,7 +671,7 @@ private fun GenreDropdown(
                         bottomEnd = FoamDimens.itemRounding
                     )
                 )
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         ) {
             items(displayed, key = { it }) { genre ->
                 BasicText(

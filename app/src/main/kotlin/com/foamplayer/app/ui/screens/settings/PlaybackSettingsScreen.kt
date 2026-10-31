@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -24,6 +23,9 @@ import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -46,7 +48,7 @@ fun PlaybackSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.playback),
@@ -66,7 +68,7 @@ fun PlaybackSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     Column {
                         FoamSliderStateItem(
@@ -127,6 +129,6 @@ private fun SectionDivider() {
         modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(FoamTheme.colors.borderOverlay)
+            .foamBorderOverlay()
     )
 }

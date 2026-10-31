@@ -49,6 +49,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.adaptAccentForTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.TimeUtils
 import androidx.core.net.toUri
@@ -237,7 +238,7 @@ internal fun DetailsSection(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .padding(vertical = FoamDimens.spacingTiny)
     ) {
         Row(

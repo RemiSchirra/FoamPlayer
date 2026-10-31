@@ -10,7 +10,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -29,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -38,14 +38,17 @@ import androidx.compose.ui.unit.Dp
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.ui.components.MiniPlayer
 import com.foamplayer.app.ui.components.ToastStack
 import com.foamplayer.app.ui.components.TrackCenterRequest
 import com.foamplayer.app.ui.components.collectionHeroOverlayLayer
 import com.foamplayer.app.ui.screens.player.MiniPlayerSwipeController
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
-import com.foamplayer.app.ui.screens.player.backdropScrimColor
 import com.foamplayer.app.ui.screens.player.progress
+import com.foamplayer.app.ui.theme.BackgroundAccentTint
+import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.LocalAccentTintState
 
 /**
  * Bottom chrome of the app: the scrim behind it, the nav bar (docked, floating
@@ -95,18 +98,25 @@ internal fun BoxScope.FoamBottomChrome(
     }
 
     if (currentRoute != Screen.Onboarding.route) {
-        val bottomScrimColor = backdropScrimColor()
+        // Scrim base color read in composition; the live accent tint is
+        // resolved inside the draw lambda so accent frames stay draw-only
+        // (see [AccentTintState]).
+        val scrimBaseColor = FoamTheme.colors.background
+        val accentTint = LocalAccentTintState.current
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(bottomBarClearance)
-                .background(
-                    Brush.verticalGradient(
-                        0f to bottomScrimColor.copy(alpha = 0f),
-                        1f to bottomScrimColor.copy(alpha = BottomChromeScrimMaxAlpha)
+                .drawBehind {
+                    val scrim = accentTint.resolve(scrimBaseColor, BackgroundAccentTint)
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            0f to scrim.copy(alpha = 0f),
+                            1f to scrim.copy(alpha = BottomChromeScrimMaxAlpha)
+                        )
                     )
-                )
+                }
         )
     }
 
@@ -253,13 +263,13 @@ internal fun BoxScope.FoamBottomChrome(
                     useSharedElements = trackListTransitionTrackId == null &&
                         centerTrackRequest == null,
                     sharedArtFlightAlpha = {
-                        if (settings.immersiveModeEnabled) {
+                        if (settings.playerMode != PlayerMode.NORMAL) {
                             1f - playerTransitionState.progress()
                         } else {
                             1f
                         }
                     },
-                    isImmersiveEnabled = settings.immersiveModeEnabled,
+                    isImmersiveEnabled = settings.playerMode == PlayerMode.IMMERSIVE,
                     isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                     marqueeMode = settings.marqueeMode,
                     skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,

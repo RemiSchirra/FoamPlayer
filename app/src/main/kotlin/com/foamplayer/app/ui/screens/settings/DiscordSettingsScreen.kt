@@ -38,6 +38,8 @@ import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurface
 import kotlinx.coroutines.delay
 
 /**
@@ -67,7 +69,7 @@ fun DiscordSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.discord_section),
@@ -86,7 +88,7 @@ fun DiscordSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     FoamSwitchItem(
                         title = stringResource(R.string.discord_presence),
@@ -111,7 +113,7 @@ fun DiscordSettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                                .background(FoamTheme.colors.surface)
+                                .foamSurface()
                         ) {
                             if (isLoggedIn) {
                                 val account = session?.account
@@ -219,7 +221,7 @@ fun DiscordSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                     ) {
                         FoamSwitchItem(
                             title = stringResource(R.string.discord_online_art),

@@ -61,6 +61,7 @@ import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.modals.OrganisationMenuButton
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 /**
  * Receiver handed to [CollectionListScreen]'s content lambda: routes the item
@@ -506,7 +507,7 @@ fun CollectionListItem(
             fullyRounded = fullyRoundedArtwork,
             castsFlightShadow = true
         )
-        .background(FoamTheme.colors.surfaceVariant)
+        .foamSurfaceVariant()
 
     val sharedTitleModifier = Modifier.rowSharedText(
         key = "$sharedElementPrefix-title-$elementKey",

@@ -55,6 +55,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.distant.DistantAuthMethod
 import com.foamplayer.distant.DistantFolder
 import com.foamplayer.distant.DistantFolderEntry
@@ -292,7 +293,7 @@ private fun ProviderOptionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -465,7 +466,7 @@ private fun SelectableFolderRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -507,7 +508,7 @@ private fun ProviderField(
         modifier = Modifier
             .fillMaxWidth()
             .clip(CircleShape)
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .padding(horizontal = FoamDimens.paddingLarge, vertical = FoamDimens.spacingStandard),
         contentAlignment = Alignment.CenterStart
     ) {

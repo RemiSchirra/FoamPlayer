@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -33,6 +32,9 @@ import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 
 @Composable
 fun MiscSettingsScreen(
@@ -65,7 +67,7 @@ fun MiscSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.settings_misc),
@@ -84,7 +86,7 @@ fun MiscSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     FoamNavigationButton(
                         title = stringResource(R.string.notification_entry),
@@ -107,7 +109,7 @@ fun MiscSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     FoamSwitchItem(
                         title = stringResource(R.string.display_on_lock_screen),
@@ -128,7 +130,7 @@ fun MiscSettingsScreen(
                             .fillMaxWidth()
                             .padding(top = FoamDimens.spacingSmall)
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                             .padding(FoamDimens.paddingMedium)
                     ) {
                         BasicText(
@@ -151,7 +153,7 @@ fun MiscSettingsScreen(
                             .fillMaxWidth()
                             .padding(top = FoamDimens.spacingSmall)
                             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .background(FoamTheme.colors.surface)
+                            .foamSurface()
                     ) {
                         FoamSwitchItem(
                             title = stringResource(R.string.fast_lock_screen),
@@ -178,7 +180,7 @@ fun MiscSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     FoamNavigationButton(
                         title = stringResource(R.string.lastfm_entry),
@@ -190,7 +192,7 @@ fun MiscSettingsScreen(
                             .fillMaxWidth()
                             .padding(horizontal = FoamDimens.paddingMedium)
                             .height(FoamDimens.separatorHeight)
-                            .background(FoamTheme.colors.borderOverlay)
+                            .foamBorderOverlay()
                     )
                     FoamNavigationButton(
                         title = stringResource(R.string.discord_entry),

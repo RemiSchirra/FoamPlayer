@@ -11,7 +11,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
@@ -29,7 +28,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -37,6 +35,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.toast.ToastCenter
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurface
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 
@@ -139,7 +138,7 @@ private fun ToastPill(text: String) {
         modifier = Modifier
             .widthIn(max = ToastMaxWidth)
             .clip(RoundedCornerShape(FoamTheme.shapes.cardRounding))
-            .background(ToastBackground)
+            .foamSurface(alpha = 0.92f)
             .padding(horizontal = ToastHorizontalPadding, vertical = ToastVerticalPadding)
     ) {
         Text(
@@ -170,9 +169,6 @@ private const val ToastMinScale = 0.8f
 
 /** Pill grows from / shrinks toward its bottom edge, where it sits on the stack. */
 private val ToastTransformOrigin = TransformOrigin(0.5f, 1f)
-
-private val ToastBackground: Color
-    @Composable get() = FoamTheme.colors.surface.copy(alpha = 0.92f)
 
 private val ToastHorizontalPadding = 16.dp
 

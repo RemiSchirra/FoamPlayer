@@ -6,7 +6,6 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 // Hoisted: this list was rebuilt on every recomposition of the score popup.
 private val ScoreOptions = listOf(
@@ -167,7 +167,7 @@ fun TrackScoreHeart(
                             spotColor = Color.Black
                         )
                         .clip(RoundedCornerShape(28.dp))
-                        .background(FoamTheme.colors.surfaceVariant)
+                        .foamSurfaceVariant()
                         .padding(vertical = 6.dp, horizontal = 4.dp)
                 ) {
                     ScoreOptions.forEach { (option, optionIcon) ->

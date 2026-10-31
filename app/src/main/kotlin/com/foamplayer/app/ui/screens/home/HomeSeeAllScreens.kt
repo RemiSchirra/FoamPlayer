@@ -59,6 +59,7 @@ import com.foamplayer.app.ui.components.rememberSortedList
 import com.foamplayer.app.ui.components.rememberSortedTracks
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlinx.coroutines.launch
 
 /** Horizontal inset of one list row; grid cells get their own symmetric padding instead. */
@@ -862,7 +863,7 @@ private fun HomePlaylistRow(
 
     val artworkModifier = Modifier
         .clip(AlbumArtShape())
-        .background(FoamTheme.colors.surfaceVariant)
+        .foamSurfaceVariant()
 
     if (density.isGrid) {
         MediaGridCell(

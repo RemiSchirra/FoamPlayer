@@ -67,6 +67,9 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.screens.settings.SettingsHeader
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.utils.TimeUtils
 import kotlinx.coroutines.launch
@@ -155,7 +158,7 @@ fun LyricsManagerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         Column(
             modifier = Modifier
@@ -291,7 +294,7 @@ private fun LyricsStatsRow(stats: LyricsManagerStats, modifier: Modifier = Modif
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .padding(vertical = FoamDimens.paddingSmall)
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -336,7 +339,7 @@ private fun LyricsSearchBar(
             .fillMaxWidth()
             .height(48.dp)
             .clip(RoundedCornerShape(FoamDimens.searchBarRounding))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .padding(horizontal = FoamDimens.paddingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -465,7 +468,7 @@ private fun LyricsManagerSongItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -479,7 +482,7 @@ private fun LyricsManagerSongItem(
             modifier = Modifier
                 .size(48.dp)
                 .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                .background(FoamTheme.colors.surfaceVariant),
+                .foamSurfaceVariant(),
             contentAlignment = Alignment.Center
         ) {
             if (track.albumArtPath != null) {

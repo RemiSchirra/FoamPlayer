@@ -53,6 +53,8 @@ import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.adaptAccentForTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.TimeUtils
 
@@ -268,7 +270,7 @@ fun CollectionFoamModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .foamSurfaceVariant()
                             ) {
                                 ModalBackButton(onBack = { showDetails = false })
                             }
@@ -277,7 +279,7 @@ fun CollectionFoamModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .foamSurfaceVariant()
                                     .padding(
                                         horizontal = FoamDimens.paddingSmall,
                                         vertical = FoamDimens.spacingTiny
@@ -335,7 +337,7 @@ fun CollectionFoamModal(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                        .background(FoamTheme.colors.surfaceVariant)
+                                        .foamSurfaceVariant()
                                 ) {
                                     navigationRows.forEachIndexed { index, row ->
                                         if (index > 0) ModalSectionDivider()
@@ -352,7 +354,7 @@ fun CollectionFoamModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                                    .background(FoamTheme.colors.surfaceVariant)
+                                    .foamSurfaceVariant()
                             ) {
                                 ModalRowButton(
                                     label = stringResource(R.string.details),
@@ -453,7 +455,7 @@ private fun CollectionModalHeader(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.itemRounding))
-            .background(FoamTheme.colors.background)
+            .foamBackground()
             .padding(FoamDimens.spacingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -468,7 +470,7 @@ private fun CollectionModalHeader(
             modifier = Modifier
                 .size(64.dp)
                 .clip(headerArtShape)
-                .background(FoamTheme.colors.surfaceVariant),
+                .foamSurfaceVariant(),
             contentAlignment = Alignment.Center
         ) {
             if (collection.imageUrl != null) {

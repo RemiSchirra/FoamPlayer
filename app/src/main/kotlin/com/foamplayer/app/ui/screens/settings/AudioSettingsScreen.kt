@@ -45,6 +45,9 @@ import com.foamplayer.app.ui.modals.AudioPipelineModal
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * Audio settings: live fidelity score with itemized breakdown, engine
@@ -55,6 +58,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 fun AudioSettingsScreen(
     onBack: () -> Unit,
     onNavigateToPlayback: () -> Unit,
+    onNavigateToBehavior: () -> Unit,
     onNavigateToDevices: () -> Unit,
     onNavigateToEqualizer: () -> Unit,
     viewModel: AudioSettingsViewModel = hiltViewModel()
@@ -68,7 +72,7 @@ fun AudioSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.audio),
@@ -105,7 +109,7 @@ fun AudioSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
                     Column {
                         FoamSwitchItem(
@@ -133,45 +137,33 @@ fun AudioSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
-                    FoamNavigationButton(
-                        title = stringResource(R.string.playback),
-                        description = stringResource(R.string.playback_desc),
-                        onClick = onNavigateToPlayback
-                    )
-                }
-                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
-            }
-
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
-                ) {
-                    FoamNavigationButton(
-                        title = stringResource(R.string.output_devices),
-                        description = stringResource(R.string.audio_devices_desc),
-                        onClick = onNavigateToDevices
-                    )
-                }
-                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
-            }
-
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
-                ) {
-                    FoamNavigationButton(
-                        title = stringResource(R.string.equalizer_dsp),
-                        description = stringResource(R.string.equalizer_dsp_desc),
-                        onClick = onNavigateToEqualizer
-                    )
+                    Column {
+                        FoamNavigationButton(
+                            title = stringResource(R.string.playback),
+                            description = stringResource(R.string.playback_desc),
+                            onClick = onNavigateToPlayback
+                        )
+                        SectionDivider()
+                        FoamNavigationButton(
+                            title = stringResource(R.string.audio_behavior),
+                            description = stringResource(R.string.audio_behavior_desc),
+                            onClick = onNavigateToBehavior
+                        )
+                        SectionDivider()
+                        FoamNavigationButton(
+                            title = stringResource(R.string.output_devices),
+                            description = stringResource(R.string.audio_devices_desc),
+                            onClick = onNavigateToDevices
+                        )
+                        SectionDivider()
+                        FoamNavigationButton(
+                            title = stringResource(R.string.equalizer_dsp),
+                            description = stringResource(R.string.equalizer_dsp_desc),
+                            onClick = onNavigateToEqualizer
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
@@ -182,7 +174,7 @@ fun AudioSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -227,7 +219,7 @@ private fun SectionDivider() {
         modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(FoamTheme.colors.borderOverlay)
+            .foamBorderOverlay()
     )
 }
 

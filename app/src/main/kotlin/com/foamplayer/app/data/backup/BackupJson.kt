@@ -26,6 +26,7 @@ import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.NotificationExtraButton
+import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
@@ -52,6 +53,9 @@ object BackupJson {
         put("normalFadeSeconds", settings.normalFadeSeconds.toDouble())
         put("quickFadeSeconds", settings.quickFadeSeconds.toDouble())
         put("silenceBetweenTracksSeconds", settings.silenceBetweenTracksSeconds.toDouble())
+        put("resumeOnStartup", settings.resumeOnStartup)
+        put("resumeOnDeviceConnected", settings.resumeOnDeviceConnected)
+        put("pauseOnDeviceDisconnected", settings.pauseOnDeviceDisconnected)
         put("iconStyle", settings.iconStyle.name)
         put("miniPlayerRounding", settings.miniPlayerRounding)
         put("fullPlayerRounding", settings.fullPlayerRounding)
@@ -60,7 +64,8 @@ object BackupJson {
         put("genreSeparators", JSONArray(settings.genreSeparators.toList()))
         put("automaticColorEnabled", settings.automaticColorEnabled)
         put("accentColor", settings.accentColor)
-        put("immersiveModeEnabled", settings.immersiveModeEnabled)
+        put("accentTintEnabled", settings.accentTintEnabled)
+        put("playerMode", settings.playerMode.name)
         put("animateSeekBarEnabled", settings.animateSeekBarEnabled)
         put("seekBarStyle", settings.seekBarStyle.name)
         put("autoOpenPlayerEnabled", settings.autoOpenPlayerEnabled)
@@ -135,6 +140,9 @@ object BackupJson {
             "silenceBetweenTracksSeconds",
             AppSettings.DEFAULT_SILENCE_BETWEEN_TRACKS_SECONDS.toDouble()
         ).toFloat(),
+        resumeOnStartup = json.optBoolean("resumeOnStartup", false),
+        resumeOnDeviceConnected = json.optBoolean("resumeOnDeviceConnected", true),
+        pauseOnDeviceDisconnected = json.optBoolean("pauseOnDeviceDisconnected", true),
         iconStyle = decodeEnum(json.optString("iconStyle"), FoamIconStyle.FLAT),
         miniPlayerRounding = json.optInt("miniPlayerRounding", 40),
         fullPlayerRounding = json.optInt("fullPlayerRounding", 40),
@@ -145,7 +153,8 @@ object BackupJson {
             .ifEmpty { AppSettings.DEFAULT_SEPARATORS },
         automaticColorEnabled = json.optBoolean("automaticColorEnabled", true),
         accentColor = json.optInt("accentColor", AppSettings.DEFAULT_ACCENT_COLOR),
-        immersiveModeEnabled = json.optBoolean("immersiveModeEnabled", true),
+        accentTintEnabled = json.optBoolean("accentTintEnabled", true),
+        playerMode = decodeEnum(json.optString("playerMode"), PlayerMode.NORMAL),
         animateSeekBarEnabled = json.optBoolean("animateSeekBarEnabled", false),
         seekBarStyle = decodeEnum(json.optString("seekBarStyle"), SeekBarStyle.NORMAL),
         autoOpenPlayerEnabled = json.optBoolean("autoOpenPlayerEnabled", false),

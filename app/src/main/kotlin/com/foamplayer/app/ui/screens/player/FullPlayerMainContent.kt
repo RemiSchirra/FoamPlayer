@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -76,6 +78,8 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.CrossfadingPlayPauseIcon
+import com.foamplayer.app.ui.components.PLAY_PAUSE_CROSSFADE_MS
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
@@ -117,6 +121,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
     screenWidthDp: Dp,
     placeholderColor: Color,
     immersive: Boolean,
+    vinyl: Boolean,
     outerVisibilityScope: AnimatedVisibilityScope,
     headerVisibilityScope: AnimatedVisibilityScope,
     viewModel: PlayerViewModel,
@@ -151,21 +156,30 @@ internal fun SharedTransitionScope.MainPlayerContent(
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Shared drag preview of the seek bar: mirrored by [PlaybackProgressSlider] while
+        // the finger is down, read by [TonearmOverlay] so the arm follows a seek drag in
+        // realtime instead of only on release.
+        val seekDragPreview = remember { mutableStateOf<Float?>(null) }
+
         TrackHeroPager(
             track = track,
             queue = queue,
             queueIndex = queueIndex,
             queueEntryIds = queueEntryIds,
+            isPlaying = isPlaying,
             isPlaybackActive = isPlaybackActive,
             pagerState = pagerState,
             density = density,
             screenWidthDp = screenWidthDp,
             placeholderColor = placeholderColor,
             immersive = immersive,
+            vinyl = vinyl,
             outerVisibilityScope = outerVisibilityScope,
             headerVisibilityScope = headerVisibilityScope,
             playerTransitionState = playerTransitionState,
             upTransitionState = upTransitionState,
+            seekBarProgress = seekBarProgress,
+            seekDragPreview = seekDragPreview,
             scoreOverrides = scoreOverrides,
             onSetScore = onSetScore,
             viewModel = viewModel,
@@ -188,6 +202,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
             durationMs = durationMs,
             outerVisibilityScope = outerVisibilityScope,
             seekBarProgress = seekBarProgress,
+            dragValueState = seekDragPreview,
             isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
             seekBarStyle = seekBarStyle,
             audioInfoText = audioInfoText,
@@ -246,16 +261,23 @@ internal fun SharedTransitionScope.TrackHeroPager(
     queue: List<TrackEntity>,
     queueIndex: Int,
     queueEntryIds: List<Long>,
+    isPlaying: () -> Boolean,
     isPlaybackActive: () -> Boolean,
     pagerState: PagerState,
     density: Density,
     screenWidthDp: Dp,
     placeholderColor: Color,
     immersive: Boolean,
+    vinyl: Boolean,
     outerVisibilityScope: AnimatedVisibilityScope,
     headerVisibilityScope: AnimatedVisibilityScope,
     playerTransitionState: SeekableTransitionState<Boolean>,
     upTransitionState: SeekableTransitionState<Boolean>,
+    seekBarProgress: SeekBarProgressState,
+    // Shared drag preview of the seek bar: set by [PlaybackProgressSlider] while the
+    // finger is down (null at rest), read by [TonearmOverlay] so the arm follows a
+    // seek drag in realtime.
+    seekDragPreview: MutableState<Float?>,
     scoreOverrides: Map<Long, Int>,
     onSetScore: (Long, Int) -> Unit,
     viewModel: PlayerViewModel,
@@ -361,6 +383,23 @@ internal fun SharedTransitionScope.TrackHeroPager(
         }
     }
 
+    // Vinyl-mode flight fade: 1 while the player rests open, easing to 0 during the
+    // open/close flight toward the mini player and while a subview slides up. It is
+    // the exact mirror of the square shared-element art (which uses this sum directly
+    // and is visible at rest mini and during flights), so the record and the square
+    // art crossfade instead of stacking.
+    val vinylFlightFade = remember(playerTransitionState, upTransitionState) {
+        {
+            val openFade = 1f - EaseOutCubic.transform(
+                (playerTransitionState.progress() / immersiveArtFadeSpan).coerceIn(0f, 1f)
+            )
+            val subViewFade = 1f - EaseOutCubic.transform(
+                ((1f - upTransitionState.progress()) / immersiveArtFadeSpan).coerceIn(0f, 1f)
+            )
+            1f - (openFade + subViewFade).coerceIn(0f, 1f)
+        }
+    }
+
     val prefetchContext = LocalContext.current
     LaunchedEffect(pagerState, queue) {
         snapshotFlow { pagerState.currentPage }.collect { page ->
@@ -405,6 +444,30 @@ internal fun SharedTransitionScope.TrackHeroPager(
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 if (immersive) {
                     Spacer(modifier = Modifier.padding(horizontal = artInset).fillMaxWidth().aspectRatio(1f))
+                } else if (vinyl) {
+                    // Vinyl mode keeps the normal pager mechanics (each page is its own
+                    // record, so swipes slide/fade like the square art); the anchor page
+                    // renders a spinning record instead. Its layer alpha is the inverse
+                    // of the hero's immersive fade: visible at rest, fading out as the
+                    // player closes toward the mini player or as a subview slides up, so
+                    // the square shared-element art can take over during flights. The
+                    // player-level tonearm overlay is drawn above the pager; the record
+                    // slides beneath it during swipes. Unlike classic mode the record
+                    // never scales on pause/play.
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = artInset)
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .graphicsLayer { alpha = vinylFlightFade() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        VinylDisc(
+                            albumArtPath = pageTrack.albumArtPath,
+                            isPlaying = isPlaying,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 } else {
                     Box(
                         modifier = Modifier
@@ -572,14 +635,14 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             // rememberPausedArtScale for the endpoint-side mirror.
                             scaleX = pausedArtScale + (1f - pausedArtScale) * (1f - heroRestFraction())
                             scaleY = pausedArtScale + (1f - pausedArtScale) * (1f - heroRestFraction())
-                            shadowElevation = if (!immersive) {
+                            shadowElevation = if (!immersive && !vinyl) {
                                 with(density) {
                                     PlayerDimens.fullPlayerArtElevation.toPx()
                                 } * outerFraction * (1f - headerFraction)
                             } else {
                                 0f
                             }
-                            alpha = if (immersive) {
+                            alpha = if (immersive || vinyl) {
                                 val openFade = 1f - EaseOutCubic.transform(
                                     (playerTransitionState.progress() / immersiveArtFadeSpan)
                                         .coerceIn(0f, 1f)
@@ -673,6 +736,29 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 }
             }
         }
+        if (vinyl) {
+            var isPagerSwiping by remember { mutableStateOf(false) }
+            LaunchedEffect(pagerState) {
+                pagerState.interactionSource.interactions.collect { interaction ->
+                    if (interaction is DragInteraction.Start) isPagerSwiping = true
+                }
+            }
+            LaunchedEffect(pagerState) {
+                snapshotFlow { pagerState.isScrollInProgress }
+                    .collect { scrolling -> if (!scrolling) isPagerSwiping = false }
+            }
+            TonearmOverlay(
+                progress = { seekDragPreview.value ?: seekBarProgress.progress },
+                isDragging = { seekDragPreview.value != null },
+                isSwiping = { isPagerSwiping },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(horizontal = PlayerDimens.screenPadding + artInset)
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .graphicsLayer { alpha = vinylFlightFade() }
+            )
+        }
     }
 }
 
@@ -719,6 +805,7 @@ internal fun SharedTransitionScope.PlaybackControls(
     durationMs: Long,
     outerVisibilityScope: AnimatedVisibilityScope,
     seekBarProgress: SeekBarProgressState,
+    dragValueState: MutableState<Float?>,
     isAnimateSeekBarEnabled: Boolean,
     seekBarStyle: SeekBarStyle,
     audioInfoText: String?,
@@ -746,7 +833,8 @@ internal fun SharedTransitionScope.PlaybackControls(
             trackChangeProgress = envelopeMorphProgress,
             onSeek = onSeek,
             audioInfoText = audioInfoText,
-            onAudioInfoClick = onAudioInfoClick
+            onAudioInfoClick = onAudioInfoClick,
+            dragValueState = dragValueState
         )
         Spacer(modifier = Modifier.height(PlayerDimens.controlsSpacing))
 
@@ -822,14 +910,6 @@ internal fun SharedTransitionScope.PlayPauseButton(
         label = "playButtonPressScale"
     )
 
-    // 0f = play icon showing, 1f = pause icon showing. Both icons ride this one value
-    // in opposite directions, so they always crossfade in lockstep.
-    val pauseFraction by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
-        label = "playPauseCrossfade"
-    )
-
     // The loading circle replaces the play/pause glyph with the same scale+fade
     // convention the two icons use: 0f = transport showing, 1f = circle showing.
     val loadingFraction by animateFloatAsState(
@@ -837,7 +917,6 @@ internal fun SharedTransitionScope.PlayPauseButton(
         animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
         label = "playLoadingCrossfade"
     )
-    val transportAlpha = 1f - loadingFraction
 
     val description = stringResource(
         when {
@@ -866,36 +945,13 @@ internal fun SharedTransitionScope.PlayPauseButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Play icon: 100% -> 20% scale and 100% -> 0% opacity when switching to pause.
-        Icon(
-            imageVector = FoamTheme.icons.current.play,
-            contentDescription = null,
+        // Shared stacked play/pause glyphs: crossfade in lockstep (100% <-> 20% scale
+        // while the alpha flips), faded out while the loading circle takes their place.
+        CrossfadingPlayPauseIcon(
+            isPlaying = isPlaying,
+            loadingFraction = { loadingFraction },
             tint = FoamTheme.colors.textPrimary,
-            modifier = Modifier
-                .size(PlayerDimens.playButtonIconSize)
-                .graphicsLayer {
-                    val visible = (1f - pauseFraction) * transportAlpha
-                    alpha = visible
-                    val iconScale = (0.2f + 0.8f * (1f - pauseFraction)) *
-                            (1f - 0.8f * loadingFraction)
-                    scaleX = iconScale
-                    scaleY = iconScale
-                }
-        )
-        // Pause icon: the exact reverse (20% -> 100% scale, 0% -> 100% opacity).
-        Icon(
-            imageVector = FoamTheme.icons.current.pause,
-            contentDescription = null,
-            tint = FoamTheme.colors.textPrimary,
-            modifier = Modifier
-                .size(PlayerDimens.playButtonIconSize)
-                .graphicsLayer {
-                    alpha = pauseFraction * transportAlpha
-                    val iconScale = (0.2f + 0.8f * pauseFraction) *
-                            (1f - 0.8f * loadingFraction)
-                    scaleX = iconScale
-                    scaleY = iconScale
-                }
+            iconSize = PlayerDimens.playButtonIconSize
         )
         if (isLoading || loadingFraction > 0f) {
             CircularProgressIndicator(
@@ -915,7 +971,6 @@ internal fun SharedTransitionScope.PlayPauseButton(
 }
 
 private const val PLAY_BUTTON_PRESSED_SCALE = 0.88f
-private const val PLAY_PAUSE_CROSSFADE_MS = 250
 
 /**
  * Progress bar + optional elapsed/remaining labels. [seekBarStyle] picks the rendering:
@@ -947,7 +1002,10 @@ internal fun PlaybackProgressSlider(
     labelSpacing: Dp = PlayerDimens.seekBarLabelSpacing,
     showTimeLabels: Boolean = true,
     audioInfoText: String? = null,
-    onAudioInfoClick: () -> Unit = {}
+    onAudioInfoClick: () -> Unit = {},
+    // Shared drag preview of the seek bar (optional): mirrored on every drag tick so
+    // the player-level tonearm can follow a manual seek in realtime (null at rest).
+    dragValueState: MutableState<Float?>? = null
 ) {
     Column(modifier = modifier) {
         var dragValue by remember { mutableStateOf<Float?>(null) }
@@ -957,10 +1015,12 @@ internal fun PlaybackProgressSlider(
             // A fresh manual drag always wins over any settle tween in flight.
             seekBarProgress.onDragging()
             dragValue = new
+            dragValueState?.value = new
         }
         val sliderModifier = Modifier.onSeekBarReleased {
             val released = dragValue
             dragValue = null
+            dragValueState?.value = null
             if (released != null) {
                 currentOnSeek((released * durationMs).toLong())
                 seekBarProgress.onSeekDragFinished(

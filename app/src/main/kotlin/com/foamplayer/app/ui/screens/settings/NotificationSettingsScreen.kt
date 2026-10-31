@@ -28,6 +28,7 @@ import com.foamplayer.app.ui.components.FoamEnumItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
 
 /**
  * Subscreen of Settings > Misc: picks which two actions sit next to the fixed
@@ -43,7 +44,7 @@ fun NotificationSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.notification_section),

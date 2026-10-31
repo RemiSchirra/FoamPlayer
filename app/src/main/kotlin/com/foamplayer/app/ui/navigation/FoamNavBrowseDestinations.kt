@@ -5,6 +5,7 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.MediaListView
+import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.screens.browse.AlbumsBrowseScreen
 import com.foamplayer.app.ui.screens.browse.AllTracksBrowseScreen
@@ -142,7 +143,7 @@ internal fun NavGraphBuilder.browseDestinations(context: FoamNavGraphContext) {
             centerTrackRequest = context.centerTrackRequest,
             isPlaybackActive = context.isPlaybackActive,
             heroLayout = context.heroLayoutFor(CollectionHeroTarget.Default),
-            immersiveMode = context.settings.immersiveModeEnabled
+            immersiveMode = context.settings.playerMode != PlayerMode.NORMAL
         )
     }
     composable(
@@ -169,7 +170,7 @@ internal fun NavGraphBuilder.browseDestinations(context: FoamNavGraphContext) {
             centerTrackRequest = context.centerTrackRequest,
             isPlaybackActive = context.isPlaybackActive,
             heroLayout = context.heroLayoutFor(CollectionHeroTarget.Default),
-            immersiveMode = context.settings.immersiveModeEnabled
+            immersiveMode = context.settings.playerMode != PlayerMode.NORMAL
         )
     }
     composable(
@@ -196,7 +197,7 @@ internal fun NavGraphBuilder.browseDestinations(context: FoamNavGraphContext) {
             centerTrackRequest = context.centerTrackRequest,
             isPlaybackActive = context.isPlaybackActive,
             heroLayout = context.heroLayoutFor(CollectionHeroTarget.Default),
-            immersiveMode = context.settings.immersiveModeEnabled
+            immersiveMode = context.settings.playerMode != PlayerMode.NORMAL
         )
     }
     composable(

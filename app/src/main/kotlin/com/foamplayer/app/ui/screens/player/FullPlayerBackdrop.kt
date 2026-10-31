@@ -46,6 +46,8 @@ import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.buildGradientImage
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 
 /**
@@ -365,7 +367,7 @@ internal fun AlbumArtBackdrop(
     val effectiveMode = if (forceDynamic) BackgroundMode.DYNAMIC else backgroundMode
 
     Box(modifier = modifier.fillMaxSize()) {
-        Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
+        Box(modifier = Modifier.fillMaxSize().foamBackground())
         when (effectiveMode) {
             BackgroundMode.DYNAMIC -> {
                 val context = LocalContext.current
@@ -450,7 +452,7 @@ private fun ImmersiveAlbumArtBackdrop(
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val sharpArtHeight = maxHeight * 0.55f
 
-        Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.background))
+        Box(modifier = Modifier.fillMaxSize().foamBackground())
         AlbumArtImagePair(
             frontArtPath = frontArtPath,
             backArtPath = backArtPath,
@@ -543,7 +545,7 @@ private fun AlbumArtImagePair(
         // field keeps the sharp no-art region (see CanvasAwareArtPair) dissolving into a
         // matching shade instead of into the bare background color.
         if (frontArtPath == null && backArtPath == null) {
-            Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.surfaceVariant))
+            Box(modifier = Modifier.fillMaxSize().foamSurfaceVariant())
         }
         if (frontArtPath != null) {
             val frontRequest = remember(frontArtPath) { request(frontArtPath) }

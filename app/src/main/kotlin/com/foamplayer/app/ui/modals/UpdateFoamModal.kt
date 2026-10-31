@@ -20,6 +20,8 @@ import com.foamplayer.app.update.GitHubRelease
 import com.foamplayer.app.ui.components.MarkdownText
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import java.io.File
 
 /**
@@ -67,7 +69,7 @@ fun UpdateFoamModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(FoamTheme.colors.borderOverlay)
+                    .foamBorderOverlay()
             )
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
@@ -173,7 +175,7 @@ private fun DownloadProgressText(progress: Float) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(FoamDimens.spacingTiny)
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         ) {
             Box(
                 modifier = Modifier

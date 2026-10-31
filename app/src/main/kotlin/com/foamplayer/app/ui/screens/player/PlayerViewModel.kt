@@ -226,12 +226,25 @@ class PlayerViewModel @Inject constructor(
 
     init {
         // Close-and-reopen resumption: rebuild the persisted session (played history,
-        // current track, upcoming queue) PAUSED at the saved position. Playback is
-        // never started here; the user presses play. The engine no-ops when the
-        // process survived (queue still live) or nothing was saved.
+        // current track, upcoming queue) PAUSED at the saved position. Playback only
+        // starts on its own when "Resume on startup" is enabled; otherwise the user
+        // presses play. The engine no-ops when the process survived (queue still live)
+        // or nothing was saved.
         viewModelScope.launch {
             audioEngine.restoreSession()
             _sessionRestoreSettled.value = true
+            if (initialSettings.resumeOnStartup) {
+                // Also covers reopening the app while the process (and playback
+                // service) survived: the queue is already live, so restoreSession()
+                // has nothing to restore, but the session may still be paused.
+                val state = audioEngine.playbackState.value
+                if (state.currentTrack != null &&
+                    !state.isPlaying &&
+                    !state.isPlaybackRequested
+                ) {
+                    audioEngine.play()
+                }
+            }
         }
 
         // The server-session poll is collection-driven (one GET per server per

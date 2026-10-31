@@ -73,6 +73,7 @@ import com.foamplayer.app.audio.dsp.NodeColorPalette
 import com.foamplayer.app.audio.dsp.ParametricNode
 import com.foamplayer.app.ui.components.FoamGlassCard
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.squig.SquigDatabase
 import com.foamplayer.squig.SquigDevice
 
@@ -323,7 +324,7 @@ private fun AutoEqSelectionBar(
                                 bottomStart = bottomCorner.dp
                             )
                         )
-                        .background(FoamTheme.colors.surfaceVariant)
+                        .foamSurfaceVariant()
                         .onSizeChanged { barHeight = it.height }
                         .padding(start = 12.dp, end = 4.dp)
                         .height(36.dp),
@@ -465,7 +466,7 @@ private fun AutoEqDropdown(
                 .fillMaxWidth()
                 .heightIn(max = AutoEqDropdownMaxHeight)
                 .clip(RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp))
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
         ) {
             if (loading) {
                 item(key = "loading") { AutoEqLoading() }
@@ -551,7 +552,7 @@ private fun AutoEqModeRow(
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
-                .background(FoamTheme.colors.surfaceVariant)
+                .foamSurfaceVariant()
                 .padding(2.dp)
         ) {
             listOf(
@@ -594,7 +595,7 @@ private fun AutoEqGenerateButton(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(FoamTheme.colors.surfaceVariant)
+            .foamSurfaceVariant()
             .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 12.dp)
             .alpha(if (enabled) 1f else 0.5f),

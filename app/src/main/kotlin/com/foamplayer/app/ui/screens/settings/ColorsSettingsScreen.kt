@@ -57,6 +57,9 @@ import com.foamplayer.app.ui.modals.SaturationValueField
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * One-tap accent shortcuts under the picker: 12 vibrant, evenly spread hues
@@ -89,6 +92,7 @@ fun ColorsSettingsScreen(
     // screen: the switch stopped reacting and the dropdown label never updated.)
     val settings by viewModel.settings.collectAsState()
     val isAutomaticColorEnabled = settings.automaticColorEnabled
+    val isAccentTintEnabled = settings.accentTintEnabled
     val accentColorInt = settings.accentColor
     val themeMode = settings.themeMode
 
@@ -97,7 +101,7 @@ fun ColorsSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.background)
+            .foamBackground()
     ) {
         SettingsHeader(
             title = stringResource(R.string.colors),
@@ -128,17 +132,26 @@ fun ColorsSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(FoamTheme.colors.surface)
+                        .foamSurface()
                 ) {
-                    FoamSwitchItem(
-                        title = stringResource(R.string.automatic_color),
-                        description = stringResource(R.string.automatic_color_desc),
-                        checked = isAutomaticColorEnabled,
-                        onCheckedChange = {
-                            animatePalette = true
-                            viewModel.setAutomaticColorEnabled(it)
-                        }
-                    )
+                    Column {
+                        FoamSwitchItem(
+                            title = stringResource(R.string.automatic_color),
+                            description = stringResource(R.string.automatic_color_desc),
+                            checked = isAutomaticColorEnabled,
+                            onCheckedChange = {
+                                animatePalette = true
+                                viewModel.setAutomaticColorEnabled(it)
+                            }
+                        )
+                        SectionDivider()
+                        FoamSwitchItem(
+                            title = stringResource(R.string.accent_tint),
+                            description = stringResource(R.string.accent_tint_desc),
+                            checked = isAccentTintEnabled,
+                            onCheckedChange = viewModel::setAccentTintEnabled
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
@@ -157,7 +170,7 @@ fun ColorsSettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                                .background(FoamTheme.colors.surface)
+                                .foamSurface()
                                 .padding(FoamDimens.paddingMedium)
                         ) {
                             AccentPickerSection(
@@ -283,7 +296,7 @@ private fun ThemeSelector(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .background(FoamTheme.colors.surface)
+            .foamSurface()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -357,6 +370,19 @@ private fun ThemeSelector(
             }
         }
     }
+}
+
+/**
+ * Hairline separator between rows of a settings card.
+ */
+@Composable
+private fun SectionDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .foamBorderOverlay()
+    )
 }
 
 /**

@@ -3,7 +3,6 @@ package com.foamplayer.app.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -38,6 +37,7 @@ import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.decode.DataSource
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlinx.coroutines.launch
 import kotlin.math.min
 
@@ -86,7 +86,7 @@ fun NoAlbumArtPlaceholder(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(FoamTheme.colors.surfaceVariant),
+            .foamSurfaceVariant(),
         contentAlignment = Alignment.Center
     ) {
         Icon(

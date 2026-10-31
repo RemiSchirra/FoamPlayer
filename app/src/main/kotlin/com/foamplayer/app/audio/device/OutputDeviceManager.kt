@@ -9,9 +9,13 @@ import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -56,6 +60,21 @@ data class AudioOutputDevice(
     val isHiResCapable: Boolean get() = maxSupportedSampleRate >= 88_200
 }
 
+/** A plug/unplug snapshot, emitted after the device list has been refreshed. */
+sealed interface AudioDeviceChange {
+    /** [devices] were attached by this change (built-in speakers excluded by consumers as needed). */
+    data class Connected(val devices: List<AudioOutputDevice>) : AudioDeviceChange
+
+    /**
+     * [devices] detached. [wasRoutingDevice] is true when one of them was the
+     * routing target before the change, i.e. the audible output actually moved.
+     */
+    data class Disconnected(
+        val devices: List<AudioOutputDevice>,
+        val wasRoutingDevice: Boolean
+    ) : AudioDeviceChange
+}
+
 /**
  * Owns the view of the system's output devices: enumerates every active output,
  * follows plug/unplug events through [AudioManager.registerAudioDeviceCallback],
@@ -67,6 +86,13 @@ class OutputDeviceManager(
 ) {
     private val _devices = MutableStateFlow<List<AudioOutputDevice>>(emptyList())
     val devices: StateFlow<List<AudioOutputDevice>> = _devices.asStateFlow()
+
+    /** Plug/unplug events, deduplicated against the previous device snapshot. */
+    private val _deviceChanges = MutableSharedFlow<AudioDeviceChange>(
+        extraBufferCapacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val deviceChanges: SharedFlow<AudioDeviceChange> = _deviceChanges.asSharedFlow()
 
     /** The device the engine currently routes to, or null when nothing is attached. */
     private val _activeDevice = MutableStateFlow<AudioOutputDevice?>(null)
@@ -83,26 +109,31 @@ class OutputDeviceManager(
 
     private val deviceCallback = object : android.media.AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
-            refresh()
+            refreshAndNotify()
         }
 
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
-            refresh()
+            refreshAndNotify()
         }
     }
 
     private var started = false
+
+    /** False until [start]'s first enumeration lands, so the launch snapshot is not a "connected" event. */
+    private var initialRefreshComplete = false
 
     fun start() {
         if (started) return
         started = true
         audioManager.registerAudioDeviceCallback(deviceCallback, null)
         refresh()
+        initialRefreshComplete = true
     }
 
     fun stop() {
         if (!started) return
         started = false
+        initialRefreshComplete = false
         audioManager.unregisterAudioDeviceCallback(deviceCallback)
     }
 
@@ -191,6 +222,38 @@ class OutputDeviceManager(
             resolved.none { it.id == pick }
         ) {
             _preferredDeviceId.value = null
+        }
+    }
+
+    /**
+     * Refreshes after a system callback and emits what actually changed, with
+     * the routing target captured beforehand so consumers can tell whether the
+     * audible output was moved.
+     */
+    private fun refreshAndNotify() {
+        val previousDevices = _devices.value
+        val previousRoutingId = routingDevice?.id
+        refresh()
+
+        // The callback registration can announce the already-attached devices
+        // before start()'s initial enumeration has settled: never treat the
+        // launch snapshot as a fresh connection.
+        if (!initialRefreshComplete) return
+
+        val previousIds = previousDevices.mapTo(HashSet()) { it.id }
+        val currentIds = _devices.value.mapTo(HashSet()) { it.id }
+        val added = _devices.value.filter { it.id !in previousIds }
+        val removed = previousDevices.filter { it.id !in currentIds }
+
+        if (added.isNotEmpty()) _deviceChanges.tryEmit(AudioDeviceChange.Connected(added))
+        if (removed.isNotEmpty()) {
+            _deviceChanges.tryEmit(
+                AudioDeviceChange.Disconnected(
+                    devices = removed,
+                    wasRoutingDevice = previousRoutingId != null &&
+                        removed.any { it.id == previousRoutingId }
+                )
+            )
         }
     }
 
