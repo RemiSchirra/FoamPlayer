@@ -18,6 +18,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -59,6 +61,12 @@ private const val TonearmSwingMsPerUnit = 250f
 
 /** The circular art label, as a fraction of the disc diameter. */
 private const val VinylLabelFraction = 0.4f
+
+/** Opacity of the blurred album-art tint spread across the record surface. */
+private const val DiscArtAlpha = 0.2f
+
+/** Blur radius of the album-art tint on the record surface. */
+private val DiscArtBlurRadius = 24.dp
 
 /*
  * Tonearm geometry, in fractions of the (square) art box: the rotation pivot is the
@@ -106,6 +114,16 @@ internal fun VinylDisc(
     modifier: Modifier = Modifier
 ) {
     val playing = isPlaying()
+    val context = LocalContext.current
+    val artRequest = remember(albumArtPath) {
+        albumArtPath?.let { path ->
+            ImageRequest.Builder(context)
+                .data(EmbeddedAlbumArt(path.toUri()))
+                .size(AlbumArtRequestSize)
+                .crossfade(false)
+                .build()
+        }
+    }
 
     // Frame-accumulated rotation: advances with real frame deltas while playing and
     // simply stops advancing when paused.
@@ -136,6 +154,27 @@ internal fun VinylDisc(
             Canvas(modifier = Modifier.fillMaxSize()) {
                 drawDiscSurface()
             }
+            // A blurred, translucent copy of the art tints the whole record. It is
+            // decorative, so it stays out of the accessibility tree.
+            if (artRequest != null) {
+                AsyncImage(
+                    model = artRequest,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .blur(
+                            radius = DiscArtBlurRadius,
+                            edgeTreatment = BlurredEdgeTreatment.Unbounded
+                        )
+                        .graphicsLayer { alpha = DiscArtAlpha },
+                    contentScale = ContentScale.Crop
+                )
+            }
+            // Grooves and rim sit above the tint so the vinyl texture stays crisp.
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawDiscGrooves()
+            }
             // The label: the track art cropped to a circle, centered on the record.
             Box(
                 modifier = Modifier
@@ -143,17 +182,9 @@ internal fun VinylDisc(
                     .clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                if (albumArtPath != null) {
-                    val context = LocalContext.current
-                    val labelArtRequest = remember(albumArtPath) {
-                        ImageRequest.Builder(context)
-                            .data(EmbeddedAlbumArt(albumArtPath.toUri()))
-                            .size(AlbumArtRequestSize)
-                            .crossfade(false)
-                            .build()
-                    }
+                if (artRequest != null) {
                     AsyncImage(
-                        model = labelArtRequest,
+                        model = artRequest,
                         contentDescription = stringResource(R.string.album_art),
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -222,13 +253,12 @@ internal fun TonearmOverlay(
 }
 
 /**
- * The record surface: a near-black disc with a subtle radial sheen, faint concentric
- * grooves between the label edge and the rim, and a thin rim highlight.
+ * The record surface: a near-black disc with a subtle radial sheen. The blurred art
+ * tint is drawn over this base, then [drawDiscGrooves] adds the texture on top.
  */
 private fun DrawScope.drawDiscSurface() {
     val center = Offset(size.width / 2f, size.height / 2f)
     val discRadius = size.minDimension / 2f
-    val labelRadius = discRadius * VinylLabelFraction
 
     drawCircle(
         brush = Brush.radialGradient(
@@ -239,6 +269,16 @@ private fun DrawScope.drawDiscSurface() {
         radius = discRadius,
         center = center
     )
+}
+
+/**
+ * Faint concentric grooves between the label edge and the rim, plus a thin rim
+ * highlight.
+ */
+private fun DrawScope.drawDiscGrooves() {
+    val center = Offset(size.width / 2f, size.height / 2f)
+    val discRadius = size.minDimension / 2f
+    val labelRadius = discRadius * VinylLabelFraction
 
     // Grooves: a handful of faint concentric rings selling the vinyl material.
     val grooveCount = 8
