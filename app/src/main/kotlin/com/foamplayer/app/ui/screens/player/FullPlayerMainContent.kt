@@ -78,6 +78,8 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.CrossfadingPlayPauseIcon
+import com.foamplayer.app.ui.components.PLAY_PAUSE_CROSSFADE_MS
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
@@ -908,14 +910,6 @@ internal fun SharedTransitionScope.PlayPauseButton(
         label = "playButtonPressScale"
     )
 
-    // 0f = play icon showing, 1f = pause icon showing. Both icons ride this one value
-    // in opposite directions, so they always crossfade in lockstep.
-    val pauseFraction by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
-        label = "playPauseCrossfade"
-    )
-
     // The loading circle replaces the play/pause glyph with the same scale+fade
     // convention the two icons use: 0f = transport showing, 1f = circle showing.
     val loadingFraction by animateFloatAsState(
@@ -923,7 +917,6 @@ internal fun SharedTransitionScope.PlayPauseButton(
         animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
         label = "playLoadingCrossfade"
     )
-    val transportAlpha = 1f - loadingFraction
 
     val description = stringResource(
         when {
@@ -952,36 +945,13 @@ internal fun SharedTransitionScope.PlayPauseButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Play icon: 100% -> 20% scale and 100% -> 0% opacity when switching to pause.
-        Icon(
-            imageVector = FoamTheme.icons.current.play,
-            contentDescription = null,
+        // Shared stacked play/pause glyphs: crossfade in lockstep (100% <-> 20% scale
+        // while the alpha flips), faded out while the loading circle takes their place.
+        CrossfadingPlayPauseIcon(
+            isPlaying = isPlaying,
+            loadingFraction = { loadingFraction },
             tint = FoamTheme.colors.textPrimary,
-            modifier = Modifier
-                .size(PlayerDimens.playButtonIconSize)
-                .graphicsLayer {
-                    val visible = (1f - pauseFraction) * transportAlpha
-                    alpha = visible
-                    val iconScale = (0.2f + 0.8f * (1f - pauseFraction)) *
-                            (1f - 0.8f * loadingFraction)
-                    scaleX = iconScale
-                    scaleY = iconScale
-                }
-        )
-        // Pause icon: the exact reverse (20% -> 100% scale, 0% -> 100% opacity).
-        Icon(
-            imageVector = FoamTheme.icons.current.pause,
-            contentDescription = null,
-            tint = FoamTheme.colors.textPrimary,
-            modifier = Modifier
-                .size(PlayerDimens.playButtonIconSize)
-                .graphicsLayer {
-                    alpha = pauseFraction * transportAlpha
-                    val iconScale = (0.2f + 0.8f * pauseFraction) *
-                            (1f - 0.8f * loadingFraction)
-                    scaleX = iconScale
-                    scaleY = iconScale
-                }
+            iconSize = PlayerDimens.playButtonIconSize
         )
         if (isLoading || loadingFraction > 0f) {
             CircularProgressIndicator(
@@ -1001,7 +971,6 @@ internal fun SharedTransitionScope.PlayPauseButton(
 }
 
 private const val PLAY_BUTTON_PRESSED_SCALE = 0.88f
-private const val PLAY_PAUSE_CROSSFADE_MS = 250
 
 /**
  * Progress bar + optional elapsed/remaining labels. [seekBarStyle] picks the rendering:

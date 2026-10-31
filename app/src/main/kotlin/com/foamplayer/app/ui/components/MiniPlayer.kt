@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Icon
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -138,10 +137,9 @@ private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
     // Same scale+fade convention as the full player's play/pause crossfade.
     val loadingFraction by animateFloatAsState(
         targetValue = if (isLoading) 1f else 0f,
-        animationSpec = tween(durationMillis = 250),
+        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
         label = "miniPlayerLoadingCrossfade"
     )
-    val transportAlpha = 1f - loadingFraction
     val description = stringResource(
         when {
             isLoading -> R.string.loading
@@ -172,18 +170,11 @@ private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
-            contentDescription = null,
+        CrossfadingPlayPauseIcon(
+            isPlaying = isPlaying,
+            loadingFraction = { loadingFraction },
             tint = FoamTheme.colors.background,
-            modifier = Modifier
-                .size(20.dp)
-                .graphicsLayer {
-                    alpha = transportAlpha
-                    val iconScale = 1f - 0.8f * loadingFraction
-                    scaleX = iconScale
-                    scaleY = iconScale
-                }
+            iconSize = 20.dp
         )
         if (isLoading || loadingFraction > 0f) {
             CircularProgressIndicator(

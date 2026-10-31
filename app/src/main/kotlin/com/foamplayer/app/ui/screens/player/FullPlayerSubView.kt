@@ -58,6 +58,8 @@ import com.foamplayer.app.audio.engine.RepeatMode
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.ui.components.CrossfadingPlayPauseIcon
+import com.foamplayer.app.ui.components.PLAY_PAUSE_CROSSFADE_MS
 import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
@@ -518,10 +520,9 @@ internal fun MiniPlayPauseButton(
     // Same scale+fade convention as the full player's play/pause crossfade.
     val loadingFraction by animateFloatAsState(
         targetValue = if (isLoading) 1f else 0f,
-        animationSpec = tween(durationMillis = 250),
+        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
         label = "miniPlayLoadingCrossfade"
     )
-    val transportAlpha = 1f - loadingFraction
     val description = stringResource(
         when {
             isLoading -> R.string.loading
@@ -546,18 +547,11 @@ internal fun MiniPlayPauseButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = if (isPlaying) FoamTheme.icons.current.pause else FoamTheme.icons.current.play,
-            contentDescription = null,
+        CrossfadingPlayPauseIcon(
+            isPlaying = isPlaying,
+            loadingFraction = { loadingFraction },
             tint = FoamTheme.colors.background,
-            modifier = Modifier
-                .size(PlayerDimens.miniPlayIconSize)
-                .graphicsLayer {
-                    alpha = transportAlpha
-                    val iconScale = 1f - 0.8f * loadingFraction
-                    scaleX = iconScale
-                    scaleY = iconScale
-                }
+            iconSize = PlayerDimens.miniPlayIconSize
         )
         if (isLoading || loadingFraction > 0f) {
             CircularProgressIndicator(
