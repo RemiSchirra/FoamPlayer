@@ -354,8 +354,11 @@
 
     <string name="auto_open_player">Ouvrir auto. le lecteur</string>
     <string name="auto_open_player_desc">Ouvrir le lecteur au lancement d\'une piste</string>
-    <string name="immersive_mode">Mode immersif</string>
-    <string name="immersive_mode_desc">La pochette d\'album remplit tout l\'écran</string>
+    <string name="player_mode">Mode du lecteur</string>
+    <string name="player_mode_desc">Apparence du lecteur complet</string>
+    <string name="player_mode_normal">Normal</string>
+    <string name="player_mode_immersive">Immersif</string>
+    <string name="player_mode_vinyl">Vinyle</string>
     <string name="animate_seek_bar">Animer la barre de progression</string>
     <string name="animate_seek_bar_desc">Mouvement fluide de la barre de progression</string>
     <string name="seek_bar_style">Style de barre de progression</string>

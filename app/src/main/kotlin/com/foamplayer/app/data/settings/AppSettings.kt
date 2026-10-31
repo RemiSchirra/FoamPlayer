@@ -45,6 +45,13 @@ enum class SeekBarStyle(val label: String) {
     WAVEFORM("Waveform")
 }
 
+/** Overall look of the full player: classic art, immersive backdrop, or vinyl. */
+enum class PlayerMode(val label: String) {
+    NORMAL("Normal"),
+    IMMERSIVE("Immersive"),
+    VINYL("Vinyl")
+}
+
 /** Which color palette the UI renders with; FOLLOW_SYSTEM resolves per system dark mode. */
 enum class ThemeMode(val label: String) {
     FOLLOW_SYSTEM("Follow system"),
@@ -109,7 +116,7 @@ data class AppSettings(
      * follows the live (per-track when Automatic Color is on) accent.
      */
     val accentTintEnabled: Boolean = true,
-    val immersiveModeEnabled: Boolean = true,
+    val playerMode: PlayerMode = PlayerMode.NORMAL,
     val animateSeekBarEnabled: Boolean = false,
     /** Visual style of the full player's seek bar (the mini player keeps the classic bar). */
     val seekBarStyle: SeekBarStyle = SeekBarStyle.NORMAL,

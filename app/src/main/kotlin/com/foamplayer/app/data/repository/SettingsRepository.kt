@@ -46,6 +46,7 @@ import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.NotificationExtraButton
+import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
@@ -108,7 +109,8 @@ class SettingsRepository @Inject constructor(
     suspend fun setAutomaticColorEnabled(enabled: Boolean) = update { it.copy(automaticColorEnabled = enabled) }
     suspend fun setAccentColor(color: Int) = update { it.copy(accentColor = color) }
     suspend fun setAccentTintEnabled(enabled: Boolean) = update { it.copy(accentTintEnabled = enabled) }
-    suspend fun setImmersiveModeEnabled(enabled: Boolean) = update { it.copy(immersiveModeEnabled = enabled) }
+    /** Persists the full player's look (normal / immersive / vinyl). */
+    suspend fun setPlayerMode(mode: PlayerMode) = update { it.copy(playerMode = mode) }
     suspend fun setAnimateSeekBarEnabled(enabled: Boolean) = update { it.copy(animateSeekBarEnabled = enabled) }
     suspend fun setSeekBarStyle(style: SeekBarStyle) = update { it.copy(seekBarStyle = style) }
     suspend fun setPreferredOutputDeviceId(deviceId: String?) = update {
@@ -375,7 +377,9 @@ class SettingsRepository @Inject constructor(
         automaticColorEnabled = this[Keys.AUTOMATIC_COLOR] ?: AppSettings().automaticColorEnabled,
         accentColor = this[Keys.ACCENT_COLOR] ?: AppSettings.DEFAULT_ACCENT_COLOR,
         accentTintEnabled = this[Keys.ACCENT_TINT] ?: AppSettings().accentTintEnabled,
-        immersiveModeEnabled = this[Keys.IMMERSIVE_MODE] ?: AppSettings().immersiveModeEnabled,
+        playerMode = this[Keys.PLAYER_MODE]
+            ?.let { runCatching { PlayerMode.valueOf(it) }.getOrNull() }
+            ?: AppSettings().playerMode,
         animateSeekBarEnabled = this[Keys.ANIMATE_SEEK_BAR] ?: AppSettings().animateSeekBarEnabled,
         seekBarStyle = this[Keys.SEEK_BAR_STYLE]
             ?.let { runCatching { SeekBarStyle.valueOf(it) }.getOrNull() }
@@ -495,7 +499,10 @@ class SettingsRepository @Inject constructor(
         this[Keys.AUTOMATIC_COLOR] = settings.automaticColorEnabled
         this[Keys.ACCENT_COLOR] = settings.accentColor
         this[Keys.ACCENT_TINT] = settings.accentTintEnabled
-        this[Keys.IMMERSIVE_MODE] = settings.immersiveModeEnabled
+        this[Keys.PLAYER_MODE] = settings.playerMode.name
+        // No migration from the pre-enum boolean: the new key is the single source of
+        // truth, so the old key is cleared here to overwrite the old state.
+        this.remove(Keys.IMMERSIVE_MODE)
         this[Keys.ANIMATE_SEEK_BAR] = settings.animateSeekBarEnabled
         this[Keys.SEEK_BAR_STYLE] = settings.seekBarStyle.name
         this[Keys.AUTO_OPEN_PLAYER] = settings.autoOpenPlayerEnabled
@@ -577,6 +584,9 @@ class SettingsRepository @Inject constructor(
         val AUTOMATIC_COLOR = booleanPreferencesKey("automatic_color")
         val ACCENT_COLOR = intPreferencesKey("accent_color")
         val ACCENT_TINT = booleanPreferencesKey("accent_tint")
+        val PLAYER_MODE = stringPreferencesKey("player_mode")
+
+        // Legacy pre-enum boolean, kept only so write() can clear it.
         val IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
         val ANIMATE_SEEK_BAR = booleanPreferencesKey("animate_seek_bar")
         val SEEK_BAR_STYLE = stringPreferencesKey("seek_bar_style")

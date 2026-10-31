@@ -357,8 +357,11 @@
 
     <string name="auto_open_player">Auto Open Player</string>
     <string name="auto_open_player_desc">Open player screen when a track starts</string>
-    <string name="immersive_mode">Immersive Mode</string>
-    <string name="immersive_mode_desc">Album art fills the entire screen</string>
+    <string name="player_mode">Player Mode</string>
+    <string name="player_mode_desc">Look of the full player</string>
+    <string name="player_mode_normal">Normal</string>
+    <string name="player_mode_immersive">Immersive</string>
+    <string name="player_mode_vinyl">Vinyl</string>
     <string name="animate_seek_bar">Animate Seek Bar</string>
     <string name="animate_seek_bar_desc">Smooth progress bar movement</string>
     <string name="seek_bar_style">Seek Bar Style</string>

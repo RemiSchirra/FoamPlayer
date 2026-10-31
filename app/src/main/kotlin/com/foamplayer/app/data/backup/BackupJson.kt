@@ -26,6 +26,7 @@ import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.NotificationExtraButton
+import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
@@ -64,7 +65,7 @@ object BackupJson {
         put("automaticColorEnabled", settings.automaticColorEnabled)
         put("accentColor", settings.accentColor)
         put("accentTintEnabled", settings.accentTintEnabled)
-        put("immersiveModeEnabled", settings.immersiveModeEnabled)
+        put("playerMode", settings.playerMode.name)
         put("animateSeekBarEnabled", settings.animateSeekBarEnabled)
         put("seekBarStyle", settings.seekBarStyle.name)
         put("autoOpenPlayerEnabled", settings.autoOpenPlayerEnabled)
@@ -153,7 +154,7 @@ object BackupJson {
         automaticColorEnabled = json.optBoolean("automaticColorEnabled", true),
         accentColor = json.optInt("accentColor", AppSettings.DEFAULT_ACCENT_COLOR),
         accentTintEnabled = json.optBoolean("accentTintEnabled", true),
-        immersiveModeEnabled = json.optBoolean("immersiveModeEnabled", true),
+        playerMode = decodeEnum(json.optString("playerMode"), PlayerMode.NORMAL),
         animateSeekBarEnabled = json.optBoolean("animateSeekBarEnabled", false),
         seekBarStyle = decodeEnum(json.optString("seekBarStyle"), SeekBarStyle.NORMAL),
         autoOpenPlayerEnabled = json.optBoolean("autoOpenPlayerEnabled", false),

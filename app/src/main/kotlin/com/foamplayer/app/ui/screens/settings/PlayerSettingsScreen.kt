@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.FoamEnumItem
 import com.foamplayer.app.ui.components.FoamSliderStateItem
@@ -50,7 +51,7 @@ fun PlayerSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
-    val isImmersiveEnabled = settings.immersiveModeEnabled
+    val playerMode = settings.playerMode
     val isAnimateSeekBarEnabled = settings.animateSeekBarEnabled
     val seekBarStyle = settings.seekBarStyle
     val isAutoOpenPlayerEnabled = settings.autoOpenPlayerEnabled
@@ -124,13 +125,21 @@ fun PlayerSettingsScreen(
                             .foamSurface()
                     ) {
                         Column {
-                            FoamSwitchItem(
-                                title = stringResource(R.string.immersive_mode),
-                                description = stringResource(R.string.immersive_mode_desc),
-                                checked = isImmersiveEnabled,
-                                onCheckedChange = {
+                            FoamEnumItem(
+                                title = stringResource(R.string.player_mode),
+                                description = stringResource(R.string.player_mode_desc),
+                                options = PlayerMode.entries.toTypedArray(),
+                                selectedOption = playerMode,
+                                onOptionSelected = {
                                     animateChanges = true
-                                    viewModel.setImmersiveModeEnabled(it)
+                                    viewModel.setPlayerMode(it)
+                                },
+                                getLabel = { mode ->
+                                    when (mode) {
+                                        PlayerMode.NORMAL -> stringResource(R.string.player_mode_normal)
+                                        PlayerMode.IMMERSIVE -> stringResource(R.string.player_mode_immersive)
+                                        PlayerMode.VINYL -> stringResource(R.string.player_mode_vinyl)
+                                    }
                                 }
                             )
                             Box(
@@ -146,7 +155,7 @@ fun PlayerSettingsScreen(
                                 onCheckedChange = { viewModel.setAnimateSeekBarEnabled(it) }
                             )
                             AnimatedVisibility(
-                                visible = isImmersiveEnabled,
+                                visible = playerMode == PlayerMode.IMMERSIVE,
                                 enter = enterTransition,
                                 exit = exitTransition
                             ) {

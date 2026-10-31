@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.Dp
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.data.settings.AppSettings
+import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.ui.components.MiniPlayer
 import com.foamplayer.app.ui.components.ToastStack
 import com.foamplayer.app.ui.components.TrackCenterRequest
@@ -262,13 +263,13 @@ internal fun BoxScope.FoamBottomChrome(
                     useSharedElements = trackListTransitionTrackId == null &&
                         centerTrackRequest == null,
                     sharedArtFlightAlpha = {
-                        if (settings.immersiveModeEnabled) {
+                        if (settings.playerMode != PlayerMode.NORMAL) {
                             1f - playerTransitionState.progress()
                         } else {
                             1f
                         }
                     },
-                    isImmersiveEnabled = settings.immersiveModeEnabled,
+                    isImmersiveEnabled = settings.playerMode == PlayerMode.IMMERSIVE,
                     isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                     marqueeMode = settings.marqueeMode,
                     skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,

@@ -24,6 +24,7 @@ import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
 import com.foamplayer.distant.DistantFolder
@@ -133,7 +134,7 @@ class SettingsViewModel @Inject constructor(
     fun setAutomaticColorEnabled(enabled: Boolean) = launch { settingsRepository.setAutomaticColorEnabled(enabled) }
     fun setAccentColor(color: Int) = launch { settingsRepository.setAccentColor(color) }
     fun setAccentTintEnabled(enabled: Boolean) = launch { settingsRepository.setAccentTintEnabled(enabled) }
-    fun setImmersiveModeEnabled(enabled: Boolean) = launch { settingsRepository.setImmersiveModeEnabled(enabled) }
+    fun setPlayerMode(mode: PlayerMode) = launch { settingsRepository.setPlayerMode(mode) }
     fun setAnimateSeekBarEnabled(enabled: Boolean) = launch { settingsRepository.setAnimateSeekBarEnabled(enabled) }
     fun setSeekBarStyle(style: SeekBarStyle) = launch { settingsRepository.setSeekBarStyle(style) }
     fun setAutoOpenPlayerEnabled(enabled: Boolean) = launch { settingsRepository.setAutoOpenPlayerEnabled(enabled) }

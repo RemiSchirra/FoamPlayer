@@ -61,6 +61,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.data.db.entities.TrackEntity
+import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.LoopingPagerModelCache
 import com.foamplayer.app.ui.components.rememberSeekBarProgressState
@@ -101,7 +102,9 @@ fun FullPlayerScreen(
     val state by viewModel.playbackState.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val scoreOverrides by viewModel.scoreOverrides.collectAsState()
-    val isImmersiveEnabled = settings.immersiveModeEnabled
+    val playerMode = settings.playerMode
+    val isImmersiveEnabled = playerMode == PlayerMode.IMMERSIVE
+    val isVinylEnabled = playerMode == PlayerMode.VINYL
     val isAnimatedCoverEnabled = isImmersiveEnabled && settings.animatedCoverEnabled
     val allowMobileDataForCanvas = settings.animatedCoverAllowMobileData
     val marqueeMode = settings.marqueeMode
@@ -739,6 +742,7 @@ fun FullPlayerScreen(
                             screenWidthDp = configuration.screenWidthDp.dp,
                             placeholderColor = placeholderColor,
                             immersive = isImmersiveEnabled,
+                            vinyl = isVinylEnabled,
                             outerVisibilityScope = animatedVisibilityScope,
                             headerVisibilityScope = this@AnimatedVisibility,
                             viewModel = viewModel,
@@ -782,7 +786,7 @@ fun FullPlayerScreen(
                             isImmersiveEnabled = isImmersiveEnabled,
                             marqueeMode = marqueeMode,
                             headerVisibilityScope = this@AnimatedVisibility,
-                            headerArtAlpha = { if (isImmersiveEnabled) upTransitionState.progress() else 1f },
+                            headerArtAlpha = { if (playerMode != PlayerMode.NORMAL) upTransitionState.progress() else 1f },
                             modifier = playerDrag,
                             onCollapse = { gestureController.collapseToMainPlayer() },
                             upTransitionState = upTransitionState
