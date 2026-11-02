@@ -3,6 +3,7 @@ package com.foamplayer.app.ui.navigation
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -10,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.NavBackStackEntry
+import kotlin.math.roundToInt
 
 /**
  * Enter/exit specs for the screen [NavHost], kept out of the host composable.
@@ -47,11 +49,15 @@ internal fun buildFoamNavTransitions(
             when {
                 playerTransitionState.currentState -> EnterTransition.None
                 isSettingsPair() || isStatsPair() ->
-                    slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) +
-                        fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
+                    slideInHorizontally(
+                        initialOffsetX = { (it * SubScreenSlideFraction).roundToInt() },
+                        animationSpec = tween()
+                    ) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                 isBrowseRoute(targetState.destination.route) ->
-                    slideInHorizontally(initialOffsetX = { it }, animationSpec = tween()) +
-                        fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
+                    slideInHorizontally(
+                        initialOffsetX = { (it * SubScreenSlideFraction).roundToInt() },
+                        animationSpec = tween()
+                    ) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                 isSharedElementPair() ->
                     fadeIn(
                         animationSpec = tween(
@@ -67,14 +73,14 @@ internal fun buildFoamNavTransitions(
                 playerTransitionState.currentState -> ExitTransition.None
                 isSettingsPair() || isStatsPair() ->
                     slideOutHorizontally(
-                        targetOffsetX = { -it / SubScreenSlideDivisor },
+                        targetOffsetX = { (-it * SubScreenSlideFraction).roundToInt() },
                         animationSpec = tween()
-                    ) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
+                    ) + fadeOut(animationSpec = tween(NavScreenFadeOutDurationMs, easing = EaseOut))
                 isBrowsePair() ->
                     slideOutHorizontally(
-                        targetOffsetX = { -it / SubScreenSlideDivisor },
+                        targetOffsetX = { (-it * SubScreenSlideFraction).roundToInt() },
                         animationSpec = tween()
-                    ) + fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
+                    ) + fadeOut(animationSpec = tween(NavScreenFadeOutDurationMs, easing = EaseOut))
                 isSharedElementPair() ->
                     fadeOut(
                         animationSpec = tween(
@@ -82,7 +88,7 @@ internal fun buildFoamNavTransitions(
                             easing = SharedElementEasing
                         )
                     )
-                else -> fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
+                else -> fadeOut(animationSpec = tween(NavScreenFadeOutDurationMs, easing = EaseOut))
             }
         },
         popEnter = {
@@ -90,12 +96,12 @@ internal fun buildFoamNavTransitions(
                 playerTransitionState.currentState -> EnterTransition.None
                 isSettingsPair() || isStatsPair() ->
                     slideInHorizontally(
-                        initialOffsetX = { -it / SubScreenSlideDivisor },
+                        initialOffsetX = { (-it * SubScreenSlideFraction).roundToInt() },
                         animationSpec = tween()
                     ) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                 isBrowsePair() ->
                     slideInHorizontally(
-                        initialOffsetX = { -it / SubScreenSlideDivisor },
+                        initialOffsetX = { (-it * SubScreenSlideFraction).roundToInt() },
                         animationSpec = tween()
                     ) + fadeIn(animationSpec = tween(NavScreenFadeDurationMs))
                 isSharedElementPair() ->
@@ -112,11 +118,15 @@ internal fun buildFoamNavTransitions(
             when {
                 playerTransitionState.currentState -> ExitTransition.None
                 isSettingsPair() || isStatsPair() ->
-                    slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) +
-                        fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
+                    slideOutHorizontally(
+                        targetOffsetX = { (it * SubScreenSlideFraction).roundToInt() },
+                        animationSpec = tween()
+                    ) + fadeOut(animationSpec = tween(NavScreenFadeOutDurationMs, easing = EaseOut))
                 isBrowseRoute(initialState.destination.route) ->
-                    slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween()) +
-                        fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
+                    slideOutHorizontally(
+                        targetOffsetX = { (it * SubScreenSlideFraction).roundToInt() },
+                        animationSpec = tween()
+                    ) + fadeOut(animationSpec = tween(NavScreenFadeOutDurationMs, easing = EaseOut))
                 isSharedElementPair() ->
                     fadeOut(
                         animationSpec = tween(
@@ -124,7 +134,7 @@ internal fun buildFoamNavTransitions(
                             easing = SharedElementEasing
                         )
                     )
-                else -> fadeOut(animationSpec = tween(NavScreenFadeDurationMs))
+                else -> fadeOut(animationSpec = tween(NavScreenFadeOutDurationMs, easing = EaseOut))
             }
         },
     )
