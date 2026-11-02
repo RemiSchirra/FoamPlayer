@@ -60,6 +60,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.components.LibraryFoldersCard
@@ -185,12 +186,7 @@ fun LibrarySettingsScreen(
             item {
                 BasicText(text = stringResource(R.string.statistics), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     FoamSliderStateItem(
                         title = stringResource(R.string.listened_threshold),
                         description = stringResource(R.string.listened_threshold_description),
@@ -218,7 +214,7 @@ fun LibrarySettingsScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
                         .foamSurface()
                         .indication(
                             interactionSource = switchInteraction,
@@ -434,13 +430,14 @@ private fun SeparatorListSection(
     onAdd: () -> Unit,
     onRemove: (String) -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .padding(horizontal = FoamDimens.paddingMedium)
-            .padding(top = FoamDimens.spacingSmall, bottom = FoamDimens.paddingMedium)
+    FoamCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(
+            start = FoamDimens.paddingMedium,
+            end = FoamDimens.paddingMedium,
+            top = FoamDimens.spacingSmall,
+            bottom = FoamDimens.paddingMedium
+        )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(

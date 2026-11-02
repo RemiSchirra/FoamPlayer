@@ -39,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.components.MarkdownText
 import com.foamplayer.app.ui.modals.FoamBottomModal
@@ -48,7 +49,6 @@ import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBorderOverlay
-import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.update.DownloadState
 import com.foamplayer.app.update.GitHubRelease
@@ -90,12 +90,7 @@ fun AboutSettingsScreen(
             // Version card: the running build, plus the available release when
             // a newer one exists.
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -154,12 +149,7 @@ fun AboutSettingsScreen(
 
             // Check-for-update row (spinner while a check is in flight).
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     if (checking) {
                         Row(
                             modifier = Modifier
@@ -191,12 +181,7 @@ fun AboutSettingsScreen(
 
             // Auto-check switch.
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     FoamSwitchItem(
                         title = stringResource(R.string.about_auto_check),
                         description = stringResource(R.string.about_auto_check_desc),
@@ -240,12 +225,7 @@ private fun UpdateAvailableCard(
     onInstall: (java.io.File) -> Unit,
     onCancelDownload: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-    ) {
+    FoamCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Full-bleed clickable row: the ripple is bounded by the card's clip.
             ReleaseNotesEntry(
@@ -255,10 +235,7 @@ private fun UpdateAvailableCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(
-                        horizontal = FoamDimens.paddingMedium,
-                        vertical = FoamDimens.spacingMedium
-                    )
+                    .padding(FoamDimens.spacingStandard)
             ) {
                 when (val state = downloadState) {
                     is DownloadState.Downloading -> {
@@ -318,7 +295,7 @@ private fun ReleaseNotesEntry(release: GitHubRelease, onClick: () -> Unit) {
                 indication = ripple(color = FoamTheme.colors.textPrimary),
                 onClick = onClick
             )
-            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
+            .padding(FoamDimens.spacingStandard),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -350,7 +327,7 @@ private fun UpdateRow(title: String, icon: ImageVector, onClick: () -> Unit) {
                 indication = ripple(color = FoamTheme.colors.textPrimary),
                 onClick = onClick
             )
-            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
+            .padding(FoamDimens.spacingStandard),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
@@ -366,12 +343,7 @@ private fun UpdateRow(title: String, icon: ImageVector, onClick: () -> Unit) {
 
 @Composable
 private fun StatusRowCard(text: String, icon: ImageVector) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-    ) {
+    FoamCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

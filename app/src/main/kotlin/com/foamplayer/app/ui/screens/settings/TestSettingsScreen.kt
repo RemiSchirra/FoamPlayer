@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,10 +20,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamSliderItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.modals.FoamBottomModal
@@ -34,7 +33,6 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBorderOverlay
-import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.squig.SquigDatabase
 import com.foamplayer.squig.SquigLink
 import com.foamplayer.squig.SquigSite
@@ -94,30 +92,29 @@ fun TestSettingsScreen(
             }
 
             item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                        .padding(FoamDimens.paddingMedium)
+                FoamCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(FoamDimens.paddingMedium)
                 ) {
-                    ModalButton(
-                        label = stringResource(R.string.dev_reset_onboarding),
-                        filled = false,
-                        onClick = { confirmAction = DevAction.RESET_ONBOARDING }
-                    )
-                    Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
-                    ModalButton(
-                        label = stringResource(R.string.dev_clear_song_stats),
-                        filled = false,
-                        onClick = { confirmAction = DevAction.CLEAR_SONG_STATS }
-                    )
-                    Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
-                    ModalButton(
-                        label = stringResource(R.string.dev_generate_random_data),
-                        filled = false,
-                        onClick = { confirmAction = DevAction.GENERATE_RANDOM_DATA }
-                    )
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        ModalButton(
+                            label = stringResource(R.string.dev_reset_onboarding),
+                            filled = false,
+                            onClick = { confirmAction = DevAction.RESET_ONBOARDING }
+                        )
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
+                        ModalButton(
+                            label = stringResource(R.string.dev_clear_song_stats),
+                            filled = false,
+                            onClick = { confirmAction = DevAction.CLEAR_SONG_STATS }
+                        )
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
+                        ModalButton(
+                            label = stringResource(R.string.dev_generate_random_data),
+                            filled = false,
+                            onClick = { confirmAction = DevAction.GENERATE_RANDOM_DATA }
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
@@ -126,12 +123,7 @@ fun TestSettingsScreen(
             item {
                 BasicText(text = stringResource(R.string.switches), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     FoamSwitchItem(
                         title = stringResource(R.string.test_switch),
                         description = stringResource(R.string.test_switch_desc),
@@ -146,12 +138,7 @@ fun TestSettingsScreen(
                 BasicText(text = stringResource(R.string.sliders), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     Column {
                         FoamSliderItem(
                             title = stringResource(R.string.test_slider_continuous),
@@ -183,12 +170,7 @@ fun TestSettingsScreen(
                 BasicText(text = stringResource(R.string.test_autoeq), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(FoamDimens.paddingMedium)) {
                         autoEqError?.let { error ->
                             BasicText(

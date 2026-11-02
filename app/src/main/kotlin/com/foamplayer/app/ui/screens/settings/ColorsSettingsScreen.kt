@@ -50,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.ThemeMode
 import com.foamplayer.app.ui.modals.FoamBottomModal
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.modals.DefaultStopPalette
 import com.foamplayer.app.ui.modals.HueBar
@@ -59,7 +60,6 @@ import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBorderOverlay
-import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * One-tap accent shortcuts under the picker: 12 vibrant, evenly spread hues
@@ -128,12 +128,7 @@ fun ColorsSettingsScreen(
             item {
                 BasicText(text = stringResource(R.string.system_colors), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     Column {
                         FoamSwitchItem(
                             title = stringResource(R.string.automatic_color),
@@ -166,12 +161,9 @@ fun ColorsSettingsScreen(
                         BasicText(text = stringResource(R.string.accent_palette), style = FoamTheme.typography.titleMedium)
                         Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                                .foamSurface()
-                                .padding(FoamDimens.paddingMedium)
+                        FoamCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(FoamDimens.paddingMedium)
                         ) {
                             AccentPickerSection(
                                 accentColorInt = accentColorInt,
@@ -292,17 +284,10 @@ private fun ThemeSelector(
         }
     )
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                onClick = { showModal = true }
-            )
-            .padding(FoamDimens.paddingMedium)
+    FoamCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(FoamDimens.paddingMedium),
+        onClick = { showModal = true }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

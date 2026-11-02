@@ -64,6 +64,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.lyrics.LyricsSourceStatus
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.screens.settings.SettingsHeader
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -290,12 +291,9 @@ private fun filterTracks(
 
 @Composable
 private fun LyricsStatsRow(stats: LyricsManagerStats, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .padding(vertical = FoamDimens.paddingSmall)
+    FoamCard(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(vertical = FoamDimens.paddingMedium)
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
             StatCell(stringResource(R.string.lyrics_manager_cached), stats.cached)

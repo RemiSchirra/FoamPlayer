@@ -39,6 +39,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.BuildConfig
 import com.foamplayer.app.R
 import com.foamplayer.app.data.backup.BackupFeature
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.modals.BackupLoadingModal
 import com.foamplayer.app.ui.modals.BackupModalType
 import com.foamplayer.app.ui.modals.BackupResultModal
@@ -48,7 +49,6 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
-import com.foamplayer.app.ui.theme.foamSurface
 
 @Composable
 fun SettingsScreen(
@@ -229,21 +229,14 @@ fun SettingsCategoryItem(
     icon: ImageVector,
     onClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                onClick = onClick
-            )
+    FoamCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
+                .padding(FoamDimens.spacingStandard),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(

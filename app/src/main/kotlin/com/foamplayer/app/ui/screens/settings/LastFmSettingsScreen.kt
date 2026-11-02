@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
@@ -34,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -42,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.lastfm.LastFmCredentialSource
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.modals.LastFmCredentialsModal
 import com.foamplayer.app.ui.modals.LastFmImportChoiceModal
@@ -51,7 +49,6 @@ import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
-import com.foamplayer.app.ui.theme.foamSurface
 import kotlinx.coroutines.delay
 
 /**
@@ -98,12 +95,7 @@ fun LastFmSettingsScreen(
             contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
         ) {
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     ApiKeyRow(
                         title = stringResource(R.string.lastfm_api_key),
                         description = when {
@@ -120,12 +112,7 @@ fun LastFmSettingsScreen(
 
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -217,12 +204,7 @@ fun LastFmSettingsScreen(
             }
 
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -257,12 +239,7 @@ fun LastFmSettingsScreen(
             }
 
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     FoamSwitchItem(
                         title = stringResource(R.string.lastfm_scrobble),
                         description = if (session != null) {
@@ -282,12 +259,7 @@ fun LastFmSettingsScreen(
             item {
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     FoamSwitchItem(
                         title = stringResource(R.string.lastfm_scrobble_first_artist),
                         description = stringResource(R.string.lastfm_scrobble_first_artist_desc),
@@ -355,7 +327,7 @@ private fun ApiKeyRow(
                 role = Role.Button,
                 onClick = onClick
             )
-            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
+            .padding(FoamDimens.spacingStandard),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {

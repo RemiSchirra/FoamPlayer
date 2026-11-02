@@ -1,8 +1,6 @@
 package com.foamplayer.app.ui.screens.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,17 +14,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,6 +34,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.audio.bitperfect.AudioOutputInfo
 import com.foamplayer.app.ui.components.FidelityScoreCard
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.modals.AudioPipelineModal
@@ -47,7 +43,6 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBorderOverlay
-import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * Audio settings: live fidelity score with itemized breakdown, engine
@@ -105,12 +100,7 @@ fun AudioSettingsScreen(
                     style = FoamTheme.typography.titleMedium
                 )
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     Column {
                         FoamSwitchItem(
                             title = stringResource(R.string.bit_perfect_output),
@@ -133,12 +123,7 @@ fun AudioSettingsScreen(
             }
 
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     Column {
                         FoamNavigationButton(
                             title = stringResource(R.string.playback),
@@ -170,17 +155,10 @@ fun AudioSettingsScreen(
 
             item {
                 Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple(color = FoamTheme.colors.textPrimary),
-                            onClick = { showPipelineModal = true }
-                        )
-                        .padding(FoamDimens.paddingMedium)
+                FoamCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(FoamDimens.paddingMedium),
+                    onClick = { showPipelineModal = true }
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
@@ -232,7 +210,7 @@ private fun OutputSummaryRow(outputInfo: AudioOutputInfo?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.paddingMedium),
+            .padding(FoamDimens.spacingStandard),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(

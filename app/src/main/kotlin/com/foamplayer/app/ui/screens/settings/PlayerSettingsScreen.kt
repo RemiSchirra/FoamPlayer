@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -26,13 +25,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.data.settings.SeekBarStyle
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamEnumItem
 import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
@@ -42,7 +41,6 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalMiniPlayerRoundingPreview
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBorderOverlay
-import com.foamplayer.app.ui.theme.foamSurface
 import kotlin.math.roundToInt
 
 @Composable
@@ -95,12 +93,7 @@ fun PlayerSettingsScreen(
                 ) {
                     BasicText(text = stringResource(R.string.behaviour), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .foamSurface()
-                    ) {
+                    FoamCard(modifier = Modifier.fillMaxWidth()) {
                         FoamSwitchItem(
                             title = stringResource(R.string.auto_open_player),
                             description = stringResource(R.string.auto_open_player_desc),
@@ -132,12 +125,7 @@ fun PlayerSettingsScreen(
                     Column(
                         modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                                .foamSurface()
-                        ) {
+                        FoamCard(modifier = Modifier.fillMaxWidth()) {
                             Column {
                                 FoamSwitchItem(
                                     title = stringResource(R.string.animate_seek_bar),
@@ -224,12 +212,7 @@ fun PlayerSettingsScreen(
                 ) {
                     BasicText(text = stringResource(R.string.interface_rounding), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .foamSurface()
-                    ) {
+                    FoamCard(modifier = Modifier.fillMaxWidth()) {
                         Column {
                             FoamSliderStateItem(
                                 title = stringResource(R.string.mini_player),

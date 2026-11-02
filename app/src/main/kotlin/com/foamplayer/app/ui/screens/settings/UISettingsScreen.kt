@@ -39,13 +39,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.ui.modals.FoamBottomModal
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBorderOverlay
-import com.foamplayer.app.ui.theme.foamSurface
 
 @Composable
 fun UISettingsScreen(
@@ -82,12 +82,7 @@ fun UISettingsScreen(
                     BasicText(text = stringResource(R.string.application), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .foamSurface()
-                    ) {
+                    FoamCard(modifier = Modifier.fillMaxWidth()) {
                         Column {
                             FoamNavigationButton(
                                 title = stringResource(R.string.colors),
@@ -127,12 +122,7 @@ fun UISettingsScreen(
                     BasicText(text = stringResource(R.string.screens), style = FoamTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .foamSurface()
-                    ) {
+                    FoamCard(modifier = Modifier.fillMaxWidth()) {
                         Column {
                             FoamNavigationButton(
                                 title = stringResource(R.string.player),
@@ -246,17 +236,10 @@ private fun LanguageSelector(
     )
     val currentLabel = languages.find { it.first == currentLanguage }?.second ?: languages[0].second
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                onClick = { showModal = true }
-            )
-            .padding(FoamDimens.paddingMedium)
+    FoamCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(FoamDimens.paddingMedium),
+        onClick = { showModal = true }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

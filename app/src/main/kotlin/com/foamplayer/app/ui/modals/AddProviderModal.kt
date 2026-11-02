@@ -292,7 +292,7 @@ private fun ProviderOptionRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+            .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
             .foamSurfaceVariant()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -465,7 +465,7 @@ private fun SelectableFolderRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+            .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
             .foamSurfaceVariant()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

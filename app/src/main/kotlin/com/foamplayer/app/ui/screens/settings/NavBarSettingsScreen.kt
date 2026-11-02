@@ -44,6 +44,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamEnumItem
 import com.foamplayer.app.ui.components.FoamSwitch
 import com.foamplayer.app.ui.components.FoamSwitchItem
@@ -54,7 +55,6 @@ import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamSurfaceBlend
-import com.foamplayer.app.ui.theme.foamSurface
 
 /** Which of the two bars a drag gesture belongs to. */
 private enum class NavBarSection { PRIMARY, SECONDARY }
@@ -178,12 +178,7 @@ fun NavBarSettingsScreen(
                         style = FoamTheme.typography.titleMedium
                     )
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .foamSurface()
-                    ) {
+                    FoamCard(modifier = Modifier.fillMaxWidth()) {
                         FoamSwitchItem(
                             title = stringResource(R.string.transparent_when_player_open),
                             description = stringResource(R.string.transparent_when_player_open_desc),

@@ -47,11 +47,11 @@ import com.foamplayer.app.R
 import com.foamplayer.app.audio.device.AudioOutputDevice
 import com.foamplayer.app.audio.device.DeviceAudioConfig
 import com.foamplayer.app.audio.device.DeviceBitPerfectMode
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
-import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * Output devices subscreen of the Audio settings: every attached output with its
@@ -85,12 +85,9 @@ fun AudioDevicesSettingsScreen(
         ) {
             if (devices.isEmpty()) {
                 item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .foamSurface()
-                            .padding(FoamDimens.paddingMedium)
+                    FoamCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(FoamDimens.paddingMedium)
                     ) {
                         BasicText(
                             text = stringResource(R.string.no_output_devices),
@@ -142,22 +139,16 @@ private fun DeviceConfigCard(
         directLabel.takeIf { device.supportsDirectPlayback }
     ).filterNotNull().joinToString(" · ")
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { expanded = !expanded }
-            )
+    FoamCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { expanded = !expanded },
+        indication = null
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = ripple(color = FoamTheme.colors.textPrimary),

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -34,7 +35,6 @@ import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
-import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.distant.DistantServer
 
@@ -56,12 +56,9 @@ fun LibraryFoldersCard(
     onRemoveServer: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .padding(FoamDimens.paddingMedium)
+    FoamCard(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(FoamDimens.paddingMedium)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -182,12 +179,9 @@ fun LibraryScanCard(
     onStartScan: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .padding(FoamDimens.paddingMedium)
+    FoamCard(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(FoamDimens.paddingMedium)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -233,12 +227,9 @@ fun RepairPlaylistsCard(
     onRepair: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .padding(FoamDimens.paddingMedium)
+    FoamCard(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(FoamDimens.paddingMedium)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {

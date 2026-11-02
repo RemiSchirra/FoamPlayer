@@ -46,7 +46,6 @@ import com.foamplayer.app.audio.fidelity.FidelityStatus
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBorderOverlay
-import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * Live audio fidelity verdict with an itemized breakdown, shared between the
@@ -61,28 +60,18 @@ fun FidelityScoreCard(
     var expanded by rememberSaveable { mutableStateOf(false) }
     val expandable = hasTrack
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .then(
-                if (expandable) {
-                    Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { expanded = !expanded }
-                    )
-                } else {
-                    Modifier
-                }
-            )
+    FoamCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = if (expandable) {
+            { expanded = !expanded }
+        } else null,
+        indication = null
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
                     .then(
                         if (expandable) {
                             Modifier.clickable(

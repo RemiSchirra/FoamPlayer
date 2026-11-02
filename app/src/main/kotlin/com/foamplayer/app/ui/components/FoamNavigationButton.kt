@@ -44,7 +44,7 @@ fun FoamNavigationButton(
             )
             // Matches FoamSwitchItem so rows inside a grouped card share
             // the same height rhythm.
-            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
+            .padding(FoamDimens.spacingStandard),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
