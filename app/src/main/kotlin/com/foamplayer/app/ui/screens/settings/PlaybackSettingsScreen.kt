@@ -22,7 +22,6 @@ import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBorderOverlay
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -43,22 +42,18 @@ fun PlaybackSettingsScreen(
     val secondsTemplate = stringResource(R.string.duration_seconds)
     val secondsDecimalTemplate = stringResource(R.string.duration_seconds_decimal)
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.playback),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.playback),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
-            contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
+            contentPadding = PaddingValues(
+                top = SettingsHeaderZoneHeight,
+                bottom = LocalBottomBarClearance.current
+            )
         ) {
             item {
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))

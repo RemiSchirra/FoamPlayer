@@ -31,7 +31,6 @@ import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.FoamDimens
-import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBorderOverlay
 import com.foamplayer.squig.SquigDatabase
 import com.foamplayer.squig.SquigLink
@@ -65,22 +64,18 @@ fun TestSettingsScreen(
     // Destructive action awaiting its confirmation sheet (null = none).
     var confirmAction by remember { mutableStateOf<DevAction?>(null) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.test_components),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.test_components),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
-            contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
+            contentPadding = PaddingValues(
+                top = SettingsHeaderZoneHeight,
+                bottom = LocalBottomBarClearance.current
+            )
         ) {
             // ------------------------------------------------ developer tools
             item {

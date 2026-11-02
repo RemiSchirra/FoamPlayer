@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -49,6 +48,7 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBackgroundTopFade
 
 @Composable
 fun SettingsScreen(
@@ -67,30 +67,13 @@ fun SettingsScreen(
     val backupRunning = viewModel.backupRunning
     val backupManager = viewModel.backupManager
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
-    ) {
-        Box(
-            modifier = Modifier.padding(
-                top = FoamDimens.paddingMedium,
-                start = FoamDimens.paddingSmall,
-                end = FoamDimens.paddingSmall
-            )
-        ) {
-            SettingsHeader(
-                title = stringResource(R.string.settings),
-                modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-            )
-        }
-
+    SettingsPage(title = stringResource(R.string.settings)) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
             contentPadding = PaddingValues(
-                top = FoamDimens.paddingMedium,
+                top = SettingsHeaderZoneHeight + FoamDimens.paddingMedium,
                 bottom = LocalBottomBarClearance.current
             )
         ) {
@@ -254,24 +237,77 @@ fun SettingsCategoryItem(
     }
 }
 
+/** Height of the header row: icon slot + its vertical padding. */
+private val SettingsHeaderRowHeight =
+    FoamDimens.headerIconSize + FoamDimens.paddingMedium * 2
+
+/** Extra distance below the header row over which the fade reaches zero alpha. */
+private val SettingsHeaderFadeTail = FoamDimens.paddingSmall
+
 /**
- * The standard settings page header: title, optional back button and trailing
- * slot, on a band of the plain theme background. [transparent] opts out of the
- * background band for pages that sit over the root backdrop layers instead
- * (the background settings screen, whose backdrop is its live preview).
+ * Height of the pinned header zone on settings pages: the header row plus the
+ * fade tail. Scrollable content reserves this as its top padding (inside the
+ * scroll) so items rest below the fade at rest and dissolve into the header
+ * when scrolled up.
+ */
+val SettingsHeaderZoneHeight = SettingsHeaderRowHeight + SettingsHeaderFadeTail
+
+/**
+ * Standard settings page scaffold: [content] fills the whole page so rows
+ * scroll UNDER the header, while the pinned header row sits on a fade of the
+ * theme background — fully opaque at the top of the page, dissolving to
+ * nothing at the bottom of the zone — so scrolling rows stay visible instead
+ * of being clipped by the header. Content must reserve
+ * [SettingsHeaderZoneHeight] as its top padding (inside the scroll).
+ */
+@Composable
+fun SettingsPage(
+    title: String,
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
+    Box(modifier = modifier.fillMaxSize().foamBackground()) {
+        content()
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(SettingsHeaderZoneHeight)
+                // Fade behind the header: background color, 100% opaque at the
+                // top of the page, 0% by the bottom of the zone. The tint
+                // resolves in the draw pass (see [foamBackgroundTopFade]), so
+                // accent changes only redraw the fade.
+                .foamBackgroundTopFade()
+        ) {
+            SettingsHeader(
+                title = title,
+                onBack = onBack,
+                trailing = trailing,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = FoamDimens.paddingMedium)
+            )
+        }
+    }
+}
+
+/**
+ * The settings header row (title, optional back button and trailing slot)
+ * pinned by [SettingsPage] over the page's background fade.
  */
 @Composable
 fun SettingsHeader(
     title: String,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
-    transparent: Boolean = false
+    trailing: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (transparent) Modifier else Modifier.foamBackground())
             .padding(vertical = FoamDimens.paddingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {

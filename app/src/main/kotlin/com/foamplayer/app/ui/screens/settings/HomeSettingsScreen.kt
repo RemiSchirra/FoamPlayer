@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,7 +44,6 @@ import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamSurfaceBlend
 
 /**
@@ -59,33 +59,16 @@ fun HomeSettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.home),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.home),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
+        HomeSectionsList(
+            order = settings.homeSectionOrder,
+            enabledSections = settings.enabledHomeSections,
+            onOrderChange = viewModel::setHomeSectionOrder,
+            onEnabledChange = viewModel::setHomeSectionEnabled
         )
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = FoamDimens.paddingMedium)
-                .padding(bottom = LocalBottomBarClearance.current)
-        ) {
-            BasicText(text = stringResource(R.string.home_settings_subtitle), style = FoamTheme.typography.body)
-            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-
-            HomeSectionsList(
-                order = settings.homeSectionOrder,
-                enabledSections = settings.enabledHomeSections,
-                onOrderChange = viewModel::setHomeSectionOrder,
-                onEnabledChange = viewModel::setHomeSectionEnabled
-            )
-        }
     }
 }
 
@@ -120,8 +103,18 @@ private fun HomeSectionsList(
 
     LazyColumn(
         state = lazyListState,
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = FoamDimens.paddingMedium),
+        contentPadding = PaddingValues(
+            top = SettingsHeaderZoneHeight + FoamDimens.spacingMedium,
+            bottom = LocalBottomBarClearance.current
+        )
     ) {
+        item {
+            BasicText(text = stringResource(R.string.home_settings_subtitle), style = FoamTheme.typography.body)
+            Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+        }
         itemsIndexed(
             items = displayedOrder,
             key = { _, section -> section.name }

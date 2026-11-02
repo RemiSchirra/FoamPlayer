@@ -20,7 +20,6 @@ import com.foamplayer.app.ui.components.FoamEnumItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
 
 /**
  * Equalizer settings (subscreen of Settings > Audio): the ISO band layout of
@@ -35,22 +34,18 @@ fun EqualizerSettingsScreen(
 ) {
     val dspState by viewModel.dspState.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.equalizer_dsp),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.equalizer_dsp),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
-            contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
+            contentPadding = PaddingValues(
+                top = SettingsHeaderZoneHeight,
+                bottom = LocalBottomBarClearance.current
+            )
         ) {
             item {
                 FoamEnumItem(

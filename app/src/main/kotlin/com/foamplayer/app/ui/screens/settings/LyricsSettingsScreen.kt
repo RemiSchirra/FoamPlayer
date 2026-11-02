@@ -52,7 +52,6 @@ import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamSurfaceBlend
 
 @Composable
@@ -64,22 +63,16 @@ fun LyricsSettingsScreen(
     var showProvidersModal by remember { mutableStateOf(false) }
     val settings by viewModel.settings.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.lyrics),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.lyrics),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = FoamDimens.paddingMedium)
+                .padding(top = SettingsHeaderZoneHeight)
                 .padding(bottom = LocalBottomBarClearance.current)
         ) {
             BasicText(text = stringResource(R.string.lyrics_sources), style = FoamTheme.typography.titleMedium)

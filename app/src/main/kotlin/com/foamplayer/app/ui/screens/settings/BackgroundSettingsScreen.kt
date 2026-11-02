@@ -158,7 +158,6 @@ fun BackgroundSettingsScreen(
         SettingsHeader(
             title = stringResource(R.string.background),
             onBack = onBack,
-            transparent = true,
             modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
         )
 

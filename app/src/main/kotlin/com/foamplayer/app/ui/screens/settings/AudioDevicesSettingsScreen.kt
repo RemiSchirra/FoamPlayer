@@ -51,7 +51,6 @@ import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
 
 /**
  * Output devices subscreen of the Audio settings: every attached output with its
@@ -66,22 +65,18 @@ fun AudioDevicesSettingsScreen(
     val devices by viewModel.devices.collectAsState()
     val activeDevice by viewModel.activeDevice.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.output_devices),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.output_devices),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
-            contentPadding = PaddingValues(top = FoamDimens.spacingMedium, bottom = LocalBottomBarClearance.current)
+            contentPadding = PaddingValues(
+                top = SettingsHeaderZoneHeight + FoamDimens.spacingMedium,
+                bottom = LocalBottomBarClearance.current
+            )
         ) {
             if (devices.isEmpty()) {
                 item {

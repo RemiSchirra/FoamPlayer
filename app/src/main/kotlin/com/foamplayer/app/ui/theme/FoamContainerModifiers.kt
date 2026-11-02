@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
@@ -36,7 +37,7 @@ val LocalAccentTintState = staticCompositionLocalOf { AccentTintState() }
  * How far each container color blends toward the accent, applied at draw time
  * as `lerp(base, accent, k)` (Settings > Colors).
  */
-internal const val BackgroundAccentTint = 0.08f
+internal const val BackgroundAccentTint = 0.2f
 internal const val SurfaceAccentTint = 0.1f
 internal const val SurfaceVariantAccentTint = 0.1f
 internal const val BorderAccentTint = 0.15f
@@ -79,6 +80,29 @@ fun Modifier.foamBackground(
     shape = shape,
     alpha = alpha
 )
+
+/**
+ * Vertical fade of the tinted background color: fully opaque at the top,
+ * transparent at the bottom. Like the other foam* container backgrounds, the
+ * tint resolves inside the draw pass, so an accent change only redraws the
+ * fade -- nothing recomposes.
+ */
+@Composable
+fun Modifier.foamBackgroundTopFade(): Modifier {
+    val tint = LocalAccentTintState.current
+    val palette = LocalFoamColors.current
+    return remember(tint, palette) {
+        drawBehind {
+            val color = tint.resolve(palette.background, BackgroundAccentTint)
+            drawRect(
+                brush = Brush.verticalGradient(
+                    0f to color,
+                    1f to color.copy(alpha = 0f)
+                )
+            )
+        }
+    }
+}
 
 /** Tint-aware `Modifier.background(FoamTheme.colors.surface)`. */
 @Composable

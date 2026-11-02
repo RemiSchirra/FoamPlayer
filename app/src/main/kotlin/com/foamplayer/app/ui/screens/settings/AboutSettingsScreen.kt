@@ -47,7 +47,6 @@ import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBorderOverlay
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.update.DownloadState
@@ -70,22 +69,18 @@ fun AboutSettingsScreen(
     val downloadState by viewModel.downloadState.collectAsState()
     val releaseNotes by viewModel.releaseNotes.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.settings_about),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.settings_about),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
-            contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
+            contentPadding = PaddingValues(
+                top = SettingsHeaderZoneHeight,
+                bottom = LocalBottomBarClearance.current
+            )
         ) {
             // Version card: the running build, plus the available release when
             // a newer one exists.
