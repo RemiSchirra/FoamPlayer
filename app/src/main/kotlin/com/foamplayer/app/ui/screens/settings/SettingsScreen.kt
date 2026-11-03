@@ -80,7 +80,6 @@ fun SettingsScreen(
             item {
                 SettingsCategoryItem(
                     title = stringResource(R.string.audio),
-                    subtitle = stringResource(R.string.audio_settings_subtitle),
                     icon = FoamTheme.icons.current.equalizer,
                     onClick = onNavigateToAudio
                 )
@@ -90,7 +89,6 @@ fun SettingsScreen(
             item {
                 SettingsCategoryItem(
                     title = stringResource(R.string.user_interface),
-                    subtitle = stringResource(R.string.ui_settings_subtitle),
                     icon = FoamTheme.icons.current.ui,
                     onClick = onNavigateToUI
                 )
@@ -100,7 +98,6 @@ fun SettingsScreen(
             item {
                 SettingsCategoryItem(
                     title = stringResource(R.string.library),
-                    subtitle = stringResource(R.string.library_settings_subtitle),
                     icon = FoamTheme.icons.current.library,
                     onClick = onNavigateToLibrary
                 )
@@ -110,7 +107,6 @@ fun SettingsScreen(
             item {
                 SettingsCategoryItem(
                     title = stringResource(R.string.lyrics),
-                    subtitle = stringResource(R.string.lyrics_settings_subtitle),
                     icon = FoamTheme.icons.current.lyrics,
                     onClick = onNavigateToLyrics
                 )
@@ -120,7 +116,6 @@ fun SettingsScreen(
             item {
                 SettingsCategoryItem(
                     title = stringResource(R.string.settings_misc),
-                    subtitle = stringResource(R.string.misc_settings_subtitle),
                     icon = FoamTheme.icons.current.misc,
                     onClick = onNavigateToMisc
                 )
@@ -130,7 +125,6 @@ fun SettingsScreen(
             item {
                 SettingsCategoryItem(
                     title = stringResource(R.string.settings_about),
-                    subtitle = stringResource(R.string.about_settings_subtitle),
                     icon = FoamTheme.icons.current.info,
                     onClick = onNavigateToAbout
                 )
@@ -142,7 +136,6 @@ fun SettingsScreen(
                 item {
                     SettingsCategoryItem(
                         title = stringResource(R.string.test_components),
-                        subtitle = stringResource(R.string.test_components_subtitle),
                         icon = Icons.Default.BugReport,
                         onClick = onNavigateToTest
                     )
@@ -208,7 +201,6 @@ fun SettingsScreen(
 @Composable
 fun SettingsCategoryItem(
     title: String,
-    subtitle: String,
     icon: ImageVector,
     onClick: () -> Unit
 ) {
@@ -231,7 +223,6 @@ fun SettingsCategoryItem(
             Spacer(modifier = Modifier.width(FoamDimens.spacingStandard))
             Column {
                 BasicText(text = title, style = FoamTheme.typography.titleMedium)
-                BasicText(text = subtitle, style = FoamTheme.typography.body)
             }
         }
     }

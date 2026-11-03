@@ -315,12 +315,7 @@
     <string name="track_count_duration">%1$d Tracks • %2$s</string>
     <string name="add_separator">Add separator…</string>
 
-    <string name="audio_settings_subtitle">Bit-perfect engine and output options</string>
-    <string name="ui_settings_subtitle">Appearance, icon styles and rounding</string>
-    <string name="library_settings_subtitle">Manage music folders and metadata</string>
-    <string name="lyrics_settings_subtitle">Lyrics providers and display settings</string>
     <string name="test_components">Components Test</string>
-    <string name="test_components_subtitle">Internal UI testing utilities</string>
     <string name="switches">Switches</string>
     <string name="sliders">Sliders</string>
 
