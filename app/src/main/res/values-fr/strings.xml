@@ -114,6 +114,10 @@
     <string name="artist_images_stop">ARRÊTER</string>
     <string name="artist_images_cache_count">%1$d images en cache</string>
     <string name="artist_images_clear_cache">VIDER LE CACHE</string>
+    <string name="artist_images_cache_limit">Artistes en cache</string>
+    <string name="artist_images_cache_limit_desc">Les images sont résolues à l\'ouverture d\'une page d\'artiste ; la moins récemment visitée est retirée quand le cache est plein.</string>
+    <string name="artist_images_resolve_all">Résoudre tous les artistes</string>
+    <string name="artist_images_resolve_all_desc">Analyse tous les artistes de votre bibliothèque d\'un coup au lieu de résoudre à l\'ouverture des pages d\'artistes.</string>
 
     <string name="no_audio_detected">Aucun fichier audio détecté.\nAllez dans les Paramètres pour ajouter des dossiers et analyser votre bibliothèque.</string>
     <string name="search_hint">Rechercher</string>

@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.data.db.dao.AlbumSearchResult
 import com.foamplayer.app.data.db.entities.TrackEntity
-import com.foamplayer.app.data.repository.ArtistImageStore
 import com.foamplayer.app.data.repository.TrackRepository
+import com.foamplayer.app.data.scanner.ArtistImageScanner
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,13 +16,16 @@ import javax.inject.Inject
 
 /**
  * Loads one artist's albums, tracks, top tracks (most-listened, padded with
- * random picks) and picture (cached Spotify image, else the first track's
- * embedded art).
+ * random picks) and picture. Opening the page counts as a cache visit: the
+ * picture is resolved on demand (artist image resolution on, "artists to
+ * cache" limit > 0) and the least-recently visited cached image is evicted
+ * once the cache is full; without a resolved image the screen falls back to
+ * the first track's embedded art.
  */
 @HiltViewModel
 class ArtistDetailViewModel @Inject constructor(
     private val repository: TrackRepository,
-    private val artistImageStore: ArtistImageStore
+    private val artistImageScanner: ArtistImageScanner
 ) : ViewModel() {
 
     private val _albums = MutableStateFlow<List<AlbumSearchResult>>(emptyList())
@@ -89,7 +92,7 @@ class ArtistDetailViewModel @Inject constructor(
 
     fun loadArtistImage(artistName: String) {
         viewModelScope.launch {
-            _artistImage.value = artistImageStore.imagePath(ArtistImageStore.key(artistName))
+            _artistImage.value = artistImageScanner.imageOnVisit(artistName)
         }
     }
 

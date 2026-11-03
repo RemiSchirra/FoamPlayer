@@ -28,6 +28,7 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsUICollections : Screen("settings/ui/collections", "Collection Layouts")
     object SettingsUIHome : Screen("settings/ui/home", "Home Layout")
     object SettingsLibrary : Screen("settings/library", "Library Settings")
+    object SettingsLibraryArtistImages : Screen("settings/library/artist-images", "Artist Images")
     object SettingsLyrics : Screen("settings/lyrics", "Lyrics Settings")
     object SettingsLyricsManager : Screen("settings/lyrics/manager", "Lyrics Manager")
     object SettingsLyricsManagerResults :

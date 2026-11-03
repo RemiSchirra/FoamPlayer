@@ -186,6 +186,15 @@ data class AppSettings(
     /** Resolves a picture for the library's artists from Spotify (Settings > Library scan). */
     val artistImageResolveEnabled: Boolean = false,
     /**
+     * How many artist pictures the on-demand cache keeps (0-50). A picture is
+     * resolved when its artist page is opened, and the least-recently visited
+     * image is evicted once the cache is full. Pictures resolved by the
+     * "resolve all artists" scan are exempt from this limit.
+     */
+    val artistImageCacheLimit: Int = DEFAULT_ARTIST_IMAGE_CACHE_LIMIT,
+    /** Gates the scan button that bulk-resolves every library artist (Settings > Library). */
+    val artistImageResolveAllEnabled: Boolean = false,
+    /**
      * Shows the app's own player over the lock screen while a song is playing:
      * waking the phone presents the lock-screen player instead of the system
      * lock screen (requires the system "Full-screen intent" permission).
@@ -287,6 +296,10 @@ data class AppSettings(
             ),
             miniPlayerRounding = miniPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
             fullPlayerRounding = fullPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
+            artistImageCacheLimit = artistImageCacheLimit.coerceIn(
+                MIN_ARTIST_IMAGE_CACHE_LIMIT,
+                MAX_ARTIST_IMAGE_CACHE_LIMIT
+            ),
             backgroundBlur = backgroundBlur.coerceIn(MIN_BACKGROUND_BLUR, MAX_BACKGROUND_BLUR),
             appBackgroundIntensity = appBackgroundIntensity.coerceIn(
                 MIN_DYNAMIC_BACKGROUND_INTENSITY,
@@ -312,13 +325,15 @@ data class AppSettings(
         const val MIN_LISTENED_THRESHOLD_PERCENT = 0
         const val MAX_LISTENED_THRESHOLD_PERCENT = 100
         const val DEFAULT_LISTENED_THRESHOLD_PERCENT = 50
+        const val MIN_ARTIST_IMAGE_CACHE_LIMIT = 0
+        const val MAX_ARTIST_IMAGE_CACHE_LIMIT = 50
+        const val DEFAULT_ARTIST_IMAGE_CACHE_LIMIT = 20
         const val MIN_ROUNDING = 0
         const val MAX_ROUNDING = 100
         const val MIN_BACKGROUND_BLUR = 0
         const val MAX_BACKGROUND_BLUR = 100
         const val DEFAULT_BACKGROUND_BLUR = 50
 
-        /** Gaussian radius, in dp, the backdrop layers render at 100% blur. */
         const val BACKGROUND_BLUR_MAX_DP = 100f
 
         /**

@@ -2,6 +2,7 @@ package com.foamplayer.app.data.scanner
 
 import com.foamplayer.app.data.db.dao.TrackDao
 import com.foamplayer.app.data.repository.ArtistImageStore
+import com.foamplayer.app.data.repository.SettingsRepository
 import com.foamplayer.spotify.SpotifyArtistImageResolver
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,7 +17,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -43,13 +43,16 @@ data class ArtistImageScanState(
  * ("A; B" stores A's picture under A and B's under B).
  *
  * Already-resolved artists are skipped entirely, so re-running the scan only
- * resolves the gaps and the "found / total" counter grows monotonically.
+ * resolves the gaps. Every stored picture enters the store's strict LRU
+ * queue, so the "artists to cache" setting bounds the cache however entries
+ * were added.
  */
 @Singleton
 class ArtistImageScanner @Inject constructor(
     private val trackDao: TrackDao,
     private val artistImageResolver: SpotifyArtistImageResolver,
-    private val artistImageStore: ArtistImageStore
+    private val artistImageStore: ArtistImageStore,
+    private val settingsRepository: SettingsRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var scanJob: Job? = null
@@ -81,13 +84,14 @@ class ArtistImageScanner @Inject constructor(
 
     /**
      * Artist name -> cached image file URI, rebuilt whenever [artists] changes
-     * or the scan lands new files (its cachedCount), so cards fill in live.
-     * A display string ("A; B") falls back to its first individual artist.
+     * or the store's content does (new images, evictions), so cards fill in
+     * live. A display string ("A; B") falls back to its first individual
+     * artist.
      */
     fun imagesFlow(artists: Flow<List<String>>): Flow<Map<String, String>> =
         combine(
             artists,
-            _state.map { it.cachedCount }.distinctUntilChanged()
+            artistImageStore.revisions
         ) { names, _ -> names }
             .map { names ->
                 val map = HashMap<String, String>(names.size)
@@ -99,6 +103,42 @@ class ArtistImageScanner @Inject constructor(
             // The per-artist cache lookups (IO hops) and map build run off the
             // collecting context, so screens subscribe without main-thread churn.
             .flowOn(Dispatchers.Default)
+
+    /**
+     * Image for an artist page visit. When artist image resolution is on and
+     * the "artists to cache" limit allows it, resolves the picture on demand
+     * through Spotify, stores it in the visited-LRU cache and refreshes its
+     * recency; when the feature is off (or the limit is 0), only the plain
+     * cached read applies. A multi-artist display ("A; B") resolves its first
+     * individual artist, matching [imageFor]'s fallback.
+     */
+    suspend fun imageOnVisit(display: String): String? {
+        val settings = settingsRepository.settings.first()
+        val limit = if (settings.artistImageResolveEnabled) settings.artistImageCacheLimit else 0
+        var stored = false
+        if (limit > 0) {
+            val name = display.split("; ")
+                .map { it.trim() }
+                .firstOrNull { it.isNotEmpty() }
+            if (name != null) {
+                val key = ArtistImageStore.key(name)
+                if (artistImageStore.hasEntry(key)) {
+                    // Already cached: only the LRU recency moves.
+                    artistImageStore.touch(key)
+                } else {
+                    val url = artistImageResolver.resolveArtistImage(name)
+                    if (url != null) {
+                        artistImageStore.rememberVisited(key, url, limit)
+                        stored = true
+                    }
+                }
+            }
+        }
+        // Keep the Settings cache count in sync with the on-demand queue:
+        // the scan state otherwise only refreshes on scan activity.
+        if (stored) refreshCounts()
+        return imageFor(display)
+    }
 
     /** Cached image for a (possibly multi-artist) display string, if any. */
     suspend fun imageFor(display: String): String? {
@@ -132,6 +172,14 @@ class ArtistImageScanner @Inject constructor(
         }
     }
 
+    /** Applies a new cache limit: trims the LRU queue and refreshes the counts. */
+    fun enforceCacheLimit(limit: Int) {
+        scope.launch {
+            artistImageStore.evictToLimit(limit)
+            refreshCounts()
+        }
+    }
+
     private suspend fun scan() {
         val artists = libraryArtists()
         if (artists.isEmpty()) {
@@ -142,15 +190,15 @@ class ArtistImageScanner @Inject constructor(
             var found = artists.count { artistImageStore.hasEntry(ArtistImageStore.key(it)) }
             _state.value = ArtistImageScanState(running = true, found = found, total = artists.size)
 
-            // Only the gaps: artists with a resolved image are skipped outright,
-            // so a re-scan costs nothing for them.
             val pending = artists.filter { !artistImageStore.hasEntry(ArtistImageStore.key(it)) }
             for (artist in pending) {
+                val limit = settingsRepository.settings.first().artistImageCacheLimit
+                if (limit <= 0) break
                 val key = ArtistImageStore.key(artist)
                 if (artistImageStore.hasEntry(key)) continue
                 val url = artistImageResolver.resolveArtistImage(artist)
                 if (url != null) {
-                    artistImageStore.remember(key, url)
+                    artistImageStore.remember(key, url, limit)
                     found++
                 }
                 _state.value = ArtistImageScanState(

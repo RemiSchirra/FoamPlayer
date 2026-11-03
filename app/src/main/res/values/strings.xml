@@ -115,6 +115,10 @@
     <string name="artist_images_stop">STOP</string>
     <string name="artist_images_cache_count">%1$d images in cache</string>
     <string name="artist_images_clear_cache">CLEAR CACHE</string>
+    <string name="artist_images_cache_limit">Artists to cache</string>
+    <string name="artist_images_cache_limit_desc">Images are resolved when you open an artist page; the least recently visited is removed once the cache is full.</string>
+    <string name="artist_images_resolve_all">Resolve all artists</string>
+    <string name="artist_images_resolve_all_desc">Scan every artist in your library up front instead of resolving images on artist page visits.</string>
 
     <string name="no_audio_detected">No audio files detected.\nGo to Settings to add folders and scan your library.</string>
     <string name="search_hint">Search</string>

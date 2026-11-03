@@ -4,19 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,8 +49,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.FoamCard
+import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.components.FoamSliderStateItem
-import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.components.LibraryFoldersCard
 import com.foamplayer.app.ui.components.LibraryScanCard
 import com.foamplayer.app.ui.components.RepairPlaylistsCard
@@ -84,6 +72,7 @@ private enum class SeparatorTarget { ARTIST, GENRE }
 @Composable
 fun LibrarySettingsScreen(
     onBack: () -> Unit,
+    onNavigateToArtistImages: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
@@ -91,7 +80,6 @@ fun LibrarySettingsScreen(
     val scanStatus by viewModel.scanStatus.collectAsState()
     val repairRunning by viewModel.repairRunning.collectAsState()
     val repairResult by viewModel.repairResult.collectAsState()
-    val artistImageScan by viewModel.artistImageScan.collectAsState()
     val artistSeparators = settings.artistSeparators
     val genreSeparators = settings.genreSeparators
     val context = LocalContext.current
@@ -200,173 +188,11 @@ fun LibrarySettingsScreen(
 
             // --- Artist Images ---
             item {
-                BasicText(text = stringResource(R.string.artist_images), style = FoamTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                // The switch's ripple is drawn at card level: it expands from
-                // the press point across the whole card, reaching the top AND
-                // bottom borders (clipped by the rounded corners).
-                val switchInteraction = remember { MutableInteractionSource() }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
-                        .foamSurface()
-                        .indication(
-                            interactionSource = switchInteraction,
-                            indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary)
-                        )
-                ) {
-                    // No vertical padding: the switch row spans the full card
-                    // height when collapsed, so its ripple reaches the card's
-                    // borders (same as the audio settings cards).
-                    Column(Modifier.fillMaxWidth()) {
-                        FoamSwitchItem(
-                            title = stringResource(R.string.artist_images_resolve),
-                            description = stringResource(R.string.artist_images_resolve_desc),
-                            checked = settings.artistImageResolveEnabled,
-                            onCheckedChange = { viewModel.setArtistImageResolveEnabled(it) },
-                            interactionSource = switchInteraction
-                        )
-
-                        // Expandable body (same pattern as the audio devices
-                        // cards): the switch reveals the scan controls with an
-                        // animated expand/collapse.
-                        AnimatedVisibility(
-                            visible = settings.artistImageResolveEnabled,
-                            enter = expandVertically() + fadeIn(),
-                            exit = shrinkVertically() + fadeOut()
-                        ) {
-                            Column(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = FoamDimens.paddingMedium)
-                                    .padding(bottom = FoamDimens.spacingMedium)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    BasicText(
-                                        text = if (artistImageScan.running) {
-                                            stringResource(
-                                                R.string.artist_images_scanning,
-                                                artistImageScan.found,
-                                                artistImageScan.total
-                                            )
-                                        } else {
-                                            stringResource(
-                                                R.string.artist_images_found,
-                                                artistImageScan.found,
-                                                artistImageScan.total
-                                            )
-                                        },
-                                        style = FoamTheme.typography.caption,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
-                                    // START SCAN <-> STOP: the pill animates its
-                                    // background, size and label between the two
-                                    // states; the ripple stays bounded inside it.
-                                    val scanRunning = artistImageScan.running
-                                    val scanButtonBackground by animateColorAsState(
-                                        targetValue = if (scanRunning) FoamTheme.colors.surfaceVariant
-                                        else FoamTheme.accentColor,
-                                        animationSpec = tween(durationMillis = 200),
-                                        label = "artistScanButtonBackground"
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .animateContentSize(animationSpec = tween(durationMillis = 200))
-                                            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                            .background(scanButtonBackground)
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
-                                                onClick = {
-                                                    if (scanRunning) viewModel.stopArtistImageScan()
-                                                    else viewModel.startArtistImageScan()
-                                                }
-                                            )
-                                            .padding(
-                                                horizontal = FoamDimens.spacingStandard,
-                                                vertical = FoamDimens.spacingSmall
-                                            )
-                                    ) {
-                                        AnimatedContent(
-                                            targetState = scanRunning,
-                                            transitionSpec = {
-                                                fadeIn(animationSpec = tween(durationMillis = 120)) togetherWith
-                                                        fadeOut(animationSpec = tween(durationMillis = 120))
-                                            },
-                                            label = "artistScanButtonLabel"
-                                        ) { running ->
-                                            BasicText(
-                                                text = if (running) stringResource(R.string.artist_images_stop)
-                                                else stringResource(R.string.start_scan),
-                                                style = FoamTheme.typography.caption.copy(
-                                                    color = if (running) FoamTheme.colors.textPrimary
-                                                    else FoamTheme.colors.background,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-
-                                if (artistImageScan.running && artistImageScan.total > 0) {
-                                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(FoamDimens.spacingTiny)
-                                            .clip(RoundedCornerShape(FoamDimens.spacingTiny / 2))
-                                            .foamSurfaceVariant()
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth(
-                                                    artistImageScan.found.toFloat() / artistImageScan.total
-                                                )
-                                                .height(FoamDimens.spacingTiny)
-                                                .background(FoamTheme.accentColor)
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    BasicText(
-                                        text = stringResource(
-                                            R.string.artist_images_cache_count,
-                                            artistImageScan.cachedCount
-                                        ),
-                                        style = FoamTheme.typography.caption,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                                            .foamSurfaceVariant()
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
-                                                onClick = { viewModel.clearArtistImageCache() }
-                                            )
-                                            .padding(
-                                                horizontal = FoamDimens.spacingStandard,
-                                                vertical = FoamDimens.spacingSmall
-                                            )
-                                    ) {
-                                        BasicText(
-                                            text = stringResource(R.string.artist_images_clear_cache),
-                                            style = FoamTheme.typography.caption.copy(
-                                                color = FoamTheme.colors.textPrimary,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
+                    FoamNavigationButton(
+                        title = stringResource(R.string.artist_images),
+                        onClick = onNavigateToArtistImages
+                    )
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingExtraLarge))
             }

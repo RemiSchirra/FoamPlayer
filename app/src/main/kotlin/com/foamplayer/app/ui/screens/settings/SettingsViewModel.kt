@@ -212,6 +212,16 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setArtistImageResolveEnabled(enabled)
     }
 
+    /** Persists the "artists to cache" limit and trims the visited-LRU pool to it. */
+    fun setArtistImageCacheLimit(limit: Int) = launch {
+        settingsRepository.setArtistImageCacheLimit(limit)
+        artistImageScanner.enforceCacheLimit(limit)
+    }
+
+    fun setArtistImageResolveAllEnabled(enabled: Boolean) = launch {
+        settingsRepository.setArtistImageResolveAllEnabled(enabled)
+    }
+
     fun startArtistImageScan() = artistImageScanner.startScan()
 
     fun stopArtistImageScan() = artistImageScanner.stopScan()

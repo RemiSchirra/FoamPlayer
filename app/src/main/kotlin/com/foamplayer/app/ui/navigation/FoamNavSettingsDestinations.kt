@@ -5,6 +5,7 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.foamplayer.app.BuildConfig
 import com.foamplayer.app.ui.screens.settings.AboutSettingsScreen
+import com.foamplayer.app.ui.screens.settings.ArtistImagesSettingsScreen
 import com.foamplayer.app.ui.screens.settings.AudioBehaviorSettingsScreen
 import com.foamplayer.app.ui.screens.settings.AudioDevicesSettingsScreen
 import com.foamplayer.app.ui.screens.settings.AudioSettingsScreen
@@ -116,7 +117,15 @@ internal fun NavGraphBuilder.settingsDestinations(context: FoamNavGraphContext) 
         )
     }
     composable(Screen.SettingsLibrary.route) {
-        LibrarySettingsScreen(onBack = { context.back() })
+        LibrarySettingsScreen(
+            onBack = { context.back() },
+            onNavigateToArtistImages = {
+                context.navController.navigate(Screen.SettingsLibraryArtistImages.route)
+            }
+        )
+    }
+    composable(Screen.SettingsLibraryArtistImages.route) {
+        ArtistImagesSettingsScreen(onBack = { context.back() })
     }
     composable(Screen.SettingsLyrics.route) {
         LyricsSettingsScreen(

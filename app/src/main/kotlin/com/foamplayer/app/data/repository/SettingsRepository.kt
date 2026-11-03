@@ -311,6 +311,14 @@ class SettingsRepository @Inject constructor(
         it.copy(artistImageResolveEnabled = enabled)
     }
 
+    suspend fun setArtistImageCacheLimit(limit: Int) = update {
+        it.copy(artistImageCacheLimit = limit)
+    }
+
+    suspend fun setArtistImageResolveAllEnabled(enabled: Boolean) = update {
+        it.copy(artistImageResolveAllEnabled = enabled)
+    }
+
     suspend fun setDisplayOnLockScreen(enabled: Boolean) = update {
         it.copy(displayOnLockScreen = enabled)
     }
@@ -464,6 +472,9 @@ class SettingsRepository @Inject constructor(
         scrobbleOnlyFirstArtist = this[Keys.LASTFM_SCROBBLE_ONLY_FIRST_ARTIST]
             ?: AppSettings().scrobbleOnlyFirstArtist,
         artistImageResolveEnabled = this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] ?: AppSettings().artistImageResolveEnabled,
+        artistImageCacheLimit = this[Keys.ARTIST_IMAGE_CACHE_LIMIT] ?: AppSettings().artistImageCacheLimit,
+        artistImageResolveAllEnabled = this[Keys.ARTIST_IMAGE_RESOLVE_ALL_ENABLED]
+            ?: AppSettings().artistImageResolveAllEnabled,
         displayOnLockScreen = this[Keys.DISPLAY_ON_LOCK_SCREEN] ?: AppSettings().displayOnLockScreen,
         fastLockScreenEnabled = this[Keys.FAST_LOCK_SCREEN_ENABLED] ?: AppSettings().fastLockScreenEnabled,
         notificationButtonLeft = this[Keys.NOTIFICATION_BUTTON_LEFT]
@@ -551,6 +562,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.LASTFM_SCROBBLING_ENABLED] = settings.lastFmScrobblingEnabled
         this[Keys.LASTFM_SCROBBLE_ONLY_FIRST_ARTIST] = settings.scrobbleOnlyFirstArtist
         this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] = settings.artistImageResolveEnabled
+        this[Keys.ARTIST_IMAGE_CACHE_LIMIT] = settings.artistImageCacheLimit
+        this[Keys.ARTIST_IMAGE_RESOLVE_ALL_ENABLED] = settings.artistImageResolveAllEnabled
         this[Keys.DISPLAY_ON_LOCK_SCREEN] = settings.displayOnLockScreen
         this[Keys.FAST_LOCK_SCREEN_ENABLED] = settings.fastLockScreenEnabled
         this[Keys.NOTIFICATION_BUTTON_LEFT] = settings.notificationButtonLeft.name
@@ -638,6 +651,8 @@ class SettingsRepository @Inject constructor(
         val LASTFM_SCROBBLING_ENABLED = booleanPreferencesKey("lastfm_scrobbling_enabled")
         val LASTFM_SCROBBLE_ONLY_FIRST_ARTIST = booleanPreferencesKey("lastfm_scrobble_only_first_artist")
         val ARTIST_IMAGE_RESOLVE_ENABLED = booleanPreferencesKey("artist_image_resolve_enabled")
+        val ARTIST_IMAGE_CACHE_LIMIT = intPreferencesKey("artist_image_cache_limit")
+        val ARTIST_IMAGE_RESOLVE_ALL_ENABLED = booleanPreferencesKey("artist_image_resolve_all_enabled")
         val DISPLAY_ON_LOCK_SCREEN = booleanPreferencesKey("display_on_lock_screen")
         val FAST_LOCK_SCREEN_ENABLED = booleanPreferencesKey("fast_lock_screen_enabled")
         val NOTIFICATION_BUTTON_LEFT = stringPreferencesKey("notification_button_left")

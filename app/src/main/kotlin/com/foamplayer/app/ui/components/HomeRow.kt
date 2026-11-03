@@ -182,19 +182,24 @@ fun HomeRowCard(
         rounding = FoamTheme.shapes.miniPlayerRounding,
         fullyRounded = round
     )
-    val immersiveFlightHero = !sharedInPlayerTransition &&
-            flightHeroTarget != null &&
-            LocalCollectionHeroLayoutLookup.current(flightHeroTarget).isImmersive
-    val sharedArtModifier = if (immersiveFlightHero) {
+    val collectionFlight = !sharedInPlayerTransition && flightHeroTarget != null
+    val immersiveFlightHero = collectionFlight &&
+            LocalCollectionHeroLayoutLookup.current(flightHeroTarget!!).isImmersive
+    val closeFlightActive = rememberCollectionCloseFlightActive(
+        sharedTransitionScope = sharedTransitionScope?.takeIf { collectionFlight && sharedArtKey != null },
+        animatedVisibilityScope = animatedVisibilityScope
+    ).value
+    val staticArtElevation = if (closeFlightActive) 0.dp else MediaItemArtElevation
+    val sharedArtModifier = if (collectionFlight) {
         Modifier.collectionRowFlightArtwork(
             key = sharedArtKey.orEmpty(),
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             enabled = sharedArtKey != null,
             restShape = artShape,
-            immersiveFlightHero = true,
-            // Fully round cards (artists) land their flight morph on the circle too.
-            fullyRounded = round
+            immersiveFlightHero = immersiveFlightHero,
+            fullyRounded = round,
+            castsFlightShadow = true
         )
     } else {
         Modifier.rowSharedArtwork(
@@ -233,12 +238,17 @@ fun HomeRowCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .then(sharedArtModifier)
                     .let {
-                        if (immersiveFlightHero) it
-                        else it.shadow(elevation = MediaItemArtElevation, shape = artShape)
+                        if (collectionFlight) {
+                            // Shadow outside, shared artwork inside (see above).
+                            it.shadow(elevation = staticArtElevation, shape = artShape)
+                                .then(sharedArtModifier)
+                        } else {
+                            it.then(sharedArtModifier)
+                                .shadow(elevation = MediaItemArtElevation, shape = artShape)
+                                .clip(artShape)
+                        }
                     }
-                    .let { if (immersiveFlightHero) it else it.clip(artShape) }
                     .foamSurfaceVariant(),
                 contentAlignment = Alignment.Center
             ) {

@@ -112,6 +112,8 @@ object BackupJson {
         put("lastFmScrobblingEnabled", settings.lastFmScrobblingEnabled)
         put("scrobbleOnlyFirstArtist", settings.scrobbleOnlyFirstArtist)
         put("artistImageResolveEnabled", settings.artistImageResolveEnabled)
+        put("artistImageCacheLimit", settings.artistImageCacheLimit)
+        put("artistImageResolveAllEnabled", settings.artistImageResolveAllEnabled)
         put("displayOnLockScreen", settings.displayOnLockScreen)
         put("fastLockScreenEnabled", settings.fastLockScreenEnabled)
         put("notificationButtonLeft", settings.notificationButtonLeft.name)
@@ -230,6 +232,11 @@ object BackupJson {
         lastFmScrobblingEnabled = json.optBoolean("lastFmScrobblingEnabled", false),
         scrobbleOnlyFirstArtist = json.optBoolean("scrobbleOnlyFirstArtist", true),
         artistImageResolveEnabled = json.optBoolean("artistImageResolveEnabled", false),
+        artistImageCacheLimit = json.optInt(
+            "artistImageCacheLimit",
+            AppSettings.DEFAULT_ARTIST_IMAGE_CACHE_LIMIT
+        ),
+        artistImageResolveAllEnabled = json.optBoolean("artistImageResolveAllEnabled", false),
         displayOnLockScreen = json.optBoolean("displayOnLockScreen", false),
         fastLockScreenEnabled = json.optBoolean("fastLockScreenEnabled", true),
         notificationButtonLeft = decodeEnum(
