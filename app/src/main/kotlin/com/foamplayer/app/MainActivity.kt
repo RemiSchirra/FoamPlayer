@@ -44,6 +44,7 @@ import com.foamplayer.app.ui.components.LocalDefaultCollectionHeroLayout
 import com.foamplayer.app.ui.navigation.FoamNavHost
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
+import com.foamplayer.app.ui.theme.FoamBackdropHost
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
 import com.foamplayer.app.ui.theme.foamBackground
@@ -616,16 +617,18 @@ private fun FoamApp(
             manualAccentColor = settings.accentColor,
             playerViewModel = playerViewModel
         ) {
-            if (onboardingCompleted == null) {
-                // Hold a blank frame while settings load, never flash onboarding over
-                // an existing user's library.
-                Box(modifier = Modifier.fillMaxSize().foamBackground())
-            } else {
-                FoamNavHost(
-                    modifier = Modifier.fillMaxSize(),
-                    startOnOnboarding = onboardingCompleted == false,
-                    playerViewModel = playerViewModel
-                )
+            FoamBackdropHost {
+                if (onboardingCompleted == null) {
+                    // Hold a blank frame while settings load, never flash onboarding over
+                    // an existing user's library.
+                    Box(modifier = Modifier.fillMaxSize().foamBackground())
+                } else {
+                    FoamNavHost(
+                        modifier = Modifier.fillMaxSize(),
+                        startOnOnboarding = onboardingCompleted == false,
+                        playerViewModel = playerViewModel
+                    )
+                }
             }
         }
     }

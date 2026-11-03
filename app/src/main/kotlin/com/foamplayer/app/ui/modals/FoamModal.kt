@@ -30,6 +30,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -60,6 +61,7 @@ import androidx.compose.ui.window.DialogWindowProvider
 import android.view.WindowManager
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.LocalFoamBackdropState
 import com.foamplayer.app.ui.theme.foamSurface
 import kotlin.math.abs
 
@@ -109,6 +111,18 @@ fun FoamBottomModal(
     transitionState.targetState = visible
 
     if (!transitionState.currentState && !transitionState.targetState) return
+
+    // Shrink the app content behind the sheet while it is open (see
+    // FoamBackdropHost): the sheet draws in its own Dialog window stacked on
+    // the main window, so the backdrop scale can only live at the app root.
+    // Mirroring [visible] here -- false as soon as the exit animation starts,
+    // cleared again on dispose -- keeps the screen's return-to-full-size
+    // motion in step with the sheet leaving.
+    val backdrop = LocalFoamBackdropState.current
+    DisposableEffect(visible) {
+        if (visible) backdrop.acquire()
+        onDispose { if (visible) backdrop.release() }
+    }
 
     Dialog(
         onDismissRequest = onDismissRequest,
@@ -183,11 +197,15 @@ fun FoamBottomModal(
             var listMovedThisGesture by remember { mutableStateOf(false) }
 
             // A drag-dismiss springs the cap down to 0 (see settle() below); clear
-            // the drag override on re-open so the sheet fits its content again.
+            // the drag override on re-open so the sheet fits its content again,
+            // and hand the backdrop scale back to its own open tween (a stale
+            // drag presence from the previous dismissal would pin it at full
+            // size).
             LaunchedEffect(visible) {
                 if (visible) {
                     draggedCapPx = null
                     listMovedThisGesture = false
+                    backdrop.dragPresence = null
                 }
             }
 
@@ -223,6 +241,11 @@ fun FoamBottomModal(
 
                     fun currentCapPx(): Float = draggedCapPx ?: restingPx()
 
+                    // Backdrop presence for the scale-behind-the-sheet effect
+                    // (FoamBackdropState.dragPresence): 1 = sheet full, 0 = gone.
+                    fun presence(capPx: Float): Float =
+                        capPx / restingPx().coerceAtLeast(1f)
+
                     suspend fun settle(flingVelocityY: Float) {
                         val resting = restingPx()
                         val anchors = floatArrayOf(0f, resting)
@@ -241,21 +264,29 @@ fun FoamBottomModal(
                                 dampingRatio = Spring.DampingRatioNoBouncy,
                                 stiffness = Spring.StiffnessMediumLow
                             )
-                        ) { value, _ -> draggedCapPx = value }
+                        ) { value, _ ->
+                            draggedCapPx = value
+                            backdrop.dragPresence = presence(value)
+                        }
                         if (target <= 0f) {
                             // The cap has already sprung to 0 by this point, so the
                             // sheet is visually gone and the scrim (tied to the cap)
-                            // has already faded out. Keep the drag override at 0
-                            // while the exit animation plays -- clearing it here
-                            // would flash the sheet back to full size -- and the
-                            // `visible` effect clears it on the next open. This
-                            // call just tears down the Dialog itself.
+                            // has already faded out. Keep the drag override -- and
+                            // the backdrop presence, also tied to the cap -- at 0
+                            // while the exit animation plays: the screen must stay
+                            // at full size, and clearing either here would flash it
+                            // back to the shrunk scale. The `visible` effect clears
+                            // both on the next open. This call just tears down the
+                            // Dialog itself.
                             latestOnDismissRequest()
                         } else {
                             // Back at the fitted size: hand control back to
                             // auto-fit so a later content change (e.g. a picker
-                            // list growing) applies.
+                            // list growing) applies, and give the backdrop scale
+                            // back to its tween (which is already at the shrunk
+                            // value the spring just landed on).
                             draggedCapPx = null
+                            backdrop.dragPresence = null
                         }
                     }
 
@@ -274,7 +305,9 @@ fun FoamBottomModal(
                             val room = restingPx() - currentCapPx()
                             if (room > 0f) {
                                 val consumed = if (-dy < room) dy else -room
-                                draggedCapPx = currentCapPx() - consumed
+                                val cap = currentCapPx() - consumed
+                                draggedCapPx = cap
+                                backdrop.dragPresence = presence(cap)
                                 return Offset(0f, consumed)
                             }
                         }
@@ -307,7 +340,9 @@ fun FoamBottomModal(
                             val cap = currentCapPx()
                             if (cap > 0f) {
                                 val amount = if (dy < cap) dy else cap
-                                draggedCapPx = cap - amount
+                                val next = cap - amount
+                                draggedCapPx = next
+                                backdrop.dragPresence = presence(next)
                                 return Offset(0f, amount)
                             }
                         }
