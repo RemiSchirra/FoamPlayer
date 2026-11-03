@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -31,8 +30,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -185,16 +189,15 @@ private fun CollectionLayoutPreview(
             .width(CollectionLayoutPreviewWidth)
             .height(CollectionLayoutPreviewHeight)
             .clip(RoundedCornerShape(CollectionLayoutPreviewRounding))
-            .border(
-                width = if (selected) 2.dp else 1.dp,
-                color = if (selected) FoamTheme.accentColor else FoamTheme.colors.borderOverlay,
-                shape = RoundedCornerShape(CollectionLayoutPreviewRounding)
-            )
             .foamSurfaceVariant()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
                 onClick = onClick
+            )
+            .collectionLayoutSelectionRing(
+                selected = selected,
+                rounding = CollectionLayoutPreviewRounding
             )
     ) {
         when (layout) {
@@ -211,6 +214,28 @@ private fun CollectionLayoutPreview(
             )
             CollectionHeroLayout.Normal -> NormalPreview()
         }
+    }
+}
+
+/**
+ * Selection ring drawn on top of the preview content, so it stays visible over
+ * the immersive previews' edge-to-edge artwork. The selected preview gets the
+ * accent color and a thicker stroke; the others keep a hairline.
+ */
+@Composable
+private fun Modifier.collectionLayoutSelectionRing(selected: Boolean, rounding: Dp): Modifier {
+    val strokeWidth = if (selected) 2.dp else 1.dp
+    val color = if (selected) FoamTheme.accentColor else FoamTheme.colors.borderOverlay
+    return drawWithContent {
+        drawContent()
+        val stroke = strokeWidth.toPx()
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(stroke / 2f, stroke / 2f),
+            size = Size(size.width - stroke, size.height - stroke),
+            cornerRadius = CornerRadius((rounding.toPx() - stroke / 2f).coerceAtLeast(0f)),
+            style = Stroke(stroke)
+        )
     }
 }
 
