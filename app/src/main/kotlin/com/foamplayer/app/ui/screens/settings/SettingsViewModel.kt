@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -59,10 +60,7 @@ class SettingsViewModel @Inject constructor(
     val settings: StateFlow<AppSettings> = settingsRepository.settings.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        // Seed with defaults instead of a blocking DataStore read: this VM is
-        // created during first composition, and a blocking read would land on
-        // the main thread's first frame.
-        initialValue = AppSettings()
+        initialValue = runBlocking { settingsRepository.settings.first() }
     )
 
     /**
@@ -90,7 +88,7 @@ class SettingsViewModel @Inject constructor(
     fun addFolder(path: String) = launch { settingsRepository.addFolder(path) }
     fun removeFolder(path: String) = trackRepository.removeFolderDetached(path)
 
-    // ----------------------------- distant providers
+    // distant providers
 
     /** Message of the last distant provider failure, surfaced by the setup modal. */
     @Volatile
@@ -298,7 +296,7 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setHomeSectionEnabled(section, enabled)
     }
 
-    // ----------------------------- developer tools
+    // developer tools
     // Only reachable from the Components Test screen, compiled in solely when
     // BuildConfig.DEV_MODE is set at build time.
 
@@ -311,7 +309,7 @@ class SettingsViewModel @Inject constructor(
     /** Fills the library with three years of random listening data. */
     fun generateRandomStats() = launch { trackRepository.generateRandomPlayStats(years = 3) }
 
-    // -------------------------------------- backups
+    // backups
 
     /** Reachable for the import sheet's feature probe. */
     val backupManager: SettingsBackupManager = settingsBackupManager
