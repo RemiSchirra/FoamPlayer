@@ -132,15 +132,10 @@
     <string name="system_colors">System Colors</string>
 
     <string name="colors">Colors</string>
-    <string name="colors_desc">Accent color and palette</string>
     <string name="player">Player</string>
-    <string name="player_desc">Layout and visuals</string>
     <string name="background">Background</string>
-    <string name="background_desc">Dynamic background effects</string>
     <string name="navigation_bar">Navigation Bar</string>
-    <string name="navbar_desc">Navbar layout and transparency</string>
     <string name="collections">Collections</string>
-    <string name="collections_desc">Hero layout of collection screens</string>
     <string name="navbar_mode">Navbar Mode</string>
     <string name="navbar_mode_desc">Choose how the bottom navigation looks</string>
     <string name="navbar_mode_docked">Docked</string>
@@ -148,7 +143,6 @@
     <string name="navbar_mode_attached">Attached</string>
     <string name="transparency">Transparency</string>
     <string name="transparent_when_player_open">Transparent when player open</string>
-    <string name="transparent_when_player_open_desc">Make the navigation bar background transparent when the full player is open</string>
     <string name="navbar_main_bar">Main Bar</string>
     <string name="navbar_main_bar_desc">Drag to reorder and show or hide items</string>
     <string name="navbar_second_bar">Second Bar</string>
@@ -400,7 +394,6 @@
     <string name="integrations_section">Integrations</string>
     <string name="discord_section">Discord</string>
     <string name="discord_entry">Discord</string>
-    <string name="discord_entry_desc">Rich Presence and online cover art</string>
     <string name="discord_presence">Discord Rich Presence</string>
     <string name="discord_presence_desc">Show what you\'re listening to on your Discord profile</string>
     <string name="discord_log_in">Log in with Discord</string>
@@ -416,7 +409,6 @@
     <!-- Last.fm -->
     <string name="lastfm_section">Last.fm</string>
     <string name="lastfm_entry">Last.fm</string>
-    <string name="lastfm_entry_desc">Scrobble and import your listening history</string>
     <string name="lastfm_log_in">Log in with Last.fm</string>
     <string name="lastfm_log_out">Disconnect</string>
     <string name="lastfm_logged_in_as">Connected as %1$s</string>

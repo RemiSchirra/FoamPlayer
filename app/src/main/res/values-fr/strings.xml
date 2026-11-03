@@ -131,15 +131,10 @@
     <string name="system_colors">Couleurs système</string>
 
     <string name="colors">Couleurs</string>
-    <string name="colors_desc">Couleur d\'accentuation et palette</string>
     <string name="player">Lecteur</string>
-    <string name="player_desc">Mise en page et visuels</string>
     <string name="background">Arrière-plan</string>
-    <string name="background_desc">Effets d\'arrière-plan dynamiques</string>
     <string name="navigation_bar">Barre de navigation</string>
-    <string name="navbar_desc">Disposition et transparence de la barre</string>
     <string name="collections">Collections</string>
-    <string name="collections_desc">Disposition des en-têtes de collections</string>
     <string name="navbar_mode">Mode de la barre</string>
     <string name="navbar_mode_desc">Choisissez l\'apparence de la navigation basse</string>
     <string name="navbar_mode_docked">Ancrée</string>
@@ -147,7 +142,6 @@
     <string name="navbar_mode_attached">Attachée</string>
     <string name="transparency">Transparence</string>
     <string name="transparent_when_player_open">Transparent quand le lecteur est ouvert</string>
-    <string name="transparent_when_player_open_desc">Rendre l\'arrière-plan de la barre de navigation transparent quand le lecteur est ouvert</string>
     <string name="navbar_main_bar">Barre principale</string>
     <string name="navbar_main_bar_desc">Glisser pour réordonner et afficher ou masquer les éléments</string>
     <string name="navbar_second_bar">Barre secondaire</string>
@@ -397,7 +391,6 @@
     <string name="integrations_section">Intégrations</string>
     <string name="discord_section">Discord</string>
     <string name="discord_entry">Discord</string>
-    <string name="discord_entry_desc">Rich Presence et pochettes en ligne</string>
     <string name="discord_presence">Discord Rich Presence</string>
     <string name="discord_presence_desc">Affiche ce que vous écoutez sur votre profil Discord</string>
     <string name="discord_log_in">Se connecter avec Discord</string>
@@ -413,7 +406,6 @@
     <!-- Last.fm -->
     <string name="lastfm_section">Last.fm</string>
     <string name="lastfm_entry">Last.fm</string>
-    <string name="lastfm_entry_desc">Scrobblez et importez votre historique d\'écoute</string>
     <string name="lastfm_log_in">Se connecter avec Last.fm</string>
     <string name="lastfm_log_out">Se déconnecter</string>
     <string name="lastfm_logged_in_as">Connecté en tant que %1$s</string>

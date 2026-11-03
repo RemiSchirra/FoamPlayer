@@ -81,7 +81,6 @@ fun UISettingsScreen(
                         Column {
                             FoamNavigationButton(
                                 title = stringResource(R.string.colors),
-                                description = stringResource(R.string.colors_desc),
                                 onClick = onNavigateToColors,
                             )
                             Box(
@@ -92,7 +91,6 @@ fun UISettingsScreen(
                             )
                             FoamNavigationButton(
                                 title = stringResource(R.string.background),
-                                description = stringResource(R.string.background_desc),
                                 onClick = onNavigateToBackground,
                             )
                             Box(
@@ -103,7 +101,6 @@ fun UISettingsScreen(
                             )
                             FoamNavigationButton(
                                 title = stringResource(R.string.navigation_bar),
-                                description = stringResource(R.string.navbar_desc),
                                 onClick = onNavigateToNavBar,
                             )
                         }
@@ -121,7 +118,6 @@ fun UISettingsScreen(
                         Column {
                             FoamNavigationButton(
                                 title = stringResource(R.string.player),
-                                description = stringResource(R.string.player_desc),
                                 onClick = onNavigateToPlayer,
                             )
                             Box(
@@ -132,7 +128,6 @@ fun UISettingsScreen(
                             )
                             FoamNavigationButton(
                                 title = stringResource(R.string.home),
-                                description = stringResource(R.string.home_settings_subtitle),
                                 onClick = onNavigateToHome,
                             )
                             Box(
@@ -143,7 +138,6 @@ fun UISettingsScreen(
                             )
                             FoamNavigationButton(
                                 title = stringResource(R.string.collections),
-                                description = stringResource(R.string.collections_desc),
                                 onClick = onNavigateToCollections,
                             )
                         }

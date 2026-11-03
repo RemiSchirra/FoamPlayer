@@ -176,7 +176,6 @@ fun NavBarSettingsScreen(
                     FoamCard(modifier = Modifier.fillMaxWidth()) {
                         FoamSwitchItem(
                             title = stringResource(R.string.transparent_when_player_open),
-                            description = stringResource(R.string.transparent_when_player_open_desc),
                             checked = settings.navBarTransparentWhenPlayerOpen,
                             onCheckedChange = { viewModel.setNavBarTransparentWhenPlayerOpen(it) }
                         )

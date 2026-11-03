@@ -161,7 +161,6 @@ fun MiscSettingsScreen(
                     Column(modifier = Modifier.fillMaxWidth()) {
                         FoamNavigationButton(
                             title = stringResource(R.string.lastfm_entry),
-                            description = stringResource(R.string.lastfm_entry_desc),
                             onClick = onNavigateToLastFm
                         )
                         Box(
@@ -173,7 +172,6 @@ fun MiscSettingsScreen(
                         )
                         FoamNavigationButton(
                             title = stringResource(R.string.discord_entry),
-                            description = stringResource(R.string.discord_entry_desc),
                             onClick = onNavigateToDiscord
                         )
                     }

@@ -27,9 +27,9 @@ import com.foamplayer.app.ui.theme.FoamTheme
 @Composable
 fun FoamNavigationButton(
     title: String,
-    description: String,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    description: String? = null,
+    onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -42,14 +42,13 @@ fun FoamNavigationButton(
                 role = Role.Button,
                 onClick = onClick,
             )
-            // Matches FoamSwitchItem so rows inside a grouped card share
-            // the same height rhythm.
             .padding(FoamDimens.spacingStandard),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             BasicText(text = title, style = FoamTheme.typography.titleMedium)
-            BasicText(text = description, style = FoamTheme.typography.body)
+            if (!description.isNullOrEmpty())
+                BasicText(text = description, style = FoamTheme.typography.body)
         }
         Spacer(modifier = Modifier.width(FoamDimens.spacingStandard))
         Icon(
