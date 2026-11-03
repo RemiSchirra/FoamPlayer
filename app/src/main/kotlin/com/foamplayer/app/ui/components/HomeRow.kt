@@ -4,9 +4,9 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.ripple
@@ -178,8 +177,11 @@ fun HomeRowCard(
 ) {
     val context = LocalContext.current
     val artShape = if (round) CircleShape else AlbumArtShape()
-    // Small radius on the press-highlight container: a large one clips the title.
-    val cellShape = RoundedCornerShape(FoamTheme.shapes.cardRounding)
+    val cellShape = MediaCellHighlightShape(
+        inset = HomeRowCardPadding,
+        rounding = FoamTheme.shapes.miniPlayerRounding,
+        fullyRounded = round
+    )
     val immersiveFlightHero = !sharedInPlayerTransition &&
             flightHeroTarget != null &&
             LocalCollectionHeroLayoutLookup.current(flightHeroTarget).isImmersive
@@ -212,85 +214,94 @@ fun HomeRowCard(
         boundsTransform = if (sharedInPlayerTransition) null else AlbumArtBoundsTransform
     )
 
-    Column(
-        modifier = modifier
-            .width(width)
-            .clip(cellShape)
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                onLongClick = onLongClick,
-                onClick = onClick
-            )
-            .padding(HomeRowCardPadding)
-    ) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Box(modifier = modifier.width(width)) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .then(sharedArtModifier)
-                // The flight variant carries its own graphicsLayer shape (the
-                // morph); a static clip would re-round every flight frame.
-                .let {
-                    if (immersiveFlightHero) it
-                    else it.shadow(elevation = MediaItemArtElevation, shape = artShape)
-                }
-                .let { if (immersiveFlightHero) it else it.clip(artShape) }
-                .foamSurfaceVariant(),
-            contentAlignment = Alignment.Center
-        ) {
-            if (imageUrl != null) {
-                // Collection cards decode under the destination hero's
-                // deterministic key so the open flight's first frame hits the
-                // cache. Track cards keep the auto key (the full player reads it).
-                val heroKeyed = flightHeroTarget != null
-                val artRequest = remember(imageUrl, imageIsEmbeddedArt, heroKeyed) {
-                    ImageRequest.Builder(context)
-                        .data(
-                            if (imageIsEmbeddedArt) {
-                                EmbeddedAlbumArt(imageUrl.toUri())
-                            } else {
-                                imageUrl
-                            }
-                        )
-                        .size(AlbumArtRequestSize)
-                        .memoryCacheKey(if (heroKeyed) albumArtMemoryCacheKey(imageUrl) else null)
-                        .build()
-                }
-                AlbumArtImage(
-                    model = artRequest,
-                    contentDescription = title,
-                    modifier = Modifier.fillMaxSize(),
-                    placeholderSize = 32.dp
+                .matchParentSize()
+                .clip(cellShape)
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onLongClick = onLongClick,
+                    onClick = onClick
                 )
-            } else if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = FoamTheme.accentColor,
-                    modifier = Modifier.size(24.dp)
+        )
+        Column(modifier = Modifier.padding(HomeRowCardPadding)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .then(sharedArtModifier)
+                    .let {
+                        if (immersiveFlightHero) it
+                        else it.shadow(elevation = MediaItemArtElevation, shape = artShape)
+                    }
+                    .let { if (immersiveFlightHero) it else it.clip(artShape) }
+                    .foamSurfaceVariant(),
+                contentAlignment = Alignment.Center
+            ) {
+                if (imageUrl != null) {
+                    val heroKeyed = flightHeroTarget != null
+                    val artRequest = remember(imageUrl, imageIsEmbeddedArt, heroKeyed) {
+                        ImageRequest.Builder(context)
+                            .data(
+                                if (imageIsEmbeddedArt) {
+                                    EmbeddedAlbumArt(imageUrl.toUri())
+                                } else {
+                                    imageUrl
+                                }
+                            )
+                            .size(AlbumArtRequestSize)
+                            .memoryCacheKey(if (heroKeyed) albumArtMemoryCacheKey(imageUrl) else null)
+                            .build()
+                    }
+                    AlbumArtImage(
+                        model = artRequest,
+                        contentDescription = title,
+                        modifier = Modifier.fillMaxSize(),
+                        placeholderSize = 32.dp
+                    )
+                } else if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = FoamTheme.accentColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                } else {
+                    NoAlbumArtLetter(title = title)
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = HomeRowCardPadding),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                BasicText(
+                    text = title,
+                    style = FoamTheme.typography.titleMedium.copy(
+                        fontSize = 15.sp,
+                        textAlign = TextAlign.Center
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.then(sharedTitleModifier)
                 )
-            } else {
-                NoAlbumArtLetter(title = title)
             }
         }
 
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = HomeRowCardPadding),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            BasicText(
-                text = title,
-                style = FoamTheme.typography.titleMedium.copy(
-                    fontSize = 15.sp,
-                    textAlign = TextAlign.Center
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.then(sharedTitleModifier)
-            )
-        }
+                .matchParentSize()
+                .clip(cellShape)
+                .indication(
+                    interactionSource = interactionSource,
+                    indication = ripple(color = FoamTheme.colors.textPrimary)
+                )
+        )
     }
 }
