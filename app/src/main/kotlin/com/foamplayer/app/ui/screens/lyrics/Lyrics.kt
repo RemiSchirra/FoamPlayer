@@ -8,10 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -118,6 +115,7 @@ import com.foamplayer.app.lyrics.LyricsUtils.parseLyrics
 import com.foamplayer.app.lyrics.LyricsUtils.parseTtml
 import com.foamplayer.app.lyrics.LyricsUtils.romanizeLyricsLine
 import com.foamplayer.app.lyrics.LyricsUtils.shouldRomanizeLyricsLine
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
 import kotlin.math.abs
@@ -668,16 +666,10 @@ fun Lyrics(
                             animationSpec =
                                 if (isSeek) {
                                     // Faster response for seeking
-                                    spring(
-                                        dampingRatio = Spring.DampingRatioLowBouncy,
-                                        stiffness = Spring.StiffnessMedium,
-                                    )
+                                    FoamMotion.Springs.LIST_SEEK
                                 } else {
                                     // Smooth auto-scroll
-                                    spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessLow,
-                                    )
+                                    FoamMotion.Springs.LIST_SCROLL
                                 },
                         )
                     }
@@ -872,7 +864,7 @@ fun Lyrics(
                             targetValue = targetAlpha,
                             animationSpec =
                                 tween(
-                                    durationMillis = 400,
+                                    durationMillis = FoamMotion.Duration.FLIGHT,
                                     easing = SmoothDecelerateEasing,
                                 ),
                             label = "lyricAlpha",
@@ -882,11 +874,7 @@ fun Lyrics(
 
                         val animatedScale by animateFloatAsState(
                             targetValue = targetScale,
-                            animationSpec =
-                                spring(
-                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                    stiffness = Spring.StiffnessLow,
-                                ),
+                            animationSpec = FoamMotion.Springs.LIST_SCROLL,
                             label = "lyricScale",
                         )
 
@@ -906,8 +894,8 @@ fun Lyrics(
                             targetValue = targetBlur,
                             animationSpec =
                                 tween(
-                                    durationMillis = 300,
-                                    easing = FastOutSlowInEasing,
+                                    durationMillis = FoamMotion.Duration.SMOOTH,
+                                    easing = FoamMotion.Easings.STANDARD,
                                 ),
                             label = "lyricBlur",
                         )
@@ -947,11 +935,7 @@ fun Lyrics(
                                                     if (abs(offset) > 10) {
                                                         lazyListState.animateScrollBy(
                                                             value = offset.toFloat(),
-                                                            animationSpec =
-                                                                spring(
-                                                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                                                    stiffness = Spring.StiffnessVeryLow,
-                                                                ),
+                                                            animationSpec = FoamMotion.Springs.LIST_SCROLL,
                                                         )
                                                     }
                                                 } else {
@@ -1891,8 +1875,8 @@ fun Lyrics(
                                                 targetValue = 1f,
                                                 animationSpec =
                                                     tween(
-                                                        durationMillis = 200,
-                                                        easing = FastOutSlowInEasing,
+                                                        durationMillis = FoamMotion.Duration.SWIFT,
+                                                        easing = FoamMotion.Easings.STANDARD,
                                                     ),
                                             )
 
@@ -1902,7 +1886,7 @@ fun Lyrics(
                                                 animationSpec =
                                                     tween(
                                                         durationMillis = 1200,
-                                                        easing = FastOutSlowInEasing,
+                                                        easing = FoamMotion.Easings.STANDARD,
                                                     ),
                                             )
                                         }
@@ -2000,11 +1984,7 @@ fun Lyrics(
                                             popInScale.snapTo(0.96f)
                                             popInScale.animateTo(
                                                 targetValue = 1f,
-                                                animationSpec =
-                                                    spring(
-                                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                                        stiffness = Spring.StiffnessLow,
-                                                    ),
+                                                animationSpec = FoamMotion.Springs.LIST_SCROLL,
                                             )
                                         }
 
@@ -2046,11 +2026,7 @@ fun Lyrics(
                                                 popInScale.snapTo(0.96f)
                                                 popInScale.animateTo(
                                                     targetValue = 1f,
-                                                    animationSpec =
-                                                        spring(
-                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                            stiffness = Spring.StiffnessMedium,
-                                                        ),
+                                                    animationSpec = FoamMotion.Springs.POP,
                                                 )
                                             }
                                         }
@@ -2365,19 +2341,19 @@ fun Lyrics(
                 visible = isManualScrolling && scrollLyrics && !isSelectionModeActive,
                 enter =
                     slideInVertically(
-                        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                        animationSpec = tween(durationMillis = FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD),
                         initialOffsetY = { it * 2 },
                     ) +
                             fadeIn(
-                                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                                animationSpec = tween(durationMillis = FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD),
                             ),
                 exit =
                     slideOutVertically(
-                        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                        animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT, easing = FoamMotion.Easings.STANDARD),
                         targetOffsetY = { it * 2 },
                     ) +
                             fadeOut(
-                                animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                                animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT, easing = FoamMotion.Easings.STANDARD),
                             ),
                 modifier =
                     Modifier

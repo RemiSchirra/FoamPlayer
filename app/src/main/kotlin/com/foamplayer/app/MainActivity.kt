@@ -45,6 +45,7 @@ import com.foamplayer.app.ui.navigation.FoamNavHost
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
 import com.foamplayer.app.ui.theme.FoamBackdropHost
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
 import com.foamplayer.app.ui.theme.foamBackground
@@ -702,7 +703,7 @@ private fun rememberAccentColor(
         else -> {
             val animatedColor by animateColorAsState(
                 targetValue = extractedColor ?: Color(manualAccentColor),
-                animationSpec = tween(durationMillis = 500),
+                animationSpec = tween(durationMillis = FoamMotion.Duration.EXPRESSIVE),
                 label = "AccentColorFade"
             )
             return animatedColor

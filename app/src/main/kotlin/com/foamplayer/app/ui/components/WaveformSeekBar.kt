@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.components
 
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -33,17 +32,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAccentTintState
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.SurfaceVariantAccentTint
 import com.foamplayer.app.ui.utils.WaveformState
 import kotlinx.coroutines.delay
 import kotlin.math.max
 import kotlin.math.pow
-
-/** Duration of the grow / release tween while the bar is pressed or dragged. */
-private const val GROW_TWEEN_MS = 200
-
-/** Duration of the glide between the shape on screen and a newly available envelope. */
-private const val ENVELOPE_SETTLE_MS = 350
 
 /**
  * How long the bars hold the last shape while no envelope is available (the
@@ -88,7 +82,7 @@ private data class EnvelopeSignature(
  * one motion. Unavailable envelopes (still extracting) never snap the bars
  * flat: an unavailable morph side contributes nothing, and when neither side
  * is available the bars HOLD the last shape — the difference to the sources is
- * carried as an offset that glides to 0 over [ENVELOPE_SETTLE_MS] whenever the
+ * carried as an offset that glides to 0 over [FoamMotion.Duration.FLIGHT] whenever the
  * sources change. Continuous drivers are not smoothed.
  *
  * While the user drags the bar itself, [growFactor] scales every bar taller,
@@ -126,7 +120,7 @@ fun WaveformSeekBar(
 
     val animatedTrackHeight by animateDpAsState(
         targetValue = if (isDragging || isPressed) trackHeight * growFactor else trackHeight,
-        animationSpec = tween(GROW_TWEEN_MS, easing = FastOutSlowInEasing),
+        animationSpec = tween(FoamMotion.Duration.SWIFT, easing = FoamMotion.Easings.STANDARD),
         label = "waveformTrackHeight"
     )
 
@@ -163,7 +157,7 @@ fun WaveformSeekBar(
             animate(
                 initialValue = from,
                 targetValue = 0f,
-                animationSpec = tween(ENVELOPE_SETTLE_MS, easing = FastOutSlowInEasing)
+                animationSpec = tween(FoamMotion.Duration.FLIGHT, easing = FoamMotion.Easings.STANDARD)
             ) { v, _ -> settle.floatValue = v }
         }
     }

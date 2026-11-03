@@ -5,7 +5,6 @@ import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +31,7 @@ import com.foamplayer.app.ui.screens.player.PlayerDimens
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.player.backdropScrimColor
 import com.foamplayer.app.ui.screens.player.progress
+import com.foamplayer.app.ui.theme.FoamMotion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -60,7 +60,7 @@ internal fun AppBackdrop(
     var settingsBackdropHidden by remember { mutableStateOf(isSettingsRoute(currentRoute)) }
     LaunchedEffect(currentRoute) {
         if (isSettingsRoute(currentRoute) && !isBackgroundSettingsRoute(currentRoute)) {
-            delay(NavScreenFadeDurationMs.toLong())
+            delay(FoamMotion.Duration.FLIGHT.toLong())
             settingsBackdropHidden = true
         } else {
             settingsBackdropHidden = false
@@ -156,10 +156,7 @@ internal class DetailListBackdropState(private val scope: CoroutineScope) {
                     crossfade.snapTo(0f)
                     crossfade.animateTo(
                         targetValue = 1f,
-                        animationSpec = tween(
-                            durationMillis = SharedElementTransitionDurationMs,
-                            easing = SharedElementEasing
-                        )
+                        animationSpec = FoamMotion.Spec.sharedElementFlight
                     )
                 } finally {
                     if (generation == crossfadeGeneration) {
@@ -206,20 +203,17 @@ internal fun DetailListBackdrop(
         // fading, and the status-bar strip (painted only by this backdrop) held
         // full alpha then dropped out of step.
         targetValue = if (listBackdropArt != null && isDetailListRoute(currentRoute)) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = if (isSharedElementRoute(currentRoute) ||
-                isSharedElementRoute(lastRoute)
-            ) {
-                SharedElementTransitionDurationMs
-            } else {
-                NavScreenFadeDurationMs
-            },
-            // Lock-step with the NavHost's screen fades (FastOutSlowIn):
-            // animateFloatAsState's tween defaults to LINEAR, which made the
-            // backdrop — and with it the status-bar strip it alone paints —
-            // linger half-strength over the already-faded content.
-            easing = SharedElementEasing
-        ),
+        // Lock-step with the NavHost's screen fades: both FoamMotion specs ride
+        // FastOutSlowIn, while animateFloatAsState's tween defaults to LINEAR,
+        // which made the backdrop — and with it the status-bar strip it alone
+        // paints — linger half-strength over the already-faded content.
+        animationSpec = if (isSharedElementRoute(currentRoute) ||
+            isSharedElementRoute(lastRoute)
+        ) {
+            FoamMotion.Spec.sharedElementFlight
+        } else {
+            FoamMotion.Spec.screenFadeIn
+        },
         label = "listBackdropAlpha"
     )
     val display = listBackdropArt ?: lastListBackdropArt

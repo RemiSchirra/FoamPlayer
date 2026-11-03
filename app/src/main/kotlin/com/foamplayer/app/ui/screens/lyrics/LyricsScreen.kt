@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.lyrics
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -34,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.lyrics.LYRICS_NOT_FOUND
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 
 private enum class LyricsViewState { LOADING, INSTRUMENTAL, NO_LYRICS, CONTENT }
@@ -81,14 +81,14 @@ fun LyricsScreen(
                     // music note pops in.
                     (scaleIn(
                         initialScale = 0.3f,
-                        animationSpec = tween()
-                    ) + fadeIn(animationSpec = tween(150))) togetherWith
+                        animationSpec = tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
+                    ) + fadeIn(animationSpec = tween(FoamMotion.Duration.SNAP))) togetherWith
                             (scaleOut(
                                 targetScale = 0.7f,
-                                animationSpec = tween(250, easing = FastOutSlowInEasing)
-                            ) + fadeOut(animationSpec = tween(200)))
+                                animationSpec = tween(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.STANDARD)
+                            ) + fadeOut(animationSpec = tween(FoamMotion.Duration.SWIFT)))
                 } else {
-                    fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(220))
+                    fadeIn(animationSpec = tween(FoamMotion.Duration.STANDARD)) togetherWith fadeOut(animationSpec = tween(FoamMotion.Duration.STANDARD))
                 }
             },
             label = "LyricsViewState"

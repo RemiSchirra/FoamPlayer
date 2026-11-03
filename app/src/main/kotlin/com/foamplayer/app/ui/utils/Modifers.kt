@@ -10,10 +10,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import com.foamplayer.app.ui.theme.FoamMotion
 
 private const val PressShrinkTargetScale = 0.9f
-private const val PressShrinkInMs = 110
-private const val PressShrinkOutMs = 200
 
 /**
  * Press feedback for control buttons: tweens down to the target scale on
@@ -31,11 +30,11 @@ fun Modifier.pressShrink(interactionSource: MutableInteractionSource): Modifier 
             when (interaction) {
                 is PressInteraction.Press -> scale.animateTo(
                     targetValue = PressShrinkTargetScale,
-                    animationSpec = tween(durationMillis = PressShrinkInMs, easing = EaseOutCubic)
+                    animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP, easing = EaseOutCubic)
                 )
                 is PressInteraction.Release, is PressInteraction.Cancel -> scale.animateTo(
                     targetValue = 1f,
-                    animationSpec = tween(durationMillis = PressShrinkOutMs, easing = EaseOutCubic)
+                    animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT, easing = EaseOutCubic)
                 )
             }
         }

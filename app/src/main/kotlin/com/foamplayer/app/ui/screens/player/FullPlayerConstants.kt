@@ -108,8 +108,6 @@ internal fun SeekableTransitionState<Boolean>.progress(): Float =
         if (targetState) fraction else 1f - fraction
     }
 
-internal const val TRANSITION_DURATION_MS = 300
-
 /** Down-swipe velocity (px/s) at which a dismiss gesture commits by flick. */
 internal const val DownSwipeCommitVelocityPxPerSec = 800f
 

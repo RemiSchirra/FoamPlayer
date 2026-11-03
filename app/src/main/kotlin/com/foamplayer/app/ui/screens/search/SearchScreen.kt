@@ -114,9 +114,8 @@ import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.navigation.LocalSearchFocusRequest
-import com.foamplayer.app.ui.navigation.SharedElementEasing
-import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
@@ -147,13 +146,8 @@ private val YearCardColor = Color(0xFFB388FF)
 private const val SwipeDismissThresholdFraction = 0.2f
 private val SwipeDismissThreshold = 80.dp
 private const val SwipeMaxFade = 0.3f
-private const val SwipeDismissDurationMs = 150
-private const val SwipeReturnDurationMs = 200
 
-private val textFlightFadeSpec = tween<Float>(
-    durationMillis = SharedElementTransitionDurationMs,
-    easing = SharedElementEasing
-)
+private val textFlightFadeSpec = FoamMotion.Spec.sharedElementFlight
 
 /** Blends the color toward [overlayColor] using the given [factor] (0.0 = original, 1.0 = overlay color). */
 private fun Color.overlay(overlayColor: Color, factor: Float): Color =
@@ -1111,15 +1105,15 @@ private fun SwipeDismissRow(
                                 if (itemWidthPx > 0f) itemWidthPx else fallbackDismissThresholdPx
                             val exitTarget =
                                 if (dismissOffsetValue > 0f) exitDistance else -exitDistance
-                            animateSwipeTo(exitTarget, SwipeDismissDurationMs) {
+                            animateSwipeTo(exitTarget, FoamMotion.Duration.SNAP) {
                                 latestOnRemove.invoke()
                             }
                         } else {
-                            animateSwipeTo(0f, SwipeReturnDurationMs)
+                            animateSwipeTo(0f, FoamMotion.Duration.SWIFT)
                         }
                     },
                     onDragCancel = {
-                        animateSwipeTo(0f, SwipeReturnDurationMs)
+                        animateSwipeTo(0f, FoamMotion.Duration.SWIFT)
                     }
                 )
             }

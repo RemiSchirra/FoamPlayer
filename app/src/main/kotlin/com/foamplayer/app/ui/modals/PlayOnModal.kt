@@ -57,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.flow.first
 
@@ -108,8 +109,10 @@ fun PlayOnModal(
                     scanning && devices.none { it.type == PlayOnDeviceType.CHROMECAST }
                 AnimatedVisibility(
                     visible = showScanningSpinner,
-                    enter = fadeIn(tween(220)) + expandHorizontally(tween(280)),
-                    exit = fadeOut(tween(200)) + shrinkHorizontally(tween(220))
+                    enter = fadeIn(tween(FoamMotion.Duration.STANDARD)) +
+                            expandHorizontally(tween(FoamMotion.Duration.SMOOTH)),
+                    exit = fadeOut(tween(FoamMotion.Duration.SWIFT)) +
+                            shrinkHorizontally(tween(FoamMotion.Duration.STANDARD))
                 ) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
@@ -278,7 +281,13 @@ private fun PlayOnDeviceRow(
     val mountProgress = remember { Animatable(if (row.atMount) 0f else 1f) }
     LaunchedEffect(Unit) {
         if (row.atMount) {
-            mountProgress.animateTo(1f, tween(durationMillis = 220, delayMillis = row.enterDelayMs))
+            mountProgress.animateTo(
+                1f,
+                tween(
+                    durationMillis = FoamMotion.Duration.STANDARD,
+                    delayMillis = row.enterDelayMs
+                )
+            )
         }
     }
 
@@ -291,23 +300,25 @@ private fun PlayOnDeviceRow(
     val interactions = remember { MutableInteractionSource() }
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) FoamTheme.colors.surfaceVariant else Color.Transparent,
-        animationSpec = tween(220)
+        animationSpec = tween(FoamMotion.Duration.STANDARD)
     )
     val iconCircleColor by animateColorAsState(
         targetValue = if (isSelected) FoamTheme.accentColor.copy(alpha = 0.15f)
         else FoamTheme.colors.surfaceVariant,
-        animationSpec = tween(220)
+        animationSpec = tween(FoamMotion.Duration.STANDARD)
     )
     val iconTint by animateColorAsState(
         targetValue = if (isSelected) FoamTheme.accentColor else FoamTheme.colors.textSecondary,
-        animationSpec = tween(220)
+        animationSpec = tween(FoamMotion.Duration.STANDARD)
     )
 
     AnimatedVisibility(
         visibleState = heightState,
         enter = if (row.atMount) EnterTransition.None
-        else fadeIn(tween(220)) + expandVertically(tween(280)),
-        exit = fadeOut(tween(200)) + shrinkVertically(tween(220))
+        else fadeIn(tween(FoamMotion.Duration.STANDARD)) +
+                expandVertically(tween(FoamMotion.Duration.SMOOTH)),
+        exit = fadeOut(tween(FoamMotion.Duration.SWIFT)) +
+                shrinkVertically(tween(FoamMotion.Duration.STANDARD))
     ) {
         Row(
             modifier = Modifier
@@ -356,8 +367,10 @@ private fun PlayOnDeviceRow(
             }
             AnimatedVisibility(
                 visible = isSelected,
-                enter = fadeIn(tween(220)) + expandHorizontally(tween(280)),
-                exit = fadeOut(tween(200)) + shrinkHorizontally(tween(220))
+                enter = fadeIn(tween(FoamMotion.Duration.STANDARD)) +
+                        expandHorizontally(tween(FoamMotion.Duration.SMOOTH)),
+                exit = fadeOut(tween(FoamMotion.Duration.SWIFT)) +
+                        shrinkHorizontally(tween(FoamMotion.Duration.STANDARD))
             ) {
                 Icon(
                     imageVector = Icons.Rounded.CheckCircle,

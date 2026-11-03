@@ -6,7 +6,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -65,6 +64,7 @@ import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.TimeUtils
@@ -112,12 +112,6 @@ private val SwipeActionIconInset = 24.dp
 
 /** Extra translucency at the dismiss threshold (alpha eases 1f -> 1 - this). */
 private const val SwipeMaxFade = 0.3f
-
-/** Duration of the fly-out animation when the item is dismissed. */
-private const val SwipeDismissDurationMs = 150
-
-/** Duration of the spring-back animation when the swipe is cancelled. */
-private const val SwipeReturnDurationMs = 200
 
 /**
  * One item of a track list. At the ROW_* densities it renders the shared
@@ -178,7 +172,7 @@ fun TrackListItem(
         }
         animateColorAsState(
             targetValue = targetTrackNumberColor,
-            animationSpec = tween(durationMillis = 200, easing = EaseOut),
+            animationSpec = tween(FoamMotion.Duration.SWIFT, easing = FoamMotion.Easings.EXIT),
             label = "activeTrackNumberFade"
         ).value
     } else {
@@ -425,7 +419,7 @@ fun TrackListItem(
                         // keeps the first composition's parameter capture.
                         latestOnPlayNext != null && dismissOffsetValue >= nextCommitPx - 0.5f -> {
                             latestOnPlayNext?.invoke()
-                            animateSwipeTo(0f, SwipeReturnDurationMs)
+                            animateSwipeTo(0f, FoamMotion.Duration.SWIFT)
                         }
                         // Fling the row fully off-screen, then remove it.
                         dismissOffsetValue <= -swipeThresholdPx() -> {
@@ -433,17 +427,17 @@ fun TrackListItem(
                                 if (itemWidthPx > 0f) itemWidthPx else fallbackDismissThresholdPx
                             animateSwipeTo(
                                 -exitDistance,
-                                SwipeDismissDurationMs,
+                                FoamMotion.Duration.SNAP,
                                 fadeDeleteIcon = true
                             ) {
                                 latestOnRemove?.invoke()
                             }
                         }
-                        else -> animateSwipeTo(0f, SwipeReturnDurationMs)
+                        else -> animateSwipeTo(0f, FoamMotion.Duration.SWIFT)
                     }
                 },
                 onDragCancel = {
-                    animateSwipeTo(0f, SwipeReturnDurationMs)
+                    animateSwipeTo(0f, FoamMotion.Duration.SWIFT)
                 }
             )
         }
@@ -598,10 +592,10 @@ fun TrackListItem(
 
                 AnimatedVisibility(
                     visible = showDragHandle,
-                    enter = fadeIn(animationSpec = tween(durationMillis = 200)) +
-                            expandHorizontally(animationSpec = tween(durationMillis = 200)),
-                    exit = fadeOut(animationSpec = tween(durationMillis = 200)) +
-                            shrinkHorizontally(animationSpec = tween(durationMillis = 200))
+                    enter = fadeIn(animationSpec = tween(FoamMotion.Duration.SWIFT)) +
+                            expandHorizontally(animationSpec = tween(FoamMotion.Duration.SWIFT)),
+                    exit = fadeOut(animationSpec = tween(FoamMotion.Duration.SWIFT)) +
+                            shrinkHorizontally(animationSpec = tween(FoamMotion.Duration.SWIFT))
                 ) {
                     Spacer(modifier = Modifier.width(12.dp))
 
@@ -731,10 +725,10 @@ private fun GridOverlayChip(
 
 /** Fade + scale-in of the edit-mode grid drag chip when entering edit mode. */
 private val GridDragHandleEnter =
-    fadeIn(animationSpec = tween(durationMillis = 200)) +
-            scaleIn(initialScale = 0.6f, animationSpec = tween(durationMillis = 200))
+    fadeIn(animationSpec = tween(FoamMotion.Duration.SWIFT)) +
+            scaleIn(initialScale = 0.6f, animationSpec = tween(FoamMotion.Duration.SWIFT))
 
 /** Fade + scale-out of the edit-mode grid drag chip when leaving edit mode. */
 private val GridDragHandleExit =
-    fadeOut(animationSpec = tween(durationMillis = 200)) +
-            scaleOut(targetScale = 0.6f, animationSpec = tween(durationMillis = 200))
+    fadeOut(animationSpec = tween(FoamMotion.Duration.SWIFT)) +
+            scaleOut(targetScale = 0.6f, animationSpec = tween(FoamMotion.Duration.SWIFT))

@@ -9,7 +9,6 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.Transition
 import androidx.compose.animation.core.animateFloatAsState
@@ -69,13 +68,11 @@ import com.foamplayer.app.ui.screens.player.progress
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 import com.foamplayer.app.update.UpdateManager
 import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsDetailsViewModel
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-
-const val SharedElementTransitionDurationMs = 350
-val SharedElementEasing = FastOutSlowInEasing
 
 /**
  * Root navigation host: every screen of the app, the mini/full player
@@ -405,18 +402,12 @@ fun FoamNavHost(
                         isOnboardingRoute -> miniPlayerPresence.snapTo(0f)
                         !hasCurrentTrack -> miniPlayerPresence.animateTo(
                             targetValue = 0f,
-                            animationSpec = tween(
-                                durationMillis = SharedElementTransitionDurationMs,
-                                easing = SharedElementEasing
-                            )
+                            animationSpec = FoamMotion.Spec.sharedElementFlight
                         )
                         playerTransitionState.targetState -> miniPlayerPresence.snapTo(1f)
                         else -> miniPlayerPresence.animateTo(
                             targetValue = 1f,
-                            animationSpec = tween(
-                                durationMillis = SharedElementTransitionDurationMs,
-                                easing = SharedElementEasing
-                            )
+                            animationSpec = FoamMotion.Spec.sharedElementFlight
                         )
                     }
                 }
@@ -438,7 +429,7 @@ fun FoamNavHost(
                 var isNavBarExpanded by remember { mutableStateOf(false) }
                 val navBarExpandFraction by animateFloatAsState(
                     targetValue = if (isNavBarExpanded) 1f else 0f,
-                    animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                    animationSpec = tween(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.STANDARD),
                     label = "NavBarExpandFraction"
                 )
                 LaunchedEffect(isPlayerOpen) {

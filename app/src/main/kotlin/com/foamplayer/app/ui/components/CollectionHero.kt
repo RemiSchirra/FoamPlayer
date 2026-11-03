@@ -13,7 +13,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
@@ -104,8 +103,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
-import com.foamplayer.app.ui.navigation.SharedElementEasing
-import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
@@ -193,12 +191,6 @@ val CollectionSearchImmersiveTopClearance = 56.dp
 /** Fraction of the screen height reserved below a list while its search bar is open. */
 private const val CollectionSearchOpenReserveScreenFraction = 0.6f
 
-/** Duration of the search-open bottom padding's grow/shrink. */
-private const val CollectionSearchPaddingAnimationMs = 250
-
-/** Duration of the hero title's expand/collapse reveal. */
-private const val CollectionHeroTitleExpandAnimationMs = 250
-
 /**
  * Hero layout of the "list of lists" screens (genres, years, folders and every
  * other collection that is not an album/artist/playlist detail), resolved from
@@ -276,9 +268,6 @@ class CollectionSearchState {
 @Composable
 fun rememberCollectionSearchState(): CollectionSearchState = remember { CollectionSearchState() }
 
-/** Duration of the search-open scroll itself. */
-private const val SearchOpenScrollDurationMs = 300
-
 /**
  * Bottom content padding a host list gains while its hero's search bar is
  * open (feed into the lazy container's PaddingValues): the keyboard's own
@@ -304,8 +293,8 @@ fun collectionSearchOpenBottomPadding(searchState: CollectionSearchState?): Dp {
     return animateDpAsState(
         targetValue = target,
         animationSpec = tween(
-            durationMillis = CollectionSearchPaddingAnimationMs,
-            easing = FastOutSlowInEasing
+            durationMillis = FoamMotion.Duration.STANDARD,
+            easing = FoamMotion.Easings.STANDARD
         ),
         label = "collectionSearchOpenBottomPadding"
     ).value
@@ -344,11 +333,11 @@ fun CollectionSearchScrollToBarEffect(
             if (useGrid && gridState != null) {
                 gridState.animateScrollBy(
                     delta,
-                    tween(durationMillis = SearchOpenScrollDurationMs, easing = FastOutSlowInEasing)
+                    tween(durationMillis = FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
                 )
             } else listState?.animateScrollBy(
                 delta,
-                tween(durationMillis = SearchOpenScrollDurationMs, easing = FastOutSlowInEasing)
+                tween(durationMillis = FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
             )
         }
     }
@@ -1067,7 +1056,7 @@ private fun CollectionHeroArtworkContent(
                 fading = displayed
                 displayed = imageUrl to imageIsEmbeddedArt
                 fade.snapTo(1f)
-                fade.animateTo(0f, tween(durationMillis = SharedElementTransitionDurationMs))
+                fade.animateTo(0f, FoamMotion.Spec.sharedElementFlight)
                 fading = null
             }
         }
@@ -1177,8 +1166,8 @@ private fun CollectionHeroExpandableTitle(
                 .clipToBounds()
                 .animateContentSize(
                     animationSpec = tween(
-                        durationMillis = CollectionHeroTitleExpandAnimationMs,
-                        easing = FastOutSlowInEasing
+                        durationMillis = FoamMotion.Duration.STANDARD,
+                        easing = FoamMotion.Easings.STANDARD
                     )
                 )
                 .then(
@@ -1422,7 +1411,7 @@ private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
     ) {
         Crossfade(
             targetState = searchState.open,
-            animationSpec = tween(durationMillis = 150),
+            animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP),
             label = "collectionSearchToggleIcon"
         ) { open ->
             Icon(
@@ -1537,12 +1526,7 @@ fun rememberCollectionHeroFlightFraction(
         return noFlight
     }
     return animatedVisibilityScope.transition.animateFloat(
-        transitionSpec = {
-            tween(
-                durationMillis = SharedElementTransitionDurationMs,
-                easing = SharedElementEasing
-            )
-        },
+        transitionSpec = { FoamMotion.Spec.sharedElementFlight },
         label = "collectionHeroFlight"
     ) { state ->
         if (state == EnterExitState.Visible) 0f else 1f
@@ -1638,10 +1622,7 @@ private fun Modifier.collectionHeroSharedText(
     }
     // The fades ride the same duration/easing tween as the bounds flight
     // instead of sharedBounds' spring defaults; see [rowSharedText].
-    val fadeSpec = tween<Float>(
-        durationMillis = SharedElementTransitionDurationMs,
-        easing = SharedElementEasing
-    )
+    val fadeSpec = FoamMotion.Spec.sharedElementFlight
     return with(sharedTransitionScope) {
         this@collectionHeroSharedText.sharedBounds(
             rememberSharedContentState(key = key),

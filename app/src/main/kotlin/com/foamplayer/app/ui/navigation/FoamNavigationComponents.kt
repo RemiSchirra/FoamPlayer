@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.navigation
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -60,13 +59,11 @@ import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAccentTintState
 import com.foamplayer.app.ui.theme.SurfaceAccentTint
 import com.foamplayer.app.ui.theme.SurfaceVariantAccentTint
-
-/** Duration of every nav-bar slot animation */
-private const val NavBarSlotAnimMillis = 250
 
 /** Elevation shared by both bars' drop shadow. */
 private val NavBarShadowElevation = 6.dp
@@ -85,10 +82,10 @@ private const val NavBarShadowStrength = 0.35f
  * Shared 250ms tween for all nav-bar slot motion: item fade/scale on enable/disable,
  * slot-center slides on reorder, and the floating pill's hugging width bounds.
  */
-private val NavBarSlotAnimation = tween<Float>(durationMillis = NavBarSlotAnimMillis, easing = FastOutSlowInEasing)
+private val NavBarSlotAnimation = tween<Float>(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.STANDARD)
 
 /** The [NavBarSlotAnimation] timing for Dp values (the floating pill's width). */
-private val NavBarSlotDpAnimation = tween<Dp>(durationMillis = NavBarSlotAnimMillis, easing = FastOutSlowInEasing)
+private val NavBarSlotDpAnimation = tween<Dp>(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.STANDARD)
 
 /**
  * Bottom strip of the screen -- nav-bar zone plus floating mini player card, system

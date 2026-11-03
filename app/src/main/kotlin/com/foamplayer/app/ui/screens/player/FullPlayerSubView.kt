@@ -59,12 +59,12 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.components.CrossfadingPlayPauseIcon
-import com.foamplayer.app.ui.components.PLAY_PAUSE_CROSSFADE_MS
 import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
@@ -296,8 +296,8 @@ internal fun SharedTransitionScope.SubViewContent(
             AnimatedContent(
                 targetState = subViewMode,
                 transitionSpec = {
-                    fadeIn(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) togetherWith
-                            fadeOut(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS))
+                    fadeIn(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH)) togetherWith
+                            fadeOut(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH))
                 },
                 label = "SubViewContent"
             ) { mode ->
@@ -429,9 +429,9 @@ private fun SharedTransitionScope.MiniPlayerHeader(
         AnimatedContent(
             targetState = track,
             transitionSpec = {
-                (fadeIn(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) +
-                        slideInVertically(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) { height -> height / 3 }) togetherWith
-                        fadeOut(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS))
+                (fadeIn(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH)) +
+                        slideInVertically(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH)) { height -> height / 3 }) togetherWith
+                        fadeOut(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH))
             },
             contentKey = { it.id },
             modifier = Modifier.weight(1f),
@@ -520,7 +520,7 @@ internal fun MiniPlayPauseButton(
     // Same scale+fade convention as the full player's play/pause crossfade.
     val loadingFraction by animateFloatAsState(
         targetValue = if (isLoading) 1f else 0f,
-        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.STANDARD),
         label = "miniPlayLoadingCrossfade"
     )
     val description = stringResource(

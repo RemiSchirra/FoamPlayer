@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.scrollBy
@@ -18,6 +17,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.foamplayer.app.ui.theme.FoamMotion
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
@@ -34,9 +34,6 @@ private const val AUTO_SCROLL_STEP_PX = 32f
 
 /** Autoscroll tick interval, in ms. */
 private const val AUTO_SCROLL_INTERVAL_MS = 16L
-
-/** Duration of the settle animation played when the drag is released. */
-private const val SETTLE_DURATION_MS = 200
 
 @Composable
 fun rememberDragDropGridState(
@@ -149,7 +146,7 @@ class DragDropGridState(
         settleJob = scope.launch {
             animation.animateTo(
                 resting,
-                tween(durationMillis = SETTLE_DURATION_MS, easing = FastOutSlowInEasing)
+                tween(durationMillis = FoamMotion.Duration.SWIFT, easing = FoamMotion.Easings.STANDARD)
             ) {
                 draggingItemOffset = value
             }

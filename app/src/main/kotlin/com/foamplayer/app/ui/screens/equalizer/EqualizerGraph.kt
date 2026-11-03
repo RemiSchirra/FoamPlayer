@@ -9,7 +9,6 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
@@ -61,6 +60,7 @@ import com.foamplayer.app.audio.dsp.DspState
 import com.foamplayer.app.audio.dsp.FilterType
 import com.foamplayer.app.audio.dsp.GraphicEqSettings
 import com.foamplayer.app.audio.dsp.ParametricNode
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -72,9 +72,6 @@ import kotlin.math.sqrt
 /** dB range shown by the response graphs (grid lines go to ±12). */
 private const val GAIN_RANGE_DB = 15f
 private const val NODE_HIT_RADIUS_PX = 44f
-
-/** How long after the last scroll movement the mini map's viewport thumb starts fading out. */
-private const val THUMB_HIDE_DELAY_MS = 700L
 
 /** Width of one graphic EQ fader column; the strip content spans the current band count of these. */
 internal val BAND_SPACING = 44.dp
@@ -456,7 +453,7 @@ fun GraphicEqStrip(
                                     scope.launch {
                                         latestScroll?.animateScrollBy(
                                             velocity * 0.3f,
-                                            tween(durationMillis = 350, easing = LinearOutSlowInEasing)
+                                            tween(durationMillis = FoamMotion.Duration.FLIGHT, easing = FoamMotion.Easings.DECELERATE)
                                         )
                                     }
                                 }
@@ -626,7 +623,9 @@ fun EqMiniMap(
                 .drop(1) // the initial value is not a scroll
                 .collectLatest {
                     scrollRecentlyChanged = true
-                    delay(THUMB_HIDE_DELAY_MS)
+                    // How long after the last scroll movement the mini map's
+                    // viewport thumb starts fading out.
+                    delay(FoamMotion.Duration.EXTENDED.toLong())
                     scrollRecentlyChanged = false
                 }
         }
@@ -634,7 +633,7 @@ fun EqMiniMap(
     val thumbVisible = interactive && (scrollRecentlyChanged || touchingMap)
     val thumbAlpha by animateFloatAsState(
         targetValue = if (thumbVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = if (thumbVisible) 150 else 450),
+        animationSpec = tween(durationMillis = if (thumbVisible) FoamMotion.Duration.SNAP else FoamMotion.Duration.EXPRESSIVE),
         label = "miniMapThumbAlpha"
     )
 

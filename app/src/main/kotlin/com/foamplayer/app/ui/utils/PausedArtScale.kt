@@ -8,7 +8,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import com.foamplayer.app.ui.screens.player.PausedArtScale
-import com.foamplayer.app.ui.screens.player.TRANSITION_DURATION_MS
+import com.foamplayer.app.ui.theme.FoamMotion
 
 /**
  * Tweened shrink applied to the full player's hero artwork while playback is
@@ -37,7 +37,7 @@ internal fun rememberPausedArtScale(isPlaybackActiveProvider: () -> Boolean): St
     }
     return animateFloatAsState(
         targetValue = target,
-        animationSpec = tween(durationMillis = TRANSITION_DURATION_MS),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.SMOOTH),
         label = "pausedArtScale"
     )
 }

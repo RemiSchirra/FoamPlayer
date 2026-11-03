@@ -10,7 +10,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -72,6 +71,7 @@ import com.foamplayer.app.ui.components.LibraryScanCard
 import com.foamplayer.app.ui.modals.AddProviderModal
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamSurface
@@ -303,7 +303,7 @@ private fun PermissionCard(
 ) {
     val statusColor by animateColorAsState(
         targetValue = if (granted) FoamTheme.colors.bitPerfectActive else FoamTheme.accentColor,
-        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD),
         label = "permissionStatusColor"
     )
     Box(
@@ -341,7 +341,7 @@ private fun PermissionCard(
             Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
             Crossfade(
                 targetState = granted,
-                animationSpec = tween(durationMillis = 300),
+                animationSpec = tween(durationMillis = FoamMotion.Duration.SMOOTH),
                 label = "permissionTrailingIcon"
             ) { isGranted ->
                 Icon(

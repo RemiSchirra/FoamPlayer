@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.player
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -39,6 +38,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
+import com.foamplayer.app.ui.theme.FoamMotion
 import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
 import kotlin.math.cos
@@ -238,7 +238,7 @@ internal fun TonearmOverlay(
                         animationSpec = tween(
                             durationMillis =
                                 (abs(target - armProgress.value) * TonearmSwingMsPerUnit).toInt(),
-                            easing = FastOutSlowInEasing
+                            easing = FoamMotion.Easings.STANDARD
                         )
                     )
                 } else if (!armProgress.isRunning) {

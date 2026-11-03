@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.components
 
-import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
@@ -28,6 +27,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.ui.theme.FoamMotion
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -151,7 +151,7 @@ fun MarqueeText(
                         targetValue = end,
                         animationSpec = tween(
                             durationMillis = travelMillis(end - state.offsetPx, speedPxPerSecond),
-                            easing = EaseInOut
+                            easing = FoamMotion.Easings.IN_OUT
                         )
                     ) { value, _ ->
                         // A restart() bumps restartCount: a stale animation frame
@@ -164,7 +164,7 @@ fun MarqueeText(
                         targetValue = 0f,
                         animationSpec = tween(
                             durationMillis = travelMillis(state.offsetPx, speedPxPerSecond),
-                            easing = EaseInOut
+                            easing = FoamMotion.Easings.IN_OUT
                         )
                     ) { value, _ ->
                         if (state.restartCount == generation) state.offsetPx = value

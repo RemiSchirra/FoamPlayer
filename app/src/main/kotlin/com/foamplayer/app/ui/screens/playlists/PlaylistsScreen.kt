@@ -8,7 +8,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -111,18 +110,14 @@ import com.foamplayer.app.ui.modals.RepairPlaylistsResultModal
 import com.foamplayer.app.ui.modals.rememberPlaylistFoamModalState
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
-import com.foamplayer.app.ui.navigation.SharedElementEasing
-import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlinx.coroutines.launch
 
-private val textFlightFadeSpec = tween<Float>(
-    durationMillis = SharedElementTransitionDurationMs,
-    easing = SharedElementEasing
-)
+private val textFlightFadeSpec = FoamMotion.Spec.sharedElementFlight
 
 private val ImageMimeTypes = arrayOf("image/*")
 
@@ -304,7 +299,7 @@ fun PlaylistsScreen(
                     val currentIndex by rememberUpdatedState(index)
                     val liftScale by animateFloatAsState(
                         targetValue = if (isDragging && !dragReleased) DragLiftScale else 1f,
-                        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+                        animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP, easing = FoamMotion.Easings.STANDARD),
                         label = "playlistDragLift"
                     )
 
@@ -401,7 +396,7 @@ fun PlaylistsScreen(
                     val currentIndex by rememberUpdatedState(index)
                     val liftScale by animateFloatAsState(
                         targetValue = if (isDragging && !dragReleased) DragLiftScale else 1f,
-                        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+                        animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP, easing = FoamMotion.Easings.STANDARD),
                         label = "playlistDragLift"
                     )
 
@@ -671,7 +666,7 @@ private fun PlaylistItemRow(
 
     val artworkElevation by animateDpAsState(
         targetValue = if (lifted) DragArtworkElevation else 0.dp,
-        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP, easing = FoamMotion.Easings.STANDARD),
         label = "playlistArtworkElevation"
     )
 
@@ -830,13 +825,13 @@ private val DragArtworkElevation: Dp = 8.dp
 
 /** Fade + scale-in of the edit-mode drag handle when entering edit mode. */
 private val DragHandleEnter =
-    fadeIn(animationSpec = tween(durationMillis = 200)) +
-            scaleIn(initialScale = 0.6f, animationSpec = tween(durationMillis = 200))
+    fadeIn(animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT)) +
+            scaleIn(initialScale = 0.6f, animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT))
 
 /** Fade + scale-out of the edit-mode drag handle when leaving edit mode. */
 private val DragHandleExit =
-    fadeOut(animationSpec = tween(durationMillis = 200)) +
-            scaleOut(targetScale = 0.6f, animationSpec = tween(durationMillis = 200))
+    fadeOut(animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT)) +
+            scaleOut(targetScale = 0.6f, animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT))
 
 /** Whole-row drag gesture driving edit-mode reordering (swaps come from the drag-drop states). */
 private fun Modifier.playlistEditDrag(

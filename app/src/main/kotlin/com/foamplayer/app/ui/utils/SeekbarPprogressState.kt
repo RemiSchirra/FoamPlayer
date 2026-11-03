@@ -16,15 +16,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import com.foamplayer.app.ui.theme.FoamMotion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-
-/** Duration of the seek bar's "settle" tween (drag release, track change, restart). */
-const val SEEK_BAR_SETTLE_TWEEN_MS = 150
 
 /**
  * How long a committed waveform envelope swap keeps holding for the playing track to
@@ -287,7 +285,7 @@ class SeekBarProgressState internal constructor(
                 // handing back to `liveProgress`, which may well still be mid-flight
                 // (still pager-offset-scaled, or in non-animated mode still stale)
                 // until [onTrackChangeApplied] says the real change has landed.
-                overrideAnimatable.animateTo(0f, tween((progress * SEEK_BAR_SETTLE_TWEEN_MS).toInt()))
+                overrideAnimatable.animateTo(0f, tween((progress * FoamMotion.Duration.SNAP).toInt()))
             } else {
                 overrideAnimatable.snapTo(0f)
                 overrideActive = true
@@ -497,7 +495,7 @@ class SeekBarProgressState internal constructor(
             // Animatable.value is itself snapshot-state-backed, so every frame this
             // advances, readers of `progress` (via overrideAnimatable.value above)
             // recompose on their own -- no per-frame callback needed here.
-            overrideAnimatable.animateTo(destination, tween((progress * SEEK_BAR_SETTLE_TWEEN_MS).toInt()))
+            overrideAnimatable.animateTo(destination, tween((progress * FoamMotion.Duration.SNAP).toInt()))
             overrideActive = false
         }
     }
@@ -549,7 +547,7 @@ class SeekBarProgressState internal constructor(
         morphAnimatable = Animatable(fromBlend.coerceIn(0f, 1f))
         morphActive = true
         morphJob = scope.launch {
-            morphAnimatable.animateTo(1f, tween(SEEK_BAR_SETTLE_TWEEN_MS))
+            morphAnimatable.animateTo(1f, tween(FoamMotion.Duration.SNAP))
             if (envelopeSettleRequested) stopTrackChangeMorph()
         }
         scheduleEnvelopeSafetyNet()
@@ -571,7 +569,7 @@ class SeekBarProgressState internal constructor(
         morphDrivenByPager = false
         morphAnimatable = Animatable(from)
         morphJob = scope.launch {
-            morphAnimatable.animateTo(0f, tween((from * SEEK_BAR_SETTLE_TWEEN_MS).toInt()))
+            morphAnimatable.animateTo(0f, tween((from * FoamMotion.Duration.SNAP).toInt()))
             stopTrackChangeMorph()
         }
     }

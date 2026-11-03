@@ -44,6 +44,7 @@ import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlin.math.roundToInt
@@ -199,12 +200,12 @@ private fun ScanControlsRow(
         val scanButtonBackground by animateColorAsState(
             targetValue = if (scanRunning) FoamTheme.colors.surfaceVariant
             else FoamTheme.accentColor,
-            animationSpec = tween(durationMillis = 200),
+            animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT),
             label = "artistScanButtonBackground"
         )
         Box(
             modifier = Modifier
-                .animateContentSize(animationSpec = tween(durationMillis = 200))
+                .animateContentSize(animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT))
                 .clip(RoundedCornerShape(FoamDimens.buttonRounding))
                 .background(scanButtonBackground)
                 .clickable(
@@ -220,8 +221,8 @@ private fun ScanControlsRow(
             AnimatedContent(
                 targetState = scanRunning,
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(durationMillis = 120)) togetherWith
-                            fadeOut(animationSpec = tween(durationMillis = 120))
+                    fadeIn(animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP)) togetherWith
+                            fadeOut(animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP))
                 },
                 label = "artistScanButtonLabel"
             ) { running ->

@@ -59,6 +59,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.navigation.NavBarDimens
 import com.foamplayer.app.ui.screens.player.PlayerDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
@@ -137,7 +138,7 @@ private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
     // Same scale+fade convention as the full player's play/pause crossfade.
     val loadingFraction by animateFloatAsState(
         targetValue = if (isLoading) 1f else 0f,
-        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.STANDARD),
         label = "miniPlayerLoadingCrossfade"
     )
     val description = stringResource(

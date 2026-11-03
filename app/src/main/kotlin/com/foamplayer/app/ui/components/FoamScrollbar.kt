@@ -37,6 +37,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /** Width of the touch strip hosting the thumb, overlaid on the container's end edge. */
@@ -48,8 +49,7 @@ private val ScrollbarEdgeInset = 4.dp
 /** Thumb opacity at rest; a press/drag swells it to full opacity. */
 private const val ScrollbarIdleAlpha = 0.4f
 
-/** Duration of the press/drag thickness + emphasis tween. */
-private const val ScrollbarPressAnimationMs = 150
+
 
 /**
  * Visual scale on the thumb's proportional length: the viewport/content share
@@ -289,17 +289,17 @@ private fun FoamScrollbarCore(
 
     val animatedThickness by animateDpAsState(
         targetValue = if (pressed) pressedThickness else thickness,
-        animationSpec = tween(durationMillis = ScrollbarPressAnimationMs),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP),
         label = "scrollbarThickness"
     )
     val animatedAlpha by animateFloatAsState(
         targetValue = if (pressed) 1f else ScrollbarIdleAlpha,
-        animationSpec = tween(durationMillis = ScrollbarPressAnimationMs),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP),
         label = "scrollbarEmphasis"
     )
     val bubbleAlpha by animateFloatAsState(
         targetValue = if (pressed && activeLabel != null) 1f else 0f,
-        animationSpec = tween(durationMillis = ScrollbarPressAnimationMs),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP),
         label = "scrollbarBubbleEmphasis"
     )
 

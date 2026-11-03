@@ -1,10 +1,10 @@
 package com.foamplayer.app.ui.screens.lyrics
 
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.withFrameNanos
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.mocharealm.accompanist.lyrics.core.model.SyncedLyrics
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -68,8 +68,8 @@ internal suspend fun LazyListState.scrollLyricIntoFocus(
             value = scrollDelta.toFloat(),
             animationSpec =
                 tween(
-                    durationMillis = LYRIC_FOCUS_SCROLL_DURATION_MS,
-                    easing = FastOutSlowInEasing,
+                    durationMillis = FoamMotion.Duration.EXPRESSIVE,
+                    easing = FoamMotion.Easings.STANDARD,
                 ),
         )
     }
@@ -115,4 +115,3 @@ private const val LYRIC_FOCUS_TOP_GUARD_RATIO = 0.18f
 private const val LYRIC_FOCUS_BOTTOM_GUARD_RATIO = 0.24f
 private const val LYRIC_FOCUS_MIN_SCROLL_PX = 6
 private const val LYRIC_FOCUS_ANIMATED_DISTANCE = 12
-private const val LYRIC_FOCUS_SCROLL_DURATION_MS = 520

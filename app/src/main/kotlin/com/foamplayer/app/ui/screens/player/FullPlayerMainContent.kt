@@ -5,9 +5,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.background
@@ -79,7 +77,6 @@ import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.CrossfadingPlayPauseIcon
-import com.foamplayer.app.ui.components.PLAY_PAUSE_CROSSFADE_MS
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
@@ -91,6 +88,7 @@ import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.components.MarqueeTextState
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 import com.foamplayer.app.ui.utils.WaveformState
@@ -906,7 +904,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
     val isPressed by playInteractions.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
         targetValue = if (isPressed) PLAY_BUTTON_PRESSED_SCALE else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = FoamMotion.Springs.CONTROL,
         label = "playButtonPressScale"
     )
 
@@ -914,7 +912,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
     // convention the two icons use: 0f = transport showing, 1f = circle showing.
     val loadingFraction by animateFloatAsState(
         targetValue = if (isLoading) 1f else 0f,
-        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.STANDARD),
         label = "playLoadingCrossfade"
     )
 

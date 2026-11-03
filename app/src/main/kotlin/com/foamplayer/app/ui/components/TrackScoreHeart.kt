@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -40,6 +39,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
@@ -106,7 +106,10 @@ fun TrackScoreHeart(
                 spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
             )
         } else {
-            menuProgress.animateTo(0f, tween(durationMillis = 130, easing = FastOutSlowInEasing))
+            menuProgress.animateTo(
+                0f,
+                tween(durationMillis = FoamMotion.Duration.SNAP, easing = FoamMotion.Easings.STANDARD)
+            )
             menuVisible = false
         }
     }

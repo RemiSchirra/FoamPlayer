@@ -4,11 +4,9 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import com.foamplayer.app.ui.theme.FoamMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -574,7 +572,7 @@ private fun AnimatedRankedRow(content: @Composable () -> Unit) {
                 if (previous != null && kotlin.math.abs(previous - y) > 1f) {
                     scope.launch {
                         glideOffset.snapTo(glideOffset.value + previous - y)
-                        glideOffset.animateTo(0f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                        glideOffset.animateTo(0f, animationSpec = FoamMotion.Springs.SHEET_SETTLE)
                     }
                 }
             }
@@ -841,7 +839,7 @@ private fun GenreBar(genre: GenreStat, maxPlays: Int) {
     val fraction = genre.playCount.toFloat() / maxPlays.coerceAtLeast(1)
     val animatedFraction by animateFloatAsState(
         targetValue = fraction,
-        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.EXPRESSIVE, easing = FoamMotion.Easings.STANDARD),
         label = "genreBarFraction"
     )
     Column {

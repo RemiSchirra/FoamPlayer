@@ -40,26 +40,6 @@ import com.foamplayer.app.ui.theme.foamBackground
  *
  * Split out of `FoamNavigation.kt` so the host composable holds only the navigation wiring.
  */
-/** Longest a programmatic mini<->full player transition may take. */
-internal const val PlayerTransitionMaxDurationMs = 500
-
-/**
- * Duration budget for a programmatic close flight (no finger on screen),
- * longer than a gesture close so it never reads as an instant snap.
- */
-internal const val AutoCloseFlightDurationMs = 700
-
-/** Shortest a flick-committed close flight may take. */
-internal const val MinGestureCloseFlightMs = 240
-
-/** Fade duration for non-shared-element screen-to-screen navigation. */
-internal const val NavScreenFadeDurationMs = 400
-
-/** Fade-out duration when a screen leaves — shorter than the fade-in and
- * eased with EaseOut, so the visible drop is front-loaded and the leaving
- * screen never lingers at partial alpha. */
-internal const val NavScreenFadeOutDurationMs = 200
-
 /** Settings/stats subscreens and collection pages slide by this fraction of
  * their width when pushed/popped. */
 internal const val SubScreenSlideFraction = 0.15f

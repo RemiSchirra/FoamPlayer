@@ -2,9 +2,7 @@ package com.foamplayer.app.ui.modals
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -60,6 +58,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import android.view.WindowManager
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalFoamBackdropState
 import com.foamplayer.app.ui.theme.foamSurface
@@ -260,10 +259,7 @@ fun FoamBottomModal(
                             initialValue = currentCapPx(),
                             targetValue = target,
                             initialVelocity = -flingVelocityY,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMediumLow
-                            )
+                            animationSpec = FoamMotion.Springs.SHEET_SETTLE
                         ) { value, _ ->
                             draggedCapPx = value
                             backdrop.dragPresence = presence(value)
@@ -392,8 +388,8 @@ fun FoamBottomModal(
 
             AnimatedVisibility(
                 visibleState = transitionState,
-                enter = fadeIn(tween(220)),
-                exit = fadeOut(tween(200)),
+                enter = fadeIn(FoamMotion.Spec.sheetFadeIn),
+                exit = fadeOut(FoamMotion.Spec.sheetFadeOut),
                 modifier = Modifier.fillMaxSize()
             ) {
                 Box(
@@ -418,8 +414,8 @@ fun FoamBottomModal(
 
             AnimatedVisibility(
                 visibleState = transitionState,
-                enter = slideInVertically(tween(280)) { fullHeight -> fullHeight },
-                exit = slideOutVertically(tween(220)) { fullHeight -> fullHeight },
+                enter = slideInVertically(tween(FoamMotion.Duration.SMOOTH)) { fullHeight -> fullHeight },
+                exit = slideOutVertically(tween(FoamMotion.Duration.STANDARD)) { fullHeight -> fullHeight },
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
                 Column(

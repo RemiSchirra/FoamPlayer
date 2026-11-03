@@ -8,7 +8,6 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
@@ -65,10 +64,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import coil.size.Size as CoilSize
 import com.foamplayer.app.constants.MediaDensity
-import com.foamplayer.app.ui.navigation.SharedElementEasing
-import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.screens.player.immersiveArtFadeSpan
 import com.foamplayer.app.ui.screens.player.PlayerDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
 import com.foamplayer.app.ui.theme.adaptAccentForTheme
@@ -153,7 +151,7 @@ fun albumArtMemoryCacheKey(path: String): String = "album-art:$path"
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 val AlbumArtBoundsTransform = BoundsTransform { _, _ ->
-    tween(durationMillis = SharedElementTransitionDurationMs, easing = SharedElementEasing)
+    tween(durationMillis = FoamMotion.Duration.FLIGHT, easing = FoamMotion.Easings.STANDARD)
 }
 
 /**
@@ -194,12 +192,7 @@ internal fun rememberCollectionFlightProgress(
     animatedVisibilityScope: AnimatedVisibilityScope
 ): State<Float> {
     val flight = animatedVisibilityScope.transition.animateFloat(
-        transitionSpec = {
-            tween(
-                durationMillis = SharedElementTransitionDurationMs,
-                easing = SharedElementEasing
-            )
-        },
+        transitionSpec = { FoamMotion.Spec.sharedElementFlight },
         label = "collectionRowFlight"
     ) { state ->
         if (state == EnterExitState.Visible) 1f else 0f
@@ -540,7 +533,7 @@ internal fun activeRowHighlight(
 
     return animateColorAsState(
         targetValue = target,
-        animationSpec = tween(durationMillis = 200, easing = EaseOut),
+        animationSpec = tween(FoamMotion.Duration.SWIFT, easing = FoamMotion.Easings.EXIT),
         label = "activeRowHighlight"
     ).value
 }
@@ -735,10 +728,7 @@ internal fun Modifier.rowSharedText(
     if (!enabled || sharedTransitionScope == null || animatedVisibilityScope == null) return this
     return with(sharedTransitionScope) {
         val state = rememberSharedContentState(key = key)
-        val fadeSpec = tween<Float>(
-            durationMillis = SharedElementTransitionDurationMs,
-            easing = SharedElementEasing
-        )
+        val fadeSpec = FoamMotion.Spec.sharedElementFlight
         val resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
             contentScale = ContentScale.FillWidth,
             alignment = Alignment.Center

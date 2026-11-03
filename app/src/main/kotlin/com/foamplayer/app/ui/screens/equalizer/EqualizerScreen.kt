@@ -9,7 +9,6 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -111,6 +110,7 @@ import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.modals.PlaylistNameField
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
@@ -760,12 +760,12 @@ private fun PresetsModal(
                     // sheet's height animate between the two tab contents.
                     val direction = if (targetState == "autoeq") 1 else -1
                     (
-                        slideInHorizontally(tween(250)) { fullWidth -> direction * fullWidth } +
-                                fadeIn(tween(250))
+                        slideInHorizontally(tween(FoamMotion.Duration.STANDARD)) { fullWidth -> direction * fullWidth } +
+                                fadeIn(tween(FoamMotion.Duration.STANDARD))
                         ) togetherWith
                             (
-                            slideOutHorizontally(tween(250)) { fullWidth -> -direction * fullWidth } +
-                                    fadeOut(tween(250))
+                            slideOutHorizontally(tween(FoamMotion.Duration.STANDARD)) { fullWidth -> -direction * fullWidth } +
+                                    fadeOut(tween(FoamMotion.Duration.STANDARD))
                             )
                 },
                 label = "presetsTabContent"
@@ -870,7 +870,7 @@ private fun PresetsTabs(
         val tabWidth = maxWidth / 2
         val indicatorOffset by animateDpAsState(
             targetValue = if (selected == "autoeq") tabWidth else 0.dp,
-            animationSpec = tween(250),
+            animationSpec = tween(FoamMotion.Duration.STANDARD),
             label = "presetsTabIndicator"
         )
 
@@ -907,12 +907,12 @@ private fun PresetsTabs(
                         targetState = isSelected,
                         transitionSpec = {
                             (
-                                slideInHorizontally(tween(250)) { it / -2 } +
-                                        fadeIn(tween(250))
+                                slideInHorizontally(tween(FoamMotion.Duration.STANDARD)) { it / -2 } +
+                                        fadeIn(tween(FoamMotion.Duration.STANDARD))
                                 ) togetherWith
                                     (
-                                    slideOutHorizontally(tween(250)) { it / 2 } +
-                                            fadeOut(tween(250))
+                                    slideOutHorizontally(tween(FoamMotion.Duration.STANDARD)) { it / 2 } +
+                                            fadeOut(tween(FoamMotion.Duration.STANDARD))
                                     )
                         },
                         label = "presetsTabLabel"
@@ -1524,7 +1524,7 @@ private fun SystemVolumeControl() {
         scope.launch {
             shownFraction.animateTo(
                 newFraction,
-                tween(durationMillis = SYSTEM_VOLUME_GLIDE_MS, easing = FastOutSlowInEasing)
+                tween(durationMillis = FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.STANDARD)
             )
         }
     }
@@ -1618,7 +1618,6 @@ private fun SystemVolumeControl() {
 }
 
 private const val SYSTEM_VOLUME_POLL_MS = 250L
-private const val SYSTEM_VOLUME_GLIDE_MS = 250
 private const val SYSTEM_VOLUME_TAG = "SystemVolume"
 private const val VOLUME_CHANGED_ACTION = "android.media.VOLUME_CHANGED_ACTION"
 private const val EXTRA_VOLUME_STREAM_TYPE = "android.media.EXTRA_VOLUME_STREAM_TYPE"
@@ -1714,9 +1713,6 @@ private fun formatPercent(percent: Float): String = "%.0f%%".format(percent)
 // displayed value: the engine is never touched, and a live drag snaps them so
 // the controls stay locked to the finger.
 
-/** Duration of the visual-only preset transition across the EQ screen. */
-private const val PRESET_TRANSITION_MS = 200
-
 /** Displayed scalar eased toward preset changes, or snapped for live drags. */
 private class TweenedFloat(initial: Float) {
     private val animatable = Animatable(initial)
@@ -1729,7 +1725,7 @@ private class TweenedFloat(initial: Float) {
         target = newTarget
         animatable.animateTo(
             newTarget,
-            tween(durationMillis = PRESET_TRANSITION_MS, easing = FastOutSlowInEasing)
+            tween(durationMillis = FoamMotion.Duration.SWIFT, easing = FoamMotion.Easings.STANDARD)
         )
     }
 
@@ -1775,7 +1771,7 @@ private class TweenedFloats(initial: List<Float>) {
         progress.snapTo(0f)
         progress.animateTo(
             1f,
-            tween(durationMillis = PRESET_TRANSITION_MS, easing = FastOutSlowInEasing)
+            tween(durationMillis = FoamMotion.Duration.SWIFT, easing = FoamMotion.Easings.STANDARD)
         )
     }
 
@@ -1819,7 +1815,7 @@ private class TweenedNodes(initial: List<ParametricNode>) {
         progress.snapTo(0f)
         progress.animateTo(
             1f,
-            tween(durationMillis = PRESET_TRANSITION_MS, easing = FastOutSlowInEasing)
+            tween(durationMillis = FoamMotion.Duration.SWIFT, easing = FoamMotion.Easings.STANDARD)
         )
     }
 

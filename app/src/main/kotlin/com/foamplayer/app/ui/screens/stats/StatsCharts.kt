@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.stats
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 
 /** Maximum number of x-axis labels drawn under a chart, whatever the slot count. */
@@ -56,7 +56,7 @@ fun StatsActivityChart(
     val progress = remember(buckets) { Animatable(0f) }
     LaunchedEffect(buckets) {
         progress.snapTo(0f)
-        progress.animateTo(1f, tween(durationMillis = 600, easing = FastOutSlowInEasing))
+        progress.animateTo(1f, tween(durationMillis = FoamMotion.Duration.EXPRESSIVE, easing = FoamMotion.Easings.STANDARD))
     }
 
     val accent = FoamTheme.accentColor
@@ -143,7 +143,7 @@ fun StatsDonutChart(
     val progress = remember(slices) { Animatable(0f) }
     LaunchedEffect(slices) {
         progress.snapTo(0f)
-        progress.animateTo(1f, tween(durationMillis = 600, easing = FastOutSlowInEasing))
+        progress.animateTo(1f, tween(durationMillis = FoamMotion.Duration.EXPRESSIVE, easing = FoamMotion.Easings.STANDARD))
     }
 
     Canvas(modifier) {
@@ -183,7 +183,7 @@ fun StatsHourChart(
     val progress = remember(hours) { Animatable(0f) }
     LaunchedEffect(hours) {
         progress.snapTo(0f)
-        progress.animateTo(1f, tween(durationMillis = 600, easing = FastOutSlowInEasing))
+        progress.animateTo(1f, tween(durationMillis = FoamMotion.Duration.EXPRESSIVE, easing = FoamMotion.Easings.STANDARD))
     }
 
     val accent = FoamTheme.accentColor

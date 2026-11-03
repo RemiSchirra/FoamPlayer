@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.theme
 
-import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
@@ -77,9 +76,9 @@ fun FoamBackdropHost(
         val scale by animateFloatAsState(
             targetValue = if (backdrop.active) FoamBackdropShrunkScale else 1f,
             animationSpec = if (backdrop.active) {
-                tween(280, easing = EaseInOut)
+                tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.IN_OUT)
             } else {
-                tween(220, easing = EaseInOut)
+                tween(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.IN_OUT)
             },
             label = "FoamBackdropScale"
         )

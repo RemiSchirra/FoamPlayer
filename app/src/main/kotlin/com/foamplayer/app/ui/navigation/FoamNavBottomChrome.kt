@@ -47,6 +47,7 @@ import com.foamplayer.app.ui.screens.player.MiniPlayerSwipeController
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.player.progress
 import com.foamplayer.app.ui.theme.BackgroundAccentTint
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAccentTintState
 
@@ -219,9 +220,12 @@ internal fun BoxScope.FoamBottomChrome(
                 if (trackListTransitionTrackId != null) {
                     // The artwork is morphing into a collection row instead of
                     // the mini player: fade + slide up from the bottom.
-                    fadeIn(tween(SharedElementTransitionDurationMs, easing = SharedElementEasing)) +
+                    fadeIn(FoamMotion.Spec.sharedElementFlight) +
                         slideInVertically(
-                            tween(SharedElementTransitionDurationMs, easing = SharedElementEasing)
+                            tween(
+                                FoamMotion.Duration.FLIGHT,
+                                easing = FoamMotion.Easings.STANDARD
+                            )
                         ) { it / 2 }
                 } else {
                     fadeIn()

@@ -84,6 +84,7 @@ import com.foamplayer.app.ui.modals.DefaultStopPalette
 import com.foamplayer.app.ui.modals.GradientColorPickerModal
 import com.foamplayer.app.ui.navigation.LocalBackgroundSettingsPreview
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
@@ -92,15 +93,15 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlinx.coroutines.flow.first
 
-private const val ModeAnimMillis = 300
+private const val ModeAnimMillis = FoamMotion.Duration.SMOOTH
 
 /** Shared transitions for every block that appears/disappears with the background mode. */
 private val ModeEnter = fadeIn(tween(ModeAnimMillis, delayMillis = 60)) +
         expandVertically(tween(ModeAnimMillis), expandFrom = Alignment.Top)
-private val ModeExit = fadeOut(tween(200)) +
+private val ModeExit = fadeOut(tween(FoamMotion.Duration.SWIFT)) +
         shrinkVertically(tween(ModeAnimMillis), shrinkTowards = Alignment.Top)
 
-private const val StopAnimMillis = 250
+private const val StopAnimMillis = FoamMotion.Duration.STANDARD
 
 /** Enter/exit for the rows of the gradient point list (and its add control). */
 private val StopEnter = fadeIn(tween(StopAnimMillis, delayMillis = 50)) +
@@ -1034,8 +1035,8 @@ private fun StopRow(
             // Row would otherwise capture the call, and Compose forbids that.
             androidx.compose.animation.AnimatedVisibility(
                 visible = canRemove,
-                enter = fadeIn(tween(150)),
-                exit = fadeOut(tween(150))
+                enter = fadeIn(tween(FoamMotion.Duration.SNAP)),
+                exit = fadeOut(tween(FoamMotion.Duration.SNAP))
             ) {
                 Box(
                     modifier = Modifier

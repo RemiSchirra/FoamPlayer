@@ -68,6 +68,7 @@ import com.foamplayer.app.ui.components.rememberSeekBarProgressState
 import com.foamplayer.app.ui.modals.PlayerAudioInfoModal
 import com.foamplayer.app.ui.modals.PlayOnDevice
 import com.foamplayer.app.ui.modals.PlayOnModal
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.WaveformCache
@@ -565,7 +566,7 @@ fun FullPlayerScreen(
             programmaticBackdropToPath = toPath
             programmaticBackdropCrossfade.snapTo(0f)
             try {
-                programmaticBackdropCrossfade.animateTo(1f, tween(TRANSITION_DURATION_MS))
+                programmaticBackdropCrossfade.animateTo(1f, tween(FoamMotion.Duration.SMOOTH))
             } finally {
                 if (generation == backdropFadeGeneration) {
                     programmaticBackdropFromPath = null
@@ -606,7 +607,7 @@ fun FullPlayerScreen(
                 try {
                     pagerState.animateScrollToPage(
                         page = transitPage,
-                        animationSpec = tween(TRANSITION_DURATION_MS)
+                        animationSpec = tween(FoamMotion.Duration.SMOOTH)
                     )
                 } finally {
                     withContext(NonCancellable) { hopOffGhost() }
@@ -614,7 +615,7 @@ fun FullPlayerScreen(
             } else {
                 pagerState.animateScrollToPage(
                     page = queueIndex,
-                    animationSpec = tween(TRANSITION_DURATION_MS)
+                    animationSpec = tween(FoamMotion.Duration.SMOOTH)
                 )
             }
         } else {
@@ -731,10 +732,10 @@ fun FullPlayerScreen(
                 Box(modifier = Modifier.weight(1f)) {
                     upTransition.AnimatedVisibility(
                         visible = { !it },
-                        enter = fadeIn(tween(TRANSITION_DURATION_MS)) +
-                                slideInVertically(tween(TRANSITION_DURATION_MS)) { h -> -h / PlayerDimens.headerSlideDivisor },
-                        exit = fadeOut(tween(TRANSITION_DURATION_MS)) +
-                                slideOutVertically(tween(TRANSITION_DURATION_MS)) { h -> -h / PlayerDimens.headerSlideDivisor },
+                        enter = fadeIn(tween(FoamMotion.Duration.SMOOTH)) +
+                                slideInVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> -h / PlayerDimens.headerSlideDivisor },
+                        exit = fadeOut(tween(FoamMotion.Duration.SMOOTH)) +
+                                slideOutVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> -h / PlayerDimens.headerSlideDivisor },
                         modifier = Modifier.fillMaxSize().then(playerDrag)
                     ) {
                         MainPlayerContent(
@@ -777,10 +778,10 @@ fun FullPlayerScreen(
 
                     upTransition.AnimatedVisibility(
                         visible = { it },
-                        enter = fadeIn(tween(TRANSITION_DURATION_MS)) +
-                                slideInVertically(tween(TRANSITION_DURATION_MS)) { h -> h / 6 },
-                        exit = fadeOut(tween(TRANSITION_DURATION_MS)) +
-                                slideOutVertically(tween(TRANSITION_DURATION_MS)) { h -> h / 6 },
+                        enter = fadeIn(tween(FoamMotion.Duration.SMOOTH)) +
+                                slideInVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> h / 6 },
+                        exit = fadeOut(tween(FoamMotion.Duration.SMOOTH)) +
+                                slideOutVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> h / 6 },
                         modifier = Modifier
                             .fillMaxSize()
                             .extendBottom(PlayerDimens.subViewContentBottomExtension)

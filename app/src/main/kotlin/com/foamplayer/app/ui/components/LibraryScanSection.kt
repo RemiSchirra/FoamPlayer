@@ -33,6 +33,7 @@ import androidx.core.net.toUri
 import com.foamplayer.app.R
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
@@ -408,7 +409,7 @@ private fun ScanPillButton(scanning: Boolean, onClick: () -> Unit) {
 private fun ScanProgressBar(progress: Float) {
     val animatedProgress by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT),
         label = "libraryScanProgress"
     )
     Box(

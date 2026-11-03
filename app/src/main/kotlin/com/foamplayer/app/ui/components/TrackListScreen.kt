@@ -3,7 +3,6 @@ package com.foamplayer.app.ui.components
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
@@ -63,6 +62,7 @@ import com.foamplayer.app.ui.modals.DensityOrganisationModal
 import com.foamplayer.app.ui.modals.OrganisationExtraAction
 import com.foamplayer.app.ui.modals.OrganisationMenuButton
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.adaptAccentForTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -471,7 +471,7 @@ fun TrackListScreen(
                     val currentIndex = rememberUpdatedState(index)
                     val liftScale by animateFloatAsState(
                         targetValue = if (isDragging && !dragReleased) GridDragLiftScale else 1f,
-                        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+                        animationSpec = tween(FoamMotion.Duration.SNAP, easing = FoamMotion.Easings.STANDARD),
                         label = "trackGridDragLift"
                     )
 
