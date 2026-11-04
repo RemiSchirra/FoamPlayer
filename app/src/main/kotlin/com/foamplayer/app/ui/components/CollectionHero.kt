@@ -16,6 +16,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -71,6 +72,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Shape
@@ -98,6 +100,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import coil.imageLoader
+import coil.memory.MemoryCache
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
@@ -1107,25 +1111,39 @@ private fun CollectionHeroArtworkImage(
     context: Context,
     modifier: Modifier
 ) {
-    val heroArtRequest = remember(imageUrl, imageIsEmbeddedArt) {
-        val data = if (imageIsEmbeddedArt) {
-            EmbeddedAlbumArt(imageUrl.toUri())
-        } else {
-            imageUrl
-        }
-        ImageRequest.Builder(context)
-            .data(data)
-            .size(AlbumArtRequestSize)
-            .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
-            .crossfade(false)
-            .build()
+    val sharedCacheKey = MemoryCache.Key(albumArtMemoryCacheKey(imageUrl))
+    val cachedBitmap = remember(sharedCacheKey) {
+        context.imageLoader.memoryCache?.get(sharedCacheKey)?.bitmap
     }
-    AlbumArtImage(
-        model = heroArtRequest,
-        contentDescription = null,
-        modifier = modifier,
-        placeholderSize = 40.dp
-    )
+    if (cachedBitmap != null) {
+        Image(
+            bitmap = cachedBitmap.asImageBitmap(),
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        val heroArtRequest = remember(imageUrl, imageIsEmbeddedArt) {
+            val data = if (imageIsEmbeddedArt) {
+                EmbeddedAlbumArt(imageUrl.toUri())
+            } else {
+                imageUrl
+            }
+            ImageRequest.Builder(context)
+                .data(data)
+                .size(AlbumArtRequestSize)
+                .placeholderMemoryCacheKey(albumArtMemoryCacheKey(imageUrl))
+                .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
+                .crossfade(false)
+                .build()
+        }
+        AlbumArtImage(
+            model = heroArtRequest,
+            contentDescription = null,
+            modifier = modifier,
+            placeholderSize = 40.dp
+        )
+    }
 }
 
 /**

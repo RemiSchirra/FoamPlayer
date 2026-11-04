@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.components
 
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.EnterExitState
@@ -62,8 +63,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
+import androidx.core.net.toUri
+import coil.imageLoader
+import coil.request.ImageRequest
 import coil.size.Size as CoilSize
 import com.foamplayer.app.constants.MediaDensity
+import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.ui.navigation.LocalActiveSharedCollectionTagState
+import com.foamplayer.app.ui.navigation.collectionFlightConfig
+import com.foamplayer.app.ui.navigation.isActiveSharedCollectionFlightKey
 import com.foamplayer.app.ui.screens.player.immersiveArtFadeSpan
 import com.foamplayer.app.ui.screens.player.PlayerDimens
 import com.foamplayer.app.ui.theme.FoamMotion
@@ -136,13 +144,40 @@ private class ExpandedAlbumArtFlightClip(
 val AlbumArtRequestSize = CoilSize(480, 480)
 
 /**
- * Deterministic Coil memory-cache key for the app's shared album art. Setting
- * it explicitly also lets [AlbumArtImage] resolve a cached bitmap
- * synchronously — Coil's AsyncImagePainter delivers Success only
- * asynchronously, and for the drawn side of a shared-element flight those
- * frames are the visible flight.
+ * Deterministic Coil memory-cache key for the app's shared album art.
+ *
+ * A shared-element flight draws the ENTERING side's artwork in the transition
+ * overlay, so that side must render the image on its FIRST frame. Every request
+ * taking part in a flight must therefore pair
+ * `placeholderMemoryCacheKey(albumArtMemoryCacheKey(path))` with
+ * `memoryCacheKey(albumArtMemoryCacheKey(path))`: Coil delivers even a
+ * memory-cache hit's result asynchronously (a frame or more after the first
+ * composition), and the placeholder key is what makes the painter draw the
+ * match's cached bitmap immediately on frame one. With the cache key alone,
+ * a first open shows the bare placeholder surface mid-flight and only
+ * RE-opening the same collection — where the request has already warmed the
+ * cache under this key — appears to animate.
  */
 fun albumArtMemoryCacheKey(path: String): String = "album-art:$path"
+
+/**
+ * Warms the shared album-art cache slot for [path] BEFORE a collection flight:
+ * fire-and-forgets the exact request the destination hero issues, so the slot
+ * is populated (or already decoding) by the time the detail screen's hero
+ * composes and reads it synchronously for its first frame (see
+ * [albumArtMemoryCacheKey]). Without this, a first open of a collection whose
+ * artwork was never decoded under the shared key shows the placeholder surface
+ * mid-flight while the decode runs.
+ */
+fun preloadAlbumArtForFlight(context: Context, path: String, isEmbeddedArt: Boolean) {
+    if (path.isBlank()) return
+    val request = ImageRequest.Builder(context)
+        .data(if (isEmbeddedArt) EmbeddedAlbumArt(path.toUri()) else path)
+        .size(AlbumArtRequestSize)
+        .memoryCacheKey(albumArtMemoryCacheKey(path))
+        .build()
+    context.imageLoader.enqueue(request)
+}
 
 /**
  * Bounds transform shared by all artwork shared elements: the same
@@ -185,7 +220,6 @@ internal class AlbumArtFlightShape(
  * faded look), 1f once landed at the row's rest look. Pinned to 1f when no
  * shared element is in flight, so the row always rests on its static look.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun rememberCollectionFlightProgress(
     sharedTransitionScope: SharedTransitionScope,
@@ -214,7 +248,6 @@ internal fun rememberCollectionFlightProgress(
  * overlay renders only the flying artwork (which casts the shadow itself),
  * while the row's own artwork slot is empty in place.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun rememberCollectionCloseFlightActive(
     sharedTransitionScope: SharedTransitionScope?,
@@ -241,12 +274,19 @@ internal fun rememberCollectionCloseFlightActive(
  * [shadowElevationPx] lets the flying artwork cast the row's drop shadow while
  * the flight plays (the static one is suppressed for the flight); at rest it
  * reads 0. Every frame is draw-only.
+ *
+ * [isFlightRow] marks the row whose collection was actually clicked (see
+ * [isActiveSharedCollectionFlightKey]) — the only source that rides the
+ * flight. The progress is driven by the SCREEN's enter/exit transition, which
+ * every row of the list shares, so other rows pin the fraction to their rest
+ * look and skip the fade: their corners stay static while the flight plays.
  */
 @Composable
 internal fun Modifier.collectionFlightArtwork(
     progress: State<Float>,
     fullyRounded: Boolean = false,
-    shadowElevationPx: () -> Float = { 0f }
+    shadowElevationPx: () -> Float = { 0f },
+    isFlightRow: Boolean = true
 ): Modifier {
     val restPercent = if (fullyRounded) {
         AlbumArtFlightFullyRoundedPercent
@@ -255,7 +295,9 @@ internal fun Modifier.collectionFlightArtwork(
     }
     return this
         .graphicsLayer {
-            val p = progress.value
+            // Rows other than the clicked one never ride the flight: the
+            // fraction stays at the rest look for the whole transition.
+            val p = if (isFlightRow) progress.value else 1f
             shape = AlbumArtFlightShape(restPercent) { p }
             clip = true
             // Isolate the DstIn fade to this layer so it never erases what
@@ -265,6 +307,7 @@ internal fun Modifier.collectionFlightArtwork(
         }
         .drawWithContent {
             drawContent()
+            if (!isFlightRow) return@drawWithContent
             val fadeStrength = 1f - progress.value
             if (fadeStrength > 0f) {
                 drawRect(
@@ -293,21 +336,20 @@ internal fun Modifier.collectionFlightArtwork(
  * clip — without it the drawn side's first overlay frame renders transparent —
  * and use the EXPANDED variant so the shadow survives it.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun Modifier.collectionRowFlightArtwork(
     key: String,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
-    enabled: Boolean,
     restShape: Shape,
     immersiveFlightHero: Boolean,
     fullyRounded: Boolean = false,
     castsFlightShadow: Boolean = false
 ): Modifier {
-    if (!enabled || sharedTransitionScope == null || animatedVisibilityScope == null) {
+    if (sharedTransitionScope == null || animatedVisibilityScope == null) {
         return this.clip(restShape)
     }
+    val isFlightRow = isActiveSharedCollectionFlightKey(key)
     if (!immersiveFlightHero) {
         if (!castsFlightShadow) {
             return this
@@ -315,7 +357,7 @@ internal fun Modifier.collectionRowFlightArtwork(
                     key = key,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
-                    enabled = true,
+                    collectionFlight = true,
                     overlayClip = restShape,
                     boundsTransform = AlbumArtBoundsTransform
                 )
@@ -335,14 +377,14 @@ internal fun Modifier.collectionRowFlightArtwork(
                 key = key,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
-                enabled = true,
+                collectionFlight = true,
                 overlayClip = null,
                 boundsTransform = AlbumArtBoundsTransform
             )
             .graphicsLayer {
                 shape = restShape
                 clip = true
-                shadowElevation = if (closeFlightActive.value) {
+                shadowElevation = if (isFlightRow && closeFlightActive.value) {
                     restElevationPx * flightProgress.value
                 } else {
                     0f
@@ -365,7 +407,7 @@ internal fun Modifier.collectionRowFlightArtwork(
     )
     val restElevationPx = with(LocalDensity.current) { MediaItemArtElevation.toPx() }
     val flightShadowElevationPx: () -> Float = {
-        if (castsFlightShadow && closeFlightActive.value) {
+        if (castsFlightShadow && isFlightRow && closeFlightActive.value) {
             restElevationPx * flightProgress.value
         } else {
             0f
@@ -376,10 +418,7 @@ internal fun Modifier.collectionRowFlightArtwork(
             key = key,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
-            enabled = true,
-            // Required on this path: without a clip the drawn (entering) side's
-            // first overlay frame renders transparent. Expanded so the flying
-            // artwork's RenderNode shadow survives the clip.
+            collectionFlight = true,
             overlayClipShape = ExpandedAlbumArtFlightClip(
                 restPercent = restPercent,
                 shapeFraction = { flightProgress.value },
@@ -387,7 +426,7 @@ internal fun Modifier.collectionRowFlightArtwork(
             ),
             boundsTransform = AlbumArtBoundsTransform
         )
-        .collectionFlightArtwork(flightProgress, fullyRounded, flightShadowElevationPx)
+        .collectionFlightArtwork(flightProgress, fullyRounded, flightShadowElevationPx, isFlightRow)
 }
 
 /**
@@ -398,7 +437,6 @@ internal fun Modifier.collectionRowFlightArtwork(
  * static rest shadows aside for the flight, mirroring
  * [rememberCollectionCloseFlightActive].
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun rememberPlayerDismissFlightActive(
     sharedTransitionScope: SharedTransitionScope?,
@@ -436,7 +474,6 @@ internal fun rememberPlayerDismissFlightActive(
  * finger during the interactive swipe. All reads happen inside the
  * graphicsLayer block: every frame of the flight is draw-only.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun Modifier.playerFlightArtwork(
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -578,7 +615,6 @@ internal fun listRowArtCornerRadius(density: MediaDensity = MediaDensity.ROW_NOR
  * the art to 72dp and shows [tertiaryText] as a third line. [highlightBackground]
  * is drawn behind the content, clipped to the same shape as the press ripple.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun MediaListRow(
     onClick: () -> Unit,
@@ -669,21 +705,31 @@ internal fun MediaListRow(
  * [overlayClipShape] keeps the given OverlayClip applied to every frame;
  * [overlayClip] passes a raw Shape instead; [boundsTransform] overrides the
  * default spring.
+ *
+ * [collectionFlight] registers the element STRUCTURALLY STABLY (always applied)
+ * and gates it dynamically through [collectionFlightConfig] to the row whose
+ * collection was clicked — see collectionRowFlightArtwork.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun Modifier.rowSharedArtwork(
     key: String,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     enabled: Boolean = true,
+    collectionFlight: Boolean = false,
     overlayClip: Shape? = null,
     overlayClipShape: SharedTransitionScope.OverlayClip? = null,
     boundsTransform: BoundsTransform? = null
 ): Modifier {
-    if (!enabled || sharedTransitionScope == null || animatedVisibilityScope == null) return this
+    if (sharedTransitionScope == null || animatedVisibilityScope == null) return this
+    if (!collectionFlight && !enabled) return this
     return with(sharedTransitionScope) {
-        val state = rememberSharedContentState(key = key)
+        val tagState = LocalActiveSharedCollectionTagState.current
+        val state = if (collectionFlight) {
+            rememberSharedContentState(key = key, config = collectionFlightConfig(tagState, key))
+        } else {
+            rememberSharedContentState(key = key)
+        }
         val resolvedOverlayClip: SharedTransitionScope.OverlayClip? =
             overlayClipShape ?: overlayClip?.let { OverlayClip(it) }
         when {
@@ -716,18 +762,24 @@ internal fun Modifier.rowSharedArtwork(
  * crossfade; tweening in lock-step makes the sides swap cleanly at midpoint.
  * zIndexInOverlay 1f keeps the text above the flying artwork (0f).
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun Modifier.rowSharedText(
     key: String,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     enabled: Boolean = true,
+    collectionFlight: Boolean = false,
     boundsTransform: BoundsTransform? = null
 ): Modifier {
-    if (!enabled || sharedTransitionScope == null || animatedVisibilityScope == null) return this
+    if (sharedTransitionScope == null || animatedVisibilityScope == null) return this
+    if (!collectionFlight && !enabled) return this
     return with(sharedTransitionScope) {
-        val state = rememberSharedContentState(key = key)
+        val tagState = LocalActiveSharedCollectionTagState.current
+        val state = if (collectionFlight) {
+            rememberSharedContentState(key = key, config = collectionFlightConfig(tagState, key))
+        } else {
+            rememberSharedContentState(key = key)
+        }
         val fadeSpec = FoamMotion.Spec.sharedElementFlight
         val resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
             contentScale = ContentScale.FillWidth,

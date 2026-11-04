@@ -170,9 +170,7 @@ fun AlbumsBrowseScreen(
                         },
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
-                        // Only the clicked row flies (see LocalActiveSharedCollection).
-                        sharedElementKey = album.album
-                            .takeIf { isActiveSharedCollection("album", album.album) },
+                        sharedElementKey = album.album,
                         immersiveFlightHero = LocalCollectionHeroLayoutLookup
                             .current(CollectionHeroTarget.Album)
                             .isImmersive
@@ -261,8 +259,7 @@ fun ArtistsBrowseScreen(
                         },
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
-                        // Only the clicked row flies (see LocalActiveSharedCollection).
-                        sharedElementKey = artist.takeIf { isActiveSharedCollection("artist", artist) },
+                        sharedElementKey = artist,
                         sharedElementPrefix = "artist",
                         immersiveFlightHero = LocalCollectionHeroLayoutLookup
                             .current(CollectionHeroTarget.Artist)
@@ -949,8 +946,7 @@ fun CollectionArtistsScreen(
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
                         // Only the clicked row flies (see LocalActiveSharedCollection).
-                        sharedElementKey = row.name
-                            .takeIf { isActiveSharedCollection("artist", row.name) },
+                        sharedElementKey = row.name,
                         sharedElementPrefix = "artist",
                         immersiveFlightHero = LocalCollectionHeroLayoutLookup
                             .current(CollectionHeroTarget.Artist)

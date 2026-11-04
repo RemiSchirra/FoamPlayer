@@ -382,8 +382,8 @@ fun HomeScreen(
                             },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
-                            sharedArtKey = "playlist-art-${playlist.playlistId}".takeIf { inFlight },
-                            sharedTitleKey = "playlist-title-${playlist.playlistId}".takeIf { inFlight },
+                            sharedArtKey = "playlist-art-${playlist.playlistId}",
+                            sharedTitleKey = "playlist-title-${playlist.playlistId}",
                             flightHeroTarget = CollectionHeroTarget.Playlist,
                             modifier = Modifier
                                 .let { if (inFlight) it else it.animateItem() }
@@ -422,8 +422,8 @@ fun HomeScreen(
                                 },
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                sharedArtKey = "album-art-${album.album}".takeIf { inFlight },
-                                sharedTitleKey = "album-title-${album.album}".takeIf { inFlight },
+                                sharedArtKey = "album-art-${album.album}",
+                                sharedTitleKey = "album-title-${album.album}",
                                 flightHeroTarget = CollectionHeroTarget.Album,
                                 modifier = Modifier
                                     .let { if (inFlight) it else it.animateItem() }
@@ -591,8 +591,8 @@ fun HomeScreen(
                                 },
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                sharedArtKey = "album-art-${album.album}".takeIf { inFlight },
-                                sharedTitleKey = "album-title-${album.album}".takeIf { inFlight },
+                                sharedArtKey = "album-art-${album.album}",
+                                sharedTitleKey = "album-title-${album.album}",
                                 flightHeroTarget = CollectionHeroTarget.Album,
                                 modifier = Modifier
                                     .let { if (inFlight) it else it.animateItem() }
@@ -640,8 +640,8 @@ fun HomeScreen(
                                 },
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                sharedArtKey = "artist-art-${artist.name}".takeIf { inFlight },
-                                sharedTitleKey = "artist-title-${artist.name}".takeIf { inFlight },
+                                sharedArtKey = "artist-art-${artist.name}",
+                                sharedTitleKey = "artist-title-${artist.name}",
                                 flightHeroTarget = CollectionHeroTarget.Artist,
                                 modifier = Modifier
                                     .let { if (inFlight) it else it.animateItem() }
@@ -681,8 +681,8 @@ fun HomeScreen(
                                 },
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                sharedArtKey = "album-art-${album.album}".takeIf { inFlight },
-                                sharedTitleKey = "album-title-${album.album}".takeIf { inFlight },
+                                sharedArtKey = "album-art-${album.album}",
+                                sharedTitleKey = "album-title-${album.album}",
                                 flightHeroTarget = CollectionHeroTarget.Album,
                                 modifier = Modifier
                                     .let { if (inFlight) it else it.animateItem() }
@@ -730,8 +730,8 @@ fun HomeScreen(
                                 },
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                sharedArtKey = "artist-art-${artist.name}".takeIf { inFlight },
-                                sharedTitleKey = "artist-title-${artist.name}".takeIf { inFlight },
+                                sharedArtKey = "artist-art-${artist.name}",
+                                sharedTitleKey = "artist-title-${artist.name}",
                                 flightHeroTarget = CollectionHeroTarget.Artist,
                                 modifier = Modifier
                                     .let { if (inFlight) it else it.animateItem() }

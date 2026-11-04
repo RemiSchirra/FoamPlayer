@@ -94,7 +94,6 @@ private const val ArtistAlbumGridColumns = 3
  * chrome zone ([collectionListTopFade]) — content dissolves into the chrome
  * instead of being hard-clipped, on every layout.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistDetailScreen(
     artistName: String,
@@ -123,12 +122,6 @@ fun ArtistDetailScreen(
         viewModel.loadArtistImage(artistName)
     }
 
-    // Hero search: one query filters BOTH sections together. A track matches
-    // when its title, artist or album name matches (typing an album name
-    // reveals its tracks); an album matches when its name/artist matches or
-    // any of its tracks matched (typing a track title reveals its album).
-    // An empty query shows everything. While searching, the tracks section
-    // expands from the top 5 to EVERY matching track.
     val searchState = rememberCollectionSearchState()
     val searchActive = searchState.open && searchState.query.isNotBlank()
     val searchSource = if (searchActive) tracks else topTracks
@@ -146,21 +139,13 @@ fun ArtistDetailScreen(
         }
     }
 
-    // The first track in alphabetical order is the fallback artwork source.
     val headerArtPath = tracks.firstOrNull()?.albumArtPath
 
-    // Artist picture: the cached Spotify image (seeded through the route by the
-    // source screen so the shared-element flight never flashes the letter
-    // fallback), else the automatic first-track fallback.
     val cachedArtistImage by viewModel.artistImage.collectAsState()
     val artistImage = cachedArtistImage ?: seedImageUrl?.takeIf { it.isNotBlank() }
-    // A seed carries its own load mode; otherwise Spotify results are plain
-    // cache files while the first-track fallback is embedded art.
     val artistImageIsEmbeddedArt = artistImage == null ||
             (cachedArtistImage == null && seedImageIsEmbeddedArt)
 
-    // The hero art (artist picture, else the first track's album art) drives
-    // the hero image, the screen's backdrop and the accent color.
     val heroImageUrl = artistImage ?: headerArtPath
     val heroImageIsEmbeddedArt = artistImage == null || artistImageIsEmbeddedArt
 
@@ -178,13 +163,6 @@ fun ArtistDetailScreen(
 
     val gridState = rememberLazyGridState()
     val topBarFraction = rememberCollectionScrollFraction(gridState)
-    // Flight fractions of this screen's two transitions: the nav flight
-    // (open/close of the artist page itself) and the player-container flight
-    // (full player expanding over / collapsing back onto this page). The
-    // floating back row is lifted into the shared-element overlay while any
-    // transition is active (collectionHeroOverlayLayer), and the overlay
-    // escapes the host hierarchy's own fades — so its alpha must multiply
-    // both fractions explicitly or it would pop at flight ends.
     val navFlightFraction =
         rememberCollectionHeroFlightFraction(sharedTransitionScope, animatedVisibilityScope)
     val containerFlightFraction =
@@ -195,15 +173,6 @@ fun ArtistDetailScreen(
     val transitionAlpha: () -> Float = {
         (1f - navFlightFraction.value) * (1f - containerFlightFraction.value)
     }
-    // Measured by the header item's layout pass (see [CollectionHeroImmersiveHeader]);
-    // read untracked inside the offset lambda, so it is always the settled value.
-    // SAVEABLE: the header is a lazy grid item — when this page is restored
-    // scrolled PAST it (returning from a deeper page), the header is not
-    // composed, so nothing re-reports the height. A plain remember would start
-    // at 0 and the immersive artwork layer would render at offset 0 — the hero
-    // flashing over the list as if unscrolled — until the first scroll composes
-    // the header again and the offset jumps, vanishing the hero instantly. The
-    // saved height restores the correct scrolled-away offset on the first frame.
     var heroVisibleHeightPx by rememberSaveable { mutableStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
         if (gridState.firstVisibleItemIndex == 0) {
@@ -212,20 +181,10 @@ fun ArtistDetailScreen(
             heroVisibleHeightPx
         }
     }
-    // Root-space top y of the grid container, reported by the gridTopObserver
-    // below and consumed by the search-open scroll effect (see
-    // [CollectionSearchScrollToBarEffect]).
     var gridTopYInRootPx by remember { mutableFloatStateOf(Float.NaN) }
     val gridTopObserver = Modifier.onGloballyPositioned {
         gridTopYInRootPx = it.positionInRoot().y
     }
-    // Search-open scroll: when the search toggle opens the hero's search bar
-    // while the hero sits scrolled away (or hidden under the fixed chrome), the
-    // grid is brought up so the bar opens at the screen top — below the floating
-    // back row, which covers the grid top on every hero layout (the grid
-    // scrolls full-bleed beneath it). The open bottom padding keeps the bar
-    // reachable even when the artist has only a handful of rows (no scroll range
-    // otherwise) and the rows visible above the keyboard.
     CollectionSearchScrollToBarEffect(
         searchState = searchState,
         listState = null,
@@ -344,8 +303,7 @@ fun ArtistDetailScreen(
                                 density = MediaDensity.GRID_NORMAL,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                sharedElementKey = album.album
-                                    .takeIf { isActiveSharedCollection("album", album.album) },
+                                sharedElementKey = album.album,
                                 immersiveFlightHero = LocalCollectionHeroLayoutLookup
                                     .current(CollectionHeroTarget.Album)
                                     .isImmersive

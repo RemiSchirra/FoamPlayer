@@ -47,6 +47,7 @@ import androidx.core.net.toUri
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.ui.navigation.isActiveSharedCollectionFlightKey
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
@@ -189,13 +190,17 @@ fun HomeRowCard(
         sharedTransitionScope = sharedTransitionScope?.takeIf { collectionFlight && sharedArtKey != null },
         animatedVisibilityScope = animatedVisibilityScope
     ).value
-    val staticArtElevation = if (closeFlightActive) 0.dp else MediaItemArtElevation
+    val staticArtElevation =
+        if (isActiveSharedCollectionFlightKey(sharedArtKey.orEmpty()) && closeFlightActive) {
+            0.dp
+        } else {
+            MediaItemArtElevation
+        }
     val sharedArtModifier = if (collectionFlight) {
         Modifier.collectionRowFlightArtwork(
             key = sharedArtKey.orEmpty(),
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
-            enabled = sharedArtKey != null,
             restShape = artShape,
             immersiveFlightHero = immersiveFlightHero,
             fullyRounded = round,
@@ -215,6 +220,7 @@ fun HomeRowCard(
         key = sharedTitleKey.orEmpty(),
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
+        collectionFlight = !sharedInPlayerTransition && flightHeroTarget != null,
         enabled = sharedTitleKey != null,
         boundsTransform = if (sharedInPlayerTransition) null else AlbumArtBoundsTransform
     )
@@ -264,6 +270,9 @@ fun HomeRowCard(
                                 }
                             )
                             .size(AlbumArtRequestSize)
+                            .placeholderMemoryCacheKey(
+                                if (heroKeyed) albumArtMemoryCacheKey(imageUrl) else null
+                            )
                             .memoryCacheKey(if (heroKeyed) albumArtMemoryCacheKey(imageUrl) else null)
                             .build()
                     }

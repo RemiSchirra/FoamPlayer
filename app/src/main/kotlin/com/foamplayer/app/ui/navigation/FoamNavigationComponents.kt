@@ -1,5 +1,7 @@
 package com.foamplayer.app.ui.navigation
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -27,6 +29,7 @@ import androidx.compose.material.Icon
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -57,6 +60,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
+import androidx.navigation.NavBackStackEntry
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.ui.theme.FoamMotion
@@ -124,6 +128,84 @@ fun sharedCollectionTag(kind: String, key: String): String = "$kind:$key"
 @Composable
 fun isActiveSharedCollection(kind: String, key: String): Boolean =
     LocalActiveSharedCollection.current == sharedCollectionTag(kind, key)
+
+/**
+ * True when a collection-flight element key ("album-art-<row id>",
+ * "playlist-title-<row id>", ...) belongs to the row whose collection was
+ * clicked to start the current navigation — the only source that carries the
+ * flight-time look (animated corner radius, immersive fade, shadow hand-off).
+ * Every other row keeps its static rest look while the flight plays.
+ *
+ * Keys parse like the shared-element configs (see [collectionFlightConfig]):
+ * "<kind>-<element>-<row id>" pairs the kind with the row id. Keys that are
+ * not collection-flight keys (player-flight keys use underscores instead of
+ * dashes, or an empty key) parse to a tag no click can produce and always
+ * read false.
+ */
+@Composable
+fun isActiveSharedCollectionFlightKey(key: String): Boolean {
+    val kind = key.substringBefore("-")
+    val rowKey = key.substringAfter("-").substringAfter("-")
+    return LocalActiveSharedCollection.current == sharedCollectionTag(kind, rowKey)
+}
+
+/** Detail route prefix of a collection flight kind ("album"/"artist"/"playlist"). */
+private fun collectionDetailRoutePrefix(kind: String): String = when (kind) {
+    "album" -> "album/"
+    "artist" -> "artist/"
+    else -> "playlist/"
+}
+
+/**
+ * True when the owning transition is between this row's screen and its kind's
+ * detail page -- the only pair a collection flight may run in.
+ *
+ * Gate for the structurally-stable shared-element registrations (see
+ * [com.foamplayer.app.ui.components.collectionRowFlightArtwork]): rows with the
+ * same key exist on several screens (the home and playlists tabs, an artist
+ * page's album grid and the browse albums list), and a route pair that does not
+ * involve the detail page -- e.g. switching between the two tabs -- would pair
+ * those rows with each other.
+ */
+internal fun AnimatedVisibilityScope.isCollectionFlightPair(kind: String): Boolean {
+    val detailPrefix = collectionDetailRoutePrefix(kind)
+    val currentRoute = (transition.currentState as? NavBackStackEntry)?.destination?.route
+        ?: return false
+    val targetRoute = (transition.targetState as? NavBackStackEntry)?.destination?.route
+        ?: return false
+    return currentRoute.startsWith(detailPrefix) || targetRoute.startsWith(detailPrefix)
+}
+
+/**
+ * Snapshot-backed source of [LocalActiveSharedCollection]'s value, for shared
+ * element configs whose enablement must read the tag OUTSIDE composition (the
+ * [SharedTransitionScope.SharedContentConfig.isEnabled] getter is evaluated by
+ * the shared transition machinery while the match is set up, where composition
+ * locals cannot be read).
+ */
+val LocalActiveSharedCollectionTagState =
+    compositionLocalOf { mutableStateOf<String?>(null) }
+
+/**
+ * [SharedTransitionScope.SharedContentConfig] gating a collection flight to its
+ * list <-> detail route pair. The getter is evaluated lazily by the shared
+ * transition machinery while the match is set up, so it reads the LIVE
+ * transition state -- not a stale composition-time value.
+ */
+internal fun collectionFlightConfig(
+    tagState: State<String?>,
+    key: String
+): SharedTransitionScope.SharedContentConfig {
+    // Key shapes: "album-art-<id>" / "album-title-<id>" -> kind "album", row id
+    // "<id>"; the canonical tag pairs the kind with the row id (see
+    // [sharedCollectionTag]).
+    val kind = key.substringBefore("-")
+    val rowKey = key.substringAfter("-").substringAfter("-")
+    return object : SharedTransitionScope.SharedContentConfig {
+        override val SharedTransitionScope.SharedContentState.isEnabled: Boolean
+            get() = tagState.value == sharedCollectionTag(kind, rowKey)
+    }
+}
 
 /**
  * Pending request for the search screen to open in its active state -- search

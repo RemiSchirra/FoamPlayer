@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.navigation
 
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
 import androidx.navigation.NavGraphBuilder
@@ -13,6 +14,7 @@ import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.scanner.PlaylistCover
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.ui.components.TrackCenterRequest
+import com.foamplayer.app.ui.components.preloadAlbumArtForFlight
 import com.foamplayer.app.ui.screens.home.HomeViewModel
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 
@@ -26,6 +28,7 @@ import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
  */
 internal class FoamNavGraphContext(
     val navController: NavHostController,
+    val context: Context,
     val sharedTransitionScope: SharedTransitionScope,
     val playerTransitionVisibilityScope: AnimatedVisibilityScope,
     val homeViewModel: HomeViewModel,
@@ -66,12 +69,14 @@ internal class FoamNavGraphContext(
     /** Opens an artist page, tagging the route pair for the shared-element flight. */
     fun openArtist(name: String, image: String? = null, imageIsEmbeddedArt: Boolean = false) {
         onActiveSharedCollectionChange(sharedCollectionTag("artist", name))
+        image?.let { preloadAlbumArtForFlight(context, it, imageIsEmbeddedArt) }
         navController.navigate(Screen.ArtistDetail.createRoute(name, image, imageIsEmbeddedArt))
     }
 
     /** Opens an album page, tagging the route pair for the shared-element flight. */
     fun openAlbum(name: String, artUrl: String? = null, artist: String? = null) {
         onActiveSharedCollectionChange(sharedCollectionTag("album", name))
+        artUrl?.let { preloadAlbumArtForFlight(context, it, isEmbeddedArt = true) }
         navController.navigate(Screen.AlbumDetail.createRoute(name, artUrl, artist))
     }
 
@@ -82,11 +87,13 @@ internal class FoamNavGraphContext(
     fun openPlaylist(playlistId: Long, name: String, fallbackImageUrl: String?) {
         onActiveSharedCollectionChange(sharedCollectionTag("playlist", "$playlistId"))
         val cover = playlistCovers[playlistId]
+        val imageUrl = cover?.imageUrl ?: fallbackImageUrl
+        imageUrl?.let { preloadAlbumArtForFlight(context, it, cover?.isEmbeddedArt ?: false) }
         navController.navigate(
             Screen.PlaylistDetail.createRoute(
                 playlistId,
                 name,
-                cover?.imageUrl ?: fallbackImageUrl,
+                imageUrl,
                 cover?.isEmbeddedArt ?: false
             )
         )

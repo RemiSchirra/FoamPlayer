@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -60,6 +61,7 @@ import com.foamplayer.app.ui.modals.DensityOrganisationModal
 import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.modals.OrganisationMenuButton
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
+import com.foamplayer.app.ui.navigation.isActiveSharedCollectionFlightKey
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
@@ -484,36 +486,37 @@ fun CollectionListItem(
     val artShape: Shape = if (fullyRoundedArtwork) CircleShape else AlbumArtShape()
     val highlightBackground = activeRowHighlight(active, imageUrl)
 
-    // Close-flight shadow hand-off (mirrors TrackListItem's player-dismiss
-    // handling): while a detail hero closes back onto THIS tagged row, the
-    // flying artwork casts the row's static drop shadow itself, so the static
-    // one steps aside for the flight and resumes on the settle frame at an
-    // identical strength.
     val closeFlightActive = rememberCollectionCloseFlightActive(
         sharedTransitionScope = sharedTransitionScope?.takeIf { elementKey != null },
         animatedVisibilityScope = animatedVisibilityScope
     ).value
     val artworkRestElevation = MediaItemArtElevation
-    val artworkElevation = if (closeFlightActive) 0.dp else artworkRestElevation
+    val artworkElevation = if (
+        elementKey != null &&
+        isActiveSharedCollectionFlightKey("$sharedElementPrefix-art-$elementKey") &&
+        closeFlightActive
+    ) 0.dp else artworkRestElevation
 
-    val sharedArtModifier = Modifier
-        .collectionRowFlightArtwork(
-            key = "$sharedElementPrefix-art-$elementKey",
-            sharedTransitionScope = sharedTransitionScope,
-            animatedVisibilityScope = animatedVisibilityScope,
-            enabled = elementKey != null,
-            restShape = artShape,
-            immersiveFlightHero = immersiveFlightHero,
-            fullyRounded = fullyRoundedArtwork,
-            castsFlightShadow = true
-        )
-        .foamSurfaceVariant()
+    val sharedArtModifier = if (elementKey == null) {
+        Modifier.clip(artShape)
+    } else {
+        Modifier
+            .collectionRowFlightArtwork(
+                key = "$sharedElementPrefix-art-$elementKey",
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                restShape = artShape,
+                immersiveFlightHero = immersiveFlightHero,
+                fullyRounded = fullyRoundedArtwork,
+                castsFlightShadow = true
+            )
+    }.foamSurfaceVariant()
 
     val sharedTitleModifier = Modifier.rowSharedText(
         key = "$sharedElementPrefix-title-$elementKey",
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
-        enabled = elementKey != null,
+        collectionFlight = elementKey != null,
         boundsTransform = AlbumArtBoundsTransform
     )
 
@@ -522,7 +525,7 @@ fun CollectionListItem(
             key = "$sharedElementPrefix-artist-$elementKey",
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
-            enabled = elementKey != null,
+            collectionFlight = elementKey != null,
             boundsTransform = AlbumArtBoundsTransform
         )
     } else {
@@ -597,6 +600,10 @@ private fun CollectionArtwork(
                     if (imageIsEmbeddedArt) EmbeddedAlbumArt(imageUrl.toUri()) else imageUrl
                 )
                 .size(AlbumArtRequestSize)
+                // Drawn side of a close flight: the placeholder key renders the
+                // hero's cached bitmap on the first frame — see
+                // albumArtMemoryCacheKey.
+                .placeholderMemoryCacheKey(albumArtMemoryCacheKey(imageUrl))
                 .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
                 .build()
         }

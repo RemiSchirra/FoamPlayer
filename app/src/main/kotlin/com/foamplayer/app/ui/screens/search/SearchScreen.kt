@@ -223,7 +223,7 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
  * field, keyboard up, caret at the end of any retained query) on arrival,
  * while a long press on the icon opens the screen idle with its browse cards.
  */
-@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
     onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
@@ -816,7 +816,6 @@ private fun SearchFilterChip(
  * The row scopes itself to [MediaArtKind.ARTIST], so its portrait loads under
  * the person placeholder without callers passing anything.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistSearchResultItem(
     artist: String,
@@ -848,14 +847,12 @@ fun ArtistSearchResultItem(
                 .size(ListRowArtSize)
                 .let { base ->
                     if (sharedTransitionScope != null &&
-                        animatedVisibilityScope != null &&
-                        isActiveSharedCollection("artist", artist)
+                        animatedVisibilityScope != null
                     ) {
                         base.collectionRowFlightArtwork(
                             key = "artist-art-$artist",
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
-                            enabled = true,
                             restShape = CircleShape,
                             immersiveFlightHero = LocalCollectionHeroLayoutLookup
                                 .current(CollectionHeroTarget.Artist)
@@ -880,6 +877,7 @@ fun ArtistSearchResultItem(
                                 }
                             )
                             .size(AlbumArtRequestSize)
+                            .placeholderMemoryCacheKey(albumArtMemoryCacheKey(imageUrl))
                             .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
                             .build()
                     }
@@ -927,7 +925,6 @@ fun ArtistSearchResultItem(
  * The row scopes itself to [MediaArtKind.ALBUM], so its cover loads under the
  * album disc placeholder without callers passing anything.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AlbumSearchResultItem(
     album: AlbumSearchResult,
@@ -957,14 +954,12 @@ fun AlbumSearchResultItem(
                 .size(ListRowArtSize)
                 .let { base ->
                     if (sharedTransitionScope != null &&
-                        animatedVisibilityScope != null &&
-                        isActiveSharedCollection("album", album.album)
+                        animatedVisibilityScope != null
                     ) {
                         base.collectionRowFlightArtwork(
                             key = "album-art-${album.album}",
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
-                            enabled = true,
                             restShape = AlbumArtShape(),
                             immersiveFlightHero = LocalCollectionHeroLayoutLookup
                                 .current(CollectionHeroTarget.Album)
@@ -982,6 +977,7 @@ fun AlbumSearchResultItem(
                         ImageRequest.Builder(context)
                             .data(EmbeddedAlbumArt(album.albumArtPath.toUri()))
                             .size(AlbumArtRequestSize)
+                            .placeholderMemoryCacheKey(albumArtMemoryCacheKey(album.albumArtPath))
                             .memoryCacheKey(albumArtMemoryCacheKey(album.albumArtPath))
                             .build()
                     }

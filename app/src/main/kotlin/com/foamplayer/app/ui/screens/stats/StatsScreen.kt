@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -89,7 +88,7 @@ import com.foamplayer.app.ui.components.rowSharedText
 import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
-import com.foamplayer.app.ui.navigation.isActiveSharedCollection
+import com.foamplayer.app.ui.navigation.isActiveSharedCollectionFlightKey
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlinx.coroutines.launch
@@ -371,9 +370,6 @@ fun StatsScreen(
                                 collectionModalState?.show(
                                     CollectionInfo(
                                         title = artist.name,
-                                        // Either a Spotify cache file (plain) or an
-                                        // audio file (embedded art): the flag routes
-                                        // the modal header to the right Coil model.
                                         imageUrl = artistImages[artist.name]?.imageUrl,
                                         imageIsEmbeddedArt = artistImages[artist.name]?.isEmbeddedArt ?: false,
                                         kind = CollectionKind.Artist,
@@ -386,7 +382,6 @@ fun StatsScreen(
                         animatedVisibilityScope = animatedVisibilityScope,
                         // Only the clicked row flies (see LocalActiveSharedCollection).
                         sharedElementKey = artist.name
-                            .takeIf { isActiveSharedCollection("artist", artist.name) }
                     )
                 }
 
@@ -417,7 +412,6 @@ fun StatsScreen(
                         animatedVisibilityScope = animatedVisibilityScope,
                         // Only the clicked row flies (see LocalActiveSharedCollection).
                         sharedElementKey = album.album
-                            .takeIf { isActiveSharedCollection("album", album.album) }
                     )
                 }
 
@@ -614,6 +608,7 @@ internal fun albumArtModel(artPath: String?): Any? {
         ImageRequest.Builder(context)
             .data(EmbeddedAlbumArt(artPath.toUri()))
             .size(AlbumArtRequestSize)
+            .placeholderMemoryCacheKey(albumArtMemoryCacheKey(artPath))
             .memoryCacheKey(albumArtMemoryCacheKey(artPath))
             .build()
     }
@@ -661,7 +656,6 @@ internal fun TopTrackRow(
  * artwork to [MediaArtKind.ARTIST], so the portrait loads under the person
  * placeholder.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun TopArtistRow(
     artist: ArtistStat,
@@ -678,7 +672,6 @@ internal fun TopArtistRow(
             key = "artist-art-$elementKey",
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
-            enabled = elementKey != null,
             restShape = CircleShape,
             immersiveFlightHero = LocalCollectionHeroLayoutLookup
                 .current(CollectionHeroTarget.Artist)
@@ -690,7 +683,7 @@ internal fun TopArtistRow(
         key = "artist-title-$elementKey",
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
-        enabled = elementKey != null,
+        collectionFlight = elementKey != null,
         boundsTransform = AlbumArtBoundsTransform
     )
 
@@ -711,6 +704,7 @@ internal fun TopArtistRow(
                             }
                         )
                         .size(AlbumArtRequestSize)
+                        .placeholderMemoryCacheKey(albumArtMemoryCacheKey(cover.imageUrl))
                         .memoryCacheKey(albumArtMemoryCacheKey(cover.imageUrl))
                         .build()
                 }
@@ -744,7 +738,6 @@ internal fun TopArtistRow(
  * The row scopes its artwork to [MediaArtKind.ALBUM], so the cover loads
  * under the album disc placeholder.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun TopAlbumRow(
     entry: TopAlbumStat,
@@ -765,7 +758,6 @@ internal fun TopAlbumRow(
             key = "album-art-$elementKey",
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
-            enabled = elementKey != null,
             restShape = artShape,
             immersiveFlightHero = LocalCollectionHeroLayoutLookup
                 .current(CollectionHeroTarget.Album)
@@ -777,14 +769,14 @@ internal fun TopAlbumRow(
         key = "album-title-$elementKey",
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
-        enabled = elementKey != null,
+        collectionFlight = elementKey != null,
         boundsTransform = AlbumArtBoundsTransform
     )
     val sharedSubtitleModifier = Modifier.rowSharedText(
         key = "album-artist-$elementKey",
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
-        enabled = elementKey != null,
+        collectionFlight = elementKey != null,
         boundsTransform = AlbumArtBoundsTransform
     )
 
@@ -815,14 +807,18 @@ internal fun TopAlbumRow(
         titleModifier = sharedTitleModifier,
         subtitleModifier = sharedSubtitleModifier,
         artworkShape = artShape,
-        artworkElevation = if (closeFlightActive) 0.dp else MediaItemArtElevation,
+        artworkElevation = if (
+            elementKey != null &&
+            isActiveSharedCollectionFlightKey("album-art-$elementKey") &&
+            closeFlightActive
+        ) 0.dp else MediaItemArtElevation,
         trailingContent = { RankedPlayBadge(entry.playCount) }
     )
 }
 
 /** Trailing "×N" play-count badge of a ranked media row. */
 @Composable
-private fun RowScope.RankedPlayBadge(count: Int) {
+private fun RankedPlayBadge(count: Int) {
     BasicText(
         text = "×$count",
         style = FoamTheme.typography.body.copy(

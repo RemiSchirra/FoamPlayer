@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -198,8 +199,7 @@ fun FoamNavHost(
     val density = LocalDensity.current
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
 
-    // Collection row clicked to start the current navigation; drives shared-element pairing.
-    var activeSharedCollection by remember { mutableStateOf<String?>(null) }
+    val activeSharedCollectionTag = remember { mutableStateOf<String?>(null) }
 
     var miniPlayerTopPx by remember { mutableStateOf(Float.NaN) }
     var miniPlayerBoxHeightPx by remember { mutableStateOf(0) }
@@ -347,7 +347,8 @@ fun FoamNavHost(
             },
             LocalBottomBarClearance provides bottomBarClearance,
             LocalCollectionHeroLayoutLookup provides heroLayoutFor,
-            LocalActiveSharedCollection provides activeSharedCollection,
+            LocalActiveSharedCollection provides activeSharedCollectionTag.value,
+    LocalActiveSharedCollectionTagState provides activeSharedCollectionTag,
             LocalSearchFocusRequest provides searchFocusRequest,
             LocalBackgroundSettingsPreview provides backgroundSettingsPreview
         ) {
@@ -363,9 +364,6 @@ fun FoamNavHost(
                     playerTargetOpen = playerTransitionState.targetState
                 )
 
-                // Full-bleed backdrop for the detail list screens (album /
-                // playlist / artist), drawn at the root so it covers the status
-                // bar and nav zone.
                 val listBackdropState = remember(scope) { DetailListBackdropState(scope) }
                 LaunchedEffect(currentRoute) { listBackdropState.onRouteChanged(currentRoute) }
                 DetailListBackdrop(
@@ -451,7 +449,7 @@ fun FoamNavHost(
 
                 val handleNavBarNavigation: (String) -> Unit = { route ->
                     isNavBarExpanded = false
-                    activeSharedCollection = null
+                    activeSharedCollectionTag.value = null
                     // Only the search icon's tap raises the focused-search request just
                     // before landing here; any other destination cancels a stale one.
                     if (route != Screen.Search.route) searchFocusRequest.consume()
@@ -504,6 +502,7 @@ fun FoamNavHost(
                             Box(modifier = Modifier.fillMaxSize()) {
                                 val navGraphContext = FoamNavGraphContext(
                                     navController = navController,
+                                    context = LocalContext.current,
                                     sharedTransitionScope = this@SharedTransitionLayout,
                                     playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                     homeViewModel = homeViewModel,
@@ -526,7 +525,7 @@ fun FoamNavHost(
                                     onPlayTracks = { tracks, index, collectionId ->
                                         playTrackFromList(tracks, index, collectionId)
                                     },
-                                    onActiveSharedCollectionChange = { activeSharedCollection = it }
+                                    onActiveSharedCollectionChange = { activeSharedCollectionTag.value = it }
                                 )
                                 NavHost(
                                     modifier = Modifier.fillMaxSize(),
@@ -581,14 +580,14 @@ fun FoamNavHost(
                                 },
                                 isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                                 onOpenAlbum = { track ->
-                                    activeSharedCollection = sharedCollectionTag("album", track.album)
+                                    activeSharedCollectionTag.value = sharedCollectionTag("album", track.album)
                                     navigateClosingPlayer(
                                         Screen.AlbumDetail.createRoute(track.album, track.albumArtPath, track.artist),
                                         Screen.AlbumDetail.route
                                     )
                                 },
                                 onOpenArtist = { track ->
-                                    activeSharedCollection = sharedCollectionTag("artist", track.artist)
+                                    activeSharedCollectionTag.value = sharedCollectionTag("artist", track.artist)
                                     navigateClosingPlayer(
                                         Screen.ArtistDetail.createRoute(track.artist),
                                         Screen.ArtistDetail.route
@@ -660,13 +659,13 @@ fun FoamNavHost(
                 scoreOverrides = scoreOverrides,
                 existingGenres = libraryGenres,
                 onNavigateClosingPlayer = { route, pattern -> navigateClosingPlayer(route, pattern) },
-                onActiveSharedCollectionChange = { activeSharedCollection = it },
+                onActiveSharedCollectionChange = { activeSharedCollectionTag.value = it },
                 onOpenArtist = { artist ->
-                    activeSharedCollection = sharedCollectionTag("artist", artist)
+                    activeSharedCollectionTag.value = sharedCollectionTag("artist", artist)
                     navController.navigate(Screen.ArtistDetail.createRoute(artist))
                 },
                 onOpenAlbum = { album, albumArtPath, artist ->
-                    activeSharedCollection = sharedCollectionTag("album", album)
+                    activeSharedCollectionTag.value = sharedCollectionTag("album", album)
                     navController.navigate(Screen.AlbumDetail.createRoute(album, albumArtPath, artist))
                 }
             )

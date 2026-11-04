@@ -182,8 +182,7 @@ fun StatsSeeAllScreen(
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
                                 // Only the clicked row flies (see LocalActiveSharedCollection).
-                                sharedElementKey = artist.name
-                                    .takeIf { isActiveSharedCollection("artist", artist.name) },
+                                sharedElementKey = artist.name,
                                 sharedElementPrefix = "artist",
                                 immersiveFlightHero = LocalCollectionHeroLayoutLookup
                                     .current(CollectionHeroTarget.Artist)
@@ -265,8 +264,7 @@ fun StatsSeeAllScreen(
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
                                 // Only the clicked row flies (see LocalActiveSharedCollection).
-                                sharedElementKey = album.album
-                                    .takeIf { isActiveSharedCollection("album", album.album) },
+                                sharedElementKey = album.album,
                                 immersiveFlightHero = LocalCollectionHeroLayoutLookup
                                     .current(CollectionHeroTarget.Album)
                                     .isImmersive
