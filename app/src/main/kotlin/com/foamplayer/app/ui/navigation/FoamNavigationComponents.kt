@@ -105,7 +105,8 @@ val LocalBottomBarClearance = compositionLocalOf { 0.dp }
  * Identity of the collection item that was clicked to start the current
  * navigation, as "<kind>:<key>" (e.g. "album:Abbey Road", "playlist:12",
  * "artist:Radiohead"), or null when the last navigation did not start from a
- * collection row.
+ * collection row. When the same collection is displayed several times on the
+ * source screen, a row origin is appended (see [sharedCollectionTag]).
  *
  * Shared-element rows register their keys ONLY while they match this tag, so a
  * screen transition pairs exactly one source row with its destination hero --
@@ -117,8 +118,43 @@ val LocalBottomBarClearance = compositionLocalOf { 0.dp }
  */
 val LocalActiveSharedCollection = compositionLocalOf { null as String? }
 
-/** Canonical tag of a clickable collection row for [LocalActiveSharedCollection]. */
-fun sharedCollectionTag(kind: String, key: String): String = "$kind:$key"
+/**
+ * Separator between a shared-element key / collection tag and its source
+ * [origin]. A control character so it cannot collide with album, artist or
+ * playlist names.
+ */
+private const val SharedCollectionOriginSeparator = '\u0000'
+
+/**
+ * Canonical tag of a clickable collection row for [LocalActiveSharedCollection].
+ *
+ * [origin] identifies the specific row when the same collection is displayed
+ * several times on one screen (the Home screen's album/artist sections). It is
+ * appended to the tag so only that row's key copy matches.
+ */
+fun sharedCollectionTag(kind: String, key: String, origin: String? = null): String =
+    if (origin.isNullOrEmpty()) {
+        "$kind:$key"
+    } else {
+        "$kind:$key$SharedCollectionOriginSeparator$origin"
+    }
+
+/**
+ * Scopes a shared-element key to a specific source [origin] (a row identity).
+ * The destination hero rebuilds the same key from the origin encoded in the
+ * active collection tag, so duplicate copies of a collection never share a key.
+ */
+fun sharedCollectionElementKey(baseKey: String, origin: String?): String =
+    if (origin.isNullOrEmpty()) {
+        baseKey
+    } else {
+        "$baseKey$SharedCollectionOriginSeparator$origin"
+    }
+
+/** Origin encoded in an active collection tag, or null. */
+fun activeSharedCollectionOrigin(tag: String?): String? =
+    tag?.substringAfter(SharedCollectionOriginSeparator, missingDelimiterValue = "")
+        ?.takeIf { it.isNotEmpty() }
 
 /**
  * True when this row is the element that was clicked to start the current
@@ -181,7 +217,9 @@ internal fun AnimatedVisibilityScope.isCollectionFlightPair(kind: String): Boole
  * element configs whose enablement must read the tag OUTSIDE composition (the
  * [SharedTransitionScope.SharedContentConfig.isEnabled] getter is evaluated by
  * the shared transition machinery while the match is set up, where composition
- * locals cannot be read).
+ * locals cannot be read). Collection heroes also read it to scope their
+ * shared-element keys to the clicked row's origin: unlike the composition-local
+ * copy, it already holds the new tag when the destination first composes.
  */
 val LocalActiveSharedCollectionTagState =
     compositionLocalOf { mutableStateOf<String?>(null) }
@@ -198,7 +236,8 @@ internal fun collectionFlightConfig(
 ): SharedTransitionScope.SharedContentConfig {
     // Key shapes: "album-art-<id>" / "album-title-<id>" -> kind "album", row id
     // "<id>"; the canonical tag pairs the kind with the row id (see
-    // [sharedCollectionTag]).
+    // [sharedCollectionTag]). A row-scoped key appends its origin to both, so
+    // the comparison still lines up.
     val kind = key.substringBefore("-")
     val rowKey = key.substringAfter("-").substringAfter("-")
     return object : SharedTransitionScope.SharedContentConfig {

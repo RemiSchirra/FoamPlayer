@@ -107,6 +107,9 @@ import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
+import com.foamplayer.app.ui.navigation.LocalActiveSharedCollectionTagState
+import com.foamplayer.app.ui.navigation.activeSharedCollectionOrigin
+import com.foamplayer.app.ui.navigation.sharedCollectionElementKey
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
@@ -1240,6 +1243,8 @@ private fun CollectionHeroTexts(
         if (centered) style.copy(textAlign = TextAlign.Center) else style
     }
     val textWidth = if (centered) Modifier.fillMaxWidth() else Modifier
+    val flightOrigin =
+        activeSharedCollectionOrigin(LocalActiveSharedCollectionTagState.current.value)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -1249,7 +1254,10 @@ private fun CollectionHeroTexts(
             title = title,
             style = titleStyle,
             modifier = Modifier.collectionHeroSharedText(
-                key = "$sharedElementPrefix-title-$sharedElementKey",
+                key = sharedCollectionElementKey(
+                    "$sharedElementPrefix-title-$sharedElementKey",
+                    flightOrigin
+                ),
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 enabled = sharedElementKey != null
@@ -1258,7 +1266,10 @@ private fun CollectionHeroTexts(
 
         if (subtitle != null) {
             val subtitleSharedText = Modifier.collectionHeroSharedText(
-                key = "$sharedElementPrefix-artist-$sharedElementKey",
+                key = sharedCollectionElementKey(
+                    "$sharedElementPrefix-artist-$sharedElementKey",
+                    flightOrigin
+                ),
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 enabled = sharedElementKey != null
@@ -1604,6 +1615,9 @@ private fun Modifier.collectionHeroSharedArtwork(
     if (sharedTransitionScope == null || animatedVisibilityScope == null || sharedElementKey == null) {
         return this
     }
+    val flightOrigin =
+        activeSharedCollectionOrigin(LocalActiveSharedCollectionTagState.current.value)
+    val key = sharedCollectionElementKey("$sharedElementPrefix-art-$sharedElementKey", flightOrigin)
     val restPercent = if (fullyRounded) {
         AlbumArtFlightFullyRoundedPercent
     } else {
@@ -1617,7 +1631,7 @@ private fun Modifier.collectionHeroSharedArtwork(
     }
     return with(sharedTransitionScope) {
         this@collectionHeroSharedArtwork.sharedElement(
-            rememberSharedContentState(key = "$sharedElementPrefix-art-$sharedElementKey"),
+            rememberSharedContentState(key = key),
             animatedVisibilityScope = animatedVisibilityScope,
             clipInOverlayDuringTransition = OverlayClip(overlayShape),
             boundsTransform = AlbumArtBoundsTransform,

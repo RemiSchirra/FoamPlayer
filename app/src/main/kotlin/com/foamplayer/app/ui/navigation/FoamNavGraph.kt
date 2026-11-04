@@ -66,26 +66,50 @@ internal class FoamNavGraphContext(
         navController.navigate(route)
     }
 
-    /** Opens an artist page, tagging the route pair for the shared-element flight. */
-    fun openArtist(name: String, image: String? = null, imageIsEmbeddedArt: Boolean = false) {
-        onActiveSharedCollectionChange(sharedCollectionTag("artist", name))
+    /**
+     * Opens an artist page, tagging the route pair for the shared-element
+     * flight. [origin] identifies the source row when the same artist is
+     * displayed several times (see [sharedCollectionTag]).
+     */
+    fun openArtist(
+        name: String,
+        image: String? = null,
+        imageIsEmbeddedArt: Boolean = false,
+        origin: String? = null
+    ) {
+        onActiveSharedCollectionChange(sharedCollectionTag("artist", name, origin))
         image?.let { preloadAlbumArtForFlight(context, it, imageIsEmbeddedArt) }
         navController.navigate(Screen.ArtistDetail.createRoute(name, image, imageIsEmbeddedArt))
     }
 
-    /** Opens an album page, tagging the route pair for the shared-element flight. */
-    fun openAlbum(name: String, artUrl: String? = null, artist: String? = null) {
-        onActiveSharedCollectionChange(sharedCollectionTag("album", name))
+    /**
+     * Opens an album page, tagging the route pair for the shared-element
+     * flight. [origin] identifies the source row when the same album is
+     * displayed several times (see [sharedCollectionTag]).
+     */
+    fun openAlbum(
+        name: String,
+        artUrl: String? = null,
+        artist: String? = null,
+        origin: String? = null
+    ) {
+        onActiveSharedCollectionChange(sharedCollectionTag("album", name, origin))
         artUrl?.let { preloadAlbumArtForFlight(context, it, isEmbeddedArt = true) }
         navController.navigate(Screen.AlbumDetail.createRoute(name, artUrl, artist))
     }
 
     /**
      * Opens a playlist page, preferring the resolved [playlistCovers] entry and
-     * falling back to the list row's own image.
+     * falling back to the list row's own image. [origin] identifies the source
+     * row when the same playlist is displayed several times.
      */
-    fun openPlaylist(playlistId: Long, name: String, fallbackImageUrl: String?) {
-        onActiveSharedCollectionChange(sharedCollectionTag("playlist", "$playlistId"))
+    fun openPlaylist(
+        playlistId: Long,
+        name: String,
+        fallbackImageUrl: String?,
+        origin: String? = null
+    ) {
+        onActiveSharedCollectionChange(sharedCollectionTag("playlist", "$playlistId", origin))
         val cover = playlistCovers[playlistId]
         val imageUrl = cover?.imageUrl ?: fallbackImageUrl
         imageUrl?.let { preloadAlbumArtForFlight(context, it, cover?.isEmbeddedArt ?: false) }

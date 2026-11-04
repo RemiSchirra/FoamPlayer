@@ -36,14 +36,19 @@ internal fun NavGraphBuilder.homeDestinations(context: FoamNavGraphContext) {
     composable(Screen.Home.route) {
         HomeScreen(
             viewModel = context.homeViewModel,
-            onPlaylistClick = { playlist ->
-                context.openPlaylist(playlist.playlistId, playlist.name, playlist.imageUrl)
+            onPlaylistClick = { playlist, flightOrigin ->
+                context.openPlaylist(
+                    playlist.playlistId,
+                    playlist.name,
+                    playlist.imageUrl,
+                    flightOrigin
+                )
             },
-            onAlbumClick = { album ->
-                context.openAlbum(album.album, album.albumArtPath, album.artist)
+            onAlbumClick = { album, flightOrigin ->
+                context.openAlbum(album.album, album.albumArtPath, album.artist, flightOrigin)
             },
-            onArtistClick = { artist, image, imageIsEmbeddedArt ->
-                context.openArtist(artist, image, imageIsEmbeddedArt)
+            onArtistClick = { artist, image, imageIsEmbeddedArt, flightOrigin ->
+                context.openArtist(artist, image, imageIsEmbeddedArt, flightOrigin)
             },
             onTrackClick = { track -> context.onPlayTracks(listOf(track), 0, null) },
             onSeeAllAlbums = { context.navigateUnshared(Screen.HomeSeeAllAlbums.route) },
