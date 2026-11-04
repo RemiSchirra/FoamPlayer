@@ -57,6 +57,11 @@ internal fun AppBackdrop(
     // background) — after the nav fade, so the outgoing screen dissolves over the
     // still-drawn backdrop. The background settings page is the exception: the
     // layers ARE its live preview.
+    //
+    // Hidden means alpha 0, NOT leaving composition: unmounting dropped the
+    // loaded art, so coming back from settings remounted the layers and flashed
+    // the bare theme background until Coil delivered the image again. Alpha
+    // keeps them warm underneath the opaque settings page.
     var settingsBackdropHidden by remember { mutableStateOf(isSettingsRoute(currentRoute)) }
     LaunchedEffect(currentRoute) {
         if (isSettingsRoute(currentRoute) && !isBackgroundSettingsRoute(currentRoute)) {
@@ -66,19 +71,30 @@ internal fun AppBackdrop(
             settingsBackdropHidden = false
         }
     }
-    val backgroundEnabled = backgroundMode == BackgroundMode.DYNAMIC && !settingsBackdropHidden
-    val onBackgroundTransition = if (backgroundEnabled) {
-        rememberAnimatedBackground(
-            enabled = true,
-            initialFrontArtPath = { playerViewModel.playbackState.value.currentTrack?.albumArtPath },
-            persistedBlur = settings.backgroundBlur,
-            persistedAppIntensity = settings.appBackgroundIntensity,
-            preview = preview,
-            modifier = Modifier.fillMaxSize()
-        )
+    // The delayed flag only hides after ENTERING settings. Leaving settings must
+    // reveal the layers immediately, without waiting for the effect above, so
+    // the outgoing opaque settings page fades onto an already-drawn backdrop.
+    val backdropAlpha = if (
+        settingsBackdropHidden &&
+        isSettingsRoute(currentRoute) &&
+        !isBackgroundSettingsRoute(currentRoute)
+    ) {
+        0f
     } else {
-        remember { { _: String?, _: String?, _: Float -> } }
+        1f
     }
+    val backdropModifier = Modifier
+        .fillMaxSize()
+        .graphicsLayer { alpha = backdropAlpha }
+
+    val onBackgroundTransition = rememberAnimatedBackground(
+        enabled = backgroundMode == BackgroundMode.DYNAMIC,
+        initialFrontArtPath = { playerViewModel.playbackState.value.currentTrack?.albumArtPath },
+        persistedBlur = settings.backgroundBlur,
+        persistedAppIntensity = settings.appBackgroundIntensity,
+        preview = preview,
+        modifier = backdropModifier
+    )
 
     // While the background settings page previews the art backdrop, the current
     // track's art must keep feeding it even with the player closed — normally
@@ -103,7 +119,7 @@ internal fun AppBackdrop(
     // collection backdrop paints over them once opaque, and keeping them
     // composed underneath makes every fade crossfade over the custom image /
     // gradient instead of dropping to the bare background color.
-    if (!settingsBackdropHidden && backgroundMode != BackgroundMode.DYNAMIC) {
+    if (backgroundMode != BackgroundMode.DYNAMIC) {
         StaticBackgroundLayers(
             mode = backgroundMode,
             customBackgroundUri = settings.customBackgroundUri,
@@ -111,7 +127,7 @@ internal fun AppBackdrop(
             persistedBackgroundBlur = settings.backgroundBlur,
             persistedAppIntensity = settings.appBackgroundIntensity,
             preview = preview,
-            modifier = Modifier.fillMaxSize()
+            modifier = backdropModifier
         )
     }
 

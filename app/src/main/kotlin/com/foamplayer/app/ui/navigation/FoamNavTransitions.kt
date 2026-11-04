@@ -155,14 +155,21 @@ private data class NavBarPosition(val tier: NavBarTier, val index: Int)
 private enum class NavBarSlide { LEFT, RIGHT, TOP, BOTTOM }
 
 /**
- * Opacity and translation share one duration for navbar switches, so an opaque
- * destination (Settings) fades to/from the backdrop image on exactly the same
- * frames as its slide. The generic screen fades (400ms in / 200ms out) are too
- * long/short for the 300ms slide and made the background visibly outlive it.
+ * Opacity changes finish well before the 300ms slide travel. Keeping them at
+ * the travel's duration left both screens (and, through the incoming Settings
+ * surface, the backdrop image) half-transparent for most of the switch, which
+ * reads as a ghost/flicker. The fade only needs to get the layers out of each
+ * other's way; the slide carries the motion.
  */
-private val NavBarSlideFadeSpec = tween<Float>(
-    durationMillis = FoamMotion.Duration.SMOOTH,
+private val NavBarSlideFadeInSpec = tween<Float>(
+    durationMillis = FoamMotion.Duration.SNAP,
     easing = FoamMotion.Easings.STANDARD
+)
+
+/** Front-loaded (most of the drop in the first frames) and short. */
+private val NavBarSlideFadeOutSpec = tween<Float>(
+    durationMillis = FoamMotion.Duration.SNAP,
+    easing = FoamMotion.Easings.EXIT
 )
 
 /**
@@ -244,7 +251,7 @@ private fun navBarEnter(slide: NavBarSlide): EnterTransition =
             initialOffsetY = { (it * SubScreenSlideFraction).roundToInt() },
             animationSpec = tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
         )
-    }) + fadeIn(animationSpec = NavBarSlideFadeSpec)
+    }) + fadeIn(animationSpec = NavBarSlideFadeInSpec)
 
 private fun navBarExit(slide: NavBarSlide): ExitTransition =
     (when (slide) {
@@ -264,4 +271,4 @@ private fun navBarExit(slide: NavBarSlide): ExitTransition =
             targetOffsetY = { (-it * SubScreenSlideFraction).roundToInt() },
             animationSpec = tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
         )
-    }) + fadeOut(animationSpec = NavBarSlideFadeSpec)
+    }) + fadeOut(animationSpec = NavBarSlideFadeOutSpec)
