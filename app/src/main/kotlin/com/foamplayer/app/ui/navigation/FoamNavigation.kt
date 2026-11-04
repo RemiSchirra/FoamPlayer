@@ -157,6 +157,8 @@ fun FoamNavHost(
     val forceDynamicBackgroundInPlayer = playerSettings.forceDynamicBackgroundInPlayer
     val navigationBarMode = playerSettings.navigationBarMode
     val navBarTransparentWhenPlayerOpen = playerSettings.navBarTransparentWhenPlayerOpen
+    val primaryNavBarItems = playerSettings.primaryNavBarItems
+    val secondaryNavBarItems = playerSettings.secondaryNavBarItems
 
     // Per-view list density / sort / inversion setters (organisation modal).
     val densityFor: (MediaListView) -> MediaDensity = { view -> playerSettings.mediaDensity(view) }
@@ -298,8 +300,16 @@ fun FoamNavHost(
 
     SharedTransitionLayout {
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")
-        val navTransitions = remember(playerTransitionState) {
-            buildFoamNavTransitions(playerTransitionState)
+        val navTransitions = remember(
+            playerTransitionState,
+            primaryNavBarItems,
+            secondaryNavBarItems
+        ) {
+            buildFoamNavTransitions(
+                playerTransitionState = playerTransitionState,
+                primaryNavBarItems = primaryNavBarItems,
+                secondaryNavBarItems = secondaryNavBarItems
+            )
         }
 
         val isBottomChromeLiftAllowed = remember { mutableStateOf(true) }

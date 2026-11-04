@@ -40,8 +40,9 @@ import com.foamplayer.app.ui.theme.foamBackground
  *
  * Split out of `FoamNavigation.kt` so the host composable holds only the navigation wiring.
  */
-/** Settings/stats subscreens and collection pages slide by this fraction of
- * their width when pushed/popped. */
+/** Settings/stats subscreens, collection pages and nav-bar tab switches slide by
+ * this fraction of their width (or height, for a cross-row tab switch) when
+ * pushed/popped. */
 internal const val SubScreenSlideFraction = 0.15f
 
 /**
