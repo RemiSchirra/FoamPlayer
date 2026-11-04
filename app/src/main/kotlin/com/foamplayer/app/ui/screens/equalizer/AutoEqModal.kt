@@ -3,7 +3,6 @@ package com.foamplayer.app.ui.screens.equalizer
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,6 +13,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -247,8 +247,8 @@ private data class AutoEqOption(
 /**
  * Caption label + pickable value bar with a filtered dropdown (the genre
  * text-bar pattern):
- * - The dropdown hangs directly under the bar and reads as one surface with
- *   it (same color, no gap, the bar's bottom corners square off while open).
+ * - The dropdown hangs under the bar and reads as one surface with it (same
+ *   color, no gap): it bleeds slightly behind the bar, whose corners never change.
  * - It is filtered live by the typed text (case-insensitive "contains" on
  *   the title and group header, prefix matches first), and opens as soon as
  *   the user types.
@@ -291,11 +291,7 @@ private fun AutoEqSelectionBar(
     val dropdownState = remember { MutableTransitionState(false) }
     dropdownState.targetState = listVisible
 
-    // Square the bar's bottom corners while the list is attached to it.
-    val bottomCorner by animateIntAsState(
-        targetValue = if (listVisible) 0 else 10,
-        label = "AutoEqBarBottomCorner"
-    )
+    val bleedPx = with(LocalDensity.current) { AutoEqDropdownBleed.roundToPx() }
     val chevronRotation by animateFloatAsState(
         targetValue = if (listVisible) 180f else 0f,
         label = "AutoEqBarChevron"
@@ -313,17 +309,28 @@ private fun AutoEqSelectionBar(
                 modifier = Modifier.width(64.dp)
             )
             Box(modifier = Modifier.weight(1f)) {
+                AutoEqDropdown(
+                    visibleState = dropdownState,
+                    loading = loading,
+                    options = filtered,
+                    onSelect = { option ->
+                        text = option.fill
+                        expanded = false
+                        option.onPick()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset { IntOffset(x = 0, y = barHeight - bleedPx) }
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints)
+                            layout(0, 0) { placeable.place(0, 0) }
+                        }
+                )
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(
-                            RoundedCornerShape(
-                                topStart = 10.dp,
-                                topEnd = 10.dp,
-                                bottomEnd = bottomCorner.dp,
-                                bottomStart = bottomCorner.dp
-                            )
-                        )
+                        .clip(RoundedCornerShape(AutoEqBarCorner))
                         .foamSurfaceVariant()
                         .onSizeChanged { barHeight = it.height }
                         .padding(start = 12.dp, end = 4.dp)
@@ -403,28 +410,6 @@ private fun AutoEqSelectionBar(
                     }
                 }
 
-                // The list overlays the content below (the modal never
-                // moves): it hangs flush under the bar via offset, the bar's
-                // wrapper is z-lifted above the following rows while the list
-                // is open, and the list reports a zero footprint so it never
-                // grows the modal's fitted height.
-                AutoEqDropdown(
-                    visibleState = dropdownState,
-                    loading = loading,
-                    options = filtered,
-                    onSelect = { option ->
-                        text = option.fill
-                        expanded = false
-                        option.onPick()
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset { IntOffset(x = 0, y = barHeight) }
-                        .layout { measurable, constraints ->
-                            val placeable = measurable.measure(constraints)
-                            layout(0, 0) { placeable.place(0, 0) }
-                        }
-                )
             }
         }
     }
@@ -432,8 +417,8 @@ private fun AutoEqSelectionBar(
 
 /**
  * The Auto EQ suggestion list: reads as the continuation of the bar above it
- * (same surface, rounded bottom), hanging flush under the bar on top of the
- * following content. Height-capped by [AutoEqDropdownMaxHeight] and
+ * (same surface, rounded bottom), bleeding behind the bar and hanging over the
+ * following content. Its first [AutoEqDropdownBleed] is hidden behind the bar. Height-capped by [AutoEqDropdownMaxHeight] and
  * scrollable; the group header renders once per group; picking a row fills
  * the bar. Rows are keyed by [AutoEqOption.id], which is already unique.
  */
@@ -465,8 +450,10 @@ private fun AutoEqDropdown(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = AutoEqDropdownMaxHeight)
-                .clip(RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp))
-                .foamSurfaceVariant()
+                .clip(RoundedCornerShape(bottomStart = AutoEqBarCorner, bottomEnd = AutoEqBarCorner))
+                .foamSurfaceVariant(),
+            // The top of the list is tucked behind the bar; start the rows below it.
+            contentPadding = PaddingValues(top = AutoEqDropdownBleed)
         ) {
             if (loading) {
                 item(key = "loading") { AutoEqLoading() }
@@ -535,6 +522,12 @@ private fun AutoEqDropdown(
 }
 
 private val AutoEqDropdownMaxHeight = 280.dp
+
+/** Corner radius of the selection bar and of the dropdown's bottom edge. */
+private val AutoEqBarCorner = 10.dp
+
+/** How far the dropdown extends up behind the bar; covers its rounded corners. */
+private val AutoEqDropdownBleed = AutoEqBarCorner
 
 /** Parametric | Graphic pills choosing the generated EQ's output section. */
 @Composable
