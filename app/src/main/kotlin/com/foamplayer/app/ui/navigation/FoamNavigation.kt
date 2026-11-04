@@ -16,7 +16,6 @@ import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -70,8 +69,8 @@ import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 import com.foamplayer.app.update.UpdateManager
 import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsDetailsViewModel
 import com.foamplayer.app.ui.theme.FoamMotion
-import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamBackdropScale
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -472,7 +471,9 @@ fun FoamNavHost(
                     }
                 }
 
-                Box(modifier = Modifier.fillMaxSize()) {
+                // Screen content: shrinks behind modals (see foamBackdropScale)
+                // while the backdrop layers above stay full-bleed.
+                Box(modifier = Modifier.fillMaxSize().foamBackdropScale()) {
                     fun playTrackFromList(
                         tracks: List<TrackEntity>,
                         index: Int,
@@ -599,39 +600,43 @@ fun FoamNavHost(
                     }
                 }
 
-                FoamBottomChrome(
-                    currentRoute = currentRoute,
-                    navigationBarMode = navigationBarMode,
-                    transition = transition,
-                    playerTransitionState = playerTransitionState,
-                    isPlayerOpen = isPlayerOpen,
-                    isTransitionAnimated = playerTransition.isTransitionAnimated,
-                    navBarExpandFraction = navBarExpandFraction,
-                    playerClosedFraction = playerClosedFraction,
-                    isBottomChromeLifted = isBottomChromeLifted,
-                    onToggleNavBarExpand = { isNavBarExpanded = !isNavBarExpanded },
-                    onNavigate = handleNavBarNavigation,
-                    settings = playerSettings,
-                    hasCurrentTrack = hasCurrentTrack,
-                    cardPresenceFraction = { miniPlayerPresence.value },
-                    miniPlayerSwipeController = miniPlayerSwipeController,
-                    miniPlayerTopPx = { miniPlayerTopPx.takeUnless { it.isNaN() } },
-                    bottomBarClearance = bottomBarClearance,
-                    miniPlayerBoxHeight = miniPlayerBoxHeight,
-                    sharedTransitionScope = this@SharedTransitionLayout,
-                    playerViewModel = playerViewModel,
-                    onBackgroundTransition = onBackgroundTransition,
-                    onOpenPlayer = { playerTransition.animate(open = true, precompose = true) },
-                    trackListTransitionTrackId = playerTransition.trackListTransitionTrackId,
-                    centerTrackRequest = playerTransition.centerTrackRequest,
-                    skipMiniPlayerTrackAnimation = playerTransition.skipMiniPlayerTrackAnimation,
-                    isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
-                    navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
-                    toastViewModel = toastViewModel,
-                    onNavZoneHeightChange = { navZoneHeightPx = it },
-                    onMiniPlayerTopChange = { miniPlayerTopPx = it },
-                    onMiniPlayerHeightChange = { miniPlayerBoxHeightPx = it }
-                )
+                // Bottom chrome (mini player + nav bar + toasts) shrinks with
+                // the screen content, in its own same-geometry scale layer.
+                Box(modifier = Modifier.fillMaxSize().foamBackdropScale()) {
+                    FoamBottomChrome(
+                        currentRoute = currentRoute,
+                        navigationBarMode = navigationBarMode,
+                        transition = transition,
+                        playerTransitionState = playerTransitionState,
+                        isPlayerOpen = isPlayerOpen,
+                        isTransitionAnimated = playerTransition.isTransitionAnimated,
+                        navBarExpandFraction = navBarExpandFraction,
+                        playerClosedFraction = playerClosedFraction,
+                        isBottomChromeLifted = isBottomChromeLifted,
+                        onToggleNavBarExpand = { isNavBarExpanded = !isNavBarExpanded },
+                        onNavigate = handleNavBarNavigation,
+                        settings = playerSettings,
+                        hasCurrentTrack = hasCurrentTrack,
+                        cardPresenceFraction = { miniPlayerPresence.value },
+                        miniPlayerSwipeController = miniPlayerSwipeController,
+                        miniPlayerTopPx = { miniPlayerTopPx.takeUnless { it.isNaN() } },
+                        bottomBarClearance = bottomBarClearance,
+                        miniPlayerBoxHeight = miniPlayerBoxHeight,
+                        sharedTransitionScope = this@SharedTransitionLayout,
+                        playerViewModel = playerViewModel,
+                        onBackgroundTransition = onBackgroundTransition,
+                        onOpenPlayer = { playerTransition.animate(open = true, precompose = true) },
+                        trackListTransitionTrackId = playerTransition.trackListTransitionTrackId,
+                        centerTrackRequest = playerTransition.centerTrackRequest,
+                        skipMiniPlayerTrackAnimation = playerTransition.skipMiniPlayerTrackAnimation,
+                        isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                        navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
+                        toastViewModel = toastViewModel,
+                        onNavZoneHeightChange = { navZoneHeightPx = it },
+                        onMiniPlayerTopChange = { miniPlayerTopPx = it },
+                        onMiniPlayerHeightChange = { miniPlayerBoxHeightPx = it }
+                    )
+                }
             }
 
             FoamGlobalModals(

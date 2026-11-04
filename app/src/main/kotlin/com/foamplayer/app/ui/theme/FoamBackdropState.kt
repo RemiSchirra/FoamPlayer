@@ -19,8 +19,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 /**
  * Shared state for the shrink effect behind modals.
  * [FoamBottomModal](com.foamplayer.app.ui.modals.FoamBottomModal) renders in
- * its own Dialog window, so the app root does the scaling: it hosts the
- * content in [FoamBackdropHost] and reads the state the modal writes.
+ * its own Dialog window, so the app content does the scaling: [FoamBackdropHost]
+ * provides this state at the app root, and the screen content applies it via
+ * [foamBackdropScale] — on the screen content only, so the backdrop image
+ * layers stay full-bleed behind it.
  */
 @Stable
 class FoamBackdropState {
@@ -53,17 +55,16 @@ class FoamBackdropState {
 /** Provided by [FoamBackdropHost] at the app root; inherited by modal Dialogs. */
 val LocalFoamBackdropState = staticCompositionLocalOf { FoamBackdropState() }
 
-/** Scale the backdrop content shrinks to while a modal is open. */
+/** Scale the screen content shrinks to while a modal is open. */
 private const val FoamBackdropShrunkScale = 0.95f
 
 /**
- * Root surface for everything behind FoamModal dialogs. Scales the hosted
- * content down to [FoamBackdropShrunkScale] while a modal is open (rounded
- * corners appear as it shrinks), follows [FoamBackdropState.dragPresence]
- * frame-by-frame during drags, and eases back to full size on close.
- *
- * The animation lives here rather than in the modal so it always completes:
- * this scope stays composed even if the modal unmounts mid-exit.
+ * Root surface for everything behind FoamModal dialogs. Provides the backdrop
+ * state to the app (and, inherited, to the modal Dialogs) and hosts the
+ * content on the plain theme background. The shrink itself lives on the
+ * screen content via [foamBackdropScale] — not here — so the background
+ * (base color and image layers) never scales and no black border can show
+ * around the shrunk content.
  */
 @Composable
 fun FoamBackdropHost(
@@ -73,41 +74,56 @@ fun FoamBackdropHost(
     val backdrop = remember { FoamBackdropState() }
 
     CompositionLocalProvider(LocalFoamBackdropState provides backdrop) {
-        val scale by animateFloatAsState(
-            targetValue = if (backdrop.active) FoamBackdropShrunkScale else 1f,
-            animationSpec = if (backdrop.active) {
-                tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.IN_OUT)
-            } else {
-                tween(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.IN_OUT)
-            },
-            label = "FoamBackdropScale"
-        )
-
         Box(
             modifier = modifier
                 .fillMaxSize()
                 .foamBackground()
-                .graphicsLayer {
-                    val presence = backdrop.dragPresence
-                    val live = if (presence != null) {
-                        FoamBackdropShrunkScale +
-                            (1f - FoamBackdropShrunkScale) * (1f - presence)
-                    } else {
-                        scale
-                    }
-                    scaleX = live
-                    scaleY = live
-                    val progress =
-                        ((1f - live) / (1f - FoamBackdropShrunkScale)).coerceIn(0f, 1f)
-                    if (progress > 0f) {
-                        shape = RoundedCornerShape(FoamDimens.cornerRadiusLarge * progress)
-                        clip = true
-                    } else {
-                        clip = false
-                    }
-                }
         ) {
             content()
+        }
+    }
+}
+
+/**
+ * Scale applied to the screen content while a modal is open: tweens down to
+ * [FoamBackdropShrunkScale] (rounded corners appear as it shrinks), follows
+ * [FoamBackdropState.dragPresence] frame-by-frame during sheet drags, and
+ * eases back to full size on close.
+ *
+ * Apply to the screen content only — never to the backdrop image layers — so
+ * the background always fills the screen edge-to-edge. The animated value is
+ * only read in the draw phase, so the animation never recomposes the scaled
+ * content.
+ */
+@Composable
+fun Modifier.foamBackdropScale(): Modifier {
+    val backdrop = LocalFoamBackdropState.current
+    val scale by animateFloatAsState(
+        targetValue = if (backdrop.active) FoamBackdropShrunkScale else 1f,
+        animationSpec = if (backdrop.active) {
+            tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.IN_OUT)
+        } else {
+            tween(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.IN_OUT)
+        },
+        label = "FoamBackdropScale"
+    )
+    return graphicsLayer {
+        val presence = backdrop.dragPresence
+        val live = if (presence != null) {
+            FoamBackdropShrunkScale +
+                (1f - FoamBackdropShrunkScale) * (1f - presence)
+        } else {
+            scale
+        }
+        scaleX = live
+        scaleY = live
+        val progress =
+            ((1f - live) / (1f - FoamBackdropShrunkScale)).coerceIn(0f, 1f)
+        if (progress > 0f) {
+            shape = RoundedCornerShape(FoamDimens.cornerRadiusLarge * progress)
+            clip = true
+        } else {
+            clip = false
         }
     }
 }
