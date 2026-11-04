@@ -746,7 +746,9 @@ private fun PresetsModal(
         onDismissRequest = onDismiss
     ) {
         var tab by remember { mutableStateOf("presets") }
-        LaunchedEffect(visible) { tab = "presets" }
+        // Reset to the first tab only when the sheet opens. Resetting on close
+        // too would slide the content back to "presets" during the exit animation.
+        LaunchedEffect(visible) { if (visible) tab = "presets" }
 
         Column(modifier = Modifier.fillMaxWidth()) {
             PresetsTabs(selected = tab, onSelect = { tab = it })
@@ -760,13 +762,13 @@ private fun PresetsModal(
                     // sheet's height animate between the two tab contents.
                     val direction = if (targetState == "autoeq") 1 else -1
                     (
-                        slideInHorizontally(tween(FoamMotion.Duration.STANDARD)) { fullWidth -> direction * fullWidth } +
-                                fadeIn(tween(FoamMotion.Duration.STANDARD))
-                        ) togetherWith
+                            slideInHorizontally(tween(FoamMotion.Duration.STANDARD)) { fullWidth -> direction * fullWidth } +
+                                    fadeIn(tween(FoamMotion.Duration.STANDARD))
+                            ) togetherWith
                             (
-                            slideOutHorizontally(tween(FoamMotion.Duration.STANDARD)) { fullWidth -> -direction * fullWidth } +
-                                    fadeOut(tween(FoamMotion.Duration.STANDARD))
-                            )
+                                    slideOutHorizontally(tween(FoamMotion.Duration.STANDARD)) { fullWidth -> -direction * fullWidth } +
+                                            fadeOut(tween(FoamMotion.Duration.STANDARD))
+                                    )
                 },
                 label = "presetsTabContent"
             ) { currentTab ->
@@ -907,13 +909,13 @@ private fun PresetsTabs(
                         targetState = isSelected,
                         transitionSpec = {
                             (
-                                slideInHorizontally(tween(FoamMotion.Duration.STANDARD)) { it / -2 } +
-                                        fadeIn(tween(FoamMotion.Duration.STANDARD))
-                                ) togetherWith
+                                    slideInHorizontally(tween(FoamMotion.Duration.STANDARD)) { it / -2 } +
+                                            fadeIn(tween(FoamMotion.Duration.STANDARD))
+                                    ) togetherWith
                                     (
-                                    slideOutHorizontally(tween(FoamMotion.Duration.STANDARD)) { it / 2 } +
-                                            fadeOut(tween(FoamMotion.Duration.STANDARD))
-                                    )
+                                            slideOutHorizontally(tween(FoamMotion.Duration.STANDARD)) { it / 2 } +
+                                                    fadeOut(tween(FoamMotion.Duration.STANDARD))
+                                            )
                         },
                         label = "presetsTabLabel"
                     ) { selectedNow ->
