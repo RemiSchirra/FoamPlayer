@@ -162,6 +162,10 @@ internal fun isSharedElementRoute(route: String?): Boolean {
             route.startsWith("playlist/")
 }
 
+internal fun isAlbumRoute(route: String?): Boolean = route != null && route.startsWith("album/")
+
+internal fun isArtistRoute(route: String?): Boolean = route != null && route.startsWith("artist/")
+
 internal fun isSettingsRoute(route: String?): Boolean {
     return route != null && (route == Screen.Settings.route || route.startsWith("settings/"))
 }

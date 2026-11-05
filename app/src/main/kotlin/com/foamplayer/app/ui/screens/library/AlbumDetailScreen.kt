@@ -22,7 +22,7 @@ fun AlbumDetailScreen(
     onTrackClick: (List<TrackEntity>, Int) -> Unit,
     onBack: () -> Unit,
     /** Tap on the hero's artist line: opens the corresponding artist page. */
-    onArtistClick: (String) -> Unit,
+    onArtistClick: (name: String, seedImage: String?, seedIsEmbeddedArt: Boolean) -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     playerTransitionVisibilityScope: AnimatedVisibilityScope,
@@ -38,6 +38,7 @@ fun AlbumDetailScreen(
     viewModel: AlbumDetailViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.tracks.collectAsState()
+    val cachedArtistImage by viewModel.artistImage.collectAsState()
 
     LaunchedEffect(albumName) {
         viewModel.loadAlbumTracks(albumName)
@@ -46,6 +47,16 @@ fun AlbumDetailScreen(
     val firstTrack = tracks.firstOrNull()
     val imageUrl = initialImageUrl ?: firstTrack?.albumArtPath
     val artistName = firstTrack?.albumArtist ?: firstTrack?.artist ?: initialArtistName
+
+    LaunchedEffect(artistName) {
+        artistName?.let(viewModel::loadArtistImage)
+    }
+
+    // Prefer a cached artist picture as the seed. Without one, seed the album
+    // art — the same fallback the artist hero would eventually show — so it
+    // never flashes the letter placeholder while the artist lookup resolves.
+    val artistPageSeedImage = cachedArtistImage ?: imageUrl
+    val artistPageSeedIsEmbeddedArt = cachedArtistImage == null
 
     LaunchedEffect(imageUrl) {
         onListBackdropArt(imageUrl, true)
@@ -74,7 +85,7 @@ fun AlbumDetailScreen(
             // Only tappable when an artist name actually resolves; the hero then
             // renders the accent-colored line as a link.
             onArtistClick = if (artistName != null) {
-                { onArtistClick(artistName) }
+                { onArtistClick(artistName, artistPageSeedImage, artistPageSeedIsEmbeddedArt) }
             } else {
                 null
             },

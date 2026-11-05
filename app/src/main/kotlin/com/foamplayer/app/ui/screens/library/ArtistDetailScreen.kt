@@ -144,7 +144,8 @@ fun ArtistDetailScreen(
     val headerArtPath = tracks.firstOrNull()?.albumArtPath
 
     val cachedArtistImage by viewModel.artistImage.collectAsState()
-    val artistImage = cachedArtistImage ?: seedImageUrl?.takeIf { it.isNotBlank() }
+    val seedImage = seedImageUrl?.takeIf { it.isNotBlank() }
+    val artistImage = cachedArtistImage ?: seedImage
     val artistImageIsEmbeddedArt = artistImage == null ||
             (cachedArtistImage == null && seedImageIsEmbeddedArt)
 

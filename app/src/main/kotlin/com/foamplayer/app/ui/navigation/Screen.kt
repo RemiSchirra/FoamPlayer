@@ -44,9 +44,11 @@ sealed class Screen(val route: String, val title: String) {
 
     object ArtistDetail : Screen("artist/{artistName}?image={image}&embedded={embedded}", "Artist") {
         /**
-         * [image] seeds the hero on its very first frame (before the cache lookup
-         * completes) so the shared-element transition from the artist lists never
-         * flashes the letter fallback — the same mechanism as [PlaylistDetail].
+         * [image] seeds the hero on its very first frame (before the cache
+         * lookup completes) so the shared-element transition from the artist
+         * lists never flashes the letter fallback — the same mechanism as
+         * [PlaylistDetail]. From an album it is that album's art, shown until
+         * the artist picture resolves.
          * [imageIsEmbeddedArt] says how the seed loads: a Spotify picture is a
          * plain file, the automatic first-track fallback is an audio file whose
          * embedded picture must be extracted.

@@ -92,8 +92,8 @@ internal fun NavGraphBuilder.libraryDetailDestinations(context: FoamNavGraphCont
                 context.onPlayTracks(tracks, index, CollectionId.album(albumName))
             },
             onBack = { context.back() },
-            onArtistClick = { artistName ->
-                context.openArtist(artistName)
+            onArtistClick = { artistName, seedImage, seedIsEmbeddedArt ->
+                context.openArtist(artistName, seedImage, seedIsEmbeddedArt)
             },
             sharedTransitionScope = context.sharedTransitionScope,
             animatedVisibilityScope = this,

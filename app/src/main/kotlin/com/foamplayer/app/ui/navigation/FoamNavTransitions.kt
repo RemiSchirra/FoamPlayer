@@ -20,8 +20,9 @@ import kotlin.math.roundToInt
  * Enter/exit specs for the screen [NavHost], kept out of the host composable.
  *
  * The rules depend on the route pair: navigation-bar switches slide from the side
- * or row the new tab lives on, settings/stats/browse stacks slide, detail screens
- * crossfade over the shared-element duration, and everything else fades.
+ * or row the new tab lives on, settings/stats/browse stacks slide, album -> artist
+ * uses the same stack slide (it has no shared artwork), detail screens crossfade
+ * over the shared-element duration, and everything else fades.
  * While the full player is on screen the nav host is already hidden, so its own
  * transitions are disabled to avoid overlapping flights on close.
  */
@@ -50,6 +51,15 @@ internal fun buildFoamNavTransitions(
         isSharedElementRoute(initialState.destination.route) ||
             isSharedElementRoute(targetState.destination.route)
 
+    // Album -> artist has no shared artwork to fly (the album's artist line is
+    // plain text), so it would otherwise crossfade. Give it the same subtle
+    // horizontal slide as the settings/stats/browse stacks instead.
+    fun AnimatedContentTransitionScope<NavBackStackEntry>.isAlbumToArtistPair() =
+        isAlbumRoute(initialState.destination.route) && isArtistRoute(targetState.destination.route)
+
+    fun AnimatedContentTransitionScope<NavBackStackEntry>.isArtistToAlbumPair() =
+        isArtistRoute(initialState.destination.route) && isAlbumRoute(targetState.destination.route)
+
     fun AnimatedContentTransitionScope<NavBackStackEntry>.navBarSlide() =
         navBarSlide(
             initialRoute = initialState.destination.route,
@@ -64,7 +74,7 @@ internal fun buildFoamNavTransitions(
             when {
                 playerTransitionState.currentState -> EnterTransition.None
                 navBarSlide != null -> navBarEnter(navBarSlide)
-                isSettingsPair() || isStatsPair() ->
+                isSettingsPair() || isStatsPair() || isAlbumToArtistPair() ->
                     slideInHorizontally(
                         initialOffsetX = { (it * SubScreenSlideFraction).roundToInt() },
                         animationSpec = tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
@@ -84,7 +94,7 @@ internal fun buildFoamNavTransitions(
             when {
                 playerTransitionState.currentState -> ExitTransition.None
                 navBarSlide != null -> navBarExit(navBarSlide)
-                isSettingsPair() || isStatsPair() ->
+                isSettingsPair() || isStatsPair() || isAlbumToArtistPair() ->
                     slideOutHorizontally(
                         targetOffsetX = { (-it * SubScreenSlideFraction).roundToInt() },
                         animationSpec = tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
@@ -107,7 +117,7 @@ internal fun buildFoamNavTransitions(
                 // back stack); the incoming screen still slides in from the side
                 // of the navbar icon it is opened from.
                 navBarSlide != null -> navBarEnter(navBarSlide)
-                isSettingsPair() || isStatsPair() ->
+                isSettingsPair() || isStatsPair() || isArtistToAlbumPair() ->
                     slideInHorizontally(
                         initialOffsetX = { (-it * SubScreenSlideFraction).roundToInt() },
                         animationSpec = tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
@@ -127,7 +137,7 @@ internal fun buildFoamNavTransitions(
             when {
                 playerTransitionState.currentState -> ExitTransition.None
                 navBarSlide != null -> navBarExit(navBarSlide)
-                isSettingsPair() || isStatsPair() ->
+                isSettingsPair() || isStatsPair() || isArtistToAlbumPair() ->
                     slideOutHorizontally(
                         targetOffsetX = { (it * SubScreenSlideFraction).roundToInt() },
                         animationSpec = tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
