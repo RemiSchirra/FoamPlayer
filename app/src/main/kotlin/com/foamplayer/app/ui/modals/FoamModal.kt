@@ -40,9 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -56,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
+import android.os.Build
 import android.view.WindowManager
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamMotion
@@ -97,26 +96,14 @@ fun FoamBottomModal(
     horizontalMargin: Dp = FoamDimens.paddingMedium,
     bottomEdgeMargin: Dp = FoamDimens.spacingMedium,
     liftAboveKeyboard: Boolean = true,
-    // Pinned below the scrollable content instead of scrolling with it, for
-    // sheets whose content can grow long (e.g. a result list with an OK button
-    // that must stay reachable).
     footer: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
-    // Keep the Dialog mounted while the exit animation plays. currentState only
-    // catches up with targetState once AnimatedVisibility finishes animating out,
-    // so this is what lets the sheet slide/fade away instead of just vanishing.
     val transitionState = remember { MutableTransitionState(false) }
     transitionState.targetState = visible
 
     if (!transitionState.currentState && !transitionState.targetState) return
 
-    // Shrink the app content behind the sheet while it is open (see
-    // FoamBackdropHost): the sheet draws in its own Dialog window stacked on
-    // the main window, so the backdrop scale can only live at the app root.
-    // Mirroring [visible] here -- false as soon as the exit animation starts,
-    // cleared again on dispose -- keeps the screen's return-to-full-size
-    // motion in step with the sheet leaving.
     val backdrop = LocalFoamBackdropState.current
     DisposableEffect(visible) {
         if (visible) backdrop.acquire()
@@ -130,18 +117,22 @@ fun FoamBottomModal(
             decorFitsSystemWindows = false
         )
     ) {
-        // The platform Dialog window dims the screen on its own by default. Left
-        // alone, that shows up as an instant half-dim UNDER our own animated
-        // scrim fade -- i.e. the fade appears to happen "twice". Kill the native
-        // dim/animation and let our own scrim be the only thing drawing it.
         val dialogView = LocalView.current
         SideEffect {
             (dialogView.parent as? DialogWindowProvider)?.window?.let { window ->
                 window.setDimAmount(0f)
                 window.setWindowAnimations(0)
-                // Keep the sheet clear of the soft keyboard: on API 30+ the
-                // window reports IME insets we pad with below; on older APIs
-                // this resize mode keeps the sheet above the keyboard.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    val imeType = android.view.WindowInsets.Type.ime()
+                    val imeSide = android.view.WindowInsets.Side.BOTTOM
+                    val attrs = window.attributes
+                    if (attrs.fitInsetsTypes != imeType || attrs.fitInsetsSides != imeSide) {
+                        attrs.setFitInsetsTypes(imeType)
+                        attrs.setFitInsetsSides(imeSide)
+                        window.attributes = attrs
+                    }
+                }
+                @Suppress("DEPRECATION")
                 window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             }
         }
@@ -150,11 +141,6 @@ fun FoamBottomModal(
             val density = LocalDensity.current
             val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
             val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            // Lift the sheet above the soft keyboard whenever it is visible
-            // (the larger of the two wins so the nav bar is never double-counted).
-            // Sheets hosting another focusable window on top (a name-input dialog)
-            // can opt out: the keyboard belongs to that other window, and padding
-            // for it here would shove this sheet up in lock-step with its typing.
             val imeInset = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
                 .takeIf { liftAboveKeyboard } ?: 0.dp
             val bottomSpacing = maxOf(bottomInset, imeInset) + bottomEdgeMargin
@@ -164,42 +150,19 @@ fun FoamBottomModal(
             }
             val scrollState = rememberScrollState()
 
-            // Natural height of the whole sheet interior (drag handle + content),
-            // measured off the scroll child, which lays out unbounded and so
-            // reports the full height even while the sheet clips it. 0 until the
-            // first layout pass after (re)opening.
             var contentHeightPx by remember { mutableFloatStateOf(0f) }
-            // The footer sits outside the scroll child, so add its measured
-            // height back in when sizing the sheet.
             var footerHeightPx by remember { mutableFloatStateOf(0f) }
 
-            // Size the sheet rests at: exactly its content, capped just short of
-            // the top. Starts at full for the first frame or two so nothing is
-            // ever shown clipped; the measured fit takes over while the sheet is
-            // still rising out of its slide-in.
             val restingCapPx = if (contentHeightPx > 0f) {
                 minOf(contentHeightPx + footerHeightPx, fullPx)
             } else {
                 fullPx
             }
 
-            // Non-null while the user is dragging the sheet away from its resting
-            // size (drag-down-to-dismiss and drag-back-up); null means "fit the
-            // content".
             var draggedCapPx by remember { mutableStateOf<Float?>(null) }
 
-            // True once the inner list has moved during the current touch
-            // gesture. If a downward drag first scrolls the list back to the top,
-            // the leftover of that same drag must not start shrinking the sheet;
-            // the user has to start a fresh gesture at the top to dismiss it.
-            // Cleared when the gesture hands off to its fling.
             var listMovedThisGesture by remember { mutableStateOf(false) }
 
-            // A drag-dismiss springs the cap down to 0 (see settle() below); clear
-            // the drag override on re-open so the sheet fits its content again,
-            // and hand the backdrop scale back to its own open tween (a stale
-            // drag presence from the previous dismissal would pin it at full
-            // size).
             LaunchedEffect(visible) {
                 if (visible) {
                     draggedCapPx = null
@@ -208,29 +171,12 @@ fun FoamBottomModal(
                 }
             }
 
-            // NOTE: neither the cap nor the scrim alpha may be read in composition.
-            // Writing draggedCapPx on every gesture frame used to recompose this whole
-            // scope -- scrim, both AnimatedVisibilitys, and content() -- per frame.
-            // Both reads are deferred instead: the cap into the layout modifier below,
-            // the scrim alpha into a drawBehind. Composition then only re-runs when
-            // the resting size actually changes (content measured, keyboard in/out).
-
-            // Live proxies so the remembered connection below always reads the
-            // current callback and available height even though it is created
-            // only once (fullPx now varies while the soft keyboard opens/closes).
             val latestOnDismissRequest by rememberUpdatedState(onDismissRequest)
             val latestFullPx by rememberUpdatedState(fullPx)
 
             val nestedScrollConnection = remember {
                 object : NestedScrollConnection {
 
-                    // Everything here is recomputed from live state on every
-                    // gesture event: this object is remembered across
-                    // recompositions, so plain locals captured at creation time
-                    // (contentHeightPx was still 0 then) would be stale and break
-                    // the drag math. contentHeightPx / draggedCapPx are state
-                    // delegates, so they read live; fullPx is read through the
-                    // rememberUpdatedState proxy above.
                     fun restingPx(): Float =
                         if (contentHeightPx > 0f) {
                             minOf(contentHeightPx + footerHeightPx, latestFullPx)
@@ -240,8 +186,6 @@ fun FoamBottomModal(
 
                     fun currentCapPx(): Float = draggedCapPx ?: restingPx()
 
-                    // Backdrop presence for the scale-behind-the-sheet effect
-                    // (FoamBackdropState.dragPresence): 1 = sheet full, 0 = gone.
                     fun presence(capPx: Float): Float =
                         capPx / restingPx().coerceAtLeast(1f)
 
@@ -250,11 +194,6 @@ fun FoamBottomModal(
                         val anchors = floatArrayOf(0f, resting)
                         val projected = (currentCapPx() - flingVelocityY * 0.15f).coerceIn(0f, resting)
                         val target = anchors.minByOrNull { abs(it - projected) } ?: resting
-                        // Always spring the cap the rest of the way, including down
-                        // to 0. This keeps the motion on a single continuous,
-                        // velocity-matched curve -- switching mid-drag to the
-                        // Dialog's fixed-duration exit transition instead is what
-                        // caused the visible speed "jump" on release.
                         animate(
                             initialValue = currentCapPx(),
                             targetValue = target,
@@ -265,38 +204,16 @@ fun FoamBottomModal(
                             backdrop.dragPresence = presence(value)
                         }
                         if (target <= 0f) {
-                            // The cap has already sprung to 0 by this point, so the
-                            // sheet is visually gone and the scrim (tied to the cap)
-                            // has already faded out. Keep the drag override -- and
-                            // the backdrop presence, also tied to the cap -- at 0
-                            // while the exit animation plays: the screen must stay
-                            // at full size, and clearing either here would flash it
-                            // back to the shrunk scale. The `visible` effect clears
-                            // both on the next open. This call just tears down the
-                            // Dialog itself.
                             latestOnDismissRequest()
                         } else {
-                            // Back at the fitted size: hand control back to
-                            // auto-fit so a later content change (e.g. a picker
-                            // list growing) applies, and give the backdrop scale
-                            // back to its tween (which is already at the shrunk
-                            // value the spring just landed on).
                             draggedCapPx = null
                             backdrop.dragPresence = null
                         }
                     }
 
                     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                        // Only resize the sheet for direct drags. A fling that
-                        // reaches the top of the list dispatches its leftover
-                        // momentum as a SideEffect; consuming that here makes the
-                        // sheet close on the same gesture that just scrolled the
-                        // list back up.
                         if (source != NestedScrollSource.UserInput) return Offset.Zero
                         val dy = available.y
-                        // Dragging up after a shrink: restore toward the fitted
-                        // size, but only while the content is still clipped --
-                        // never grow the sheet into empty space.
                         if (dy < 0f) {
                             val room = restingPx() - currentCapPx()
                             if (room > 0f) {
@@ -315,23 +232,13 @@ fun FoamBottomModal(
                         available: Offset,
                         source: NestedScrollSource
                     ): Offset {
-                        // Same rule as above: only a real drag can shrink the
-                        // sheet. Otherwise a fling to the top would hand its
-                        // leftover delta to the sheet and dismiss it mid-scroll.
                         if (source != NestedScrollSource.UserInput) return Offset.Zero
-
-                        // If this gesture already moved the list, the leftover
-                        // after reaching the top belongs to the same scroll -- do
-                        // not start dragging the sheet until a new gesture.
                         if (consumed.y != 0f) {
                             listMovedThisGesture = true
                             return Offset.Zero
                         }
 
                         val dy = available.y
-                        // Dragging down and the content had nothing left to give
-                        // (already at its top): shrink the sheet instead, bottom
-                        // edge staying docked while the top follows the finger.
                         if (dy > 0f && !listMovedThisGesture) {
                             val cap = currentCapPx()
                             if (cap > 0f) {
@@ -346,27 +253,18 @@ fun FoamBottomModal(
                     }
 
                     override suspend fun onPreFling(available: Velocity): Velocity {
-                        // A gesture that already scrolled the list stops there:
-                        // its leftover velocity must not carry on into a sheet
-                        // dismissal. Consume the flag so the next gesture can
-                        // dismiss normally from the top.
                         val listMoved = listMovedThisGesture
                         listMovedThisGesture = false
 
                         val atRest = currentCapPx() >= restingPx() - 0.5f
                         val listCannotScroll = scrollState.maxValue == 0
                         return when {
-                            // The fling belongs to the list the gesture moved.
                             listMoved -> Velocity.Zero
-                            // A partially dragged sheet must settle back or close.
                             !atRest -> {
                                 settle(available.y)
                                 Velocity(0f, available.y)
                             }
-                            // Mid-list: let the list fling in either direction.
                             scrollState.value > 0f -> Velocity.Zero
-                            // At the top, an upward fling should still scroll the
-                            // list down instead of being eaten by the sheet.
                             !listCannotScroll && available.y < 0f -> Velocity.Zero
                             else -> {
                                 settle(available.y)
@@ -395,15 +293,6 @@ fun FoamBottomModal(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        // Scrim darkness tracks the sheet's live size instead of only the
-                        // open/closed boolean, so dragging the sheet down progressively
-                        // fades the background. Read in the draw phase: no recomposition
-                        // per drag frame.
-                        .drawBehind {
-                            val cap = draggedCapPx ?: restingCapPx
-                            val alpha = (cap / restingCapPx.coerceAtLeast(1f)).coerceIn(0f, 1f) * 0.55f
-                            drawRect(Color.Black.copy(alpha = alpha))
-                        }
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
@@ -422,12 +311,7 @@ fun FoamBottomModal(
                     modifier = modifier
                         .fillMaxWidth()
                         .padding(horizontal = horizontalMargin)
-                        // Float above the navigation bars so the sheet's rounded
-                        // bottom edge stays visible at the bottom of the screen.
                         .padding(bottom = bottomSpacing)
-                        // Live height cap (replaces heightIn(max = cap)): draggedCapPx is
-                        // read inside the measure block, so drag frames re-measure only
-                        // this chain instead of recomposing the dialog's contents.
                         .layout { measurable, constraints ->
                             val capPx = (draggedCapPx ?: restingCapPx).toInt().coerceAtLeast(0)
                             val cappedConstraints = constraints.copy(
@@ -439,7 +323,6 @@ fun FoamBottomModal(
                         }
                         .clip(RoundedCornerShape(cornerRadius))
                         .foamSurface()
-                        // Swallow taps here so they don't fall through to the scrim below.
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
@@ -447,18 +330,11 @@ fun FoamBottomModal(
                         )
                         .nestedScroll(nestedScrollConnection)
                 ) {
-                    // Only the interior scrolls; an optional footer stays pinned
-                    // to the bottom of the sheet. weight(fill = false) lets the
-                    // sheet still wrap short content, while a long content column
-                    // is bounded to the remaining space and scrolls internally.
                     Column(
                         modifier = Modifier
                             .then(if (footer != null) Modifier.weight(1f, fill = false) else Modifier)
                             .verticalScroll(scrollState)
                     ) {
-                        // Measured to derive the sheet's fitted size. The scroll child
-                        // lays out unbounded, so this reports the full natural height
-                        // even while the sheet is clipped smaller.
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -473,8 +349,6 @@ fun FoamBottomModal(
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
-                                // Single horizontal grab bar, drawn directly so it stays
-                                // independent of the icon style setting.
                                 Box(
                                     modifier = Modifier
                                         .width(32.dp)

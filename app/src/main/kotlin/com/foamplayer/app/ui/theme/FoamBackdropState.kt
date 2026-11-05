@@ -14,6 +14,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 
 /**
@@ -80,6 +82,12 @@ fun FoamBackdropHost(
                 .foamBackground()
         ) {
             content()
+            // The modal scrim lives here, in the activity window, rather than
+            // inside the modal Dialog: the dialog window shrinks to fit the
+            // soft keyboard, so anything drawn in it stops at the keyboard's
+            // top edge and the strip the keyboard is animating through would
+            // stay undimmed. This window never resizes for the IME.
+            Box(modifier = Modifier.fillMaxSize().foamBackdropDim())
         }
     }
 }
@@ -125,5 +133,34 @@ fun Modifier.foamBackdropScale(): Modifier {
         } else {
             clip = false
         }
+    }
+}
+
+/** Opacity of the dim behind a modal sheet once fully open. */
+private const val FoamBackdropScrimAlpha = 0.55f
+
+/**
+ * Full-screen dim behind modal sheets, drawn by [FoamBackdropHost] at the app
+ * root instead of by the sheet's own Dialog window — see the comment there.
+ * Fades with [FoamBackdropState.active] and follows
+ * [FoamBackdropState.dragPresence] frame-by-frame while a sheet is dragged
+ * down. The live value is read in the draw phase, so drags and fades never
+ * recompose anything.
+ */
+@Composable
+fun Modifier.foamBackdropDim(): Modifier {
+    val backdrop = LocalFoamBackdropState.current
+    val fade by animateFloatAsState(
+        targetValue = if (backdrop.active) 1f else 0f,
+        animationSpec = if (backdrop.active) {
+            FoamMotion.Spec.sheetFadeIn
+        } else {
+            FoamMotion.Spec.sheetFadeOut
+        },
+        label = "FoamBackdropDim"
+    )
+    return drawBehind {
+        val presence = backdrop.dragPresence ?: fade
+        drawRect(Color.Black.copy(alpha = presence.coerceIn(0f, 1f) * FoamBackdropScrimAlpha))
     }
 }
