@@ -610,6 +610,11 @@ fun FoamNavHost(
                     }
                 }
 
+                FoamBottomScrim(
+                    currentRoute = currentRoute,
+                    bottomBarClearance = bottomBarClearance
+                )
+
                 // Bottom chrome (mini player + nav bar + toasts) shrinks with
                 // the screen content, in its own same-geometry scale layer.
                 Box(modifier = Modifier.fillMaxSize().foamBackdropScale()) {
@@ -630,7 +635,6 @@ fun FoamNavHost(
                         cardPresenceFraction = { miniPlayerPresence.value },
                         miniPlayerSwipeController = miniPlayerSwipeController,
                         miniPlayerTopPx = { miniPlayerTopPx.takeUnless { it.isNaN() } },
-                        bottomBarClearance = bottomBarClearance,
                         miniPlayerBoxHeight = miniPlayerBoxHeight,
                         sharedTransitionScope = this@SharedTransitionLayout,
                         playerViewModel = playerViewModel,

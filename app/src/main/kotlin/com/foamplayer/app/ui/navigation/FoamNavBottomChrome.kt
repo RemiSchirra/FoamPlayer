@@ -52,8 +52,11 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAccentTintState
 
 /**
- * Bottom chrome of the app: the scrim behind it, the nav bar (docked, floating
- * or attached), the mini player card and the toast stack. Hidden on onboarding.
+ * Bottom chrome of the app: the nav bar (docked, floating or attached), the
+ * mini player card and the toast stack. Hidden on onboarding.
+ *
+ * The scrim behind it is drawn separately by [FoamBottomScrim] in the unscaled
+ * root layer, so it stays full-bleed while a modal shrinks the chrome.
  *
  * The host owns the state (expansion, presence fraction, geometry) so both the
  * player and the chrome can react to it; this composable only lays it out.
@@ -76,7 +79,6 @@ internal fun BoxScope.FoamBottomChrome(
     cardPresenceFraction: () -> Float,
     miniPlayerSwipeController: MiniPlayerSwipeController,
     miniPlayerTopPx: () -> Float?,
-    bottomBarClearance: Dp,
     miniPlayerBoxHeight: Dp,
     sharedTransitionScope: SharedTransitionScope,
     playerViewModel: PlayerViewModel,
@@ -96,29 +98,6 @@ internal fun BoxScope.FoamBottomChrome(
     var lastPlayingState by remember { mutableStateOf<PlaybackState?>(null) }
     SideEffect {
         if (livePlaybackState.currentTrack != null) lastPlayingState = livePlaybackState
-    }
-
-    if (currentRoute != Screen.Onboarding.route) {
-        // Scrim base color read in composition; the live accent tint is
-        // resolved inside the draw lambda so accent frames stay draw-only
-        // (see [AccentTintState]).
-        val scrimBaseColor = FoamTheme.colors.background
-        val accentTint = LocalAccentTintState.current
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(bottomBarClearance)
-                .drawBehind {
-                    val scrim = accentTint.resolve(scrimBaseColor, BackgroundAccentTint)
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            0f to scrim.copy(alpha = 0f),
-                            1f to scrim.copy(alpha = BottomChromeScrimMaxAlpha)
-                        )
-                    )
-                }
-        )
     }
 
     // Nav bar + mini player overlay, hidden on onboarding.
@@ -305,5 +284,39 @@ internal fun BoxScope.FoamBottomChrome(
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(bottom = miniPlayerBottomPadding + miniPlayerBoxHeight + ToastsAboveMiniPlayerGap)
+    )
+}
+
+/**
+ * Bottom fade behind the nav bar and mini player. Kept out of the chrome's
+ * [com.foamplayer.app.ui.theme.foamBackdropScale] layer so a modal only shrinks
+ * the screen content and chrome, leaving this dimming effect fixed to the
+ * screen edges.
+ */
+@Composable
+internal fun BoxScope.FoamBottomScrim(
+    currentRoute: String?,
+    bottomBarClearance: Dp
+) {
+    if (currentRoute == Screen.Onboarding.route) return
+    // Scrim base color read in composition; the live accent tint is resolved
+    // inside the draw lambda so accent frames stay draw-only (see
+    // [AccentTintState]).
+    val scrimBaseColor = FoamTheme.colors.background
+    val accentTint = LocalAccentTintState.current
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth()
+            .height(bottomBarClearance)
+            .drawBehind {
+                val scrim = accentTint.resolve(scrimBaseColor, BackgroundAccentTint)
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        0f to scrim.copy(alpha = 0f),
+                        1f to scrim.copy(alpha = BottomChromeScrimMaxAlpha)
+                    )
+                )
+            }
     )
 }
