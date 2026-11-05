@@ -71,6 +71,7 @@ import com.foamplayer.app.ui.components.isNavTransitionInProgress
 import com.foamplayer.app.ui.components.collectionSearchOpenBottomPadding
 import com.foamplayer.app.ui.components.rememberCollectionHeroFlightFraction
 import com.foamplayer.app.ui.components.rememberCollectionScrollFraction
+import com.foamplayer.app.ui.components.rememberCollectionScrollTopBarTitleStart
 import com.foamplayer.app.ui.components.rememberCollectionSearchState
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.adaptAccentForTheme
@@ -163,7 +164,6 @@ fun ArtistDetailScreen(
         ?: FoamTheme.accentColor
 
     val gridState = rememberLazyGridState()
-    val topBarFraction = rememberCollectionScrollFraction(gridState)
     val navFlightFraction =
         rememberCollectionHeroFlightFraction(sharedTransitionScope, animatedVisibilityScope)
     val containerFlightFraction =
@@ -186,6 +186,15 @@ fun ArtistDetailScreen(
     val gridTopObserver = Modifier.onGloballyPositioned {
         gridTopYInRootPx = it.positionInRoot().y
     }
+    val titleStart = rememberCollectionScrollTopBarTitleStart(
+        listTopInRootPx = { gridTopYInRootPx },
+        scrollOffsetPx = heroScrollOffsetPx,
+        isFirstItemVisible = { gridState.firstVisibleItemIndex == 0 }
+    )
+    val topBarFraction = rememberCollectionScrollFraction(
+        gridState = gridState,
+        titleFadeStartPx = titleStart.startPx
+    )
     CollectionSearchScrollToBarEffect(
         searchState = searchState,
         listState = null,
@@ -248,6 +257,7 @@ fun ArtistDetailScreen(
                         searchState = searchState,
                         onVisibleHeightPx = { heroVisibleHeightPx = it },
                         scrollOffsetPx = heroScrollOffsetPx,
+                        onTitleTopPx = titleStart.onTitleTopPx,
                         transitionAlpha = transitionAlpha,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
@@ -384,6 +394,7 @@ private fun ArtistHero(
     searchState: CollectionSearchState?,
     onVisibleHeightPx: (Int) -> Unit,
     scrollOffsetPx: () -> Int,
+    onTitleTopPx: ((Float) -> Unit)?,
     transitionAlpha: () -> Float,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
@@ -401,6 +412,7 @@ private fun ArtistHero(
             searchState = searchState,
             onVisibleHeightPx = onVisibleHeightPx,
             scrollOffsetPx = scrollOffsetPx,
+            onTitleTopPx = onTitleTopPx,
             transitionAlpha = transitionAlpha,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
@@ -421,6 +433,7 @@ private fun ArtistHero(
         onShuffleAllClick = onShuffleAllClick,
         searchState = searchState,
         accentColor = accentColor,
+        onTitleTopPx = onTitleTopPx,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         sharedElementKey = sharedElementKey,

@@ -202,7 +202,6 @@ fun TrackListScreen(
 
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
-    val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
     // Flight fractions of this screen's two transitions: the nav flight and
     // the player-container flight. The floating back/more row is lifted into
     // the shared-element overlay while any transition is active
@@ -235,6 +234,23 @@ fun TrackListScreen(
     val listTopObserver = Modifier.onGloballyPositioned {
         listTopYInRootPx = it.positionInRoot().y
     }
+    val titleStart = rememberCollectionScrollTopBarTitleStart(
+        listTopInRootPx = { listTopYInRootPx },
+        scrollOffsetPx = heroScrollOffsetPx,
+        isFirstItemVisible = {
+            if (density.isGrid) {
+                gridState.firstVisibleItemIndex == 0
+            } else {
+                listState.firstVisibleItemIndex == 0
+            }
+        }
+    )
+    val topBarFraction = rememberCollectionScrollFraction(
+        listState = listState,
+        gridState = gridState,
+        useGrid = density.isGrid,
+        titleFadeStartPx = titleStart.startPx
+    )
     CollectionSearchScrollToBarEffect(
         searchState = searchState,
         listState = listState,
@@ -449,6 +465,7 @@ fun TrackListScreen(
                             accentColor = heroAccentColor,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
                             scrollOffsetPx = heroScrollOffsetPx,
+                            onTitleTopPx = titleStart.onTitleTopPx,
                             transitionAlpha = transitionAlpha,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
@@ -630,6 +647,7 @@ fun TrackListScreen(
                             accentColor = heroAccentColor,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
                             scrollOffsetPx = heroScrollOffsetPx,
+                            onTitleTopPx = titleStart.onTitleTopPx,
                             transitionAlpha = transitionAlpha,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
@@ -834,6 +852,7 @@ private fun TrackListHero(
     accentColor: Color,
     onVisibleHeightPx: (Int) -> Unit,
     scrollOffsetPx: () -> Int,
+    onTitleTopPx: ((Float) -> Unit)?,
     transitionAlpha: () -> Float,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
@@ -853,6 +872,7 @@ private fun TrackListHero(
             searchState = searchState,
             onVisibleHeightPx = onVisibleHeightPx,
             scrollOffsetPx = scrollOffsetPx,
+            onTitleTopPx = onTitleTopPx,
             transitionAlpha = transitionAlpha,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
@@ -874,6 +894,7 @@ private fun TrackListHero(
         onSubtitleClick = onArtistClick,
         searchState = searchState,
         accentColor = accentColor,
+        onTitleTopPx = onTitleTopPx,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         sharedElementKey = sharedElementKey,

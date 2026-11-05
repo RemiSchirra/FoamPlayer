@@ -441,6 +441,8 @@ fun CollectionHeroImmersiveHeader(
     onSubtitleClick: ((String) -> Unit)? = null,
     searchState: CollectionSearchState? = null,
     scrollOffsetPx: (() -> Int)? = null,
+    /** Reports the hero title's current top y in root coordinates, for the scroll top bar's fade-in anchor. */
+    onTitleTopPx: ((Float) -> Unit)? = null,
     overlayTextAlpha: (() -> Float)? = null,
     transitionAlpha: (() -> Float)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -538,6 +540,7 @@ fun CollectionHeroImmersiveHeader(
                     onShuffleAllClick = onShuffleAllClick,
                     onSubtitleClick = onSubtitleClick,
                     searchState = searchState,
+                    onTitleTopPx = onTitleTopPx,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedElementKey = sharedElementKey,
@@ -610,6 +613,8 @@ fun CollectionHero(
     accentColor: Color = FoamTheme.accentColor,
     transitionAlpha: (() -> Float)? = null,
     scrollOffsetPx: (() -> Int)? = null,
+    /** Reports the hero title's current top y in root coordinates, for the scroll top bar's fade-in anchor. */
+    onTitleTopPx: ((Float) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedElementKey: String? = null,
@@ -629,6 +634,7 @@ fun CollectionHero(
             onSubtitleClick = onSubtitleClick,
             searchState = searchState,
             accentColor = accentColor,
+            onTitleTopPx = onTitleTopPx,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             sharedElementKey = sharedElementKey,
@@ -648,6 +654,7 @@ fun CollectionHero(
             onSubtitleClick = onSubtitleClick,
             searchState = searchState,
             accentColor = accentColor,
+            onTitleTopPx = onTitleTopPx,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             sharedElementKey = sharedElementKey,
@@ -695,6 +702,7 @@ private fun CollectionHeroCompact(
     onSubtitleClick: ((String) -> Unit)?,
     searchState: CollectionSearchState?,
     accentColor: Color,
+    onTitleTopPx: ((Float) -> Unit)?,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
@@ -740,6 +748,7 @@ private fun CollectionHeroCompact(
                     accentColor = accentColor,
                     centered = false,
                     onSubtitleClick = onSubtitleClick,
+                    onTitleTopPx = onTitleTopPx,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedElementKey = sharedElementKey,
@@ -798,6 +807,7 @@ private fun CollectionHeroNormal(
     onSubtitleClick: ((String) -> Unit)?,
     searchState: CollectionSearchState?,
     accentColor: Color,
+    onTitleTopPx: ((Float) -> Unit)?,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
@@ -844,6 +854,7 @@ private fun CollectionHeroNormal(
                 accentColor = accentColor,
                 centered = true,
                 onSubtitleClick = onSubtitleClick,
+                onTitleTopPx = onTitleTopPx,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 sharedElementKey = sharedElementKey,
@@ -1026,6 +1037,7 @@ private fun CollectionHeroOverlayContent(
     onShuffleAllClick: (() -> Unit)? = null,
     onSubtitleClick: ((String) -> Unit)? = null,
     searchState: CollectionSearchState? = null,
+    onTitleTopPx: ((Float) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedElementKey: String? = null,
@@ -1044,6 +1056,7 @@ private fun CollectionHeroOverlayContent(
             accentColor = accentColor,
             centered = centered,
             onSubtitleClick = onSubtitleClick,
+            onTitleTopPx = onTitleTopPx,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             sharedElementKey = sharedElementKey,
@@ -1283,6 +1296,7 @@ private fun CollectionHeroTexts(
     accentColor: Color,
     centered: Boolean,
     onSubtitleClick: ((String) -> Unit)? = null,
+    onTitleTopPx: ((Float) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
@@ -1298,6 +1312,13 @@ private fun CollectionHeroTexts(
         if (centered) style.copy(textAlign = TextAlign.Center) else style
     }
     val textWidth = if (centered) Modifier.fillMaxWidth() else Modifier
+    val titlePositionModifier = if (onTitleTopPx != null) {
+        Modifier.onGloballyPositioned { coordinates ->
+            onTitleTopPx(coordinates.positionInRoot().y)
+        }
+    } else {
+        Modifier
+    }
     val flightOrigin =
         activeSharedCollectionOrigin(LocalActiveSharedCollectionTagState.current.value)
 
@@ -1316,7 +1337,7 @@ private fun CollectionHeroTexts(
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 enabled = sharedElementKey != null
-            )
+            ).then(titlePositionModifier)
         )
 
         if (subtitle != null) {
@@ -1858,16 +1879,74 @@ fun Modifier.collectionListTopFade(): Modifier =
             )
         }
 
+/** The scroll offset where the top bar title starts to fade in, plus the hero title-position reporter feeding it. */
+class CollectionScrollTopBarTitleStart(
+    val startPx: Int,
+    val onTitleTopPx: (Float) -> Unit
+)
+
+/**
+ * Tracks when the hero's title starts entering the top chrome's fade zone.
+ * Pass [CollectionScrollTopBarTitleStart.onTitleTopPx] to the hero and feed
+ * [CollectionScrollTopBarTitleStart.startPx] to the scroll-fraction helper, so
+ * the scroll top bar waits for the hero title to actually reach the top of the
+ * screen instead of fading in as soon as the list moves.
+ */
+@Composable
+fun rememberCollectionScrollTopBarTitleStart(
+    listTopInRootPx: () -> Float,
+    scrollOffsetPx: () -> Int,
+    isFirstItemVisible: () -> Boolean
+): CollectionScrollTopBarTitleStart {
+    val topFadeZonePx = with(LocalDensity.current) { CollectionScrollTopBarZoneHeight.roundToPx() }
+    var startPx by remember { mutableIntStateOf(0) }
+    val onTitleTopPx: (Float) -> Unit = { titleTopInRootPx ->
+        if (isFirstItemVisible()) {
+            val listTopPx = listTopInRootPx().takeUnless { it.isNaN() } ?: 0f
+            val measured = collectionScrollTopBarTitleStartPx(
+                titleTopInRootPx = titleTopInRootPx,
+                listTopInRootPx = listTopPx,
+                scrollOffsetPx = scrollOffsetPx(),
+                topFadeZonePx = topFadeZonePx
+            )
+            if (measured != startPx) startPx = measured
+        }
+    }
+    return CollectionScrollTopBarTitleStart(startPx, onTitleTopPx)
+}
+
+/**
+ * Scroll offset (px) at which the hero's title starts entering the top chrome's
+ * fade zone, i.e. the moment the hero title begins to disappear at the top of
+ * the screen. Measurements come from the hero title's and the list's own
+ * root-space positions, so the anchor follows the active hero layout
+ * (compact, normal or immersive) and the title's real height/wrapping instead
+ * of a fixed scroll distance.
+ */
+fun collectionScrollTopBarTitleStartPx(
+    titleTopInRootPx: Float,
+    listTopInRootPx: Float,
+    scrollOffsetPx: Int,
+    topFadeZonePx: Int
+): Int =
+    (titleTopInRootPx - listTopInRootPx + scrollOffsetPx - topFadeZonePx)
+        .roundToInt()
+        .coerceAtLeast(0)
+
 /** Grid-only counterpart used by screens that only ever render a [LazyVerticalGrid]. */
 @Composable
-fun rememberCollectionScrollFraction(gridState: LazyGridState): () -> Float {
+fun rememberCollectionScrollFraction(
+    gridState: LazyGridState,
+    titleFadeStartPx: Int = 0
+): () -> Float {
     val fadeDistancePx = with(LocalDensity.current) { CollectionScrollTopBarFadeDistance.toPx() }
-    return remember(gridState, fadeDistancePx) {
+    return remember(gridState, fadeDistancePx, titleFadeStartPx) {
         {
             if (gridState.firstVisibleItemIndex > 0) {
                 1f
             } else {
-                (gridState.firstVisibleItemScrollOffset / fadeDistancePx).coerceIn(0f, 1f)
+                ((gridState.firstVisibleItemScrollOffset - titleFadeStartPx) / fadeDistancePx)
+                    .coerceIn(0f, 1f)
             }
         }
     }
@@ -1875,18 +1954,19 @@ fun rememberCollectionScrollFraction(gridState: LazyGridState): () -> Float {
 
 /**
  * Scroll fraction (0f at rest, 1f once the list has scrolled
- * [CollectionScrollTopBarFadeDistance]) driving [CollectionScrollTopBar].
- * Works for both a [LazyListState] and a [LazyGridState]; consumed from draw
- * phases without per-frame recomposition.
+ * [CollectionScrollTopBarFadeDistance] past [titleFadeStartPx]) driving
+ * [CollectionScrollTopBar]. Works for both a [LazyListState] and a
+ * [LazyGridState]; consumed from draw phases without per-frame recomposition.
  */
 @Composable
 fun rememberCollectionScrollFraction(
     listState: LazyListState,
     gridState: LazyGridState?,
-    useGrid: Boolean
+    useGrid: Boolean,
+    titleFadeStartPx: Int = 0
 ): () -> Float {
     val fadeDistancePx = with(LocalDensity.current) { CollectionScrollTopBarFadeDistance.toPx() }
-    return remember(listState, gridState, useGrid, fadeDistancePx) {
+    return remember(listState, gridState, useGrid, fadeDistancePx, titleFadeStartPx) {
         {
             val index: Int
             val offset: Int
@@ -1897,7 +1977,11 @@ fun rememberCollectionScrollFraction(
                 index = listState.firstVisibleItemIndex
                 offset = listState.firstVisibleItemScrollOffset
             }
-            if (index > 0) 1f else (offset / fadeDistancePx).coerceIn(0f, 1f)
+            if (index > 0) {
+                1f
+            } else {
+                ((offset - titleFadeStartPx) / fadeDistancePx).coerceIn(0f, 1f)
+            }
         }
     }
 }

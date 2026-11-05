@@ -176,7 +176,6 @@ fun CollectionListScreen(
 
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
-    val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
     val heroScrollOffsetPx: () -> Int = {
         if (density.isGrid) {
@@ -197,6 +196,23 @@ fun CollectionListScreen(
     val listTopObserver = Modifier.onGloballyPositioned {
         listTopYInRootPx = it.positionInRoot().y
     }
+    val titleStart = rememberCollectionScrollTopBarTitleStart(
+        listTopInRootPx = { listTopYInRootPx },
+        scrollOffsetPx = heroScrollOffsetPx,
+        isFirstItemVisible = {
+            if (density.isGrid) {
+                gridState.firstVisibleItemIndex == 0
+            } else {
+                listState.firstVisibleItemIndex == 0
+            }
+        }
+    )
+    val topBarFraction = rememberCollectionScrollFraction(
+        listState = listState,
+        gridState = gridState,
+        useGrid = density.isGrid,
+        titleFadeStartPx = titleStart.startPx
+    )
     CollectionSearchScrollToBarEffect(
         searchState = searchState,
         listState = listState,
@@ -262,7 +278,8 @@ fun CollectionListScreen(
                             icon = headerIcon,
                             searchState = searchState,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
-                            scrollOffsetPx = heroScrollOffsetPx
+                            scrollOffsetPx = heroScrollOffsetPx,
+                            onTitleTopPx = titleStart.onTitleTopPx
                         )
                     }
                 }
@@ -307,7 +324,8 @@ fun CollectionListScreen(
                             icon = headerIcon,
                             searchState = searchState,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
-                            scrollOffsetPx = heroScrollOffsetPx
+                            scrollOffsetPx = heroScrollOffsetPx,
+                            onTitleTopPx = titleStart.onTitleTopPx
                         )
                     }
                 }
@@ -389,7 +407,8 @@ private fun CollectionListHero(
     icon: ImageVector?,
     searchState: CollectionSearchState?,
     onVisibleHeightPx: (Int) -> Unit,
-    scrollOffsetPx: () -> Int
+    scrollOffsetPx: () -> Int,
+    onTitleTopPx: ((Float) -> Unit)?
 ) {
     val itemsCountText = pluralStringResource(R.plurals.items_count, itemCount, itemCount)
 
@@ -401,7 +420,8 @@ private fun CollectionListHero(
             statsText = itemsCountText,
             searchState = searchState,
             onVisibleHeightPx = onVisibleHeightPx,
-            scrollOffsetPx = scrollOffsetPx
+            scrollOffsetPx = scrollOffsetPx,
+            onTitleTopPx = onTitleTopPx
         )
         return
     }
@@ -414,7 +434,8 @@ private fun CollectionListHero(
         imageUrl = imageUrl,
         icon = icon,
         searchState = searchState,
-        onPlayAllClick = null
+        onPlayAllClick = null,
+        onTitleTopPx = onTitleTopPx
     )
 }
 
