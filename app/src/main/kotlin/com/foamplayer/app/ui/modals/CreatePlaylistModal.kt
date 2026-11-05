@@ -21,10 +21,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -58,6 +60,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
@@ -324,6 +328,23 @@ internal fun PlaylistNameField(
     var textFieldValue by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
     if (textFieldValue.text != value) {
         textFieldValue = TextFieldValue(value, TextRange(value.length))
+    }
+
+    // The caret disappears when the field loses focus: clear it whenever the
+    // keyboard is closed (back gesture, drag-down, ...). The initial hidden
+    // state is ignored because the sheets that auto-focus this field request
+    // focus right after composition; only a visible -> hidden transition means
+    // the user actually closed the keyboard.
+    val focusManager = LocalFocusManager.current
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    var keyboardWasOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible) {
+        if (imeVisible) {
+            keyboardWasOpen = true
+        } else if (keyboardWasOpen) {
+            keyboardWasOpen = false
+            focusManager.clearFocus()
+        }
     }
 
     Box(
