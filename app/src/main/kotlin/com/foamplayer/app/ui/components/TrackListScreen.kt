@@ -765,7 +765,15 @@ fun TrackListScreen(
                     renderInOverlay = animatedVisibilityScope?.let { scope ->
                         { scope.isNavTransitionInProgress() }
                     }
-                )
+                ),
+            // Centre the title in the space the right-hand buttons leave free,
+            // not on the whole screen: with the edit pencil and the
+            // organisation dots both present, a screen-centred title would run
+            // underneath them.
+            trailingTitleInset = collectionScrollTopBarTitleInset(
+                (if (onEditModeChange != null) 1 else 0) +
+                    (if (onDensityChange != null) 1 else 0)
+            )
         )
 
         Box(
@@ -886,7 +894,7 @@ private fun TrackListTopBarRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(CollectionTopBarRowHorizontalPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // While editing, back leaves edit mode before the screen.
@@ -911,7 +919,7 @@ private fun TrackListTopBarRow(
             )
 
             if (onDensityChange != null) {
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(CollectionTopBarButtonSpacing))
             }
         }
 

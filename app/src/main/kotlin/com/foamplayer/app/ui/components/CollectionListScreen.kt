@@ -333,14 +333,17 @@ fun CollectionListScreen(
         CollectionScrollTopBar(
             title = title,
             fraction = topBarFraction,
-            modifier = Modifier.align(Alignment.TopCenter)
+            modifier = Modifier.align(Alignment.TopCenter),
+            trailingTitleInset = collectionScrollTopBarTitleInset(
+                if (onDensityChange != null) 1 else 0
+            )
         )
 
         Box(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(CollectionTopBarRowHorizontalPadding),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CollectionTopBarIcon(

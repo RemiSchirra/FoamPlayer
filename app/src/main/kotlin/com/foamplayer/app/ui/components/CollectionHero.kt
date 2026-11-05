@@ -110,6 +110,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.navigation.LocalActiveSharedCollectionTagState
 import com.foamplayer.app.ui.navigation.activeSharedCollectionOrigin
 import com.foamplayer.app.ui.navigation.sharedCollectionElementKey
+import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
@@ -168,11 +169,38 @@ const val CollectionScrollTopBarMaxAlpha = 0.55f
 /** Diameter of the floating top-bar icons' translucent circle. */
 val CollectionTopBarIconCircleSize = 40.dp
 
+/** Horizontal padding of the floating back/more top-bar row. */
+val CollectionTopBarRowHorizontalPadding = FoamDimens.paddingMedium
+
+/** Gap between adjacent floating top-bar buttons. */
+val CollectionTopBarButtonSpacing = FoamDimens.spacingMedium
+
 /** Alpha of the floating top-bar icons' translucent circle background. */
 const val CollectionTopBarIconBackgroundAlpha = 0.4f
 
-/** Horizontal padding kept clear of the back/more buttons for the top bar's title. */
-val CollectionScrollTopBarTitleHorizontalPadding = 56.dp
+/** Clearance between the scroll top bar's title and the buttons on either side. */
+val CollectionScrollTopBarTitleButtonGap = FoamDimens.paddingSmall
+
+/**
+ * Horizontal inset kept clear of the back/more buttons for the top bar's title
+ * when a side hosts a single button.
+ */
+val CollectionScrollTopBarTitleHorizontalPadding =
+    CollectionTopBarRowHorizontalPadding +
+        CollectionTopBarIconCircleSize +
+        CollectionScrollTopBarTitleButtonGap
+
+/**
+ * Inset from a screen edge to the scroll top bar's title on a side hosting
+ * [buttonCount] top-bar buttons. Keeps the title centred in the space the
+ * buttons leave free instead of the full screen, so longer titles cannot run
+ * under a second right-hand button, and leaves [CollectionScrollTopBarTitleButtonGap]
+ * of breathing room against the buttons.
+ */
+fun collectionScrollTopBarTitleInset(buttonCount: Int): Dp =
+    CollectionScrollTopBarTitleHorizontalPadding +
+        (CollectionTopBarIconCircleSize + CollectionTopBarButtonSpacing) *
+        (buttonCount - 1).coerceAtLeast(0)
 
 /** Padding between the immersive overlay block and the list's first row. */
 val CollectionHeroImmersiveListTopPadding = 16.dp
@@ -1715,7 +1743,9 @@ val LocalCollectionHeroLayoutLookup: ProvidableCompositionLocal<(CollectionHeroT
 fun CollectionScrollTopBar(
     title: String,
     fraction: () -> Float,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    leadingTitleInset: Dp = CollectionScrollTopBarTitleHorizontalPadding,
+    trailingTitleInset: Dp = CollectionScrollTopBarTitleHorizontalPadding
 ) {
     val density = LocalDensity.current
     val statusBarHeightPx = WindowInsets.statusBars.getTop(density)
@@ -1748,7 +1778,7 @@ fun CollectionScrollTopBar(
                 // screen's back/more buttons.
                 .padding(top = statusBarHeight)
                 .height(CollectionScrollTopBarZoneHeight)
-                .padding(horizontal = CollectionScrollTopBarTitleHorizontalPadding),
+                .padding(start = leadingTitleInset, end = trailingTitleInset),
             contentAlignment = Alignment.Center
         ) {
             BasicText(

@@ -60,6 +60,7 @@ import com.foamplayer.app.ui.components.CollectionSearchImmersiveTopClearance
 import com.foamplayer.app.ui.components.CollectionSearchState
 import com.foamplayer.app.ui.components.CollectionTopBarIcon
 import com.foamplayer.app.ui.components.CollectionTopBarRowHeight
+import com.foamplayer.app.ui.components.CollectionTopBarRowHorizontalPadding
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.MediaArtKind
 import com.foamplayer.app.ui.components.MediaArtKindScope
@@ -343,7 +344,7 @@ fun ArtistDetailScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(CollectionTopBarRowHorizontalPadding),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CollectionTopBarIcon(
