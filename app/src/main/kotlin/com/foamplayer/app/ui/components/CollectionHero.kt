@@ -114,6 +114,7 @@ import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
+import kotlin.math.roundToInt
 
 /** Immersive hero image height, as a fraction of the full screen height. */
 const val CollectionHeroImmersiveHeightFraction = 0.5f
@@ -129,6 +130,18 @@ const val CollectionHeroImmersiveOverlayFraction = 0.85f
 
 /** Vertical position of the compact-immersive text/play block, as a fraction of the image height. */
 const val CollectionHeroCompactImmersiveOverlayFraction = 0.72f
+
+/**
+ * Fraction of the list's scroll distance the immersive hero artwork travels.
+ * Below 1f the artwork moves up slower than the content, giving the scrolling
+ * collection a parallax backdrop.
+ */
+const val CollectionHeroImmersiveParallaxFactor = 0.55f
+
+/**
+ * Extra scale the immersive hero artwork gains while scrolling down.
+ */
+const val CollectionHeroImmersiveScrollScale = 0.25f
 
 /** Alpha of the subtle scrim over the immersive hero's status-bar zone. */
 const val CollectionHeroStatusBarScrimAlpha = 0.35f
@@ -540,6 +553,11 @@ fun CollectionHeroImmersiveHeader(
  * as a full circle (artist images). Compact and Normal keep the static theme
  * shape and no fade.
  *
+ * [scrollOffsetPx] drives the immersive artwork's scroll treatment: it moves
+ * up slower than the list content (parallax) while scaling up and fading
+ * toward transparent, so the collection's rows slide over a receding backdrop.
+ * Compact and Normal render in the list itself and ignore it.
+ *
  * NOTE on flight rendering: the shared-element overlay draws only the
  * becoming-visible side's content and clip. On open that is this hero; on
  * close the drawn side is the source row instead — which is why the row side
@@ -859,6 +877,13 @@ private fun CollectionHeroImmersiveArtwork(
     val statusBarHeightPx = WindowInsets.statusBars.getTop(density)
     val statusBarHeight = with(density) { statusBarHeightPx.toDp() }
     val heroHeight = collectionHeroImmersiveHeight(layout)
+    val heroVisiblePx = (with(density) { heroHeight.roundToPx() } - statusBarHeightPx)
+        .coerceAtLeast(1)
+    // 0 at rest, 1 once the hero has scrolled its own visible height away.
+    val scrollProgress: () -> Float = {
+        val scroll = scrollOffsetPx?.invoke() ?: 0
+        (scroll.toFloat() / heroVisiblePx).coerceIn(0f, 1f)
+    }
     val flightFraction = rememberCollectionHeroFlightFraction(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
@@ -876,9 +901,9 @@ private fun CollectionHeroImmersiveArtwork(
             .fillMaxWidth()
             .height(heroHeight)
             .offset {
-                // Bleed behind the status bar at rest, then ride the list's
-                // scroll 1:1 so the hero scrolls away like a header item.
-                IntOffset(0, -statusBarHeightPx - (scrollOffsetPx?.invoke() ?: 0))
+                val scroll = (scrollOffsetPx?.invoke() ?: 0) *
+                        CollectionHeroImmersiveParallaxFactor
+                IntOffset(0, -statusBarHeightPx - scroll.roundToInt())
             }
     ) {
         Box(
@@ -894,12 +919,12 @@ private fun CollectionHeroImmersiveArtwork(
                     fullyRounded = fullyRoundedArtwork
                 )
                 .graphicsLayer {
+                    val progress = scrollProgress()
+                    val scale = 1f + progress * CollectionHeroImmersiveScrollScale
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = 1f - progress
                     compositingStrategy = CompositingStrategy.Offscreen
-                    // In-flight in-place look: the shared-element overlay only
-                    // takes over once the match's bounds are configured, and
-                    // screens opened without a fade render in place from frame
-                    // one — so the artwork must carry the departing row's
-                    // rounded corners ITSELF on every frame it renders in place.
                     shape = AlbumArtFlightShape(flightRestPercent) { flightFraction.value }
                     clip = true
                 }
@@ -938,7 +963,9 @@ private fun CollectionHeroImmersiveArtwork(
                     }
                 )
                 .graphicsLayer {
-                    alpha = (1f - flightFraction.value) * (transitionAlpha?.invoke() ?: 1f)
+                    alpha = (1f - scrollProgress()) *
+                            (1f - flightFraction.value) *
+                            (transitionAlpha?.invoke() ?: 1f)
                 }
                 .background(
                     Brush.verticalGradient(
