@@ -123,7 +123,20 @@ const val CollectionHeroImmersiveHeightFraction = 0.5f
 /** Compact-immersive hero image height, as a fraction of the full screen height. */
 const val CollectionHeroCompactImmersiveHeightFraction = 0.30f
 
-/** Point (fraction of the image height) where the immersive artwork's bottom fade begins. */
+/**
+ * Extra artwork height the immersive layouts bleed BELOW their layout height,
+ * as a fraction of the full screen height. The artwork's top and the fade's
+ * start stay put while the image extends a little further down, so it reaches
+ * under the overlaid title/buttons without moving them.
+ */
+const val CollectionHeroImmersiveBleedFraction = 0.06f
+
+/**
+ * Point (fraction of the layout height, see [CollectionHeroImmersiveHeightFraction])
+ * where the immersive artwork's bottom fade begins. The drawn artwork may be
+ * taller than the layout height by [CollectionHeroImmersiveBleedFraction]; the
+ * fade's fraction is rescaled so the start height stays put.
+ */
 const val CollectionHeroImmersiveFadeStartFraction = 0.65f
 
 /** Vertical position of the immersive text/play block, as a fraction of the image height. */
@@ -400,6 +413,21 @@ fun collectionHeroImmersiveHeight(layout: CollectionHeroLayout): Dp {
         else -> 0f
     }
     return LocalConfiguration.current.screenHeightDp.dp * fraction
+}
+
+/**
+ * Total drawn height of an immersive hero artwork for [layout]: its layout
+ * height plus the downward bleed. The bleed is only visual — the list item and
+ * the overlaid text/buttons keep using [collectionHeroImmersiveHeight].
+ */
+@Composable
+fun collectionHeroImmersiveArtworkHeight(layout: CollectionHeroLayout): Dp {
+    val bleed = if (layout.isImmersive) {
+        LocalConfiguration.current.screenHeightDp.dp * CollectionHeroImmersiveBleedFraction
+    } else {
+        0.dp
+    }
+    return collectionHeroImmersiveHeight(layout) + bleed
 }
 
 private fun collectionHeroOverlayFraction(layout: CollectionHeroLayout): Float = when (layout) {
@@ -916,6 +944,11 @@ private fun CollectionHeroImmersiveArtwork(
     val statusBarHeightPx = WindowInsets.statusBars.getTop(density)
     val statusBarHeight = with(density) { statusBarHeightPx.toDp() }
     val heroHeight = collectionHeroImmersiveHeight(layout)
+    val artworkHeight = collectionHeroImmersiveArtworkHeight(layout)
+    // The artwork bleeds below the hero's layout height; rescale the fade's
+    // start so it still begins at the same absolute height.
+    val fadeStartFraction = (heroHeight * CollectionHeroImmersiveFadeStartFraction) /
+            artworkHeight
     val heroVisiblePx = (with(density) { heroHeight.roundToPx() } - statusBarHeightPx)
         .coerceAtLeast(1)
     // 0 at rest, 1 once the hero has scrolled its own visible height away.
@@ -938,7 +971,7 @@ private fun CollectionHeroImmersiveArtwork(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(heroHeight)
+            .height(artworkHeight)
             .offset {
                 val scroll = (scrollOffsetPx?.invoke() ?: 0) *
                         CollectionHeroImmersiveParallaxFactor
@@ -948,7 +981,7 @@ private fun CollectionHeroImmersiveArtwork(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(heroHeight)
+                .height(artworkHeight)
                 .collectionHeroSharedArtwork(
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
@@ -973,7 +1006,7 @@ private fun CollectionHeroImmersiveArtwork(
                     drawRect(
                         brush = Brush.verticalGradient(
                             0f to Color.Black,
-                            CollectionHeroImmersiveFadeStartFraction to Color.Black,
+                            fadeStartFraction to Color.Black,
                             1f to Color.Black.copy(alpha = 1f - fadeStrength)
                         ),
                         blendMode = BlendMode.DstIn

@@ -46,6 +46,7 @@ import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.ui.components.CollectionHeroCompactImmersiveHeightFraction
 import com.foamplayer.app.ui.components.CollectionHeroCompactImmersiveOverlayFraction
+import com.foamplayer.app.ui.components.CollectionHeroImmersiveBleedFraction
 import com.foamplayer.app.ui.components.CollectionHeroImmersiveFadeStartFraction
 import com.foamplayer.app.ui.components.CollectionHeroImmersiveHeightFraction
 import com.foamplayer.app.ui.components.CollectionHeroImmersiveOverlayFraction
@@ -338,20 +339,25 @@ private fun ImmersivePreview(
     overlayFraction: Float,
     centered: Boolean
 ) {
+    val artworkHeightFraction = imageHeightFraction + CollectionHeroImmersiveBleedFraction
+    // The bleed extends the artwork downward; the fade start keeps the same
+    // absolute height (same rescale as the real hero).
+    val fadeStartFraction =
+        imageHeightFraction * CollectionHeroImmersiveFadeStartFraction / artworkHeightFraction
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(imageHeightFraction)
+                .fillMaxHeight(artworkHeightFraction)
                 .foamBorderOverlay()
         )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(imageHeightFraction)
+                .fillMaxHeight(artworkHeightFraction)
                 .background(
                     Brush.verticalGradient(
-                        CollectionHeroImmersiveFadeStartFraction to Color.Transparent,
+                        fadeStartFraction to Color.Transparent,
                         1f to FoamTheme.colors.surfaceVariant
                     )
                 )
