@@ -321,8 +321,17 @@ object NavBarDimens {
     // ---- Floating / attached bar ----------------------------------------------
     val FloatingRowHeight = 56.dp
 
-    /** Margin around the floating pill (horizontal and vertical). */
+    /** Margin around the floating pill's sides and top. */
     val FloatingBarMargin = 12.dp
+
+    /**
+     * Gap between the floating pill's bottom edge and the system nav bar: 0 so
+     * the pill sits flush on top of it. The inset itself is applied by the
+     * host's navigationBarsPadding; this only removes the pill's own extra
+     * margin. The docked bar needs no equivalent: its surface already extends
+     * down through the inset to the bottom of the screen.
+     */
+    val FloatingBarBottomMargin = 0.dp
 
     /** Mini player artwork size the pill's corner radius hugs. Used by MiniPlayer.kt. */
     val MiniPlayerArtSize = 44.dp
@@ -502,25 +511,22 @@ object NavBarDimens {
      * instead of floating a full [AttachedCardDrop] away from the bar.
      */
     fun miniPlayerBottomPadding(mode: NavigationBarMode, expandFraction: Float = 0f): Dp {
-        val attachedBase = DockedBarHeight + DockedMiniPlayerGap - AttachedCardDrop
+        val attachedBase =
+            FloatingBarBottomMargin + FloatingRowHeight + FloatingMiniPlayerGap - AttachedCardDrop
         // How much taller the bar surface is at full expansion: the extra row plus
         // the inter-row spacing that only exists while expanded.
         val expandedGrowth = ExtraRowHeight + ExtraRowExpandedSpacing
         val base = when (mode) {
             NavigationBarMode.ATTACHED -> {
-                // Where the extra row's icons end up once the bar is fully open:
-                // pill top, minus the row's dip into the main row, minus the icons'
-                // own hit padding.
-                val pillTop = FloatingBarMargin + FloatingRowHeight + expandedGrowth
+                val pillTop = FloatingBarBottomMargin + FloatingRowHeight + expandedGrowth
                 val iconsTop = pillTop -
                         extraRowBottomOverlap(FloatingRowHeight) -
                         ExtraRowItemHitPadding
-                // Lift that leaves the card's visible edge just above those icons.
                 val fullLift = iconsTop + AttachedExpandedIconGap -
                         MiniPlayerCardVerticalPadding - attachedBase - expandedGrowth
                 attachedBase + fullLift * expandFraction
             }
-            NavigationBarMode.FLOATING -> FloatingRowHeight + FloatingBarMargin + FloatingMiniPlayerGap
+            NavigationBarMode.FLOATING -> FloatingRowHeight + FloatingBarBottomMargin + FloatingMiniPlayerGap
             else -> DockedBarHeight + DockedMiniPlayerGap + DockedBarBottomMargin
         }
         val ride = when (mode) {
@@ -539,7 +545,7 @@ object NavBarDimens {
      */
     fun navBarZoneHeight(mode: NavigationBarMode): Dp = when (mode) {
         NavigationBarMode.DOCKED -> DockedBarHeight + DockedBarBottomMargin
-        else -> FloatingRowHeight + FloatingBarMargin * 2
+        else -> FloatingRowHeight + FloatingBarMargin + FloatingBarBottomMargin
     }
 
     /** Fade length of the elevation scrim drawn at a bar surface's top edge. */
@@ -569,7 +575,7 @@ object NavBarDimens {
         val cardTop = miniPlayerBottomPadding(NavigationBarMode.ATTACHED, expandFraction) +
                 miniPlayerBoxHeight -
                 MiniPlayerCardVerticalPadding
-        val pillTop = FloatingBarMargin + FloatingRowHeight +
+        val pillTop = FloatingBarBottomMargin + FloatingRowHeight +
                 (ExtraRowHeight + ExtraRowExpandedSpacing) * expandFraction
         return (cardTop - pillTop).coerceAtLeast(0.dp)
     }
@@ -1088,7 +1094,7 @@ internal fun FloatingNavigationBar(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(NavBarDimens.FloatingRowHeight + NavBarDimens.FloatingBarMargin * 2)
+            .height(NavBarDimens.FloatingRowHeight + NavBarDimens.FloatingBarMargin + NavBarDimens.FloatingBarBottomMargin)
     ) {
         // Widest the pill's drawn surface may get: the zone minus the pill's own
         // outer horizontal margins. Rows denser than this compress their slots
@@ -1135,7 +1141,7 @@ internal fun FloatingNavigationBar(
                 .padding(
                     start = NavBarDimens.FloatingBarMargin,
                     end = NavBarDimens.FloatingBarMargin,
-                    bottom = NavBarDimens.FloatingBarMargin
+                    bottom = NavBarDimens.FloatingBarBottomMargin
                 )
                 .then(
                     pillSurfaceWidth?.let { Modifier.width(it) } ?: Modifier

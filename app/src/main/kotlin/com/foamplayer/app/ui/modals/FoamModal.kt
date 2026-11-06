@@ -110,6 +110,16 @@ fun FoamBottomModal(
         onDispose { if (visible) backdrop.release() }
     }
 
+    // System-bar insets are read OUTSIDE the Dialog, in the activity window:
+    // the dialog window fits only the IME (see the fitInsetsTypes SideEffect
+    // below), so its statusBars/navigationBars insets report zero inside and
+    // bottom-docked sheets slide under the system nav buttons. The activity
+    // window's insets are the same values the app's own nav bar pads with, so
+    // capturing them here and passing them down keeps the sheet clear.
+    val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navigationBarBottomPadding =
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(
@@ -139,14 +149,12 @@ fun FoamBottomModal(
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val density = LocalDensity.current
-            val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-            val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val imeInset = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
                 .takeIf { liftAboveKeyboard } ?: 0.dp
-            val bottomSpacing = maxOf(bottomInset, imeInset) + bottomEdgeMargin
+            val bottomSpacing = maxOf(navigationBarBottomPadding, imeInset) + bottomEdgeMargin
 
             val fullPx = with(density) {
-                (maxHeight - topInset - topEdgeMargin - bottomSpacing).coerceAtLeast(0.dp).toPx()
+                (maxHeight - statusBarTopPadding - topEdgeMargin - bottomSpacing).coerceAtLeast(0.dp).toPx()
             }
             val scrollState = rememberScrollState()
 
