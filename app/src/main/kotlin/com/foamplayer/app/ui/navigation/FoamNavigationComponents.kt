@@ -151,6 +151,25 @@ fun sharedCollectionElementKey(baseKey: String, origin: String?): String =
         "$baseKey$SharedCollectionOriginSeparator$origin"
     }
 
+/**
+ * Saved-state key holding the collection tag a detail destination was opened
+ * with. Heroes read it from their own entry, so their shared-element key stays
+ * stable while other pages are opened on top and closed again (album -> artist
+ * -> back -> close album).
+ */
+internal const val SharedCollectionTagKey = "foam.sharedCollectionTag"
+
+/**
+ * The collection tag the current collection DETAIL destination was opened with,
+ * read from its own [NavBackStackEntry]. Heroes scope their shared-element keys
+ * with it, so the key stays stable while other pages are opened on top and
+ * closed again (album -> artist -> back -> close album).
+ *
+ * Rows on the source screen instead resolve the tag of the detail page taking
+ * part in the current transition (see [LocalActiveSharedCollectionTagState]).
+ */
+val LocalCollectionDetailTag = compositionLocalOf { null as String? }
+
 /** Origin encoded in an active collection tag, or null. */
 fun activeSharedCollectionOrigin(tag: String?): String? =
     tag?.substringAfter(SharedCollectionOriginSeparator, missingDelimiterValue = "")

@@ -166,6 +166,10 @@ internal fun isAlbumRoute(route: String?): Boolean = route != null && route.star
 
 internal fun isArtistRoute(route: String?): Boolean = route != null && route.startsWith("artist/")
 
+/** Detail pages that take part in collection shared-element flights. */
+internal fun isCollectionDetailRoute(route: String?): Boolean =
+    isAlbumRoute(route) || isArtistRoute(route) || route?.startsWith("playlist/") == true
+
 internal fun isSettingsRoute(route: String?): Boolean {
     return route != null && (route == Screen.Settings.route || route.startsWith("settings/"))
 }

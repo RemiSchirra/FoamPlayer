@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,6 +39,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavController
 import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -201,6 +204,46 @@ fun FoamNavHost(
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
 
     val activeSharedCollectionTag = remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(navController) {
+        var lastEntry: NavBackStackEntry? = navController.currentBackStackEntry
+        val seenEntryIds = navController.currentBackStack.value.mapTo(mutableSetOf()) { it.id }
+        val listener = NavController.OnDestinationChangedListener { controller, destination, _ ->
+            val entry = controller.currentBackStackEntry
+            val outgoing = lastEntry
+            val returnedToExisting = entry != null && entry.id in seenEntryIds
+            lastEntry = entry
+            entry?.let { seenEntryIds += it.id }
+
+            // A null active tag means the navigation explicitly opted out (e.g.
+            // a nav-bar switch), so leave it alone then.
+            if (returnedToExisting &&
+                outgoing != null &&
+                outgoing.id != entry?.id &&
+                activeSharedCollectionTag.value != null &&
+                isCollectionDetailRoute(outgoing.destination.route)
+            ) {
+                outgoing.savedStateHandle.get<String>(SharedCollectionTagKey)?.let {
+                    activeSharedCollectionTag.value = it
+                }
+            }
+
+            if (!isCollectionDetailRoute(destination.route)) return@OnDestinationChangedListener
+            val currentEntry = entry ?: return@OnDestinationChangedListener
+            val savedState = currentEntry.savedStateHandle
+            val savedTag = savedState.get<String>(SharedCollectionTagKey)
+            if (savedTag == null) {
+                activeSharedCollectionTag.value?.let { savedState[SharedCollectionTagKey] = it }
+            } else if (activeSharedCollectionTag.value == null) {
+                // Reaching a detail page with no click tag means it was restored
+                // (saved tab stack / process death). Give it its own tag back so
+                // its later close still pairs with its original source row.
+                activeSharedCollectionTag.value = savedTag
+            }
+        }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose { navController.removeOnDestinationChangedListener(listener) }
+    }
 
     var miniPlayerTopPx by remember { mutableStateOf(Float.NaN) }
     var miniPlayerBoxHeightPx by remember { mutableStateOf(0) }

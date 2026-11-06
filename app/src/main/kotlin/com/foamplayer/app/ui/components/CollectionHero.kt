@@ -108,6 +108,7 @@ import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.navigation.LocalActiveSharedCollectionTagState
+import com.foamplayer.app.ui.navigation.LocalCollectionDetailTag
 import com.foamplayer.app.ui.navigation.activeSharedCollectionOrigin
 import com.foamplayer.app.ui.navigation.sharedCollectionElementKey
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -1353,7 +1354,7 @@ private fun CollectionHeroTexts(
         Modifier
     }
     val flightOrigin =
-        activeSharedCollectionOrigin(LocalActiveSharedCollectionTagState.current.value)
+        activeSharedCollectionOrigin(collectionDetailTag())
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -1712,6 +1713,16 @@ fun AnimatedVisibilityScope.isNavTransitionInProgress(): Boolean =
     transition.currentState != EnterExitState.Visible ||
             transition.targetState != EnterExitState.Visible
 
+/**
+ * Tag the collection hero scopes its shared-element keys with. A detail page
+ * uses the tag stored on its OWN back-stack entry, so its key never drifts when
+ * another collection page is opened on top and popped again. Falls back to the
+ * active transition tag for hosts that are not a collection detail destination.
+ */
+@Composable
+private fun collectionDetailTag(): String? =
+    LocalCollectionDetailTag.current ?: LocalActiveSharedCollectionTagState.current.value
+
 @Composable
 private fun Modifier.collectionHeroSharedArtwork(
     sharedTransitionScope: SharedTransitionScope?,
@@ -1725,7 +1736,7 @@ private fun Modifier.collectionHeroSharedArtwork(
         return this
     }
     val flightOrigin =
-        activeSharedCollectionOrigin(LocalActiveSharedCollectionTagState.current.value)
+        activeSharedCollectionOrigin(collectionDetailTag())
     val key = sharedCollectionElementKey("$sharedElementPrefix-art-$sharedElementKey", flightOrigin)
     val restPercent = if (fullyRounded) {
         AlbumArtFlightFullyRoundedPercent
