@@ -51,9 +51,11 @@ import com.foamplayer.app.ui.navigation.isActiveSharedCollectionFlightKey
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
-private val HomeRowEdgePadding = 24.dp
+private val HomeRowEdgePadding = 12.dp
 private val HomeRowHeaderButtonGap = 16.dp
-private val HomeRowCardSpacing = 8.dp
+
+/** Cards sit flush: the press highlight spans the full card, so no gap. */
+private val HomeRowCardSpacing = 0.dp
 
 /** Vertical gap between two Home rows. */
 val HomeRowSpacing = 40.dp
@@ -64,7 +66,12 @@ val HomeRowCardWidth = 140.dp
 /** Card width for tracks/artists. */
 val HomeRowCardSmallWidth = 112.dp
 
-private val HomeRowCardPadding = 4.dp
+/**
+ * Inner breathing room of a card. The ripple highlight fills the whole card
+ * (adjacent cards touch), so this is the gap between the artwork and the
+ * highlight's bounding box.
+ */
+private val HomeRowCardPadding = MediaGridCellPadding
 private val HomeRowHeaderSpacing = 4.dp
 
 /**
