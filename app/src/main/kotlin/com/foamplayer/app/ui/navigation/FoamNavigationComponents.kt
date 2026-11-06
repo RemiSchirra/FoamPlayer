@@ -297,11 +297,21 @@ val LocalSearchFocusRequest = compositionLocalOf { SearchFocusRequest() }
 object NavBarDimens {
 
     // ---- Docked bar -----------------------------------------------------------
-    /** The icon row itself. */
-    val DockedRowHeight = 64.dp
+    /**
+     * The icon row itself: one [ItemHitTargetSize] slot with the same 4dp slack
+     * around each target as the floating row ([FloatingRowHeight]), so both
+     * bars hug their buttons identically.
+     */
+    val DockedRowHeight = 56.dp
 
-    /** Connector that joins the bar to the mini player card above it. */
-    val DockedConnector = 6.dp
+    /**
+     * Extra surface above the icon row joining it to the mini player card:
+     * zero, so the visible surface is exactly the row and the padding above
+     * the buttons matches the padding below them (to the system action
+     * buttons). Kept as a constant so the bar's height stays tunable in one
+     * place.
+     */
+    val DockedConnector = 0.dp
 
     /**
      * The docked container's height in EVERY state: player open or closed, mini
@@ -311,12 +321,12 @@ object NavBarDimens {
     val DockedBarHeight = DockedRowHeight + DockedConnector
 
     /**
-     * Slack kept above/below the docked bar's interactive row so the icons sit
-     * centered within the surface's visible height, with a moderate amount of
-     * breathing room to the bottom edge. The surface itself lands on the bottom
-     * of the screen, extending down through the system nav-bar inset.
+     * The bar's own breathing room below its interactive row, on top of the
+     * system nav-bar inset. The surface itself still extends down through this
+     * margin and the inset, running behind the system action buttons to the
+     * bottom of the screen -- only the row and its icons ride up.
      */
-    val DockedBarBottomMargin = 6.dp
+    val DockedBarBottomMargin = 4.dp
 
     // ---- Floating / attached bar ----------------------------------------------
     val FloatingRowHeight = 56.dp
@@ -325,13 +335,12 @@ object NavBarDimens {
     val FloatingBarMargin = 12.dp
 
     /**
-     * Gap between the floating pill's bottom edge and the system nav bar: 0 so
-     * the pill sits flush on top of it. The inset itself is applied by the
-     * host's navigationBarsPadding; this only removes the pill's own extra
-     * margin. The docked bar needs no equivalent: its surface already extends
-     * down through the inset to the bottom of the screen.
+     * Extra breathing room between the floating pill's bottom edge and the
+     * system nav bar. The inset itself is applied by the host's
+     * navigationBarsPadding; this adds the pill's own gap on top of it. The
+     * docked bar keeps the same distance below its row: [DockedBarBottomMargin].
      */
-    val FloatingBarBottomMargin = 0.dp
+    val FloatingBarBottomMargin = 4.dp
 
     /** Mini player artwork size the pill's corner radius hugs. Used by MiniPlayer.kt. */
     val MiniPlayerArtSize = 44.dp
