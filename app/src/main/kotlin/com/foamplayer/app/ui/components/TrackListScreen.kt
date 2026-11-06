@@ -915,7 +915,10 @@ private fun TrackListTopBarRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(CollectionTopBarRowHorizontalPadding),
+            .padding(
+                horizontal = CollectionTopBarRowHorizontalPadding,
+                vertical = CollectionTopBarRowVerticalPadding
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // While editing, back leaves edit mode before the screen.

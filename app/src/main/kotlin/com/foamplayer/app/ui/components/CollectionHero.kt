@@ -189,6 +189,14 @@ val CollectionTopBarRowHorizontalPadding = FoamDimens.paddingMedium
 /** Gap between adjacent floating top-bar buttons. */
 val CollectionTopBarButtonSpacing = FoamDimens.spacingMedium
 
+/**
+ * Vertical padding of the floating back/edit/more top-bar row: centres the
+ * [CollectionTopBarIconCircleSize] icons inside [CollectionTopBarRowHeight] so
+ * they line up with the scroll top bar's title instead of sitting a few dp
+ * below it.
+ */
+val CollectionTopBarRowVerticalPadding = (CollectionTopBarRowHeight - CollectionTopBarIconCircleSize) / 2
+
 /** Alpha of the floating top-bar icons' translucent circle background. */
 const val CollectionTopBarIconBackgroundAlpha = 0.4f
 

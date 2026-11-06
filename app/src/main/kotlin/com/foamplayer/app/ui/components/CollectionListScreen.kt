@@ -361,7 +361,10 @@ fun CollectionListScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(CollectionTopBarRowHorizontalPadding),
+                    .padding(
+                        horizontal = CollectionTopBarRowHorizontalPadding,
+                        vertical = CollectionTopBarRowVerticalPadding
+                    ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CollectionTopBarIcon(

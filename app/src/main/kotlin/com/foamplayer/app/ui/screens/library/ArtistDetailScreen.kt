@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.library
 
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -61,6 +60,7 @@ import com.foamplayer.app.ui.components.CollectionSearchState
 import com.foamplayer.app.ui.components.CollectionTopBarIcon
 import com.foamplayer.app.ui.components.CollectionTopBarRowHeight
 import com.foamplayer.app.ui.components.CollectionTopBarRowHorizontalPadding
+import com.foamplayer.app.ui.components.CollectionTopBarRowVerticalPadding
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
 import com.foamplayer.app.ui.components.MediaArtKind
 import com.foamplayer.app.ui.components.MediaArtKindScope
@@ -355,7 +355,10 @@ fun ArtistDetailScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(CollectionTopBarRowHorizontalPadding),
+                    .padding(
+                        horizontal = CollectionTopBarRowHorizontalPadding,
+                        vertical = CollectionTopBarRowVerticalPadding
+                    ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CollectionTopBarIcon(
