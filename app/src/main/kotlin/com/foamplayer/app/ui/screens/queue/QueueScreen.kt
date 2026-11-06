@@ -24,6 +24,7 @@ import androidx.compose.material.Icon
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -118,6 +119,10 @@ fun QueueScreen(
     }
 
     var displayedItems by remember { mutableStateOf(upcomingItems) }
+    // The upcomingItems instance displayedItems was last synced from. Lets the sync below
+    // run during composition (same frame as the mode change) without snapping a freshly
+    // dropped, not-yet-acknowledged reorder back to the old order.
+    var syncedFrom by remember { mutableStateOf(upcomingItems) }
     var dragOriginIndex by remember { mutableStateOf<Int?>(null) }
     var dragOriginEntryId by remember { mutableStateOf<Long?>(null) }
     // The list as it was when the drag started. onMove reorders displayedItems live, so
@@ -129,10 +134,26 @@ fun QueueScreen(
 
     val latestUpcomingItems by rememberUpdatedState(upcomingItems)
 
-    LaunchedEffect(upcomingItems) {
-        if (dragOriginIndex == null) {
-            displayedItems = upcomingItems
+    // Synced during composition rather than in a LaunchedEffect: an effect lands one frame
+    // after the mode flips, so the rows would render stale (old mode's list) for a frame
+    // before the real list arrives, which showed up as flicker and broken item animations.
+    // Skipped mid-drag so the live reorder isn't clobbered; it syncs once the drag ends.
+    if (syncedFrom !== upcomingItems && dragOriginIndex == null) {
+        syncedFrom = upcomingItems
+        displayedItems = upcomingItems
+    }
+
+    // Leaving repeat-all drops the history and playing rows, which are usually the list's
+    // scroll anchor (the list opens on the playing row). With the anchor key gone, the
+    // LazyColumn falls back to the old index and jumps. Reset to the head of the upcoming
+    // list in the same frame as the change (SideEffect runs before measure, unlike a
+    // LaunchedEffect, and requestScrollToItem doesn't animate).
+    val prevRepeatAll = remember { mutableStateOf(repeatAll) }
+    SideEffect {
+        if (prevRepeatAll.value && !repeatAll) {
+            lazyListState.requestScrollToItem(0)
         }
+        prevRepeatAll.value = repeatAll
     }
 
     val dragDropListState = rememberDragDropListState(
@@ -168,7 +189,11 @@ fun QueueScreen(
     ) {
         QueueHeaderRow(
             tracks = displayedItems,
-            onShuffle = viewModel::shuffleUpcoming,
+            repeatMode = state.repeatMode,
+            isShuffle = state.isShuffle,
+            onToggleShuffle = viewModel::toggleShuffle,
+            onToggleRepeat = viewModel::toggleRepeat,
+            onRandomize = viewModel::shuffleUpcoming,
             onClear = viewModel::clearUpcoming,
             modifier = Modifier.fillMaxWidth()
         )
@@ -286,12 +311,17 @@ fun QueueScreen(
 /**
  * Header row of the queue subview: "Queue" with the main queue's stats under it
  * (track count and total duration on one line, auxiliary entries excluded) on
- * the left; the shuffle and clear buttons on the right.
+ * the left; on the right the repeat and shuffle mode toggles, the randomize (dice)
+ * button that reshuffles the upcoming list once, and the clear button.
  */
 @Composable
 private fun QueueHeaderRow(
     tracks: List<QueueItem>,
-    onShuffle: () -> Unit,
+    repeatMode: RepeatMode,
+    isShuffle: Boolean,
+    onToggleShuffle: () -> Unit,
+    onToggleRepeat: () -> Unit,
+    onRandomize: () -> Unit, // Unused but can be used to randomize the queue
     onClear: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -317,9 +347,19 @@ private fun QueueHeaderRow(
         }
 
         QueueHeaderButton(
+            icon = when (repeatMode) {
+                RepeatMode.ONE -> FoamTheme.icons.current.repeatOne
+                else -> FoamTheme.icons.current.repeat
+            },
+            contentDescription = stringResource(R.string.action_repeat),
+            isDimmed = repeatMode == RepeatMode.NONE,
+            onClick = onToggleRepeat
+        )
+        QueueHeaderButton(
             icon = FoamTheme.icons.current.shuffle,
-            contentDescription = stringResource(R.string.queue_shuffle),
-            onClick = onShuffle
+            contentDescription = "Shuffle",
+            isDimmed = !isShuffle,
+            onClick = onToggleShuffle
         )
         QueueHeaderButton(
             icon = FoamTheme.icons.current.close,
@@ -329,13 +369,14 @@ private fun QueueHeaderRow(
     }
 }
 
-/** Small circular icon button with a bounded ripple. */
+/** Small circular icon button with a bounded ripple; [isDimmed] marks a toggle that is off. */
 @Composable
 private fun QueueHeaderButton(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isDimmed: Boolean = false
 ) {
     val buttonInteractions = remember { MutableInteractionSource() }
 
@@ -354,7 +395,7 @@ private fun QueueHeaderButton(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = FoamTheme.colors.textPrimary,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(24.dp).graphicsLayer { alpha = if (isDimmed) 0.4f else 1f }
         )
     }
 }

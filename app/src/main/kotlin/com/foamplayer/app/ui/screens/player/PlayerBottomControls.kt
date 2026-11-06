@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import com.foamplayer.app.R
-import com.foamplayer.app.audio.engine.RepeatMode
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -34,8 +33,6 @@ internal fun PlayerBottomControls(
     viewModel: PlayerViewModel,
     subViewMode: SubViewMode,
     onSelectSubView: (SubViewMode) -> Unit,
-    repeatMode: RepeatMode,
-    isShuffle: Boolean,
     onPlayOnClick: () -> Unit,
     uiAlpha: () -> Float,
     subControlsProgress: () -> Float,
@@ -74,18 +71,14 @@ internal fun PlayerBottomControls(
 
         SubViewSelectorRow(
             subViewMode = subViewMode,
-            repeatMode = repeatMode,
-            isShuffle = isShuffle,
             progress = subControlsProgress,
             onSelect = onSelectSubView,
-            onShuffleClick = { viewModel.toggleShuffle() },
             onPlayOnClick = onPlayOnClick,
-            onRepeatClick = { viewModel.toggleRepeat() },
             modifier = selectorRowModifier
         )
 
         // Compose the transport cluster only while it is (becoming) visible. At rest it
-        // is alpha 0 but still sits on top of the shuffle / radio / Play on / repeat buttons
+        // is alpha 0 but still sits on top of the Play on button
         // (same Box, composed later, ~162dp wide centered), and its disabled
         // clickables still take part in hit-testing, swallowing taps meant for them.
         val showTransportCluster by remember(subControlsProgress) {

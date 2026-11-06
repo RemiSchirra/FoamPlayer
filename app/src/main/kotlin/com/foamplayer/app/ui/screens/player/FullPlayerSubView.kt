@@ -54,7 +54,6 @@ import androidx.compose.ui.util.lerp as lerpFloat
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.foamplayer.app.R
-import com.foamplayer.app.audio.engine.RepeatMode
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
@@ -153,13 +152,9 @@ private fun SubViewSelectorItem(
 @Composable
 internal fun SubViewSelectorRow(
     subViewMode: SubViewMode,
-    repeatMode: RepeatMode,
-    isShuffle: Boolean,
     progress: () -> Float,
     onSelect: (SubViewMode) -> Unit,
-    onShuffleClick: () -> Unit,
     onPlayOnClick: () -> Unit,
-    onRepeatClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -175,29 +170,10 @@ internal fun SubViewSelectorRow(
         )
 
         SubViewSelectorAction(
-            icon = FoamTheme.icons.current.shuffle,
-            contentDescription = "Shuffle",
-            isDimmed = !isShuffle,
-            progress = progress,
-            onClick = onShuffleClick
-        )
-
-        SubViewSelectorAction(
             icon = FoamTheme.icons.current.cast,
             contentDescription = stringResource(R.string.play_on),
             progress = progress,
             onClick = onPlayOnClick
-        )
-
-        SubViewSelectorAction(
-            icon = when (repeatMode) {
-                RepeatMode.ONE -> FoamTheme.icons.current.repeatOne
-                else -> FoamTheme.icons.current.repeat
-            },
-            contentDescription = stringResource(R.string.action_repeat),
-            isDimmed = repeatMode == RepeatMode.NONE,
-            progress = progress,
-            onClick = onRepeatClick
         )
 
         SubViewSelectorItem(
@@ -210,8 +186,7 @@ internal fun SubViewSelectorRow(
 }
 
 /**
- * Non-selector action icons living between the lyrics/queue selectors (shuffle, radio, "Play
- * on", repeat). Same icon/touch sizing as SubViewSelectorItem, but they disappear
+ * Non-selector action icons living between the lyrics/queue selectors (currently just "Play on"). Same icon/touch sizing as SubViewSelectorItem, but they disappear
  * as the subview opens: [progress] -> 1 fades the icon out (draw-phase alpha) and
  * gates the click once invisible, so a hidden action is never tappable while the
  * lyrics/queue selectors at both ends stay reachable for switching/collapsing.

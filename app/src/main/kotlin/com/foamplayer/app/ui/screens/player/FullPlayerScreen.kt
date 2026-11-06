@@ -819,8 +819,6 @@ fun FullPlayerScreen(
                             gestureController.expandToSubView()
                         }
                     },
-                    repeatMode = state.repeatMode,
-                    isShuffle = state.isShuffle,
                     onPlayOnClick = { showPlayOnModal = true },
                     uiAlpha = uiAlpha,
                     subControlsProgress = subControlsProgress,
@@ -886,4 +884,3 @@ fun FullPlayerScreen(
         }
     )
 }
-
