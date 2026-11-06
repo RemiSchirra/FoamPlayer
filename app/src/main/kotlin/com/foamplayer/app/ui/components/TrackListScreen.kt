@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -790,7 +791,7 @@ fun TrackListScreen(
             // underneath them.
             trailingTitleInset = collectionScrollTopBarTitleInset(
                 (if (onEditModeChange != null) 1 else 0) +
-                    (if (onDensityChange != null) 1 else 0)
+                        (if (onDensityChange != null) 1 else 0)
             )
         )
 
@@ -806,14 +807,16 @@ fun TrackListScreen(
                 )
                 .graphicsLayer { alpha = transitionAlpha() }
         ) {
-            TrackListTopBarRow(
-                onBack = onBack,
-                accentColor = heroAccentColor,
-                editMode = editMode,
-                onEditModeChange = onEditModeChange,
-                onDensityChange = onDensityChange,
-                onOpenOrganisation = { showOrganisationModal = true }
-            )
+            CompositionLocalProvider(LocalCollectionTopBarScrollFraction provides topBarFraction) {
+                TrackListTopBarRow(
+                    onBack = onBack,
+                    accentColor = heroAccentColor,
+                    editMode = editMode,
+                    onEditModeChange = onEditModeChange,
+                    onDensityChange = onDensityChange,
+                    onOpenOrganisation = { showOrganisationModal = true }
+                )
+            }
         }
     }
 

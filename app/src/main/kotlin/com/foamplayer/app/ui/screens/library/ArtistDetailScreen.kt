@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -59,6 +60,7 @@ import com.foamplayer.app.ui.components.CollectionSearchImmersiveTopClearance
 import com.foamplayer.app.ui.components.CollectionSearchState
 import com.foamplayer.app.ui.components.CollectionTopBarIcon
 import com.foamplayer.app.ui.components.CollectionTopBarRowHeight
+import com.foamplayer.app.ui.components.LocalCollectionTopBarScrollFraction
 import com.foamplayer.app.ui.components.CollectionTopBarRowHorizontalPadding
 import com.foamplayer.app.ui.components.CollectionTopBarRowVerticalPadding
 import com.foamplayer.app.ui.components.LocalCollectionHeroLayoutLookup
@@ -352,20 +354,22 @@ fun ArtistDetailScreen(
                 )
                 .graphicsLayer { alpha = transitionAlpha() }
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = CollectionTopBarRowHorizontalPadding,
-                        vertical = CollectionTopBarRowVerticalPadding
-                    ),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CollectionTopBarIcon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = stringResource(R.string.back),
-                    onClick = onBack
-                )
+            CompositionLocalProvider(LocalCollectionTopBarScrollFraction provides topBarFraction) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = CollectionTopBarRowHorizontalPadding,
+                            vertical = CollectionTopBarRowVerticalPadding
+                        ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CollectionTopBarIcon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = stringResource(R.string.back),
+                        onClick = onBack
+                    )
+                }
             }
         }
     }

@@ -31,6 +31,7 @@ import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -358,27 +359,29 @@ fun CollectionListScreen(
         )
 
         Box(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = CollectionTopBarRowHorizontalPadding,
-                        vertical = CollectionTopBarRowVerticalPadding
-                    ),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CollectionTopBarIcon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = stringResource(R.string.back),
-                    onClick = onBack
-                )
-
-                if (onDensityChange != null) {
-                    Spacer(modifier = Modifier.weight(1f))
-                    OrganisationMenuButton(
-                        contentDescription = stringResource(R.string.organisation),
-                        onClick = { showOrganisationModal = true }
+            CompositionLocalProvider(LocalCollectionTopBarScrollFraction provides topBarFraction) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = CollectionTopBarRowHorizontalPadding,
+                            vertical = CollectionTopBarRowVerticalPadding
+                        ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CollectionTopBarIcon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = stringResource(R.string.back),
+                        onClick = onBack
                     )
+
+                    if (onDensityChange != null) {
+                        Spacer(modifier = Modifier.weight(1f))
+                        OrganisationMenuButton(
+                            contentDescription = stringResource(R.string.organisation),
+                            onClick = { showOrganisationModal = true }
+                        )
+                    }
                 }
             }
         }

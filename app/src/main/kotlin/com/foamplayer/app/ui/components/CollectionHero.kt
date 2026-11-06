@@ -66,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -200,6 +201,16 @@ val CollectionTopBarRowVerticalPadding = (CollectionTopBarRowHeight - Collection
 /** Alpha of the floating top-bar icons' translucent circle background. */
 const val CollectionTopBarIconBackgroundAlpha = 0.4f
 
+/**
+ * The hosting screen's scroll-top-bar fraction (0f at rest, 1f once the title is
+ * fully shown), read by every [CollectionTopBarIcon] below it. The icons' circle
+ * background fades with the exact reverse of the title's alpha: fully visible
+ * when the title is hidden, gone when the title is fully shown. Draw-phase only.
+ * Defaults to 0f (circle always shown) for screens that don't provide it.
+ */
+val LocalCollectionTopBarScrollFraction: ProvidableCompositionLocal<() -> Float> =
+    compositionLocalOf { { 0f } }
+
 /** Clearance between the scroll top bar's title and the buttons on either side. */
 val CollectionScrollTopBarTitleButtonGap = FoamDimens.paddingSmall
 
@@ -209,8 +220,8 @@ val CollectionScrollTopBarTitleButtonGap = FoamDimens.paddingSmall
  */
 val CollectionScrollTopBarTitleHorizontalPadding =
     CollectionTopBarRowHorizontalPadding +
-        CollectionTopBarIconCircleSize +
-        CollectionScrollTopBarTitleButtonGap
+            CollectionTopBarIconCircleSize +
+            CollectionScrollTopBarTitleButtonGap
 
 /**
  * Inset from a screen edge to the scroll top bar's title on a side hosting
@@ -221,8 +232,8 @@ val CollectionScrollTopBarTitleHorizontalPadding =
  */
 fun collectionScrollTopBarTitleInset(buttonCount: Int): Dp =
     CollectionScrollTopBarTitleHorizontalPadding +
-        (CollectionTopBarIconCircleSize + CollectionTopBarButtonSpacing) *
-        (buttonCount - 1).coerceAtLeast(0)
+            (CollectionTopBarIconCircleSize + CollectionTopBarButtonSpacing) *
+            (buttonCount - 1).coerceAtLeast(0)
 
 /** Padding between the immersive overlay block and the list's first row. */
 val CollectionHeroImmersiveListTopPadding = 16.dp
@@ -1887,11 +1898,18 @@ fun CollectionTopBarIcon(
     circleSize: Dp = CollectionTopBarIconCircleSize
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val scrollFraction = LocalCollectionTopBarScrollFraction.current
     Box(
         modifier = modifier
             .size(circleSize)
             .clip(CircleShape)
-            .background(backgroundColor)
+            // Fades with the reverse of the scroll top bar title's alpha.
+            .drawBehind {
+                drawRect(
+                    color = backgroundColor,
+                    alpha = (1f - scrollFraction()).coerceIn(0f, 1f)
+                )
+            }
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = FoamTheme.colors.textPrimary),
