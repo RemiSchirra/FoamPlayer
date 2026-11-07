@@ -198,14 +198,17 @@ fun QueueScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
-        val fadeHeight = 24.dp
+        // The top fade is kept short and its padding minimal so the first row sits close
+        // to the header; the bottom keeps the longer fade (no header above it to crowd).
+        val topFadeHeight = 8.dp
+        val bottomFadeHeight = 24.dp
 
         LazyColumn(
             state = lazyListState,
-            contentPadding = PaddingValues(vertical = fadeHeight),
+            contentPadding = PaddingValues(top = 2.dp, bottom = bottomFadeHeight),
             modifier = Modifier
                 .weight(1f)
-                .fadingEdges(edgeHeight = fadeHeight)
+                .fadingEdges(topEdgeHeight = topFadeHeight, bottomEdgeHeight = bottomFadeHeight)
         ) {
             itemsIndexed(
                 items = displayedItems,
@@ -401,22 +404,23 @@ private fun QueueHeaderButton(
 }
 
 /**
- * Fades the top and bottom [edgeHeight] of this composable's own content to transparent,
- * instead of letting a scrolling container hard-clip it at the viewport edge.
+ * Fades the top [topEdgeHeight] and bottom [bottomEdgeHeight] of this composable's own content
+ * to transparent, instead of letting a scrolling container hard-clip it at the viewport edge.
  *
  * Uses an offscreen compositing layer (alpha < 1f forces one) so the gradient can be applied
  * with [BlendMode.DstIn] against the content's actual alpha channel — this fades whatever is
  * being drawn (list items, backgrounds, images, etc.) rather than painting a solid color on
  * top, so it works correctly no matter what sits behind the container.
  */
-private fun Modifier.fadingEdges(edgeHeight: Dp): Modifier = this
+private fun Modifier.fadingEdges(topEdgeHeight: Dp, bottomEdgeHeight: Dp): Modifier = this
     .graphicsLayer { alpha = 0.99f }
     .drawWithContent {
         drawContent()
-        val edgeHeightPx = edgeHeight.toPx()
-        if (edgeHeightPx <= 0f || size.height <= 0f) return@drawWithContent
-        val topFraction = (edgeHeightPx / size.height).coerceIn(0f, 0.5f)
-        val bottomFraction = (1f - edgeHeightPx / size.height).coerceIn(0.5f, 1f)
+        val topPx = topEdgeHeight.toPx()
+        val bottomPx = bottomEdgeHeight.toPx()
+        if (size.height <= 0f || (topPx <= 0f && bottomPx <= 0f)) return@drawWithContent
+        val topFraction = (topPx / size.height).coerceIn(0f, 0.5f)
+        val bottomFraction = (1f - bottomPx / size.height).coerceIn(0.5f, 1f)
         drawRect(
             brush = Brush.verticalGradient(
                 0f to Color.Transparent,
