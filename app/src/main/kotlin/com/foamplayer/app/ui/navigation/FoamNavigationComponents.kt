@@ -68,6 +68,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAccentTintState
 import com.foamplayer.app.ui.theme.SurfaceAccentTint
 import com.foamplayer.app.ui.theme.SurfaceVariantAccentTint
+import com.foamplayer.app.ui.utils.consumeTaps
 
 /** Elevation shared by both bars' drop shadow. */
 private val NavBarShadowElevation = 6.dp
@@ -982,6 +983,7 @@ fun FoamNavigationBar(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
+                .consumeTaps()
                 .padding(bottom = NavBarDimens.DockedBarBottomMargin)
                 .fillMaxWidth()
                 .requiredHeight(
@@ -1159,6 +1161,7 @@ internal fun FloatingNavigationBar(
                     NavBarDimens.FloatingRowHeight +
                             (NavBarDimens.ExtraRowHeight + NavBarDimens.ExtraRowExpandedSpacing) * expandFraction
                 )
+                .consumeTaps()
                 // Elevation over the scrolling content. In ATTACHED mode the shadow's
                 // top edge is hidden behind the card-connected surface extension; the
                 // extension's own top edge gets its depth from the scrim drawn below.

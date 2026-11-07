@@ -50,6 +50,7 @@ import com.foamplayer.app.ui.theme.BackgroundAccentTint
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAccentTintState
+import com.foamplayer.app.ui.utils.consumeTaps
 
 /**
  * Bottom chrome of the app: the nav bar (docked, floating or attached), the
@@ -113,6 +114,14 @@ internal fun BoxScope.FoamBottomChrome(
                     renderInOverlay = isBottomChromeLifted
                 )
         ) {
+            // Invisible shield over the whole zone, under the bar's interactive
+            // content: taps that miss an icon (and the gap + system inset below
+            // the bar) stop here instead of reaching the rows scrolling behind.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .consumeTaps()
+            )
             when (navigationBarMode) {
                 NavigationBarMode.DOCKED -> Box(
                     modifier = Modifier.fillMaxWidth().navigationBarsPadding()
