@@ -279,6 +279,8 @@ fun FullPlayerScreen(
                 return Offset.Zero
             }
 
+            private var listMovedThisGesture = false
+
             override fun onPostScroll(
                 consumed: Offset,
                 available: Offset,
@@ -286,7 +288,12 @@ fun FullPlayerScreen(
             ): Offset {
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
 
-                if (available.y > 0f) {
+                if (consumed.y != 0f) {
+                    listMovedThisGesture = true
+                    return Offset.Zero
+                }
+
+                if (available.y > 0f && !listMovedThisGesture) {
                     gestureController.onDrag(available.y)
                     return Offset(0f, available.y)
                 }
@@ -294,6 +301,8 @@ fun FullPlayerScreen(
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
+                listMovedThisGesture = false
+
                 val upState = gestureController.upTransitionState
                 val isMidDrag = upState.currentState != upState.targetState
 
