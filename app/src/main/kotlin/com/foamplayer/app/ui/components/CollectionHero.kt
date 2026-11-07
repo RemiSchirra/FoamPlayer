@@ -80,6 +80,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -988,6 +989,22 @@ private fun CollectionHeroImmersiveArtwork(
         FoamTheme.shapes.miniPlayerRounding * 50f
     }
 
+    // Status-bar scrim pinning. During a nav transition the scrim is lifted
+    // into the shared-transition overlay, which draws it at the root position
+    // of its (transformed) host, so the collection open/close zoom of the
+    // screen carried it away from the top edge: the dim left the status bar
+    // and slid back as the zoom settled (dimmed -> undimmed -> dimmed). The
+    // scrim belongs to the screen's top edge, not to the zoomed content, so
+    // while lifted it cancels the host transform and stays where it rests.
+    // [scrimRestPositionPx] is the scrim's un-transformed root position,
+    // captured at scroll 0 whenever no transition runs; a screen that never
+    // rested keeps (0, 0), the top-left of the screen.
+    val scrimCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val scrimRestPositionPx = remember { floatArrayOf(0f, 0f) }
+    val parallaxShiftPx: () -> Float = {
+        (scrollOffsetPx?.invoke() ?: 0) * CollectionHeroImmersiveParallaxFactor
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -1048,6 +1065,20 @@ private fun CollectionHeroImmersiveArtwork(
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
                 .height(statusBarHeight + CollectionHeroStatusBarScrimExtraHeight)
+                .onGloballyPositioned { coordinates ->
+                    // Fires on every scroll frame (the host moves with the
+                    // parallax): keep it to a reference check, and only read the
+                    // position at scroll 0 outside transitions, where it is the
+                    // scrim's rest position with no parallax term.
+                    if (scrimCoordinates[0] !== coordinates) scrimCoordinates[0] = coordinates
+                    if ((scrollOffsetPx?.invoke() ?: 0) == 0 &&
+                        animatedVisibilityScope?.isNavTransitionInProgress() != true
+                    ) {
+                        val position = coordinates.positionInRoot()
+                        scrimRestPositionPx[0] = position.x
+                        scrimRestPositionPx[1] = position.y
+                    }
+                }
                 .collectionHeroOverlayLayer(
                     sharedTransitionScope = sharedTransitionScope,
                     renderInOverlay = animatedVisibilityScope?.let { scope ->
@@ -1058,6 +1089,16 @@ private fun CollectionHeroImmersiveArtwork(
                     alpha = (1f - scrollProgress()) *
                             (1f - flightFraction.value) *
                             (transitionAlpha?.invoke() ?: 1f)
+                    // Cancel the host's zoom transform while lifted (see above).
+                    val coordinates = scrimCoordinates[0]
+                    if (coordinates != null &&
+                        coordinates.isAttached &&
+                        animatedVisibilityScope?.isNavTransitionInProgress() == true
+                    ) {
+                        val position = coordinates.positionInRoot()
+                        translationX = scrimRestPositionPx[0] - position.x
+                        translationY = scrimRestPositionPx[1] - parallaxShiftPx() - position.y
+                    }
                 }
                 .background(
                     Brush.verticalGradient(

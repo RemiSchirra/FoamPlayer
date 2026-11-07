@@ -205,6 +205,9 @@ fun FoamNavHost(
 
     val activeSharedCollectionTag = remember { mutableStateOf<String?>(null) }
 
+    // Pivot of the collection open/close zoom (position of the tapped item).
+    val zoomOrigins = remember { CollectionZoomOrigins() }
+
     DisposableEffect(navController) {
         var lastEntry: NavBackStackEntry? = navController.currentBackStackEntry
         val seenEntryIds = navController.currentBackStack.value.mapTo(mutableSetOf()) { it.id }
@@ -316,6 +319,7 @@ fun FoamNavHost(
 
     /** Navigates while closing the player, staging the flight after the nav swap. */
     fun navigateClosingPlayer(route: String, pattern: String) {
+        zoomOrigins.discardTouch()
         val topId = navController.currentDestination?.id
         val topPattern = navController.currentDestination?.route
         val replacesPrevious = playerOpenedPattern != null &&
@@ -346,12 +350,14 @@ fun FoamNavHost(
         val navTransitions = remember(
             playerTransitionState,
             primaryNavBarItems,
-            secondaryNavBarItems
+            secondaryNavBarItems,
+            zoomOrigins
         ) {
             buildFoamNavTransitions(
                 playerTransitionState = playerTransitionState,
                 primaryNavBarItems = primaryNavBarItems,
-                secondaryNavBarItems = secondaryNavBarItems
+                secondaryNavBarItems = secondaryNavBarItems,
+                zoomOrigins = zoomOrigins
             )
         }
 
@@ -400,7 +406,7 @@ fun FoamNavHost(
             LocalBottomBarClearance provides bottomBarClearance,
             LocalCollectionHeroLayoutLookup provides heroLayoutFor,
             LocalActiveSharedCollection provides activeSharedCollectionTag.value,
-    LocalActiveSharedCollectionTagState provides activeSharedCollectionTag,
+            LocalActiveSharedCollectionTagState provides activeSharedCollectionTag,
             LocalSearchFocusRequest provides searchFocusRequest,
             LocalBackgroundSettingsPreview provides backgroundSettingsPreview
         ) {
@@ -526,7 +532,12 @@ fun FoamNavHost(
 
                 // Screen content: shrinks behind modals (see foamBackdropScale)
                 // while the backdrop layers above stay full-bleed.
-                Box(modifier = Modifier.fillMaxSize().foamBackdropScale()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .foamZoomOriginTracker(zoomOrigins)
+                        .foamBackdropScale()
+                ) {
                     fun playTrackFromList(
                         tracks: List<TrackEntity>,
                         index: Int,
@@ -723,10 +734,12 @@ fun FoamNavHost(
                 onNavigateClosingPlayer = { route, pattern -> navigateClosingPlayer(route, pattern) },
                 onActiveSharedCollectionChange = { activeSharedCollectionTag.value = it },
                 onOpenArtist = { artist ->
+                    zoomOrigins.discardTouch()
                     activeSharedCollectionTag.value = sharedCollectionTag("artist", artist)
                     navController.navigate(Screen.ArtistDetail.createRoute(artist))
                 },
                 onOpenAlbum = { album, albumArtPath, artist ->
+                    zoomOrigins.discardTouch()
                     activeSharedCollectionTag.value = sharedCollectionTag("album", album)
                     navController.navigate(Screen.AlbumDetail.createRoute(album, albumArtPath, artist))
                 }

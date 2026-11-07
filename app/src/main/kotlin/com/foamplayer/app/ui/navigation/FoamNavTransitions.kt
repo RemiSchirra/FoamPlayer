@@ -7,10 +7,21 @@ import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.runtime.Stable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isUnspecified
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntSize
 import androidx.navigation.NavBackStackEntry
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.ui.theme.FoamMotion
@@ -21,8 +32,10 @@ import kotlin.math.roundToInt
  *
  * The rules depend on the route pair: navigation-bar switches slide from the side
  * or row the new tab lives on, settings/stats/browse stacks slide, album -> artist
- * uses the same stack slide (it has no shared artwork), detail screens crossfade
- * over the shared-element duration, and everything else fades.
+ * uses the same stack slide (it has no shared artwork), opening/closing a
+ * collection (album/playlist/artist), or an album from its artist page, zooms
+ * around the tapped item (see [CollectionZoomOrigins]), other detail screens crossfade over the
+ * shared-element duration, and everything else fades.
  * While the full player is on screen the nav host is already hidden, so its own
  * transitions are disabled to avoid overlapping flights on close.
  */
@@ -36,7 +49,8 @@ internal class FoamNavTransitions(
 internal fun buildFoamNavTransitions(
     playerTransitionState: SeekableTransitionState<Boolean>,
     primaryNavBarItems: List<NavBarItem>,
-    secondaryNavBarItems: List<NavBarItem>
+    secondaryNavBarItems: List<NavBarItem>,
+    zoomOrigins: CollectionZoomOrigins
 ): FoamNavTransitions {
     fun AnimatedContentTransitionScope<NavBackStackEntry>.isSettingsPair() =
         isSettingsRoute(initialState.destination.route) && isSettingsRoute(targetState.destination.route)
@@ -49,7 +63,7 @@ internal fun buildFoamNavTransitions(
 
     fun AnimatedContentTransitionScope<NavBackStackEntry>.isSharedElementPair() =
         isSharedElementRoute(initialState.destination.route) ||
-            isSharedElementRoute(targetState.destination.route)
+                isSharedElementRoute(targetState.destination.route)
 
     // Album -> artist has no shared artwork to fly (the album's artist line is
     // plain text), so it would otherwise crossfade. Give it the same subtle
@@ -59,6 +73,30 @@ internal fun buildFoamNavTransitions(
 
     fun AnimatedContentTransitionScope<NavBackStackEntry>.isArtistToAlbumPair() =
         isArtistRoute(initialState.destination.route) && isAlbumRoute(targetState.destination.route)
+
+    // Opening a collection from a list/grid, or an album from its artist page
+    // (push, used by enter/exit), and closing it back (pop, used by
+    // popEnter/popExit). Album -> artist pushes and artist -> album pops keep
+    // their stack slide, so only the opposite directions zoom.
+    fun AnimatedContentTransitionScope<NavBackStackEntry>.isCollectionOpenPair() =
+        (isCollectionDetailRoute(targetState.destination.route) &&
+                !isCollectionDetailRoute(initialState.destination.route)) ||
+                isArtistToAlbumPair()
+
+    fun AnimatedContentTransitionScope<NavBackStackEntry>.isCollectionClosePair() =
+        (isCollectionDetailRoute(initialState.destination.route) &&
+                !isCollectionDetailRoute(targetState.destination.route)) ||
+                isAlbumToArtistPair()
+
+    // Both screens of the push share the origin computed for the collection entry.
+    fun AnimatedContentTransitionScope<NavBackStackEntry>.openOrigin(): TransformOrigin =
+        zoomOrigins.originForOpen(entryId = targetState.id, sourceEntryId = initialState.id)
+
+    // On close the list screen is composed again at the position it was left
+    // at, so the origin remembered at open is where the item will be at the
+    // end of the animation.
+    fun AnimatedContentTransitionScope<NavBackStackEntry>.closeOrigin(): TransformOrigin =
+        zoomOrigins.originForClose(entryId = initialState.id, targetEntryId = targetState.id)
 
     fun AnimatedContentTransitionScope<NavBackStackEntry>.navBarSlide() =
         navBarSlide(
@@ -84,6 +122,13 @@ internal fun buildFoamNavTransitions(
                         initialOffsetX = { (it * SubScreenSlideFraction).roundToInt() },
                         animationSpec = tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
                     ) + fadeIn(animationSpec = FoamMotion.Spec.screenFadeIn)
+                // Collection opens: the incoming detail content scales up from the tapped item.
+                isCollectionOpenPair() ->
+                    scaleIn(
+                        animationSpec = FoamMotion.Spec.sharedElementFlight,
+                        initialScale = CollectionZoomMinScale,
+                        transformOrigin = openOrigin()
+                    ) + fadeIn(FoamMotion.Spec.sharedElementFlight)
                 isSharedElementPair() ->
                     fadeIn(FoamMotion.Spec.sharedElementFlight)
                 else -> fadeIn(animationSpec = FoamMotion.Spec.screenFadeIn)
@@ -104,6 +149,15 @@ internal fun buildFoamNavTransitions(
                         targetOffsetX = { (-it * SubScreenSlideFraction).roundToInt() },
                         animationSpec = tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
                     ) + fadeOut(animationSpec = FoamMotion.Spec.screenFadeOut)
+                // Collection opens: the outgoing list shrinks around the tapped item.
+                // The artwork flies in the shared-transition overlay, so it is
+                // not scaled by this layer.
+                isCollectionOpenPair() ->
+                    scaleOut(
+                        animationSpec = FoamMotion.Spec.sharedElementFlight,
+                        targetScale = CollectionZoomMinScale,
+                        transformOrigin = openOrigin()
+                    ) + fadeOut(FoamMotion.Spec.sharedElementFlight)
                 isSharedElementPair() ->
                     fadeOut(FoamMotion.Spec.sharedElementFlight)
                 else -> fadeOut(animationSpec = FoamMotion.Spec.screenFadeOut)
@@ -127,6 +181,14 @@ internal fun buildFoamNavTransitions(
                         initialOffsetX = { (-it * SubScreenSlideFraction).roundToInt() },
                         animationSpec = tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
                     ) + fadeIn(animationSpec = FoamMotion.Spec.screenFadeIn)
+                // Collection closes: the list scales back up around the item's
+                // final position.
+                isCollectionClosePair() ->
+                    scaleIn(
+                        animationSpec = FoamMotion.Spec.sharedElementFlight,
+                        initialScale = CollectionZoomMinScale,
+                        transformOrigin = closeOrigin()
+                    ) + fadeIn(FoamMotion.Spec.sharedElementFlight)
                 isSharedElementPair() ->
                     fadeIn(FoamMotion.Spec.sharedElementFlight)
                 else -> fadeIn(animationSpec = FoamMotion.Spec.screenFadeIn)
@@ -147,6 +209,14 @@ internal fun buildFoamNavTransitions(
                         targetOffsetX = { (it * SubScreenSlideFraction).roundToInt() },
                         animationSpec = tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
                     ) + fadeOut(animationSpec = FoamMotion.Spec.screenFadeOut)
+                // Collection closes: the outgoing detail content shrinks toward
+                // the item's final position.
+                isCollectionClosePair() ->
+                    scaleOut(
+                        animationSpec = FoamMotion.Spec.sharedElementFlight,
+                        targetScale = CollectionZoomMinScale,
+                        transformOrigin = closeOrigin()
+                    ) + fadeOut(FoamMotion.Spec.sharedElementFlight)
                 isSharedElementPair() ->
                     fadeOut(FoamMotion.Spec.sharedElementFlight)
                 else -> fadeOut(animationSpec = FoamMotion.Spec.screenFadeOut)
@@ -154,6 +224,97 @@ internal fun buildFoamNavTransitions(
         },
     )
 }
+
+/**
+ * Scale the shrunken side of the collection open/close zoom starts/ends at.
+ * Keep it in step with the shrink [com.foamplayer.app.ui.theme.foamBackdropScale]
+ * applies behind modals so both read as the same "push back" gesture.
+ */
+private const val CollectionZoomMinScale = 0.92f
+
+/** A tap older than this is not what triggered the navigation (modal, deep link...). */
+private const val TouchFreshnessNanos = 2_500_000_000L
+private const val MaxRememberedOrigins = 48
+
+/**
+ * Where the collection zoom is pivoted: the position of the item the user tapped
+ * to open a collection, as a fraction of the screen-content container.
+ *
+ * The last pointer-down is tracked by [foamZoomOriginTracker]. When a collection
+ * entry is pushed, that position is frozen for the entry, so the push and the
+ * later pop (close) pivot around the same spot, which is where the item sits
+ * again once the list is back (its scroll position is restored). Without a
+ * fresh tap (opened from a modal, the player, a restored stack) or when the pop
+ * does not return to the list the collection was opened from, the pivot falls
+ * back to the container center.
+ */
+@Stable
+internal class CollectionZoomOrigins {
+    private class Remembered(val sourceEntryId: String, val origin: TransformOrigin)
+
+    private var lastTouch: Offset = Offset.Unspecified
+    private var lastTouchContainer: IntSize = IntSize.Zero
+    private var lastTouchNanos: Long = 0L
+    private val byEntry = LinkedHashMap<String, Remembered>()
+
+    fun onPointerDown(position: Offset, containerSize: IntSize) {
+        lastTouch = position
+        lastTouchContainer = containerSize
+        lastTouchNanos = System.nanoTime()
+    }
+
+    /** Navigations not started by tapping an item (modals, player) must not reuse a past tap. */
+    fun discardTouch() {
+        lastTouch = Offset.Unspecified
+    }
+
+    fun originForOpen(entryId: String, sourceEntryId: String): TransformOrigin {
+        byEntry[entryId]?.let { return it.origin }
+        val origin = touchOrigin() ?: TransformOrigin.Center
+        byEntry[entryId] = Remembered(sourceEntryId, origin)
+        if (byEntry.size > MaxRememberedOrigins) {
+            byEntry.remove(byEntry.keys.first())
+        }
+        return origin
+    }
+
+    fun originForClose(entryId: String, targetEntryId: String): TransformOrigin {
+        val remembered = byEntry[entryId] ?: return TransformOrigin.Center
+        return if (remembered.sourceEntryId == targetEntryId) {
+            remembered.origin
+        } else {
+            TransformOrigin.Center
+        }
+    }
+
+    private fun touchOrigin(): TransformOrigin? {
+        if (lastTouch.isUnspecified) return null
+        if (System.nanoTime() - lastTouchNanos > TouchFreshnessNanos) return null
+        val width = lastTouchContainer.width
+        val height = lastTouchContainer.height
+        if (width <= 0 || height <= 0) return null
+        return TransformOrigin(
+            pivotFractionX = (lastTouch.x / width).coerceIn(0f, 1f),
+            pivotFractionY = (lastTouch.y / height).coerceIn(0f, 1f)
+        )
+    }
+}
+
+/**
+ * Records where the screen content was last touched, without consuming anything
+ * (Initial pass). Apply it to the box that hosts the NavHost, before any scale
+ * modifier, so positions stay in the container's own coordinates.
+ */
+internal fun Modifier.foamZoomOriginTracker(origins: CollectionZoomOrigins): Modifier =
+    pointerInput(origins) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val down = event.changes.firstOrNull { it.changedToDownIgnoreConsumed() }
+                if (down != null) origins.onPointerDown(down.position, size)
+            }
+        }
+    }
 
 /** Which row of the navigation bar a screen belongs to. */
 private enum class NavBarTier { PRIMARY, SECONDARY }
