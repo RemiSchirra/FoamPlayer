@@ -1,8 +1,6 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,7 +29,6 @@ import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.FoamDimens
-import com.foamplayer.app.ui.theme.foamBorderOverlay
 import com.foamplayer.squig.SquigDatabase
 import com.foamplayer.squig.SquigLink
 import com.foamplayer.squig.SquigSite
@@ -141,12 +138,7 @@ fun TestSettingsScreen(
                             onValueChange = { sliderValue = it },
                             valueDisplay = "${(sliderValue * 100).toInt()}%"
                         )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(FoamDimens.separatorHeight)
-                                .foamBorderOverlay()
-                        )
+                        SettingsSectionDivider()
                         FoamSliderItem(
                             title = stringResource(R.string.test_slider_snapped),
                             value = snappedSliderValue,

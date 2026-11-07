@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -31,7 +30,6 @@ import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBorderOverlay
 
 @Composable
 fun MiscSettingsScreen(
@@ -163,13 +161,7 @@ fun MiscSettingsScreen(
                             title = stringResource(R.string.lastfm_entry),
                             onClick = onNavigateToLastFm
                         )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = FoamDimens.paddingMedium)
-                                .height(FoamDimens.separatorHeight)
-                                .foamBorderOverlay()
-                        )
+                        SettingsSectionDivider()
                         FoamNavigationButton(
                             title = stringResource(R.string.discord_entry),
                             onClick = onNavigateToDiscord

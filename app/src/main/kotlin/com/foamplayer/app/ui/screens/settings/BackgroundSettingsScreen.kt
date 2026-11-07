@@ -88,7 +88,6 @@ import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
-import com.foamplayer.app.ui.theme.foamBorderOverlay
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlinx.coroutines.flow.first
@@ -183,12 +182,7 @@ fun BackgroundSettingsScreen(
                 Column {
                     BackgroundMode.entries.forEachIndexed { index, modeOption ->
                         if (index > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .foamBorderOverlay()
-                            )
+                            SettingsSectionDivider()
                         }
                         ModeOptionRow(
                             mode = modeOption,
@@ -283,12 +277,7 @@ fun BackgroundSettingsScreen(
                                     viewModel.setForceDynamicBackgroundInCollections(it)
                                 },
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .foamBorderOverlay()
-                            )
+                            SettingsSectionDivider()
                             CompactSwitchRow(
                                 title = stringResource(R.string.player),
                                 checked = forceDynamicInPlayer,
@@ -338,12 +327,7 @@ fun BackgroundSettingsScreen(
                                 formatValue = { "${it.roundToInt()}%" },
                                 minMaxDisplay = intensityMin to intensityMax,
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .foamBorderOverlay()
-                            )
+                            SettingsSectionDivider()
                         }
                     }
                     FoamSliderStateItem(
@@ -358,12 +342,7 @@ fun BackgroundSettingsScreen(
                         formatValue = { "${it.roundToInt()}%" },
                         minMaxDisplay = colorMin to colorMax,
                     )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(FoamDimens.separatorHeight)
-                            .foamBorderOverlay()
-                    )
+                    SettingsSectionDivider()
                     FoamSliderStateItem(
                         title = stringResource(R.string.player_color_intensity),
                         initialValue = settings.playerBackgroundIntensity.toFloat(),
@@ -734,12 +713,7 @@ private fun GradientEditor(
                             ) {
                                 Column {
                                     if (entry.showSeparator) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(FoamDimens.separatorHeight)
-                                                .foamBorderOverlay()
-                                        )
+                                        SettingsSectionDivider()
                                     }
                                     StopRow(
                                         label = stringResource(R.string.gradient_point, entry.pointNumber),
@@ -769,12 +743,7 @@ private fun GradientEditor(
                         exit = StopExit
                     ) {
                         Column {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .foamBorderOverlay()
-                            )
+                            SettingsSectionDivider()
                             AddStopButton(onAdd = { addStop() })
                         }
                     }

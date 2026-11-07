@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +29,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.foamBorderOverlay
+
+/**
+ * Hairline separator between rows of a settings card. Inset horizontally by
+ * [FoamDimens.paddingMedium] so it lines up with the row content instead of
+ * running the full width of the card.
+ */
+@Composable
+internal fun SettingsSectionDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FoamDimens.paddingMedium)
+            .height(FoamDimens.separatorHeight)
+            .foamBorderOverlay()
+    )
+}
 
 /** [AnimatedVisibility] whose transitions are disabled until [animate] is first set. */
 @Composable

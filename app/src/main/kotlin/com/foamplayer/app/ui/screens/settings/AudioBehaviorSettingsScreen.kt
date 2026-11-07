@@ -1,7 +1,5 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -15,7 +13,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.FoamCard
@@ -23,7 +20,6 @@ import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBorderOverlay
 
 /**
  * Behavior settings (subscreen of Settings > Audio): automatic playback
@@ -60,14 +56,14 @@ fun AudioBehaviorSettingsScreen(
                             checked = settings.resumeOnStartup,
                             onCheckedChange = { viewModel.setResumeOnStartup(it) }
                         )
-                        SectionDivider()
+                        SettingsSectionDivider()
                         FoamSwitchItem(
                             title = stringResource(R.string.resume_on_device_connected),
                             description = stringResource(R.string.resume_on_device_connected_desc),
                             checked = settings.resumeOnDeviceConnected,
                             onCheckedChange = { viewModel.setResumeOnDeviceConnected(it) }
                         )
-                        SectionDivider()
+                        SettingsSectionDivider()
                         FoamSwitchItem(
                             title = stringResource(R.string.pause_on_device_disconnected),
                             description = stringResource(R.string.pause_on_device_disconnected_desc),
@@ -80,14 +76,4 @@ fun AudioBehaviorSettingsScreen(
             }
         }
     }
-}
-
-@Composable
-private fun SectionDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .foamBorderOverlay()
-    )
 }

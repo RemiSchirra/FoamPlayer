@@ -58,7 +58,6 @@ import com.foamplayer.app.ui.modals.SaturationValueField
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBorderOverlay
 
 /**
  * One-tap accent shortcuts under the picker: 12 vibrant, evenly spread hues
@@ -134,7 +133,7 @@ fun ColorsSettingsScreen(
                                 viewModel.setAutomaticColorEnabled(it)
                             }
                         )
-                        SectionDivider()
+                        SettingsSectionDivider()
                         FoamSwitchItem(
                             title = stringResource(R.string.accent_tint),
                             description = stringResource(R.string.accent_tint_desc),
@@ -350,19 +349,6 @@ private fun ThemeSelector(
             }
         }
     }
-}
-
-/**
- * Hairline separator between rows of a settings card.
- */
-@Composable
-private fun SectionDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .foamBorderOverlay()
-    )
 }
 
 /**

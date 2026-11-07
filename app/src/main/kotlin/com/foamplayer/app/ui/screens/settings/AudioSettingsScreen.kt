@@ -41,7 +41,6 @@ import com.foamplayer.app.ui.modals.AudioPipelineModal
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBorderOverlay
 
 /**
  * Audio settings: live fidelity score with itemized breakdown, engine
@@ -103,14 +102,14 @@ fun AudioSettingsScreen(
                             checked = settings.bitPerfectEnabled,
                             onCheckedChange = { viewModel.setBitPerfectEnabled(it) }
                         )
-                        SectionDivider()
+                        SettingsSectionDivider()
                         FoamSwitchItem(
                             title = stringResource(R.string.direct_volume_control),
                             description = stringResource(R.string.direct_volume_control_desc),
                             checked = dspState.directVolumeControl,
                             onCheckedChange = { viewModel.setDirectVolumeControl(it) }
                         )
-                        SectionDivider()
+                        SettingsSectionDivider()
                         OutputSummaryRow(outputInfo = playbackState.audioOutputInfo)
                     }
                 }
@@ -125,19 +124,19 @@ fun AudioSettingsScreen(
                             description = stringResource(R.string.playback_desc),
                             onClick = onNavigateToPlayback
                         )
-                        SectionDivider()
+                        SettingsSectionDivider()
                         FoamNavigationButton(
                             title = stringResource(R.string.audio_behavior),
                             description = stringResource(R.string.audio_behavior_desc),
                             onClick = onNavigateToBehavior
                         )
-                        SectionDivider()
+                        SettingsSectionDivider()
                         FoamNavigationButton(
                             title = stringResource(R.string.output_devices),
                             description = stringResource(R.string.audio_devices_desc),
                             onClick = onNavigateToDevices
                         )
-                        SectionDivider()
+                        SettingsSectionDivider()
                         FoamNavigationButton(
                             title = stringResource(R.string.equalizer_dsp),
                             description = stringResource(R.string.equalizer_dsp_desc),
@@ -183,16 +182,6 @@ fun AudioSettingsScreen(
         visible = showPipelineModal,
         onDismiss = { showPipelineModal = false },
         outputInfo = playbackState.audioOutputInfo
-    )
-}
-
-@Composable
-private fun SectionDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .foamBorderOverlay()
     )
 }
 

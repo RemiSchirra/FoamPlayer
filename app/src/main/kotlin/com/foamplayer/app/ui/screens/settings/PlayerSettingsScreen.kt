@@ -7,7 +7,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.PaddingValues
@@ -39,7 +38,6 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalMiniPlayerRoundingPreview
-import com.foamplayer.app.ui.theme.foamBorderOverlay
 import kotlin.math.roundToInt
 
 @Composable
@@ -134,12 +132,7 @@ fun PlayerSettingsScreen(
                                     exit = exitTransition
                                 ) {
                                     Column {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(FoamDimens.separatorHeight)
-                                                .foamBorderOverlay()
-                                        )
+                                        SettingsSectionDivider()
                                         FoamSwitchItem(
                                             title = stringResource(R.string.animated_cover),
                                             description = stringResource(R.string.animated_cover_desc),
@@ -155,12 +148,7 @@ fun PlayerSettingsScreen(
                                             exit = exitTransition
                                         ) {
                                             Column {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .height(FoamDimens.separatorHeight)
-                                                        .foamBorderOverlay()
-                                                )
+                                                SettingsSectionDivider()
                                                 FoamSwitchItem(
                                                     title = stringResource(R.string.animated_cover_mobile_data),
                                                     description = stringResource(R.string.animated_cover_mobile_data_desc),
@@ -221,12 +209,7 @@ fun PlayerSettingsScreen(
                                 formatValue = { "${it.roundToInt()}%" },
                                 minMaxDisplay = roundingMin to roundingMax
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .foamBorderOverlay()
-                            )
+                            SettingsSectionDivider()
                             FoamSliderStateItem(
                                 title = stringResource(R.string.full_player),
                                 initialValue = settings.fullPlayerRounding.toFloat(),

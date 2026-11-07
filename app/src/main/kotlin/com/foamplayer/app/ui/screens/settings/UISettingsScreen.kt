@@ -44,7 +44,6 @@ import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBorderOverlay
 
 @Composable
 fun UISettingsScreen(
@@ -83,22 +82,12 @@ fun UISettingsScreen(
                                 title = stringResource(R.string.colors),
                                 onClick = onNavigateToColors,
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .foamBorderOverlay()
-                            )
+                            SettingsSectionDivider()
                             FoamNavigationButton(
                                 title = stringResource(R.string.background),
                                 onClick = onNavigateToBackground,
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .foamBorderOverlay()
-                            )
+                            SettingsSectionDivider()
                             FoamNavigationButton(
                                 title = stringResource(R.string.navigation_bar),
                                 onClick = onNavigateToNavBar,
@@ -120,22 +109,12 @@ fun UISettingsScreen(
                                 title = stringResource(R.string.player),
                                 onClick = onNavigateToPlayer,
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .foamBorderOverlay()
-                            )
+                            SettingsSectionDivider()
                             FoamNavigationButton(
                                 title = stringResource(R.string.home),
                                 onClick = onNavigateToHome,
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .foamBorderOverlay()
-                            )
+                            SettingsSectionDivider()
                             FoamNavigationButton(
                                 title = stringResource(R.string.collections),
                                 onClick = onNavigateToCollections,
