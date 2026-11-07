@@ -74,6 +74,7 @@ import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsDetailsViewMod
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBackdropScale
+import com.foamplayer.app.ui.theme.foamPlayerOpenScale
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -561,7 +562,12 @@ fun FoamNavHost(
                             visible = { isFull -> !isFull },
                             enter = if (playerTransition.isTransitionAnimated) fadeIn() else EnterTransition.None,
                             exit = if (playerTransition.isTransitionAnimated) fadeOut() else ExitTransition.None,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .foamPlayerOpenScale(
+                                    playerOpen = playerTransitionState.targetState,
+                                    playerProgress = { playerTransitionState.progress() }
+                                )
                         ) {
                             val playerTransitionVisibilityScope = this
                             Box(modifier = Modifier.fillMaxSize()) {

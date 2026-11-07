@@ -1,5 +1,7 @@
 package com.foamplayer.app.ui.theme
 
+import androidx.compose.animation.core.EaseInCubic
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
@@ -133,6 +135,40 @@ fun Modifier.foamBackdropScale(): Modifier {
         } else {
             clip = false
         }
+    }
+}
+
+/** Scale the screen content shrinks to while the full player is open. */
+private const val FoamPlayerShrunkScale = 0.95f
+
+/**
+ * Progressive shrink of the screen content behind the full player, easing
+ * back on close. Uses the player's own content-fade curves (EaseOutCubic on
+ * open, EaseInCubic on close) so the recede stays in sync with the player.
+ * [playerProgress] (0 = closed, 1 = open) is read in the draw phase, so
+ * drags scrub it without recomposing.
+ *
+ * Screen content only — never the player, the bottom chrome or the
+ * full-bleed backdrop layers.
+ */
+fun Modifier.foamPlayerOpenScale(
+    playerOpen: Boolean,
+    playerProgress: () -> Float
+): Modifier = graphicsLayer {
+    val raw = playerProgress().coerceIn(0f, 1f)
+    val completion = if (playerOpen) {
+        EaseOutCubic.transform(raw)
+    } else {
+        EaseInCubic.transform(raw)
+    }
+    val scale = 1f - (1f - FoamPlayerShrunkScale) * completion
+    scaleX = scale
+    scaleY = scale
+    if (completion > 0f) {
+        shape = RoundedCornerShape(FoamDimens.cornerRadiusLarge * completion)
+        clip = true
+    } else {
+        clip = false
     }
 }
 
