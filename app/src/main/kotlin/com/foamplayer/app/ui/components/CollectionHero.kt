@@ -989,16 +989,6 @@ private fun CollectionHeroImmersiveArtwork(
         FoamTheme.shapes.miniPlayerRounding * 50f
     }
 
-    // Status-bar scrim pinning. During a nav transition the scrim is lifted
-    // into the shared-transition overlay, which draws it at the root position
-    // of its (transformed) host, so the collection open/close zoom of the
-    // screen carried it away from the top edge: the dim left the status bar
-    // and slid back as the zoom settled (dimmed -> undimmed -> dimmed). The
-    // scrim belongs to the screen's top edge, not to the zoomed content, so
-    // while lifted it cancels the host transform and stays where it rests.
-    // [scrimRestPositionPx] is the scrim's un-transformed root position,
-    // captured at scroll 0 whenever no transition runs; a screen that never
-    // rested keeps (0, 0), the top-left of the screen.
     val scrimCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val scrimRestPositionPx = remember { floatArrayOf(0f, 0f) }
     val parallaxShiftPx: () -> Float = {
@@ -1009,11 +999,7 @@ private fun CollectionHeroImmersiveArtwork(
         modifier = modifier
             .fillMaxWidth()
             .height(artworkHeight)
-            .offset {
-                val scroll = (scrollOffsetPx?.invoke() ?: 0) *
-                        CollectionHeroImmersiveParallaxFactor
-                IntOffset(0, -statusBarHeightPx - scroll.roundToInt())
-            }
+            .offset { IntOffset(0, -statusBarHeightPx) }
     ) {
         Box(
             modifier = Modifier
@@ -1029,6 +1015,7 @@ private fun CollectionHeroImmersiveArtwork(
                 )
                 .graphicsLayer {
                     val progress = scrollProgress()
+                    translationY = -parallaxShiftPx()
                     val scale = 1f + progress * CollectionHeroImmersiveScrollScale
                     scaleX = scale
                     scaleY = scale
@@ -1098,6 +1085,8 @@ private fun CollectionHeroImmersiveArtwork(
                         val position = coordinates.positionInRoot()
                         translationX = scrimRestPositionPx[0] - position.x
                         translationY = scrimRestPositionPx[1] - parallaxShiftPx() - position.y
+                    } else {
+                        translationY = -parallaxShiftPx()
                     }
                 }
                 .background(
