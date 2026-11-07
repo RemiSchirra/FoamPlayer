@@ -680,6 +680,7 @@ fun MiniPlayer(
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.weight(1f),
+                        pageSpacing = NavBarDimens.MiniPlayerPageSpacing,
                         beyondViewportPageCount = 1,
                         key = { index -> queueEntryIds.getOrNull(index) ?: -(index + 1).toLong() }
                     ) { page ->

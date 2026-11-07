@@ -359,6 +359,9 @@ object NavBarDimens {
     /** Vertical gap between the mini player's artwork row and its seek slider. */
     val MiniPlayerContentSpacing = 6.dp
 
+    /** Horizontal gap between neighbouring pages while swiping the mini player pager. */
+    val MiniPlayerPageSpacing = 12.dp
+
     /** Height of the strip the mini player's seek slider occupies. */
     val MiniPlayerSliderHeight = 12.dp
 
