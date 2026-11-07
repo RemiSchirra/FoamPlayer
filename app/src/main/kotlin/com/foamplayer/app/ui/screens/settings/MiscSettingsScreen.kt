@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -159,11 +160,13 @@ fun MiscSettingsScreen(
                     Column(modifier = Modifier.fillMaxWidth()) {
                         FoamNavigationButton(
                             title = stringResource(R.string.lastfm_entry),
+                            leadingIcon = painterResource(R.drawable.ic_lastfm),
                             onClick = onNavigateToLastFm
                         )
                         SettingsSectionDivider()
                         FoamNavigationButton(
                             title = stringResource(R.string.discord_entry),
+                            leadingIcon = painterResource(R.drawable.ic_discord),
                             onClick = onNavigateToDiscord
                         )
                     }

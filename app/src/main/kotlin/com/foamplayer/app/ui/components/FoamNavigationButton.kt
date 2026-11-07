@@ -2,13 +2,16 @@ package com.foamplayer.app.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
@@ -18,17 +21,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
 
-/** Settings row navigating to a subscreen: title + description, chevron right. */
+/** Settings row navigating to a subscreen: optional leading icon + title + description, chevron right. */
 @Composable
 fun FoamNavigationButton(
     title: String,
     modifier: Modifier = Modifier,
     description: String? = null,
+    leadingIcon: Painter? = null,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -45,6 +52,22 @@ fun FoamNavigationButton(
             .padding(FoamDimens.spacingStandard),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (leadingIcon != null) {
+            Box(
+                modifier = Modifier
+                    .size(FoamDimens.headerIconSize)
+                    .clip(RoundedCornerShape(FoamDimens.buttonRounding)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = leadingIcon,
+                    contentDescription = null,
+                    tint = Color.Unspecified,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Spacer(modifier = Modifier.width(FoamDimens.spacingStandard))
+        }
         Column(modifier = Modifier.weight(1f)) {
             BasicText(text = title, style = FoamTheme.typography.titleMedium)
             if (!description.isNullOrEmpty())
