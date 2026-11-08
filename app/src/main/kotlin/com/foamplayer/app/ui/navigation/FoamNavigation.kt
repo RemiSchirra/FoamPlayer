@@ -683,7 +683,6 @@ fun FoamNavHost(
                         navigationBarMode = navigationBarMode,
                         transition = transition,
                         playerTransitionState = playerTransitionState,
-                        isPlayerOpen = isPlayerOpen,
                         isTransitionAnimated = playerTransition.isTransitionAnimated,
                         navBarExpandFraction = navBarExpandFraction,
                         playerClosedFraction = playerClosedFraction,

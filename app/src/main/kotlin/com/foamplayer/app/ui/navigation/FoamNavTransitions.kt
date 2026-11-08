@@ -226,6 +226,53 @@ internal fun buildFoamNavTransitions(
 }
 
 /**
+ * Enter/exit durations of the selection-tint fade that accompanies a screen
+ * switch, sized to the transition the pair actually gets (mirrors the
+ * classification in [buildFoamNavTransitions]): navbar switches and the
+ * settings/stats/browse slides run at the SMOOTH travel, collection zooms and
+ * shared-element flights at FLIGHT, and plain fades at the screen-fade specs.
+ */
+internal data class ScreenSwitchTiming(val enterMillis: Int, val exitMillis: Int) {
+    companion object {
+        /** Defaults while no screen transition runs (the rest-state tween). */
+        val Rest = ScreenSwitchTiming(
+            FoamMotion.Duration.STANDARD,
+            FoamMotion.Duration.STANDARD
+        )
+    }
+}
+
+/**
+ * Tint-fade durations for a navigation between [initialRoute] and
+ * [targetRoute]. Only navbar-relevant pairs flip an icon's highlight, but the
+ * classification follows the screen transitions either way so the fade lands
+ * with the animation the user is watching.
+ */
+internal fun screenSwitchTiming(initialRoute: String?, targetRoute: String?): ScreenSwitchTiming {
+    val fromItem = navBarItemForRoute(initialRoute)
+    val toItem = navBarItemForRoute(targetRoute)
+
+    // Tab switches and the settings/stats stacks + album <-> artist slides.
+    val slides = ((fromItem != null && toItem != null) ||
+            (isSettingsRoute(initialRoute) && isSettingsRoute(targetRoute)) ||
+            (isStatsRoute(initialRoute) && isStatsRoute(targetRoute)) ||
+            (isAlbumRoute(initialRoute) && isArtistRoute(targetRoute)))
+
+    // Collection open/close zooms and every shared-element flight.
+    val flights = (isCollectionDetailRoute(initialRoute) != isCollectionDetailRoute(targetRoute)) ||
+            isSharedElementRoute(initialRoute) ||
+            isSharedElementRoute(targetRoute)
+
+    return when {
+        slides -> ScreenSwitchTiming(FoamMotion.Duration.SMOOTH, FoamMotion.Duration.SMOOTH)
+        flights -> ScreenSwitchTiming(FoamMotion.Duration.FLIGHT, FoamMotion.Duration.FLIGHT)
+        // Plain fades: the incoming screen fades in over the flight duration,
+        // the outgoing one fades out front-loaded (screenFadeOut).
+        else -> ScreenSwitchTiming(FoamMotion.Duration.FLIGHT, FoamMotion.Duration.SWIFT)
+    }
+}
+
+/**
  * Scale the shrunken side of the collection open/close zoom starts/ends at.
  * Keep it in step with the shrink [com.foamplayer.app.ui.theme.foamBackdropScale]
  * applies behind modals so both read as the same "push back" gesture.

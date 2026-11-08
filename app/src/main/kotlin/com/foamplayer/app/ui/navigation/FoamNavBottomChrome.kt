@@ -68,7 +68,6 @@ internal fun BoxScope.FoamBottomChrome(
     navigationBarMode: NavigationBarMode,
     transition: Transition<Boolean>,
     playerTransitionState: SeekableTransitionState<Boolean>,
-    isPlayerOpen: Boolean,
     isTransitionAnimated: Boolean,
     navBarExpandFraction: Float,
     playerClosedFraction: () -> Float,
@@ -128,7 +127,7 @@ internal fun BoxScope.FoamBottomChrome(
                 ) {
                     FoamNavigationBar(
                         currentRoute = currentRoute,
-                        isPlayerOpen = isPlayerOpen,
+                        playerClosedFraction = playerClosedFraction,
                         onNavigate = onNavigate,
                         primaryItems = settings.navBarPrimaryOrder,
                         primaryEnabled = settings.navBarPrimaryEnabled,
@@ -144,7 +143,6 @@ internal fun BoxScope.FoamBottomChrome(
                 ) {
                     FloatingNavigationBar(
                         currentRoute = currentRoute,
-                        isPlayerOpen = isPlayerOpen,
                         onNavigate = onNavigate,
                         primaryItems = settings.navBarPrimaryOrder,
                         primaryEnabled = settings.navBarPrimaryEnabled,
@@ -166,7 +164,6 @@ internal fun BoxScope.FoamBottomChrome(
                 ) {
                     FloatingNavigationBar(
                         currentRoute = currentRoute,
-                        isPlayerOpen = isPlayerOpen,
                         onNavigate = onNavigate,
                         primaryItems = settings.navBarPrimaryOrder,
                         primaryEnabled = settings.navBarPrimaryEnabled,

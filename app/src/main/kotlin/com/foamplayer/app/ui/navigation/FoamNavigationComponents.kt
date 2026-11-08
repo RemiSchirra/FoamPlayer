@@ -2,7 +2,6 @@ package com.foamplayer.app.ui.navigation
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -23,7 +22,6 @@ import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Icon
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -46,9 +44,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -439,23 +440,50 @@ object NavBarDimens {
  * Icon of a nav item, tinted by selection, with no interaction.
  * Split from [FoamNavItem] so [FoamNavExtraRow] can draw icons in its clipped layer
  * and keep the touch targets in an unclipped one.
+ *
+ * The tint is resolved at draw time: the route-selection amount is animated
+ * with [tintTiming]'s duration — its spec is only read when [selected] flips,
+ * so the fade lasts exactly as long as the screen transition that caused it —
+ * and the player fraction is read per frame, so swiping the player open/closed
+ * fades the accent with the gesture. Accent-color changes redraw without
+ * recomposing.
  */
 @Composable
 private fun NavItemVisual(
     icon: ImageVector,
     selected: Boolean,
+    tintTiming: ScreenSwitchTiming,
+    playerClosedFraction: () -> Float,
     modifier: Modifier = Modifier,
     contentDescription: String? = null
 ) {
-    val animatedTint by animateColorAsState(
-        targetValue = if (selected) FoamTheme.accentColor else FoamTheme.colors.textSecondary,
-        label = "NavIconTint"
+    val routeSelection by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = if (selected) tintTiming.enterMillis else tintTiming.exitMillis,
+            easing = FoamMotion.Easings.STANDARD
+        ),
+        label = "NavRouteSelection"
     )
-    Icon(
-        imageVector = icon,
-        contentDescription = contentDescription,
-        modifier = modifier.size(NavBarDimens.ItemIconSize),
-        tint = animatedTint
+    val painter = rememberVectorPainter(icon)
+    val secondary = FoamTheme.colors.textSecondary
+    val accentTint = LocalAccentTintState.current
+    Box(
+        modifier
+            .size(NavBarDimens.ItemIconSize)
+            .then(
+                if (contentDescription != null) {
+                    Modifier.semantics { this.contentDescription = contentDescription }
+                } else {
+                    Modifier
+                }
+            )
+            .drawBehind {
+                val amount = (routeSelection * playerClosedFraction()).coerceIn(0f, 1f)
+                with(painter) {
+                    draw(size, colorFilter = ColorFilter.tint(lerp(secondary, accentTint.color, amount)))
+                }
+            }
     )
 }
 
@@ -463,12 +491,16 @@ private fun NavItemVisual(
  * Clickable nav icon. The hit target fills its slot width (see [NavBarSlotRow]) and
  * is clipped to [NavItemHitShape] before the click so the ripple stays rounded.
  * [onLongClick] is optional (only used by the search item).
+ * [tintTiming] and [playerClosedFraction] drive the icon's selection tint (see
+ * [NavItemVisual]).
  */
 @Composable
 private fun FoamNavItem(
     icon: ImageVector,
     contentDescription: String,
     selected: Boolean,
+    tintTiming: ScreenSwitchTiming,
+    playerClosedFraction: () -> Float,
     modifier: Modifier = Modifier,
     iconModifier: Modifier = Modifier,
     hitPadding: Dp = NavBarDimens.ItemHitTargetPadding,
@@ -495,6 +527,8 @@ private fun FoamNavItem(
             icon = icon,
             contentDescription = contentDescription,
             selected = selected,
+            tintTiming = tintTiming,
+            playerClosedFraction = playerClosedFraction,
             modifier = iconModifier
         )
     }
@@ -523,12 +557,40 @@ private fun NavBarItem.icon(): ImageVector = when (this) {
     NavBarItem.MORE -> FoamTheme.icons.current.more
 }
 
-/** Whether an item pointing at [screen] is selected. */
-private fun isScreenSelected(currentRoute: String?, isPlayerOpen: Boolean, screen: Screen): Boolean =
-    !isPlayerOpen && (
-            currentRoute == screen.route ||
-                    (screen == Screen.Settings && currentRoute?.startsWith("settings/") == true)
-            )
+/**
+ * Whether an item pointing at [screen] is the screen currently shown. The
+ * player's dehighlight is a separate, gesture-following factor (see
+ * [NavItemVisual]), so opening/closing the player fades the accent with the
+ * swipe instead of on its own timer.
+ */
+private fun isRouteSelected(currentRoute: String?, screen: Screen): Boolean =
+    currentRoute == screen.route ||
+            (screen == Screen.Settings && currentRoute?.startsWith("settings/") == true)
+
+/** Per-bar holder for the tint timing of the last screen switch. */
+private class SwitchTintHolder(initialRoute: String?) {
+    var route: String? = initialRoute
+    var timing: ScreenSwitchTiming = ScreenSwitchTiming.Rest
+}
+
+/**
+ * Enter/exit durations of the selection-tint fade for the screen transition
+ * between the previous and the current route (see [screenSwitchTiming]).
+ * Recomputed only on route changes, so an in-flight fade keeps its spec until
+ * the next switch.
+ */
+@Composable
+private fun rememberSwitchTintTiming(currentRoute: String?): ScreenSwitchTiming {
+    val holder = remember { SwitchTintHolder(currentRoute) }
+    if (currentRoute != holder.route) {
+        holder.timing = screenSwitchTiming(
+            initialRoute = holder.route,
+            targetRoute = currentRoute
+        )
+        holder.route = currentRoute
+    }
+    return holder.timing
+}
 
 /**
  * Row of icon slots shared by the main and extra rows.
@@ -623,7 +685,8 @@ private fun NavBarSlotRow(
 @Composable
 private fun FoamNavigationItems(
     currentRoute: String?,
-    isPlayerOpen: Boolean,
+    tintTiming: ScreenSwitchTiming,
+    playerClosedFraction: () -> Float,
     onNavigate: (String) -> Unit,
     items: List<NavBarItem>,
     primaryEnabled: Set<NavBarItem>,
@@ -649,13 +712,15 @@ private fun FoamNavigationItems(
                     if (expandFraction > 0.5f) R.string.collapse_navigation else R.string.expand_navigation
                 ),
                 selected = false,
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 enabled = itemEnabled,
                 iconModifier = Modifier.rotate(expandFraction * 90f),
                 onClick = onToggleExpand
             )
         } else {
             val screen = item.targetScreen()
-            val selected = isScreenSelected(currentRoute, isPlayerOpen, screen)
+            val selected = isRouteSelected(currentRoute, screen)
             // Search: tap opens it focused, long press opens the browse cards.
             val isSearch = item == NavBarItem.SEARCH
 
@@ -663,6 +728,8 @@ private fun FoamNavigationItems(
                 icon = item.icon(),
                 contentDescription = screen.title,
                 selected = selected,
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 enabled = itemEnabled,
                 onLongClick = {
                     if (isSearch)
@@ -694,7 +761,8 @@ private fun FoamNavExtraRow(
     items: List<NavBarItem>,
     enabledItems: Set<NavBarItem>,
     currentRoute: String?,
-    isPlayerOpen: Boolean,
+    tintTiming: ScreenSwitchTiming,
+    playerClosedFraction: () -> Float,
     onNavigate: (String) -> Unit,
     expandFraction: Float,
     modifier: Modifier = Modifier
@@ -722,7 +790,9 @@ private fun FoamNavExtraRow(
             val screen = item.targetScreen()
             NavItemVisual(
                 icon = item.icon(),
-                selected = isScreenSelected(currentRoute, isPlayerOpen, screen),
+                selected = isRouteSelected(currentRoute, screen),
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 modifier = Modifier.padding(NavBarDimens.ExtraRowItemHitPadding)
             )
         }
@@ -766,11 +836,16 @@ private fun FoamNavExtraRow(
     }
 }
 
-/** Classic docked navigation bar. */
+/**
+ * Classic docked navigation bar.
+ *
+ * [playerClosedFraction] (1 = player closed, 0 = open) fades the selection
+ * tint with the player transition, so the accent follows the swipe in and out.
+ */
 @Composable
 fun FoamNavigationBar(
     currentRoute: String?,
-    isPlayerOpen: Boolean,
+    playerClosedFraction: () -> Float = { 1f },
     onNavigate: (String) -> Unit,
     primaryItems: List<NavBarItem>,
     primaryEnabled: Set<NavBarItem>,
@@ -785,6 +860,9 @@ fun FoamNavigationBar(
     val accentTint = LocalAccentTintState.current
     val density = LocalDensity.current
     val navBarBottomInsetPx = WindowInsets.navigationBars.getBottom(density)
+    // The items' selection tint fades for as long as the screen transition
+    // that caused the route change
+    val tintTiming = rememberSwitchTintTiming(currentRoute)
 
     // Fixed footprint: the extra row expands upwards as an overlay
     Box(
@@ -825,7 +903,8 @@ fun FoamNavigationBar(
                 items = secondaryItems,
                 enabledItems = secondaryEnabled,
                 currentRoute = currentRoute,
-                isPlayerOpen = isPlayerOpen,
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 onNavigate = onNavigate,
                 expandFraction = expandFraction,
                 modifier = Modifier.offset(y = NavBarDimens.extraRowBottomOverlap(NavBarDimens.DockedBarHeight))
@@ -833,7 +912,8 @@ fun FoamNavigationBar(
 
             FoamNavigationItems(
                 currentRoute = currentRoute,
-                isPlayerOpen = isPlayerOpen,
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 onNavigate = onNavigate,
                 items = primaryItems,
                 primaryEnabled = primaryEnabled,
@@ -863,7 +943,6 @@ fun FoamNavigationBar(
 @Composable
 internal fun FloatingNavigationBar(
     currentRoute: String?,
-    isPlayerOpen: Boolean,
     onNavigate: (String) -> Unit,
     primaryItems: List<NavBarItem>,
     primaryEnabled: Set<NavBarItem>,
@@ -872,7 +951,11 @@ internal fun FloatingNavigationBar(
     attachedToMiniPlayer: Boolean = false,
     connectToMiniPlayer: Boolean = false,
     miniPlayerTopPx: () -> Float? = { null },
-    playerClosedFraction: () -> Float = { 0f },
+    /**
+     * How closed the player is (1 = closed, 0 = open), live with the swipe:
+     * drives the pill's transparent-mode fade and the items' selection tint.
+     */
+    playerClosedFraction: () -> Float = { 1f },
     /**
      * Presence (0..1) of the mini player card, independent of the player
      * transition. Animates in on the first play.
@@ -894,6 +977,9 @@ internal fun FloatingNavigationBar(
     // Tint is resolved at draw time to keep accent frames draw-only
     val surfaceVariantColor = FoamTheme.colors.surfaceVariant
     val accentTint = LocalAccentTintState.current
+    // The items' selection tint fades for as long as the screen transition
+    // that caused the route change
+    val tintTiming = rememberSwitchTintTiming(currentRoute)
 
     // Measured top of the pill, used with the card's top to size the attached extension
     var pillTopPx by remember { mutableStateOf(Float.NaN) }
@@ -1009,7 +1095,8 @@ internal fun FloatingNavigationBar(
                 items = secondaryItems,
                 enabledItems = secondaryEnabled,
                 currentRoute = currentRoute,
-                isPlayerOpen = isPlayerOpen,
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 onNavigate = onNavigate,
                 expandFraction = expandFraction,
                 modifier = Modifier.offset(y = NavBarDimens.extraRowBottomOverlap(NavBarDimens.FloatingRowHeight))
@@ -1017,7 +1104,8 @@ internal fun FloatingNavigationBar(
 
             FoamNavigationItems(
                 currentRoute = currentRoute,
-                isPlayerOpen = isPlayerOpen,
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 onNavigate = onNavigate,
                 items = primaryItems,
                 primaryEnabled = primaryEnabled,
