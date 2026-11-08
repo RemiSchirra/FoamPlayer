@@ -73,6 +73,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 
 /**
  * A distant jump in progress: while the pager slides one page to [viaPage],
@@ -332,8 +333,13 @@ fun MiniPlayer(
         // A skip already requested for a swipe that ended on a loop ghost page (real index + time).
         var wrapRequestedReal = -1
         var wrapRequestedAtMs = 0L
+        // True from the moment a finger grabs the pager until the pager has really stopped
+        // (drag AND the fling that follows the release). Engine-driven syncs must not touch
+        // the pager while this is set.
+        var userScrolling by mutableStateOf(false)
     }
     val pagerSyncState = remember { PagerSyncState() }
+    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
 
     // Marquee text state per track
     val marqueeStates = remember { mutableMapOf<Long, MiniEntryMarqueeStates>() }
@@ -473,6 +479,26 @@ fun MiniPlayer(
     LaunchedEffect(currentIndex, currentEntryId) {
         // Taking the token first turns a superseded run's `finally` into a no-op.
         val myToken = ++pagerSyncState.activeToken
+
+        // The user's finger (or the fling it just launched) owns the pager right now.
+        // The engine reports the track of a previous swipe with some delay; if that report
+        // lands while a second swipe is under way, syncing here would animate the pager back
+        // to the first swipe's page and cancel the second swipe. So wait until the pager has
+        // really stopped. The swipe's own settle (see the settledPage effect) then asks the
+        // engine for wherever the user actually ended up, which makes this sync pointless;
+        // it only still runs when the gesture ended on the page it started from.
+        if (isDragged || pagerSyncState.userScrolling) {
+            pendingJump = null
+            pageShadow.inFlight = null
+            departureSpent = true
+            pagerSyncState.isSyncing = false
+            val settledBefore = pagerState.settledPage
+            snapshotFlow {
+                !pagerState.isScrollInProgress && pagerState.settledPage == pagerState.currentPage
+            }.first { it }
+            if (pagerState.settledPage != settledBefore) return@LaunchedEffect
+        }
+
         val currentQueue = latestQueue
         val inFlight = pendingJump          // slide of a superseded run still on screen, if any
         val dep = latestDeparture           // old track pinned on its page by a queue replacement
@@ -578,7 +604,13 @@ fun MiniPlayer(
     // PagerState.targetPage already reflects its predicted destination while
     // the finger is still down, so collecting it directly fired the commit
     // mid-drag instead of on release.
-    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(pagerState) {
+        snapshotFlow { isDragged to pagerState.isScrollInProgress }
+            .collect { (dragged, scrolling) ->
+                if (dragged) pagerSyncState.userScrolling = true
+                else if (!scrolling) pagerSyncState.userScrolling = false
+            }
+    }
     LaunchedEffect(pagerState) {
         snapshotFlow { isDragged }
             .collect { dragging ->
