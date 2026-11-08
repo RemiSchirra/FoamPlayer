@@ -746,6 +746,15 @@ fun MiniPlayer(
                                         ImageRequest.Builder(context)
                                             .data(EmbeddedAlbumArt(pageTrack.albumArtPath.toUri()))
                                             .size(AlbumArtRequestSize)
+                                            // Shares the player flight's cache slot: this
+                                            // request warms the bitmap the full-player hero
+                                            // draws synchronously on the flight's first frame.
+                                            .placeholderMemoryCacheKey(
+                                                albumArtMemoryCacheKey(pageTrack.albumArtPath)
+                                            )
+                                            .memoryCacheKey(
+                                                albumArtMemoryCacheKey(pageTrack.albumArtPath)
+                                            )
                                             .build()
                                     }
                                     AsyncImage(

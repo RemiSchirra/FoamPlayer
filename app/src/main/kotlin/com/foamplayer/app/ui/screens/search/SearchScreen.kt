@@ -115,6 +115,7 @@ import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.navigation.LocalSearchFocusRequest
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
+import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
@@ -241,6 +242,8 @@ fun SearchScreen(
     sharedTrackId: Long?,
     activeTrackId: Long?,
     onTrackClick: (TrackEntity) -> Unit,
+    isPlaybackActive: Boolean = true,
+    immersiveArt: Boolean = false,
     searchViewModel: SearchViewModel = hiltViewModel()
 ) {
     val query by searchViewModel.query.collectAsState()
@@ -264,6 +267,10 @@ fun SearchScreen(
     val longPressScope = rememberCoroutineScope()
     val imeInsets = WindowInsets.ime
     val listState = rememberLazyListState()
+
+    // One hoisted paused-scale animation read by the flight-source row inside
+    // its graphicsLayer (see TrackListScreen).
+    val flightPausedArtScale = rememberPausedArtScale(isPlaybackActive)
 
     // A modal's Dialog steals focus while the keyboard is up; close the IME
     // first so the sheet opens at its resting position.
@@ -539,6 +546,8 @@ fun SearchScreen(
                                     active = track.id == activeTrackId,
                                     sharedTransitionScope = sharedTransitionScope,
                                     animatedVisibilityScope = playerTransitionVisibilityScope,
+                                    flightPausedArtScale = { flightPausedArtScale.value },
+                                    immersiveArt = immersiveArt,
                                     isSharedTransitionSource = track.id == sharedTrackId
                                 )
                             }
@@ -571,6 +580,8 @@ fun SearchScreen(
                                     active = track.id == activeTrackId,
                                     sharedTransitionScope = sharedTransitionScope,
                                     animatedVisibilityScope = playerTransitionVisibilityScope,
+                                    flightPausedArtScale = { flightPausedArtScale.value },
+                                    immersiveArt = immersiveArt,
                                     isSharedTransitionSource = track.id == sharedTrackId
                                 )
                             }
@@ -609,6 +620,8 @@ fun SearchScreen(
                                         active = entry.track.id == activeTrackId,
                                         sharedTransitionScope = sharedTransitionScope,
                                         animatedVisibilityScope = playerTransitionVisibilityScope,
+                                        flightPausedArtScale = { flightPausedArtScale.value },
+                                        immersiveArt = immersiveArt,
                                         isSharedTransitionSource = entry.track.id == sharedTrackId,
                                         modifier = Modifier.animateItem()
                                     )

@@ -162,7 +162,9 @@ fun <T> HomeRow(
  * open/close flight, false as a destination navigation. With
  * [flightHeroTarget] resolving to an immersive layout, the artwork also
  * carries the mirrored collection flight morph (see
- * [collectionRowFlightArtwork]).
+ * [collectionRowFlightArtwork]). For player flights, [flightPausedArtScale]
+ * and [immersiveArt] feed [playerFlightArtwork] so the card's artwork morphs
+ * into the full-player hero like a track list row does.
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -181,7 +183,9 @@ fun HomeRowCard(
     sharedArtKey: String? = null,
     sharedTitleKey: String? = null,
     sharedInPlayerTransition: Boolean = false,
-    flightHeroTarget: CollectionHeroTarget? = null
+    flightHeroTarget: CollectionHeroTarget? = null,
+    flightPausedArtScale: (() -> Float)? = null,
+    immersiveArt: Boolean = false
 ) {
     val context = LocalContext.current
     val artShape = if (round) CircleShape else AlbumArtShape()
@@ -256,6 +260,22 @@ fun HomeRowCard(
                             // Shadow outside, shared artwork inside (see above).
                             it.shadow(elevation = staticArtElevation, shape = artShape)
                                 .then(sharedArtModifier)
+                        } else if (sharedInPlayerTransition &&
+                            sharedArtKey != null &&
+                            animatedVisibilityScope != null &&
+                            flightPausedArtScale != null
+                        ) {
+                            // Player-flight source: clip radius, paused scale and shadow
+                            // must ride the transition to match the full-player hero
+                            // (same morph TrackListItem applies to its rows).
+                            it.then(sharedArtModifier)
+                                .playerFlightArtwork(
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    fullArtRadius = fullPlayerArtRadius(),
+                                    pausedArtScale = flightPausedArtScale,
+                                    immersive = immersiveArt,
+                                    restArtElevation = MediaItemArtElevation
+                                )
                         } else {
                             it.then(sharedArtModifier)
                                 .shadow(elevation = MediaItemArtElevation, shape = artShape)
@@ -266,7 +286,9 @@ fun HomeRowCard(
                 contentAlignment = Alignment.Center
             ) {
                 if (imageUrl != null) {
-                    val heroKeyed = flightHeroTarget != null
+                    // Track cards are player-flight sources too, so they always warm
+                    // the shared cache slot the full-player hero reads on frame one.
+                    val heroKeyed = flightHeroTarget != null || sharedInPlayerTransition
                     val artRequest = remember(imageUrl, imageIsEmbeddedArt, heroKeyed) {
                         ImageRequest.Builder(context)
                             .data(

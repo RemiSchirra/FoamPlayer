@@ -76,6 +76,7 @@ import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.CrossfadingPlayPauseIcon
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
 import com.foamplayer.app.ui.components.PreviousAction
@@ -407,6 +408,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     ImageRequest.Builder(prefetchContext)
                         .data(EmbeddedAlbumArt(path.toUri()))
                         .size(AlbumArtRequestSize)
+                        .memoryCacheKey(albumArtMemoryCacheKey(path))
                         .build()
                 )
             }
@@ -494,6 +496,10 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                     .data(EmbeddedAlbumArt(pageTrack.albumArtPath.toUri()))
                                     .size(AlbumArtRequestSize)
                                     .crossfade(false)
+                                    .placeholderMemoryCacheKey(
+                                        albumArtMemoryCacheKey(pageTrack.albumArtPath)
+                                    )
+                                    .memoryCacheKey(albumArtMemoryCacheKey(pageTrack.albumArtPath))
                                     .build()
                             }
                             AsyncImage(
@@ -663,6 +669,13 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             ImageRequest.Builder(context)
                                 .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
                                 .size(AlbumArtRequestSize)
+                                .crossfade(false)
+                                // The hero is the ENTERING side of a player flight, so it
+                                // must draw its artwork on the first frame: the shared
+                                // placeholder key resolves the source's cached bitmap
+                                // synchronously instead of after an async cache hit.
+                                .placeholderMemoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
+                                .memoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
                                 .build()
                         }
                         AsyncImage(

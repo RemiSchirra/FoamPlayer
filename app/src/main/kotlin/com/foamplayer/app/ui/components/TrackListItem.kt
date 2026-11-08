@@ -542,6 +542,13 @@ fun TrackListItem(
                         ImageRequest.Builder(context)
                             .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
                             .size(AlbumArtRequestSize)
+                            // Shares the player flight's cache slot: this request warms
+                            // the bitmap the full-player hero draws synchronously on the
+                            // flight's first frame.
+                            .placeholderMemoryCacheKey(
+                                albumArtMemoryCacheKey(track.albumArtPath)
+                            )
+                            .memoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
                             .build()
                     }
                     AlbumArtImage(
@@ -692,6 +699,8 @@ private fun TrackGridArtwork(track: TrackEntity) {
             ImageRequest.Builder(context)
                 .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
                 .size(AlbumArtRequestSize)
+                .placeholderMemoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
+                .memoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
                 .build()
         }
         AlbumArtImage(

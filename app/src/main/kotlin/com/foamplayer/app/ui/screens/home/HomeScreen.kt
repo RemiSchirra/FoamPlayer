@@ -70,6 +70,7 @@ import com.foamplayer.app.ui.modals.RenamePlaylistModal
 import com.foamplayer.app.ui.modals.rememberPlaylistFoamModalState
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.navigation.sharedCollectionElementKey
+import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -170,8 +171,13 @@ fun HomeScreen(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
-    sharedTrackId: Long? = null
+    sharedTrackId: Long? = null,
+    isPlaybackActive: Boolean = true,
+    immersiveArt: Boolean = false
 ) {
+    // One hoisted paused-scale animation shared by whichever track card is the
+    // player-flight source (read inside its graphicsLayer, draw-only).
+    val flightPausedArtScale = rememberPausedArtScale(isPlaybackActive)
     val playlists by viewModel.recommendedPlaylists.collectAsState()
     val playlistCovers by viewModel.playlistCovers.collectAsState()
     val albums by viewModel.recommendedAlbums.collectAsState()
@@ -476,15 +482,17 @@ fun HomeScreen(
                                 onTrackClick(track)
                             },
                             onLongClick = {
-                longPressScope.launch {
-                    trackModalState?.show(viewModel.freshTrack(track))
-                }
-            },
+                                longPressScope.launch {
+                                    trackModalState?.show(viewModel.freshTrack(track))
+                                }
+                            },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
                             sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
                             sharedTitleKey = "track_title_${track.id}".takeIf { inPlayerFlight },
                             sharedInPlayerTransition = true,
+                            flightPausedArtScale = { flightPausedArtScale.value },
+                            immersiveArt = immersiveArt,
                             modifier = Modifier
                                 .let { if (inPlayerFlight) it else it.animateItem() }
                         )
@@ -517,6 +525,8 @@ fun HomeScreen(
                             sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
                             sharedTitleKey = "track_title_${track.id}".takeIf { inPlayerFlight },
                             sharedInPlayerTransition = true,
+                            flightPausedArtScale = { flightPausedArtScale.value },
+                            immersiveArt = immersiveArt,
                             modifier = Modifier
                                 .let { if (inPlayerFlight) it else it.animateItem() }
                         )
@@ -540,15 +550,17 @@ fun HomeScreen(
                                 onTrackClick(track)
                             },
                             onLongClick = {
-                longPressScope.launch {
-                    trackModalState?.show(viewModel.freshTrack(track))
-                }
-            },
+                                longPressScope.launch {
+                                    trackModalState?.show(viewModel.freshTrack(track))
+                                }
+                            },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
                             sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
                             sharedTitleKey = "track_title_${track.id}".takeIf { inPlayerFlight },
                             sharedInPlayerTransition = true,
+                            flightPausedArtScale = { flightPausedArtScale.value },
+                            immersiveArt = immersiveArt,
                             modifier = Modifier
                                 .let { if (inPlayerFlight) it else it.animateItem() }
                         )
@@ -572,15 +584,17 @@ fun HomeScreen(
                                 onTrackClick(track)
                             },
                             onLongClick = {
-                longPressScope.launch {
-                    trackModalState?.show(viewModel.freshTrack(track))
-                }
-            },
+                                longPressScope.launch {
+                                    trackModalState?.show(viewModel.freshTrack(track))
+                                }
+                            },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
                             sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
                             sharedTitleKey = "track_title_${track.id}".takeIf { inPlayerFlight },
                             sharedInPlayerTransition = true,
+                            flightPausedArtScale = { flightPausedArtScale.value },
+                            immersiveArt = immersiveArt,
                             modifier = Modifier
                                 .let { if (inPlayerFlight) it else it.animateItem() }
                         )
