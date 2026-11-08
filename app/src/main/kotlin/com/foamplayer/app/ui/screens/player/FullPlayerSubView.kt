@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -53,13 +54,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp as lerpFloat
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.CrossfadingPlayPauseIcon
 import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
+import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -435,8 +439,20 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                         .foamSurfaceVariant()
                 ) {
                     if (headerTrack.albumArtPath != null) {
+                        val context = LocalContext.current
+                        val headerArtRequest = remember(headerTrack.albumArtPath) {
+                            ImageRequest.Builder(context)
+                                .data(EmbeddedAlbumArt(headerTrack.albumArtPath.toUri()))
+                                .size(AlbumArtRequestSize)
+                                .crossfade(false)
+                                .placeholderMemoryCacheKey(
+                                    albumArtMemoryCacheKey(headerTrack.albumArtPath)
+                                )
+                                .memoryCacheKey(albumArtMemoryCacheKey(headerTrack.albumArtPath))
+                                .build()
+                        }
                         AsyncImage(
-                            model = EmbeddedAlbumArt(headerTrack.albumArtPath.toUri()),
+                            model = headerArtRequest,
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
