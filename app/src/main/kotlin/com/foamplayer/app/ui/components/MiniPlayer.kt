@@ -406,13 +406,21 @@ fun MiniPlayer(
     LaunchedEffect(pagerState) {
         snapshotFlow {
             val jump = pendingJump
+            val dep = latestDeparture
             val currentQueue = latestQueue
             AlbumArtPaletteCache.interpolatedColor(
                 currentPage = pagerState.currentPage,
                 currentPageOffsetFraction = pagerState.currentPageOffsetFraction,
                 pageCount = currentQueue.size
             ) { page ->
-                (overrideTrackFor(jump, page, currentQueue) ?: currentQueue.getOrNull(page))?.albumArtPath
+                // Same page -> track mapping as the pager content below, so the
+                // accent never shows the replacement queue's track on the page
+                // that is still displaying the departing one.
+                (
+                        overrideTrackFor(jump, page, currentQueue)
+                            ?: dep?.takeIf { jump == null && page == it.page }?.track
+                            ?: currentQueue.getOrNull(page)
+                        )?.albumArtPath
             }
         }.collect { interpolatedColor ->
             if (interpolatedColor != null) onColorChange(interpolatedColor)
@@ -420,17 +428,28 @@ fun MiniPlayer(
     }
 
     // Keep the app-wide backdrop in lockstep with the pager, including while
-    // the finger is still dragging between two tracks.
+    // the finger is still dragging between two tracks. The page -> art mapping
+    // mirrors the pager content (jump override, then the departing track still
+    // pinned on its page, then the real queue): when a list pick replaces the
+    // queue, the page we are on keeps showing the OLD track's art until the
+    // slide runs, instead of cutting to whatever the new queue has at that page.
+    // Discrete cuts that still slip through are crossfaded by the backdrop
+    // itself (see BackdropCrossfadeDriver in FoamNavBackdrops.kt).
     LaunchedEffect(pagerState) {
         snapshotFlow {
             val jump = pendingJump
+            val dep = latestDeparture
             val currentQueue = latestQueue
             val absoluteOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
             val frontIndex = absoluteOffset.toInt().coerceIn(0, (currentQueue.size - 1).coerceAtLeast(0))
             val backIndex = (frontIndex + 1).coerceAtMost((currentQueue.size - 1).coerceAtLeast(0))
             val fraction = (absoluteOffset - frontIndex).coerceIn(0f, 1f)
             val pathForPage: (Int) -> String? = { page ->
-                (overrideTrackFor(jump, page, currentQueue) ?: currentQueue.getOrNull(page))?.albumArtPath
+                (
+                        overrideTrackFor(jump, page, currentQueue)
+                            ?: dep?.takeIf { jump == null && page == it.page }?.track
+                            ?: currentQueue.getOrNull(page)
+                        )?.albumArtPath
             }
             Triple(pathForPage(frontIndex), pathForPage(backIndex), fraction)
         }.collect { (frontArtPath, backArtPath, fraction) ->
