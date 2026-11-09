@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -745,6 +746,16 @@ fun MiniPlayer(
 
                         val isSettledCurrentTrackPage =
                             jump == null && dep == null && page == currentIndex && pageTrack.id == track.id
+                        // Hoisted so the art box below can be re-keyed on the tag state: a
+                        // tag (re-)added to an already-composed page must get a fresh
+                        // composition identity, or its remembered entry never registers with
+                        // the coordinator and the open/close flight cannot pair.
+                        val artSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
+                            rememberSharedContentState(key = "album_art_${track.id}")
+                        } else null
+                        val titleSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
+                            rememberSharedContentState(key = "track_title_${track.id}")
+                        } else null
                         val pageMarquee = statesFor(entryKey(page))
 
                         Row(
@@ -756,14 +767,21 @@ fun MiniPlayer(
                                     indication = null
                                 ) { onClick() }
                         ) {
+                            // A tag added to an already-composed page via the gate flip never
+                            // registers its entry with the coordinator (the composed modifier's
+                            // remembered entry keeps its stale slot), so the open/close flight
+                            // can never pair and the artwork cross-fades in place. Re-keying
+                            // the art box on the tag state forces a fresh composition identity,
+                            // so the entry always (re-)registers.
+                            key(artSharedState) {
                             Box(
                                 modifier = Modifier
                                     .size(miniImageSize)
                                     .then(
-                                        if (useSharedElements && isSettledCurrentTrackPage) {
+                                        if (artSharedState != null) {
                                             Modifier
                                                 .sharedElement(
-                                                    rememberSharedContentState(key = "album_art_${track.id}"),
+                                                    artSharedState,
                                                     animatedVisibilityScope = animatedVisibilityScope
                                                 )
                                                 .graphicsLayer { alpha = sharedArtFlightAlpha() }
@@ -820,6 +838,7 @@ fun MiniPlayer(
                                     NoAlbumArtPlaceholder()
                                 }
                             }
+                            }
 
                             Spacer(modifier = Modifier.width(12.dp))
 
@@ -829,9 +848,9 @@ fun MiniPlayer(
                                     style = FoamTheme.typography.titleMedium,
                                     mode = marqueeMode,
                                     state = pageMarquee.title,
-                                    modifier = if (useSharedElements && isSettledCurrentTrackPage) {
+                                    modifier = if (titleSharedState != null) {
                                         Modifier.sharedBounds(
-                                            rememberSharedContentState(key = "track_title_${track.id}"),
+                                            titleSharedState,
                                             animatedVisibilityScope = animatedVisibilityScope
                                         )
                                     } else Modifier

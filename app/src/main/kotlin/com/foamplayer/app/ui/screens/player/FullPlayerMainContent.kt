@@ -562,6 +562,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
 
         if (showHero) {
             val heroMarquee = statesFor(entryKey(anchorPage))
+            val heroArtState = rememberSharedContentState(key = "album_art_${track.id}")
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
@@ -586,7 +587,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 coordinates.positionInRoot().y + coordinates.size.height / 2f
                         }
                         .sharedElement(
-                            rememberSharedContentState(key = "album_art_${track.id}"),
+                            heroArtState,
                             animatedVisibilityScope = outerVisibilityScope
                         )
                         .sharedElement(
