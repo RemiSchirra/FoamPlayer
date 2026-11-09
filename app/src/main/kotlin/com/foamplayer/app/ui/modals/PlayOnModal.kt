@@ -56,6 +56,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
+import com.foamplayer.app.ui.components.SystemVolumeControl
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -74,6 +75,9 @@ private val MountDriftDp = 12.dp
  * part of the list and selected by default; the repository-supplied targets
  * (Bluetooth outputs, media-server remote players, discovered cast/UPnP devices)
  * join it with their own icon, title and play-type description.
+ *
+ * A system volume bar is docked below the list as the sheet's footer, so it
+ * stays visible no matter how far the target list scrolls.
  */
 @Composable
 fun PlayOnModal(
@@ -87,6 +91,16 @@ fun PlayOnModal(
     FoamBottomModal(
         visible = visible,
         onDismissRequest = onDismiss,
+        footer = {
+            Box(
+                modifier = Modifier.padding(
+                    horizontal = FoamDimens.paddingMedium,
+                    vertical = FoamDimens.spacingSmall,
+                ),
+            ) {
+                SystemVolumeControl(showPercent = false)
+            }
+        },
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
