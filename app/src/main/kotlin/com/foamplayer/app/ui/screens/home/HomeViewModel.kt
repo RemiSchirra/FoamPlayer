@@ -17,6 +17,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transform
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -64,6 +67,63 @@ class HomeViewModel @Inject constructor(
     val scanStatus: StateFlow<ScanStatus> = trackRepository.scanStatus
 
     /**
+     * Sources that must have delivered their first database snapshot before the
+     * Home screen can be shown. The app holds its first UI frame until this is
+     * true, so rows never pop into place one by one after launch.
+     */
+    private object HomeSource {
+        const val LIBRARY = "library"
+        const val RECOMMENDED_PLAYLISTS = "recommended_playlists"
+        const val RECOMMENDED_ALBUMS = "recommended_albums"
+        const val RECENT_TRACKS = "recent_tracks"
+        const val RECOMMENDED_TRACKS = "recommended_tracks"
+        const val FAVORITE_TRACKS = "favorite_tracks"
+        const val OLD_FAVORITE_TRACKS = "old_favorite_tracks"
+        const val OLD_FAVORITE_ALBUMS = "old_favorite_albums"
+        const val FAVORITE_ARTISTS = "favorite_artists"
+        const val RECENTLY_ADDED_ALBUMS = "recently_added_albums"
+        const val RECENTLY_ADDED_ARTISTS = "recently_added_artists"
+
+        val all = setOf(
+            LIBRARY,
+            RECOMMENDED_PLAYLISTS,
+            RECOMMENDED_ALBUMS,
+            RECENT_TRACKS,
+            RECOMMENDED_TRACKS,
+            FAVORITE_TRACKS,
+            OLD_FAVORITE_TRACKS,
+            OLD_FAVORITE_ALBUMS,
+            FAVORITE_ARTISTS,
+            RECENTLY_ADDED_ALBUMS,
+            RECENTLY_ADDED_ARTISTS
+        )
+    }
+
+    private val loadedSources = MutableStateFlow<Set<String>>(emptySet())
+
+    private val _contentReady = MutableStateFlow(false)
+
+    /**
+     * True once every Home data source has emitted its first snapshot. The
+     * launch gate waits on this so the whole page appears in one piece.
+     */
+    val contentReady: StateFlow<Boolean> = _contentReady.asStateFlow()
+
+    /**
+     * Marks [key] loaded AFTER the value has been handed to the downstream
+     * [stateIn] collector, so readiness can never run ahead of the page's data.
+     */
+    private fun <T> Flow<T>.trackSource(key: String): Flow<T> = transform { value ->
+        emit(value)
+        markSourceLoaded(key)
+    }
+
+    private fun markSourceLoaded(key: String) {
+        val loaded = loadedSources.updateAndGet { it + key }
+        if (loaded.containsAll(HomeSource.all)) _contentReady.value = true
+    }
+
+    /**
      * Re-reads a track from the DB right before the track modal opens: home rows
      * are collected snapshots, so an edited track's metadata can be stale in the
      * row list. Falls back to the snapshot when the row can't be found.
@@ -79,7 +139,8 @@ class HomeViewModel @Inject constructor(
     /** Playlists ranked by the aggregate play count + likes of the songs they contain. */
     val recommendedPlaylists: StateFlow<List<PlaylistRecommendation>> =
         playlistRepository.getRecommendedPlaylists()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .trackSource(HomeSource.RECOMMENDED_PLAYLISTS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Resolved covers per playlist id (custom image first, else first-track embedded art). */
     val playlistCovers: StateFlow<Map<Long, PlaylistCover>> =
@@ -89,37 +150,44 @@ class HomeViewModel @Inject constructor(
     /** Albums ranked by the aggregate play count + likes of their tracks. */
     val recommendedAlbums: StateFlow<List<AlbumRecommendation>> =
         trackRepository.getRecommendedAlbums()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .trackSource(HomeSource.RECOMMENDED_ALBUMS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Tracks with at least one listen, newest listen first. */
     val recentTracks: StateFlow<List<TrackEntity>> =
         trackRepository.getRecentlyPlayed()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .trackSource(HomeSource.RECENT_TRACKS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Most-listened tracks, descending by listen count. */
     val recommendedTracks: StateFlow<List<TrackEntity>> =
         trackRepository.getRecommendedTracks()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .trackSource(HomeSource.RECOMMENDED_TRACKS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Liked tracks (score >= 1), ranked by score then listen count. */
     val favoriteTracks: StateFlow<List<TrackEntity>> =
         trackRepository.getFavoriteTracks()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .trackSource(HomeSource.FAVORITE_TRACKS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Long-standing favorites: listening history whose last listen is older than 14 days. */
     val oldFavoriteTracks: StateFlow<List<TrackEntity>> =
         trackRepository.getOldFavorites(System.currentTimeMillis() - OldFavoritesCutoffMs)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .trackSource(HomeSource.OLD_FAVORITE_TRACKS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Albums whose latest listen is older than 14 days, ranked by aggregate play/like. */
     val oldFavoriteAlbums: StateFlow<List<AlbumRecommendation>> =
         trackRepository.getOldFavoriteAlbums(System.currentTimeMillis() - OldFavoritesCutoffMs)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .trackSource(HomeSource.OLD_FAVORITE_ALBUMS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Albums newest-first by their most recently added (first-seen) track. */
     val recentlyAddedAlbums: StateFlow<List<AlbumRecommendation>> =
         trackRepository.getRecentlyAddedAlbums()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .trackSource(HomeSource.RECENTLY_ADDED_ALBUMS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /**
      * Artists newest-first by the latest file modification date among their
@@ -148,7 +216,8 @@ class HomeViewModel @Inject constructor(
                     .toList()
             }
             .flowOn(Dispatchers.Default)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .trackSource(HomeSource.RECENTLY_ADDED_ARTISTS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /**
      * Artists ranked by the total plays of their songs. Names split on the
@@ -176,7 +245,8 @@ class HomeViewModel @Inject constructor(
                     .toList()
             }
             .flowOn(Dispatchers.Default)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .trackSource(HomeSource.FAVORITE_ARTISTS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Resolved pictures per artist name: a Spotify image or first-track embedded art. */
     val artistImages: StateFlow<Map<String, ArtistCover>> =
@@ -248,6 +318,9 @@ class HomeViewModel @Inject constructor(
                 if (_randomTracks.value.isEmpty()) reshuffleRandomTracks()
                 if (_randomAlbums.value.isEmpty()) reshuffleRandomAlbums()
                 if (_randomArtists.value.isEmpty()) reshuffleRandomArtists()
+                // Marked last: the gate must not reveal Home before the
+                // library-backed grids have been seeded.
+                markSourceLoaded(HomeSource.LIBRARY)
             }
         }
         viewModelScope.launch {

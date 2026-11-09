@@ -3,15 +3,19 @@ package com.foamplayer.app.ui.utils
 import android.content.Context
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Process-wide cache of album-art accent colors keyed by art path. MiniPlayer
@@ -28,6 +32,9 @@ object AlbumArtPaletteCache {
     /** Maximum cached colors before the least-recently-read entry is evicted. */
     private const val MAX_ENTRIES = 64
 
+    /** Upper bound on how long the launch gate waits for one extraction. */
+    private const val SETTLE_TIMEOUT_MS = 750L
+
     /** Snapshot-backed map; read directly from composition. */
     val colors = mutableStateMapOf<String, Color>()
 
@@ -40,6 +47,28 @@ object AlbumArtPaletteCache {
      * terminal instead of re-launching a decode on every [ensure] call.
      */
     private val failedPaths = mutableSetOf<String>()
+
+    /**
+     * Paths whose extraction finished either way (color present in [colors] or
+     * classified as [failedPaths]). Snapshot-backed so the launch gate can wait
+     * for the restored track's accent without polling.
+     */
+    private val settledPaths = mutableStateMapOf<String, Unit>()
+
+    /** True once [path]'s extraction has finished (successfully or not). */
+    fun isSettled(path: String): Boolean = settledPaths.containsKey(path)
+
+    /**
+     * Suspends until [path]'s color is known (or extraction failed), with a
+     * short safety timeout so a damaged file can never hold the app on its
+     * startup frame.
+     */
+    suspend fun awaitSettled(path: String) {
+        if (isSettled(path)) return
+        withTimeoutOrNull(SETTLE_TIMEOUT_MS.milliseconds) {
+            snapshotFlow { isSettled(path) }.first { it }
+        }
+    }
 
     // Access-ordered record driving eviction; values are placeholders.
     private val recency = object : LinkedHashMap<String, Unit>() {
@@ -67,10 +96,14 @@ object AlbumArtPaletteCache {
     fun ensure(scope: CoroutineScope, context: Context, path: String?, isEmbeddedArt: Boolean = true) {
         if (path == null) return
         if (colors.containsKey(path)) {
+            settledPaths[path] = Unit
             touch(path)
             return
         }
-        if (path in failedPaths) return
+        if (path in failedPaths) {
+            settledPaths[path] = Unit
+            return
+        }
         scope.launch {
             val shouldFetch = inFlightLock.withLock {
                 if (path in inFlight) {
@@ -89,6 +122,7 @@ object AlbumArtPaletteCache {
                 } else {
                     failedPaths += path
                 }
+                settledPaths[path] = Unit
             } finally {
                 // The launching scope may be cancelled mid-`withLock`, which would
                 // throw before clearing `inFlight` and block every future fetch of

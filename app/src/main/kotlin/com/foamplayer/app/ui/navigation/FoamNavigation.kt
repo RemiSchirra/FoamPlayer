@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -75,8 +76,16 @@ import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBackdropScale
 import com.foamplayer.app.ui.theme.foamPlayerOpenScale
+import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+
+/**
+ * Process-wide latch for the launch gate: once the gate has opened, later
+ * activity recreations (rotation, theme changes) must not hide the already-warm
+ * UI for a frame. A fresh process still starts with the gate closed.
+ */
+private var startupGateOpened = false
 
 /**
  * Root navigation host: every screen of the app, the mini/full player
@@ -163,6 +172,56 @@ fun FoamNavHost(
     val navBarTransparentWhenPlayerOpen = playerSettings.navBarTransparentWhenPlayerOpen
     val primaryNavBarItems = playerSettings.primaryNavBarItems
     val secondaryNavBarItems = playerSettings.secondaryNavBarItems
+
+    // ---------------------------------------------------------------------
+    // Launch gate
+    //
+    // The backdrop layers below are composed from the very first frame (so
+    // the restored artwork can load and warm up), but the screens, the mini
+    // player and the nav bar only enter once everything they show is known:
+    // the saved playback session, the Home query snapshots and the
+    // album-art accent. That makes the app appear as one finished frame
+    // instead of fading, reordering and animating its parts into place.
+    // ---------------------------------------------------------------------
+    val startupContext = LocalContext.current
+    val sessionRestoreSettled by playerViewModel.sessionRestoreSettled.collectAsState()
+    val homeContentReady by homeViewModel.contentReady.collectAsState()
+    val currentAlbumArtPath by playerViewModel.currentAlbumArtPath.collectAsState()
+
+    var startupAccentReady by remember { mutableStateOf(false) }
+    LaunchedEffect(
+        playerSettings.automaticColorEnabled,
+        sessionRestoreSettled,
+        currentAlbumArtPath
+    ) {
+        if (startupAccentReady) return@LaunchedEffect
+        if (!playerSettings.automaticColorEnabled) {
+            startupAccentReady = true
+        } else if (sessionRestoreSettled) {
+            val path = currentAlbumArtPath
+            if (path != null) {
+                AlbumArtPaletteCache.ensure(
+                    scope = this,
+                    context = startupContext,
+                    path = path
+                )
+                AlbumArtPaletteCache.awaitSettled(path)
+            }
+            startupAccentReady = true
+        }
+    }
+
+    var startupReady by remember { mutableStateOf(startupGateOpened) }
+    LaunchedEffect(sessionRestoreSettled, homeContentReady, startupAccentReady) {
+        if (startupReady) return@LaunchedEffect
+        if (sessionRestoreSettled && homeContentReady && startupAccentReady) {
+            // Let the session/row state flows land on their loaded values for
+            // one frame before the UI is composed for the first time.
+            withFrameNanos { }
+            startupGateOpened = true
+            startupReady = true
+        }
+    }
 
     // Per-view list density / sort / inversion setters (organisation modal).
     val densityFor: (MediaListView) -> MediaDensity = { view -> playerSettings.mediaDensity(view) }
@@ -452,11 +511,15 @@ fun FoamNavHost(
                 val isPlayerOpen = playerTransitionState.targetState
                 val scalesWholeScreenForPlayer = !isSettingsRoute(currentRoute)
 
-                val miniPlayerPresence = remember {
-                    Animatable(if (playerViewModel.hasCurrentTrack.value) 1f else 0f)
-                }
                 val isOnboardingRoute = currentRoute == Screen.Onboarding.route
-                LaunchedEffect(hasCurrentTrack, isOnboardingRoute) {
+                // Created only once the gate opens, seeded with the restored
+                // session, so the first revealed frame already has the mini
+                // player in its final position: no snap/animation visible.
+                val miniPlayerPresence = remember(startupReady) {
+                    Animatable(if (startupReady && hasCurrentTrack && !isOnboardingRoute) 1f else 0f)
+                }
+                LaunchedEffect(hasCurrentTrack, isOnboardingRoute, startupReady) {
+                    if (!startupReady) return@LaunchedEffect
                     when {
                         isOnboardingRoute -> miniPlayerPresence.snapTo(0f)
                         !hasCurrentTrack -> miniPlayerPresence.animateTo(
@@ -533,9 +596,13 @@ fun FoamNavHost(
                     }
                 }
 
+                // Gate everything the user reads as "the app" (screens,
+                // mini player, nav bar) behind the startup gate. The backdrop
+                // layers above stay composed so their artwork is already
+                // decoded when this first appears.
                 // Screen content: shrinks behind modals (see foamBackdropScale)
                 // while the backdrop layers above stay full-bleed.
-                Box(
+                if (startupReady) Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .foamZoomOriginTracker(zoomOrigins)
@@ -678,14 +745,16 @@ fun FoamNavHost(
                     }
                 }
 
-                FoamBottomScrim(
-                    currentRoute = currentRoute,
-                    bottomBarClearance = bottomBarClearance
-                )
+                if (startupReady) {
+                    FoamBottomScrim(
+                        currentRoute = currentRoute,
+                        bottomBarClearance = bottomBarClearance
+                    )
+                }
 
                 // Bottom chrome (mini player + nav bar + toasts) shrinks with
                 // the screen content, in its own same-geometry scale layer.
-                Box(modifier = Modifier.fillMaxSize().foamBackdropScale()) {
+                if (startupReady) Box(modifier = Modifier.fillMaxSize().foamBackdropScale()) {
                     FoamBottomChrome(
                         currentRoute = currentRoute,
                         navigationBarMode = navigationBarMode,

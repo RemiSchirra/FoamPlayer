@@ -184,11 +184,17 @@ internal fun DynamicAlbumArtBackground(
 ) {
     val context = LocalContext.current
 
+    // Coil's own crossfade is only for artwork that replaces already-visible
+    // art. Requests built before the first image has loaded (app launch, or a
+    // restored track whose path arrives a few frames later) must appear in
+    // place instead of fading up from nothing.
+    var hasShownArtwork by remember { mutableStateOf(false) }
+
     fun artRequest(path: String, isEmbedded: Boolean) = ImageRequest.Builder(context)
         .data(if (isEmbedded) EmbeddedAlbumArt(path.toUri()) else path)
         .size(AlbumArtRequestSize)
         .memoryCacheKey(albumArtMemoryCacheKey(path))
-        .crossfade(300)
+        .crossfade(if (hasShownArtwork) 300 else 0)
         .build()
 
     Box(modifier = modifier) {
@@ -201,6 +207,7 @@ internal fun DynamicAlbumArtBackground(
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize().performantBlur(blur),
                 contentScale = ContentScale.Crop,
+                onSuccess = { hasShownArtwork = true },
             )
         }
         if (backArtPath != null && backArtPath != frontArtPath) {
@@ -215,6 +222,7 @@ internal fun DynamicAlbumArtBackground(
                     .performantBlur(blur)
                     .graphicsLayer { alpha = crossfadeFraction() },
                 contentScale = ContentScale.Crop,
+                onSuccess = { hasShownArtwork = true },
             )
         }
         Box(
@@ -240,17 +248,20 @@ internal fun CustomImageBackground(
     Box(modifier) {
         if (imageUri != null) {
             val context = LocalContext.current
+            // The first image appears in place; later URI changes may crossfade.
+            var hasShownImage by remember { mutableStateOf(false) }
             val request = remember(imageUri) {
                 ImageRequest.Builder(context)
                     .data(imageUri.toUri())
-                    .crossfade(300)
+                    .crossfade(if (hasShownImage) 300 else 0)
                     .build()
             }
             AsyncImage(
                 model = request,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize().performantBlur(blur),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                onSuccess = { hasShownImage = true }
             )
         }
         Box(

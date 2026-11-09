@@ -28,6 +28,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -697,10 +700,25 @@ private fun rememberAccentColor(
     }
     val extractedColor = effectiveArtPath?.let { AlbumArtPaletteCache.colors[it] }
 
+    // The first real palette color must appear in place: the launch gate holds
+    // the UI until it is known, so animating in from the manual fallback would
+    // be visible only as a launch fade. Once resolved, the animation stays
+    // composed so later track changes keep their crossfade.
+    // Seeded from the cache so activity recreation (already-warm palette) does
+    // not flash the manual accent for a frame before this effect runs.
+    var hasResolvedAccent by remember { mutableStateOf(extractedColor != null) }
+    LaunchedEffect(extractedColor) {
+        if (extractedColor != null) hasResolvedAccent = true
+    }
+
     when {
         !isAutomaticColor -> return Color(manualAccentColor)
         dynamicAccentColor != null -> return dynamicAccentColor
+        !hasResolvedAccent -> return Color(manualAccentColor)
         else -> {
+            // Entering this branch for the first time initializes the animation
+            // at the target color, so there is no launch-time fade; later
+            // targets still animate.
             val animatedColor by animateColorAsState(
                 targetValue = extractedColor ?: Color(manualAccentColor),
                 animationSpec = tween(durationMillis = FoamMotion.Duration.EXPRESSIVE),
