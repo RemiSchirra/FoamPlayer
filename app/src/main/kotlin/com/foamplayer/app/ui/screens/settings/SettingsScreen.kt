@@ -47,7 +47,6 @@ import com.foamplayer.app.ui.modals.ImportSettingsModal
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBackgroundTopFade
 
 @Composable
@@ -259,7 +258,7 @@ fun SettingsPage(
     trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
-    Box(modifier = modifier.fillMaxSize().foamBackground()) {
+    Box(modifier = modifier.fillMaxSize()) {
         content()
         Box(
             modifier = Modifier

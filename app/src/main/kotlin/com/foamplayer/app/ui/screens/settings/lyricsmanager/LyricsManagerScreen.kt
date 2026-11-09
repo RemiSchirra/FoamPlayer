@@ -68,7 +68,6 @@ import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.screens.settings.SettingsHeader
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.FoamDimens
-import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
@@ -159,7 +158,6 @@ fun LyricsManagerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .foamBackground()
     ) {
         Column(
             modifier = Modifier

@@ -409,7 +409,8 @@ fun FoamNavHost(
             LocalActiveSharedCollection provides activeSharedCollectionTag.value,
             LocalActiveSharedCollectionTagState provides activeSharedCollectionTag,
             LocalSearchFocusRequest provides searchFocusRequest,
-            LocalBackgroundSettingsPreview provides backgroundSettingsPreview
+            LocalBackgroundSettingsPreview provides backgroundSettingsPreview,
+            LocalPlayerTransitionState provides playerTransitionState
         ) {
             Box(modifier = modifier.fillMaxSize().foamBackground()) {
 
@@ -449,6 +450,7 @@ fun FoamNavHost(
                 )
 
                 val isPlayerOpen = playerTransitionState.targetState
+                val scalesWholeScreenForPlayer = !isSettingsRoute(currentRoute)
 
                 val miniPlayerPresence = remember {
                     Animatable(if (playerViewModel.hasCurrentTrack.value) 1f else 0f)
@@ -564,9 +566,15 @@ fun FoamNavHost(
                             exit = if (playerTransition.isTransitionAnimated) fadeOut() else ExitTransition.None,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .foamPlayerOpenScale(
-                                    playerOpen = playerTransitionState.targetState,
-                                    playerProgress = { playerTransitionState.progress() }
+                                .then(
+                                    if (scalesWholeScreenForPlayer) {
+                                        Modifier.foamPlayerOpenScale(
+                                            playerOpen = playerTransitionState.targetState,
+                                            playerProgress = { playerTransitionState.progress() }
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
                                 )
                         ) {
                             val playerTransitionVisibilityScope = this

@@ -1,6 +1,7 @@
 package com.foamplayer.app.ui.navigation
 import android.os.Bundle
 import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.Transition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -31,8 +32,10 @@ import com.foamplayer.app.ui.components.CollectionId
 import com.foamplayer.app.ui.screens.player.CustomImageBackground
 import com.foamplayer.app.ui.screens.player.DynamicAlbumArtBackground
 import com.foamplayer.app.ui.screens.player.GradientBackground
+import com.foamplayer.app.ui.screens.player.progress
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.foamPlayerOpenScale
 
 /**
  * Top-level support for [FoamNavHost]: transition timing, the background-layer subsystem and the
@@ -113,6 +116,15 @@ class BackgroundSettingsPreviewState {
 val LocalBackgroundSettingsPreview = staticCompositionLocalOf { BackgroundSettingsPreviewState() }
 
 /**
+ * Full-player open/close transition, provided by [FoamNavHost]. Settings
+ * destinations scale only their content with it (see [foamPlayerOpenScale]),
+ * keeping their opaque surface full-bleed; every other destination is scaled
+ * wholesale by the host instead.
+ */
+internal val LocalPlayerTransitionState =
+    staticCompositionLocalOf<SeekableTransitionState<Boolean>?> { null }
+
+/**
  * Destination wrapper that applies the status-bar inset INSIDE each destination.
  *
  * The inset used to be applied once, around the whole NavHost. The NavHost's
@@ -123,6 +135,11 @@ val LocalBackgroundSettingsPreview = staticCompositionLocalOf { BackgroundSettin
  * dimmed root backdrop showed through instead. With the padding moved inside,
  * the fading layer spans the full screen and the bleed survives the transition.
  * Layout of the screens is unchanged: they still start below the inset.
+ *
+ * Settings destinations paint an opaque surface here, OUTSIDE their content
+ * scale, so opening the full player shrinks the page content while the page
+ * background stays full-bleed (the generic player scale is skipped for those
+ * routes in [FoamNavHost]).
  */
 internal fun NavGraphBuilder.composable(
     route: String,
@@ -133,6 +150,7 @@ internal fun NavGraphBuilder.composable(
     val paintsOpaqueSurface = isSettings && !isBackgroundSettingsRoute(route)
     navComposable(route = route, arguments = arguments) { entry ->
         val contentScope = this
+        val playerTransitionState = LocalPlayerTransitionState.current
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -145,9 +163,24 @@ internal fun NavGraphBuilder.composable(
                         Modifier
                     }
                 )
-                .statusBarsPadding()
         ) {
-            contentScope.content(entry)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (isSettings && playerTransitionState != null) {
+                            Modifier.foamPlayerOpenScale(
+                                playerOpen = playerTransitionState.targetState,
+                                playerProgress = { playerTransitionState.progress() }
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .statusBarsPadding()
+            ) {
+                contentScope.content(entry)
+            }
         }
     }
 }
