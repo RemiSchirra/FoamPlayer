@@ -158,7 +158,7 @@ private fun DeviceConfigCard(
                             .clip(CircleShape)
                             .background(
                                 if (isActive) FoamTheme.colors.bitPerfectActive
-                                else FoamTheme.colors.borderOverlay
+                                else FoamTheme.tintedSurfaceVariant
                             )
                     )
                     Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
@@ -215,7 +215,7 @@ private fun DeviceConfigCard(
                                     .clip(RoundedCornerShape(FoamDimens.buttonRounding))
                                     .background(
                                         if (selected) FoamTheme.accentColor
-                                        else FoamTheme.colors.surfaceVariant
+                                        else FoamTheme.tintedSurfaceVariant
                                     )
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
@@ -258,7 +258,7 @@ private fun DeviceConfigCard(
                                     .clip(RoundedCornerShape(FoamDimens.buttonRounding))
                                     .background(
                                         if (selected) FoamTheme.accentColor
-                                        else FoamTheme.colors.surfaceVariant
+                                        else FoamTheme.tintedSurfaceVariant
                                     )
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
