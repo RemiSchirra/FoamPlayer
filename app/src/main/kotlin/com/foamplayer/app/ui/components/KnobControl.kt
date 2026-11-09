@@ -105,7 +105,7 @@ fun KnobControl(
     val latestOnValueChange by rememberUpdatedState(onValueChange)
 
     val accent = FoamTheme.accentColor
-    val trackColor = FoamTheme.colors.surfaceVariant
+    val trackColor = FoamTheme.tintedSurfaceVariant
     val needleColor = FoamTheme.colors.textPrimary
 
     // Arc geometry: the start angle keeps the sweep centered on the vertical

@@ -342,9 +342,9 @@ fun GraphicEqStrip(
     onViewportWidthChanged: (Int) -> Unit = {}
 ) {
     val accent = FoamTheme.accentColor
-    val trackColor = FoamTheme.colors.surfaceVariant
+    val trackColor = FoamTheme.tintedSurfaceVariant
     val labelColor = FoamTheme.colors.textSecondary
-    val disabledDotColor = FoamTheme.colors.surface
+    val disabledDotColor = FoamTheme.tintedSurface
     val textMeasurer = rememberTextMeasurer()
     val valueStyle = TextStyle(fontSize = 8.sp, color = accent)
     val labelStyle = TextStyle(fontSize = 8.sp, color = labelColor)

@@ -313,7 +313,7 @@ private fun PlayOnDeviceRow(
 
     val interactions = remember { MutableInteractionSource() }
     val backgroundColor by animateColorAsState(
-        targetValue = if (isSelected) FoamTheme.colors.surfaceVariant else Color.Transparent,
+        targetValue = if (isSelected) FoamTheme.tintedSurfaceVariant else Color.Transparent,
         animationSpec = tween(FoamMotion.Duration.STANDARD)
     )
     val iconCircleColor by animateColorAsState(

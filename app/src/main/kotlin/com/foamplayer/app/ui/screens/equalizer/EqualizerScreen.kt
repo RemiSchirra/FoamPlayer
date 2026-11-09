@@ -362,9 +362,9 @@ fun EqualizerScreen(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(
                                     if (workingNodes.size < ParametricEqSettings.MAX_NODES) {
-                                        FoamTheme.colors.surfaceVariant
+                                        FoamTheme.tintedSurfaceVariant
                                     } else {
-                                        FoamTheme.colors.surfaceVariant.copy(alpha = 0.4f)
+                                        FoamTheme.tintedSurfaceVariant.copy(alpha = 0.4f)
                                     }
                                 )
                                 .clickable(
@@ -1317,14 +1317,14 @@ private fun ParametricNodeEditor(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (selected) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant)
+                            .background(if (selected) FoamTheme.accentColor else FoamTheme.tintedSurfaceVariant)
                             .clickable { onUpdate(node.copy(type = type)) }
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         BasicText(
                             text = type.label,
                             style = FoamTheme.typography.caption.copy(
-                                color = if (selected) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+                                color = if (selected) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary,
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                             )
                         )

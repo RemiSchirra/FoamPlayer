@@ -149,6 +149,7 @@ fun SystemVolumeControl(showPercent: Boolean = true) {
         FoamSlider(
             modifier = Modifier.weight(1f),
             value = { shownFraction.value },
+            inactiveColor = FoamTheme.tintedSurfaceVariant,
             onValueChange = { raw ->
                 val fraction = raw.coerceIn(0f, 1f)
                 scope.launch(start = CoroutineStart.UNDISPATCHED) {

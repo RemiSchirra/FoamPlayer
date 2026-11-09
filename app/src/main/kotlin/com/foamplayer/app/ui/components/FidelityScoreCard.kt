@@ -153,7 +153,7 @@ private fun FidelitySectionDivider() {
 @Composable
 private fun FidelityRing(score: FidelityScore?) {
     val ringColor = scoreColor(score)
-    val trackColor = FoamTheme.colors.surfaceVariant
+    val trackColor = FoamTheme.tintedSurfaceVariant
     val fraction = score?.fraction ?: 0f
 
     Box(modifier = Modifier.size(72.dp), contentAlignment = Alignment.Center) {

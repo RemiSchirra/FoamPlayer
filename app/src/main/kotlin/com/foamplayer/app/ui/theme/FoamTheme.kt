@@ -237,6 +237,16 @@ object FoamTheme {
         @Composable get() = LocalAccentTintState.current.resolve(
             LocalFoamColors.current.surface, SurfaceAccentTint
         )
+
+    val tintedSurfaceVariant: Color
+        @Composable get() = LocalAccentTintState.current.resolve(
+            LocalFoamColors.current.surfaceVariant, SurfaceAccentTint
+        )
+
+    val tintedBackground: Color
+        @Composable get() = LocalAccentTintState.current.resolve(
+            LocalFoamColors.current.background, SurfaceAccentTint
+        )
 }
 
 /**
