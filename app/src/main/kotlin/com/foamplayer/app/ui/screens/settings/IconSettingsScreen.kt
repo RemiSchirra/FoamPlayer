@@ -25,7 +25,9 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +41,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.ui.components.FoamCard
+import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.iconpacks.FoamIconPack
 import com.foamplayer.app.ui.iconpacks.FoamIconPackRegistry
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
@@ -52,9 +55,11 @@ import com.foamplayer.app.ui.theme.rememberPackRoleIcon
 private const val FallbackIconAlpha = 0.45f
 
 /**
- * Icon settings (Settings > User interface > Icons): one section per bundled
- * icon pack — name, variant pills when the pack draws several styles, and the
- * full role grid previewing the pack's effective variant.
+ * Icon settings (Settings > User interface > Icons): on top, the navbar variant
+ * controls — a Dynamic navbar icons switch and the active/inactive variant pickers
+ * it reveals — then one section per bundled icon pack — name, variant pills when
+ * the pack draws several styles, and the full role grid previewing the pack's
+ * effective variant.
  */
 @Composable
 fun IconSettingsScreen(
@@ -63,6 +68,9 @@ fun IconSettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsState()
     val iconPackId = settings.iconPackId
+    // Transitions stay off until the user first toggles the switch, so the
+    // section never animates on entry (the settings convention).
+    var animateChanges by remember { mutableStateOf(false) }
 
     SettingsPage(
         title = stringResource(R.string.icon_pack),
@@ -77,6 +85,56 @@ fun IconSettingsScreen(
                 bottom = LocalBottomBarClearance.current
             )
         ) {
+            item {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        FoamSwitchItem(
+                            title = stringResource(R.string.dynamic_nav_icons),
+                            checked = settings.dynamicNavIcons,
+                            onCheckedChange = {
+                                animateChanges = true
+                                viewModel.setDynamicNavIcons(it)
+                            }
+                        )
+                        // The revealed pickers ride the settings expand/shrink
+                        // + fade; the spacer lives inside so its height animates
+                        // too (see BackgroundSettingsScreen).
+                        SettingsExpandVisibility(
+                            visible = settings.dynamicNavIcons,
+                            animate = animateChanges
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(
+                                    start = FoamDimens.spacingStandard,
+                                    end = FoamDimens.spacingStandard,
+                                    bottom = FoamDimens.spacingStandard
+                                )
+                            ) {
+                                // Only the variants the selected pack actually
+                                // draws -- the navbar renders its icons.
+                                val availableVariants =
+                                    FoamIconPackRegistry.byId(settings.iconPackId).variants
+                                NavbarVariantPills(
+                                    title = stringResource(R.string.nav_icon_active_variant),
+                                    variants = availableVariants,
+                                    selectedVariant = settings.navIconActiveVariant,
+                                    onVariantSelected = viewModel::setNavIconActiveVariant
+                                )
+                                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                                NavbarVariantPills(
+                                    title = stringResource(R.string.nav_icon_inactive_variant),
+                                    variants = availableVariants,
+                                    selectedVariant = settings.navIconInactiveVariant,
+                                    onVariantSelected = viewModel::setNavIconInactiveVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            }
             items(FoamIconPackRegistry.all.size) { index ->
                 val pack = FoamIconPackRegistry.all[index]
                 IconPackSection(
@@ -166,6 +224,40 @@ private fun IconPackSection(
             }
             Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             IconRoleGrid(pack = pack, style = effective)
+        }
+    }
+}
+
+/**
+ * One navbar variant picker: [title] over a row of [variants] pills, mirroring
+ * the pack sections' pill row. Each pill previews the resolved icon set for
+ * the variant (the play role), not any raw pack's.
+ */
+@Composable
+private fun NavbarVariantPills(
+    title: String,
+    variants: List<FoamIconStyle>,
+    selectedVariant: FoamIconStyle,
+    onVariantSelected: (FoamIconStyle) -> Unit
+) {
+    Column {
+        BasicText(
+            text = title,
+            style = FoamTheme.typography.body
+        )
+        Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingTiny)
+        ) {
+            variants.forEach { variant ->
+                PackVariantPill(
+                    variant = variant,
+                    icon = FoamTheme.icons.setFor(variant).play,
+                    isSelected = variant == selectedVariant,
+                    onSelected = { onVariantSelected(variant) }
+                )
+            }
         }
     }
 }

@@ -154,6 +154,9 @@
     <string name="navbar_item_more">Plus</string>
     <string name="expand_navigation">Déployer la navigation</string>
     <string name="collapse_navigation">Réduire la navigation</string>
+    <string name="dynamic_nav_icons">Icônes dynamiques de la barre de navigation</string>
+    <string name="nav_icon_active_variant">Variante active</string>
+    <string name="nav_icon_inactive_variant">Variante inactive</string>
 
     <!-- Écran des statistiques -->
     <string name="stats_loading">Chargement des statistiques d\'écoute…</string>

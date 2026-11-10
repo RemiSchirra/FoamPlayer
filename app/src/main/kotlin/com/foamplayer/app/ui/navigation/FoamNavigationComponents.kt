@@ -62,6 +62,7 @@ import com.foamplayer.app.R
 import androidx.navigation.NavBackStackEntry
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
+import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAccentTintState
@@ -447,10 +448,17 @@ object NavBarDimens {
  * and the player fraction is read per frame, so swiping the player open/closed
  * fades the accent with the gesture. Accent-color changes redraw without
  * recomposing.
+ *
+ * [activeIcon] and [inactiveIcon] crossfade on the same route-selection
+ * fraction that drives the color highlight, so the icon swap and the accent
+ * fade together: the inactive variant fades out while the active one fades
+ * in, both at the selection tint. Identical vectors (a disabled dynamic-icon
+ * switch) draw once with no crossfade.
  */
 @Composable
 private fun NavItemVisual(
-    icon: ImageVector,
+    activeIcon: ImageVector,
+    inactiveIcon: ImageVector,
     selected: Boolean,
     tintTiming: ScreenSwitchTiming,
     playerClosedFraction: () -> Float,
@@ -465,7 +473,8 @@ private fun NavItemVisual(
         ),
         label = "NavRouteSelection"
     )
-    val painter = rememberVectorPainter(icon)
+    val activePainter = rememberVectorPainter(activeIcon)
+    val inactivePainter = rememberVectorPainter(inactiveIcon)
     val secondary = FoamTheme.colors.textSecondary
     val accentTint = LocalAccentTintState.current
     Box(
@@ -480,8 +489,20 @@ private fun NavItemVisual(
             )
             .drawBehind {
                 val amount = (routeSelection * playerClosedFraction()).coerceIn(0f, 1f)
-                with(painter) {
-                    draw(size, colorFilter = ColorFilter.tint(lerp(secondary, accentTint.color, amount)))
+                val tint = ColorFilter.tint(lerp(secondary, accentTint.color, amount))
+                if (activeIcon == inactiveIcon) {
+                    with(activePainter) {
+                        draw(size, colorFilter = tint)
+                    }
+                } else {
+                    // Inactive: fades out as the selection arrives.
+                    with(inactivePainter) {
+                        draw(size, colorFilter = tint, alpha = 1f - amount)
+                    }
+                    // Active: fades in on top as the selection arrives.
+                    with(activePainter) {
+                        draw(size, colorFilter = tint, alpha = amount)
+                    }
                 }
             }
     )
@@ -491,12 +512,13 @@ private fun NavItemVisual(
  * Clickable nav icon. The hit target fills its slot width (see [NavBarSlotRow]) and
  * is clipped to [NavItemHitShape] before the click so the ripple stays rounded.
  * [onLongClick] is optional (only used by the search item).
- * [tintTiming] and [playerClosedFraction] drive the icon's selection tint (see
- * [NavItemVisual]).
+ * [tintTiming], [activeIcon] and [inactiveIcon] drive the icon's selection tint
+ * and variant crossfade (see [NavItemVisual]).
  */
 @Composable
 private fun FoamNavItem(
-    icon: ImageVector,
+    activeIcon: ImageVector,
+    inactiveIcon: ImageVector,
     contentDescription: String,
     selected: Boolean,
     tintTiming: ScreenSwitchTiming,
@@ -524,7 +546,8 @@ private fun FoamNavItem(
         contentAlignment = Alignment.Center
     ) {
         NavItemVisual(
-            icon = icon,
+            activeIcon = activeIcon,
+            inactiveIcon = inactiveIcon,
             contentDescription = contentDescription,
             selected = selected,
             tintTiming = tintTiming,
@@ -546,15 +569,20 @@ private fun NavBarItem.targetScreen(): Screen = when (this) {
     NavBarItem.MORE -> Screen.Settings
 }
 
+/** The item's icon in [variant]; null = the theme's current (default) set. */
 @Composable
-private fun NavBarItem.icon(): ImageVector = when (this) {
-    NavBarItem.HOME -> FoamTheme.icons.current.home
-    NavBarItem.PLAYLISTS -> FoamTheme.icons.current.playlists
-    NavBarItem.SEARCH -> FoamTheme.icons.current.search
-    NavBarItem.STATS -> FoamTheme.icons.current.stats
-    NavBarItem.EQUALIZER -> FoamTheme.icons.current.equalizer
-    NavBarItem.SETTINGS -> FoamTheme.icons.current.settings
-    NavBarItem.MORE -> FoamTheme.icons.current.more
+private fun NavBarItem.icon(variant: FoamIconStyle?): ImageVector {
+    val icons = FoamTheme.icons
+    val set = if (variant == null) icons.current else icons.setFor(variant)
+    return when (this) {
+        NavBarItem.HOME -> set.home
+        NavBarItem.PLAYLISTS -> set.playlists
+        NavBarItem.SEARCH -> set.search
+        NavBarItem.STATS -> set.stats
+        NavBarItem.EQUALIZER -> set.equalizer
+        NavBarItem.SETTINGS -> set.settings
+        NavBarItem.MORE -> set.more
+    }
 }
 
 /**
@@ -690,6 +718,9 @@ private fun FoamNavigationItems(
     onNavigate: (String) -> Unit,
     items: List<NavBarItem>,
     primaryEnabled: Set<NavBarItem>,
+    dynamicIcons: Boolean,
+    activeVariant: FoamIconStyle,
+    inactiveVariant: FoamIconStyle,
     showExpandToggle: Boolean = false,
     expandFraction: Float = 0f,
     onToggleExpand: () -> Unit = {},
@@ -706,8 +737,12 @@ private fun FoamNavigationItems(
         modifier = modifier
     ) { item, itemEnabled ->
         if (item == NavBarItem.MORE) {
+            // The toggle is never selected: with dynamic icons it renders the
+            // inactive variant.
+            val moreIcon = item.icon(if (dynamicIcons) inactiveVariant else null)
             FoamNavItem(
-                icon = FoamTheme.icons.current.more,
+                activeIcon = moreIcon,
+                inactiveIcon = moreIcon,
                 contentDescription = stringResource(
                     if (expandFraction > 0.5f) R.string.collapse_navigation else R.string.expand_navigation
                 ),
@@ -724,8 +759,12 @@ private fun FoamNavigationItems(
             // Search: tap opens it focused, long press opens the browse cards.
             val isSearch = item == NavBarItem.SEARCH
 
+            val activeIcon = item.icon(if (dynamicIcons) activeVariant else null)
+            val inactiveIcon = if (dynamicIcons) item.icon(inactiveVariant) else activeIcon
+
             FoamNavItem(
-                icon = item.icon(),
+                activeIcon = activeIcon,
+                inactiveIcon = inactiveIcon,
                 contentDescription = screen.title,
                 selected = selected,
                 tintTiming = tintTiming,
@@ -764,6 +803,9 @@ private fun FoamNavExtraRow(
     tintTiming: ScreenSwitchTiming,
     playerClosedFraction: () -> Float,
     onNavigate: (String) -> Unit,
+    dynamicIcons: Boolean,
+    activeVariant: FoamIconStyle,
+    inactiveVariant: FoamIconStyle,
     expandFraction: Float,
     modifier: Modifier = Modifier
 ) {
@@ -788,8 +830,11 @@ private fun FoamNavExtraRow(
                 .padding(horizontal = NavBarDimens.RowEdgePadding)
         ) { item, _ ->
             val screen = item.targetScreen()
+            val activeIcon = item.icon(if (dynamicIcons) activeVariant else null)
+            val inactiveIcon = if (dynamicIcons) item.icon(inactiveVariant) else activeIcon
             NavItemVisual(
-                icon = item.icon(),
+                activeIcon = activeIcon,
+                inactiveIcon = inactiveIcon,
                 selected = isRouteSelected(currentRoute, screen),
                 tintTiming = tintTiming,
                 playerClosedFraction = playerClosedFraction,
@@ -841,6 +886,8 @@ private fun FoamNavExtraRow(
  *
  * [playerClosedFraction] (1 = player closed, 0 = open) fades the selection
  * tint with the player transition, so the accent follows the swipe in and out.
+ * [dynamicIcons] with [activeVariant]/[inactiveVariant] swaps each item's icon
+ * variant with its selection (see [NavItemVisual]).
  */
 @Composable
 fun FoamNavigationBar(
@@ -851,6 +898,9 @@ fun FoamNavigationBar(
     primaryEnabled: Set<NavBarItem>,
     secondaryItems: List<NavBarItem>,
     secondaryEnabled: Set<NavBarItem>,
+    dynamicIcons: Boolean = false,
+    activeVariant: FoamIconStyle = FoamIconStyle.FLAT,
+    inactiveVariant: FoamIconStyle = FoamIconStyle.OUTLINE,
     connectToMiniPlayer: Boolean = false,
     expandFraction: Float = 0f,
     onToggleExpand: () -> Unit = {}
@@ -906,6 +956,9 @@ fun FoamNavigationBar(
                 tintTiming = tintTiming,
                 playerClosedFraction = playerClosedFraction,
                 onNavigate = onNavigate,
+                dynamicIcons = dynamicIcons,
+                activeVariant = activeVariant,
+                inactiveVariant = inactiveVariant,
                 expandFraction = expandFraction,
                 modifier = Modifier.offset(y = NavBarDimens.extraRowBottomOverlap(NavBarDimens.DockedBarHeight))
             )
@@ -917,6 +970,9 @@ fun FoamNavigationBar(
                 onNavigate = onNavigate,
                 items = primaryItems,
                 primaryEnabled = primaryEnabled,
+                dynamicIcons = dynamicIcons,
+                activeVariant = activeVariant,
+                inactiveVariant = inactiveVariant,
                 showExpandToggle = secondaryEnabled.isNotEmpty(),
                 expandFraction = expandFraction,
                 onToggleExpand = onToggleExpand,
@@ -948,6 +1004,9 @@ internal fun FloatingNavigationBar(
     primaryEnabled: Set<NavBarItem>,
     secondaryItems: List<NavBarItem>,
     secondaryEnabled: Set<NavBarItem>,
+    dynamicIcons: Boolean = false,
+    activeVariant: FoamIconStyle = FoamIconStyle.FLAT,
+    inactiveVariant: FoamIconStyle = FoamIconStyle.OUTLINE,
     attachedToMiniPlayer: Boolean = false,
     connectToMiniPlayer: Boolean = false,
     miniPlayerTopPx: () -> Float? = { null },
@@ -1098,6 +1157,9 @@ internal fun FloatingNavigationBar(
                 tintTiming = tintTiming,
                 playerClosedFraction = playerClosedFraction,
                 onNavigate = onNavigate,
+                dynamicIcons = dynamicIcons,
+                activeVariant = activeVariant,
+                inactiveVariant = inactiveVariant,
                 expandFraction = expandFraction,
                 modifier = Modifier.offset(y = NavBarDimens.extraRowBottomOverlap(NavBarDimens.FloatingRowHeight))
             )
@@ -1109,6 +1171,9 @@ internal fun FloatingNavigationBar(
                 onNavigate = onNavigate,
                 items = primaryItems,
                 primaryEnabled = primaryEnabled,
+                dynamicIcons = dynamicIcons,
+                activeVariant = activeVariant,
+                inactiveVariant = inactiveVariant,
                 showExpandToggle = secondaryEnabled.isNotEmpty(),
                 expandFraction = expandFraction,
                 onToggleExpand = onToggleExpand,

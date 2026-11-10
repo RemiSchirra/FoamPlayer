@@ -114,6 +114,12 @@ data class AppSettings(
     val iconStyles: Map<String, FoamIconStyle> = emptyMap(),
     /** Id of the bundled icon pack whose drawables overlay the default icons (see FoamIconPackRegistry). */
     val iconPackId: String = DEFAULT_ICON_PACK_ID,
+    /** Swaps navbar icon variants with selection (see navIconActiveVariant/navIconInactiveVariant). */
+    val dynamicNavIcons: Boolean = true,
+    /** Navbar icon variant of the selected buttons (Settings > User interface > Icons). */
+    val navIconActiveVariant: FoamIconStyle = FoamIconStyle.FLAT,
+    /** Navbar icon variant of the unselected buttons. */
+    val navIconInactiveVariant: FoamIconStyle = FoamIconStyle.OUTLINE,
     val miniPlayerRounding: Int = 40,
     val fullPlayerRounding: Int = 40,
     val marqueeMode: MarqueeMode = MarqueeMode.PING_PONG,

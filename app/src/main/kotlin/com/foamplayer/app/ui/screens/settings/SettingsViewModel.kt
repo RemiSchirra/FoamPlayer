@@ -86,6 +86,16 @@ class SettingsViewModel @Inject constructor(
         launch { settingsRepository.setIconStyleFor(packId, style) }
     /** Persists the bundled icon pack whose drawables overlay the default icons. */
     fun setIconPack(id: String) = launch { settingsRepository.setIconPack(id) }
+    /** Persists whether navbar icon variants swap with the selection. */
+    fun setDynamicNavIcons(enabled: Boolean) = launch { settingsRepository.setDynamicNavIcons(enabled) }
+    /** Persists the navbar icon variant of the selected buttons. */
+    fun setNavIconActiveVariant(style: FoamIconStyle) = launch {
+        settingsRepository.setNavIconActiveVariant(style)
+    }
+    /** Persists the navbar icon variant of the unselected buttons. */
+    fun setNavIconInactiveVariant(style: FoamIconStyle) = launch {
+        settingsRepository.setNavIconInactiveVariant(style)
+    }
     fun setMiniPlayerRounding(rounding: Int) = launch { settingsRepository.setMiniPlayerRounding(rounding) }
     fun setFullPlayerRounding(rounding: Int) = launch { settingsRepository.setFullPlayerRounding(rounding) }
     fun setMarqueeMode(mode: MarqueeMode) = launch { settingsRepository.setMarqueeMode(mode) }

@@ -61,6 +61,9 @@ object BackupJson {
             settings.iconStyles.forEach { (packId, style) -> put(packId, style.name) }
         })
         put("iconPackId", settings.iconPackId)
+        put("dynamicNavIcons", settings.dynamicNavIcons)
+        put("navIconActiveVariant", settings.navIconActiveVariant.name)
+        put("navIconInactiveVariant", settings.navIconInactiveVariant.name)
         put("miniPlayerRounding", settings.miniPlayerRounding)
         put("fullPlayerRounding", settings.fullPlayerRounding)
         put("marqueeMode", settings.marqueeMode.name)
@@ -151,6 +154,15 @@ object BackupJson {
         pauseOnDeviceDisconnected = json.optBoolean("pauseOnDeviceDisconnected", true),
         iconStyles = decodeIconStyleMap(json.optJSONObject("iconStyles")),
   iconPackId = json.optString("iconPackId", DEFAULT_ICON_PACK_ID),
+        dynamicNavIcons = json.optBoolean("dynamicNavIcons", true),
+        navIconActiveVariant = decodeEnum(
+            json.optString("navIconActiveVariant"),
+            FoamIconStyle.FLAT
+        ),
+        navIconInactiveVariant = decodeEnum(
+            json.optString("navIconInactiveVariant"),
+            FoamIconStyle.OUTLINE
+        ),
         miniPlayerRounding = json.optInt("miniPlayerRounding", 40),
         fullPlayerRounding = json.optInt("fullPlayerRounding", 40),
         marqueeMode = decodeEnum(json.optString("marqueeMode"), MarqueeMode.PING_PONG),

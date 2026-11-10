@@ -108,6 +108,16 @@ class SettingsRepository @Inject constructor(
     }
     /** Persists the bundled icon pack whose drawables overlay the default icons. */
     suspend fun setIconPack(id: String) = update { it.copy(iconPackId = id) }
+    /** Persists whether navbar icon variants swap with the selection. */
+    suspend fun setDynamicNavIcons(enabled: Boolean) = update { it.copy(dynamicNavIcons = enabled) }
+    /** Persists the navbar icon variant of the selected buttons. */
+    suspend fun setNavIconActiveVariant(style: FoamIconStyle) = update {
+        it.copy(navIconActiveVariant = style)
+    }
+    /** Persists the navbar icon variant of the unselected buttons. */
+    suspend fun setNavIconInactiveVariant(style: FoamIconStyle) = update {
+        it.copy(navIconInactiveVariant = style)
+    }
     suspend fun setMiniPlayerRounding(rounding: Int) = update { it.copy(miniPlayerRounding = rounding) }
     suspend fun setFullPlayerRounding(rounding: Int) = update { it.copy(fullPlayerRounding = rounding) }
     suspend fun setMarqueeMode(mode: MarqueeMode) = update { it.copy(marqueeMode = mode) }
@@ -391,6 +401,13 @@ class SettingsRepository @Inject constructor(
         distantServers = DistantServersCodec.decode(this[Keys.DISTANT_SERVERS]),
         iconStyles = decodeIconStyles(this[Keys.ICON_STYLES]),
         iconPackId = this[Keys.ICON_PACK] ?: AppSettings().iconPackId,
+        dynamicNavIcons = this[Keys.DYNAMIC_NAV_ICONS] ?: AppSettings().dynamicNavIcons,
+        navIconActiveVariant = this[Keys.NAV_ICON_ACTIVE_VARIANT]
+            ?.let { runCatching { FoamIconStyle.valueOf(it) }.getOrNull() }
+            ?: AppSettings().navIconActiveVariant,
+        navIconInactiveVariant = this[Keys.NAV_ICON_INACTIVE_VARIANT]
+            ?.let { runCatching { FoamIconStyle.valueOf(it) }.getOrNull() }
+            ?: AppSettings().navIconInactiveVariant,
         miniPlayerRounding = this[Keys.MINI_PLAYER_ROUNDING] ?: AppSettings().miniPlayerRounding,
         fullPlayerRounding = this[Keys.FULL_PLAYER_ROUNDING] ?: AppSettings().fullPlayerRounding,
         marqueeMode = this[Keys.MARQUEE_MODE]
@@ -519,6 +536,9 @@ class SettingsRepository @Inject constructor(
         this[Keys.DISTANT_SERVERS] = DistantServersCodec.encode(settings.distantServers)
         this[Keys.ICON_STYLES] = encodeIconStyles(settings.iconStyles)
         this[Keys.ICON_PACK] = settings.iconPackId
+        this[Keys.DYNAMIC_NAV_ICONS] = settings.dynamicNavIcons
+        this[Keys.NAV_ICON_ACTIVE_VARIANT] = settings.navIconActiveVariant.name
+        this[Keys.NAV_ICON_INACTIVE_VARIANT] = settings.navIconInactiveVariant.name
         this[Keys.MINI_PLAYER_ROUNDING] = settings.miniPlayerRounding
         this[Keys.FULL_PLAYER_ROUNDING] = settings.fullPlayerRounding
         this[Keys.MARQUEE_MODE] = settings.marqueeMode.name
@@ -605,6 +625,9 @@ class SettingsRepository @Inject constructor(
         val DISTANT_SERVERS = stringPreferencesKey("distant_servers")
         val ICON_STYLES = stringPreferencesKey("icon_styles")
         val ICON_PACK = stringPreferencesKey("icon_pack")
+        val DYNAMIC_NAV_ICONS = booleanPreferencesKey("dynamic_nav_icons")
+        val NAV_ICON_ACTIVE_VARIANT = stringPreferencesKey("nav_icon_active_variant")
+        val NAV_ICON_INACTIVE_VARIANT = stringPreferencesKey("nav_icon_inactive_variant")
         val MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")
         val FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")
         val MARQUEE_MODE = stringPreferencesKey("marquee_mode")
