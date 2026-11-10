@@ -13,11 +13,11 @@ import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.DefaultEnabledHomeSections
 import com.foamplayer.app.constants.DefaultHomeSectionOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
-import com.foamplayer.app.constants.DefaultNavBarScreenItems
+import com.foamplayer.app.constants.DefaultNavBarPrimaryEnabled
+import com.foamplayer.app.constants.DefaultNavBarSecondaryEnabled
 import com.foamplayer.app.constants.HomeSection
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
-import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.data.settings.AppSettings
@@ -224,12 +224,12 @@ object BackupJson {
         navBarPrimaryOrder = decodeEnumList(json.optJSONArray("navBarPrimaryOrder")),
         navBarPrimaryEnabled = decodeEnumSet(
             json.optJSONArray("navBarPrimaryEnabled"),
-            DefaultNavBarScreenItems.toSet()
+            DefaultNavBarPrimaryEnabled
         ),
         navBarSecondaryOrder = decodeEnumList(json.optJSONArray("navBarSecondaryOrder")),
         navBarSecondaryEnabled = decodeEnumSet(
             json.optJSONArray("navBarSecondaryEnabled"),
-            setOf(NavBarItem.STATS)
+            DefaultNavBarSecondaryEnabled
         ),
         homeSectionOrder = decodeEnumList<HomeSection>(json.optJSONArray("homeSectionOrder"))
             .ifEmpty { DefaultHomeSectionOrder },

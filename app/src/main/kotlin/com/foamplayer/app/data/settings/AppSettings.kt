@@ -9,8 +9,9 @@ import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.AllNavBarScreenItems
+import com.foamplayer.app.constants.DefaultNavBarPrimaryEnabled
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
-import com.foamplayer.app.constants.DefaultNavBarScreenItems
+import com.foamplayer.app.constants.DefaultNavBarSecondaryEnabled
 import com.foamplayer.app.constants.DefaultNavBarSecondaryOrder
 import com.foamplayer.app.constants.DefaultHomeSectionOrder
 import com.foamplayer.app.constants.DefaultEnabledHomeSections
@@ -172,9 +173,9 @@ data class AppSettings(
     val navigationBarMode: NavigationBarMode = NavigationBarMode.ATTACHED,
     val navBarTransparentWhenPlayerOpen: Boolean = false,
     val navBarPrimaryOrder: List<NavBarItem> = DefaultNavBarPrimaryOrder,
-    val navBarPrimaryEnabled: Set<NavBarItem> = DefaultNavBarScreenItems.toSet(),
+    val navBarPrimaryEnabled: Set<NavBarItem> = DefaultNavBarPrimaryEnabled,
     val navBarSecondaryOrder: List<NavBarItem> = DefaultNavBarSecondaryOrder,
-    val navBarSecondaryEnabled: Set<NavBarItem> = setOf(NavBarItem.STATS),
+    val navBarSecondaryEnabled: Set<NavBarItem> = DefaultNavBarSecondaryEnabled,
     /**
      * Home page sections in the user's configured order, and which of them are
      * shown (Settings > User interface > Home). The Home screen renders
