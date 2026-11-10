@@ -840,7 +840,8 @@ fun FullPlayerScreen(
                     queueIndex = queueIndex,
                     queueSize = queueSize,
                     envelopeMorphProgress = envelopeMorphProgress,
-                    markSkipIntent = markSkipIntent
+                    markSkipIntent = markSkipIntent,
+                    dragModifier = playerDrag
                 )
             }
 

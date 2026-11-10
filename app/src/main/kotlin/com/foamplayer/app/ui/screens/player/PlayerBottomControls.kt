@@ -45,9 +45,10 @@ internal fun PlayerBottomControls(
     queueIndex: Int,
     queueSize: Int,
     envelopeMorphProgress: () -> Float,
-    markSkipIntent: (Boolean) -> Unit
+    markSkipIntent: (Boolean) -> Unit,
+    dragModifier: Modifier = Modifier
 ) {
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = Modifier.fillMaxWidth().then(dragModifier)) {
         val latestNavbarExpandHeight = rememberUpdatedState(navbarExpandHeight)
         val latestSubControlsProgress = rememberUpdatedState(subControlsProgress)
 
