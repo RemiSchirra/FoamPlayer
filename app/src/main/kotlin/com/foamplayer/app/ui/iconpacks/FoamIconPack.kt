@@ -64,12 +64,15 @@ object CooliconsIconPack : FoamIconPack {
         FoamIconRole.STATS to R.drawable.coolicons_stats,
         FoamIconRole.LIBRARY to R.drawable.coolicons_library,
         FoamIconRole.QUEUE to R.drawable.coolicons_queue,
+        FoamIconRole.LYRICS to R.drawable.coolicons_lyrics,
         FoamIconRole.CAST to R.drawable.coolicons_cast,
         FoamIconRole.RADIO to R.drawable.coolicons_radio,
         FoamIconRole.REPEAT to R.drawable.coolicons_repeat,
         FoamIconRole.REPEAT_ONE to R.drawable.coolicons_repeat_one,
         FoamIconRole.SHUFFLE to R.drawable.coolicons_shuffle,
         FoamIconRole.CLOSE to R.drawable.coolicons_close,
+        FoamIconRole.DRAG_HANDLE to R.drawable.coolicons_drag_handle,
+        FoamIconRole.MORE to R.drawable.coolicons_more,
     )
 
     private val resOutline = mapOf(
@@ -83,12 +86,15 @@ object CooliconsIconPack : FoamIconPack {
         FoamIconRole.STATS to R.drawable.coolicons_outline_stats,
         FoamIconRole.LIBRARY to R.drawable.coolicons_outline_library,
         FoamIconRole.QUEUE to R.drawable.coolicons_outline_queue,
+        FoamIconRole.LYRICS to R.drawable.coolicons_outline_lyrics,
         FoamIconRole.CAST to res[FoamIconRole.CAST],
         FoamIconRole.RADIO to R.drawable.coolicons_outline_radio,
         FoamIconRole.REPEAT to res[FoamIconRole.REPEAT],
         FoamIconRole.REPEAT_ONE to res[FoamIconRole.REPEAT_ONE],
         FoamIconRole.SHUFFLE to res[FoamIconRole.SHUFFLE],
         FoamIconRole.CLOSE to res[FoamIconRole.CLOSE],
+        FoamIconRole.DRAG_HANDLE to res[FoamIconRole.DRAG_HANDLE],
+        FoamIconRole.MORE to res[FoamIconRole.MORE],
     )
 }
 
