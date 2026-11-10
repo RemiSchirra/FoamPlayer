@@ -107,16 +107,9 @@ private fun SubViewSelectorItem(
         SubViewMode.QUEUE -> FoamTheme.icons.current.queue
     }
 
-    // TODO : For some reason the queue icon is smaller than lyrics icon, so sizes are hardcoded
     val label = stringResource(mode.labelRes)
-    val iconSize = when (mode) {
-        SubViewMode.LYRICS -> 24.dp
-        SubViewMode.QUEUE -> 28.dp
-    }
-    val touchPadding = when (mode) {
-        SubViewMode.LYRICS -> 12.dp
-        SubViewMode.QUEUE -> 10.dp
-    }
+    val iconSize = 28.dp
+    val touchPadding = 10.dp
     val selectorInteractions = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
@@ -227,7 +220,7 @@ private fun SubViewSelectorAction(
             contentDescription = contentDescription,
             tint = FoamTheme.colors.textPrimary,
             modifier = Modifier
-                .size(24.dp)
+                .size(28.dp)
                 .graphicsLayer {
                     alpha = (if (isDimmed) 0.4f else 1f) * (1f - progress().coerceIn(0f, 1f))
                 }
