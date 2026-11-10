@@ -15,6 +15,7 @@ import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.DiscordSettingsScreen
 import com.foamplayer.app.ui.screens.settings.EqualizerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.HomeSettingsScreen
+import com.foamplayer.app.ui.screens.settings.IconSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LastFmSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.LyricsSettingsScreen
@@ -76,12 +77,16 @@ internal fun NavGraphBuilder.settingsDestinations(context: FoamNavGraphContext) 
             onNavigateToPlayer = { context.navController.navigate(Screen.SettingsPlayer.route) },
             onNavigateToNavBar = { context.navController.navigate(Screen.SettingsNavBar.route) },
             onNavigateToBackground = { context.navController.navigate(Screen.SettingsBackground.route) },
+            onNavigateToIcons = { context.navController.navigate(Screen.SettingsIcons.route) },
             onNavigateToCollections = { context.navController.navigate(Screen.SettingsUICollections.route) },
             onNavigateToHome = { context.navController.navigate(Screen.SettingsUIHome.route) }
         )
     }
     composable(Screen.SettingsColors.route) {
         ColorsSettingsScreen(onBack = { context.back() })
+    }
+    composable(Screen.SettingsIcons.route) {
+        IconSettingsScreen(onBack = { context.back() })
     }
     composable(Screen.SettingsPlayer.route) {
         PlayerSettingsScreen(onBack = { context.back() })

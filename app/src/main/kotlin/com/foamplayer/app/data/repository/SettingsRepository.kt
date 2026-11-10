@@ -103,6 +103,8 @@ class SettingsRepository @Inject constructor(
         it.copy(pauseOnDeviceDisconnected = enabled)
     }
     suspend fun setIconStyle(style: FoamIconStyle) = update { it.copy(iconStyle = style) }
+    /** Persists the bundled icon pack whose drawables overlay the default icons. */
+    suspend fun setIconPack(id: String) = update { it.copy(iconPackId = id) }
     suspend fun setMiniPlayerRounding(rounding: Int) = update { it.copy(miniPlayerRounding = rounding) }
     suspend fun setFullPlayerRounding(rounding: Int) = update { it.copy(fullPlayerRounding = rounding) }
     suspend fun setMarqueeMode(mode: MarqueeMode) = update { it.copy(marqueeMode = mode) }
@@ -375,6 +377,7 @@ class SettingsRepository @Inject constructor(
         iconStyle = this[Keys.ICON_STYLE]
             ?.let { runCatching { FoamIconStyle.valueOf(it) }.getOrNull() }
             ?: AppSettings().iconStyle,
+        iconPackId = this[Keys.ICON_PACK] ?: AppSettings().iconPackId,
         miniPlayerRounding = this[Keys.MINI_PLAYER_ROUNDING] ?: AppSettings().miniPlayerRounding,
         fullPlayerRounding = this[Keys.FULL_PLAYER_ROUNDING] ?: AppSettings().fullPlayerRounding,
         marqueeMode = this[Keys.MARQUEE_MODE]
@@ -502,6 +505,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.SELECTED_FOLDERS] = settings.libraryFolders
         this[Keys.DISTANT_SERVERS] = DistantServersCodec.encode(settings.distantServers)
         this[Keys.ICON_STYLE] = settings.iconStyle.name
+        this[Keys.ICON_PACK] = settings.iconPackId
         this[Keys.MINI_PLAYER_ROUNDING] = settings.miniPlayerRounding
         this[Keys.FULL_PLAYER_ROUNDING] = settings.fullPlayerRounding
         this[Keys.MARQUEE_MODE] = settings.marqueeMode.name
@@ -587,6 +591,7 @@ class SettingsRepository @Inject constructor(
         val SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
         val DISTANT_SERVERS = stringPreferencesKey("distant_servers")
         val ICON_STYLE = stringPreferencesKey("icon_style")
+        val ICON_PACK = stringPreferencesKey("icon_pack")
         val MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")
         val FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")
         val MARQUEE_MODE = stringPreferencesKey("marquee_mode")

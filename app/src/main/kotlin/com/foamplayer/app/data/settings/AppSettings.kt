@@ -27,6 +27,13 @@ import com.foamplayer.app.constants.defaultSortMode
 import com.foamplayer.distant.DistantServer
 import kotlin.math.pow
 
+/**
+ * Id of the built-in icon pack (no role overrides). The shared source of truth
+ * for the settings default and the pack registry, so the data layer does not
+ * depend on the ui icon pack module.
+ */
+const val DEFAULT_ICON_PACK_ID = "default"
+
 /** The complete, validated set of user-configurable application preferences. */
 enum class FoamIconStyle(val label: String) {
     SOLID("Solid"),
@@ -103,6 +110,8 @@ data class AppSettings(
     /** Connected distant servers (Plex/Jellyfin) and the folders scanned from them. */
     val distantServers: List<DistantServer> = emptyList(),
     val iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
+    /** Id of the bundled icon pack whose drawables overlay the default icons (see FoamIconPackRegistry). */
+    val iconPackId: String = DEFAULT_ICON_PACK_ID,
     val miniPlayerRounding: Int = 40,
     val fullPlayerRounding: Int = 40,
     val marqueeMode: MarqueeMode = MarqueeMode.PING_PONG,

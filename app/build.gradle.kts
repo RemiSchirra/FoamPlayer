@@ -81,6 +81,13 @@ android {
         buildConfig = true
     }
 
+    // Additional sources for the icon packs
+    sourceSets {
+        getByName("main") {
+            res.directories += "src/main/iconpacks/coolicons/res"
+        }
+    }
+
     packaging {
         resources {
             excludes += "META-INF/{AL2.0,LGPL2.1}"

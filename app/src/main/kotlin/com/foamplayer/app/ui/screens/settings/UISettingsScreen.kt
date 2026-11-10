@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -37,7 +35,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
-import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.ui.modals.FoamBottomModal
 import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamNavigationButton
@@ -52,12 +49,12 @@ fun UISettingsScreen(
     onNavigateToPlayer: () -> Unit,
     onNavigateToNavBar: () -> Unit,
     onNavigateToBackground: () -> Unit,
+    onNavigateToIcons: () -> Unit,
     onNavigateToCollections: () -> Unit = {},
     onNavigateToHome: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
-    val iconStyle = settings.iconStyle
 
     SettingsPage(
         title = stringResource(R.string.user_interface),
@@ -91,6 +88,12 @@ fun UISettingsScreen(
                             FoamNavigationButton(
                                 title = stringResource(R.string.navigation_bar),
                                 onClick = onNavigateToNavBar,
+                            )
+                            SettingsSectionDivider()
+                            FoamNavigationButton(
+                                title = stringResource(R.string.icon_pack),
+                                description = stringResource(R.string.icon_pack_desc),
+                                onClick = onNavigateToIcons,
                             )
                         }
                     }
@@ -137,58 +140,11 @@ fun UISettingsScreen(
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
-            item {
-                Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
-                    BasicText(text = stringResource(R.string.icon_style), style = FoamTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
-                    ) {
-                        FoamIconStyle.entries.forEach { style ->
-                            val isSelected = style == iconStyle
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                                    .background(
-                                        if (isSelected) FoamTheme.accentColor
-                                        else FoamTheme.colors.surface
-                                    )
-                                    .clickable { viewModel.setIconStyle(style) }
-                                    .padding(vertical = FoamDimens.paddingMedium),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    val iconSet = when (style) {
-                                        FoamIconStyle.SOLID -> FoamTheme.icons.solid
-                                        FoamIconStyle.OUTLINE -> FoamTheme.icons.outline
-                                        FoamIconStyle.FLAT -> FoamTheme.icons.flat
-                                    }
-                                    Icon(
-                                        imageVector = iconSet.play,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(FoamDimens.iconSmall),
-                                        tint = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
-                                    )
-                                    Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
-                                    BasicText(
-                                        text = style.label,
-                                        style = FoamTheme.typography.body.copy(
-                                            color = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
-            }
         }
     }
 }
+
+// The icon-style chips moved to IconSettingsScreen (Settings > User interface > Icons).
 
 /** Dropdown picker for the app language. */
 @Composable

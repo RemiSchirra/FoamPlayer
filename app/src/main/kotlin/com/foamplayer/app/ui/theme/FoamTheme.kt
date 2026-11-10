@@ -15,6 +15,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -22,6 +24,8 @@ import androidx.compose.ui.unit.Dp
 import com.foamplayer.app.data.settings.FoamIconStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.foamplayer.app.ui.iconpacks.FoamIconPack
+import com.foamplayer.app.ui.iconpacks.FoamIconPackRegistry
 
 /** The app's color palette. */
 @Immutable
@@ -270,11 +274,39 @@ private fun smoothstep(edge0: Float, edge1: Float, value: Float): Float {
     return t * t * (3f - 2f * t)
 }
 
-/** Provides the app's theme: colors, typography, icon style, shapes and accent. */
+/**
+ * Resolves [pack]'s drawable resources over the default icon set, for all
+ * three styles (the icon settings screen's style preview reads them too).
+ * Packs are partial: a role without a drawable keeps the default icon.
+ * [vectorResource] is a cheap read-only lookup, so a plain resolution on each
+ * recomposition of [FoamTheme] (which recomposes rarely) is fine -- and it
+ * lets the resolution stay a @Composable instead of hiding a composable call
+ * inside a remember block.
+ */
+@Composable
+internal fun rememberFoamIcons(pack: FoamIconPack, style: FoamIconStyle): FoamIcons {
+    val resolved = FoamIconStyle.entries.associateWith { s ->
+        FoamIconRole.entries.fold(DefaultFoamIcons.setFor(s)) { set, role ->
+            pack.resFor(s, role)?.let { res ->
+                set.with(role, ImageVector.vectorResource(res))
+            } ?: set
+        }
+    }
+    return FoamIcons(
+        solid = resolved.getValue(FoamIconStyle.SOLID),
+        outline = resolved.getValue(FoamIconStyle.OUTLINE),
+        flat = resolved.getValue(FoamIconStyle.FLAT),
+        currentStyle = style
+    )
+}
+
+/** Provides the app's theme: colors, typography, icon pack + style, shapes and accent. */
 @Composable
 fun FoamTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
+    /** Id of the bundled icon pack overlaying the default icons (Settings > User interface > Icons). */
+    iconPackId: String = FoamIconPackRegistry.DEFAULT_ID,
     miniPlayerRounding: Float = 0.4f,
     fullPlayerRounding: Float = 0.4f,
     accentColor: Color? = null,
@@ -284,7 +316,8 @@ fun FoamTheme(
 ) {
     // Remembered per input so the static locals' consumers skip when only the
     // accent (per-frame) changes.
-    val icons = remember(iconStyle) { DefaultFoamIcons.copy(currentStyle = iconStyle) }
+    val pack = FoamIconPackRegistry.byId(iconPackId)
+    val icons = rememberFoamIcons(pack, iconStyle)
     val shapes = remember(miniPlayerRounding, fullPlayerRounding) {
         FoamShapes(
             miniPlayerRounding = miniPlayerRounding,

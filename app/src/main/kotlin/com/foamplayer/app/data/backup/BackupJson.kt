@@ -22,6 +22,7 @@ import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.BackgroundMode
+import com.foamplayer.app.data.settings.DEFAULT_ICON_PACK_ID
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
@@ -57,6 +58,7 @@ object BackupJson {
         put("resumeOnDeviceConnected", settings.resumeOnDeviceConnected)
         put("pauseOnDeviceDisconnected", settings.pauseOnDeviceDisconnected)
         put("iconStyle", settings.iconStyle.name)
+        put("iconPackId", settings.iconPackId)
         put("miniPlayerRounding", settings.miniPlayerRounding)
         put("fullPlayerRounding", settings.fullPlayerRounding)
         put("marqueeMode", settings.marqueeMode.name)
@@ -146,6 +148,7 @@ object BackupJson {
         resumeOnDeviceConnected = json.optBoolean("resumeOnDeviceConnected", true),
         pauseOnDeviceDisconnected = json.optBoolean("pauseOnDeviceDisconnected", true),
         iconStyle = decodeEnum(json.optString("iconStyle"), FoamIconStyle.FLAT),
+  iconPackId = json.optString("iconPackId", DEFAULT_ICON_PACK_ID),
         miniPlayerRounding = json.optInt("miniPlayerRounding", 40),
         fullPlayerRounding = json.optInt("fullPlayerRounding", 40),
         marqueeMode = decodeEnum(json.optString("marqueeMode"), MarqueeMode.PING_PONG),

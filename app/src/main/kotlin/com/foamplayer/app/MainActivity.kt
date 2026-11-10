@@ -614,6 +614,7 @@ private fun FoamApp(
         AccentThemedApp(
             darkTheme = darkTheme,
             iconStyle = settings.iconStyle,
+            iconPackId = settings.iconPackId,
             miniPlayerRounding = settings.miniPlayerRounding / 100f,
             fullPlayerRounding = settings.fullPlayerRounding / 100f,
             accentTintEnabled = settings.accentTintEnabled,
@@ -650,6 +651,7 @@ private fun FoamApp(
 private fun AccentThemedApp(
     darkTheme: Boolean,
     iconStyle: FoamIconStyle,
+    iconPackId: String,
     miniPlayerRounding: Float,
     fullPlayerRounding: Float,
     accentTintEnabled: Boolean,
@@ -671,6 +673,7 @@ private fun AccentThemedApp(
     FoamTheme(
         darkTheme = darkTheme,
         iconStyle = iconStyle,
+        iconPackId = iconPackId,
         miniPlayerRounding = miniPlayerRounding,
         fullPlayerRounding = fullPlayerRounding,
         accentColor = accentColor,
