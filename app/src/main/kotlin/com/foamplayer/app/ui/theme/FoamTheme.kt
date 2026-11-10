@@ -318,8 +318,8 @@ internal fun rememberPackRoleIcon(
 @Composable
 fun FoamTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    /** Preferred icon style (variant); the selected pack normalizes it (Settings > User interface > Icons). */
-    iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
+    /** Preferred icon style (variant) for the pack; packs not drawing it render their first (Settings > User interface > Icons). */
+    iconStyle: FoamIconStyle? = null,
     /** Id of the bundled icon pack overlaying the default icons (Settings > User interface > Icons). */
     iconPackId: String = FoamIconPackRegistry.DEFAULT_ID,
     miniPlayerRounding: Float = 0.4f,
@@ -332,9 +332,9 @@ fun FoamTheme(
     // Remembered per input so the static locals' consumers skip when only the
     // accent (per-frame) changes.
     val pack = FoamIconPackRegistry.byId(iconPackId)
-    // The stored style is a preference: packs not drawing it render their
+    // The style is a per-pack preference: packs not drawing it render their
     // first variant instead (see FoamIconPack.effectiveVariant).
-    val icons = rememberFoamIcons(pack, pack.effectiveVariant(iconStyle))
+    val icons = rememberFoamIcons(pack, pack.effectiveVariant(iconStyle ?: FoamIconStyle.FLAT))
     val shapes = remember(miniPlayerRounding, fullPlayerRounding) {
         FoamShapes(
             miniPlayerRounding = miniPlayerRounding,

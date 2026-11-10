@@ -57,7 +57,9 @@ object BackupJson {
         put("resumeOnStartup", settings.resumeOnStartup)
         put("resumeOnDeviceConnected", settings.resumeOnDeviceConnected)
         put("pauseOnDeviceDisconnected", settings.pauseOnDeviceDisconnected)
-        put("iconStyle", settings.iconStyle.name)
+        put("iconStyles", JSONObject().apply {
+            settings.iconStyles.forEach { (packId, style) -> put(packId, style.name) }
+        })
         put("iconPackId", settings.iconPackId)
         put("miniPlayerRounding", settings.miniPlayerRounding)
         put("fullPlayerRounding", settings.fullPlayerRounding)
@@ -147,7 +149,7 @@ object BackupJson {
         resumeOnStartup = json.optBoolean("resumeOnStartup", false),
         resumeOnDeviceConnected = json.optBoolean("resumeOnDeviceConnected", true),
         pauseOnDeviceDisconnected = json.optBoolean("pauseOnDeviceDisconnected", true),
-        iconStyle = decodeEnum(json.optString("iconStyle"), FoamIconStyle.FLAT),
+        iconStyles = decodeIconStyleMap(json.optJSONObject("iconStyles")),
   iconPackId = json.optString("iconPackId", DEFAULT_ICON_PACK_ID),
         miniPlayerRounding = json.optInt("miniPlayerRounding", 40),
         fullPlayerRounding = json.optInt("fullPlayerRounding", 40),
@@ -420,6 +422,20 @@ object BackupJson {
 
     private inline fun <reified T : Enum<T>> decodeEnum(name: String, default: T): T =
         enumValues<T>().firstOrNull { it.name == name } ?: default
+
+    /**
+     * Decodes the per-pack icon style map; unknown packs or styles are dropped so
+     * backups from builds with other packs restore gracefully.
+     */
+    private fun decodeIconStyleMap(obj: JSONObject?): Map<String, FoamIconStyle> {
+        if (obj == null) return emptyMap()
+        val result = mutableMapOf<String, FoamIconStyle>()
+        for (packId in obj.keys()) {
+            runCatching { FoamIconStyle.valueOf(obj.optString(packId)) }.getOrNull()
+                ?.let { result[packId] = it }
+        }
+        return result
+    }
 
     private inline fun <reified T : Enum<T>> decodeEnumList(array: JSONArray?): List<T> {
         if (array == null) return emptyList()

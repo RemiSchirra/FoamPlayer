@@ -2,6 +2,7 @@ package com.foamplayer.app.ui.screens.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,11 +19,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
+import androidx.compose.material.ripple
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,7 +62,6 @@ fun IconSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
-    val iconStyle = settings.iconStyle
     val iconPackId = settings.iconPackId
 
     SettingsPage(
@@ -79,11 +81,12 @@ fun IconSettingsScreen(
                 val pack = FoamIconPackRegistry.all[index]
                 IconPackSection(
                     pack = pack,
-                    preferredStyle = iconStyle,
+                    // Each pack previews and selects its own stored variant.
+                    preferredStyle = settings.iconStyleFor(pack.id),
                     isSelected = pack.id == iconPackId,
                     onSelect = { viewModel.setIconPack(pack.id) },
                     onVariantSelected = { style ->
-                        viewModel.setIconStyle(style)
+                        viewModel.setIconStyleFor(pack.id, style)
                         viewModel.setIconPack(pack.id)
                     }
                 )
@@ -175,6 +178,7 @@ private fun PackVariantPill(
     isSelected: Boolean,
     onSelected: () -> Unit
 ) {
+    val interactions = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
@@ -182,7 +186,11 @@ private fun PackVariantPill(
                 if (isSelected) FoamTheme.accentColor
                 else FoamTheme.colors.surface
             )
-            .clickable { onSelected() }
+            .clickable(
+                interactionSource = interactions,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onSelected
+            )
             .padding(horizontal = FoamDimens.spacingSmall, vertical = FoamDimens.spacingTiny)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

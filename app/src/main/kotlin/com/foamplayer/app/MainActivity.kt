@@ -613,7 +613,7 @@ private fun FoamApp(
     ) {
         AccentThemedApp(
             darkTheme = darkTheme,
-            iconStyle = settings.iconStyle,
+            iconStyleForPack = settings::iconStyleFor,
             iconPackId = settings.iconPackId,
             miniPlayerRounding = settings.miniPlayerRounding / 100f,
             fullPlayerRounding = settings.fullPlayerRounding / 100f,
@@ -650,7 +650,7 @@ private fun FoamApp(
 @Composable
 private fun AccentThemedApp(
     darkTheme: Boolean,
-    iconStyle: FoamIconStyle,
+    iconStyleForPack: (String) -> FoamIconStyle,
     iconPackId: String,
     miniPlayerRounding: Float,
     fullPlayerRounding: Float,
@@ -672,7 +672,7 @@ private fun AccentThemedApp(
 
     FoamTheme(
         darkTheme = darkTheme,
-        iconStyle = iconStyle,
+        iconStyle = iconStyleForPack(iconPackId),
         iconPackId = iconPackId,
         miniPlayerRounding = miniPlayerRounding,
         fullPlayerRounding = fullPlayerRounding,

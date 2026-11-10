@@ -81,7 +81,9 @@ class SettingsViewModel @Inject constructor(
     fun setListenedThresholdPercent(percent: Int) = launch {
         settingsRepository.setListenedThresholdPercent(percent)
     }
-    fun setIconStyle(style: FoamIconStyle) = launch { settingsRepository.setIconStyle(style) }
+    /** Persists the variant of one icon pack; other packs keep theirs. */
+    fun setIconStyleFor(packId: String, style: FoamIconStyle) =
+        launch { settingsRepository.setIconStyleFor(packId, style) }
     /** Persists the bundled icon pack whose drawables overlay the default icons. */
     fun setIconPack(id: String) = launch { settingsRepository.setIconPack(id) }
     fun setMiniPlayerRounding(rounding: Int) = launch { settingsRepository.setMiniPlayerRounding(rounding) }

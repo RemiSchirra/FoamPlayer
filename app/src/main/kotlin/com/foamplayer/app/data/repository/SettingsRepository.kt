@@ -102,7 +102,10 @@ class SettingsRepository @Inject constructor(
     suspend fun setPauseOnDeviceDisconnected(enabled: Boolean) = update {
         it.copy(pauseOnDeviceDisconnected = enabled)
     }
-    suspend fun setIconStyle(style: FoamIconStyle) = update { it.copy(iconStyle = style) }
+    /** Persists the variant of one icon pack; other packs keep theirs. */
+    suspend fun setIconStyleFor(packId: String, style: FoamIconStyle) = update {
+        it.copy(iconStyles = it.iconStyles + (packId to style))
+    }
     /** Persists the bundled icon pack whose drawables overlay the default icons. */
     suspend fun setIconPack(id: String) = update { it.copy(iconPackId = id) }
     suspend fun setMiniPlayerRounding(rounding: Int) = update { it.copy(miniPlayerRounding = rounding) }
@@ -359,6 +362,18 @@ class SettingsRepository @Inject constructor(
         it.copy(deviceAudioConfigs = it.deviceAudioConfigs + (deviceId to config))
     }
 
+    /** Encodes the per-pack icon style map as comma-separated "packId:STYLE" entries. */
+    private fun encodeIconStyles(styles: Map<String, FoamIconStyle>): String =
+        styles.entries.joinToString(",") { "${it.key}:${it.value.name}" }
+
+    /** Decodes the per-pack icon style map; unknown packs or styles are dropped. */
+    private fun decodeIconStyles(encoded: String?): Map<String, FoamIconStyle> =
+        encoded?.split(",")?.mapNotNull { entry ->
+            val packId = entry.substringBefore(":", "").takeIf { it.isNotEmpty() }
+            val style = runCatching { FoamIconStyle.valueOf(entry.substringAfter(":", "")) }.getOrNull()
+            if (packId != null && style != null) packId to style else null
+        }?.toMap() ?: emptyMap()
+
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
         listenedThresholdPercent = this[Keys.LISTENED_THRESHOLD_PERCENT]
@@ -374,9 +389,7 @@ class SettingsRepository @Inject constructor(
             ?: AppSettings().pauseOnDeviceDisconnected,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
         distantServers = DistantServersCodec.decode(this[Keys.DISTANT_SERVERS]),
-        iconStyle = this[Keys.ICON_STYLE]
-            ?.let { runCatching { FoamIconStyle.valueOf(it) }.getOrNull() }
-            ?: AppSettings().iconStyle,
+        iconStyles = decodeIconStyles(this[Keys.ICON_STYLES]),
         iconPackId = this[Keys.ICON_PACK] ?: AppSettings().iconPackId,
         miniPlayerRounding = this[Keys.MINI_PLAYER_ROUNDING] ?: AppSettings().miniPlayerRounding,
         fullPlayerRounding = this[Keys.FULL_PLAYER_ROUNDING] ?: AppSettings().fullPlayerRounding,
@@ -504,7 +517,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.PAUSE_ON_DEVICE_DISCONNECTED] = settings.pauseOnDeviceDisconnected
         this[Keys.SELECTED_FOLDERS] = settings.libraryFolders
         this[Keys.DISTANT_SERVERS] = DistantServersCodec.encode(settings.distantServers)
-        this[Keys.ICON_STYLE] = settings.iconStyle.name
+        this[Keys.ICON_STYLES] = encodeIconStyles(settings.iconStyles)
         this[Keys.ICON_PACK] = settings.iconPackId
         this[Keys.MINI_PLAYER_ROUNDING] = settings.miniPlayerRounding
         this[Keys.FULL_PLAYER_ROUNDING] = settings.fullPlayerRounding
@@ -590,7 +603,7 @@ class SettingsRepository @Inject constructor(
         val PAUSE_ON_DEVICE_DISCONNECTED = booleanPreferencesKey("pause_on_device_disconnected")
         val SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
         val DISTANT_SERVERS = stringPreferencesKey("distant_servers")
-        val ICON_STYLE = stringPreferencesKey("icon_style")
+        val ICON_STYLES = stringPreferencesKey("icon_styles")
         val ICON_PACK = stringPreferencesKey("icon_pack")
         val MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")
         val FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")

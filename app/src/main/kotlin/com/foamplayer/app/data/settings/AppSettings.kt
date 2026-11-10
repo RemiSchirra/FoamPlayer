@@ -110,7 +110,8 @@ data class AppSettings(
     /** Connected distant servers (Plex/Jellyfin) and the folders scanned from them. */
     val distantServers: List<DistantServer> = emptyList(),
     /** Preferred variant (style) of the selected icon pack; packs not drawing it fall back to their first. */
-    val iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
+    /** Preferred variant (style) per icon pack id; packs not drawing it fall back to their first. */
+    val iconStyles: Map<String, FoamIconStyle> = emptyMap(),
     /** Id of the bundled icon pack whose drawables overlay the default icons (see FoamIconPackRegistry). */
     val iconPackId: String = DEFAULT_ICON_PACK_ID,
     val miniPlayerRounding: Int = 40,
@@ -245,6 +246,9 @@ data class AppSettings(
 
     /** The [MediaDensity] remembered by [view]; every view starts as the classic row. */
     fun mediaDensity(view: MediaListView): MediaDensity = mediaDensities[view] ?: MediaDensity.ROW_NORMAL
+
+    /** The preferred variant remembered for icon pack [id]; packs without one start at FLAT. */
+    fun iconStyleFor(id: String): FoamIconStyle = iconStyles[id] ?: FoamIconStyle.FLAT
 
     /** The [DeviceAudioConfig] remembered by [deviceId]; unknown devices start at defaults. */
     fun deviceAudioConfig(deviceId: String?): DeviceAudioConfig =
