@@ -109,6 +109,7 @@ data class AppSettings(
     val libraryFolders: Set<String> = emptySet(),
     /** Connected distant servers (Plex/Jellyfin) and the folders scanned from them. */
     val distantServers: List<DistantServer> = emptyList(),
+    /** Preferred variant (style) of the selected icon pack; packs not drawing it fall back to their first. */
     val iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
     /** Id of the bundled icon pack whose drawables overlay the default icons (see FoamIconPackRegistry). */
     val iconPackId: String = DEFAULT_ICON_PACK_ID,

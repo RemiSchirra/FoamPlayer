@@ -300,10 +300,25 @@ internal fun rememberFoamIcons(pack: FoamIconPack, style: FoamIconStyle): FoamIc
     )
 }
 
+/**
+ * The single [role] icon of [pack] in [style]: the pack's drawable when it
+ * draws the role, else the default set's icon. Lightweight single-role
+ * resolution for previews (pack cards, variant pills) that need one icon
+ * instead of the full set.
+ */
+@Composable
+internal fun rememberPackRoleIcon(
+    pack: FoamIconPack,
+    style: FoamIconStyle,
+    role: FoamIconRole
+): ImageVector = pack.resFor(style, role)?.let { ImageVector.vectorResource(it) }
+    ?: DefaultFoamIcons.setFor(style)[role]
+
 /** Provides the app's theme: colors, typography, icon pack + style, shapes and accent. */
 @Composable
 fun FoamTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    /** Preferred icon style (variant); the selected pack normalizes it (Settings > User interface > Icons). */
     iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
     /** Id of the bundled icon pack overlaying the default icons (Settings > User interface > Icons). */
     iconPackId: String = FoamIconPackRegistry.DEFAULT_ID,
@@ -317,7 +332,9 @@ fun FoamTheme(
     // Remembered per input so the static locals' consumers skip when only the
     // accent (per-frame) changes.
     val pack = FoamIconPackRegistry.byId(iconPackId)
-    val icons = rememberFoamIcons(pack, iconStyle)
+    // The stored style is a preference: packs not drawing it render their
+    // first variant instead (see FoamIconPack.effectiveVariant).
+    val icons = rememberFoamIcons(pack, pack.effectiveVariant(iconStyle))
     val shapes = remember(miniPlayerRounding, fullPlayerRounding) {
         FoamShapes(
             miniPlayerRounding = miniPlayerRounding,

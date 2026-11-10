@@ -43,14 +43,15 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamIconRole
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.rememberFoamIcons
+import com.foamplayer.app.ui.theme.rememberPackRoleIcon
 
 /** Alpha of fallback icons (roles the selected pack does not draw) in the pack grids. */
 private const val FallbackIconAlpha = 0.45f
 
 /**
- * Icon settings (Settings > User interface > Icons): the icon style chips and
- * one section per bundled icon pack, each previewing every semantic role in
- * the currently selected style.
+ * Icon settings (Settings > User interface > Icons): one section per bundled
+ * icon pack — name, variant pills when the pack draws several styles, and the
+ * full role grid previewing the pack's effective variant.
  */
 @Composable
 fun IconSettingsScreen(
@@ -74,21 +75,17 @@ fun IconSettingsScreen(
                 bottom = LocalBottomBarClearance.current
             )
         ) {
-            item {
-                IconStyleChips(
-                    selectedStyle = iconStyle,
-                    onStyleSelected = { viewModel.setIconStyle(it) }
-                )
-                Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
-            }
-
             items(FoamIconPackRegistry.all.size) { index ->
                 val pack = FoamIconPackRegistry.all[index]
                 IconPackSection(
                     pack = pack,
-                    style = iconStyle,
+                    preferredStyle = iconStyle,
                     isSelected = pack.id == iconPackId,
-                    onSelect = { viewModel.setIconPack(pack.id) }
+                    onSelect = { viewModel.setIconPack(pack.id) },
+                    onVariantSelected = { style ->
+                        viewModel.setIconStyle(style)
+                        viewModel.setIconPack(pack.id)
+                    }
                 )
                 if (index < FoamIconPackRegistry.all.lastIndex) {
                     Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
@@ -98,76 +95,37 @@ fun IconSettingsScreen(
     }
 }
 
-/** The icon style chips (Solid / Outline / Flat), previewing each style's play icon. */
-@Composable
-private fun IconStyleChips(
-    selectedStyle: FoamIconStyle,
-    onStyleSelected: (FoamIconStyle) -> Unit
-) {
-    Column {
-        BasicText(text = stringResource(R.string.icon_style), style = FoamTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
-        ) {
-            FoamIconStyle.entries.forEach { style ->
-                val isSelected = style == selectedStyle
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .background(
-                            if (isSelected) FoamTheme.accentColor
-                            else FoamTheme.colors.surface
-                        )
-                        .clickable { onStyleSelected(style) }
-                        .padding(vertical = FoamDimens.paddingMedium),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = FoamTheme.icons.setFor(style).play,
-                            contentDescription = null,
-                            modifier = Modifier.size(FoamDimens.iconSmall),
-                            tint = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
-                        )
-                        Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
-                        BasicText(
-                            text = style.label,
-                            style = FoamTheme.typography.body.copy(
-                                color = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** One pack's picker card and its full icon grid, rendered in [style]. */
+/**
+ * One pack's card: name row, variant pills (only when the pack draws more than
+ * one style) and the full icon grid, all on one [FoamCard]. Tapping the card
+ * selects the pack; tapping a pill selects the pack and its variant.
+ */
 @Composable
 private fun IconPackSection(
     pack: FoamIconPack,
-    style: FoamIconStyle,
+    preferredStyle: FoamIconStyle,
     isSelected: Boolean,
-    onSelect: () -> Unit
+    onSelect: () -> Unit,
+    onVariantSelected: (FoamIconStyle) -> Unit
 ) {
-    Column {
-        FoamCard(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(FoamDimens.paddingMedium),
-            onClick = onSelect
-        ) {
+    val effective = pack.effectiveVariant(preferredStyle)
+    FoamCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(FoamDimens.paddingMedium),
+        onClick = onSelect
+    ) {
+        Column {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    PackPreviewIcon(pack = pack, modifier = Modifier.size(FoamDimens.iconMedium))
+                    PackPreviewIcon(
+                        pack = pack,
+                        preferredStyle = preferredStyle,
+                        modifier = Modifier.size(FoamDimens.iconMedium)
+                    )
                     Spacer(modifier = Modifier.width(FoamDimens.spacingMedium))
                     BasicText(
                         text = pack.label,
@@ -185,17 +143,77 @@ private fun IconPackSection(
                     )
                 }
             }
-        }
-        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-        FoamCard(modifier = Modifier.fillMaxWidth()) {
-            IconRoleGrid(pack = pack, style = style)
+            if (pack.variants.size > 1) {
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingTiny)
+                ) {
+                    pack.variants.forEach { variant ->
+                        PackVariantPill(
+                            variant = variant,
+                            // The pill previews the card's own pack, not the
+                            // app-wide selected one.
+                            icon = rememberPackRoleIcon(pack, variant, FoamIconRole.PLAY),
+                            isSelected = variant == effective,
+                            onSelected = { onVariantSelected(variant) }
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
+            IconRoleGrid(pack = pack, style = effective)
         }
     }
 }
 
-/** The picker's leading icon: the pack's preview drawable or the default play icon. */
+/** One variant pill: the pack's own sample play icon for [variant] over its label. */
 @Composable
-private fun PackPreviewIcon(pack: FoamIconPack, modifier: Modifier = Modifier) {
+private fun PackVariantPill(
+    variant: FoamIconStyle,
+    icon: ImageVector,
+    isSelected: Boolean,
+    onSelected: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+            .background(
+                if (isSelected) FoamTheme.accentColor
+                else FoamTheme.colors.surface
+            )
+            .clickable { onSelected() }
+            .padding(horizontal = FoamDimens.spacingSmall, vertical = FoamDimens.spacingTiny)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(FoamDimens.iconSmall),
+                tint = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
+            )
+            Spacer(modifier = Modifier.width(FoamDimens.spacingTiny))
+            BasicText(
+                text = variant.label,
+                style = FoamTheme.typography.caption.copy(
+                    color = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+            )
+        }
+    }
+}
+
+/**
+ * The picker's leading icon: the pack's preview drawable, or the pack's own
+ * play icon in its effective variant (not the app-wide selected pack's).
+ */
+@Composable
+private fun PackPreviewIcon(
+    pack: FoamIconPack,
+    preferredStyle: FoamIconStyle,
+    modifier: Modifier = Modifier
+) {
     val preview: Painter? = pack.previewRes?.let { painterResource(it) }
     if (preview != null) {
         Icon(
@@ -206,7 +224,9 @@ private fun PackPreviewIcon(pack: FoamIconPack, modifier: Modifier = Modifier) {
         )
     } else {
         Icon(
-            imageVector = FoamTheme.icons.current.play,
+            imageVector = rememberPackRoleIcon(
+                pack, pack.effectiveVariant(preferredStyle), FoamIconRole.PLAY
+            ),
             contentDescription = null,
             tint = FoamTheme.colors.textPrimary,
             modifier = modifier
@@ -224,7 +244,7 @@ private fun PackPreviewIcon(pack: FoamIconPack, modifier: Modifier = Modifier) {
 private fun IconRoleGrid(pack: FoamIconPack, style: FoamIconStyle) {
     val icons = rememberFoamIcons(pack, style).current
     val rows = FoamIconRole.entries.chunked(6)
-    Column(modifier = Modifier.fillMaxWidth().padding(FoamDimens.paddingMedium)) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         rows.forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),

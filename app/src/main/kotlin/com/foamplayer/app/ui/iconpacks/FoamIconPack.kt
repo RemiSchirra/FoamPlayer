@@ -23,6 +23,16 @@ interface FoamIconPack {
 
     /** Drawable res for a role, or null to fall back to the default icon for that role. */
     fun resFor(style: FoamIconStyle, role: FoamIconRole): Int?
+
+    /** The icon styles (variants) this pack draws; shown as pills in the picker. */
+    val variants: List<FoamIconStyle>
+
+    /**
+     * The style actually rendered for [preferred]: the preference when this
+     * pack draws it, else the pack's first variant.
+     */
+    fun effectiveVariant(preferred: FoamIconStyle): FoamIconStyle =
+        if (preferred in variants) preferred else variants.firstOrNull() ?: FoamIconStyle.FLAT
 }
 
 /** The built-in set: no overrides, the app's default icons render everywhere. */
@@ -30,6 +40,7 @@ object DefaultIconPack : FoamIconPack {
     override val id: String = DEFAULT_ICON_PACK_ID
     override val label: String = "Default"
     override val previewRes: Int? = null
+    override val variants: List<FoamIconStyle> = FoamIconStyle.entries
     override fun resFor(style: FoamIconStyle, role: FoamIconRole): Int? = null
 }
 
@@ -37,6 +48,7 @@ object CooliconsIconPack : FoamIconPack {
     override val id: String = "coolicons"
     override val label: String = "Coolicons"
     override val previewRes: Int = R.drawable.coolicons_play
+    override val variants: List<FoamIconStyle> = listOf(FoamIconStyle.FLAT)
 
     override fun resFor(style: FoamIconStyle, role: FoamIconRole): Int? = res[role]
 

@@ -92,7 +92,6 @@ fun UISettingsScreen(
                             SettingsSectionDivider()
                             FoamNavigationButton(
                                 title = stringResource(R.string.icon_pack),
-                                description = stringResource(R.string.icon_pack_desc),
                                 onClick = onNavigateToIcons,
                             )
                         }
