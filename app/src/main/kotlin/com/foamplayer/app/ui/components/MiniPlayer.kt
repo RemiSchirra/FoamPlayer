@@ -3,11 +3,12 @@ package com.foamplayer.app.ui.components
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -65,6 +66,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
+import com.foamplayer.app.ui.utils.pressShrink
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import kotlin.math.abs
 import androidx.core.net.toUri
@@ -123,9 +125,10 @@ private class MiniEntryMarqueeStates {
 }
 
 /**
- * Play/pause button. Deliberately a leaf: the accent background changes every
- * frame while the accent color animates, and keeping the read here means only
- * this button recomposes per frame instead of the whole [MiniPlayer] body.
+ * Play/pause button, a bare glyph like the full player's main control (no
+ * filled circle behind it). Deliberately a leaf: the loading crossfade and
+ * play/pause flips recompose only this button instead of the whole
+ * [MiniPlayer] body.
  */
 @Composable
 private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
@@ -151,40 +154,52 @@ private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
         }
     )
 
+    val playInteractions = remember { MutableInteractionSource() }
+
+    // The glyph is the shared element, laid out at its own size and scaled to the
+    // interpolated bounds (ScaleToBounds) so it morphs between 28dp and the full
+    // player's glyph without a size pop.
+    val glyphSharedState = if (useSharedElements) {
+        rememberSharedContentState(key = "play_button_$trackId")
+    } else null
+
     Box(
         modifier = modifier
+            .pressShrink(playInteractions)
             .size(36.dp)
-            .then(
-                if (useSharedElements) {
-                    Modifier.sharedBounds(
-                        rememberSharedContentState(key = "play_button_$trackId"),
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
-                } else Modifier
-            )
-            .clip(RoundedCornerShape(18.dp))
-            .background(FoamTheme.accentColor)
             .semantics { contentDescription = description }
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = playInteractions,
                 indication = null,
                 enabled = !isLoading,
                 onClick = onPlayPauseClick
             ),
         contentAlignment = Alignment.Center
     ) {
+        // Same glyph size as the subview's mini play button
+        // (PlayerDimens.miniPlayIconSize) — visibly larger than the old 20dp
+        // without filling the 36dp touch target edge-to-edge.
         CrossfadingPlayPauseIcon(
             isPlaying = isPlaying,
             loadingFraction = { loadingFraction },
-            tint = FoamTheme.colors.background,
-            iconSize = 20.dp
+            tint = FoamTheme.colors.textPrimary,
+            iconSize = 28.dp,
+            modifier = if (glyphSharedState != null) {
+                Modifier.sharedBounds(
+                    glyphSharedState,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.Fit, Alignment.Center),
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                )
+            } else Modifier
         )
         if (isLoading || loadingFraction > 0f) {
             CircularProgressIndicator(
-                color = FoamTheme.colors.background,
+                color = FoamTheme.colors.textPrimary,
                 strokeWidth = 2.dp,
                 modifier = Modifier
-                    .size(20.dp)
+                    .size(24.dp)
                     .graphicsLayer {
                         alpha = loadingFraction
                         val circleScale = 0.2f + 0.8f * loadingFraction
@@ -774,70 +789,70 @@ fun MiniPlayer(
                             // the art box on the tag state forces a fresh composition identity,
                             // so the entry always (re-)registers.
                             key(artSharedState) {
-                            Box(
-                                modifier = Modifier
-                                    .size(miniImageSize)
-                                    .then(
-                                        if (artSharedState != null) {
-                                            Modifier
-                                                .sharedElement(
-                                                    artSharedState,
-                                                    animatedVisibilityScope = animatedVisibilityScope
-                                                )
-                                                .graphicsLayer { alpha = sharedArtFlightAlpha() }
-                                        } else Modifier
-                                    )
-                                    .graphicsLayer {
-                                        val artTransition = animatedVisibilityScope.transition
-                                        shape = RoundedCornerShape(
-                                            if (artTransition.currentState == artTransition.targetState) {
-                                                miniImageRadius
-                                            } else {
-                                                animatedCornerRadius
-                                            }
+                                Box(
+                                    modifier = Modifier
+                                        .size(miniImageSize)
+                                        .then(
+                                            if (artSharedState != null) {
+                                                Modifier
+                                                    .sharedElement(
+                                                        artSharedState,
+                                                        animatedVisibilityScope = animatedVisibilityScope
+                                                    )
+                                                    .graphicsLayer { alpha = sharedArtFlightAlpha() }
+                                            } else Modifier
                                         )
-                                        clip = true
-                                        val scale =
-                                            1f + (heroPausedArtScale - 1f) * animatedArtElevationFraction
-                                        scaleX = scale
-                                        scaleY = scale
-                                        shadowElevation = if (!isImmersiveEnabled && useSharedElements && isSettledCurrentTrackPage) {
-                                            PlayerDimens.fullPlayerArtElevation.toPx() * animatedArtElevationFraction
-                                        } else {
-                                            0f
+                                        .graphicsLayer {
+                                            val artTransition = animatedVisibilityScope.transition
+                                            shape = RoundedCornerShape(
+                                                if (artTransition.currentState == artTransition.targetState) {
+                                                    miniImageRadius
+                                                } else {
+                                                    animatedCornerRadius
+                                                }
+                                            )
+                                            clip = true
+                                            val scale =
+                                                1f + (heroPausedArtScale - 1f) * animatedArtElevationFraction
+                                            scaleX = scale
+                                            scaleY = scale
+                                            shadowElevation = if (!isImmersiveEnabled && useSharedElements && isSettledCurrentTrackPage) {
+                                                PlayerDimens.fullPlayerArtElevation.toPx() * animatedArtElevationFraction
+                                            } else {
+                                                0f
+                                            }
                                         }
+                                        .foamSurface(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (pageTrack.albumArtPath != null) {
+                                        val albumArtRequest = remember(pageTrack.albumArtPath) {
+                                            ImageRequest.Builder(context)
+                                                .data(EmbeddedAlbumArt(pageTrack.albumArtPath.toUri()))
+                                                .size(AlbumArtRequestSize)
+                                                // Shares the player flight's cache slot: this
+                                                // request warms the bitmap the full-player hero
+                                                // draws synchronously on the flight's first frame.
+                                                .placeholderMemoryCacheKey(
+                                                    albumArtMemoryCacheKey(pageTrack.albumArtPath)
+                                                )
+                                                .memoryCacheKey(
+                                                    albumArtMemoryCacheKey(pageTrack.albumArtPath)
+                                                )
+                                                .build()
+                                        }
+                                        AsyncImage(
+                                            model = albumArtRequest,
+                                            contentDescription = stringResource(R.string.album_art),
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        // Fills this slot like real artwork would and
+                                        // scales with the shared-element flight.
+                                        NoAlbumArtPlaceholder()
                                     }
-                                    .foamSurface(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (pageTrack.albumArtPath != null) {
-                                    val albumArtRequest = remember(pageTrack.albumArtPath) {
-                                        ImageRequest.Builder(context)
-                                            .data(EmbeddedAlbumArt(pageTrack.albumArtPath.toUri()))
-                                            .size(AlbumArtRequestSize)
-                                            // Shares the player flight's cache slot: this
-                                            // request warms the bitmap the full-player hero
-                                            // draws synchronously on the flight's first frame.
-                                            .placeholderMemoryCacheKey(
-                                                albumArtMemoryCacheKey(pageTrack.albumArtPath)
-                                            )
-                                            .memoryCacheKey(
-                                                albumArtMemoryCacheKey(pageTrack.albumArtPath)
-                                            )
-                                            .build()
-                                    }
-                                    AsyncImage(
-                                        model = albumArtRequest,
-                                        contentDescription = stringResource(R.string.album_art),
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    // Fills this slot like real artwork would and
-                                    // scales with the shared-element flight.
-                                    NoAlbumArtPlaceholder()
                                 }
-                            }
                             }
 
                             Spacer(modifier = Modifier.width(12.dp))
@@ -880,7 +895,8 @@ fun MiniPlayer(
                             isLoading = playbackState.isLoading,
                             animatedVisibilityScope = animatedVisibilityScope,
                             useSharedElements = useSharedElements,
-                            onPlayPauseClick = onPlayPauseClick
+                            onPlayPauseClick = onPlayPauseClick,
+                            modifier = Modifier.padding(end = 4.dp)
                         )
                     }
                 }

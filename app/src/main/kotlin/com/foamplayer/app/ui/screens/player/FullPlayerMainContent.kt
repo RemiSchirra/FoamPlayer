@@ -3,6 +3,8 @@ package com.foamplayer.app.ui.screens.player
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.animateFloatAsState
@@ -940,10 +942,6 @@ internal fun SharedTransitionScope.PlayPauseButton(
     Box(
         modifier = modifier
             .size(PlayerDimens.playButtonSize)
-            .sharedBounds(
-                rememberSharedContentState(key = "play_button_${track.id}"),
-                animatedVisibilityScope = outerVisibilityScope
-            )
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
@@ -959,11 +957,20 @@ internal fun SharedTransitionScope.PlayPauseButton(
     ) {
         // Shared stacked play/pause glyphs: crossfade in lockstep (100% <-> 20% scale
         // while the alpha flips), faded out while the loading circle takes their place.
+        // Shared with the mini player's "play_button_" key: laid out at its own size and
+        // scaled to the interpolated bounds (ScaleToBounds) during the flight.
         CrossfadingPlayPauseIcon(
             isPlaying = isPlaying,
             loadingFraction = { loadingFraction },
             tint = FoamTheme.colors.textPrimary,
-            iconSize = PlayerDimens.playButtonIconSize
+            iconSize = PlayerDimens.playButtonIconSize,
+            modifier = Modifier.sharedBounds(
+                rememberSharedContentState(key = "play_button_${track.id}"),
+                animatedVisibilityScope = outerVisibilityScope,
+                resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.Fit, Alignment.Center),
+                enter = fadeIn(),
+                exit = fadeOut()
+            )
         )
         if (isLoading || loadingFraction > 0f) {
             CircularProgressIndicator(
