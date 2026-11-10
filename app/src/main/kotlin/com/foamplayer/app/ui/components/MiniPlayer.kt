@@ -771,6 +771,9 @@ fun MiniPlayer(
                         val titleSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
                             rememberSharedContentState(key = "track_title_${track.id}")
                         } else null
+                        val artistSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
+                            rememberSharedContentState(key = "track_artist_${track.id}")
+                        } else null
                         val pageMarquee = statesFor(entryKey(page))
 
                         Row(
@@ -857,31 +860,41 @@ fun MiniPlayer(
 
                             Spacer(modifier = Modifier.width(12.dp))
 
-                            Column(modifier = Modifier.weight(1f)) {
-                                MarqueeText(
-                                    text = pageTrack.title,
-                                    style = FoamTheme.typography.titleMedium,
-                                    mode = marqueeMode,
-                                    state = pageMarquee.title,
-                                    modifier = if (titleSharedState != null) {
-                                        Modifier.sharedBounds(
-                                            titleSharedState,
-                                            animatedVisibilityScope = animatedVisibilityScope
-                                        )
-                                    } else Modifier
-                                )
-                                MarqueeText(
-                                    text = stringResource(R.string.artist_album_separator, pageTrack.artist, pageTrack.album),
-                                    style = FoamTheme.typography.caption,
-                                    mode = marqueeMode,
-                                    state = pageMarquee.subtitle,
-                                    modifier = if (useSharedElements && isSettledCurrentTrackPage) {
-                                        Modifier.sharedBounds(
-                                            rememberSharedContentState(key = "track_artist_${track.id}"),
-                                            animatedVisibilityScope = animatedVisibilityScope
-                                        )
-                                    } else Modifier
-                                )
+                            // Same late-tag problem as the art box above: the title and the
+                            // artist/album bounds are only tagged once the page is the settled
+                            // current one (or the gate flips on). A tag added to an already-composed
+                            // page never registers with the coordinator, so the first close (or the
+                            // first close after swiping to a new song) cannot pair the text with the
+                            // full player's and it cross-fades -> flicker. Re-keying on the tag
+                            // states gives the column a fresh identity whenever they appear.
+                            // Marquee state is hoisted per entry, so scrolling carries over.
+                            key(titleSharedState, artistSharedState) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    MarqueeText(
+                                        text = pageTrack.title,
+                                        style = FoamTheme.typography.titleMedium,
+                                        mode = marqueeMode,
+                                        state = pageMarquee.title,
+                                        modifier = if (titleSharedState != null) {
+                                            Modifier.sharedBounds(
+                                                titleSharedState,
+                                                animatedVisibilityScope = animatedVisibilityScope
+                                            )
+                                        } else Modifier
+                                    )
+                                    MarqueeText(
+                                        text = stringResource(R.string.artist_album_separator, pageTrack.artist, pageTrack.album),
+                                        style = FoamTheme.typography.caption,
+                                        mode = marqueeMode,
+                                        state = pageMarquee.subtitle,
+                                        modifier = if (artistSharedState != null) {
+                                            Modifier.sharedBounds(
+                                                artistSharedState,
+                                                animatedVisibilityScope = animatedVisibilityScope
+                                            )
+                                        } else Modifier
+                                    )
+                                }
                             }
                         }
                     }
