@@ -51,6 +51,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.util.lerp as lerpFloat
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
@@ -154,17 +156,25 @@ internal fun SubViewSelectorRow(
     onPlayOnClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val restInsetPx = with(LocalDensity.current) { SelectorRestInset.toPx() }
+    val directionSign = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1f else -1f
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SubViewSelectorItem(
-            mode = SubViewMode.LYRICS,
-            isSelected = subViewMode == SubViewMode.LYRICS,
-            progress = progress,
-            onSelect = onSelect
-        )
+        Box(
+            modifier = Modifier.graphicsLayer {
+                translationX = directionSign * restInsetPx * (1f - progress().coerceIn(0f, 1f))
+            }
+        ) {
+            SubViewSelectorItem(
+                mode = SubViewMode.LYRICS,
+                isSelected = subViewMode == SubViewMode.LYRICS,
+                progress = progress,
+                onSelect = onSelect
+            )
+        }
 
         SubViewSelectorAction(
             icon = FoamTheme.icons.current.cast,
@@ -173,14 +183,22 @@ internal fun SubViewSelectorRow(
             onClick = onPlayOnClick
         )
 
-        SubViewSelectorItem(
-            mode = SubViewMode.QUEUE,
-            isSelected = subViewMode == SubViewMode.QUEUE,
-            progress = progress,
-            onSelect = onSelect
-        )
+        Box(
+            modifier = Modifier.graphicsLayer {
+                translationX = -directionSign * restInsetPx * (1f - progress().coerceIn(0f, 1f))
+            }
+        ) {
+            SubViewSelectorItem(
+                mode = SubViewMode.QUEUE,
+                isSelected = subViewMode == SubViewMode.QUEUE,
+                progress = progress,
+                onSelect = onSelect
+            )
+        }
     }
 }
+
+private val SelectorRestInset = 40.dp
 
 /**
  * Non-selector action icons living between the lyrics/queue selectors (currently just "Play on"). Same icon/touch sizing as SubViewSelectorItem, but they disappear
