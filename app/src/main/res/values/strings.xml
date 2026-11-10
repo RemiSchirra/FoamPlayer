@@ -145,7 +145,6 @@
     <string name="navbar_mode_docked">Docked</string>
     <string name="navbar_mode_floating">Floating</string>
     <string name="navbar_mode_attached">Attached</string>
-    <string name="transparency">Transparency</string>
     <string name="transparent_when_player_open">Transparent when player open</string>
     <string name="navbar_main_bar">Main Bar</string>
     <string name="navbar_main_bar_desc">Drag to reorder and show or hide items</string>
@@ -154,7 +153,7 @@
     <string name="navbar_item_more">More</string>
     <string name="expand_navigation">Expand navigation</string>
     <string name="collapse_navigation">Collapse navigation</string>
-    <string name="dynamic_nav_icons">Dynamic navbar icons</string>
+    <string name="dynamic_icons">Dynamic icons</string>
     <string name="nav_icon_active_variant">Active variant</string>
     <string name="nav_icon_inactive_variant">Inactive variant</string>
 

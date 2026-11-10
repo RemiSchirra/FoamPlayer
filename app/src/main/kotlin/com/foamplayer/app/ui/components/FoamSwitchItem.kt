@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
@@ -33,7 +34,8 @@ fun FoamSwitchItem(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     description: String? = null,
-    interactionSource: MutableInteractionSource? = null
+    interactionSource: MutableInteractionSource? = null,
+    verticalPadding: Dp = FoamDimens.spacingStandard
 ) {
     val rowInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
     val rowIndication = if (interactionSource != null) {
@@ -52,7 +54,7 @@ fun FoamSwitchItem(
                 role = Role.Switch,
                 onValueChange = onCheckedChange
             )
-            .padding(FoamDimens.spacingStandard),
+            .padding(horizontal = FoamDimens.spacingStandard, vertical = verticalPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {

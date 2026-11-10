@@ -145,7 +145,6 @@
     <string name="navbar_mode_docked">Ancrée</string>
     <string name="navbar_mode_floating">Flottante</string>
     <string name="navbar_mode_attached">Attachée</string>
-    <string name="transparency">Transparence</string>
     <string name="transparent_when_player_open">Transparent quand le lecteur est ouvert</string>
     <string name="navbar_main_bar">Barre principale</string>
     <string name="navbar_main_bar_desc">Glisser pour réordonner et afficher ou masquer les éléments</string>
@@ -154,7 +153,7 @@
     <string name="navbar_item_more">Plus</string>
     <string name="expand_navigation">Déployer la navigation</string>
     <string name="collapse_navigation">Réduire la navigation</string>
-    <string name="dynamic_nav_icons">Icônes dynamiques de la barre de navigation</string>
+    <string name="dynamic_icons">Icônes dynamiques</string>
     <string name="nav_icon_active_variant">Variante active</string>
     <string name="nav_icon_inactive_variant">Variante inactive</string>
 
