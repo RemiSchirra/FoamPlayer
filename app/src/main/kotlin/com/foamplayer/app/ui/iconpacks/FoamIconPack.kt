@@ -48,9 +48,10 @@ object CooliconsIconPack : FoamIconPack {
     override val id: String = "coolicons"
     override val label: String = "Coolicons"
     override val previewRes: Int = R.drawable.coolicons_play
-    override val variants: List<FoamIconStyle> = listOf(FoamIconStyle.FLAT)
+    override val variants: List<FoamIconStyle> = listOf(FoamIconStyle.FLAT, FoamIconStyle.OUTLINE)
 
-    override fun resFor(style: FoamIconStyle, role: FoamIconRole): Int? = res[role]
+    override fun resFor(style: FoamIconStyle, role: FoamIconRole): Int? =
+        (if (style == FoamIconStyle.OUTLINE) resOutline else res)[role]
 
     private val res = mapOf(
         FoamIconRole.PLAY to R.drawable.coolicons_play,
@@ -62,6 +63,32 @@ object CooliconsIconPack : FoamIconPack {
         FoamIconRole.SETTINGS to R.drawable.coolicons_settings,
         FoamIconRole.STATS to R.drawable.coolicons_stats,
         FoamIconRole.LIBRARY to R.drawable.coolicons_library,
+        FoamIconRole.QUEUE to R.drawable.coolicons_queue,
+        FoamIconRole.CAST to R.drawable.coolicons_cast,
+        FoamIconRole.RADIO to R.drawable.coolicons_radio,
+        FoamIconRole.REPEAT to R.drawable.coolicons_repeat,
+        FoamIconRole.REPEAT_ONE to R.drawable.coolicons_repeat_one,
+        FoamIconRole.SHUFFLE to R.drawable.coolicons_shuffle,
+        FoamIconRole.CLOSE to R.drawable.coolicons_close,
+    )
+
+    private val resOutline = mapOf(
+        FoamIconRole.PLAY to R.drawable.coolicons_outline_play,
+        FoamIconRole.PAUSE to R.drawable.coolicons_outline_pause,
+        FoamIconRole.NEXT to R.drawable.coolicons_outline_next,
+        FoamIconRole.PREVIOUS to R.drawable.coolicons_outline_previous,
+        FoamIconRole.SEARCH to R.drawable.coolicons_outline_search,
+        FoamIconRole.HOME to R.drawable.coolicons_outline_home,
+        FoamIconRole.SETTINGS to R.drawable.coolicons_outline_settings,
+        FoamIconRole.STATS to R.drawable.coolicons_outline_stats,
+        FoamIconRole.LIBRARY to R.drawable.coolicons_outline_library,
+        FoamIconRole.QUEUE to R.drawable.coolicons_outline_queue,
+        FoamIconRole.CAST to res[FoamIconRole.CAST],
+        FoamIconRole.RADIO to R.drawable.coolicons_outline_radio,
+        FoamIconRole.REPEAT to res[FoamIconRole.REPEAT],
+        FoamIconRole.REPEAT_ONE to res[FoamIconRole.REPEAT_ONE],
+        FoamIconRole.SHUFFLE to res[FoamIconRole.SHUFFLE],
+        FoamIconRole.CLOSE to res[FoamIconRole.CLOSE],
     )
 }
 

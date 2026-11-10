@@ -85,6 +85,7 @@ android {
     sourceSets {
         getByName("main") {
             res.directories += "src/main/iconpacks/coolicons/res"
+            res.directories += "src/main/iconpacks/coolicons_outline/res"
         }
     }
 
