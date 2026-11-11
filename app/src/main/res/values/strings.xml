@@ -369,6 +369,7 @@
     <string name="pager_effect_crossfade">Crossfade</string>
     <string name="pager_effect_depth">Depth</string>
     <string name="pager_effect_flip">Flip</string>
+    <string name="pager_effect_cube">Cube</string>
     <string name="pager_effect_tilt">Tilt</string>
     <string name="mini_player">Mini Player</string>
     <string name="full_player">Full Player</string>

@@ -62,6 +62,7 @@ class PlayerPagerEffectMathTest {
         assertSpec(PlayerPagerEffect.CROSSFADE, travel = 0.5f, opacity = 0f)
         assertSpec(PlayerPagerEffect.DEPTH, travel = 0.5f, scale = 0.88f, opacity = 0f)
         assertSpec(PlayerPagerEffect.FLIP, travel = 0.6f, opacity = 0f, rotationY = 90f)
+        assertSpec(PlayerPagerEffect.CUBE, travel = 0.6f, opacity = 0f, rotationY = -90f)
         assertSpec(
             PlayerPagerEffect.TILT,
             travel = 0.8f,
@@ -72,11 +73,13 @@ class PlayerPagerEffectMathTest {
     }
 
     @Test
-    fun `only flip and tilt are 3d`() {
+    fun `only flip cube and tilt are 3d`() {
         for (effect in nonSlideEffects) {
             assertEquals(
                 "$effect",
-                effect == PlayerPagerEffect.FLIP || effect == PlayerPagerEffect.TILT,
+                effect == PlayerPagerEffect.FLIP ||
+                    effect == PlayerPagerEffect.CUBE ||
+                    effect == PlayerPagerEffect.TILT,
                 effect.spec.is3d
             )
         }
@@ -287,6 +290,18 @@ class PlayerPagerEffectMathTest {
     }
 
     @Test
+    fun `cube is flip with the opposite angle`() {
+        for (offset in offsets) {
+            assertEquals(
+                "cube at $offset",
+                -PlayerPagerEffectMath.layer(PlayerPagerEffect.FLIP, offset).rotationY,
+                PlayerPagerEffectMath.layer(PlayerPagerEffect.CUBE, offset).rotationY,
+                1e-6f
+            )
+        }
+    }
+
+    @Test
     fun `tilt yaw is 20 degrees and pitch is 10 degrees at full separation`() {
         assertEquals(20f, PlayerPagerEffectMath.layer(PlayerPagerEffect.TILT, 1f).rotationY, 1e-6f)
         assertEquals(-20f, PlayerPagerEffectMath.layer(PlayerPagerEffect.TILT, -1f).rotationY, 1e-6f)
@@ -311,7 +326,7 @@ class PlayerPagerEffectMathTest {
 
     @Test
     fun `camera distance is set for 3D effects only`() {
-        for (effect in listOf(PlayerPagerEffect.FLIP, PlayerPagerEffect.TILT)) {
+        for (effect in listOf(PlayerPagerEffect.FLIP, PlayerPagerEffect.CUBE, PlayerPagerEffect.TILT)) {
             assertEquals(
                 PlayerPagerEffectMath.CAMERA_DISTANCE_DENSITY_FACTOR * 3f,
                 PlayerPagerEffectMath.cameraDistance(effect, 3f),

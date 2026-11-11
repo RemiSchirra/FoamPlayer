@@ -190,6 +190,7 @@ fun PlayerSettingsScreen(
                                     PlayerPagerEffect.CROSSFADE -> stringResource(R.string.pager_effect_crossfade)
                                     PlayerPagerEffect.DEPTH -> stringResource(R.string.pager_effect_depth)
                                     PlayerPagerEffect.FLIP -> stringResource(R.string.pager_effect_flip)
+                                    PlayerPagerEffect.CUBE -> stringResource(R.string.pager_effect_cube)
                                     PlayerPagerEffect.TILT -> stringResource(R.string.pager_effect_tilt)
                                 }
                             }

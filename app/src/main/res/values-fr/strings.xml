@@ -367,6 +367,7 @@
     <string name="pager_effect_crossfade">Fondu enchaîné</string>
     <string name="pager_effect_depth">Profondeur</string>
     <string name="pager_effect_flip">Retournement</string>
+    <string name="pager_effect_cube">Cube</string>
     <string name="pager_effect_tilt">Inclinaison</string>
     <string name="mini_player">Mini lecteur</string>
     <string name="full_player">Lecteur complet</string>
