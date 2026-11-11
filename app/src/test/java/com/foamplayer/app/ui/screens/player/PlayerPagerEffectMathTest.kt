@@ -3,14 +3,13 @@ package com.foamplayer.app.ui.screens.player
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.data.settings.PlayerPagerEffect
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Tests the pure geometry behind the full player's track-pager effects. Every
- * effect keeps the pager's one-to-one finger tracking; the effect only shortens
- * the page stride (so pages overlap) and layers a crossfade, scale or mirrored 3D
- * rotation on top.
+ * Tests the pure geometry behind the full player's track-pager effects: travel
+ * fractions, stride, fling target, and the layer values derived from each spec.
  */
 class PlayerPagerEffectMathTest {
 
@@ -38,18 +37,53 @@ class PlayerPagerEffectMathTest {
         assertEquals(0f, PlayerPagerEffectMath.visibility(-2f), 1e-6f)
     }
 
-    // ------------------------------------------------------------ travel fractions
+    // ------------------------------------------------------------------ effect specs
 
-    @Test
-    fun `travel fractions match the product spec`() {
-        assertEquals(1f, PlayerPagerEffect.SLIDE.travelFraction, 1e-6f)
-        assertEquals(0.5f, PlayerPagerEffect.CROSSFADE.travelFraction, 1e-6f)
-        assertEquals(0.5f, PlayerPagerEffect.DEPTH.travelFraction, 1e-6f)
-        assertEquals(0.6f, PlayerPagerEffect.FLIP.travelFraction, 1e-6f)
-        assertEquals(0.8f, PlayerPagerEffect.TILT.travelFraction, 1e-6f)
+    private fun assertSpec(
+        effect: PlayerPagerEffect,
+        travel: Float,
+        scale: Float = 1f,
+        opacity: Float = 1f,
+        rotationY: Float = 0f,
+        rotationX: Float = 0f
+    ) {
+        val spec = effect.spec
+        assertEquals("$effect travel", travel, spec.travelFraction, 1e-6f)
+        assertEquals("$effect scale", scale, spec.targetScale, 1e-6f)
+        assertEquals("$effect opacity", opacity, spec.targetOpacity, 1e-6f)
+        assertEquals("$effect rotationY", rotationY, spec.targetRotationY, 1e-6f)
+        assertEquals("$effect rotationX", rotationX, spec.targetRotationX, 1e-6f)
+        assertEquals("$effect 3d", rotationY != 0f || rotationX != 0f, spec.is3d)
     }
 
-    // ------------------------------------------------------------- page stride
+    @Test
+    fun `effect specs match the product spec`() {
+        assertSpec(PlayerPagerEffect.SLIDE, travel = 1f)
+        assertSpec(PlayerPagerEffect.CROSSFADE, travel = 0.5f, opacity = 0f)
+        assertSpec(PlayerPagerEffect.DEPTH, travel = 0.5f, scale = 0.88f, opacity = 0f)
+        assertSpec(PlayerPagerEffect.FLIP, travel = 0.6f, opacity = 0f, rotationY = 90f)
+        assertSpec(
+            PlayerPagerEffect.TILT,
+            travel = 0.8f,
+            opacity = 0f,
+            rotationY = 20f,
+            rotationX = 10f
+        )
+    }
+
+    @Test
+    fun `only flip and tilt are 3d`() {
+        for (effect in nonSlideEffects) {
+            assertEquals(
+                "$effect",
+                effect == PlayerPagerEffect.FLIP || effect == PlayerPagerEffect.TILT,
+                effect.spec.is3d
+            )
+        }
+        assertFalse(PlayerPagerEffect.SLIDE.spec.is3d)
+    }
+
+    // ----------------------------------------------------------------- page stride
 
     @Test
     fun `slide keeps the stock page spacing unchanged`() {
@@ -69,7 +103,7 @@ class PlayerPagerEffectMathTest {
             val stride = pageWidth + spacing.value
             assertEquals(
                 "$effect stride",
-                slideStride * effect.travelFraction,
+                slideStride * effect.spec.travelFraction,
                 stride,
                 1e-3f
             )
@@ -90,7 +124,7 @@ class PlayerPagerEffectMathTest {
     fun `page spacing scales linearly with the travel fraction`() {
         val pageWidth = 400.dp
         val slideSpacing = 0.dp
-        // 50% -> the pages' centers sit half a stride apart, i.e. a 200dp slot.
+        // 50% -> half a stride between page centers.
         assertEquals(
             -200f,
             PlayerPagerEffectMath.pageSpacing(
@@ -112,7 +146,7 @@ class PlayerPagerEffectMathTest {
         )
     }
 
-    // ------------------------------------------------------------- fling target
+    // ------------------------------------------------------------------ fling target
 
     private fun target(
         absoluteOffset: Float,
@@ -190,58 +224,46 @@ class PlayerPagerEffectMathTest {
         assertEquals(1, target(1.1f, velocity = -min, minFlingVelocity = min))
     }
 
-    // -------------------------------------------------------------- SLIDE identity
+    // ------------------------------------------------------------------- SLIDE identity
 
     @Test
     fun `slide keeps the stock pager untouched at every offset`() {
         for (offset in offsets) {
-            val visibility = PlayerPagerEffectMath.visibility(offset)
-            assertEquals(1f, PlayerPagerEffectMath.alpha(PlayerPagerEffect.SLIDE, visibility), 1e-6f)
-            assertEquals(1f, PlayerPagerEffectMath.scale(PlayerPagerEffect.SLIDE, visibility), 1e-6f)
-            assertEquals(
-                0f,
-                PlayerPagerEffectMath.rotationY(PlayerPagerEffect.SLIDE, offset, visibility),
-                1e-6f
-            )
-            assertEquals(
-                0f,
-                PlayerPagerEffectMath.rotationX(PlayerPagerEffect.SLIDE, visibility),
-                1e-6f
-            )
+            val layer = PlayerPagerEffectMath.layer(PlayerPagerEffect.SLIDE, offset)
+            assertEquals(1f, layer.alpha, 1e-6f)
+            assertEquals(1f, layer.scale, 1e-6f)
+            assertEquals(0f, layer.rotationY, 1e-6f)
+            assertEquals(0f, layer.rotationX, 1e-6f)
             assertEquals(0f, PlayerPagerEffectMath.cameraDistance(PlayerPagerEffect.SLIDE, 3f), 1e-6f)
         }
     }
 
-    // ------------------------------------------------------------------ crossfade
+    // --------------------------------------------------------------------- crossfade
 
     @Test
     fun `every non-slide effect crossfades with abs offset`() {
         for (effect in nonSlideEffects) {
             for (offset in offsets) {
-                val expected = 1f - kotlin.math.abs(offset)
                 assertEquals(
                     "alpha of $effect at $offset",
-                    expected,
-                    PlayerPagerEffectMath.alpha(effect, PlayerPagerEffectMath.visibility(offset)),
+                    1f - kotlin.math.abs(offset),
+                    PlayerPagerEffectMath.layer(effect, offset).alpha,
                     1e-6f
                 )
             }
         }
     }
 
-    // --------------------------------------------------------------- DEPTH scale
+    // ------------------------------------------------------------------- DEPTH scale
 
     @Test
-    fun `depth scales pages between 0_88 and 1`() {
-        assertEquals(
-            PlayerPagerEffectMath.DEPTH_MIN_SCALE,
-            PlayerPagerEffectMath.scale(PlayerPagerEffect.DEPTH, 0f),
-            1e-6f
-        )
-        assertEquals(1f, PlayerPagerEffectMath.scale(PlayerPagerEffect.DEPTH, 1f), 1e-6f)
+    fun `depth scales pages between its target and 1`() {
+        val min = PlayerPagerEffect.DEPTH.spec.targetScale
+        assertEquals(min, PlayerPagerEffectMath.layer(PlayerPagerEffect.DEPTH, 1f).scale, 1e-6f)
+        assertEquals(1f, PlayerPagerEffectMath.layer(PlayerPagerEffect.DEPTH, 0f).scale, 1e-6f)
         assertEquals(
             0.94f,
-            PlayerPagerEffectMath.scale(PlayerPagerEffect.DEPTH, 0.5f),
+            PlayerPagerEffectMath.layer(PlayerPagerEffect.DEPTH, 0.5f).scale,
             1e-6f
         )
     }
@@ -249,59 +271,27 @@ class PlayerPagerEffectMathTest {
     @Test
     fun `only depth scales`() {
         for (effect in PlayerPagerEffect.entries.filter { it != PlayerPagerEffect.DEPTH }) {
-            assertEquals(1f, PlayerPagerEffectMath.scale(effect, 0f), 1e-6f)
-            assertEquals(1f, PlayerPagerEffectMath.scale(effect, 1f), 1e-6f)
+            assertEquals(1f, PlayerPagerEffectMath.layer(effect, 0f).scale, 1e-6f)
+            assertEquals(1f, PlayerPagerEffectMath.layer(effect, 1f).scale, 1e-6f)
         }
     }
 
-    // ----------------------------------------------------------------- 3D effects
+    // -------------------------------------------------------------------- 3D effects
 
     @Test
     fun `flip reaches 90 degrees toward the centre and mirrors per side`() {
-        assertEquals(
-            90f,
-            PlayerPagerEffectMath.rotationY(PlayerPagerEffect.FLIP, 1f, 0f),
-            1e-6f
-        )
-        assertEquals(
-            -90f,
-            PlayerPagerEffectMath.rotationY(PlayerPagerEffect.FLIP, -1f, 0f),
-            1e-6f
-        )
-        assertEquals(
-            45f,
-            PlayerPagerEffectMath.rotationY(PlayerPagerEffect.FLIP, 0.5f, 0.5f),
-            1e-6f
-        )
-        assertEquals(
-            0f,
-            PlayerPagerEffectMath.rotationY(PlayerPagerEffect.FLIP, 0f, 1f),
-            1e-6f
-        )
+        assertEquals(90f, PlayerPagerEffectMath.layer(PlayerPagerEffect.FLIP, 1f).rotationY, 1e-6f)
+        assertEquals(-90f, PlayerPagerEffectMath.layer(PlayerPagerEffect.FLIP, -1f).rotationY, 1e-6f)
+        assertEquals(45f, PlayerPagerEffectMath.layer(PlayerPagerEffect.FLIP, 0.5f).rotationY, 1e-6f)
+        assertEquals(0f, PlayerPagerEffectMath.layer(PlayerPagerEffect.FLIP, 0f).rotationY, 1e-6f)
     }
 
     @Test
     fun `tilt yaw is 20 degrees and pitch is 10 degrees at full separation`() {
-        assertEquals(
-            20f,
-            PlayerPagerEffectMath.rotationY(PlayerPagerEffect.TILT, 1f, 0f),
-            1e-6f
-        )
-        assertEquals(
-            -20f,
-            PlayerPagerEffectMath.rotationY(PlayerPagerEffect.TILT, -1f, 0f),
-            1e-6f
-        )
-        assertEquals(
-            10f,
-            PlayerPagerEffectMath.rotationX(PlayerPagerEffect.TILT, 0f),
-            1e-6f
-        )
-        assertEquals(
-            0f,
-            PlayerPagerEffectMath.rotationX(PlayerPagerEffect.TILT, 1f),
-            1e-6f
-        )
+        assertEquals(20f, PlayerPagerEffectMath.layer(PlayerPagerEffect.TILT, 1f).rotationY, 1e-6f)
+        assertEquals(-20f, PlayerPagerEffectMath.layer(PlayerPagerEffect.TILT, -1f).rotationY, 1e-6f)
+        assertEquals(10f, PlayerPagerEffectMath.layer(PlayerPagerEffect.TILT, 1f).rotationX, 1e-6f)
+        assertEquals(0f, PlayerPagerEffectMath.layer(PlayerPagerEffect.TILT, 0f).rotationX, 1e-6f)
     }
 
     @Test
@@ -312,39 +302,22 @@ class PlayerPagerEffectMathTest {
             PlayerPagerEffect.DEPTH
         )) {
             for (offset in offsets) {
-                assertEquals(
-                    0f,
-                    PlayerPagerEffectMath.rotationY(
-                        effect,
-                        offset,
-                        PlayerPagerEffectMath.visibility(offset)
-                    ),
-                    1e-6f
-                )
-                assertEquals(
-                    0f,
-                    PlayerPagerEffectMath.rotationX(
-                        effect,
-                        PlayerPagerEffectMath.visibility(offset)
-                    ),
-                    1e-6f
-                )
+                val layer = PlayerPagerEffectMath.layer(effect, offset)
+                assertEquals("$effect rotationY at $offset", 0f, layer.rotationY, 1e-6f)
+                assertEquals("$effect rotationX at $offset", 0f, layer.rotationX, 1e-6f)
             }
         }
     }
 
     @Test
     fun `camera distance is set for 3D effects only`() {
-        assertEquals(
-            PlayerPagerEffectMath.CAMERA_DISTANCE_DENSITY_FACTOR * 3f,
-            PlayerPagerEffectMath.cameraDistance(PlayerPagerEffect.FLIP, 3f),
-            1e-6f
-        )
-        assertEquals(
-            PlayerPagerEffectMath.CAMERA_DISTANCE_DENSITY_FACTOR * 3f,
-            PlayerPagerEffectMath.cameraDistance(PlayerPagerEffect.TILT, 3f),
-            1e-6f
-        )
+        for (effect in listOf(PlayerPagerEffect.FLIP, PlayerPagerEffect.TILT)) {
+            assertEquals(
+                PlayerPagerEffectMath.CAMERA_DISTANCE_DENSITY_FACTOR * 3f,
+                PlayerPagerEffectMath.cameraDistance(effect, 3f),
+                1e-6f
+            )
+        }
         for (effect in listOf(
             PlayerPagerEffect.SLIDE,
             PlayerPagerEffect.CROSSFADE,
@@ -354,16 +327,16 @@ class PlayerPagerEffectMathTest {
         }
     }
 
-    // ------------------------------------------------------------ rest / identity
+    // ----------------------------------------------------------------- rest identity
 
     @Test
     fun `every effect is the identity on the centred page`() {
         for (effect in PlayerPagerEffect.entries) {
-            val visibility = PlayerPagerEffectMath.visibility(0f)
-            assertEquals(1f, PlayerPagerEffectMath.alpha(effect, visibility), 1e-6f)
-            assertEquals(1f, PlayerPagerEffectMath.scale(effect, visibility), 1e-6f)
-            assertEquals(0f, PlayerPagerEffectMath.rotationY(effect, 0f, visibility), 1e-6f)
-            assertEquals(0f, PlayerPagerEffectMath.rotationX(effect, visibility), 1e-6f)
+            val layer = PlayerPagerEffectMath.layer(effect, 0f)
+            assertEquals("$effect alpha", 1f, layer.alpha, 1e-6f)
+            assertEquals("$effect scale", 1f, layer.scale, 1e-6f)
+            assertEquals("$effect rotationY", 0f, layer.rotationY, 1e-6f)
+            assertEquals("$effect rotationX", 0f, layer.rotationX, 1e-6f)
         }
     }
 }

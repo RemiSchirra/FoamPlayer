@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
+import androidx.compose.ui.zIndex
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.imageLoader
@@ -369,10 +370,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
     // parameter above, so resolve the scalar once for camera distance.
     val densityScale = density.density
 
-    // Each page keeps its full width; only the pager's slot stride is shortened to
-    // the effect's travel. The pager itself still moves the content one-to-one with
-    // the finger, so a page follows the drag exactly like SLIDE, but a full page
-    // advance takes just the configured fraction of the finger travel.
+    // Pages keep their full width; only the slot stride shrinks to the effect's travel.
     val fullPageWidth = screenWidthDp - PlayerDimens.screenPadding * 2
     val slidePageSpacing = (PlayerDimens.pageSpacing - artInset * 2).coerceAtLeast(0.dp)
     val effectivePageSpacing = PlayerPagerEffectMath.pageSpacing(
@@ -381,9 +379,8 @@ internal fun SharedTransitionScope.TrackHeroPager(
         effect = pagerEffect
     )
 
-    // SLIDE keeps Compose's stock release behaviour. The reduced effects shorten the
-    // page stride, so the stock positional snap (which compares the finger delta to
-    // the full page width) would overshoot; the effect behaviour snaps in page units.
+    // The stock snap divides the finger delta by the full page width, so only SLIDE
+    // can use it; the shortened effects snap in page units instead.
     val defaultFlingBehavior = PagerDefaults.flingBehavior(state = pagerState)
     val effectFlingBehavior = rememberPagerEffectFlingBehavior(pagerState, pagerFlingTarget)
 
@@ -447,24 +444,28 @@ internal fun SharedTransitionScope.TrackHeroPager(
         }
     }
 
+    // The hero mirrors the anchor page: below the pages moving in while it is the
+    // settled one, above them once the swipe commits to the anchor.
+    val heroBelowPager = pagerEffect != PlayerPagerEffect.SLIDE &&
+        pagerState.isScrollInProgress &&
+        pagerState.settledPage == anchorPage
+
     Box(modifier = Modifier.fillMaxWidth()) {
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .zIndex(if (heroBelowPager) 1f else 0f),
             contentPadding = PaddingValues(horizontal = PlayerDimens.screenPadding),
-            // Pages are wider by 2 * artInset now; shave it off the spacing so the gap
-            // between neighbouring album arts (and their peek) stays what it was.
-            // The effect then shrinks the slot stride (negative spacing = overlap) so
-            // one page advance takes its configured fraction of the finger travel.
-            // The pager keeps its stock one-to-one tracking.
+            // Pages are wider by 2 * artInset; remove that from the spacing to keep the
+            // album-art gap, then let the effect shorten the stride (overlap).
             pageSpacing = effectivePageSpacing,
             flingBehavior = if (pagerEffect == PlayerPagerEffect.SLIDE) {
                 defaultFlingBehavior
             } else {
                 effectFlingBehavior
             },
-            // Non-SLIDE effects pull the neighbors inward visually, so they must be
-            // composed at rest to fade in from the first pixel of a drag.
+            // Neighbours must be composed to fade in from the first drag pixel.
             beyondViewportPageCount = if (pagerEffect == PlayerPagerEffect.SLIDE) 0 else 1,
             // Keyed by queue ENTRY id, not track id: the same track can legitimately
             // appear twice in the queue ("play next" on the playing track), and
@@ -508,21 +509,27 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         currentPage = pagerState.currentPage,
                         offsetFraction = pagerState.currentPageOffsetFraction
                     )
-                    // Translation is the pager's own: the shortened slot stride
-                    // already makes it one-to-one with the finger for every effect.
-                    val visibility = PlayerPagerEffectMath.visibility(offset)
-                    alpha = PlayerPagerEffectMath.alpha(pagerEffect, visibility)
-                    val pageScale = PlayerPagerEffectMath.scale(pagerEffect, visibility)
-                    scaleX = pageScale
-                    scaleY = pageScale
-                    rotationY = PlayerPagerEffectMath.rotationY(pagerEffect, offset, visibility)
-                    rotationX = PlayerPagerEffectMath.rotationX(pagerEffect, visibility)
-                    if (pagerEffect == PlayerPagerEffect.FLIP ||
-                        pagerEffect == PlayerPagerEffect.TILT
-                    ) {
+                    // The pager owns the translation; the effect only layers transforms.
+                    val layer = PlayerPagerEffectMath.layer(pagerEffect, offset)
+                    alpha = layer.alpha
+                    scaleX = layer.scale
+                    scaleY = layer.scale
+                    rotationY = layer.rotationY
+                    rotationX = layer.rotationX
+                    if (pagerEffect.spec.is3d) {
                         cameraDistance =
                             PlayerPagerEffectMath.cameraDistance(pagerEffect, densityScale)
                     }
+                }
+            }
+
+            // Every page moving in draws above the settled one, whichever side it
+            // comes from, so reversing direction never lets the settled page cover it.
+            val pageZIndex by remember(pagerState, page, pagerEffect) {
+                derivedStateOf {
+                    if (pagerEffect != PlayerPagerEffect.SLIDE &&
+                        page != pagerState.settledPage
+                    ) 1f else 0f
                 }
             }
 
@@ -530,6 +537,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .zIndex(pageZIndex)
                     .then(pageSemanticsModifier)
                     .then(pageEffectModifier)
             ) {
@@ -664,6 +672,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .zIndex(if (heroBelowPager) 0f else 1f)
                     .padding(horizontal = PlayerDimens.screenPadding)
                     .graphicsLayer {
                         val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
@@ -675,16 +684,13 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         // effect-shortened stride from the pager's layout info.
                         translationX = -stridePx * offset
                         if (pagerEffect != PlayerPagerEffect.SLIDE) {
-                            val visibility = PlayerPagerEffectMath.visibility(offset)
-                            alpha = PlayerPagerEffectMath.alpha(pagerEffect, visibility)
-                            val heroScale = PlayerPagerEffectMath.scale(pagerEffect, visibility)
-                            scaleX = heroScale
-                            scaleY = heroScale
-                            rotationY = PlayerPagerEffectMath.rotationY(pagerEffect, -offset, visibility)
-                            rotationX = PlayerPagerEffectMath.rotationX(pagerEffect, visibility)
-                            if (pagerEffect == PlayerPagerEffect.FLIP ||
-                                pagerEffect == PlayerPagerEffect.TILT
-                            ) {
+                            val layer = PlayerPagerEffectMath.layer(pagerEffect, -offset)
+                            alpha = layer.alpha
+                            scaleX = layer.scale
+                            scaleY = layer.scale
+                            rotationY = layer.rotationY
+                            rotationX = layer.rotationX
+                            if (pagerEffect.spec.is3d) {
                                 cameraDistance =
                                     PlayerPagerEffectMath.cameraDistance(pagerEffect, densityScale)
                             }

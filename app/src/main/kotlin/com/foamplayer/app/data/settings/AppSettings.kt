@@ -54,18 +54,32 @@ enum class SeekBarStyle(val label: String) {
 }
 
 /**
- * Visual effect of the full player's track pager. [travelFraction] is how far a
- * page moves per page of finger travel, as a fraction of one page stride: 1f is
- * the original full slide, 0.5f moves the pages half as far. The mapping is a
- * straight linear scale, so the outgoing and incoming pages share a constant
- * speed for the whole drag.
+ * Targets an effect reaches at one full page of separation. The centered page
+ * always renders at the identity; these values are interpolated in as a page
+ * moves away.
+ *
+ * [travelFraction] is the page stride relative to SLIDE: 1 is a full slide,
+ * 0.5 advances a page in half the finger travel.
  */
-enum class PlayerPagerEffect(val label: String, val travelFraction: Float) {
-    SLIDE("Slide", 1f),
-    CROSSFADE("Crossfade", 0.5f),
-    DEPTH("Depth", 0.5f),
-    FLIP("Flip", 0.6f),
-    TILT("Tilt", 0.8f),
+@Immutable
+data class PlayerPagerEffectSpec(
+    val travelFraction: Float,
+    val targetScale: Float = 1f,
+    val targetOpacity: Float = 1f,
+    val targetRotationY: Float = 0f,
+    val targetRotationX: Float = 0f
+) {
+    /** Whether the effect needs a perspective camera. */
+    val is3d: Boolean get() = targetRotationY != 0f || targetRotationX != 0f
+}
+
+/** Visual effect of the full player's track pager, with its [spec]. */
+enum class PlayerPagerEffect(val label: String, val spec: PlayerPagerEffectSpec) {
+    SLIDE("Slide", PlayerPagerEffectSpec(travelFraction = 1f)),
+    CROSSFADE("Crossfade", PlayerPagerEffectSpec(0.5f, targetOpacity = 0f)),
+    DEPTH("Depth", PlayerPagerEffectSpec(0.5f, targetScale = 0.88f, targetOpacity = 0f)),
+    FLIP("Flip", PlayerPagerEffectSpec(0.6f, targetOpacity = 0f, targetRotationY = 90f)),
+    TILT("Tilt", PlayerPagerEffectSpec(0.8f, targetOpacity = 0f, targetRotationY = 20f, targetRotationX = 10f)),
 }
 
 /** Overall look of the full player: classic art, immersive backdrop, or vinyl. */

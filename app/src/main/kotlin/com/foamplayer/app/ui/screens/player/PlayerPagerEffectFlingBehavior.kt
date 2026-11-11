@@ -17,16 +17,9 @@ import kotlin.math.abs
 private val MinFlingVelocityDp = 400.dp
 
 /**
- * Release behaviour for the effect-shortened pager.
- *
- * The stock pager's positional snap target is derived from the finger's pixel
- * delta divided by the full page width, which is inconsistent with the shortened
- * stride used by the effects: releasing just past a page then continues to the
- * following one. This behaviour decides from the page offset itself (already in
- * shortened strides), so a slow release always settles on the nearest page.
- *
- * It also publishes [targetPage] as soon as the target is known, letting the
- * player commit the track on release without waiting for the settle animation.
+ * Release behaviour for the shortened pager. The stock snap divides the finger
+ * delta by the full page width and overshoots, so this targets in page units.
+ * Publishes [targetPage] so the track commits before the settle animation ends.
  */
 @Composable
 internal fun rememberPagerEffectFlingBehavior(
@@ -53,7 +46,7 @@ private class PagerEffectFlingBehavior(
         initialVelocity: Float,
         onRemainingDistanceUpdated: (Float) -> Unit
     ): Float {
-        // The slot stride (page + spacing) is the distance one page index covers.
+        // The slot stride is the distance one page index covers.
         val stride = (state.layoutInfo.pageSize + state.layoutInfo.pageSpacing).toFloat()
         if (stride <= 0f || state.pageCount == 0) {
             onRemainingDistanceUpdated(0f)
@@ -85,8 +78,7 @@ private class PagerEffectFlingBehavior(
                 visibilityThreshold = 1f
             )
         ) { value, _ ->
-            // Never scroll away from the start or past the snap position, even if
-            // the release velocity briefly opposes the target (stock behavior).
+            // Stay between the start and the snap position.
             val clamped = value.coerceIn(low, high)
             val delta = clamped - consumed
             consumed += scrollBy(delta)

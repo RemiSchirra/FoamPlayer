@@ -411,8 +411,7 @@ fun FullPlayerScreen(
         lastBackwardSkipMs[0] = if (backward) System.currentTimeMillis() else 0L
     }
     val programmaticScrollPage = remember { mutableStateOf<Int?>(null) }
-    // Page the effect pager will settle on after the current release. Published by
-    // PlayerPagerEffectFlingBehavior so the track can commit immediately.
+    // Page the effect pager will settle on; published on release so the track commits.
     val pagerFlingTarget = remember { mutableStateOf<Int?>(null) }
 
     var backdropHopHold by remember { mutableStateOf(false) }

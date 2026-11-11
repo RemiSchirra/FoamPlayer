@@ -116,9 +116,8 @@ internal fun PlayerPagerSyncEffects(
                     backdropRenumberHold() ||
                     programmaticScrollPage.value != null
                 ) return@collect
-                // The shortened-stride pager publishes the exact page it settles on
-                // (see PlayerPagerEffectFlingBehavior); wait for it rather than trusting
-                // the stock target, whose positional threshold assumes a full page.
+                // The shortened pager publishes its exact settle page; wait for it
+                // instead of the stock target, which assumes a full page.
                 val targetPage = if (pagerEffect == PlayerPagerEffect.SLIDE) {
                     stockTargetPage
                 } else {
