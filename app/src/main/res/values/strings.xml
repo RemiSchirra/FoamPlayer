@@ -363,6 +363,13 @@
     <string name="seek_bar_style_desc">Look of the full player\'s progress bar</string>
     <string name="seek_bar_style_normal">Normal</string>
     <string name="seek_bar_style_waveform">Waveform</string>
+    <string name="pager_effect">Pager Effect</string>
+    <string name="pager_effect_desc">Animation when swiping between tracks in the full player</string>
+    <string name="pager_effect_slide">Slide</string>
+    <string name="pager_effect_crossfade">Crossfade</string>
+    <string name="pager_effect_depth">Depth</string>
+    <string name="pager_effect_flip">Flip</string>
+    <string name="pager_effect_tilt">Tilt</string>
     <string name="mini_player">Mini Player</string>
     <string name="full_player">Full Player</string>
     <string name="square">Square</string>

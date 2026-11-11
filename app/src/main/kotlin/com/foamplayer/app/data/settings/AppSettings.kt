@@ -53,6 +53,21 @@ enum class SeekBarStyle(val label: String) {
     WAVEFORM("Waveform")
 }
 
+/**
+ * Visual effect of the full player's track pager. [travelFraction] is how far a
+ * page moves per page of finger travel, as a fraction of one page stride: 1f is
+ * the original full slide, 0.5f moves the pages half as far. The mapping is a
+ * straight linear scale, so the outgoing and incoming pages share a constant
+ * speed for the whole drag.
+ */
+enum class PlayerPagerEffect(val label: String, val travelFraction: Float) {
+    SLIDE("Slide", 1f),
+    CROSSFADE("Crossfade", 0.5f),
+    DEPTH("Depth", 0.5f),
+    FLIP("Flip", 0.6f),
+    TILT("Tilt", 0.8f),
+}
+
 /** Overall look of the full player: classic art, immersive backdrop, or vinyl. */
 enum class PlayerMode(val label: String) {
     NORMAL("Normal"),
@@ -135,6 +150,8 @@ data class AppSettings(
      */
     val accentTintEnabled: Boolean = true,
     val playerMode: PlayerMode = PlayerMode.NORMAL,
+    /** Effect used when swiping between tracks in the full player. */
+    val playerPagerEffect: PlayerPagerEffect = PlayerPagerEffect.SLIDE,
     val animateSeekBarEnabled: Boolean = false,
     /** Visual style of the full player's seek bar (the mini player keeps the classic bar). */
     val seekBarStyle: SeekBarStyle = SeekBarStyle.NORMAL,

@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import com.foamplayer.app.data.settings.PlayerPagerEffect
 import com.foamplayer.app.ui.components.LoopingPagerModel
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import kotlin.math.abs
@@ -24,6 +25,7 @@ internal fun PlayerPagerSyncEffects(
     isProgressiveEnvelope: Boolean,
     queueIndex: Int,
     currentEntryId: Long?,
+    pagerEffect: PlayerPagerEffect,
     latestQueueIndex: State<Int>,
     latestQueueSize: State<Int>,
     latestHeroModel: State<LoopingPagerModel>,
@@ -34,6 +36,7 @@ internal fun PlayerPagerSyncEffects(
     backdropRenumberHold: () -> Boolean,
     isMainPagerVisible: () -> Boolean,
     programmaticScrollPage: MutableState<Int?>,
+    pagerFlingTarget: MutableState<Int?>,
     hopOffGhost: suspend () -> Unit
 ) {
     val isPagerDragged by pagerState.interactionSource.collectIsDraggedAsState()
@@ -103,15 +106,27 @@ internal fun PlayerPagerSyncEffects(
     }
 
     // Commit on release: the track must not wait for the pager's settle animation.
-    LaunchedEffect(pagerState) {
-        snapshotFlow { isPagerDragged to pagerState.targetPage }
-            .collect { (dragging, targetPage) ->
+    LaunchedEffect(pagerState, pagerEffect) {
+        snapshotFlow {
+            Triple(isPagerDragged, pagerState.targetPage, pagerFlingTarget.value)
+        }
+            .collect { (dragging, stockTargetPage, effectTargetPage) ->
                 if (dragging ||
                     !isMainPagerVisible() ||
                     backdropRenumberHold() ||
-                    programmaticScrollPage.value != null ||
-                    targetPage !in 0 until latestQueueSize.value
+                    programmaticScrollPage.value != null
                 ) return@collect
+                // The shortened-stride pager publishes the exact page it settles on
+                // (see PlayerPagerEffectFlingBehavior); wait for it rather than trusting
+                // the stock target, whose positional threshold assumes a full page.
+                val targetPage = if (pagerEffect == PlayerPagerEffect.SLIDE) {
+                    stockTargetPage
+                } else {
+                    effectTargetPage ?: return@collect
+                }
+                if (targetPage !in 0 until latestQueueSize.value) return@collect
+                // Consume the published target so a later renumbering cannot replay it.
+                if (pagerEffect != PlayerPagerEffect.SLIDE) pagerFlingTarget.value = null
                 val model = latestHeroModel.value
                 val isNewTrack = if (model.isGhostPage(targetPage)) {
                     model.ghostTwinPage(targetPage) != latestQueueIndex.value
@@ -127,6 +142,8 @@ internal fun PlayerPagerSyncEffects(
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
+                // The fling is over; its published target is stale from here on.
+                pagerFlingTarget.value = null
                 if (programmaticScrollPage.value != null) {
                     programmaticScrollPage.value = null
                     if (settledPage == latestQueueIndex.value) {
@@ -166,6 +183,7 @@ internal fun PlayerPagerSyncEffects(
             when (interaction) {
                 is DragInteraction.Start -> {
                     programmaticScrollPage.value = null
+                    pagerFlingTarget.value = null
                     viewModel.prepareQueueShuffle()
                 }
                 is DragInteraction.Stop, is DragInteraction.Cancel -> {

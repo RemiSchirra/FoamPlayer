@@ -411,6 +411,9 @@ fun FullPlayerScreen(
         lastBackwardSkipMs[0] = if (backward) System.currentTimeMillis() else 0L
     }
     val programmaticScrollPage = remember { mutableStateOf<Int?>(null) }
+    // Page the effect pager will settle on after the current release. Published by
+    // PlayerPagerEffectFlingBehavior so the track can commit immediately.
+    val pagerFlingTarget = remember { mutableStateOf<Int?>(null) }
 
     var backdropHopHold by remember { mutableStateOf(false) }
     suspend fun hopOffGhost() {
@@ -540,6 +543,7 @@ fun FullPlayerScreen(
         isProgressiveEnvelope = isProgressiveEnvelope,
         queueIndex = queueIndex,
         currentEntryId = currentEntryId,
+        pagerEffect = settings.playerPagerEffect,
         latestQueueIndex = latestQueueIndex,
         latestQueueSize = latestQueueSize,
         latestHeroModel = latestHeroModel,
@@ -550,6 +554,7 @@ fun FullPlayerScreen(
         backdropRenumberHold = { backdropRenumberHold },
         isMainPagerVisible = { isMainPagerVisible() },
         programmaticScrollPage = programmaticScrollPage,
+        pagerFlingTarget = pagerFlingTarget,
         hopOffGhost = { hopOffGhost() }
     )
 
@@ -765,6 +770,8 @@ fun FullPlayerScreen(
                             placeholderColor = placeholderColor,
                             immersive = isImmersiveEnabled,
                             vinyl = isVinylEnabled,
+                            pagerEffect = settings.playerPagerEffect,
+                            pagerFlingTarget = pagerFlingTarget,
                             outerVisibilityScope = animatedVisibilityScope,
                             headerVisibilityScope = this@AnimatedVisibility,
                             viewModel = viewModel,

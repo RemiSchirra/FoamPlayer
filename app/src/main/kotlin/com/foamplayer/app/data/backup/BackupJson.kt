@@ -28,6 +28,7 @@ import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.NotificationExtraButton
 import com.foamplayer.app.data.settings.PlayerMode
+import com.foamplayer.app.data.settings.PlayerPagerEffect
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
@@ -73,6 +74,7 @@ object BackupJson {
         put("accentColor", settings.accentColor)
         put("accentTintEnabled", settings.accentTintEnabled)
         put("playerMode", settings.playerMode.name)
+        put("playerPagerEffect", settings.playerPagerEffect.name)
         put("animateSeekBarEnabled", settings.animateSeekBarEnabled)
         put("seekBarStyle", settings.seekBarStyle.name)
         put("autoOpenPlayerEnabled", settings.autoOpenPlayerEnabled)
@@ -174,6 +176,10 @@ object BackupJson {
         accentColor = json.optInt("accentColor", AppSettings.DEFAULT_ACCENT_COLOR),
         accentTintEnabled = json.optBoolean("accentTintEnabled", true),
         playerMode = decodeEnum(json.optString("playerMode"), PlayerMode.NORMAL),
+        playerPagerEffect = decodeEnum(
+            json.optString("playerPagerEffect"),
+            PlayerPagerEffect.SLIDE
+        ),
         animateSeekBarEnabled = json.optBoolean("animateSeekBarEnabled", false),
         seekBarStyle = decodeEnum(json.optString("seekBarStyle"), SeekBarStyle.NORMAL),
         autoOpenPlayerEnabled = json.optBoolean("autoOpenPlayerEnabled", false),

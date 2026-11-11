@@ -72,7 +72,10 @@ fun TrackScoreHeart(
     onSetScore: (Int) -> Unit,
     modifier: Modifier = Modifier,
     iconSize: Dp = 26.dp,
-    touchTarget: Dp = 40.dp
+    touchTarget: Dp = 40.dp,
+    // Pager prefetch composes neighbour pages while they are invisible; they must
+    // not react to taps aimed at the settled page underneath.
+    enabled: Boolean = true
 ) {
     var menuVisible by remember { mutableStateOf(false) } // popup in composition
     var menuExpanded by remember { mutableStateOf(false) } // target state
@@ -125,6 +128,7 @@ fun TrackScoreHeart(
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                enabled = enabled,
                 onLongClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     menuVisible = true

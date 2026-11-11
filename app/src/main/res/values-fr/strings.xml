@@ -361,6 +361,13 @@
     <string name="seek_bar_style_desc">Apparence de la barre du lecteur complet</string>
     <string name="seek_bar_style_normal">Normale</string>
     <string name="seek_bar_style_waveform">Forme d\'onde</string>
+    <string name="pager_effect">Effet de pagination</string>
+    <string name="pager_effect_desc">Animation lors du balayage entre les pistes du lecteur complet</string>
+    <string name="pager_effect_slide">Glissement</string>
+    <string name="pager_effect_crossfade">Fondu enchaîné</string>
+    <string name="pager_effect_depth">Profondeur</string>
+    <string name="pager_effect_flip">Retournement</string>
+    <string name="pager_effect_tilt">Inclinaison</string>
     <string name="mini_player">Mini lecteur</string>
     <string name="full_player">Lecteur complet</string>
     <string name="square">Carré</string>

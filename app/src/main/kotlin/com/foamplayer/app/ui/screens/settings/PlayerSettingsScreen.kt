@@ -29,6 +29,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.PlayerMode
+import com.foamplayer.app.data.settings.PlayerPagerEffect
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamEnumItem
@@ -49,6 +50,7 @@ fun PlayerSettingsScreen(
     val playerMode = settings.playerMode
     val isAnimateSeekBarEnabled = settings.animateSeekBarEnabled
     val seekBarStyle = settings.seekBarStyle
+    val playerPagerEffect = settings.playerPagerEffect
     val isAutoOpenPlayerEnabled = settings.autoOpenPlayerEnabled
     val isAnimatedCoverEnabled = settings.animatedCoverEnabled
     val isAnimatedCoverAllowMobileData = settings.animatedCoverAllowMobileData
@@ -172,6 +174,23 @@ fun PlayerSettingsScreen(
                                 when (style) {
                                     SeekBarStyle.NORMAL -> stringResource(R.string.seek_bar_style_normal)
                                     SeekBarStyle.WAVEFORM -> stringResource(R.string.seek_bar_style_waveform)
+                                }
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                        FoamEnumItem(
+                            title = stringResource(R.string.pager_effect),
+                            description = stringResource(R.string.pager_effect_desc),
+                            options = PlayerPagerEffect.entries.toTypedArray(),
+                            selectedOption = playerPagerEffect,
+                            onOptionSelected = { viewModel.setPlayerPagerEffect(it) },
+                            getLabel = { effect ->
+                                when (effect) {
+                                    PlayerPagerEffect.SLIDE -> stringResource(R.string.pager_effect_slide)
+                                    PlayerPagerEffect.CROSSFADE -> stringResource(R.string.pager_effect_crossfade)
+                                    PlayerPagerEffect.DEPTH -> stringResource(R.string.pager_effect_depth)
+                                    PlayerPagerEffect.FLIP -> stringResource(R.string.pager_effect_flip)
+                                    PlayerPagerEffect.TILT -> stringResource(R.string.pager_effect_tilt)
                                 }
                             }
                         )

@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -58,6 +59,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
@@ -76,6 +78,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.data.settings.PlayerPagerEffect
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
@@ -123,6 +126,8 @@ internal fun SharedTransitionScope.MainPlayerContent(
     placeholderColor: Color,
     immersive: Boolean,
     vinyl: Boolean,
+    pagerEffect: PlayerPagerEffect,
+    pagerFlingTarget: MutableState<Int?>,
     outerVisibilityScope: AnimatedVisibilityScope,
     headerVisibilityScope: AnimatedVisibilityScope,
     viewModel: PlayerViewModel,
@@ -175,6 +180,8 @@ internal fun SharedTransitionScope.MainPlayerContent(
             placeholderColor = placeholderColor,
             immersive = immersive,
             vinyl = vinyl,
+            pagerEffect = pagerEffect,
+            pagerFlingTarget = pagerFlingTarget,
             outerVisibilityScope = outerVisibilityScope,
             headerVisibilityScope = headerVisibilityScope,
             playerTransitionState = playerTransitionState,
@@ -270,6 +277,8 @@ internal fun SharedTransitionScope.TrackHeroPager(
     placeholderColor: Color,
     immersive: Boolean,
     vinyl: Boolean,
+    pagerEffect: PlayerPagerEffect,
+    pagerFlingTarget: MutableState<Int?>,
     outerVisibilityScope: AnimatedVisibilityScope,
     headerVisibilityScope: AnimatedVisibilityScope,
     playerTransitionState: SeekableTransitionState<Boolean>,
@@ -356,6 +365,27 @@ internal fun SharedTransitionScope.TrackHeroPager(
     val miniPlayerRounding = FoamTheme.shapes.miniPlayerRounding
     val miniRadius = (miniImageSize / 2) * miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
+    // The graphicsLayer scope's own `density` Float is shadowed by the Density
+    // parameter above, so resolve the scalar once for camera distance.
+    val densityScale = density.density
+
+    // Each page keeps its full width; only the pager's slot stride is shortened to
+    // the effect's travel. The pager itself still moves the content one-to-one with
+    // the finger, so a page follows the drag exactly like SLIDE, but a full page
+    // advance takes just the configured fraction of the finger travel.
+    val fullPageWidth = screenWidthDp - PlayerDimens.screenPadding * 2
+    val slidePageSpacing = (PlayerDimens.pageSpacing - artInset * 2).coerceAtLeast(0.dp)
+    val effectivePageSpacing = PlayerPagerEffectMath.pageSpacing(
+        pageWidth = fullPageWidth,
+        slideSpacing = slidePageSpacing,
+        effect = pagerEffect
+    )
+
+    // SLIDE keeps Compose's stock release behaviour. The reduced effects shorten the
+    // page stride, so the stock positional snap (which compares the finger delta to
+    // the full page width) would overshoot; the effect behaviour snaps in page units.
+    val defaultFlingBehavior = PagerDefaults.flingBehavior(state = pagerState)
+    val effectFlingBehavior = rememberPagerEffectFlingBehavior(pagerState, pagerFlingTarget)
 
     // Paused-shrink departure/arrival: the endpoints of the art's shared-element pairs
     // (mini player, subview header) rest UNSCALED -- only this hero shrinks on
@@ -424,8 +454,18 @@ internal fun SharedTransitionScope.TrackHeroPager(
             contentPadding = PaddingValues(horizontal = PlayerDimens.screenPadding),
             // Pages are wider by 2 * artInset now; shave it off the spacing so the gap
             // between neighbouring album arts (and their peek) stays what it was.
-            pageSpacing = (PlayerDimens.pageSpacing - artInset * 2).coerceAtLeast(0.dp),
-            beyondViewportPageCount = 0,
+            // The effect then shrinks the slot stride (negative spacing = overlap) so
+            // one page advance takes its configured fraction of the finger travel.
+            // The pager keeps its stock one-to-one tracking.
+            pageSpacing = effectivePageSpacing,
+            flingBehavior = if (pagerEffect == PlayerPagerEffect.SLIDE) {
+                defaultFlingBehavior
+            } else {
+                effectFlingBehavior
+            },
+            // Non-SLIDE effects pull the neighbors inward visually, so they must be
+            // composed at rest to fade in from the first pixel of a drag.
+            beyondViewportPageCount = if (pagerEffect == PlayerPagerEffect.SLIDE) 0 else 1,
             // Keyed by queue ENTRY id, not track id: the same track can legitimately
             // appear twice in the queue ("play next" on the playing track), and
             // duplicate keys crash the pager.
@@ -443,7 +483,56 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     abs(offset).coerceIn(0f, 1f)
                 }
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            // The hero overlay renders the anchor page during a swipe; hide the
+            // duplicate art under it so non-SLIDE effects do not double-expose.
+            val suppressAnchorArt =
+                isAnchorPage && showHero && pagerEffect != PlayerPagerEffect.SLIDE
+
+            // Neighbor pages are composed for non-SLIDE effects (see
+            // beyondViewportPageCount) and their pulled-in layer still hit-tests at
+            // alpha 0, so only the settled page keeps its controls interactive.
+            val pageInteractive =
+                pagerEffect == PlayerPagerEffect.SLIDE || page == pagerState.currentPage
+            // Hidden neighbours stay composed for the fade, but must not be announced
+            // or focusable while they are inert.
+            val pageSemanticsModifier =
+                if (pageInteractive) Modifier else Modifier.clearAndSetSemantics {}
+
+            // SLIDE keeps the stock pager untouched (no extra graphics layer).
+            val pageEffectModifier = if (pagerEffect == PlayerPagerEffect.SLIDE) {
+                Modifier
+            } else {
+                Modifier.graphicsLayer {
+                    val offset = PlayerPagerEffectMath.pageOffset(
+                        page = page,
+                        currentPage = pagerState.currentPage,
+                        offsetFraction = pagerState.currentPageOffsetFraction
+                    )
+                    // Translation is the pager's own: the shortened slot stride
+                    // already makes it one-to-one with the finger for every effect.
+                    val visibility = PlayerPagerEffectMath.visibility(offset)
+                    alpha = PlayerPagerEffectMath.alpha(pagerEffect, visibility)
+                    val pageScale = PlayerPagerEffectMath.scale(pagerEffect, visibility)
+                    scaleX = pageScale
+                    scaleY = pageScale
+                    rotationY = PlayerPagerEffectMath.rotationY(pagerEffect, offset, visibility)
+                    rotationX = PlayerPagerEffectMath.rotationX(pagerEffect, visibility)
+                    if (pagerEffect == PlayerPagerEffect.FLIP ||
+                        pagerEffect == PlayerPagerEffect.TILT
+                    ) {
+                        cameraDistance =
+                            PlayerPagerEffectMath.cameraDistance(pagerEffect, densityScale)
+                    }
+                }
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(pageSemanticsModifier)
+                    .then(pageEffectModifier)
+            ) {
                 if (immersive) {
                     Spacer(modifier = Modifier.padding(horizontal = artInset).fillMaxWidth().aspectRatio(1f))
                 } else if (vinyl) {
@@ -477,7 +566,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             .fillMaxWidth()
                             .aspectRatio(1f)
                             .graphicsLayer {
-                                alpha = anchorPageAlpha()
+                                alpha = if (suppressAnchorArt) 0f else anchorPageAlpha()
                                 scaleX = pausedArtScale
                                 scaleY = pausedArtScale
                                 shape = RoundedCornerShape(with(density) { fullRadius.toPx() })
@@ -535,6 +624,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             .combinedClickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = ripple(color = FoamTheme.colors.textPrimary),
+                                enabled = pageInteractive,
                                 onClick = { onOpenAlbum(pageTrack) },
                                 onLongClick = { onOpenArtist(pageTrack) }
                             )
@@ -555,9 +645,14 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     }
                     TrackScoreHeart(
                         score = scoreOverrides[pageTrack.id] ?: pageTrack.score,
-                        onSetScore = { value -> onSetScore(pageTrack.id, value) }
+                        onSetScore = { value -> onSetScore(pageTrack.id, value) },
+                        enabled = pageInteractive
                     )
-                    TrackMoreButton(track = pageTrack, refresh = viewModel::freshTrack)
+                    TrackMoreButton(
+                        track = pageTrack,
+                        refresh = viewModel::freshTrack,
+                        enabled = pageInteractive
+                    )
                 }
             }
         }
@@ -572,9 +667,28 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     .padding(horizontal = PlayerDimens.screenPadding)
                     .graphicsLayer {
                         val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
-                        val pageWidthPx = pagerState.layoutInfo.pageSize.toFloat()
-                        val pageSpacingPx = pagerState.layoutInfo.pageSpacing.toFloat()
-                        translationX = -offset * (pageWidthPx + pageSpacingPx)
+                        val stridePx = (
+                            pagerState.layoutInfo.pageSize + pagerState.layoutInfo.pageSpacing
+                            ).toFloat()
+                        // The hero is an overlay (the pager does not place it), so it
+                        // mirrors the anchor page's native translation using the
+                        // effect-shortened stride from the pager's layout info.
+                        translationX = -stridePx * offset
+                        if (pagerEffect != PlayerPagerEffect.SLIDE) {
+                            val visibility = PlayerPagerEffectMath.visibility(offset)
+                            alpha = PlayerPagerEffectMath.alpha(pagerEffect, visibility)
+                            val heroScale = PlayerPagerEffectMath.scale(pagerEffect, visibility)
+                            scaleX = heroScale
+                            scaleY = heroScale
+                            rotationY = PlayerPagerEffectMath.rotationY(pagerEffect, -offset, visibility)
+                            rotationX = PlayerPagerEffectMath.rotationX(pagerEffect, visibility)
+                            if (pagerEffect == PlayerPagerEffect.FLIP ||
+                                pagerEffect == PlayerPagerEffect.TILT
+                            ) {
+                                cameraDistance =
+                                    PlayerPagerEffectMath.cameraDistance(pagerEffect, densityScale)
+                            }
+                        }
                     }
             ) {
                 Box(
@@ -786,7 +900,9 @@ internal fun TrackMoreButton(
     track: TrackEntity,
     // Re-reads the track from the DB right before the modal opens: the queue entity is a
     // snapshot, so its play count / last-listen date are stale once the track has played.
-    refresh: suspend (TrackEntity) -> TrackEntity = { it }
+    refresh: suspend (TrackEntity) -> TrackEntity = { it },
+    // See TrackScoreHeart: neighbour pager pages stay inert until they settle.
+    enabled: Boolean = true
 ) {
     val trackModalState = LocalTrackFoamModalState.current
     val scope = rememberCoroutineScope()
@@ -797,7 +913,8 @@ internal fun TrackMoreButton(
             .pressShrink(moreInteractions)
             .clickable(
                 interactionSource = moreInteractions,
-                indication = null
+                indication = null,
+                enabled = enabled
             ) { scope.launch { trackModalState?.show(refresh(track)) } },
         contentAlignment = Alignment.Center
     ) {

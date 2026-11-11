@@ -47,6 +47,7 @@ import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.NotificationExtraButton
 import com.foamplayer.app.data.settings.PlayerMode
+import com.foamplayer.app.data.settings.PlayerPagerEffect
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
@@ -126,6 +127,10 @@ class SettingsRepository @Inject constructor(
     suspend fun setAccentTintEnabled(enabled: Boolean) = update { it.copy(accentTintEnabled = enabled) }
     /** Persists the full player's look (normal / immersive / vinyl). */
     suspend fun setPlayerMode(mode: PlayerMode) = update { it.copy(playerMode = mode) }
+    /** Persists the full player's track-pager effect. */
+    suspend fun setPlayerPagerEffect(effect: PlayerPagerEffect) = update {
+        it.copy(playerPagerEffect = effect)
+    }
     suspend fun setAnimateSeekBarEnabled(enabled: Boolean) = update { it.copy(animateSeekBarEnabled = enabled) }
     suspend fun setSeekBarStyle(style: SeekBarStyle) = update { it.copy(seekBarStyle = style) }
     suspend fun setPreferredOutputDeviceId(deviceId: String?) = update {
@@ -421,6 +426,9 @@ class SettingsRepository @Inject constructor(
         playerMode = this[Keys.PLAYER_MODE]
             ?.let { runCatching { PlayerMode.valueOf(it) }.getOrNull() }
             ?: AppSettings().playerMode,
+        playerPagerEffect = this[Keys.PLAYER_PAGER_EFFECT]
+            ?.let { runCatching { PlayerPagerEffect.valueOf(it) }.getOrNull() }
+            ?: AppSettings().playerPagerEffect,
         animateSeekBarEnabled = this[Keys.ANIMATE_SEEK_BAR] ?: AppSettings().animateSeekBarEnabled,
         seekBarStyle = this[Keys.SEEK_BAR_STYLE]
             ?.let { runCatching { SeekBarStyle.valueOf(it) }.getOrNull() }
@@ -548,6 +556,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.ACCENT_COLOR] = settings.accentColor
         this[Keys.ACCENT_TINT] = settings.accentTintEnabled
         this[Keys.PLAYER_MODE] = settings.playerMode.name
+        this[Keys.PLAYER_PAGER_EFFECT] = settings.playerPagerEffect.name
         // No migration from the pre-enum boolean: the new key is the single source of
         // truth, so the old key is cleared here to overwrite the old state.
         this.remove(Keys.IMMERSIVE_MODE)
@@ -639,6 +648,7 @@ class SettingsRepository @Inject constructor(
         val ACCENT_COLOR = intPreferencesKey("accent_color")
         val ACCENT_TINT = booleanPreferencesKey("accent_tint")
         val PLAYER_MODE = stringPreferencesKey("player_mode")
+        val PLAYER_PAGER_EFFECT = stringPreferencesKey("player_pager_effect")
 
         // Legacy pre-enum boolean, kept only so write() can clear it.
         val IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
