@@ -1034,7 +1034,7 @@ internal fun FloatingNavigationBar(
     }
 
     // Tint is resolved at draw time to keep accent frames draw-only
-    val surfaceVariantColor = FoamTheme.colors.surfaceVariant
+    val surfaceVariantColor = FoamTheme.tintedSurfaceVariant
     val accentTint = LocalAccentTintState.current
     // The items' selection tint fades for as long as the screen transition
     // that caused the route change

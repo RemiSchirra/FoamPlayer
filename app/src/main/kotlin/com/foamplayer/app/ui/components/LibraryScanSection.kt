@@ -251,13 +251,13 @@ fun RepairPlaylistsCard(
     }
 }
 
-/** REPAIR <-> REPAIRING pill; disabled (surfaceVariant) while repairing. */
+/** REPAIR <-> REPAIRING pill. */
 @Composable
 private fun RepairPillButton(running: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(if (running) FoamTheme.colors.surfaceVariant else FoamTheme.accentColor)
+            .background(if (running) FoamTheme.tintedSurfaceVariant else FoamTheme.accentColor)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
@@ -269,7 +269,7 @@ private fun RepairPillButton(running: Boolean, onClick: () -> Unit) {
         BasicText(
             text = if (running) stringResource(R.string.playlist_repairing_caps) else stringResource(R.string.playlist_repair_caps),
             style = FoamTheme.typography.caption.copy(
-                color = if (running) FoamTheme.colors.textSecondary else FoamTheme.colors.background,
+                color = if (running) FoamTheme.colors.textSecondary else FoamTheme.tintedBackground,
                 fontWeight = FontWeight.Bold
             )
         )
@@ -385,7 +385,7 @@ private fun ScanPillButton(scanning: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(if (scanning) FoamTheme.colors.surfaceVariant else FoamTheme.accentColor)
+            .background(if (scanning) FoamTheme.tintedSurfaceVariant else FoamTheme.accentColor)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
@@ -397,7 +397,7 @@ private fun ScanPillButton(scanning: Boolean, onClick: () -> Unit) {
         BasicText(
             text = if (scanning) stringResource(R.string.scanning_caps) else stringResource(R.string.start_scan),
             style = FoamTheme.typography.caption.copy(
-                color = if (scanning) FoamTheme.colors.textSecondary else FoamTheme.colors.background,
+                color = if (scanning) FoamTheme.colors.textSecondary else FoamTheme.tintedBackground,
                 fontWeight = FontWeight.Bold
             )
         )

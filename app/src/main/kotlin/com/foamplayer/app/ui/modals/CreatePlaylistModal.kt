@@ -688,7 +688,7 @@ internal fun ModalButton(
             .fillMaxWidth()
             .alpha(if (enabled) 1f else 0.4f)
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(if (filled) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant)
+            .background(if (filled) FoamTheme.accentColor else FoamTheme.tintedSurfaceVariant)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),

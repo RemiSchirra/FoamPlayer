@@ -113,7 +113,7 @@ private fun PipelineStageRow(
         PipelineStageStatus.BYPASSED -> FoamTheme.colors.textSecondary
         PipelineStageStatus.WARN -> FoamTheme.colors.bitPerfectInactive
     }
-    val lineColor = FoamTheme.colors.borderOverlay
+    val lineColor = FoamTheme.tintedSurfaceVariant
 
     Row(modifier = Modifier.height(IntrinsicSize.Min)) {
         // Status dot + connector line.

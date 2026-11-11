@@ -289,7 +289,7 @@ private fun PreviewPlayerChrome(artSlot: @Composable () -> Unit) {
 /** Classic mode: rounded square art, then the shared controls. */
 @Composable
 private fun NormalPlayerPreview() {
-    Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.surfaceVariant)) {
+    Box(modifier = Modifier.fillMaxSize().background(FoamTheme.tintedSurface)) {
         PreviewPlayerChrome {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 PreviewArtBox(size = 58.dp, rounding = 9.dp)
@@ -304,7 +304,7 @@ private fun NormalPlayerPreview() {
  */
 @Composable
 private fun VinylPlayerPreview() {
-    Box(modifier = Modifier.fillMaxSize().background(FoamTheme.colors.surfaceVariant)) {
+    Box(modifier = Modifier.fillMaxSize().background(FoamTheme.tintedSurface)) {
         PreviewPlayerChrome {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 PreviewVinylRecord(modifier = Modifier.size(58.dp))
@@ -329,7 +329,7 @@ private fun PreviewVinylRecord(modifier: Modifier = Modifier) {
             modifier = Modifier
                 .fillMaxSize(0.4f)
                 .clip(CircleShape)
-                .background(FoamTheme.colors.surfaceVariant)
+                .background(FoamTheme.tintedSurfaceVariant)
                 .foamBorderOverlay()
         )
         Box(
@@ -425,8 +425,8 @@ private fun ImmersivePlayerPreview() {
                     Brush.verticalGradient(
                         0f to Color.Transparent,
                         0.45f to Color.Transparent,
-                        0.75f to FoamTheme.colors.surfaceVariant.copy(alpha = 0.55f),
-                        1f to FoamTheme.colors.surfaceVariant
+                        0.75f to FoamTheme.tintedSurface.copy(alpha = 0.55f),
+                        1f to FoamTheme.tintedSurface
                     )
                 )
         )

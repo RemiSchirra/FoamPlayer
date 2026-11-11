@@ -561,7 +561,7 @@ internal fun PackVariantPill(
             .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
             .background(
                 if (isSelected) FoamTheme.accentColor
-                else FoamTheme.colors.surface
+                else FoamTheme.tintedSurfaceVariant
             )
             .clickable(
                 interactionSource = interactions,
@@ -575,13 +575,13 @@ internal fun PackVariantPill(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(FoamDimens.iconSmall),
-                tint = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
+                tint = if (isSelected) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary
             )
             Spacer(modifier = Modifier.width(FoamDimens.spacingTiny))
             BasicText(
                 text = variant.label,
                 style = FoamTheme.typography.caption.copy(
-                    color = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+                    color = if (isSelected) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                 )
             )

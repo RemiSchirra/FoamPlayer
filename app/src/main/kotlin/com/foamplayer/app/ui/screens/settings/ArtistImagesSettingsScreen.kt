@@ -198,7 +198,7 @@ private fun ScanControlsRow(
         // label between the two states; the ripple stays bounded inside it.
         val scanRunning = scan.running
         val scanButtonBackground by animateColorAsState(
-            targetValue = if (scanRunning) FoamTheme.colors.surfaceVariant
+            targetValue = if (scanRunning) FoamTheme.tintedSurfaceVariant
             else FoamTheme.accentColor,
             animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT),
             label = "artistScanButtonBackground"

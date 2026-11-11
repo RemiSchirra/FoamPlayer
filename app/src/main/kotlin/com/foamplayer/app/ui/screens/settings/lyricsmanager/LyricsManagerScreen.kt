@@ -418,7 +418,7 @@ private fun LyricsFilterChips(
                 modifier = Modifier
                     .clip(RoundedCornerShape(FoamDimens.buttonRounding))
                     .background(
-                        if (isSelected) FoamTheme.accentColor else FoamTheme.colors.surface
+                        if (isSelected) FoamTheme.accentColor else FoamTheme.tintedSurface
                     )
                     .clickable { onSelect(filterValue) }
                     .padding(horizontal = FoamDimens.paddingSmall, vertical = FoamDimens.spacingTiny)

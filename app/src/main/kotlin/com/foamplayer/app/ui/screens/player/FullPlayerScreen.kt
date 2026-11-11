@@ -320,7 +320,7 @@ fun FullPlayerScreen(
                     upTransitionState.currentState != upTransitionState.targetState
         }
     }
-    val placeholderColor = if (isTransitioning) Color.Transparent else FoamTheme.colors.surfaceVariant
+    val placeholderColor = if (isTransitioning) Color.Transparent else FoamTheme.tintedSurfaceVariant
 
     val pagerState = key(state.repeatMode == RepeatMode.ALL) {
         rememberPagerState(

@@ -114,7 +114,6 @@ private const val TopListDisplaySize = 10
  * track/artist/album/genre lists — all scoped to the selected period.
  * Reached from the nav bar's second bar by default.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun StatsScreen(
     onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
@@ -444,7 +443,7 @@ private fun PeriodChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant)
+            .background(if (selected) FoamTheme.accentColor else FoamTheme.tintedSurfaceVariant)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
@@ -455,7 +454,7 @@ private fun PeriodChip(label: String, selected: Boolean, onClick: () -> Unit) {
         BasicText(
             text = label,
             style = FoamTheme.typography.caption.copy(
-                color = if (selected) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+                color = if (selected) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
             )
         )

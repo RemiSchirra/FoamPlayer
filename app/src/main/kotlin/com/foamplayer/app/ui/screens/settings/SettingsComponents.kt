@@ -78,7 +78,7 @@ internal fun SettingsActionButton(
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
             .background(
-                if (enabled) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant
+                if (enabled) FoamTheme.accentColor else FoamTheme.tintedSurfaceVariant
             )
             .clickable(
                 interactionSource = interactionSource,

@@ -286,14 +286,14 @@ private fun TypeFilterChips(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-                    .background(if (isSelected) FoamTheme.accentColor else FoamTheme.colors.surface)
+                    .background(if (isSelected) FoamTheme.accentColor else FoamTheme.tintedSurface)
                     .clickable { onToggle(type) }
                     .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingTiny)
             ) {
                 BasicText(
                     text = label,
                     style = FoamTheme.typography.caption.copy(
-                        color = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
+                        color = if (isSelected) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary
                     )
                 )
             }
@@ -470,7 +470,7 @@ private fun ActionButton(label: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(if (enabled) FoamTheme.colors.surfaceVariant else FoamTheme.colors.surface)
+            .background(if (enabled) FoamTheme.tintedSurfaceVariant else FoamTheme.tintedSurface)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingSmall)
     ) {

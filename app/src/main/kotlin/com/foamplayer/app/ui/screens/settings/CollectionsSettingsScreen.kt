@@ -54,6 +54,7 @@ import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBorderOverlay
+import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
 /** Width of one layout-preview phone thumbnail; the 9:19.5 aspect fixes its height. */
@@ -190,7 +191,7 @@ private fun CollectionLayoutPreview(
             .width(CollectionLayoutPreviewWidth)
             .height(CollectionLayoutPreviewHeight)
             .clip(RoundedCornerShape(CollectionLayoutPreviewRounding))
-            .foamSurfaceVariant()
+            .foamSurface()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -358,7 +359,7 @@ private fun ImmersivePreview(
                 .background(
                     Brush.verticalGradient(
                         fadeStartFraction to Color.Transparent,
-                        1f to FoamTheme.colors.surfaceVariant
+                        1f to FoamTheme.tintedSurface
                     )
                 )
         )

@@ -48,14 +48,14 @@ private fun FormatChip(label: String, isSelected: Boolean, onClick: () -> Unit) 
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(if (isSelected) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant)
+            .background(if (isSelected) FoamTheme.accentColor else FoamTheme.tintedSurfaceVariant)
             .clickable { onClick() }
             .padding(horizontal = FoamDimens.paddingSmall, vertical = FoamDimens.spacingTiny)
     ) {
         BasicText(
             text = label,
             style = FoamTheme.typography.caption.copy(
-                color = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
+                color = if (isSelected) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary
             )
         )
     }

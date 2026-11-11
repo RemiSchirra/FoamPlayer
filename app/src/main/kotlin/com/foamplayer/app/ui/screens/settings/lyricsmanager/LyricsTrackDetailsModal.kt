@@ -298,7 +298,7 @@ private fun DeleteLyricsButton(enabled: Boolean, onClick: () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
             .background(
-                if (enabled) FoamTheme.accentColor.copy(alpha = 0.15f) else FoamTheme.colors.surfaceVariant
+                if (enabled) FoamTheme.accentColor.copy(alpha = 0.15f) else FoamTheme.tintedSurfaceVariant
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

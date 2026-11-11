@@ -552,7 +552,7 @@ private fun PowerButton(
         modifier = Modifier
             .size(40.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(if (enabled) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant)
+            .background(if (enabled) FoamTheme.accentColor else FoamTheme.tintedSurfaceVariant)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -566,7 +566,7 @@ private fun PowerButton(
             contentDescription = stringResource(
                 if (enabled) R.string.disable_dsp else R.string.enable_dsp
             ),
-            tint = if (enabled) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+            tint = if (enabled) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary,
             modifier = Modifier.size(24.dp)
         )
     }
@@ -891,7 +891,7 @@ private fun PresetRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) FoamTheme.accentColor.copy(alpha = 0.16f) else FoamTheme.colors.surfaceVariant)
+            .background(if (selected) FoamTheme.accentColor.copy(alpha = 0.16f) else FoamTheme.tintedSurfaceVariant)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),

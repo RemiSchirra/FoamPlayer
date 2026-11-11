@@ -318,7 +318,7 @@ private fun PlayOnDeviceRow(
     )
     val iconCircleColor by animateColorAsState(
         targetValue = if (isSelected) FoamTheme.accentColor.copy(alpha = 0.15f)
-        else FoamTheme.colors.surfaceVariant,
+        else FoamTheme.tintedSurfaceVariant,
         animationSpec = tween(FoamMotion.Duration.STANDARD)
     )
     val iconTint by animateColorAsState(
