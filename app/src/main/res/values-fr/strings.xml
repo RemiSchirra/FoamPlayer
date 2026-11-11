@@ -704,6 +704,11 @@
     <string name="eq_delete_node">Supprimer le nœud</string>
     <string name="eq_add_node">Ajouter un nœud paramétrique</string>
     <string name="eq_node_limit">Limite de nœuds atteinte</string>
+    <string name="eq_filter_peaking">Bosse</string>
+    <string name="eq_filter_low_shelf">Plateau bas</string>
+    <string name="eq_filter_high_shelf">Plateau haut</string>
+    <string name="eq_filter_low_pass">Passe-bas</string>
+    <string name="eq_filter_high_pass">Passe-haut</string>
     <string name="eq_volume">Volume</string>
     <string name="eq_save_preset_title">Enregistrer un préréglage</string>
     <string name="eq_preset_name_hint">Nom du préréglage</string>

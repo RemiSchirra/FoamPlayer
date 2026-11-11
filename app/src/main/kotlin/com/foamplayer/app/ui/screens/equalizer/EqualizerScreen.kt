@@ -52,7 +52,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -64,12 +66,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
@@ -77,23 +81,20 @@ import com.foamplayer.app.R
 import com.foamplayer.app.audio.dsp.DspMath
 import com.foamplayer.app.audio.dsp.DspPreset
 import com.foamplayer.app.audio.dsp.DspState
-import com.foamplayer.app.audio.dsp.FilterType
 import com.foamplayer.app.audio.dsp.GraphicEqSettings
-import com.foamplayer.app.audio.dsp.NodeColorPalette
 import com.foamplayer.app.audio.dsp.ParametricEqSettings
 import com.foamplayer.app.audio.dsp.ParametricNode
 import com.foamplayer.app.audio.dsp.PresetKind
 import com.foamplayer.app.audio.dsp.ToneSettings
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.ui.components.FoamGlassCard
-import com.foamplayer.app.ui.components.FoamSlider
 import com.foamplayer.app.ui.components.FoamSwitch
 import com.foamplayer.app.ui.components.KnobControl
 import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.components.ScreenTitle
 import com.foamplayer.app.ui.components.SystemVolumeControl
+import com.foamplayer.app.ui.components.VerticalFoamSlider
 import com.foamplayer.app.ui.components.VerticalSlider
-import com.foamplayer.app.ui.components.onSeekBarReleased
 import com.foamplayer.app.ui.modals.FoamBottomModal
 import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.modals.PlaylistNameField
@@ -126,7 +127,6 @@ fun EqualizerScreen(
     val assignments by viewModel.assignments.collectAsState()
 
     var selectedSection by remember { mutableStateOf(DspMath.Section.GRAPHIC) }
-    var selectedNodeId by remember { mutableStateOf<Long?>(null) }
     var showPresetsModal by remember { mutableStateOf(false) }
     var showSavePresetModal by remember { mutableStateOf(false) }
     var showPresetMenuModal by remember { mutableStateOf(false) }
@@ -141,6 +141,7 @@ fun EqualizerScreen(
     }
 
     val stripScrollState = rememberScrollState()
+    val nodesScrollState = rememberScrollState()
     var stripViewportWidthPx by remember { mutableIntStateOf(0) }
 
     var workingGains by remember { mutableStateOf(state.graphicEq.gainsDb) }
@@ -352,51 +353,6 @@ fun EqualizerScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (selectedSection == DspMath.Section.PARAMETRIC) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    if (workingNodes.size < ParametricEqSettings.MAX_NODES) {
-                                        FoamTheme.tintedSurfaceVariant
-                                    } else {
-                                        FoamTheme.tintedSurfaceVariant.copy(alpha = 0.4f)
-                                    }
-                                )
-                                .clickable(
-                                    enabled = workingNodes.size < ParametricEqSettings.MAX_NODES
-                                ) {
-                                    val id = viewModel.addParametricNode()
-                                    selectedNodeId = id
-                                }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Add,
-                                    contentDescription = null,
-                                    tint = FoamTheme.accentColor,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                BasicText(
-                                    text = stringResource(R.string.eq_node),
-                                    style = FoamTheme.typography.caption.copy(
-                                        color = FoamTheme.accentColor,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-
                 Row(modifier = Modifier.fillMaxWidth()) {
                     VerticalSlider(
                         value = preampDisplay.value,
@@ -434,43 +390,23 @@ fun EqualizerScreen(
                             onViewportWidthChanged = { stripViewportWidthPx = it },
                             modifier = Modifier.weight(1f)
                         )
-                        DspMath.Section.PARAMETRIC -> EqualizerGraph(
-                            state = tweenedToneState,
+                        DspMath.Section.PARAMETRIC -> ParametricNodeList(
                             nodes = tweenedNodes,
+                            committedNodes = state.parametricEq.nodes,
                             enabled = state.parametricEq.enabled,
-                            selectedNodeId = selectedNodeId,
-                            onNodeSelect = { selectedNodeId = it },
-                            onNodesChange = { nodes ->
-                                workingNodes = nodes
+                            canAdd = workingNodes.size < ParametricEqSettings.MAX_NODES,
+                            scrollState = nodesScrollState,
+                            onPreview = { node ->
+                                workingNodes = workingNodes.map { if (it.id == node.id) node else it }
+                                // A live drag overrides the preset easing.
                                 screenScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                                    displayedNodes.snapTo(nodes)
+                                    displayedNodes.snapTo(workingNodes)
                                 }
                             },
-                            onNodeCommit = { node -> viewModel.updateParametricNode(node) },
+                            onCommit = { node -> viewModel.updateParametricNode(node) },
+                            onDelete = { id -> viewModel.removeParametricNode(id) },
+                            onAdd = { viewModel.addParametricNode() },
                             modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                if (selectedSection == DspMath.Section.PARAMETRIC) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    val selectedNode = workingNodes.firstOrNull { it.id == selectedNodeId }
-                    if (selectedNode != null) {
-                        ParametricNodeEditor(
-                            node = selectedNode,
-                            onUpdate = { viewModel.updateParametricNode(it) },
-                            onDelete = {
-                                viewModel.removeParametricNode(selectedNode.id)
-                                selectedNodeId = null
-                            }
-                        )
-                    } else {
-                        AddNodeRow(
-                            canAdd = workingNodes.size < ParametricEqSettings.MAX_NODES,
-                            onAdd = {
-                                val id = viewModel.addParametricNode()
-                                selectedNodeId = id
-                            }
                         )
                     }
                 }
@@ -1256,38 +1192,232 @@ private fun ControlsRow(
     }
 }
 
+private val NODE_CARD_HEIGHT = 230.dp
+private val NODE_CARD_WIDTH = 184.dp
+private val NODE_GAIN_SLIDER_WIDTH = 40.dp
+private val NODE_KNOB_SIZE = 96.dp
+
+/**
+ * The parametric EQ as a horizontally scrollable list of vertical node cards
+ * (same height as the graphic strip, so both cards match), with the add button
+ * at the end of the list. Each card is a channel strip: the gain fader runs the
+ * full card height on the left, while a filter pill (compact name plus a
+ * miniature response curve) and the stacked frequency / Q knobs sit on the
+ * right. The color dot and delete button are tucked into the card's bottom-right
+ * corner. Tapping the color dot or the filter pill opens a small centered
+ * dialog. Slider and knob drags preview locally through [onPreview] and commit
+ * once on release through [onCommit].
+ */
 @Composable
-private fun ParametricNodeEditor(
-    node: ParametricNode,
-    onUpdate: (ParametricNode) -> Unit,
-    onDelete: () -> Unit
+private fun ParametricNodeList(
+    nodes: List<ParametricNode>,
+    committedNodes: List<ParametricNode>,
+    enabled: Boolean,
+    canAdd: Boolean,
+    scrollState: androidx.compose.foundation.ScrollState,
+    onPreview: (ParametricNode) -> Unit,
+    onCommit: (ParametricNode) -> Unit,
+    onDelete: (Long) -> Unit,
+    onAdd: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    FoamGlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column {
+    var colorNodeId by remember { mutableStateOf<Long?>(null) }
+    var filterNodeId by remember { mutableStateOf<Long?>(null) }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(NODE_CARD_HEIGHT)
+            .alpha(if (enabled) 1f else 0.5f)
+            .horizontalScroll(scrollState),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        nodes.forEach { node ->
+            key(node.id) {
+                ParametricNodeCard(
+                    node = node,
+                    onPreview = onPreview,
+                    onCommit = onCommit,
+                    onDelete = { onDelete(node.id) },
+                    onColorClick = { colorNodeId = node.id },
+                    onFilterClick = { filterNodeId = node.id },
+                    modifier = Modifier.fillMaxHeight()
+                )
+            }
+        }
+        AddNodeButton(
+            canAdd = canAdd,
+            onAdd = onAdd,
+            modifier = Modifier.fillMaxHeight()
+        )
+    }
+
+    // Dialogs edit the committed node, not the eased display copy, so opening
+    // one mid preset-transition never snapshots interpolated values.
+    val colorNode = colorNodeId?.let { id -> committedNodes.firstOrNull { it.id == id } }
+    if (colorNode != null) {
+        NodeColorDialog(
+            currentArgb = colorNode.colorArgb,
+            onSelect = { argb ->
+                onCommit(colorNode.copy(colorArgb = argb))
+                colorNodeId = null
+            },
+            onDismiss = { colorNodeId = null }
+        )
+    }
+
+    val filterNode = filterNodeId?.let { id -> committedNodes.firstOrNull { it.id == id } }
+    if (filterNode != null) {
+        NodeFilterDialog(
+            node = filterNode,
+            onSelect = { type ->
+                onCommit(filterNode.copy(type = type))
+                filterNodeId = null
+            },
+            onDismiss = { filterNodeId = null }
+        )
+    }
+}
+
+@Composable
+private fun ParametricNodeCard(
+    node: ParametricNode,
+    onPreview: (ParametricNode) -> Unit,
+    onCommit: (ParametricNode) -> Unit,
+    onDelete: () -> Unit,
+    onColorClick: () -> Unit,
+    onFilterClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Always edit the freshest node: the controls' callbacks outlive recompositions.
+    val latestNode by rememberUpdatedState(node)
+
+    Row(
+        modifier = modifier
+            .width(NODE_CARD_WIDTH)
+            .clip(RoundedCornerShape(12.dp))
+            .foamSurfaceVariant()
+            .padding(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (node.type.gainAdjustable) {
+            Column(
+                modifier = Modifier
+                    .width(NODE_GAIN_SLIDER_WIDTH)
+                    .fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                BasicText(
+                    text = "%+.1f".format(node.gainDb),
+                    style = FoamTheme.typography.monospace.copy(
+                        color = FoamTheme.colors.textSecondary,
+                        fontSize = 10.sp
+                    )
+                )
+                VerticalFoamSlider(
+                    value = gainToNormalized(node.gainDb),
+                    onValueChange = {
+                        onPreview(latestNode.copy(gainDb = normalizedToGain(it)))
+                    },
+                    onCommit = {
+                        onCommit(latestNode.copy(gainDb = normalizedToGain(it)))
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                )
+                BasicText(
+                    text = stringResource(R.string.eq_gain),
+                    style = FoamTheme.typography.caption.copy(
+                        color = FoamTheme.colors.textSecondary,
+                        fontSize = 10.sp
+                    )
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Filter pill: just a miniature schematic of the filter type, so the
+            // node's shape reads at a glance before opening the picker.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(FoamTheme.accentColor)
+                    .clickable(onClick = onFilterClick)
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilterCurvePreview(
+                    type = node.type,
+                    color = FoamTheme.tintedBackground,
+                    modifier = Modifier
+                        .width(40.dp)
+                        .height(22.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.SpaceEvenly,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                NodeKnob(
+                    label = stringResource(R.string.eq_freq),
+                    value = frequencyToNormalized(node.frequencyHz),
+                    valueText = { frequencyDisplay(normalizedToFrequency(it)) },
+                    minValue = 0f,
+                    maxValue = 1f,
+                    defaultValue = frequencyToNormalized(1000f),
+                    onValueChange = {
+                        onPreview(latestNode.copy(frequencyHz = normalizedToFrequency(it)))
+                    },
+                    onCommit = {
+                        onCommit(latestNode.copy(frequencyHz = normalizedToFrequency(it)))
+                    }
+                )
+                NodeKnob(
+                    label = stringResource(R.string.eq_q),
+                    value = node.q,
+                    valueText = { "%.2f".format(it) },
+                    minValue = ParametricNode.MIN_Q,
+                    maxValue = ParametricNode.MAX_Q,
+                    defaultValue = 1.2f,
+                    onValueChange = { onPreview(latestNode.copy(q = it)) },
+                    onCommit = { onCommit(latestNode.copy(q = it)) }
+                )
+            }
+
+            // Color + delete tucked into the card's bottom-right corner.
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .size(12.dp)
+                        .size(20.dp)
                         .clip(CircleShape)
                         .background(Color(node.colorArgb))
+                        .border(1.dp, FoamTheme.colors.borderOverlay, CircleShape)
+                        .clickable(onClick = onColorClick)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                BasicText(
-                    text = stringResource(R.string.eq_node_id, node.id),
-                    style = FoamTheme.typography.caption.copy(
-                        color = FoamTheme.accentColor,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
+                Spacer(modifier = Modifier.width(6.dp))
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .foamSurfaceVariant()
+                        .size(22.dp)
+                        .clip(RoundedCornerShape(6.dp))
                         .clickable(onClick = onDelete),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1299,180 +1429,82 @@ private fun ParametricNodeEditor(
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            NodeColorPicker(node = node, onUpdate = onUpdate)
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                FilterType.entries.forEach { type ->
-                    val selected = node.type == type
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (selected) FoamTheme.accentColor else FoamTheme.tintedSurfaceVariant)
-                            .clickable { onUpdate(node.copy(type = type)) }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        BasicText(
-                            text = type.label,
-                            style = FoamTheme.typography.caption.copy(
-                                color = if (selected) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            NodeSlider(
-                label = stringResource(R.string.eq_freq),
-                valueText = frequencyDisplay(node.frequencyHz),
-                value = frequencyToNormalized(node.frequencyHz),
-                onCommit = { normalized ->
-                    onUpdate(node.copy(frequencyHz = normalizedToFrequency(normalized)))
-                }
-            )
-
-            if (node.type.gainAdjustable) {
-                NodeSlider(
-                    label = stringResource(R.string.eq_gain),
-                    valueText = formatDb(node.gainDb),
-                    value = (node.gainDb - ParametricNode.MIN_GAIN_DB) /
-                            (ParametricNode.MAX_GAIN_DB - ParametricNode.MIN_GAIN_DB),
-                    onCommit = { normalized ->
-                        onUpdate(
-                            node.copy(
-                                gainDb = ParametricNode.MIN_GAIN_DB + normalized *
-                                        (ParametricNode.MAX_GAIN_DB - ParametricNode.MIN_GAIN_DB)
-                            )
-                        )
-                    }
-                )
-            }
-
-            NodeSlider(
-                label = stringResource(R.string.eq_q),
-                valueText = "%.2f".format(node.q),
-                value = (node.q - ParametricNode.MIN_Q) / (ParametricNode.MAX_Q - ParametricNode.MIN_Q),
-                onCommit = { normalized ->
-                    onUpdate(
-                        node.copy(
-                            q = ParametricNode.MIN_Q + normalized *
-                                    (ParametricNode.MAX_Q - ParametricNode.MIN_Q)
-                        )
-                    )
-                }
-            )
         }
     }
 }
 
+/** Compact half-circle knob with an always-visible value, used inside a node card. */
 @Composable
-private fun NodeColorPicker(
-    node: ParametricNode,
-    onUpdate: (ParametricNode) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        BasicText(
-            text = stringResource(R.string.eq_color),
-            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
-        )
-        NodeColorPalette.forEach { colorArgb ->
-            val selected = node.colorArgb == colorArgb
-            Box(
-                modifier = Modifier
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .background(Color(colorArgb))
-                    .border(
-                        width = if (selected) 2.dp else 1.dp,
-                        color = if (selected) {
-                            FoamTheme.colors.textPrimary
-                        } else {
-                            FoamTheme.colors.borderOverlay
-                        },
-                        shape = CircleShape
-                    )
-                    .clickable { onUpdate(node.copy(colorArgb = colorArgb)) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun NodeSlider(
+private fun NodeKnob(
     label: String,
-    valueText: String,
     value: Float,
+    valueText: (Float) -> String,
+    minValue: Float,
+    maxValue: Float,
+    defaultValue: Float,
+    onValueChange: (Float) -> Unit,
     onCommit: (Float) -> Unit
 ) {
-    var dragValue by remember(value) { mutableStateOf(value) }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        KnobControl(
+            value = value,
+            onValueChange = onValueChange,
+            onCommit = onCommit,
+            label = null,
+            valueText = valueText,
+            size = NODE_KNOB_SIZE,
+            minValue = minValue,
+            maxValue = maxValue,
+            defaultValue = defaultValue,
+            arcSweepDegrees = 180f,
+            showNeedle = false,
+            // No default detent: frequency and Q should track the finger smoothly.
+            snapFraction = 0f
+        ) {
+            BasicText(
+                text = valueText(value),
+                style = FoamTheme.typography.monospace.copy(
+                    color = FoamTheme.colors.textPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            )
+        }
         BasicText(
             text = label,
-            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary),
-            modifier = Modifier.width(44.dp)
-        )
-        FoamSlider(
-            value = { dragValue },
-            onValueChange = { dragValue = it },
-            modifier = Modifier
-                .weight(1f)
-                .onSeekBarReleased { onCommit(dragValue) }
-        )
-        BasicText(
-            text = valueText,
-            style = FoamTheme.typography.monospace,
-            modifier = Modifier.width(64.dp)
+            style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary)
         )
     }
 }
 
 @Composable
-private fun AddNodeRow(
+private fun AddNodeButton(
     canAdd: Boolean,
-    onAdd: () -> Unit
+    onAdd: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
+    Column(
+        modifier = modifier
+            .width(72.dp)
             .clip(RoundedCornerShape(12.dp))
-            .foamSurface()
+            .foamSurfaceVariant()
+            .alpha(if (canAdd) 1f else 0.4f)
             .clickable(enabled = canAdd, onClick = onAdd)
-            .padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         Icon(
             imageVector = Icons.Rounded.Add,
-            contentDescription = null,
-            tint = if (canAdd) FoamTheme.accentColor else FoamTheme.colors.textSecondary,
-            modifier = Modifier.size(16.dp)
+            contentDescription = stringResource(R.string.eq_add_node),
+            tint = FoamTheme.accentColor,
+            modifier = Modifier.size(24.dp)
         )
-        Spacer(modifier = Modifier.width(6.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         BasicText(
-            text = stringResource(if (canAdd) R.string.eq_add_node else R.string.eq_node_limit),
+            text = stringResource(if (canAdd) R.string.eq_node else R.string.eq_node_limit),
             style = FoamTheme.typography.caption.copy(
-                color = if (canAdd) FoamTheme.accentColor else FoamTheme.colors.textSecondary
+                color = FoamTheme.accentColor,
+                fontWeight = FontWeight.Bold
             )
         )
     }
@@ -1693,24 +1725,52 @@ private fun tweenNode(from: ParametricNode, to: ParametricNode, fraction: Float)
     fun lerp(start: Float, end: Float) = start + (end - start) * fraction
     return to.copy(
         // Log-space so the node moves at a constant speed across the log axis.
-        frequencyHz = exp(lerp(ln(from.frequencyHz), ln(to.frequencyHz))),
+        // The epsilon keeps the 0 Hz knob floor out of ln(0).
+        frequencyHz = exp(
+            lerp(
+                ln(from.frequencyHz.coerceAtLeast(0.01f)),
+                ln(to.frequencyHz.coerceAtLeast(0.01f))
+            )
+        ),
         gainDb = lerp(from.gainDb, to.gainDb),
         q = lerp(from.q, to.q),
         slope = lerp(from.slope, to.slope)
     )
 }
 
+/**
+ * Offset of the knob's log taper. Adding it to the frequency puts 0 Hz at the
+ * floor while keeping the audible range spaced logarithmically (20 Hz lands at
+ * roughly 10% of the travel, as with a pure 20 Hz..20 kHz log scale).
+ */
+private const val FREQ_TAPER_OFFSET_HZ = 20.0
+
 internal fun frequencyDisplay(hz: Float): String =
-    if (hz >= 1000f) "%.1f kHz".format(hz / 1000f) else "%.0f Hz".format(hz)
+    if (hz >= 1000f) "%.2fK".format(hz / 1000f) else "%.0f".format(hz)
 
 private fun frequencyToNormalized(hz: Float): Float {
-    val logMin = ln(ParametricNode.MIN_FREQ_HZ.toDouble())
-    val logMax = ln(ParametricNode.MAX_FREQ_HZ.toDouble())
-    return ((ln(hz.toDouble()) - logMin) / (logMax - logMin)).toFloat().coerceIn(0f, 1f)
+    val clamped = hz.coerceIn(0f, ParametricNode.MAX_FREQ_HZ)
+    val logMin = ln(FREQ_TAPER_OFFSET_HZ)
+    val logMax = ln(ParametricNode.MAX_FREQ_HZ + FREQ_TAPER_OFFSET_HZ)
+    return ((ln(clamped + FREQ_TAPER_OFFSET_HZ) - logMin) / (logMax - logMin))
+        .toFloat()
+        .coerceIn(0f, 1f)
 }
 
 private fun normalizedToFrequency(normalized: Float): Float {
-    val logMin = ln(ParametricNode.MIN_FREQ_HZ.toDouble())
-    val logMax = ln(ParametricNode.MAX_FREQ_HZ.toDouble())
-    return 10.0.pow(logMin + (logMax - logMin) * normalized.toDouble()).toFloat()
+    val logMin = ln(FREQ_TAPER_OFFSET_HZ)
+    val logMax = ln(ParametricNode.MAX_FREQ_HZ + FREQ_TAPER_OFFSET_HZ)
+    val hz = exp(logMin + (logMax - logMin) * normalized.coerceIn(0f, 1f).toDouble()) -
+            FREQ_TAPER_OFFSET_HZ
+    return hz.toFloat().coerceIn(0f, ParametricNode.MAX_FREQ_HZ)
+}
+
+private fun gainToNormalized(db: Float): Float {
+    val range = ParametricNode.MAX_GAIN_DB - ParametricNode.MIN_GAIN_DB
+    return ((db - ParametricNode.MIN_GAIN_DB) / range).coerceIn(0f, 1f)
+}
+
+private fun normalizedToGain(normalized: Float): Float {
+    val range = ParametricNode.MAX_GAIN_DB - ParametricNode.MIN_GAIN_DB
+    return ParametricNode.MIN_GAIN_DB + normalized.coerceIn(0f, 1f) * range
 }

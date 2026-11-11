@@ -174,7 +174,8 @@ data class ParametricNode(
     val colorArgb: Long = NodeColorPalette.first()
 ) {
     companion object {
-        const val MIN_FREQ_HZ = 20f
+        /** 0 Hz is allowed by the UI (it sits at the bottom of the log tapered knob); DSP treats it as bypass. */
+        const val MIN_FREQ_HZ = 0f
         const val MAX_FREQ_HZ = 20000f
         const val MIN_GAIN_DB = -12f
         const val MAX_GAIN_DB = 12f
@@ -202,7 +203,10 @@ data class ParametricEqSettings(
     val enabled: Boolean = false,
     val nodes: List<ParametricNode> = emptyList()
 ) {
-    val isNeutral: Boolean get() = !enabled || nodes.all { it.gainDb == 0f && !it.isCutFilter }
+    val isNeutral: Boolean
+        get() = !enabled || nodes.all {
+            it.frequencyHz <= 0f || (it.gainDb == 0f && !it.isCutFilter)
+        }
 
     private val ParametricNode.isCutFilter: Boolean
         get() = type == FilterType.LOW_PASS || type == FilterType.HIGH_PASS

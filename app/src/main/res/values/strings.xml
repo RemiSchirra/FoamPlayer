@@ -705,6 +705,11 @@
     <string name="eq_delete_node">Delete node</string>
     <string name="eq_add_node">Add parametric node</string>
     <string name="eq_node_limit">Node limit reached</string>
+    <string name="eq_filter_peaking">Peaking</string>
+    <string name="eq_filter_low_shelf">Low shelf</string>
+    <string name="eq_filter_high_shelf">High shelf</string>
+    <string name="eq_filter_low_pass">Low pass</string>
+    <string name="eq_filter_high_pass">High pass</string>
     <string name="eq_volume">Volume</string>
     <string name="eq_save_preset_title">Save Preset</string>
     <string name="eq_preset_name_hint">Preset name</string>
