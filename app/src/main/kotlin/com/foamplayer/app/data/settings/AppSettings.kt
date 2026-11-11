@@ -78,9 +78,9 @@ enum class PlayerPagerEffect(val label: String, val spec: PlayerPagerEffectSpec)
     SLIDE("Slide", PlayerPagerEffectSpec(travelFraction = 1f)),
     CROSSFADE("Crossfade", PlayerPagerEffectSpec(0.5f, targetOpacity = 0f)),
     DEPTH("Depth", PlayerPagerEffectSpec(0.5f, targetScale = 0.88f, targetOpacity = 0f)),
-    FLIP("Flip", PlayerPagerEffectSpec(0.6f, targetOpacity = 0f, targetRotationY = 90f)),
-    CUBE("Cube", PlayerPagerEffectSpec(0.6f, targetOpacity = 0f, targetRotationY = -90f)),
-    TILT("Tilt", PlayerPagerEffectSpec(0.8f, targetOpacity = 0f, targetRotationY = 20f, targetRotationX = 10f)),
+    FLIP("Flip", PlayerPagerEffectSpec(0.6f, targetOpacity = 0f, targetRotationY = -90f)),
+    CUBE("Cube", PlayerPagerEffectSpec(0.6f, targetOpacity = 0f, targetRotationY = 90f)),
+    TILT("Tilt", PlayerPagerEffectSpec(.85f, targetOpacity = 0f, targetScale = .88f, targetRotationY = -30f, targetRotationX = 15f)),
 }
 
 /** Overall look of the full player: classic art, immersive backdrop, or vinyl. */
