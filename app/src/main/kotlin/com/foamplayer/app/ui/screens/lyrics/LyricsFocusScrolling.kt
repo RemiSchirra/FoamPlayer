@@ -2,6 +2,7 @@ package com.foamplayer.app.ui.screens.lyrics
 
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.withFrameNanos
 import com.foamplayer.app.ui.theme.FoamMotion
@@ -21,6 +22,7 @@ internal suspend fun LazyListState.scrollLyricIntoFocus(
     animateToNearbyItem: Boolean,
     force: Boolean,
     alignByItemCenter: Boolean,
+    animate: Boolean = true,
 ) {
     val itemCount = layoutInfo.totalItemsCount
     if (itemCount == 0) return
@@ -64,14 +66,18 @@ internal suspend fun LazyListState.scrollLyricIntoFocus(
     val targetFocusPoint = viewportStart + (viewportHeight * anchorRatio).roundToInt()
     val scrollDelta = itemFocusPoint - targetFocusPoint
     if (abs(scrollDelta) > LYRIC_FOCUS_MIN_SCROLL_PX) {
-        animateScrollBy(
-            value = scrollDelta.toFloat(),
-            animationSpec =
-                tween(
-                    durationMillis = FoamMotion.Duration.EXPRESSIVE,
-                    easing = FoamMotion.Easings.STANDARD,
-                ),
-        )
+        if (animate) {
+            animateScrollBy(
+                value = scrollDelta.toFloat(),
+                animationSpec =
+                    tween(
+                        durationMillis = FoamMotion.Duration.EXPRESSIVE,
+                        easing = FoamMotion.Easings.STANDARD,
+                    ),
+            )
+        } else {
+            scrollBy(scrollDelta.toFloat())
+        }
     }
 }
 
