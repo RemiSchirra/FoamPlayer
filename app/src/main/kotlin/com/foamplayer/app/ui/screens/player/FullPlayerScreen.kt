@@ -593,7 +593,11 @@ fun FullPlayerScreen(
             clearSyncTarget()
             return@LaunchedEffect
         }
-        if (pagerState.currentPage == queueIndex) {
+        if (pagerState.currentPage == queueIndex ||
+            (pagerState.isScrollInProgress &&
+                    programmaticScrollPage.value == null &&
+                    pagerState.targetPage == queueIndex)
+        ) {
             clearSyncTarget()
             return@LaunchedEffect
         }
