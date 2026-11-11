@@ -12,6 +12,8 @@ import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.gestures.DraggableState
@@ -21,12 +23,10 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -46,7 +46,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -788,9 +787,11 @@ fun FullPlayerScreen(
                     upTransition.AnimatedVisibility(
                         visible = { it },
                         enter = fadeIn(tween(FoamMotion.Duration.SMOOTH)) +
-                                slideInVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> h / 6 },
+                                slideInVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> h / 6 } +
+                                scaleIn(tween(FoamMotion.Duration.SMOOTH), initialScale = 0.95f),
                         exit = fadeOut(tween(FoamMotion.Duration.SMOOTH)) +
-                                slideOutVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> h / 6 },
+                                slideOutVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> h / 6 } +
+                                scaleOut(tween(FoamMotion.Duration.SMOOTH), targetScale = 0.95f),
                         modifier = Modifier
                             .fillMaxSize()
                             .extendBottom(PlayerDimens.subViewContentBottomExtension)
