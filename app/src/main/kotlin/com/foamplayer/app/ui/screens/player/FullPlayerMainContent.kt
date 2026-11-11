@@ -54,6 +54,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -447,8 +449,8 @@ internal fun SharedTransitionScope.TrackHeroPager(
     // The hero mirrors the anchor page: below the pages moving in while it is the
     // settled one, above them once the swipe commits to the anchor.
     val heroBelowPager = pagerEffect != PlayerPagerEffect.SLIDE &&
-        pagerState.isScrollInProgress &&
-        pagerState.settledPage == anchorPage
+            pagerState.isScrollInProgress &&
+            pagerState.settledPage == anchorPage
 
     Box(modifier = Modifier.fillMaxWidth()) {
         HorizontalPager(
@@ -519,6 +521,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     if (pagerEffect.spec.is3d) {
                         cameraDistance =
                             PlayerPagerEffectMath.cameraDistance(pagerEffect, densityScale)
+                        compositingStrategy = CompositingStrategy.ModulateAlpha
                     }
                 }
             }
@@ -574,6 +577,14 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                     with(density) { PlayerDimens.fullPlayerArtElevation.toPx() }
                                 } else {
                                     0f
+                                }
+                                if (pagerEffect.spec.is3d) {
+                                    val offset = PlayerPagerEffectMath.pageOffset(
+                                        page = page,
+                                        currentPage = pagerState.currentPage,
+                                        offsetFraction = pagerState.currentPageOffsetFraction
+                                    )
+                                    fadeShadow(PlayerPagerEffectMath.layer(pagerEffect, offset).alpha)
                                 }
                             }
                             .background(placeholderColor),
@@ -661,8 +672,8 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     .graphicsLayer {
                         val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
                         val stridePx = (
-                            pagerState.layoutInfo.pageSize + pagerState.layoutInfo.pageSpacing
-                            ).toFloat()
+                                pagerState.layoutInfo.pageSize + pagerState.layoutInfo.pageSpacing
+                                ).toFloat()
                         translationX = -stridePx * offset
                         if (pagerEffect != PlayerPagerEffect.SLIDE) {
                             val layer = PlayerPagerEffectMath.layer(pagerEffect, -offset)
@@ -674,6 +685,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             if (pagerEffect.spec.is3d) {
                                 cameraDistance =
                                     PlayerPagerEffectMath.cameraDistance(pagerEffect, densityScale)
+                                compositingStrategy = CompositingStrategy.ModulateAlpha
                             }
                         }
                     }
@@ -743,6 +755,11 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 } * outerFraction * (1f - headerFraction)
                             } else {
                                 0f
+                            }
+                            if (pagerEffect.spec.is3d) {
+                                val offset = pagerState.currentPage - anchorPage +
+                                        pagerState.currentPageOffsetFraction
+                                fadeShadow(PlayerPagerEffectMath.layer(pagerEffect, -offset).alpha)
                             }
                             alpha = if (immersive || vinyl) {
                                 val openFade = 1f - EaseOutCubic.transform(
@@ -1085,6 +1102,13 @@ internal fun SharedTransitionScope.PlayPauseButton(
 }
 
 private const val PLAY_BUTTON_PRESSED_SCALE = 0.88f
+
+/** Native shadows ignore an ancestor's ModulateAlpha, so the page fade is applied to the shadow color. */
+private fun GraphicsLayerScope.fadeShadow(alpha: Float) {
+    val color = Color.Black.copy(alpha = alpha)
+    ambientShadowColor = color
+    spotShadowColor = color
+}
 
 /**
  * Progress bar + optional elapsed/remaining labels. [seekBarStyle] picks the rendering:
