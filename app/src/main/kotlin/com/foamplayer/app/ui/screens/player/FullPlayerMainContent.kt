@@ -544,15 +544,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 if (immersive) {
                     Spacer(modifier = Modifier.padding(horizontal = artInset).fillMaxWidth().aspectRatio(1f))
                 } else if (vinyl) {
-                    // Vinyl mode keeps the normal pager mechanics (each page is its own
-                    // record, so swipes slide/fade like the square art); the anchor page
-                    // renders a spinning record instead. Its layer alpha is the inverse
-                    // of the hero's immersive fade: visible at rest, fading out as the
-                    // player closes toward the mini player or as a subview slides up, so
-                    // the square shared-element art can take over during flights. The
-                    // player-level tonearm overlay is drawn above the pager; the record
-                    // slides beneath it during swipes. Unlike classic mode the record
-                    // never scales on pause/play.
                     Box(
                         modifier = Modifier
                             .padding(horizontal = artInset)
@@ -608,10 +599,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 contentScale = ContentScale.Crop
                             )
                         } else {
-                            // No art at all: the image-like music-note placeholder, filling
-                            // this page's art box the same way the mini player's slot and the
-                            // subview header do, so shared-element flights land on the exact
-                            // same look on every surface.
                             NoAlbumArtPlaceholder()
                         }
                     }
@@ -624,9 +611,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            // While the hero overlay shows this (anchor) page's text, hide the
-                            // page's copy: both render the same shared marquee state, so
-                            // drawing both would only double the glyphs.
                             .graphicsLayer { alpha = if (isAnchorPage && showHero) 0f else 1f }
                             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
                             .combinedClickable(
@@ -679,9 +663,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         val stridePx = (
                             pagerState.layoutInfo.pageSize + pagerState.layoutInfo.pageSpacing
                             ).toFloat()
-                        // The hero is an overlay (the pager does not place it), so it
-                        // mirrors the anchor page's native translation using the
-                        // effect-shortened stride from the pager's layout info.
                         translationX = -stridePx * offset
                         if (pagerEffect != PlayerPagerEffect.SLIDE) {
                             val layer = PlayerPagerEffectMath.layer(pagerEffect, -offset)
@@ -754,12 +735,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 }
                             )
                             clip = true
-                            // The paused shrink eases in/out with the flight: at rest the
-                            // hero shows its own paused look (heroRestFraction 1), and while
-                            // flying it tracks the unscaled endpoint the overlay departs
-                            // from (fraction 0), so both ends of the pair render the same
-                            // scale the moment the gesture starts. See
-                            // rememberPausedArtScale for the endpoint-side mirror.
                             scaleX = pausedArtScale + (1f - pausedArtScale) * (1f - heroRestFraction())
                             scaleY = pausedArtScale + (1f - pausedArtScale) * (1f - heroRestFraction())
                             shadowElevation = if (!immersive && !vinyl) {
@@ -793,10 +768,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
                                 .size(AlbumArtRequestSize)
                                 .crossfade(false)
-                                // The hero is the ENTERING side of a player flight, so it
-                                // must draw its artwork on the first frame: the shared
-                                // placeholder key resolves the source's cached bitmap
-                                // synchronously instead of after an async cache hit.
                                 .placeholderMemoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
                                 .memoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
                                 .build()
@@ -886,6 +857,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 isDragging = { seekDragPreview.value != null },
                 isSwiping = { isPagerSwiping },
                 modifier = Modifier
+                    .zIndex(2f)
                     .align(Alignment.TopStart)
                     .padding(horizontal = PlayerDimens.screenPadding + artInset)
                     .fillMaxWidth()
