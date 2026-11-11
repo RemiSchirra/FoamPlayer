@@ -107,6 +107,7 @@ import com.foamplayer.app.ui.utils.rememberWaveform
 import kotlin.math.abs
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 /** Layer 1 content: handle, hi-res badge, the track hero pager, playback controls, subview shortcuts. */
@@ -413,11 +414,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
         }
     }
 
-    // Vinyl-mode flight fade: 1 while the player rests open, easing to 0 during the
-    // open/close flight toward the mini player and while a subview slides up. It is
-    // the exact mirror of the square shared-element art (which uses this sum directly
-    // and is visible at rest mini and during flights), so the record and the square
-    // art crossfade instead of stacking.
     val vinylFlightFade = remember(playerTransitionState, upTransitionState) {
         {
             val openFade = 1f - EaseOutCubic.transform(
@@ -446,11 +442,29 @@ internal fun SharedTransitionScope.TrackHeroPager(
         }
     }
 
-    // The hero mirrors the anchor page: below the pages moving in while it is the
-    // settled one, above them once the swipe commits to the anchor.
-    val heroBelowPager = pagerEffect != PlayerPagerEffect.SLIDE &&
-            pagerState.isScrollInProgress &&
-            pagerState.settledPage == anchorPage
+    val anchorPageNow by rememberUpdatedState(anchorPage)
+    var restAnchorKey by remember { mutableStateOf(entryKey(anchorPage)) }
+    LaunchedEffect(pagerState) {
+        snapshotFlow {
+            val key = currentEntryKey(anchorPageNow)
+            val pageKey = pagerState.layoutInfo.visiblePagesInfo
+                .firstOrNull { it.index == pagerState.currentPage }?.key
+            if (pagerState.currentPageOffsetFraction == 0f && pageKey == key) key else null
+        }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect { restAnchorKey = it }
+    }
+    val heroBelowPager by remember(pagerEffect, pagerState, anchorPage) {
+        derivedStateOf {
+            if (pagerEffect == PlayerPagerEffect.SLIDE) return@derivedStateOf false
+            val anchorKey = currentEntryKey(anchorPage)
+            val pageKey = pagerState.layoutInfo.visiblePagesInfo
+                .firstOrNull { it.index == pagerState.currentPage }?.key
+            val atRest = pagerState.currentPageOffsetFraction == 0f && pageKey == anchorKey
+            anchorKey == restAnchorKey && !atRest
+        }
+    }
 
     Box(modifier = Modifier.fillMaxWidth()) {
         HorizontalPager(
@@ -526,15 +540,13 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 }
             }
 
-            // Every page moving in draws above the settled one, whichever side it
-            // comes from, so reversing direction never lets the settled page cover it.
-            val pageZIndex by remember(pagerState, page, pagerEffect) {
-                derivedStateOf {
-                    if (pagerEffect != PlayerPagerEffect.SLIDE &&
-                        page != pagerState.settledPage
-                    ) 1f else 0f
-                }
-            }
+            // Every non-anchor page draws above the anchor page, whichever side it comes
+            // from, so reversing direction never lets the anchor cover an incoming page.
+            // Keyed on the anchor (not pagerState.settledPage): the anchor flips in the
+            // same composition as the hero overlay and isAnchorPage, whereas settledPage
+            // flips when the scroll ends and, in between, briefly put the outgoing page
+            // above the new one for a frame after the swipe commit.
+            val pageZIndex = if (pagerEffect != PlayerPagerEffect.SLIDE && page != anchorPage) 1f else 0f
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
