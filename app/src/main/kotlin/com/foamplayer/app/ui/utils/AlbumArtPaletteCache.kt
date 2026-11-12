@@ -142,6 +142,11 @@ object AlbumArtPaletteCache {
      * @param currentPage the pager's [PagerState.currentPage]
      * @param currentPageOffsetFraction the pager's [PagerState.currentPageOffsetFraction]
      * @param pageCount number of pages/tracks the pager can be on
+     * @param fallback color standing in for a page whose track has no cached
+     *   art color (no album art, or an extraction that is still running or
+     *   failed), so the accent scrubs toward it across the swipe instead of
+     *   holding the previous track's color; null keeps the old behavior of
+     *   returning null when the current page has no color
      * @param pathForPage resolves a page index to its album-art path; callers
      *   that need to remap a page mid-transition can do so here
      */
@@ -149,6 +154,7 @@ object AlbumArtPaletteCache {
         currentPage: Int,
         currentPageOffsetFraction: Float,
         pageCount: Int,
+        fallback: Color? = null,
         pathForPage: (Int) -> String?
     ): Color? {
         if (pageCount <= 0) return null
@@ -165,7 +171,8 @@ object AlbumArtPaletteCache {
             colorB = pathForPage(indexB)?.let { colors[it] }
         }
 
-        val resolvedA = colorA ?: return null
-        return lerp(resolvedA, colorB ?: resolvedA, fraction)
+        val resolvedA = colorA ?: fallback ?: return null
+        val resolvedB = colorB ?: fallback ?: resolvedA
+        return lerp(resolvedA, resolvedB, fraction)
     }
 }

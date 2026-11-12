@@ -305,7 +305,6 @@ fun MiniPlayer(
     val currentEntryId = queueEntryIds.getOrNull(currentIndex)
 
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     val pagerState = rememberPagerState(
         initialPage = currentIndex.coerceAtLeast(0),
@@ -425,16 +424,13 @@ fun MiniPlayer(
         }
     }
 
-    LaunchedEffect(pagerState) {
+    val fallbackAccent = FoamTheme.colors.textPrimary
+    LaunchedEffect(pagerState, fallbackAccent) {
         snapshotFlow {
             val jump = pendingJump
             val dep = latestDeparture
             val currentQueue = latestQueue
-            AlbumArtPaletteCache.interpolatedColor(
-                currentPage = pagerState.currentPage,
-                currentPageOffsetFraction = pagerState.currentPageOffsetFraction,
-                pageCount = currentQueue.size
-            ) { page ->
+            val artPathFor: (Int) -> String? = { page ->
                 // Same page -> track mapping as the pager content below, so the
                 // accent never shows the replacement queue's track on the page
                 // that is still displaying the departing one.
@@ -443,6 +439,23 @@ fun MiniPlayer(
                             ?: dep?.takeIf { jump == null && page == it.page }?.track
                             ?: currentQueue.getOrNull(page)
                         )?.albumArtPath
+            }
+            val page = pagerState.currentPage
+            val fraction = pagerState.currentPageOffsetFraction
+            val resolved = AlbumArtPaletteCache.interpolatedColor(
+                currentPage = page,
+                currentPageOffsetFraction = fraction,
+                pageCount = currentQueue.size,
+                fallback = fallbackAccent
+            ) { artPathFor(it) }
+            val path = artPathFor(page)
+            when {
+                fraction == 0f &&
+                        (path == null ||
+                                (AlbumArtPaletteCache.colors[path] == null &&
+                                        AlbumArtPaletteCache.isSettled(path))
+                                ) -> fallbackAccent
+                else -> resolved
             }
         }.collect { interpolatedColor ->
             if (interpolatedColor != null) onColorChange(interpolatedColor)

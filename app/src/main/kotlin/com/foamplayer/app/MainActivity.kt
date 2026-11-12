@@ -47,9 +47,11 @@ import com.foamplayer.app.ui.components.LocalDefaultCollectionHeroLayout
 import com.foamplayer.app.ui.navigation.FoamNavHost
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
+import com.foamplayer.app.ui.theme.DarkFoamColors
 import com.foamplayer.app.ui.theme.FoamBackdropHost
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.LightFoamColors
 import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -60,6 +62,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.core.content.edit
+import kotlin.time.Duration.Companion.milliseconds
 
 /** Single activity hosting the whole Compose UI and the media playback session. */
 @AndroidEntryPoint
@@ -222,7 +225,7 @@ class MainActivity : AppCompatActivity() {
 
     /** True while the keyguard is showing (device locked). */
     private fun isDeviceLocked(): Boolean =
-        (getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+        (getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
 
     /**
      * Removes this task without an animation, restoring the system's previous
@@ -249,7 +252,7 @@ class MainActivity : AppCompatActivity() {
         restartFastLock()
         if (!isDeviceLocked()) {
             lifecycleScope.launch {
-                delay(KEYGUARD_SETTLE_MS)
+                delay(KEYGUARD_SETTLE_MS.milliseconds)
                 if (lockDisplaySessionActive && !isDeviceLocked()) {
                     lockDisplaySessionActive = false
                     cancelFastLock()
@@ -497,7 +500,7 @@ class MainActivity : AppCompatActivity() {
         if (!settingsViewModel.settings.value.fastLockScreenEnabled) return
         fastLockJob?.cancel()
         fastLockJob = lifecycleScope.launch {
-            delay(FAST_LOCK_TIMEOUT_MS)
+            delay(FAST_LOCK_TIMEOUT_MS.milliseconds)
             fastLockJob = null
             endLockDisplaySession()
         }
@@ -663,12 +666,21 @@ private fun AccentThemedApp(
     val albumArtPath by playerViewModel.currentAlbumArtPath.collectAsState()
     val dynamicAccentColor by playerViewModel.dynamicAccentColor.collectAsState()
 
+    val fallbackAccent =
+        if (darkTheme) DarkFoamColors.textPrimary else LightFoamColors.textPrimary
+
     val accentColor = rememberAccentColor(
         isAutomaticColor = isAutomaticColor,
         manualAccentColor = manualAccentColor,
         dynamicAccentColor = dynamicAccentColor,
+        fallbackAccent = fallbackAccent,
         albumArtPath = albumArtPath
     )
+    val accentIsFallback = when {
+        !isAutomaticColor -> false
+        dynamicAccentColor != null -> dynamicAccentColor == fallbackAccent
+        else -> albumArtPath == null || AlbumArtPaletteCache.colors[albumArtPath] == null
+    }
 
     FoamTheme(
         darkTheme = darkTheme,
@@ -677,6 +689,7 @@ private fun AccentThemedApp(
         miniPlayerRounding = miniPlayerRounding,
         fullPlayerRounding = fullPlayerRounding,
         accentColor = accentColor,
+        accentIsFallback = accentIsFallback,
         accentTintEnabled = accentTintEnabled,
         content = content
     )
@@ -684,13 +697,16 @@ private fun AccentThemedApp(
 
 /**
  * Resolves the active accent color: the manual pick, or the palette color
- * extracted from the current album art when automatic color is on.
+ * extracted from the current album art when automatic color is on. A track
+ * without album art (or whose extraction failed) falls back to the theme's
+ * text primary ([fallbackAccent]) instead of the manual pick.
  */
 @Composable
 private fun rememberAccentColor(
     isAutomaticColor: Boolean,
     manualAccentColor: Int,
     dynamicAccentColor: Color?,
+    fallbackAccent: Color,
     albumArtPath: String?
 ): Color {
     val context = LocalContext.current
@@ -717,13 +733,14 @@ private fun rememberAccentColor(
     when {
         !isAutomaticColor -> return Color(manualAccentColor)
         dynamicAccentColor != null -> return dynamicAccentColor
-        !hasResolvedAccent -> return Color(manualAccentColor)
+        !hasResolvedAccent -> return fallbackAccent
         else -> {
             // Entering this branch for the first time initializes the animation
             // at the target color, so there is no launch-time fade; later
-            // targets still animate.
+            // targets still animate -- including the fallback, so switching to
+            // a track without album art crossfades to the text primary.
             val animatedColor by animateColorAsState(
-                targetValue = extractedColor ?: Color(manualAccentColor),
+                targetValue = extractedColor ?: fallbackAccent,
                 animationSpec = tween(durationMillis = FoamMotion.Duration.EXPRESSIVE),
                 label = "AccentColorFade"
             )

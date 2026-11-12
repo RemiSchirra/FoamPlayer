@@ -498,20 +498,36 @@ fun FullPlayerScreen(
             }
     }
 
-    LaunchedEffect(pagerState, settings.automaticColorEnabled) {
+    val fallbackAccent = FoamTheme.colors.textPrimary
+    LaunchedEffect(pagerState, settings.automaticColorEnabled, fallbackAccent) {
         if (!settings.automaticColorEnabled) return@LaunchedEffect
         snapshotFlow {
             // New page number against the old queue for a frame would push a wrong accent.
             if (backdropRenumberHold) return@snapshotFlow null
             val anchoredQueue = pagerAnchoredQueue
-            AlbumArtPaletteCache.interpolatedColor(
-                currentPage = pagerState.currentPage,
-                currentPageOffsetFraction = pagerState.currentPageOffsetFraction,
-                pageCount = anchoredQueue.size
-            ) { page -> anchoredQueue.getOrNull(page)?.albumArtPath }
-        }.collect { interpolatedColor ->
-            if (interpolatedColor != null) {
-                viewModel.setDynamicAccentColor(interpolatedColor)
+            val artPathFor: (Int) -> String? = { p ->
+                anchoredQueue.getOrNull(p)?.albumArtPath
+            }
+            val page = pagerState.currentPage
+            val fraction = pagerState.currentPageOffsetFraction
+            val resolved = AlbumArtPaletteCache.interpolatedColor(
+                currentPage = page,
+                currentPageOffsetFraction = fraction,
+                pageCount = anchoredQueue.size,
+                fallback = fallbackAccent
+            ) { artPathFor(it) }
+            val path = artPathFor(page)
+            when {
+                fraction == 0f &&
+                        (path == null ||
+                                (AlbumArtPaletteCache.colors[path] == null &&
+                                        AlbumArtPaletteCache.isSettled(path))
+                                ) -> fallbackAccent
+                else -> resolved
+            }
+        }.collect { accentColor ->
+            if (accentColor != null) {
+                viewModel.setDynamicAccentColor(accentColor)
             }
         }
     }

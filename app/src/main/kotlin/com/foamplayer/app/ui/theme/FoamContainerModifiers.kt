@@ -3,6 +3,7 @@ package com.foamplayer.app.ui.theme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -26,9 +27,33 @@ class AccentTintState {
     var color by mutableStateOf(DefaultPrimaryAccent)
     var enabled by mutableStateOf(true)
 
+    /**
+     * Scale of the background tint: 1 = full tint, 0 = the plain palette
+     * background. [FoamTheme] drives it to 0 while the accent is the
+     * text-primary fallback (no album art to extract from), so tinted
+     * backgrounds land on the untouched palette color instead of greying
+     * toward the text color. Read in the draw phase only.
+     */
+    var backgroundTintScale by mutableFloatStateOf(1f)
+
     /** Base palette color -> tint-aware draw color. Call from a draw lambda. */
     fun resolve(base: Color, amount: Float): Color =
         if (enabled) lerp(start = base, stop = color, fraction = amount) else base
+
+    /**
+     * Background variant of [resolve]: the tint fades out with
+     * [backgroundTintScale]. Call from a draw lambda.
+     */
+    fun resolveBackground(base: Color, amount: Float): Color =
+        if (enabled) {
+            lerp(
+                start = base,
+                stop = color,
+                fraction = amount * backgroundTintScale.coerceIn(0f, 1f)
+            )
+        } else {
+            base
+        }
 }
 
 val LocalAccentTintState = staticCompositionLocalOf { AccentTintState() }
@@ -51,12 +76,17 @@ private fun Modifier.tintedContainerBackground(
     baseColor: Color,
     tintAmount: Float,
     shape: Shape,
-    alpha: Float
+    alpha: Float,
+    useBackgroundScale: Boolean = false
 ): Modifier {
     val tint = LocalAccentTintState.current
     return remember(tint, baseColor, tintAmount, shape, alpha) {
         drawBehind {
-            val color = tint.resolve(baseColor, tintAmount).copy(alpha = alpha)
+            val color = if (useBackgroundScale) {
+                tint.resolveBackground(baseColor, tintAmount)
+            } else {
+                tint.resolve(baseColor, tintAmount)
+            }.copy(alpha = alpha)
             if (shape == RectangleShape) {
                 drawRect(color)
             } else {
@@ -78,7 +108,8 @@ fun Modifier.foamBackground(
     baseColor = LocalFoamColors.current.background,
     tintAmount = BackgroundAccentTint,
     shape = shape,
-    alpha = alpha
+    alpha = alpha,
+    useBackgroundScale = true
 )
 
 /**
@@ -93,7 +124,7 @@ fun Modifier.foamBackgroundTopFade(): Modifier {
     val palette = LocalFoamColors.current
     return remember(tint, palette) {
         drawBehind {
-            val color = tint.resolve(palette.background, BackgroundAccentTint)
+            val color = tint.resolveBackground(palette.background, BackgroundAccentTint)
             drawRect(
                 brush = Brush.verticalGradient(
                     0f to color,

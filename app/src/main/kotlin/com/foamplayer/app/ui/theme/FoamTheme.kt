@@ -1,5 +1,7 @@
 package com.foamplayer.app.ui.theme
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -332,6 +334,12 @@ fun FoamTheme(
     miniPlayerRounding: Float = 0.4f,
     fullPlayerRounding: Float = 0.4f,
     accentColor: Color? = null,
+    /**
+     * True while the accent is the text-primary fallback (the current track has
+     * no album art, or its extraction failed): tinted backgrounds fade to the
+     * plain palette color instead of greying toward the text color.
+     */
+    accentIsFallback: Boolean = false,
     /** Blends the accent into backgrounds and containers (Settings > Colors). */
     accentTintEnabled: Boolean = true,
     content: @Composable () -> Unit
@@ -363,6 +371,12 @@ fun FoamTheme(
     val accentTint = remember { AccentTintState() }
     accentTint.color = targetAccentColor
     accentTint.enabled = accentTintEnabled
+    val backgroundTintScale by animateFloatAsState(
+        targetValue = if (accentIsFallback) 0f else 1f,
+        animationSpec = tween(FoamMotion.Duration.EXPRESSIVE),
+        label = "FoamBackgroundTintScale"
+    )
+    accentTint.backgroundTintScale = backgroundTintScale
 
     // Live overrides pushed by the settings screens (see
     // [MiniPlayerRoundingPreviewState]); the holder itself never changes.

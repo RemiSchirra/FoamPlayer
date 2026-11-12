@@ -205,7 +205,16 @@ internal fun DynamicAlbumArtBackground(
             AsyncImage(
                 model = request,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize().performantBlur(blur),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .performantBlur(blur)
+                    .graphicsLayer {
+                        alpha = if (backArtPath == null) {
+                            1f - crossfadeFraction().coerceIn(0f, 1f)
+                        } else {
+                            1f
+                        }
+                    },
                 contentScale = ContentScale.Crop,
                 onSuccess = { hasShownArtwork = true },
             )
@@ -397,7 +406,16 @@ internal fun AlbumArtBackdrop(
                         AsyncImage(
                             model = frontRequest,
                             contentDescription = null,
-                            modifier = Modifier.fillMaxSize().performantBlur(backgroundBlur),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .performantBlur(backgroundBlur)
+                                .graphicsLayer {
+                                    alpha = if (backArtPath == null) {
+                                        1f - crossfadeFraction().coerceIn(0f, 1f)
+                                    } else {
+                                        1f
+                                    }
+                                },
                             contentScale = ContentScale.Crop
                         )
                     }
@@ -554,8 +572,9 @@ private fun AlbumArtImagePair(
     Box(modifier = modifier) {
         // A track with no artwork has no blurred layer either; a flat placeholder-surface
         // field keeps the sharp no-art region (see CanvasAwareArtPair) dissolving into a
-        // matching shade instead of into the bare background color.
-        if (frontArtPath == null && backArtPath == null) {
+        // matching shade instead of into the bare background color. It also sits under a
+        // pair with one artless side, so the swipe fades onto it instead of popping.
+        if (frontArtPath == null || backArtPath == null) {
             Box(modifier = Modifier.fillMaxSize().foamSurfaceVariant())
         }
         if (frontArtPath != null) {
@@ -563,7 +582,15 @@ private fun AlbumArtImagePair(
             AsyncImage(
                 model = frontRequest,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = if (backArtPath == null) {
+                            1f - crossfadeFraction().coerceIn(0f, 1f)
+                        } else {
+                            1f
+                        }
+                    },
                 contentScale = ContentScale.Crop
             )
         }
@@ -623,16 +650,29 @@ private fun CanvasAwareArtPair(
     val topPath = if (canvasIsBack) frontArtPath else backArtPath
 
     Box(modifier = modifier) {
+        if (bottomPath == null || topPath == null) {
+            NoAlbumArtPlaceholder(modifier = Modifier.fillMaxSize())
+        }
         if (bottomPath != null) {
             val bottomRequest = remember(bottomPath) { request(bottomPath) }
             AsyncImage(
                 model = bottomRequest,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = if (topPath == null) {
+                            if (canvasIsBack) {
+                                crossfadeFraction()
+                            } else {
+                                1f - crossfadeFraction()
+                            }
+                        } else {
+                            1f
+                        }
+                    },
                 contentScale = ContentScale.Crop
             )
-        } else {
-            NoAlbumArtPlaceholder(modifier = Modifier.fillMaxSize())
         }
         if (canvasUrl != null) {
             val canvasVisible = canvasAnchor != CanvasAnchor.NONE

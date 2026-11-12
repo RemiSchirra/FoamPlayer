@@ -61,15 +61,6 @@ internal fun AppBackdrop(
     playerViewModel: PlayerViewModel,
     playerTargetOpen: Boolean,
 ): (frontArtPath: String?, backArtPath: String?, fraction: Float) -> Unit {
-    // Settings pages hide the backdrop layers (they sit on the plain theme
-    // background) — after the nav fade, so the outgoing screen dissolves over the
-    // still-drawn backdrop. The background settings page is the exception: the
-    // layers ARE its live preview.
-    //
-    // Hidden means alpha 0, NOT leaving composition: unmounting dropped the
-    // loaded art, so coming back from settings remounted the layers and flashed
-    // the bare theme background until Coil delivered the image again. Alpha
-    // keeps them warm underneath the opaque settings page.
     var settingsBackdropHidden by remember { mutableStateOf(isSettingsRoute(currentRoute)) }
     LaunchedEffect(currentRoute) {
         if (isSettingsRoute(currentRoute) && !isBackgroundSettingsRoute(currentRoute)) {
@@ -117,11 +108,6 @@ internal fun AppBackdrop(
         { front: String?, back: String?, fraction: Float -> driver.submit(front, back, fraction) }
     }
 
-    // While the background settings page previews the art backdrop, the current
-    // track's art must keep feeding it even with the player closed — normally
-    // only the open player drives this collector and the visible mini player
-    // covers the rest. rememberUpdatedState keeps the read inside the collector
-    // fresh across route changes.
     val feedArtToBackground by rememberUpdatedState(
         playerTargetOpen || isBackgroundSettingsRoute(currentRoute)
     )
@@ -133,13 +119,6 @@ internal fun AppBackdrop(
         }
     }
 
-    // The user-configured static layers (custom blurred image / gradient): same
-    // dim as the dynamic art, hidden on settings pages like the art — EXCEPT the
-    // background settings page, where they are the live preview of the
-    // parameters being edited. They are never suppressed on detail pages: the
-    // collection backdrop paints over them once opaque, and keeping them
-    // composed underneath makes every fade crossfade over the custom image /
-    // gradient instead of dropping to the bare background color.
     if (backgroundMode != BackgroundMode.DYNAMIC) {
         StaticBackgroundLayers(
             mode = backgroundMode,
@@ -329,16 +308,7 @@ internal fun DetailListBackdrop(
     val listBackdropArt = state.art
     val lastListBackdropArt = state.lastArt
     val listBackdropAlpha by animateFloatAsState(
-        // Keyed on the ROUTE as well as the art: the art is only cleared from a
-        // LaunchedEffect (a frame or more after the route flips), so keying on
-        // art alone started this fade late while the screens were already
-        // fading, and the status-bar strip (painted only by this backdrop) held
-        // full alpha then dropped out of step.
         targetValue = if (listBackdropArt != null && isDetailListRoute(currentRoute)) 1f else 0f,
-        // Lock-step with the NavHost's screen fades: both FoamMotion specs ride
-        // FastOutSlowIn, while animateFloatAsState's tween defaults to LINEAR,
-        // which made the backdrop — and with it the status-bar strip it alone
-        // paints — linger half-strength over the already-faded content.
         animationSpec = if (isSharedElementRoute(currentRoute) ||
             isSharedElementRoute(lastRoute)
         ) {
@@ -349,18 +319,15 @@ internal fun DetailListBackdrop(
         label = "listBackdropAlpha"
     )
     val display = listBackdropArt ?: lastListBackdropArt
-    // Plain expression, not a remembered derivedStateOf: the art/alpha values
-    // above are read during composition, and a remembered derived state would
-    // keep capturing the FIRST composition's null art and stay false forever.
     val show = (backgroundMode == BackgroundMode.DYNAMIC || forceDynamic) &&
             display != null && listBackdropAlpha > 0f
     if (show) {
         DynamicAlbumArtBackground(
-            frontArtPath = (state.crossfadeFrom ?: display)?.path,
-            frontArtIsEmbedded = (state.crossfadeFrom ?: display)?.isEmbeddedArt ?: true,
+            frontArtPath = (state.crossfadeFrom ?: display).path,
+            frontArtIsEmbedded = (state.crossfadeFrom ?: display).isEmbeddedArt,
             backArtPath = state.crossfadeTo?.path,
             backArtIsEmbedded = state.crossfadeTo?.isEmbeddedArt ?: true,
-            crossfadeFraction = { state.crossfade.value },
+            crossfadeFraction = { if (state.crossfadeTo != null) state.crossfade.value else 0f },
             blur = blur,
             intensity = intensity,
             modifier = Modifier
@@ -388,7 +355,7 @@ internal fun PlayerBackdrop(
 ) {
     // In DOCKED mode the backdrop's black fade must land on the bar's top edge.
     val playerBackdropFadeInset = if (navigationBarMode == NavigationBarMode.DOCKED) {
-        with(androidx.compose.ui.platform.LocalDensity.current) { navZoneHeightPx.toDp() }
+        with(LocalDensity.current) { navZoneHeightPx.toDp() }
     } else {
         0.dp
     }
