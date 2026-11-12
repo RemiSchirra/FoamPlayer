@@ -211,7 +211,7 @@ fun NavBarSettingsScreen(
                                     animateChanges = true
                                     viewModel.setDynamicNavIcons(it)
                                 },
-                                verticalPadding = FoamDimens.spacingMedium
+                                verticalPadding = FoamDimens.spacingTiny
                             )
                             // The revealed pickers ride the settings expand/shrink
                             // + fade; the spacer lives inside so its height animates
@@ -222,6 +222,7 @@ fun NavBarSettingsScreen(
                             ) {
                                 Column(
                                     modifier = Modifier.padding(
+                                        top = FoamDimens.spacingSmall,
                                         start = FoamDimens.spacingStandard,
                                         end = FoamDimens.spacingStandard,
                                         bottom = FoamDimens.spacingStandard
