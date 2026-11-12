@@ -28,7 +28,7 @@ import com.foamplayer.app.ui.screens.settings.SettingsScreen
 import com.foamplayer.app.ui.screens.settings.TestSettingsScreen
 import com.foamplayer.app.ui.screens.settings.UISettingsScreen
 import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsManagerScreen
-import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsSearchResultsScreen
+import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsDetailsScreen
 
 /** The settings stack and its leaf pages. */
 internal fun NavGraphBuilder.settingsDestinations(context: FoamNavGraphContext) {
@@ -116,7 +116,7 @@ internal fun NavGraphBuilder.settingsDestinations(context: FoamNavGraphContext) 
         arguments = listOf(navArgument("trackId") { type = NavType.LongType })
     ) { backStackEntry ->
         val trackId = backStackEntry.arguments?.getLong("trackId") ?: -1L
-        LyricsSearchResultsScreen(
+        LyricsDetailsScreen(
             trackId = trackId,
             onBack = { context.back() }
         )

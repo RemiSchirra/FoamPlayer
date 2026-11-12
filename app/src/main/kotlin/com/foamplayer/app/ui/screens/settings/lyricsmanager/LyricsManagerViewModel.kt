@@ -12,14 +12,12 @@ import com.foamplayer.app.data.repository.TrackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,13 +33,6 @@ data class LyricsManagerStats(
     val total: Int = 0,
     val isScanning: Boolean = false
 )
-
-/** Outcome of a delete-lyrics action, surfaced to the user as a snackbar. */
-sealed interface LyricsDeleteEvent {
-    /** [embeddedRemained] = embedded lyrics survived (unsupported container). */
-    data class Deleted(val embeddedRemained: Boolean) : LyricsDeleteEvent
-    data class Failed(val reason: String) : LyricsDeleteEvent
-}
 
 /**
  * Full lyrics picture of one track, powering the long-press details modal.
@@ -82,9 +73,6 @@ class LyricsManagerViewModel @Inject constructor(
     val statusMap: StateFlow<Map<Long, LyricsSourceStatus>> = _statusMap.asStateFlow()
 
     private val isScanning = MutableStateFlow(false)
-
-    private val _deleteEvents = Channel<LyricsDeleteEvent>(Channel.BUFFERED)
-    val deleteEvents = _deleteEvents.receiveAsFlow()
 
     private val _trackDetails = MutableStateFlow<LyricsTrackDetails?>(null)
     val trackDetails: StateFlow<LyricsTrackDetails?> = _trackDetails.asStateFlow()
@@ -177,34 +165,6 @@ class LyricsManagerViewModel @Inject constructor(
         }
         if (batch.isEmpty()) return
         _statusMap.update { current -> current + batch }
-    }
-
-    /**
-     * Removes every lyrics source from [track] (online cache, sidecar file,
-     * embedded tag), then re-checks that track's status so its row and the
-     * counters update immediately.
-     */
-    fun deleteLyrics(track: TrackEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val result = runCatching { lyricsRepository.deleteLyrics(track) }
-            _statusMap.update { current ->
-                current + (track.id to runCatching { lyricsRepository.getSourceStatus(track) }.getOrDefault(
-                    current[track.id] ?: LyricsSourceStatus(
-                        hasCached = false,
-                        hasFile = false,
-                        hasEmbedded = false
-                    )
-                ))
-            }
-            result.fold(
-                onSuccess = { deleteResult ->
-                    if (deleteResult.deletedSomething) {
-                        _deleteEvents.send(LyricsDeleteEvent.Deleted(deleteResult.embeddedStillPresent))
-                    }
-                },
-                onFailure = { error -> _deleteEvents.send(LyricsDeleteEvent.Failed(error.message ?: "")) }
-            )
-        }
     }
 
     /**

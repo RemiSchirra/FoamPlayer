@@ -35,6 +35,9 @@ data class FoamColors(
     val surfaceVariant: Color,
     val bitPerfectActive: Color,
     val bitPerfectInactive: Color,
+    /** Lyrics-status dot colors: red = no lyrics, blue = embedded lyrics. */
+    val noLyrics: Color,
+    val embedded: Color,
     val textPrimary: Color,
     val textSecondary: Color,
     val borderOverlay: Color
@@ -46,6 +49,8 @@ val DarkFoamColors = FoamColors(
     surfaceVariant = Color(0xFF2A2A2A),
     bitPerfectActive = Color(0xFF00E676),
     bitPerfectInactive = Color(0xFFFFB300),
+    noLyrics = Color(0xFFFF5252),
+    embedded = Color(0xFF448AFF),
     textPrimary = Color(0xFFE0E0E0),
     textSecondary = Color(0x99FFFFFF),
     borderOverlay = Color(0xFF333333)
@@ -57,6 +62,8 @@ val LightFoamColors = FoamColors(
     surfaceVariant = Color(0xFFDFDFDF),
     bitPerfectActive = Color(0xFF00A344),
     bitPerfectInactive = Color(0xFFB26A00),
+    noLyrics = Color(0xFFD32F2F),
+    embedded = Color(0xFF1976D2),
     textPrimary = Color(0xFF1C1C1C),
     textSecondary = Color(0x99000000),
     borderOverlay = Color(0xFFC9C9C9)

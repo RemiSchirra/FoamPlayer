@@ -253,7 +253,10 @@
     <string name="lyrics_results_plain">Brutes</string>
     <string name="lyrics_results_synced">Synchronisées</string>
     <string name="lyrics_results_word_synced">Mot à mot</string>
-    <string name="lyrics_results_title">Résultats de recherche</string>
+    <string name="lyrics_details_title">Détails des paroles</string>
+    <string name="lyrics_details_tab_saved">Paroles enregistrées</string>
+    <string name="lyrics_details_tab_search">Recherche</string>
+    <string name="lyrics_details_saved_empty">Aucune parole enregistrée pour ce titre</string>
     <string name="lyrics_results_provider">Fournisseur</string>
     <string name="lyrics_results_save_as_file">Enregistrer en fichier</string>
     <string name="lyrics_results_embed">Intégrer au fichier</string>

@@ -46,6 +46,7 @@ enum class FoamIconRole(val label: String) {
     CLOSE("Close"),
     DELETE("Delete"),
     ARROW_FORWARD("Forward"),
+    CHEVRON_RIGHT("Chevron right"),
     SHUFFLE("Shuffle"),
     MISC("Misc"),
     UI("UI"),
@@ -84,6 +85,7 @@ data class FoamIconSet(private val icons: Map<FoamIconRole, ImageVector>) {
     val close: ImageVector get() = icons.getValue(FoamIconRole.CLOSE)
     val delete: ImageVector get() = icons.getValue(FoamIconRole.DELETE)
     val arrowForward: ImageVector get() = icons.getValue(FoamIconRole.ARROW_FORWARD)
+    val chevronRight: ImageVector get() = icons.getValue(FoamIconRole.CHEVRON_RIGHT)
     val shuffle: ImageVector get() = icons.getValue(FoamIconRole.SHUFFLE)
     val misc: ImageVector get() = icons.getValue(FoamIconRole.MISC)
     val ui: ImageVector get() = icons.getValue(FoamIconRole.UI)
@@ -147,6 +149,7 @@ val DefaultFoamIcons = FoamIcons(
         FoamIconRole.CLOSE to Icons.Filled.Close,
         FoamIconRole.DELETE to Icons.Filled.Delete,
         FoamIconRole.ARROW_FORWARD to Icons.AutoMirrored.Filled.ArrowForward,
+        FoamIconRole.CHEVRON_RIGHT to Icons.Filled.ChevronRight,
         FoamIconRole.SHUFFLE to Icons.Filled.Shuffle,
         FoamIconRole.MISC to Icons.Filled.Extension,
         FoamIconRole.UI to Icons.Filled.Palette,
@@ -176,6 +179,7 @@ val DefaultFoamIcons = FoamIcons(
         FoamIconRole.CLOSE to Icons.Outlined.Close,
         FoamIconRole.DELETE to Icons.Outlined.Delete,
         FoamIconRole.ARROW_FORWARD to Icons.AutoMirrored.Outlined.ArrowForward,
+        FoamIconRole.CHEVRON_RIGHT to Icons.Outlined.ChevronRight,
         FoamIconRole.SHUFFLE to Icons.Outlined.Shuffle,
         FoamIconRole.MISC to Icons.Outlined.Extension,
         FoamIconRole.UI to Icons.Outlined.Palette,
@@ -205,6 +209,7 @@ val DefaultFoamIcons = FoamIcons(
         FoamIconRole.CLOSE to Icons.Rounded.Close,
         FoamIconRole.DELETE to Icons.Rounded.Delete,
         FoamIconRole.ARROW_FORWARD to Icons.AutoMirrored.Rounded.ArrowForward,
+        FoamIconRole.CHEVRON_RIGHT to Icons.Rounded.ChevronRight,
         FoamIconRole.SHUFFLE to Icons.Rounded.Shuffle,
         FoamIconRole.MISC to Icons.Rounded.Extension,
         FoamIconRole.UI to Icons.Rounded.Palette,

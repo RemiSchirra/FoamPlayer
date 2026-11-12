@@ -15,6 +15,7 @@ import com.foamplayer.app.data.lyrics.LyricsSearchResult
 import com.foamplayer.app.data.lyrics.LyricsSourceStatus
 import com.foamplayer.app.data.lyrics.LyricsStatusScanner
 import com.foamplayer.app.data.lyrics.ResolvedLyrics
+import com.foamplayer.app.data.lyrics.SavedLyricsEntry
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.lyrics.LyricsProvider
 import com.foamplayer.app.lyrics.LyricsUtils
@@ -292,6 +293,74 @@ class LyricsRepository @Inject constructor(
             embeddedStillPresent = embeddedStillPresent
         )
     }
+
+    /**
+     * Every lyrics payload currently stored for [track]: the persisted online
+     * cache, the sidecar file and the embedded tag, in that order. Local reads
+     * only — never the network.
+     */
+    suspend fun getSavedLyrics(track: TrackEntity): List<SavedLyricsEntry> = withContext(Dispatchers.IO) {
+        buildList {
+            cachedLyricsDao.getByTrackId(track.id)
+                ?.takeIf { it.lyrics.isNotBlank() }
+                ?.let { cached ->
+                    add(
+                        SavedLyricsEntry(
+                            source = LyricsSource.ONLINE,
+                            content = cached.lyrics,
+                            providerName = cached.provider,
+                            type = LyricsSearchHelper.classify(cached.lyrics),
+                            derivedDurationMs = LyricsSearchHelper.deriveDurationMs(cached.lyrics)
+                        )
+                    )
+                }
+            resolveFromFile(track)?.let { resolved ->
+                add(
+                    SavedLyricsEntry(
+                        source = LyricsSource.LYRICS_FILE,
+                        content = resolved.content,
+                        providerName = null,
+                        type = LyricsSearchHelper.classify(resolved.content),
+                        derivedDurationMs = LyricsSearchHelper.deriveDurationMs(resolved.content)
+                    )
+                )
+            }
+            resolveFromEmbedded(track)?.let { resolved ->
+                add(
+                    SavedLyricsEntry(
+                        source = LyricsSource.EMBEDDED,
+                        content = resolved.content,
+                        providerName = null,
+                        type = LyricsSearchHelper.classify(resolved.content),
+                        derivedDurationMs = LyricsSearchHelper.deriveDurationMs(resolved.content)
+                    )
+                )
+            }
+        }
+    }
+
+    /**
+     * Removes only the lyrics stored in [source] for [track]: the cache entry,
+     * the .lrc/.ttml sidecars, or the embedded tag. The other sources are left
+     * untouched.
+     */
+    suspend fun deleteSavedLyrics(track: TrackEntity, source: LyricsSource): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                when (source) {
+                    LyricsSource.ONLINE -> cachedLyricsDao.deleteByTrackId(track.id)
+                    LyricsSource.LYRICS_FILE -> {
+                        lyricsFileWriter.deleteSidecars(track.path).getOrThrow()
+                        invalidateSearchText(track.id)
+                    }
+                    LyricsSource.EMBEDDED -> {
+                        AudioLyricsTagWriter.removeEmbeddedLyrics(context, track.path).getOrThrow()
+                        statusScanner.invalidate(track.id)
+                        invalidateSearchText(track.id)
+                    }
+                }
+            }
+        }
 
     private suspend fun fetchFrom(provider: LyricsProvider, track: TrackEntity): String? =
         try {

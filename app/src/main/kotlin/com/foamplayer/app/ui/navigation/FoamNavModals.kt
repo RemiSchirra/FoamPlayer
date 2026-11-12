@@ -20,9 +20,6 @@ import com.foamplayer.app.ui.modals.TrackRadioModal
 import com.foamplayer.app.ui.modals.TrackRadioState
 import com.foamplayer.app.ui.modals.TrackRadioViewModel
 import com.foamplayer.app.ui.modals.UpdateFoamModal
-import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsDetailsViewModel
-import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsTrackDetails
-import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsTrackDetailsModal
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.update.DownloadState
@@ -40,21 +37,6 @@ internal class FoamNavModalState {
     var pickerBatchCollection by mutableStateOf<CollectionInfo?>(null)
     var pickerBatchTracks by mutableStateOf<List<TrackEntity>?>(null)
     var pickerExcludedPlaylistId by mutableStateOf<Long?>(null)
-
-    private var _lyricsModalTrack by mutableStateOf<TrackEntity?>(null)
-    var lyricsModalTrack: TrackEntity?
-        get() = _lyricsModalTrack
-        set(value) {
-            _lyricsModalTrack = value
-            if (value != null) lastLyricsModalTrack = value
-        }
-
-    var lastLyricsModalTrack by mutableStateOf<TrackEntity?>(null)
-        private set
-
-    /** Keeps the previous track while the lyrics sheet slides away. */
-    val lyricsDisplayTrack: TrackEntity?
-        get() = lyricsModalTrack ?: lastLyricsModalTrack
 
     fun openPlaylistPickerFor(track: TrackEntity) {
         playlistPickerTrack = track
@@ -84,7 +66,6 @@ internal fun FoamGlobalModals(
     playerViewModel: PlayerViewModel,
     playlistsViewModel: PlaylistsViewModel,
     trackRadioViewModel: TrackRadioViewModel,
-    lyricsDetailsViewModel: LyricsDetailsViewModel,
     updateManager: UpdateManager,
     updateStartupRelease: GitHubRelease?,
     updateDownloadState: DownloadState,
@@ -92,8 +73,6 @@ internal fun FoamGlobalModals(
     trackModalState: TrackFoamModalState,
     collectionModalState: CollectionFoamModalState,
     trackRadioState: TrackRadioState,
-    lyricsTrackDetails: LyricsTrackDetails?,
-    isLyricsDetailsLoading: Boolean,
     playlists: List<com.foamplayer.app.data.db.entities.PlaylistEntity>,
     playlistCovers: Map<Long, PlaylistCover>,
     playlistIdsWithTrack: Set<Long>,
@@ -143,8 +122,8 @@ internal fun FoamGlobalModals(
         },
         onSeeRadio = trackRadioViewModel::openRadioFor,
         onOpenLyrics = { track ->
-            modalState.lyricsModalTrack = track
-            lyricsDetailsViewModel.loadTrackDetails(track)
+            trackModalState.dismiss()
+            navController.navigate(Screen.SettingsLyricsManagerResults.createRoute(track.id))
         },
         onResetPlayStats = { track ->
             playerViewModel.resetPlayStats(track.id)
@@ -231,23 +210,6 @@ internal fun FoamGlobalModals(
             trackModalState.show(track)
         },
         onDismiss = trackRadioViewModel::dismissRadio
-    )
-
-    LyricsTrackDetailsModal(
-        visible = modalState.lyricsModalTrack != null,
-        track = modalState.lyricsDisplayTrack,
-        details = lyricsTrackDetails?.takeIf { it.track.id == modalState.lyricsDisplayTrack?.id },
-        isLoading = isLyricsDetailsLoading,
-        onDismiss = { modalState.lyricsModalTrack = null },
-        onDelete = { modalState.lyricsModalTrack?.let { lyricsDetailsViewModel.deleteLyrics(it) } },
-        onSearch = {
-            val trackId = modalState.lyricsModalTrack?.id
-            modalState.lyricsModalTrack = null
-            trackModalState.dismiss()
-            trackId?.let {
-                navController.navigate(Screen.SettingsLyricsManagerResults.createRoute(it))
-            }
-        }
     )
 
     // Long-press collection actions; a folder/genre/year spanning several

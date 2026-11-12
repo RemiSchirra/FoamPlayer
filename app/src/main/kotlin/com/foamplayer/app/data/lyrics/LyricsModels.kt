@@ -52,3 +52,14 @@ data class LyricsDeleteResult(
 ) {
     val deletedSomething: Boolean get() = cachedDeleted || fileDeleted || embeddedRemoved
 }
+
+/** One lyrics payload stored in a local source: online cache, sidecar file, or embedded tag. */
+data class SavedLyricsEntry(
+    val source: LyricsSource,
+    val content: String,
+    /** Provider name for online (cached) lyrics, null for local sources. */
+    val providerName: String?,
+    val type: LyricsResultType,
+    /** Duration derived from the content's timings, null when unknown. */
+    val derivedDurationMs: Long?
+)

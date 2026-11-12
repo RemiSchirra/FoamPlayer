@@ -33,7 +33,7 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsLyrics : Screen("settings/lyrics", "Lyrics Settings")
     object SettingsLyricsManager : Screen("settings/lyrics/manager", "Lyrics Manager")
     object SettingsLyricsManagerResults :
-        Screen("settings/lyrics/manager/results?trackId={trackId}", "Lyrics Search Results") {
+        Screen("settings/lyrics/manager/results?trackId={trackId}", "Lyrics details") {
         fun createRoute(trackId: Long) = "settings/lyrics/manager/results?trackId=$trackId"
     }
     object SettingsMisc : Screen("settings/misc", "Misc Settings")

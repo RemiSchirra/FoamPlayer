@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.screens.settings.lyricsmanager
 
-import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -31,8 +30,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
-import androidx.compose.material.SnackbarHost
-import androidx.compose.material.SnackbarHostState
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -50,6 +47,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,11 +70,9 @@ import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.utils.TimeUtils
-import kotlinx.coroutines.launch
 
 private enum class LyricsFilter { ALL, NO_LYRICS, CACHED, FILE, EMBEDDED }
 
-@SuppressLint("LocalContextGetResourceValueCall")
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LyricsManagerScreen(
@@ -93,8 +89,6 @@ fun LyricsManagerScreen(
     var filter by remember { mutableStateOf(LyricsFilter.ALL) }
     var modalTrack by remember { mutableStateOf<TrackEntity?>(null) }
 
-    val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
     val trackDetails by viewModel.trackDetails.collectAsState()
     val isDetailsLoading by viewModel.isDetailsLoading.collectAsState()
 
@@ -104,6 +98,7 @@ fun LyricsManagerScreen(
     // are observed, and the platform view focus is cleared as well: on some
     // devices the compose-level clear alone leaves the caret visible.
     val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val density = LocalDensity.current
     val view = LocalView.current
     val imeTargetBottom = WindowInsets.imeAnimationTarget.getBottom(density)
@@ -124,26 +119,6 @@ fun LyricsManagerScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.deleteEvents.collect { event ->
-            val message = when (event) {
-                is LyricsDeleteEvent.Deleted ->
-                    if (event.embeddedRemained) {
-                        context.getString(R.string.lyrics_manager_deleted_partial)
-                    } else {
-                        context.getString(R.string.lyrics_manager_deleted)
-                    }
-                is LyricsDeleteEvent.Failed ->
-                    context.getString(R.string.lyrics_manager_delete_failed, event.reason)
-            }
-            // Non-blocking: showSnackbar suspends until the snackbar is dismissed,
-            // which must not delay the details-modal refresh below.
-            launch { snackbarHostState.showSnackbar(message) }
-            // Keep the details modal in sync with the deleted state.
-            modalTrack?.let { viewModel.loadTrackDetails(it) }
-        }
     }
 
     // Load the modal's lyrics details whenever a track is long-pressed.
@@ -229,7 +204,13 @@ fun LyricsManagerScreen(
                             track = track,
                             cached = track.id in cachedTrackIds,
                             status = statusMap[track.id],
-                            onOpenResults = { onOpenResults(track.id) },
+                            onOpenResults = {
+                                // Close the IME instantly so it does not follow
+                                // the user into the lyrics details screen.
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                                onOpenResults(track.id)
+                            },
                             onLongPress = { modalTrack = track }
                         )
                     }
@@ -237,13 +218,6 @@ fun LyricsManagerScreen(
             }
         }
         }
-
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = FoamDimens.paddingMedium + LocalBottomBarClearance.current)
-        )
     }
 
     LyricsTrackDetailsModal(
@@ -252,7 +226,6 @@ fun LyricsManagerScreen(
         details = trackDetails?.takeIf { it.track.id == modalTrack?.id },
         isLoading = isDetailsLoading,
         onDismiss = { modalTrack = null },
-        onDelete = { modalTrack?.let { viewModel.deleteLyrics(it) } },
         onSearch = {
             val trackId = modalTrack?.id
             modalTrack = null
@@ -387,7 +360,7 @@ private fun LyricsFilterChips(
         Triple(
             LyricsFilter.NO_LYRICS,
             stringResource(R.string.lyrics_manager_no_lyrics),
-            FoamTheme.accentColor
+            FoamTheme.colors.noLyrics
         ),
         Triple(
             LyricsFilter.CACHED,
@@ -402,7 +375,7 @@ private fun LyricsFilterChips(
         Triple(
             LyricsFilter.EMBEDDED,
             stringResource(R.string.lyrics_manager_embedded),
-            FoamTheme.colors.bitPerfectActive
+            FoamTheme.colors.embedded
         )
     )
 
@@ -420,7 +393,10 @@ private fun LyricsFilterChips(
                     .background(
                         if (isSelected) FoamTheme.accentColor else FoamTheme.tintedSurface
                     )
-                    .clickable { onSelect(filterValue) }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = FoamTheme.colors.textPrimary)
+                    ) { onSelect(filterValue) }
                     .padding(horizontal = FoamDimens.paddingSmall, vertical = FoamDimens.spacingTiny)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -447,8 +423,8 @@ private fun LyricsFilterChips(
 
 /**
  * A lyrics-manager song row: album art, title, artists, album, duration and a
- * lyrics-presence dot (red = none, orange = cached only, green = file or
- * embedded). Tap opens the lyrics search results, long-press opens the lyrics
+ * lyrics-presence dot (red = none, orange = cached only, green = file, blue =
+ * embedded). Tap opens the lyrics details screen, long-press opens the lyrics
  * details modal; both carry the standard ripple. Deliberately its own
  * composable (not a shared MediaListRow / TrackListItem).
  */
@@ -529,20 +505,21 @@ private fun LyricsManagerSongItem(
 
         Spacer(modifier = Modifier.width(FoamDimens.spacingTiny))
 
-        // Lyrics presence: green = file/embedded, orange = cached only, red = none.
-        // Neutral until the per-track scan reached this row.
+        // Lyrics presence: green = sidecar file, blue = embedded tag, orange =
+        // cached only, red = none. Neutral until the per-track scan reached
+        // this row; the file dot wins when both local sources exist.
         Box(
             modifier = Modifier
                 .size(6.dp)
                 .clip(RoundedCornerShape(3.dp))
                 .background(
                     when {
-                        status?.hasFile == true || status?.hasEmbedded == true ->
-                            FoamTheme.colors.bitPerfectActive
+                        status?.hasFile == true -> FoamTheme.colors.bitPerfectActive
+                        status?.hasEmbedded == true -> FoamTheme.colors.embedded
                         cached || status?.hasCached == true ->
                             FoamTheme.colors.bitPerfectInactive
                         status == null -> FoamTheme.colors.textSecondary
-                        else -> FoamTheme.accentColor
+                        else -> FoamTheme.colors.noLyrics
                     }
                 )
         )
@@ -555,8 +532,8 @@ private fun LyricsManagerSongItem(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = FoamTheme.icons.current.search,
-                contentDescription = stringResource(R.string.search),
+                imageVector = FoamTheme.icons.current.chevronRight,
+                contentDescription = stringResource(R.string.lyrics_details_title),
                 tint = FoamTheme.colors.textPrimary,
                 modifier = Modifier.size(FoamDimens.iconSmall)
             )

@@ -71,7 +71,6 @@ import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.player.progress
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 import com.foamplayer.app.update.UpdateManager
-import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsDetailsViewModel
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBackdropScale
@@ -121,11 +120,6 @@ fun FoamNavHost(
     // Playlist picker / lyrics sheet state is shared with the destination graph
     // (the collection modal) and the global dialogs below.
     val modalState = remember { FoamNavModalState() }
-
-    // Lyrics details sheet: a separate Dialog stacked on the open track sheet.
-    val lyricsDetailsViewModel: LyricsDetailsViewModel = hiltViewModel()
-    val lyricsTrackDetails by lyricsDetailsViewModel.trackDetails.collectAsState()
-    val isLyricsDetailsLoading by lyricsDetailsViewModel.isDetailsLoading.collectAsState()
 
     // Song radio sheet: the similar list is built per seed track on open.
     val trackRadioViewModel: TrackRadioViewModel = hiltViewModel()
@@ -795,7 +789,6 @@ fun FoamNavHost(
                 playerViewModel = playerViewModel,
                 playlistsViewModel = playlistsViewModel,
                 trackRadioViewModel = trackRadioViewModel,
-                lyricsDetailsViewModel = lyricsDetailsViewModel,
                 updateManager = updateManager,
                 updateStartupRelease = updateStartupRelease,
                 updateDownloadState = updateDownloadState,
@@ -803,8 +796,6 @@ fun FoamNavHost(
                 trackModalState = trackModalState,
                 collectionModalState = collectionModalState,
                 trackRadioState = trackRadioState,
-                lyricsTrackDetails = lyricsTrackDetails,
-                isLyricsDetailsLoading = isLyricsDetailsLoading,
                 playlists = playlists,
                 playlistCovers = playlistCovers,
                 playlistIdsWithTrack = playlistIdsWithTrack,

@@ -253,7 +253,10 @@
     <string name="lyrics_results_plain">Plain</string>
     <string name="lyrics_results_synced">Synced</string>
     <string name="lyrics_results_word_synced">Word-synced</string>
-    <string name="lyrics_results_title">Lyrics Search Results</string>
+    <string name="lyrics_details_title">Lyrics details</string>
+    <string name="lyrics_details_tab_saved">Saved lyrics</string>
+    <string name="lyrics_details_tab_search">Search</string>
+    <string name="lyrics_details_saved_empty">No lyrics saved for this track</string>
     <string name="lyrics_results_provider">Provider</string>
     <string name="lyrics_results_save_as_file">Save as file</string>
     <string name="lyrics_results_embed">Embed in file</string>
