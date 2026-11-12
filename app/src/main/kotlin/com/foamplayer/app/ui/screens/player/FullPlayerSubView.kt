@@ -40,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -50,6 +49,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -71,7 +71,6 @@ import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.LocalAccentTintState
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.pressShrink
@@ -200,6 +199,11 @@ internal fun SubViewSelectorRow(
 }
 
 private val SelectorRestInset = 40.dp
+private val SelectorIconSize = 28.dp
+private val SelectorActionTouchPadding = 12.dp
+
+/** Height of the selector row's content (the tallest item is the "Play on" action). */
+internal val SelectorRowHeight = SelectorIconSize + SelectorActionTouchPadding * 2
 
 /**
  * Non-selector action icons living between the lyrics/queue selectors (currently just "Play on"). Same icon/touch sizing as SubViewSelectorItem, but they disappear
@@ -231,7 +235,7 @@ private fun SubViewSelectorAction(
                 enabled = isEnabled,
                 onClick = onClick
             )
-            .padding(12.dp),
+            .padding(SelectorActionTouchPadding),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -239,7 +243,7 @@ private fun SubViewSelectorAction(
             contentDescription = contentDescription,
             tint = FoamTheme.colors.textPrimary,
             modifier = Modifier
-                .size(28.dp)
+                .size(SelectorIconSize)
                 .graphicsLayer {
                     alpha = (if (isDimmed) 0.4f else 1f) * (1f - progress().coerceIn(0f, 1f))
                 }
@@ -529,7 +533,9 @@ internal fun MiniPlayPauseButton(
     isLoading: () -> Boolean,
     progress: () -> Float,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    size: Dp = PlayerDimens.miniPlayButtonSize,
+    iconSize: Dp = PlayerDimens.miniPlayIconSize
 ) {
     // Read in this leaf's scope: a play/pause flip recomposes only this button.
     val isPlaying = isPlaying()
@@ -551,17 +557,11 @@ internal fun MiniPlayPauseButton(
         }
     )
 
-    // The button's fill follows the live accent, which changes every frame of a
-    // hero pager swipe; resolved in the draw phase (see AccentTintState) so an
-    // accent frame only redraws the circle instead of recomposing this button.
-    val accentTint = LocalAccentTintState.current
     Box(
         modifier = modifier
             .pressShrink(playInteractions)
-            .size(PlayerDimens.miniPlayButtonSize)
+            .size(size)
             .graphicsLayer { alpha = progress() }
-            .clip(CircleShape)
-            .drawBehind { drawRect(accentTint.color) }
             .semantics { contentDescription = description }
             .clickable(
                 interactionSource = playInteractions,
@@ -574,15 +574,15 @@ internal fun MiniPlayPauseButton(
         CrossfadingPlayPauseIcon(
             isPlaying = isPlaying,
             loadingFraction = { loadingFraction },
-            tint = FoamTheme.colors.background,
-            iconSize = PlayerDimens.miniPlayIconSize
+            tint = FoamTheme.colors.textPrimary,
+            iconSize = iconSize
         )
         if (isLoading || loadingFraction > 0f) {
             CircularProgressIndicator(
-                color = FoamTheme.colors.background,
+                color = FoamTheme.colors.textPrimary,
                 strokeWidth = 2.dp,
                 modifier = Modifier
-                    .size(PlayerDimens.miniPlayIconSize)
+                    .size(iconSize)
                     .graphicsLayer {
                         alpha = loadingFraction
                         val circleScale = 0.2f + 0.8f * loadingFraction

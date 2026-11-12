@@ -15,15 +15,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Density
 import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.theme.FoamTheme
 
+private const val PlayButtonScale = 1.4f
+private const val TransportSpacingScale = 0.3f
+
+private fun Density.selectorRowTranslationY(progress: Float, navbarExpandHeight: Float): Float =
+    PlayerDimens.selectorRowNavbarDrop.toPx() * (1f - progress) -
+            PlayerDimens.selectorRowRise.toPx() * progress -
+            navbarExpandHeight
+
 /**
  * The control row under the player content: the lyrics/queue selector plus the mini transport
  * cluster, both riding the subview transition (`subControlsProgress`) and the navbar's extra-row
- * growth (`navbarExpandHeight`).
+ * growth (`navbarExpandHeight`). The transport cluster shares the selector row's vertical center.
  *
  * Split out of `FullPlayerScreen` so the screen body stays a layout; everything here is driven by
  * the progress providers it is handed, so no player state is read during composition here.
@@ -52,6 +61,9 @@ internal fun PlayerBottomControls(
         val latestNavbarExpandHeight = rememberUpdatedState(navbarExpandHeight)
         val latestSubControlsProgress = rememberUpdatedState(subControlsProgress)
 
+        val playButtonSize = PlayerDimens.miniPlayButtonSize * PlayButtonScale
+        val playIconSize = PlayerDimens.miniPlayIconSize * PlayButtonScale
+
         val selectorRowModifier = remember(subControlsProgress, uiAlpha) {
             Modifier
                 .fillMaxWidth()
@@ -64,9 +76,7 @@ internal fun PlayerBottomControls(
                 .graphicsLayer {
                     alpha = uiAlpha()
                     val progress = latestSubControlsProgress.value()
-                    translationY = PlayerDimens.selectorRowNavbarDrop.toPx() * (1f - progress) -
-                            PlayerDimens.selectorRowRise.toPx() * progress -
-                            latestNavbarExpandHeight.value()
+                    translationY = selectorRowTranslationY(progress, latestNavbarExpandHeight.value())
                 }
         }
 
@@ -86,22 +96,23 @@ internal fun PlayerBottomControls(
             derivedStateOf { subControlsProgress() > PlayerDimens.visibilityEpsilon }
         }
 
-        val transportClusterModifier = remember(subControlsProgress) {
+        val transportClusterModifier = remember(subControlsProgress, playButtonSize) {
             Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = PlayerDimens.selectorRowBottomPadding)
-                .height(PlayerDimens.miniPlayButtonSize)
+                .height(playButtonSize)
                 .graphicsLayer {
-                    translationY = -(PlayerDimens.playButtonRise + PlayerDimens.transportBottomInset).toPx() *
-                            latestSubControlsProgress.value() -
-                            latestNavbarExpandHeight.value()
+                    translationY = selectorRowTranslationY(
+                        latestSubControlsProgress.value(),
+                        latestNavbarExpandHeight.value()
+                    ) + ((playButtonSize - SelectorRowHeight) / 2).toPx()
                 }
         }
 
         if (showTransportCluster) {
             Row(
                 modifier = transportClusterModifier,
-                horizontalArrangement = Arrangement.spacedBy(PlayerDimens.transportSpacing),
+                horizontalArrangement = Arrangement.spacedBy(PlayerDimens.transportSpacing * TransportSpacingScale),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 MiniTransportButton(
@@ -135,7 +146,9 @@ internal fun PlayerBottomControls(
                     isPlaying = isPlayingProvider,
                     isLoading = isLoadingProvider,
                     progress = subControlsProgress,
-                    onClick = { if (isPlayingProvider()) viewModel.pause() else viewModel.play() }
+                    onClick = { if (isPlayingProvider()) viewModel.pause() else viewModel.play() },
+                    size = playButtonSize,
+                    iconSize = playIconSize
                 )
 
                 MiniTransportButton(

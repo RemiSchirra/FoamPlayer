@@ -20,7 +20,7 @@ internal object PlayerDimens {
      * below this, the lyrics/queue content would stop short of the lowered row; it is
      * extended downward by the difference to keep its bottom edge (and fade) hugging the row.
      */
-    val selectorRowRiseLayoutBasis = 36.dp
+    val selectorRowRiseLayoutBasis = 55.dp
     val subViewContentBottomExtension = (selectorRowRiseLayoutBasis - selectorRowRise).coerceAtLeast(0.dp)
     val seekBarRise = 12.dp
 
