@@ -73,7 +73,9 @@ private val TrackRadioHeaderReserve = 220.dp
  * - The radio list rendered as standard [TrackListItem] rows — the seed track
  *   first, then similar tracks in random order, plain rows without any card
  *   wrapper. Tapping a row starts the radio from it, handing the list to the
- *   player, which replaces the upcoming queue with it.
+ *   player, which replaces the upcoming queue with it. Long-pressing a row
+ *   closes the sheet and hands the track to [onTrackLongPress], which opens
+ *   the track's own action modal in its place.
  *
  * The list itself is provided by [TrackRadioViewModel]; this composable is pure
  * rendering. [visible] follows the ViewModel's open state, while the internally
@@ -89,6 +91,7 @@ fun TrackRadioModal(
     isLoading: Boolean,
     useAlbumArtAccent: Boolean,
     onPlay: (Int) -> Unit,
+    onTrackLongPress: (TrackEntity) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -131,7 +134,11 @@ fun TrackRadioModal(
                 when {
                     isLoading && tracks.isEmpty() -> TrackRadioLoading()
                     !isLoading && tracks.isEmpty() -> TrackRadioEmpty()
-                    else -> TrackRadioList(tracks = tracks, onPlayFrom = onPlay)
+                    else -> TrackRadioList(
+                        tracks = tracks,
+                        onPlayFrom = onPlay,
+                        onTrackLongPress = onTrackLongPress
+                    )
                 }
             }
         }
@@ -260,7 +267,8 @@ private fun TrackRadioLoading() {
 @Composable
 private fun TrackRadioList(
     tracks: List<TrackEntity>,
-    onPlayFrom: (Int) -> Unit
+    onPlayFrom: (Int) -> Unit,
+    onTrackLongPress: (TrackEntity) -> Unit
 ) {
     val listHeight = minOf(
         TrackRadioRowHeight * tracks.size,
@@ -278,6 +286,7 @@ private fun TrackRadioList(
             TrackListItem(
                 track = track,
                 onClick = { onPlayFrom(index) },
+                onLongClick = { onTrackLongPress(track) },
                 density = MediaDensity.ROW_NORMAL
             )
         }

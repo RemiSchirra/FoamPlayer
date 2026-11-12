@@ -226,6 +226,10 @@ internal fun FoamGlobalModals(
             }
             trackRadioViewModel.dismissRadio()
         },
+        onTrackLongPress = { track ->
+            trackRadioViewModel.dismissRadio()
+            trackModalState.show(track)
+        },
         onDismiss = trackRadioViewModel::dismissRadio
     )
 
