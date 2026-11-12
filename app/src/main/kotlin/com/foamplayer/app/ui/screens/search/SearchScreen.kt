@@ -677,17 +677,27 @@ fun SearchScreen(
                                 }
                             }
                             item(key = "history_clear") {
+                                val clearHistoryInteractionSource = remember { MutableInteractionSource() }
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .animateItem()
-                                        .clickable { searchViewModel.clearHistory() }
                                         .padding(vertical = 16.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     BasicText(
                                         text = stringResource(R.string.clear_search_history),
-                                        style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor)
+                                        style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .clickable(
+                                                interactionSource = clearHistoryInteractionSource,
+                                                indication = ripple(
+                                                    bounded = true,
+                                                    color = FoamTheme.colors.textPrimary
+                                                )
+                                            ) { searchViewModel.clearHistory() }
+                                            .padding(horizontal = 16.dp, vertical = 4.dp)
                                     )
                                 }
                             }
