@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.CircularProgressIndicator
@@ -55,8 +54,8 @@ private val FoamTrackRadioSpacing = FoamDimens.spacingSmall
 /** Art size of the header's radio chip, matching the row scaffold's artwork. */
 private val TrackRadioChipSize = 44.dp
 
-/** Size of the round play button in the radio header. */
-private val TrackRadioPlaySize = 40.dp
+/** Size of the play button in the radio header. */
+private val TrackRadioPlaySize = 32.dp
 
 /** Composed height of one ROW_NORMAL [TrackListItem] row, for list sizing. */
 private val TrackRadioRowHeight = 60.dp
@@ -190,7 +189,6 @@ private fun TrackRadioHeader(
         Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
 
         TrackRadioPlayButton(
-            accentColor = accentColor,
             enabled = isPlayEnabled,
             onClick = onPlay
         )
@@ -200,7 +198,6 @@ private fun TrackRadioHeader(
 /** Play button that starts the radio from its seed track. */
 @Composable
 private fun TrackRadioPlayButton(
-    accentColor: Color,
     enabled: Boolean,
     onClick: () -> Unit
 ) {
@@ -208,11 +205,9 @@ private fun TrackRadioPlayButton(
     Box(
         modifier = Modifier
             .size(TrackRadioPlaySize)
-            .clip(CircleShape)
-            .background(if (enabled) accentColor else FoamTheme.colors.borderOverlay)
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(color = FoamTheme.colors.textPrimary),
+                indication = ripple(bounded = false, color = FoamTheme.colors.textPrimary),
                 enabled = enabled,
                 onClick = onClick
             ),
@@ -221,8 +216,8 @@ private fun TrackRadioPlayButton(
         Icon(
             imageVector = FoamTheme.icons.current.play,
             contentDescription = stringResource(R.string.play),
-            tint = FoamTheme.colors.background,
-            modifier = Modifier.size(22.dp)
+            tint = if (enabled) FoamTheme.colors.textPrimary else FoamTheme.colors.borderOverlay,
+            modifier = Modifier.size(TrackRadioPlaySize)
         )
     }
 }
