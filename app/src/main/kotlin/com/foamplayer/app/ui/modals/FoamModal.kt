@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -61,7 +62,6 @@ import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalFoamBackdropState
 import com.foamplayer.app.ui.theme.foamSurface
-import kotlin.math.abs
 
 /**
  * A modal sheet docked to the bottom of the screen: inset from the sides, kept
@@ -73,14 +73,13 @@ import kotlin.math.abs
  *   the screen). Content taller than that cap falls back to a normal internal
  *   scroll, so the whole modal is visible without any interaction in the
  *   common case.
- * - Dragging/scrolling DOWN while the content is scrolled to its top
- *   progressively shrinks the sheet -- the bottom edge stays docked while the
- *   top descends -- rather than fighting with the content scroll. Dragging
- *   back up restores it, again only up to its fitted size (never into empty
- *   space).
+ * - Dragging/scrolling DOWN while the content is scrolled to its top slides
+ *   the whole sheet down, past the navigation bars and off the bottom of the
+ *   screen, rather than fighting with the content scroll. Dragging back up
+ *   brings it back, never above its resting position.
  * - Releasing mid-drag (with or without a flick) springs to the nearest
- *   resting point: dismissed, or back at its fitted size. The scrim fades with
- *   the sheet's live size, so dragging it down also fades the background.
+ *   resting point: dismissed, or back in place. The scrim fades with the
+ *   sheet's position, so dragging it down also fades the background.
  *
  * Rendered in a full-screen [Dialog] so it always overlays the whole screen
  * regardless of where it's called from (e.g. from inside a nav bar that isn't
@@ -167,13 +166,12 @@ fun FoamBottomModal(
                 fullPx
             }
 
-            var draggedCapPx by remember { mutableStateOf<Float?>(null) }
-
+            var dragOffsetPx by remember { mutableFloatStateOf(0f) }
             var listMovedThisGesture by remember { mutableStateOf(false) }
 
             LaunchedEffect(visible) {
                 if (visible) {
-                    draggedCapPx = null
+                    dragOffsetPx = 0f
                     listMovedThisGesture = false
                     backdrop.dragPresence = null
                 }
@@ -181,6 +179,7 @@ fun FoamBottomModal(
 
             val latestOnDismissRequest by rememberUpdatedState(onDismissRequest)
             val latestFullPx by rememberUpdatedState(fullPx)
+            val latestBottomSpacingPx by rememberUpdatedState(with(density) { bottomSpacing.toPx() })
 
             val nestedScrollConnection = remember {
                 object : NestedScrollConnection {
@@ -192,29 +191,32 @@ fun FoamBottomModal(
                             latestFullPx
                         }
 
-                    fun currentCapPx(): Float = draggedCapPx ?: restingPx()
+                    fun maxOffsetPx(): Float = restingPx() + latestBottomSpacingPx
 
-                    fun presence(capPx: Float): Float =
-                        capPx / restingPx().coerceAtLeast(1f)
+                    fun presence(offsetPx: Float): Float =
+                        1f - (offsetPx / maxOffsetPx().coerceAtLeast(1f)).coerceIn(0f, 1f)
+
+                    fun dragTo(offsetPx: Float) {
+                        dragOffsetPx = offsetPx
+                        backdrop.dragPresence = presence(offsetPx)
+                    }
 
                     suspend fun settle(flingVelocityY: Float) {
-                        val resting = restingPx()
-                        val anchors = floatArrayOf(0f, resting)
-                        val projected = (currentCapPx() - flingVelocityY * 0.15f).coerceIn(0f, resting)
-                        val target = anchors.minByOrNull { abs(it - projected) } ?: resting
+                        val maxOffset = maxOffsetPx()
+                        val projected = (dragOffsetPx + flingVelocityY * 0.15f).coerceIn(0f, maxOffset)
+                        val dismiss = projected >= restingPx() / 2f
                         animate(
-                            initialValue = currentCapPx(),
-                            targetValue = target,
-                            initialVelocity = -flingVelocityY,
+                            initialValue = dragOffsetPx,
+                            targetValue = if (dismiss) maxOffset else 0f,
+                            initialVelocity = flingVelocityY,
                             animationSpec = FoamMotion.Springs.SHEET_SETTLE
                         ) { value, _ ->
-                            draggedCapPx = value
-                            backdrop.dragPresence = presence(value)
+                            dragTo(value.coerceIn(0f, maxOffset))
                         }
-                        if (target <= 0f) {
+                        if (dismiss) {
                             latestOnDismissRequest()
                         } else {
-                            draggedCapPx = null
+                            dragOffsetPx = 0f
                             backdrop.dragPresence = null
                         }
                     }
@@ -222,15 +224,10 @@ fun FoamBottomModal(
                     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                         if (source != NestedScrollSource.UserInput) return Offset.Zero
                         val dy = available.y
-                        if (dy < 0f) {
-                            val room = restingPx() - currentCapPx()
-                            if (room > 0f) {
-                                val consumed = if (-dy < room) dy else -room
-                                val cap = currentCapPx() - consumed
-                                draggedCapPx = cap
-                                backdrop.dragPresence = presence(cap)
-                                return Offset(0f, consumed)
-                            }
+                        if (dy < 0f && dragOffsetPx > 0f) {
+                            val consumed = maxOf(dy, -dragOffsetPx)
+                            dragTo(dragOffsetPx + consumed)
+                            return Offset(0f, consumed)
                         }
                         return Offset.Zero
                     }
@@ -248,12 +245,9 @@ fun FoamBottomModal(
 
                         val dy = available.y
                         if (dy > 0f && !listMovedThisGesture) {
-                            val cap = currentCapPx()
-                            if (cap > 0f) {
-                                val amount = if (dy < cap) dy else cap
-                                val next = cap - amount
-                                draggedCapPx = next
-                                backdrop.dragPresence = presence(next)
+                            val amount = minOf(dy, maxOffsetPx() - dragOffsetPx)
+                            if (amount > 0f) {
+                                dragTo(dragOffsetPx + amount)
                                 return Offset(0f, amount)
                             }
                         }
@@ -264,7 +258,7 @@ fun FoamBottomModal(
                         val listMoved = listMovedThisGesture
                         listMovedThisGesture = false
 
-                        val atRest = currentCapPx() >= restingPx() - 0.5f
+                        val atRest = dragOffsetPx <= 0.5f
                         val listCannotScroll = scrollState.maxValue == 0
                         return when {
                             listMoved -> Velocity.Zero
@@ -282,8 +276,7 @@ fun FoamBottomModal(
                     }
 
                     override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                        val listCannotScroll =
-                            currentCapPx() >= restingPx() - 0.5f && scrollState.maxValue == 0
+                        val listCannotScroll = dragOffsetPx <= 0.5f && scrollState.maxValue == 0
                         if (listCannotScroll && available.y > 0f) {
                             settle(available.y)
                         }
@@ -312,7 +305,9 @@ fun FoamBottomModal(
             AnimatedVisibility(
                 visibleState = transitionState,
                 enter = slideInVertically(tween(FoamMotion.Duration.SMOOTH)) { fullHeight -> fullHeight },
-                exit = slideOutVertically(tween(FoamMotion.Duration.STANDARD)) { fullHeight -> fullHeight },
+                exit = slideOutVertically(tween(FoamMotion.Duration.STANDARD)) { fullHeight ->
+                    fullHeight + with(density) { bottomSpacing.roundToPx() }
+                },
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
                 Column(
@@ -320,8 +315,9 @@ fun FoamBottomModal(
                         .fillMaxWidth()
                         .padding(horizontal = horizontalMargin)
                         .padding(bottom = bottomSpacing)
+                        .graphicsLayer { translationY = dragOffsetPx }
                         .layout { measurable, constraints ->
-                            val capPx = (draggedCapPx ?: restingCapPx).toInt().coerceAtLeast(0)
+                            val capPx = restingCapPx.toInt().coerceAtLeast(0)
                             val cappedConstraints = constraints.copy(
                                 minHeight = 0,
                                 maxHeight = minOf(constraints.maxHeight, capPx)
