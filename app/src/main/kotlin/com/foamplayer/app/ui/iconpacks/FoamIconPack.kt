@@ -59,6 +59,7 @@ object CooliconsIconPack : FoamIconPack {
         FoamIconRole.NEXT to R.drawable.coolicons_next,
         FoamIconRole.PREVIOUS to R.drawable.coolicons_previous,
         FoamIconRole.SEARCH to R.drawable.coolicons_search,
+        FoamIconRole.EQUALIZER to R.drawable.coolicons_equalizer,
         FoamIconRole.HOME to R.drawable.coolicons_home,
         FoamIconRole.SETTINGS to R.drawable.coolicons_settings,
         FoamIconRole.STATS to R.drawable.coolicons_stats,
@@ -72,6 +73,7 @@ object CooliconsIconPack : FoamIconPack {
         FoamIconRole.REPEAT_ONE to R.drawable.coolicons_repeat_one,
         FoamIconRole.SHUFFLE to R.drawable.coolicons_shuffle,
         FoamIconRole.CLOSE to R.drawable.coolicons_close,
+        FoamIconRole.DELETE to R.drawable.coolicons_trash,
         FoamIconRole.DRAG_HANDLE to R.drawable.coolicons_drag_handle,
         FoamIconRole.MORE to R.drawable.coolicons_more,
     )
@@ -82,6 +84,7 @@ object CooliconsIconPack : FoamIconPack {
         FoamIconRole.NEXT to R.drawable.coolicons_outline_next,
         FoamIconRole.PREVIOUS to R.drawable.coolicons_outline_previous,
         FoamIconRole.SEARCH to R.drawable.coolicons_outline_search,
+        FoamIconRole.EQUALIZER to res[FoamIconRole.EQUALIZER],
         FoamIconRole.HOME to R.drawable.coolicons_outline_home,
         FoamIconRole.SETTINGS to R.drawable.coolicons_outline_settings,
         FoamIconRole.STATS to R.drawable.coolicons_outline_stats,
@@ -95,6 +98,7 @@ object CooliconsIconPack : FoamIconPack {
         FoamIconRole.REPEAT_ONE to res[FoamIconRole.REPEAT_ONE],
         FoamIconRole.SHUFFLE to res[FoamIconRole.SHUFFLE],
         FoamIconRole.CLOSE to res[FoamIconRole.CLOSE],
+        FoamIconRole.DELETE to R.drawable.coolicons_outline_trash,
         FoamIconRole.DRAG_HANDLE to res[FoamIconRole.DRAG_HANDLE],
         FoamIconRole.MORE to res[FoamIconRole.MORE],
     )
