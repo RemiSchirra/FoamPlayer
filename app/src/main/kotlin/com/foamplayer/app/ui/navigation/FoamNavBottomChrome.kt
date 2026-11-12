@@ -269,6 +269,7 @@ internal fun BoxScope.FoamBottomChrome(
                     },
                     isImmersiveEnabled = settings.playerMode == PlayerMode.IMMERSIVE,
                     isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                    isAutomaticColorEnabled = settings.automaticColorEnabled,
                     marqueeMode = settings.marqueeMode,
                     skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,
                     showContainer = navigationBarMode != NavigationBarMode.ATTACHED,

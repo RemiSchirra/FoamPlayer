@@ -53,6 +53,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.GraphicsLayerScope
@@ -127,7 +128,10 @@ internal fun SharedTransitionScope.MainPlayerContent(
     pagerState: PagerState,
     density: Density,
     screenWidthDp: Dp,
-    placeholderColor: Color,
+    // Draw-phase read (lambda): the placeholder color follows the live accent, which
+    // changes every frame of a hero pager swipe -- consuming it inside the pages'
+    // drawBehind keeps accent frames redraw-only (see FullPlayerScreen).
+    placeholderColor: () -> Color,
     immersive: Boolean,
     vinyl: Boolean,
     pagerEffect: PlayerPagerEffect,
@@ -278,7 +282,10 @@ internal fun SharedTransitionScope.TrackHeroPager(
     pagerState: PagerState,
     density: Density,
     screenWidthDp: Dp,
-    placeholderColor: Color,
+    // Draw-phase read (lambda): the placeholder color follows the live accent, which
+    // changes every frame of a hero pager swipe -- consuming it inside the pages'
+    // drawBehind keeps accent frames redraw-only (see FullPlayerScreen).
+    placeholderColor: () -> Color,
     immersive: Boolean,
     vinyl: Boolean,
     pagerEffect: PlayerPagerEffect,
@@ -599,7 +606,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                     fadeShadow(PlayerPagerEffectMath.layer(pagerEffect, offset).alpha)
                                 }
                             }
-                            .background(placeholderColor),
+                            .drawBehind { drawRect(placeholderColor()) },
                         contentAlignment = Alignment.Center
                     ) {
                         if (pageTrack.albumArtPath != null) {
@@ -787,7 +794,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 1f
                             }
                         }
-                        .background(placeholderColor),
+                        .drawBehind { drawRect(placeholderColor()) },
                     contentAlignment = Alignment.Center
                 ) {
                     if (track.albumArtPath != null) {
@@ -1185,21 +1192,21 @@ internal fun PlaybackProgressSlider(
             // morphFromWaveform anchors the bars elsewhere while a swap is in flight;
             // at rest the bars trace the playing track's own envelope.
             val waveform = morphFromWaveform ?: track?.let { rememberWaveform(it.path, it.duration) }
-            WaveformSeekBar(
+            AccentSeekTrack(
+                seekBarStyle = seekBarStyle,
                 value = { dragValue ?: seekBarProgress.progress },
                 onValueChange = onSliderValueChange,
+                modifier = sliderModifier,
                 waveform = waveform,
                 targetWaveform = morphTargetWaveform,
-                trackChangeProgress = trackChangeProgress,
-                modifier = sliderModifier,
-                inactiveColor = FoamTheme.accentColor.copy(alpha = 0.4f)
+                trackChangeProgress = trackChangeProgress
             )
         } else {
-            FoamSlider(
+            AccentSeekTrack(
+                seekBarStyle = seekBarStyle,
                 value = { dragValue ?: seekBarProgress.progress },
                 onValueChange = onSliderValueChange,
-                modifier = sliderModifier,
-                inactiveColor = FoamTheme.accentColor.copy(alpha = 0.4f)
+                modifier = sliderModifier
             )
         }
         if (showTimeLabels) {
@@ -1236,6 +1243,46 @@ internal fun PlaybackProgressSlider(
                 BasicText(text = TimeUtils.formatDurationCompact(durationMs), style = labelStyle)
             }
         }
+    }
+}
+
+/**
+ * The player's seek track, isolated so the per-frame accent read recomposes
+ * only the track itself, never the time labels: FoamTheme.accentColor changes
+ * every frame of a hero pager swipe (viewModel.setDynamicAccentColor fires per
+ * drag frame), and both track colors follow it here. Same pattern as
+ * MiniPlayerProgressSlider and SubViewSelectorItem -- one small leaf scope per
+ * accent frame. WaveformSeekBar and FoamSlider consume the passed colors in
+ * their own draw phase, so an accent frame only redraws the bars.
+ */
+@Composable
+private fun AccentSeekTrack(
+    seekBarStyle: SeekBarStyle,
+    value: () -> Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    waveform: WaveformState? = null,
+    targetWaveform: WaveformState? = null,
+    trackChangeProgress: () -> Float = { 0f }
+) {
+    val inactiveColor = FoamTheme.accentColor.copy(alpha = 0.4f)
+    if (seekBarStyle == SeekBarStyle.WAVEFORM) {
+        WaveformSeekBar(
+            value = value,
+            onValueChange = onValueChange,
+            waveform = waveform,
+            targetWaveform = targetWaveform,
+            trackChangeProgress = trackChangeProgress,
+            modifier = modifier,
+            inactiveColor = inactiveColor
+        )
+    } else {
+        FoamSlider(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = modifier,
+            inactiveColor = inactiveColor
+        )
     }
 }
 

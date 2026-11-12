@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -287,26 +288,38 @@ private fun smoothstep(edge0: Float, edge1: Float, value: Float): Float {
  * Resolves [pack]'s drawable resources over the default icon set, for all
  * three styles (the icon settings screen's style preview reads them too).
  * Packs are partial: a role without a drawable keeps the default icon.
- * [vectorResource] is a cheap read-only lookup, so a plain resolution on each
- * recomposition of [FoamTheme] (which recomposes rarely) is fine -- and it
- * lets the resolution stay a @Composable instead of hiding a composable call
- * inside a remember block.
+ *
+ * Resolved once per pack + style + context and remembered. FoamTheme re-runs
+ * on every accent frame (the dynamic accent changes per drag frame while a
+ * track swipe is in flight), and a plain re-resolution here would both re-parse
+ * every icon vector at display frequency and hand CompositionLocalProvider a
+ * fresh, unequal FoamIcons -- invalidating every FoamTheme.icons reader in the
+ * app (nav bar, player chrome, every icon) per frame during an active swipe.
+ * The non-composable vectorResource overload lets the parse live inside the
+ * remember block; the stable instance keeps LocalFoamIcons readers
+ * un-invalidated across accent frames.
  */
 @Composable
 internal fun rememberFoamIcons(pack: FoamIconPack, style: FoamIconStyle): FoamIcons {
-    val resolved = FoamIconStyle.entries.associateWith { s ->
-        FoamIconRole.entries.fold(DefaultFoamIcons.setFor(s)) { set, role ->
-            pack.resFor(s, role)?.let { res ->
-                set.with(role, ImageVector.vectorResource(res))
-            } ?: set
+    val context = LocalContext.current
+    return remember(pack, style, context) {
+        val resolved = FoamIconStyle.entries.associateWith { s ->
+            FoamIconRole.entries.fold(DefaultFoamIcons.setFor(s)) { set, role ->
+                pack.resFor(s, role)?.let { res ->
+                    set.with(
+                        role,
+                        ImageVector.vectorResource(context.theme, context.resources, res)
+                    )
+                } ?: set
+            }
         }
+        FoamIcons(
+            solid = resolved.getValue(FoamIconStyle.SOLID),
+            outline = resolved.getValue(FoamIconStyle.OUTLINE),
+            flat = resolved.getValue(FoamIconStyle.FLAT),
+            currentStyle = style
+        )
     }
-    return FoamIcons(
-        solid = resolved.getValue(FoamIconStyle.SOLID),
-        outline = resolved.getValue(FoamIconStyle.OUTLINE),
-        flat = resolved.getValue(FoamIconStyle.FLAT),
-        currentStyle = style
-    )
 }
 
 /**

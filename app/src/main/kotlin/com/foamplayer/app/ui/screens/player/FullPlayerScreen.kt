@@ -69,6 +69,8 @@ import com.foamplayer.app.ui.modals.PlayOnDevice
 import com.foamplayer.app.ui.modals.PlayOnModal
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.LocalAccentTintState
+import com.foamplayer.app.ui.theme.SurfaceAccentTint
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.WaveformCache
 import com.foamplayer.app.ui.utils.WaveformState
@@ -320,7 +322,22 @@ fun FullPlayerScreen(
                     upTransitionState.currentState != upTransitionState.targetState
         }
     }
-    val placeholderColor = if (isTransitioning) Color.Transparent else FoamTheme.tintedSurfaceVariant
+    // Draw-phase placeholder color: the tinted variant follows the live accent,
+    // which changes every frame of a hero pager swipe (viewModel.setDynamicAccentColor
+    // fires per drag frame). Reading it here -- in this screen's own scope -- would
+    // recompose the entire player at display frequency during an active swipe, so it
+    // is handed to the hero pager as a lambda consumed in the pages' draw phase
+    // (see TrackHeroPager). Both reads inside the lambda (the transition flag and
+    // the live accent) invalidate drawing only.
+    val accentTint = LocalAccentTintState.current
+    val placeholderBaseColor = FoamTheme.colors.surfaceVariant
+    val placeholderColor = {
+        if (isTransitioning) {
+            Color.Transparent
+        } else {
+            accentTint.resolve(placeholderBaseColor, SurfaceAccentTint)
+        }
+    }
 
     val pagerState = key(state.repeatMode == RepeatMode.ALL) {
         rememberPagerState(

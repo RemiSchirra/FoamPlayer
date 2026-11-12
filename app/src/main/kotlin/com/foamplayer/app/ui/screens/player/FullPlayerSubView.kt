@@ -14,7 +14,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -41,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -71,6 +71,7 @@ import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.LocalAccentTintState
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.pressShrink
@@ -492,8 +493,25 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                 }
             }
         }
-        Icon(imageVector = Icons.Rounded.KeyboardArrowDown, contentDescription = stringResource(R.string.collapse), tint = FoamTheme.accentColor, modifier = Modifier.size(28.dp))
+        CollapseAccentIcon()
     }
+}
+
+/**
+ * Isolated so the per-frame accent read recomposes only the icon: accentColor
+ * changes every frame of a hero pager swipe (viewModel.setDynamicAccentColor
+ * fires per drag frame), and reading it inline in the header body would
+ * recompose the header (and its sharedBounds/marquee children) at display
+ * frequency. Same pattern as SubViewSelectorItem above.
+ */
+@Composable
+private fun CollapseAccentIcon() {
+    Icon(
+        imageVector = Icons.Rounded.KeyboardArrowDown,
+        contentDescription = stringResource(R.string.collapse),
+        tint = FoamTheme.accentColor,
+        modifier = Modifier.size(28.dp)
+    )
 }
 
 /**
@@ -533,13 +551,17 @@ internal fun MiniPlayPauseButton(
         }
     )
 
+    // The button's fill follows the live accent, which changes every frame of a
+    // hero pager swipe; resolved in the draw phase (see AccentTintState) so an
+    // accent frame only redraws the circle instead of recomposing this button.
+    val accentTint = LocalAccentTintState.current
     Box(
         modifier = modifier
             .pressShrink(playInteractions)
             .size(PlayerDimens.miniPlayButtonSize)
             .graphicsLayer { alpha = progress() }
             .clip(CircleShape)
-            .background(FoamTheme.accentColor)
+            .drawBehind { drawRect(accentTint.color) }
             .semantics { contentDescription = description }
             .clickable(
                 interactionSource = playInteractions,

@@ -280,6 +280,8 @@ fun MiniPlayer(
     skipTrackChangeAnimation: Boolean = false,
     showContainer: Boolean = true,
     fallbackPlaybackState: PlaybackState? = null,
+    /** Whether the app accent derives from album art; see the pager color effect below. */
+    isAutomaticColorEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val livePlaybackState by playbackStateFlow.collectAsState()
@@ -425,7 +427,12 @@ fun MiniPlayer(
     }
 
     val fallbackAccent = FoamTheme.colors.textPrimary
-    LaunchedEffect(pagerState, fallbackAccent) {
+    // Gated like FullPlayerScreen's equivalent effect: with automatic color off the
+    // app-wide accent ignores these updates entirely (the manual pick wins in
+    // rememberAccentColor), so firing one per drag frame would only recompose the
+    // accent scope -- and FoamTheme behind it -- for nothing during a swipe.
+    LaunchedEffect(pagerState, isAutomaticColorEnabled, fallbackAccent) {
+        if (!isAutomaticColorEnabled) return@LaunchedEffect
         snapshotFlow {
             val jump = pendingJump
             val dep = latestDeparture
