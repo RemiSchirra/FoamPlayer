@@ -141,6 +141,8 @@ fun TrackListScreen(
     /** False when [imageUrl] is a plain image URI (e.g. a playlist cover). */
     imageIsEmbeddedArt: Boolean = true,
     artistName: String? = null,
+    /** Album release year; when set it is prepended to the hero's stats line. */
+    year: Int? = null,
     /** When set, the hero's artist line becomes a tappable link. */
     onArtistClick: ((String) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -195,7 +197,9 @@ fun TrackListScreen(
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
     val trackCount = tracks.size
-    val statsText = stringResource(R.string.track_count_duration, trackCount, durationText)
+    val statsText = year?.let {
+        stringResource(R.string.year_track_count_duration, it, trackCount, durationText)
+    } ?: stringResource(R.string.track_count_duration, trackCount, durationText)
     val context = LocalContext.current
     var showOrganisationModal by remember { mutableStateOf(false) }
 

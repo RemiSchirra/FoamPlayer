@@ -316,6 +316,7 @@
     <string name="play_on_remote_player_desc">%1$s media server</string>
     <string name="play_on_upnp_desc">UPnP</string>
     <string name="track_count_duration">%1$d Tracks • %2$s</string>
+    <string name="year_track_count_duration">%1$d • %2$d Tracks • %3$s</string>
     <string name="add_separator">Add separator…</string>
 
     <string name="test_components">Components Test</string>

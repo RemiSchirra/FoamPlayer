@@ -82,8 +82,7 @@ fun AlbumDetailScreen(
             onBack = onBack,
             imageUrl = imageUrl,
             artistName = artistName,
-            // Only tappable when an artist name actually resolves; the hero then
-            // renders the accent-colored line as a link.
+            year = firstTrack?.year,
             onArtistClick = if (artistName != null) {
                 { onArtistClick(artistName, artistPageSeedImage, artistPageSeedIsEmbeddedArt) }
             } else {
