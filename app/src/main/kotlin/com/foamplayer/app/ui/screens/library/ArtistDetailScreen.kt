@@ -35,6 +35,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -72,6 +73,7 @@ import com.foamplayer.app.ui.components.collectionListTopFade
 import com.foamplayer.app.ui.components.isNavTransitionInProgress
 import com.foamplayer.app.ui.components.collectionSearchOpenBottomPadding
 import com.foamplayer.app.ui.components.rememberCollectionHeroFlightFraction
+import com.foamplayer.app.ui.components.rememberCollectionHeroOverscroll
 import com.foamplayer.app.ui.components.rememberCollectionScrollFraction
 import com.foamplayer.app.ui.components.rememberCollectionScrollTopBarTitleStart
 import com.foamplayer.app.ui.components.rememberCollectionSearchState
@@ -178,6 +180,7 @@ fun ArtistDetailScreen(
         (1f - navFlightFraction.value) * (1f - containerFlightFraction.value)
     }
     var heroVisibleHeightPx by rememberSaveable { mutableStateOf(0) }
+    val heroOverscroll = rememberCollectionHeroOverscroll()
     val heroScrollOffsetPx: () -> Int = {
         if (gridState.firstVisibleItemIndex == 0) {
             gridState.firstVisibleItemScrollOffset
@@ -221,6 +224,7 @@ fun ArtistDetailScreen(
                     accentColor = accentColor,
                     transitionAlpha = transitionAlpha,
                     scrollOffsetPx = heroScrollOffsetPx,
+                    overscrollPx = heroOverscroll.pullPx,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedElementKey = artistName,
@@ -235,6 +239,7 @@ fun ArtistDetailScreen(
                 columns = GridCells.Fixed(ArtistAlbumGridColumns),
                 modifier = Modifier
                     .fillMaxSize()
+                    .nestedScroll(heroOverscroll.connection)
                     .collectionListTopFade()
                     .then(gridTopObserver),
                 state = gridState,

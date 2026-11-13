@@ -13,6 +13,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
@@ -51,6 +54,8 @@ import androidx.compose.material.ripple
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ProvidableCompositionLocal
@@ -70,6 +75,9 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -77,6 +85,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -100,6 +109,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import coil.imageLoader
@@ -119,6 +129,9 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /** Immersive hero image height, as a fraction of the full screen height. */
 const val CollectionHeroImmersiveHeightFraction = 0.5f
@@ -159,6 +172,84 @@ const val CollectionHeroImmersiveParallaxFactor = 0.55f
  * Extra scale the immersive hero artwork gains while scrolling down.
  */
 const val CollectionHeroImmersiveScrollScale = 0.25f
+
+/**
+ * Maximum extra vertical stretch of the immersive hero artwork when the list is
+ * pulled down past its top (1f = the artwork doubles in height). The stretch
+ * follows a rubber-band curve and approaches this value asymptotically.
+ */
+const val CollectionHeroOverscrollMaxStretch = 0.04f
+
+/**
+ * Tracks how far the user has pulled a collection list past its top edge, so
+ * the immersive hero artwork (drawn BEHIND the list, hence outside the list's
+ * own stretch overscroll effect) can stretch along with the rows.
+ *
+ * Attach [connection] with `Modifier.nestedScroll` on the list/grid and pass
+ * [pullPx] to [CollectionHero] as `overscrollPx`. The list's default overscroll
+ * effect is left untouched: it still stretches the rows, this only mirrors the
+ * pull on the artwork. Reads are draw-phase only (no recomposition per frame).
+ */
+@Stable
+class CollectionHeroOverscroll(private val scope: CoroutineScope) {
+    private val pull = mutableFloatStateOf(0f)
+    private var releaseJob: Job? = null
+
+    /** Current pull past the top edge, in px (0f at rest). */
+    val pullPx: () -> Float = { pull.floatValue }
+
+    val connection: NestedScrollConnection = object : NestedScrollConnection {
+        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            // Dragging back up while stretched: release the stretch first.
+            val current = pull.floatValue
+            if (current > 0f && available.y < 0f && source == NestedScrollSource.UserInput) {
+                releaseJob?.cancel()
+                val consumed = maxOf(available.y, -current)
+                pull.floatValue = current + consumed
+                return Offset(0f, consumed)
+            }
+            return Offset.Zero
+        }
+
+        override fun onPostScroll(
+            consumed: Offset,
+            available: Offset,
+            source: NestedScrollSource
+        ): Offset {
+            // Whatever the list could not consume while pulling down is overscroll.
+            if (available.y > 0f && source == NestedScrollSource.UserInput) {
+                releaseJob?.cancel()
+                pull.floatValue += available.y
+            }
+            return Offset.Zero
+        }
+
+        override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+            // Called on every release (even with zero velocity). The spring-back
+            // runs in its own coroutine: the scroll container awaits this
+            // callback before releasing the list's native stretch, so blocking
+            // here would freeze that effect.
+            if (pull.floatValue > 0f) {
+                releaseJob?.cancel()
+                releaseJob = scope.launch {
+                    animate(
+                        initialValue = pull.floatValue,
+                        targetValue = 0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) { value, _ -> pull.floatValue = value }
+                }
+            }
+            return Velocity.Zero
+        }
+    }
+}
+
+@Composable
+fun rememberCollectionHeroOverscroll(): CollectionHeroOverscroll =
+    rememberCoroutineScope().let { scope -> remember(scope) { CollectionHeroOverscroll(scope) } }
 
 /** Alpha of the subtle scrim over the immersive hero's status-bar zone. */
 const val CollectionHeroStatusBarScrimAlpha = 0.35f
@@ -638,6 +729,9 @@ fun CollectionHeroImmersiveHeader(
  * toward transparent, so the collection's rows slide over a receding backdrop.
  * Compact and Normal render in the list itself and ignore it.
  *
+ * [overscrollPx] reports how far the list is pulled past its top edge; the
+ * immersive artwork stretches downward (anchored at the top) to follow it.
+ *
  * NOTE on flight rendering: the shared-element overlay draws only the
  * becoming-visible side's content and clip. On open that is this hero; on
  * close the drawn side is the source row instead — which is why the row side
@@ -662,6 +756,8 @@ fun CollectionHero(
     accentColor: Color = FoamTheme.accentColor,
     transitionAlpha: (() -> Float)? = null,
     scrollOffsetPx: (() -> Int)? = null,
+    /** Pull past the list's top edge in px (see [CollectionHeroOverscroll.pullPx]); stretches the immersive artwork. */
+    overscrollPx: (() -> Float)? = null,
     /** Reports the hero title's current top y in root coordinates, for the scroll top bar's fade-in anchor. */
     onTitleTopPx: ((Float) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -721,6 +817,7 @@ fun CollectionHero(
                 accentColor = accentColor,
                 transitionAlpha = transitionAlpha,
                 scrollOffsetPx = scrollOffsetPx,
+                overscrollPx = overscrollPx,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 sharedElementKey = sharedElementKey,
@@ -955,6 +1052,7 @@ private fun CollectionHeroImmersiveArtwork(
     accentColor: Color,
     transitionAlpha: (() -> Float)?,
     scrollOffsetPx: (() -> Int)?,
+    overscrollPx: (() -> Float)?,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
@@ -970,6 +1068,7 @@ private fun CollectionHeroImmersiveArtwork(
     // start so it still begins at the same absolute height.
     val fadeStartFraction = (heroHeight * CollectionHeroImmersiveFadeStartFraction) /
             artworkHeight
+    val artworkHeightPx = with(density) { artworkHeight.toPx() }
     val heroVisiblePx = (with(density) { heroHeight.roundToPx() } - statusBarHeightPx)
         .coerceAtLeast(1)
     // 0 at rest, 1 once the hero has scrolled its own visible height away.
@@ -1017,8 +1116,17 @@ private fun CollectionHeroImmersiveArtwork(
                     val progress = scrollProgress()
                     translationY = -parallaxShiftPx()
                     val scale = 1f + progress * CollectionHeroImmersiveScrollScale
+                    // Overscroll stretch (rubber-band), anchored at the artwork's top.
+                    val pull = overscrollPx?.invoke() ?: 0f
+                    val stretch = if (pull > 0f) {
+                        val p = pull / artworkHeightPx
+                        CollectionHeroOverscrollMaxStretch * p / (1f + p)
+                    } else {
+                        0f
+                    }
+                    transformOrigin = TransformOrigin(0.5f, if (stretch > 0f) 0f else 0.5f)
                     scaleX = scale
-                    scaleY = scale
+                    scaleY = scale + stretch
                     alpha = 1f - progress
                     compositingStrategy = CompositingStrategy.Offscreen
                     shape = AlbumArtFlightShape(flightRestPercent) { flightFraction.value }

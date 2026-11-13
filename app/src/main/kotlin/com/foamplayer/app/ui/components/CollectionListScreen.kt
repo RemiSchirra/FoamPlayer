@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -178,6 +179,7 @@ fun CollectionListScreen(
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
+    val heroOverscroll = rememberCollectionHeroOverscroll()
     val heroScrollOffsetPx: () -> Int = {
         if (density.isGrid) {
             if (gridState.firstVisibleItemIndex == 0) {
@@ -240,6 +242,7 @@ fun CollectionListScreen(
                 icon = headerIcon,
                 onPlayAllClick = null,
                 scrollOffsetPx = heroScrollOffsetPx,
+                overscrollPx = heroOverscroll.pullPx,
                 modifier = Modifier.align(Alignment.TopStart)
             )
         }
@@ -249,6 +252,7 @@ fun CollectionListScreen(
                 columns = GridCells.Fixed(density.gridColumns),
                 modifier = Modifier
                     .fillMaxSize()
+                    .nestedScroll(heroOverscroll.connection)
                     .collectionListTopFade()
                     .then(listTopObserver),
                 state = gridState,
@@ -305,6 +309,7 @@ fun CollectionListScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
+                    .nestedScroll(heroOverscroll.connection)
                     .collectionListTopFade()
                     .then(listTopObserver),
                 state = listState,
