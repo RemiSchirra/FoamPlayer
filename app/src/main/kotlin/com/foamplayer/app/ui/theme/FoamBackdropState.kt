@@ -100,6 +100,12 @@ fun FoamBackdropHost(
  * [FoamBackdropState.dragPresence] frame-by-frame during sheet drags, and
  * eases back to full size on close.
  *
+ * Applied at the SharedTransitionLayout level (see FoamNavHost), so the
+ * shared-element overlay scales with it: flights render in unscaled lookahead
+ * layout space, and with the scale here they still depart exactly at the
+ * on-screen artwork's bounds — a player close can therefore start together
+ * with a dismissing modal, with the artwork staying seamless.
+ *
  * Apply to the screen content only — never to the backdrop image layers — so
  * the background always fills the screen edge-to-edge. The animated value is
  * only read in the draw phase, so the animation never recomposes the scaled

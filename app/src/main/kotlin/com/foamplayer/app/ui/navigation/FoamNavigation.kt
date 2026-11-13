@@ -72,7 +72,6 @@ import com.foamplayer.app.ui.screens.player.progress
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 import com.foamplayer.app.update.UpdateManager
 import com.foamplayer.app.ui.theme.FoamMotion
-import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamBackdropScale
 import com.foamplayer.app.ui.theme.foamPlayerOpenScale
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -371,7 +370,12 @@ fun FoamNavHost(
     var playerOpenedRoute by remember { mutableStateOf<String?>(null) }
     var playerOpenedPattern by remember { mutableStateOf<String?>(null) }
 
-    /** Navigates while closing the player, staging the flight after the nav swap. */
+    /**
+     * Navigates while closing the player, staging the flight after the nav
+     * swap. The modal shrink scale lives on the SharedTransitionLayout, so the
+     * artwork flight scales with the world and starts together with a
+     * dismissing modal — no pop, no staging.
+     */
     fun navigateClosingPlayer(route: String, pattern: String) {
         zoomOrigins.discardTouch()
         val topId = navController.currentDestination?.id
@@ -399,7 +403,54 @@ fun FoamNavHost(
         }
     }
 
-    SharedTransitionLayout {
+    // Backdrop layers: full-bleed root-level siblings, composed OUTSIDE the
+    // shared transition below, so the modal shrink never scales the background.
+    var navZoneHeightPx by remember { mutableStateOf(0) }
+    val onBackgroundTransition = AppBackdrop(
+        currentRoute = currentRoute,
+        backgroundMode = backgroundMode,
+        settings = playerSettings,
+        preview = backgroundSettingsPreview,
+        playerViewModel = playerViewModel,
+        playerTargetOpen = playerTransitionState.targetState
+    )
+
+    val listBackdropState = remember(scope) { DetailListBackdropState(scope) }
+    LaunchedEffect(currentRoute) { listBackdropState.onRouteChanged(currentRoute) }
+    DetailListBackdrop(
+        state = listBackdropState,
+        currentRoute = currentRoute,
+        lastRoute = lastRoute,
+        backgroundMode = backgroundMode,
+        forceDynamic = forceDynamicBackgroundInCollections,
+        blur = backgroundBlurRadius(playerSettings.backgroundBlur),
+        intensity = playerSettings.appBackgroundIntensity / 100f
+    )
+    val onListBackdropArt: (String?, Boolean) -> Unit = listBackdropState::onArt
+
+    // Full player backdrop (root-hosted)
+    val fullPlayerBackdropState = remember { FullPlayerBackdropState() }
+    PlayerBackdrop(
+        transitionState = playerTransitionState,
+        state = fullPlayerBackdropState,
+        backgroundMode = backgroundMode,
+        settings = playerSettings,
+        navigationBarMode = navigationBarMode,
+        navZoneHeightPx = navZoneHeightPx,
+        forceDynamic = forceDynamicBackgroundInPlayer
+    )
+
+    // The modal shrink scale is applied to the SharedTransitionLayout itself,
+    // so the shared-element overlay scales with the world: the artwork flight
+    // departs exactly at the on-screen hero's bounds, and a close can start
+    // together with a dismissing modal — no pop, no staging. No base background
+    // here: it would paint over the backdrop layers behind this layout — the
+    // base comes from FoamBackdropHost instead.
+    SharedTransitionLayout(
+        modifier = modifier
+            .fillMaxSize()
+            .foamBackdropScale()
+    ) {
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")
         val navTransitions = remember(
             playerTransitionState,
@@ -465,42 +516,7 @@ fun FoamNavHost(
             LocalBackgroundSettingsPreview provides backgroundSettingsPreview,
             LocalPlayerTransitionState provides playerTransitionState
         ) {
-            Box(modifier = modifier.fillMaxSize().foamBackground()) {
-
-                var navZoneHeightPx by remember { mutableStateOf(0) }
-                val onBackgroundTransition = AppBackdrop(
-                    currentRoute = currentRoute,
-                    backgroundMode = backgroundMode,
-                    settings = playerSettings,
-                    preview = backgroundSettingsPreview,
-                    playerViewModel = playerViewModel,
-                    playerTargetOpen = playerTransitionState.targetState
-                )
-
-                val listBackdropState = remember(scope) { DetailListBackdropState(scope) }
-                LaunchedEffect(currentRoute) { listBackdropState.onRouteChanged(currentRoute) }
-                DetailListBackdrop(
-                    state = listBackdropState,
-                    currentRoute = currentRoute,
-                    lastRoute = lastRoute,
-                    backgroundMode = backgroundMode,
-                    forceDynamic = forceDynamicBackgroundInCollections,
-                    blur = backgroundBlurRadius(playerSettings.backgroundBlur),
-                    intensity = playerSettings.appBackgroundIntensity / 100f
-                )
-                val onListBackdropArt: (String?, Boolean) -> Unit = listBackdropState::onArt
-
-                // Full player backdrop (root-hosted)
-                val fullPlayerBackdropState = remember { FullPlayerBackdropState() }
-                PlayerBackdrop(
-                    transitionState = playerTransitionState,
-                    state = fullPlayerBackdropState,
-                    backgroundMode = backgroundMode,
-                    settings = playerSettings,
-                    navigationBarMode = navigationBarMode,
-                    navZoneHeightPx = navZoneHeightPx,
-                    forceDynamic = forceDynamicBackgroundInPlayer
-                )
+            Box(modifier = Modifier.fillMaxSize()) {
 
                 val isPlayerOpen = playerTransitionState.targetState
                 val scalesWholeScreenForPlayer = !isSettingsRoute(currentRoute)
@@ -590,17 +606,10 @@ fun FoamNavHost(
                     }
                 }
 
-                // Gate everything the user reads as "the app" (screens,
-                // mini player, nav bar) behind the startup gate. The backdrop
-                // layers above stay composed so their artwork is already
-                // decoded when this first appears.
-                // Screen content: shrinks behind modals (see foamBackdropScale)
-                // while the backdrop layers above stay full-bleed.
                 if (startupReady) Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .foamZoomOriginTracker(zoomOrigins)
-                        .foamBackdropScale()
                 ) {
                     fun playTrackFromList(
                         tracks: List<TrackEntity>,
@@ -747,8 +756,8 @@ fun FoamNavHost(
                 }
 
                 // Bottom chrome (mini player + nav bar + toasts) shrinks with
-                // the screen content, in its own same-geometry scale layer.
-                if (startupReady) Box(modifier = Modifier.fillMaxSize().foamBackdropScale()) {
+                // the screen content, in the shared-transition scale above.
+                if (startupReady) Box(modifier = Modifier.fillMaxSize()) {
                     FoamBottomChrome(
                         currentRoute = currentRoute,
                         navigationBarMode = navigationBarMode,

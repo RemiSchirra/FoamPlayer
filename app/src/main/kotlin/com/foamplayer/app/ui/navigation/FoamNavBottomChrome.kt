@@ -304,10 +304,9 @@ internal fun BoxScope.FoamBottomChrome(
 }
 
 /**
- * Bottom fade behind the nav bar and mini player. Kept out of the chrome's
- * [com.foamplayer.app.ui.theme.foamBackdropScale] layer so a modal only shrinks
- * the screen content and chrome, leaving this dimming effect fixed to the
- * screen edges.
+ * Bottom fade behind the nav bar and mini player. Drawn inside the shared
+ * transition's scale layer, so it fades with the screen content when a modal
+ * shrink or the full player's open/close transform is applied.
  */
 @Composable
 internal fun BoxScope.FoamBottomScrim(
