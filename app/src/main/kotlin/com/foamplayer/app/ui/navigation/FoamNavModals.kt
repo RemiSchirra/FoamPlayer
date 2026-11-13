@@ -123,7 +123,10 @@ internal fun FoamGlobalModals(
         onSeeRadio = trackRadioViewModel::openRadioFor,
         onOpenLyrics = { track ->
             trackModalState.dismiss()
-            navController.navigate(Screen.SettingsLyricsManagerResults.createRoute(track.id))
+            onNavigateClosingPlayer(
+                Screen.SettingsLyricsManagerResults.createRoute(track.id),
+                Screen.SettingsLyricsManagerResults.route
+            )
         },
         onResetPlayStats = { track ->
             playerViewModel.resetPlayStats(track.id)
