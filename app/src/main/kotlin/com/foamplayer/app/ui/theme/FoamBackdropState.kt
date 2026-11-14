@@ -15,6 +15,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.ClipOp
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
@@ -113,24 +119,9 @@ fun FoamBackdropHost(
  */
 @Composable
 fun Modifier.foamBackdropScale(): Modifier {
-    val backdrop = LocalFoamBackdropState.current
-    val scale by animateFloatAsState(
-        targetValue = if (backdrop.active) FoamBackdropShrunkScale else 1f,
-        animationSpec = if (backdrop.active) {
-            tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.IN_OUT)
-        } else {
-            tween(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.IN_OUT)
-        },
-        label = "FoamBackdropScale"
-    )
+    val liveScale = rememberFoamBackdropLiveScale()
     return graphicsLayer {
-        val presence = backdrop.dragPresence
-        val live = if (presence != null) {
-            FoamBackdropShrunkScale +
-                (1f - FoamBackdropShrunkScale) * (1f - presence)
-        } else {
-            scale
-        }
+        val live = liveScale()
         scaleX = live
         scaleY = live
         val progress =
@@ -141,6 +132,68 @@ fun Modifier.foamBackdropScale(): Modifier {
         } else {
             clip = false
         }
+    }
+}
+
+/**
+ * Live scale of the screen content while a modal is open, as a lambda to be
+ * invoked from the draw phase only (tween target, or frame-by-frame from
+ * [FoamBackdropState.dragPresence] during sheet drags).
+ */
+@Composable
+private fun rememberFoamBackdropLiveScale(): () -> Float {
+    val backdrop = LocalFoamBackdropState.current
+    val scale by animateFloatAsState(
+        targetValue = if (backdrop.active) FoamBackdropShrunkScale else 1f,
+        animationSpec = if (backdrop.active) {
+            tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.IN_OUT)
+        } else {
+            tween(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.IN_OUT)
+        },
+        label = "FoamBackdropScale"
+    )
+    return {
+        val presence = backdrop.dragPresence
+        if (presence != null) {
+            FoamBackdropShrunkScale +
+                    (1f - FoamBackdropShrunkScale) * (1f - presence)
+        } else {
+            scale
+        }
+    }
+}
+
+/**
+ * Draws [block] only in the area the shrunk screen content no longer covers
+ * (the margin around it and the corners its rounding reveals). Place it in the
+ * modifier chain BEFORE [foamBackdropScale] so it is drawn unscaled, behind
+ * the scaled content. Used for chrome-like overlays — such as the bottom
+ * fade — that must stay full-bleed while the content shrinks. Draws nothing at
+ * full scale, so the content's own copy of the overlay is never doubled up.
+ */
+@Composable
+fun Modifier.foamBackdropOutsideContent(block: DrawScope.() -> Unit): Modifier {
+    val liveScale = rememberFoamBackdropLiveScale()
+    return drawBehind {
+        val live = liveScale()
+        if (live >= 0.999f) return@drawBehind
+        val progress =
+            ((1f - live) / (1f - FoamBackdropShrunkScale)).coerceIn(0f, 1f)
+        val radius = FoamDimens.cornerRadiusLarge.toPx() * progress
+        val insetX = size.width * (1f - live) / 2f
+        val insetY = size.height * (1f - live) / 2f
+        val contentBounds = Path().apply {
+            addRoundRect(
+                RoundRect(
+                    left = insetX,
+                    top = insetY,
+                    right = size.width - insetX,
+                    bottom = size.height - insetY,
+                    cornerRadius = CornerRadius(radius, radius)
+                )
+            )
+        }
+        clipPath(contentBounds, clipOp = ClipOp.Difference) { block() }
     }
 }
 

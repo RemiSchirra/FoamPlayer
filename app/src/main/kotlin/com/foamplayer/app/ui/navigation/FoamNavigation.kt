@@ -449,6 +449,13 @@ fun FoamNavHost(
     SharedTransitionLayout(
         modifier = modifier
             .fillMaxSize()
+            // Unscaled bottom fade, drawn only in the margin the shrunk content
+            // leaves, so the fade stays full-bleed while a modal is open.
+            .foamBottomScrimOutsideShrunk(
+                currentRoute = currentRoute,
+                bottomBarClearance = bottomBarClearance,
+                enabled = startupReady
+            )
             .foamBackdropScale()
     ) {
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")

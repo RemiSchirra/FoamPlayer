@@ -51,6 +51,7 @@ import com.foamplayer.app.ui.theme.BackgroundAccentTint
 import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAccentTintState
+import com.foamplayer.app.ui.theme.foamBackdropOutsideContent
 import com.foamplayer.app.ui.utils.consumeTaps
 
 /**
@@ -349,4 +350,36 @@ internal fun BoxScope.FoamBottomScrim(
                 )
             }
     )
+}
+
+/**
+ * Unscaled copy of the bottom fade, visible only where the shrunk screen
+ * content (see [foamBackdropOutsideContent]) no longer covers the screen, so
+ * the fade stays full-bleed at the bottom edge while a modal is open. Apply to
+ * the SharedTransitionLayout's modifier before `foamBackdropScale()`.
+ */
+@Composable
+internal fun Modifier.foamBottomScrimOutsideShrunk(
+    currentRoute: String?,
+    bottomBarClearance: Dp,
+    enabled: Boolean
+): Modifier {
+    if (!enabled || currentRoute == Screen.Onboarding.route) return this
+    val scrimBaseColor = FoamTheme.colors.background
+    val accentTint = LocalAccentTintState.current
+    return foamBackdropOutsideContent {
+        val scrim = accentTint.resolve(scrimBaseColor, BackgroundAccentTint)
+        val clearancePx = bottomBarClearance.toPx()
+        val top = size.height - clearancePx
+        drawRect(
+            brush = Brush.verticalGradient(
+                0f to scrim.copy(alpha = 0f),
+                1f to scrim.copy(alpha = BottomChromeScrimMaxAlpha),
+                startY = top,
+                endY = size.height
+            ),
+            topLeft = androidx.compose.ui.geometry.Offset(0f, top),
+            size = androidx.compose.ui.geometry.Size(size.width, clearancePx)
+        )
+    }
 }
