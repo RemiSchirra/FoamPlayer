@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -38,9 +41,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
@@ -55,6 +60,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -518,6 +524,175 @@ internal fun Modifier.playerFlightArtwork(
     }
 }
 
+/**
+ * Breathing room the player-dismiss highlight wraps the full player's hero (image +
+ * text) with at the flight's start. Mirrors how a row's own highlight radius follows
+ * its artwork plus [ListRowHighlightPadding], so the flight's start container rounds
+ * the same way around the hero art.
+ */
+val PlayerFlightHighlightPadding = 12.dp
+
+/**
+ * Extra headroom the player-dismiss highlight draws above the player's image at the
+ * flight's player end, easing down to the final padding as it lands (see
+ * [playerFlightHighlightTarget]).
+ */
+val PlayerFlightHighlightExtraTopPadding = 36.dp
+
+/**
+ * Everything the row side of the player-dismiss highlight flight needs: the shared
+ * element key matching the full player's source container, the player transition
+ * scopes and the highlight color the morphing rect fades in with.
+ */
+internal class PlayerFlightHighlightSpec(
+    val key: String,
+    val sharedTransitionScope: SharedTransitionScope,
+    val animatedVisibilityScope: AnimatedVisibilityScope,
+    val highlightColor: Color,
+)
+
+/**
+ * Expands a node's reported bounds by [paddingPx] on every side, drawing its content
+ * [paddingPx] inside them: the node measures at the given constraints, then reports
+ * size + 2 * padding with the content placed at the padding offset. The shared
+ * transition machinery reads these lookahead bounds, so a node sized to a container
+ * reports the container's bounds grown by the padding on all sides — the breathing
+ * room the flight's start container wraps the player's image + text with.
+ */
+private fun Modifier.expandedHighlightBounds(paddingPx: Float): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val padding = paddingPx.roundToInt()
+    layout(
+        width = placeable.width + padding * 2,
+        height = placeable.height + padding * 2
+    ) {
+        placeable.placeRelative(padding, padding)
+    }
+}
+
+/**
+ * SOURCE side of the player-dismiss highlight flight: an invisible container whose
+ * bounds wrap the full player's hero (image + text) expanded by [paddingPx]. Paired
+ * with [playerFlightHighlightTarget] on the tagged row, its bounds are the flight's
+ * start rect — the highlight appears to wrap the player's image + text and morphs
+ * down into the row's own highlight rect as the flight lands.
+ *
+ * The content is empty: only the bounds take part in the pair. Registered for as long
+ * as the hero is composed; without a tagged row on the entering screen the pair never
+ * matches and nothing renders.
+ */
+@Composable
+internal fun Modifier.playerFlightHighlightSource(
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    key: String,
+    paddingPx: Float
+): Modifier = with(sharedTransitionScope) {
+    this@playerFlightHighlightSource
+        .expandedHighlightBounds(paddingPx)
+        .sharedBounds(
+            rememberSharedContentState(key = key),
+            animatedVisibilityScope = animatedVisibilityScope,
+            // Pairs with the flying artwork and texts: the overlay sort forces
+            // root-level 0f entries to -1f, so -2f keeps the highlight below the
+            // artwork (-1f effective) and the texts (1f) render above both.
+            zIndexInOverlay = -2f
+        )
+}
+
+/**
+ * TARGET side of the player-dismiss highlight flight (see
+ * [playerFlightHighlightSource]): registers the row's highlight rect as the shared
+ * bounds endpoint paired with the full player's art + text container, and draws the
+ * highlight INSIDE the transition overlay while the player transition is in flight.
+ *
+ * The rect rides the shared bounds between the row and the player's art + text
+ * container in BOTH directions: a dismiss flight lands it at the row's rect, fading
+ * in over the flight, while an auto-open lifts it from the row into the player
+ * container, fading out. The radius eases from the hero art's radius (plus the same
+ * padding) to the row's own radius, and extra headroom is drawn above the player's
+ * image at the player end, easing down to the final padding. Everything is driven by
+ * the player's seekable transition, so the morph tracks the finger during the
+ * interactive swipe.
+ *
+ * Draws nothing at rest — the row's own static highlight takes over, so the hand-off
+ * at settle is exact: the overlay ends at the row's rect, radius and color on the
+ * frame it drops. [gridCell] swaps the landing radius for a grid cell's size-derived
+ * [MediaCellHighlightShape] radius, which converges on the cell's own radius at the
+ * settle frame.
+ */
+@Composable
+internal fun Modifier.playerFlightHighlightTarget(
+    spec: PlayerFlightHighlightSpec,
+    gridCell: Boolean = false
+): Modifier {
+    val localDensity = LocalDensity.current
+    val rowEndRadiusPx = with(localDensity) {
+        (listRowArtCornerRadius() + ListRowHighlightPadding).toPx()
+    }
+    val gridInsetPx = with(localDensity) { MediaGridCellPadding.toPx() }
+    val gridRounding = FoamTheme.shapes.miniPlayerRounding
+    val endRadiusPx: (Size) -> Float = if (gridCell) {
+        { size ->
+            val artSide = (size.width - gridInsetPx * 2).coerceAtLeast(0f)
+            (artSide / 2f * gridRounding + gridInsetPx).coerceAtMost(size.minDimension / 2f)
+        }
+    } else {
+        { _ -> rowEndRadiusPx }
+    }
+    val startRadiusPx = with(localDensity) {
+        (fullPlayerArtRadius() + PlayerFlightHighlightPadding).toPx()
+    }
+    val extraTopPx = with(localDensity) { PlayerFlightHighlightExtraTopPadding.toPx() }
+    val flightProgress by spec.animatedVisibilityScope.transition.animateFloat(
+        label = "playerHighlightFlight"
+    ) { state ->
+        if (state == EnterExitState.Visible) 1f else 0f
+    }
+    // Mid-flight either direction (closing into the row or auto-opening out of it):
+    // both directions render the morphing rect in the overlay; the open direction
+    // fades the rect OUT while it rises into the player container.
+    val inFlight = remember(spec.animatedVisibilityScope) {
+        derivedStateOf {
+            spec.animatedVisibilityScope.transition.targetState != EnterExitState.Visible ||
+                    spec.animatedVisibilityScope.transition.currentState != EnterExitState.Visible
+        }
+    }
+    return with(spec.sharedTransitionScope) {
+        sharedBounds(
+            rememberSharedContentState(key = spec.key),
+            animatedVisibilityScope = spec.animatedVisibilityScope,
+            enter = EnterTransition.None,
+            exit = ExitTransition.None,
+            // The overlay re-measures the content at the animated bounds every frame,
+            // so the drawn rect fills them exactly instead of being scaled up from its
+            // rest size (a scale would distort the radius across the aspect jump).
+            resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+            // Below the flying artwork: the overlay sort forces root-level 0f
+            // entries to -1f, so the highlight needs less than that to draw under
+            // the image and text.
+            zIndexInOverlay = -2f
+        )
+    }
+        .fillMaxSize()
+        .drawBehind {
+            if (!inFlight.value) return@drawBehind
+            val progress = flightProgress.coerceIn(0f, 1f)
+            if (progress <= 0f) return@drawBehind
+            val radius = lerp(startRadiusPx, endRadiusPx(size), progress)
+                .coerceAtMost(size.minDimension / 2f)
+            // Extra headroom above the player's image at the flight's player end,
+            // easing down to the final padding as the rect lands.
+            val extraTop = extraTopPx * (1f - progress)
+            drawRoundRect(
+                color = spec.highlightColor.copy(alpha = spec.highlightColor.alpha * progress),
+                cornerRadius = CornerRadius(radius),
+                topLeft = Offset(0f, -extraTop),
+                size = Size(size.width, size.height + extraTop)
+            )
+        }
+}
+
 /** Size of the artwork thumbnail at the leading edge of a list row. */
 val ListRowArtSize = 48.dp
 
@@ -632,6 +807,7 @@ internal fun MediaListRow(
     artworkElevation: Dp = MediaItemArtElevation,
     artworkShape: Shape = AlbumArtShape(),
     highlightBackground: Color = Color.Transparent,
+    suppressHighlightBackground: Boolean = false,
     trailingContent: @Composable RowScope.() -> Unit = {}
 ) {
     val artSize = rowArtSize(density)
@@ -644,7 +820,16 @@ internal fun MediaListRow(
             .fillMaxWidth()
             .then(rowModifier)
             .clip(highlightShape)
-            .background(highlightBackground, highlightShape)
+            // Steps aside while the player-dismiss highlight flight lands: the shared
+            // overlay renders the morphing highlight instead, and this static one
+            // resumes at the exact settle frame so the hand-off is seamless.
+            .then(
+                if (suppressHighlightBackground) {
+                    Modifier
+                } else {
+                    Modifier.background(highlightBackground, highlightShape)
+                }
+            )
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),

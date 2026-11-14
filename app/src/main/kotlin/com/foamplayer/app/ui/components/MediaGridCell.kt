@@ -89,6 +89,8 @@ internal fun MediaGridCell(
     artworkElevation: Dp = MediaItemArtElevation,
     artworkShape: Shape = AlbumArtShape(),
     highlightBackground: Color = Color.Transparent,
+    /** Steps the static highlight aside while the player-dismiss highlight flight lands (see MediaListRow.playerFlightHighlightTarget). */
+    suppressHighlightBackground: Boolean = false,
     artworkOverlay: @Composable BoxScope.() -> Unit = {}
 ) {
     val cellShape = MediaCellHighlightShape(
@@ -102,7 +104,13 @@ internal fun MediaGridCell(
             modifier = Modifier
                 .matchParentSize()
                 .clip(cellShape)
-                .background(highlightBackground, cellShape)
+                .then(
+                    if (suppressHighlightBackground) {
+                        Modifier
+                    } else {
+                        Modifier.background(highlightBackground, cellShape)
+                    }
+                )
                 .combinedClickable(
                     interactionSource = interactionSource,
                     indication = null,

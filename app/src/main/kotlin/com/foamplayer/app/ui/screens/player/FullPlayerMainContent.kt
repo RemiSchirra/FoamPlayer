@@ -88,7 +88,9 @@ import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.CrossfadingPlayPauseIcon
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
+import com.foamplayer.app.ui.components.PlayerFlightHighlightPadding
 import com.foamplayer.app.ui.components.PreviousAction
+import com.foamplayer.app.ui.components.playerFlightHighlightSource
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.TrackScoreHeart
 import com.foamplayer.app.ui.components.FoamSlider
@@ -877,6 +879,21 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 }
             }
         }
+
+        // SOURCE bounds of the player-dismiss highlight flight: an invisible container
+        // whose bounds wrap the hero's image + text (the layout the pager pages and the
+        // hero overlay share) with breathing room — the origin row's highlight morphs
+        // from it down into its own rect. See playerFlightHighlightSource.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .playerFlightHighlightSource(
+                    sharedTransitionScope = this@TrackHeroPager,
+                    animatedVisibilityScope = outerVisibilityScope,
+                    key = "player_highlight_${track.id}",
+                    paddingPx = with(density) { PlayerFlightHighlightPadding.toPx() }
+                )
+        )
         if (vinyl) {
             var isPagerSwiping by remember { mutableStateOf(false) }
             LaunchedEffect(pagerState) {

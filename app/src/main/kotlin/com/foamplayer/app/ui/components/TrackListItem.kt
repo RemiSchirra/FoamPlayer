@@ -2,6 +2,7 @@ package com.foamplayer.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.OpenWith
 import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -203,6 +205,39 @@ fun TrackListItem(
         artworkRestElevation
     }
 
+    // Player-dismiss highlight flight: when this row is the tagged flight target, its
+    // highlight rect pairs with the full player's art + text container — the highlight
+    // wraps that container at the flight's start, morphs into the row's own rect and
+    // fades in over the flight (see playerFlightHighlightTarget). Rows without an
+    // artwork box (track numbers, RowSmall) take no part: no artwork lands on them.
+    val highlightFlight: PlayerFlightHighlightSpec? = if (
+        isSharedTransitionSource &&
+        trackNumberText == null &&
+        density != MediaDensity.ROW_SMALL &&
+        sharedTransitionScope != null &&
+        animatedVisibilityScope != null &&
+        flightPausedArtScale != null
+    ) {
+        PlayerFlightHighlightSpec(
+            key = "player_highlight_${track.id}",
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            highlightColor = animatedBackgroundColor
+        )
+    } else {
+        null
+    }
+    // While the transition is in flight either direction, the shared overlay renders
+    // the morphing highlight; the row's own static background steps aside so the
+    // morphing one never double-draws over it, resuming at the exact settle frame.
+    val highlightInFlight = highlightFlight != null && animatedVisibilityScope != null && (
+            isDismissFlightActive() || derivedStateOf {
+                animatedVisibilityScope.transition.targetState != EnterExitState.Visible ||
+                        animatedVisibilityScope.transition.currentState != EnterExitState.Visible
+            }.value
+            )
+    val suppressHighlightBackground = highlightFlight != null && highlightInFlight
+
     if (density.isGrid) {
         val sharedArtworkBase: Modifier = Modifier.rowSharedArtwork(
             key = "album_art_${track.id}",
@@ -235,6 +270,15 @@ fun TrackListItem(
                 // variant promotes every row to its own render layer even at 1f.
                 .then(if (auxiliary) Modifier.graphicsLayer { alpha = AuxiliaryAlpha } else Modifier)
         ) {
+            if (highlightFlight != null) {
+                // The cell's bounds are the shared-bounds endpoint the highlight morphs
+                // into; the morphing rect itself is drawn in the transition overlay.
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .playerFlightHighlightTarget(spec = highlightFlight, gridCell = true)
+                )
+            }
             MediaGridCell(
                 onClick = onClick,
                 onLongClick = resolvedOnLongClick,
@@ -243,6 +287,7 @@ fun TrackListItem(
                 title = track.title,
                 subtitle = stringResource(R.string.artist_album_separator, track.artist, track.album),
                 highlightBackground = animatedBackgroundColor,
+                suppressHighlightBackground = suppressHighlightBackground,
                 artworkElevation = artworkElevation,
                 titleModifier = Modifier.rowSharedText(
                     key = "track_title_${track.id}",
@@ -526,6 +571,16 @@ fun TrackListItem(
             )
         }
 
+        if (highlightFlight != null) {
+            // The row's bounds are the shared-bounds endpoint the highlight morphs
+            // into; the morphing rect itself is drawn in the transition overlay.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .playerFlightHighlightTarget(spec = highlightFlight)
+            )
+        }
+
         MediaListRow(
             onClick = onClick,
             onLongClick = resolvedOnLongClick,
@@ -570,6 +625,7 @@ fun TrackListItem(
             },
             artworkElevation = artworkElevation,
             highlightBackground = animatedBackgroundColor,
+            suppressHighlightBackground = suppressHighlightBackground,
             rowModifier = swipeRowModifier,
             titleModifier = Modifier.rowSharedText(
                 key = "track_title_${track.id}",
