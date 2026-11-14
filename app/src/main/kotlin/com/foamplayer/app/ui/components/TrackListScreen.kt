@@ -95,19 +95,30 @@ class TrackCenterRequest(val trackId: Long, val requestId: Int) {
 }
 
 /**
- * Scrolls the list so the item at [index] sits as close to the vertical middle
- * of the viewport as the list's bounds allow (the raw scroll is clamped at
- * both ends). Both steps are synchronous, so the returned info is already the
- * settled placement.
+ * Vertical viewport fraction where the playing track's row/cell lands when a
+ * dismiss flight settles onto a collection (see [TrackCenterRequest]).
+ * 0.5f centers the item; 1f / 3f lands it a third of the way from the top.
+ */
+private const val CenteredItemViewportFraction = 1f / 3f
+
+/**
+ * Vertical viewport offset (px) where the target item's middle should land.
+ */
+private fun centerAnchorY(viewportStartOffset: Int, viewportEndOffset: Int): Float =
+    viewportStartOffset + (viewportEndOffset - viewportStartOffset) * CenteredItemViewportFraction
+
+/**
+ * Scrolls the list so the item at [index] sits as close to the
+ * [CenteredItemViewportFraction] anchor of the viewport as the list's bounds
+ * allow (the raw scroll is clamped at both ends). Both steps are synchronous,
+ * so the returned info is already the settled placement.
  */
 private suspend fun LazyListState.scrollToCenteredItem(index: Int): LazyListItemInfo? {
     scrollToItem(index)
     val info = layoutInfo
     val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return null
-    val delta = (
-            item.offset + item.size / 2 -
-                    (info.viewportEndOffset + info.viewportStartOffset) / 2
-            ).toFloat()
+    val delta = item.offset + item.size / 2 -
+            centerAnchorY(info.viewportStartOffset, info.viewportEndOffset)
     if (delta != 0f) scrollBy(delta)
     return layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
 }
@@ -117,10 +128,8 @@ private suspend fun LazyGridState.scrollToCenteredItem(index: Int): LazyGridItem
     scrollToItem(index)
     val info = layoutInfo
     val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return null
-    val delta = (
-            item.offset.y + item.size.height / 2 -
-                    (info.viewportEndOffset + info.viewportStartOffset) / 2
-            ).toFloat()
+    val delta = item.offset.y + item.size.height / 2 -
+            centerAnchorY(info.viewportStartOffset, info.viewportEndOffset)
     if (delta != 0f) scrollBy(delta)
     return layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
 }
