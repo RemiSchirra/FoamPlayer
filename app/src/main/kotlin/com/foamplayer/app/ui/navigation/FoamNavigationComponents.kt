@@ -362,8 +362,14 @@ object NavBarDimens {
     /** Gap between the card and the floating pill. */
     val FloatingMiniPlayerGap = 4.dp
 
-    /** How far the card sinks into the bar in ATTACHED mode. */
-    val AttachedCardDrop = 24.dp
+    /**
+     * How far the card sinks into the bar in ATTACHED mode. Tuned so that, with
+     * the extra row closed, the gap between the buttons and the seek strip
+     * equals the gap between the buttons and the bar's bottom edge
+     * ([RowEdgePadding] + [ItemHitTargetPadding]). The expanded card position
+     * doesn't depend on this.
+     */
+    val AttachedCardDrop = 22.dp
 
     /**
      * ATTACHED, fully expanded: where the card's visible bottom edge lands relative
