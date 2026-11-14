@@ -1033,8 +1033,10 @@ internal fun FloatingNavigationBar(
         NavBarDimens.ItemHitTargetSize / 2 + NavBarDimens.RowEdgePadding
     }
 
-    // Tint is resolved at draw time to keep accent frames draw-only
-    val surfaceVariantColor = FoamTheme.tintedSurfaceVariant
+    // Tint is resolved at draw time to keep accent frames draw-only. The base
+    // palette color is read here (not tintedSurfaceVariant): that one is
+    // already resolved once, so resolving it again would double-tint the pill.
+    val surfaceVariantColor = FoamTheme.colors.surfaceVariant
     val accentTint = LocalAccentTintState.current
     // The items' selection tint fades for as long as the screen transition
     // that caused the route change
