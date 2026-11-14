@@ -28,7 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -288,9 +288,12 @@ private fun ThemeSelector(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            BasicText(text = currentLabel, style = FoamTheme.typography.body)
+            BasicText(
+                text = currentLabel,
+                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary)
+            )
             Icon(
-                imageVector = Icons.Default.ArrowDropDown,
+                imageVector = Icons.Rounded.ExpandMore,
                 contentDescription = null,
                 tint = FoamTheme.colors.textSecondary
             )
