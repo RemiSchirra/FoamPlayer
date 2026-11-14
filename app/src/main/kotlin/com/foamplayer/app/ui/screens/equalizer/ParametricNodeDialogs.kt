@@ -64,7 +64,7 @@ internal fun NodeColorDialog(
                 .padding(FoamDimens.spacingMedium),
             verticalArrangement = Arrangement.spacedBy(FoamDimens.spacingSmall)
         ) {
-            NodeColorPalette.chunked(4).forEach { rowColors ->
+            NodeColorPalette.chunked(5).forEach { rowColors ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly

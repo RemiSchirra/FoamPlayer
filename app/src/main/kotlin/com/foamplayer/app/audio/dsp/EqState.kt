@@ -186,16 +186,39 @@ data class ParametricNode(
     }
 }
 
-/** Colors a parametric node can take; new nodes cycle through the palette. */
+/**
+ * Colors a parametric node can take; new nodes cycle through the palette.
+ * Rendered as a 5-column x 4-row grid in the color picker, arranged so that
+ * no two similar swatches touch: every hue family appears as a light and a
+ * deep shade, and matching shades are spread to opposite ends of the grid so
+ * any two neighbors read apart. The first eight entries keep the original
+ * hues so persisted states and built-in presets keep matching.
+ */
 val NodeColorPalette: List<Long> = listOf(
+    // Row 1
     0xFF4FC3F7L, // light blue
     0xFF81C784L, // green
     0xFFFFB74DL, // orange
     0xFFE57373L, // red
     0xFFBA68C8L, // purple
+    // Row 2
     0xFFFFD54FL, // amber
     0xFF4DB6ACL, // teal
-    0xFFF06292L  // pink
+    0xFFF06292L, // pink
+    0xFF1565C0L, // deep blue
+    0xFFF9A825L, // gold
+    // Row 3
+    0xFFC62828L, // deep red
+    0xFF9E9D24L, // olive
+    0xFF6A1B9AL, // deep violet
+    0xFFA1887FL, // taupe
+    0xFF2E7D32L, // deep green
+    // Row 4
+    0xFF78909CL, // slate
+    0xFF5C6BC0L, // indigo
+    0xFFAD1457L, // raspberry
+    0xFF00838FL, // deep cyan
+    0xFFE65100L  // burnt orange
 )
 
 /** Parametric EQ: up to [ParametricEqSettings.MAX_NODES] freely-placed filters. */
