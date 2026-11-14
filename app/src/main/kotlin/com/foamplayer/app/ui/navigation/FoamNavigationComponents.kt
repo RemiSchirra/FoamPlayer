@@ -860,6 +860,12 @@ private fun FoamNavExtraRow(
                         // Width follows the slot, only the height overflows the row
                         .fillMaxWidth()
                         .requiredHeight(NavBarDimens.ItemHitTargetSize)
+                        .graphicsLayer {
+                            val fraction = expandFraction.coerceIn(0f, 1f)
+                            alpha = fraction
+                            scaleX = fraction
+                            scaleY = fraction
+                        }
                         .clip(NavItemHitShape)
                         .combinedClickable(
                             interactionSource = remember { MutableInteractionSource() },
