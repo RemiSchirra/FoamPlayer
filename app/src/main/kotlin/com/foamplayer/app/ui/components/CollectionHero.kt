@@ -1714,7 +1714,8 @@ private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
                 imageVector = if (open) {
                     FoamTheme.icons.current.close
                 } else {
-                    FoamTheme.icons.current.search
+                    // Force the outline variant
+                    FoamTheme.icons.outline.search
                 },
                 contentDescription = stringResource(
                     if (open) R.string.close_search else R.string.search

@@ -52,7 +52,6 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Piano
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -384,7 +383,8 @@ fun SearchScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Rounded.Search,
+                // Force the outline variant
+                imageVector = FoamTheme.icons.outline.search,
                 contentDescription = null,
                 tint = FoamTheme.colors.textSecondary,
                 modifier = Modifier.size(24.dp)
