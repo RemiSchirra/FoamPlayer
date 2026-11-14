@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -14,6 +15,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
 import com.foamplayer.app.R
@@ -55,7 +58,8 @@ internal fun PlayerBottomControls(
     queueSize: Int,
     envelopeMorphProgress: () -> Float,
     markSkipIntent: (Boolean) -> Unit,
-    dragModifier: Modifier = Modifier
+    dragModifier: Modifier = Modifier,
+    selectorTopRoot: MutableFloatState? = null
 ) {
     Box(modifier = Modifier.fillMaxWidth().then(dragModifier)) {
         val latestNavbarExpandHeight = rememberUpdatedState(navbarExpandHeight)
@@ -64,7 +68,7 @@ internal fun PlayerBottomControls(
         val playButtonSize = PlayerDimens.miniPlayButtonSize * PlayButtonScale
         val playIconSize = PlayerDimens.miniPlayIconSize * PlayButtonScale
 
-        val selectorRowModifier = remember(subControlsProgress, uiAlpha) {
+        val selectorRowModifier = remember(subControlsProgress, uiAlpha, selectorTopRoot) {
             Modifier
                 .fillMaxWidth()
                 .padding(
@@ -78,6 +82,7 @@ internal fun PlayerBottomControls(
                     val progress = latestSubControlsProgress.value()
                     translationY = selectorRowTranslationY(progress, latestNavbarExpandHeight.value())
                 }
+                .onGloballyPositioned { selectorTopRoot?.floatValue = it.positionInRoot().y }
         }
 
         SubViewSelectorRow(

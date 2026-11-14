@@ -772,6 +772,10 @@ fun FullPlayerScreen(
                 backdropState.subViewBlurProgress = subViewBlurProgressProvider
             }
 
+            val selectorTopRoot = androidx.compose.runtime.remember {
+                androidx.compose.runtime.mutableFloatStateOf(Float.NaN)
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -823,7 +827,8 @@ fun FullPlayerScreen(
                             onOpenAlbum = onOpenAlbum,
                             onOpenArtist = onOpenArtist,
                             flightGeometry = flightGeometry,
-                            onSkipIntent = markSkipIntent
+                            onSkipIntent = markSkipIntent,
+                            selectorTopRoot = selectorTopRoot
                         )
                     }
 
@@ -885,7 +890,8 @@ fun FullPlayerScreen(
                     queueSize = queueSize,
                     envelopeMorphProgress = envelopeMorphProgress,
                     markSkipIntent = markSkipIntent,
-                    dragModifier = playerDrag
+                    dragModifier = playerDrag,
+                    selectorTopRoot = selectorTopRoot
                 )
             }
 

@@ -26,7 +26,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
@@ -40,10 +42,12 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -69,6 +73,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.lerp
@@ -108,6 +113,7 @@ import com.foamplayer.app.ui.utils.pressShrink
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import com.foamplayer.app.ui.utils.rememberWaveform
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
@@ -164,7 +170,9 @@ internal fun SharedTransitionScope.MainPlayerContent(
     onOpenArtist: (TrackEntity) -> Unit,
     flightGeometry: PlayerFlightGeometryState? = null,
     /** Reports a transport-button skip (true = previous) so a repeat-all wrap animates in the right direction. */
-    onSkipIntent: (backward: Boolean) -> Unit = {}
+    onSkipIntent: (backward: Boolean) -> Unit = {},
+    /** Root-space Y of the lyrics / play on / queue row's top, reported by PlayerBottomControls. */
+    selectorTopRoot: MutableFloatState? = null
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(top = PlayerDimens.screenPadding),
@@ -228,6 +236,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
             morphFromWaveform = morphFromWaveform,
             morphTargetWaveform = morphTargetWaveform,
             envelopeMorphProgress = envelopeMorphProgress,
+            selectorTopRoot = selectorTopRoot,
             onSeek = { positionMs -> viewModel.seekTo(positionMs) },
             onPrevious = {
                 when (
@@ -975,16 +984,22 @@ internal fun SharedTransitionScope.PlaybackControls(
     morphFromWaveform: WaveformState?,
     morphTargetWaveform: WaveformState?,
     envelopeMorphProgress: () -> Float,
+    selectorTopRoot: MutableFloatState?,
     onSeek: (Long) -> Unit,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit
 ) {
+    val sliderBottomRoot = remember { mutableFloatStateOf(Float.NaN) }
+    val rowNaturalCenterRoot = remember { mutableFloatStateOf(Float.NaN) }
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = PlayerDimens.screenPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         PlaybackProgressSlider(
+            modifier = Modifier.onGloballyPositioned {
+                sliderBottomRoot.floatValue = it.positionInRoot().y + it.size.height
+            },
             durationMs = durationMs,
             seekBarProgress = seekBarProgress,
             isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
@@ -1000,46 +1015,63 @@ internal fun SharedTransitionScope.PlaybackControls(
         )
         Spacer(modifier = Modifier.height(PlayerDimens.controlsSpacing))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier.fillMaxWidth().onGloballyPositioned {
+                rowNaturalCenterRoot.floatValue = it.positionInRoot().y + it.size.height / 2f
+            }
         ) {
-            val previousInteractions = remember { MutableInteractionSource() }
-            Icon(
-                imageVector = FoamTheme.icons.current.previous,
-                contentDescription = stringResource(R.string.previous),
-                tint = FoamTheme.colors.textPrimary,
+            Row(
                 modifier = Modifier
-                    .size(PlayerDimens.transportIconSize)
-                    .pressShrink(previousInteractions)
-                    .clickable(
-                        interactionSource = previousInteractions,
-                        indication = null,
-                        onClick = onPrevious
-                    )
-            )
-            PlayPauseButton(
-                track = track,
-                isPlaying = isPlaying,
-                isLoading = isLoading,
-                outerVisibilityScope = outerVisibilityScope,
-                onClick = onPlayPause
-            )
-            val nextInteractions = remember { MutableInteractionSource() }
-            Icon(
-                imageVector = FoamTheme.icons.current.next,
-                contentDescription = stringResource(R.string.next),
-                tint = FoamTheme.colors.textPrimary,
-                modifier = Modifier
-                    .size(PlayerDimens.transportIconSize)
-                    .pressShrink(nextInteractions)
-                    .clickable(
-                        interactionSource = nextInteractions,
-                        indication = null,
-                        onClick = onNext
-                    )
-            )
+                    .fillMaxWidth()
+                    .offset {
+                        val sliderBottom = sliderBottomRoot.floatValue
+                        val selectorTop = selectorTopRoot?.floatValue ?: Float.NaN
+                        val naturalCenter = rowNaturalCenterRoot.floatValue
+                        if (sliderBottom.isNaN() || selectorTop.isNaN() || naturalCenter.isNaN()) {
+                            IntOffset.Zero
+                        } else {
+                            IntOffset(0, ((sliderBottom + selectorTop) / 2f - naturalCenter).roundToInt())
+                        }
+                    },
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val previousInteractions = remember { MutableInteractionSource() }
+                Icon(
+                    imageVector = FoamTheme.icons.current.previous,
+                    contentDescription = stringResource(R.string.previous),
+                    tint = FoamTheme.colors.textPrimary,
+                    modifier = Modifier
+                        .requiredSize(PlayerDimens.transportIconSize)
+                        .pressShrink(previousInteractions)
+                        .clickable(
+                            interactionSource = previousInteractions,
+                            indication = null,
+                            onClick = onPrevious
+                        )
+                )
+                PlayPauseButton(
+                    track = track,
+                    isPlaying = isPlaying,
+                    isLoading = isLoading,
+                    outerVisibilityScope = outerVisibilityScope,
+                    onClick = onPlayPause
+                )
+                val nextInteractions = remember { MutableInteractionSource() }
+                Icon(
+                    imageVector = FoamTheme.icons.current.next,
+                    contentDescription = stringResource(R.string.next),
+                    tint = FoamTheme.colors.textPrimary,
+                    modifier = Modifier
+                        .requiredSize(PlayerDimens.transportIconSize)
+                        .pressShrink(nextInteractions)
+                        .clickable(
+                            interactionSource = nextInteractions,
+                            indication = null,
+                            onClick = onNext
+                        )
+                )
+            }
         }
     }
 }
@@ -1089,7 +1121,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
     )
     Box(
         modifier = modifier
-            .size(PlayerDimens.playButtonSize)
+            .requiredSize(PlayerDimens.playButtonSize)
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
@@ -1103,10 +1135,6 @@ internal fun SharedTransitionScope.PlayPauseButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Shared stacked play/pause glyphs: crossfade in lockstep (100% <-> 20% scale
-        // while the alpha flips), faded out while the loading circle takes their place.
-        // Shared with the mini player's "play_button_" key: laid out at its own size and
-        // scaled to the interpolated bounds (ScaleToBounds) during the flight.
         CrossfadingPlayPauseIcon(
             isPlaying = isPlaying,
             loadingFraction = { loadingFraction },
