@@ -3,8 +3,15 @@ package com.foamplayer.app.ui.components
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.EaseOutExpo
+import androidx.compose.animation.core.EaseOutQuad
+import androidx.compose.animation.core.EaseOutQuart
+import androidx.compose.animation.core.EaseOutQuint
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -33,6 +40,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,16 +50,33 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.round
+import androidx.compose.ui.util.lerp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.foamplayer.app.R
@@ -260,6 +285,86 @@ private fun MiniPlayerProgressSlider(
     )
 }
 
+/** Gap between the expanded container and the top of the flying artwork. */
+private val ExpandedTopInset = 32.dp
+
+/**
+ * Card background of the mini player. At [expansion] 0 it is the card; at 1 it
+ * spans the window sideways and down to the bottom edge. Its top follows the
+ * flying artwork ([artTop], root pixels, NaN when unknown) with a gap that grows
+ * from [topInset] to [ExpandedTopInset].
+ *
+ * The layer is window-sized and shaped by a clip outline computed in the draw
+ * phase, so it tracks the artwork in the same frame and never recomposes. It
+ * applies [opacity] itself: a fade on an ancestor would clip it to the card.
+ */
+@Composable
+private fun MiniPlayerContainer(
+    radius: Dp,
+    topInset: Dp,
+    expansion: () -> Float,
+    opacity: () -> Float,
+    artTop: () -> Float,
+    modifier: Modifier = Modifier
+) {
+    var card by remember { mutableStateOf(IntRect.Zero) }
+    var rootSize by remember { mutableStateOf(IntSize.Zero) }
+    val density = LocalDensity.current
+    val radiusPx = with(density) { radius.toPx() }
+    val insetPx = with(density) { topInset.toPx() }
+    val expandedInsetPx = with(density) { ExpandedTopInset.toPx() }
+    val elevationPx = with(density) { 8.dp.toPx() }
+
+    Box(
+        modifier = modifier
+            .onGloballyPositioned {
+                card = IntRect(it.positionInRoot().round(), it.size)
+                rootSize = it.findRootCoordinates().size
+            }
+            .layout { measurable, constraints ->
+                val size = if (rootSize == IntSize.Zero) {
+                    IntSize(constraints.maxWidth, constraints.maxHeight)
+                } else rootSize
+                val placeable = measurable.measure(Constraints.fixed(size.width, size.height))
+                layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
+            }
+            .graphicsLayer {
+                val t = expansion()
+                val ready = rootSize != IntSize.Zero
+                val left = card.left.toFloat()
+                val top = card.top.toFloat()
+                val art = artTop()
+                val flyingTop = when {
+                    t == 0f -> top
+                    art.isNaN() -> lerp(top, 0f, t)
+                    else -> minOf(top, art - lerp(insetPx, expandedInsetPx, t))
+                }
+                val rect = RoundRect(
+                    left = lerp(left, 0f, t),
+                    top = flyingTop,
+                    right = lerp(card.right.toFloat(), rootSize.width.toFloat(), t),
+                    bottom = lerp(card.bottom.toFloat(), rootSize.height.toFloat(), t),
+                    cornerRadius = CornerRadius(lerp(radiusPx, 0f, t))
+                )
+                translationX = if (ready) -left else 0f
+                translationY = if (ready) -top else 0f
+                alpha = opacity()
+                shadowElevation = elevationPx * (1f - t)
+                clip = true
+                shape = object : Shape {
+                    override fun createOutline(
+                        size: Size,
+                        layoutDirection: LayoutDirection,
+                        density: Density
+                    ): Outline = Outline.Rounded(
+                        if (ready) rect else RoundRect(0f, 0f, size.width, size.height, rect.topLeftCornerRadius)
+                    )
+                }
+            }
+            .foamSurfaceVariant()
+    )
+}
+
 @Composable
 fun MiniPlayer(
     playbackStateFlow: StateFlow<PlaybackState>,
@@ -279,6 +384,8 @@ fun MiniPlayer(
     marqueeMode: MarqueeMode = MarqueeMode.PING_PONG,
     skipTrackChangeAnimation: Boolean = false,
     showContainer: Boolean = true,
+    /** Expand the card to the window and fade while the player is open; the host then must not fade this composable itself. */
+    expandContainer: Boolean = false,
     fallbackPlaybackState: PlaybackState? = null,
     /** Whether the app accent derives from album art; see the pager color effect below. */
     isAutomaticColorEnabled: Boolean = true,
@@ -734,6 +841,27 @@ fun MiniPlayer(
         if (enterExitState == EnterExitState.Visible) 0f else 1f
     }
 
+    val hiddenByPlayer = { state: EnterExitState -> expandContainer && state != EnterExitState.Visible }
+    val containerExpansion = animatedVisibilityScope.transition.animateFloat(
+        transitionSpec = { FoamMotion.Spec.sharedElementFlight },
+        label = "miniContainerExpansion"
+    ) { state -> if (hiddenByPlayer(state)) 1f else 0f }
+    val visibilityAlphaState = animatedVisibilityScope.transition.animateFloat(
+        transitionSpec = {
+            if (targetState == EnterExitState.Visible) {
+                FoamMotion.Spec.sharedElementFlight
+            } else {
+                tween(
+                    FoamMotion.Duration.FLIGHT,
+                    easing = EaseOutQuint
+                )
+            }
+        },
+        label = "miniVisibilityAlpha"
+    ) { state -> if (hiddenByPlayer(state)) 0f else 1f }
+    val visibilityAlpha = { visibilityAlphaState.value }
+    var flyingArtTop by remember { mutableFloatStateOf(Float.NaN) }
+
     val heroPausedArtScale by rememberPausedArtScale(
         playbackState.isPlaying || playbackState.isPlaybackRequested
     )
@@ -746,202 +874,212 @@ fun MiniPlayer(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = NavBarDimens.MiniPlayerCardVerticalPadding)
-                .then(
-                    if (showContainer) {
-                        Modifier.shadow(
-                            elevation = 8.dp,
-                            shape = RoundedCornerShape(containerRadius)
-                        )
-                    } else Modifier
-                )
-                .clip(RoundedCornerShape(containerRadius))
-                .then(
-                    if (showContainer) {
-                        Modifier.foamSurfaceVariant()
-                    } else Modifier
-                )
-                .padding(containerPadding)
         ) {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.weight(1f),
-                        pageSpacing = NavBarDimens.MiniPlayerPageSpacing,
-                        beyondViewportPageCount = 1,
-                        key = { index -> queueEntryIds.getOrNull(index) ?: -(index + 1).toLong() }
-                    ) { page ->
-                        val jump = pendingJump
-                        val dep = departure
-                        val pageTrack = (
-                                overrideTrackFor(jump, page, queue)
-                                    ?: dep?.takeIf { jump == null && page == it.page }?.track
-                                    ?: queue.getOrNull(page)
-                                ) ?: return@HorizontalPager
+            if (showContainer) {
+                MiniPlayerContainer(
+                    radius = containerRadius,
+                    topInset = containerPadding,
+                    artTop = { flyingArtTop },
+                    expansion = { containerExpansion.value },
+                    opacity = visibilityAlpha,
+                    modifier = Modifier.matchParentSize()
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { alpha = visibilityAlpha() }
+                    .clip(RoundedCornerShape(containerRadius))
+                    .padding(containerPadding)
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.weight(1f),
+                            pageSpacing = NavBarDimens.MiniPlayerPageSpacing,
+                            beyondViewportPageCount = 1,
+                            key = { index -> queueEntryIds.getOrNull(index) ?: -(index + 1).toLong() }
+                        ) { page ->
+                            val jump = pendingJump
+                            val dep = departure
+                            val pageTrack = (
+                                    overrideTrackFor(jump, page, queue)
+                                        ?: dep?.takeIf { jump == null && page == it.page }?.track
+                                        ?: queue.getOrNull(page)
+                                    ) ?: return@HorizontalPager
 
-                        val isSettledCurrentTrackPage =
-                            jump == null && dep == null && page == currentIndex && pageTrack.id == track.id
-                        // Hoisted so the art box below can be re-keyed on the tag state: a
-                        // tag (re-)added to an already-composed page must get a fresh
-                        // composition identity, or its remembered entry never registers with
-                        // the coordinator and the open/close flight cannot pair.
-                        val artSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
-                            rememberSharedContentState(key = "album_art_${track.id}")
-                        } else null
-                        val titleSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
-                            rememberSharedContentState(key = "track_title_${track.id}")
-                        } else null
-                        val artistSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
-                            rememberSharedContentState(key = "track_artist_${track.id}")
-                        } else null
-                        val pageMarquee = statesFor(entryKey(page))
+                            val isSettledCurrentTrackPage =
+                                jump == null && dep == null && page == currentIndex && pageTrack.id == track.id
+                            // Hoisted so the art box below can be re-keyed on the tag state: a
+                            // tag (re-)added to an already-composed page must get a fresh
+                            // composition identity, or its remembered entry never registers with
+                            // the coordinator and the open/close flight cannot pair.
+                            val artSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
+                                rememberSharedContentState(key = "album_art_${track.id}")
+                            } else null
+                            val titleSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
+                                rememberSharedContentState(key = "track_title_${track.id}")
+                            } else null
+                            val artistSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
+                                rememberSharedContentState(key = "track_artist_${track.id}")
+                            } else null
+                            val pageMarquee = statesFor(entryKey(page))
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) { onClick() }
-                        ) {
-                            // A tag added to an already-composed page via the gate flip never
-                            // registers its entry with the coordinator (the composed modifier's
-                            // remembered entry keeps its stale slot), so the open/close flight
-                            // can never pair and the artwork cross-fades in place. Re-keying
-                            // the art box on the tag state forces a fresh composition identity,
-                            // so the entry always (re-)registers.
-                            key(artSharedState) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(miniImageSize)
-                                        .then(
-                                            if (artSharedState != null) {
-                                                Modifier
-                                                    .sharedElement(
-                                                        artSharedState,
-                                                        animatedVisibilityScope = animatedVisibilityScope
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) { onClick() }
+                            ) {
+                                // A tag added to an already-composed page via the gate flip never
+                                // registers its entry with the coordinator (the composed modifier's
+                                // remembered entry keeps its stale slot), so the open/close flight
+                                // can never pair and the artwork cross-fades in place. Re-keying
+                                // the art box on the tag state forces a fresh composition identity,
+                                // so the entry always (re-)registers.
+                                key(artSharedState) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(miniImageSize)
+                                            .then(
+                                                if (artSharedState != null) {
+                                                    Modifier
+                                                        .sharedElement(
+                                                            artSharedState,
+                                                            animatedVisibilityScope = animatedVisibilityScope
+                                                        )
+                                                        .graphicsLayer { alpha = sharedArtFlightAlpha() }
+                                                } else Modifier
+                                            )
+                                            .then(
+                                                if (artSharedState != null) {
+                                                    Modifier.onGloballyPositioned {
+                                                        flyingArtTop = it.positionInRoot().y
+                                                    }
+                                                } else Modifier
+                                            )
+                                            .graphicsLayer {
+                                                val artTransition = animatedVisibilityScope.transition
+                                                shape = RoundedCornerShape(
+                                                    if (artTransition.currentState == artTransition.targetState) {
+                                                        miniImageRadius
+                                                    } else {
+                                                        animatedCornerRadius
+                                                    }
+                                                )
+                                                clip = true
+                                                val scale =
+                                                    1f + (heroPausedArtScale - 1f) * animatedArtElevationFraction
+                                                scaleX = scale
+                                                scaleY = scale
+                                                shadowElevation = if (!isImmersiveEnabled && useSharedElements && isSettledCurrentTrackPage) {
+                                                    PlayerDimens.fullPlayerArtElevation.toPx() * animatedArtElevationFraction
+                                                } else {
+                                                    0f
+                                                }
+                                            }
+                                            .foamSurface(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (pageTrack.albumArtPath != null) {
+                                            val albumArtRequest = remember(pageTrack.albumArtPath) {
+                                                ImageRequest.Builder(context)
+                                                    .data(EmbeddedAlbumArt(pageTrack.albumArtPath.toUri()))
+                                                    .size(AlbumArtRequestSize)
+                                                    // Shares the player flight's cache slot: this
+                                                    // request warms the bitmap the full-player hero
+                                                    // draws synchronously on the flight's first frame.
+                                                    .placeholderMemoryCacheKey(
+                                                        albumArtMemoryCacheKey(pageTrack.albumArtPath)
                                                     )
-                                                    .graphicsLayer { alpha = sharedArtFlightAlpha() }
+                                                    .memoryCacheKey(
+                                                        albumArtMemoryCacheKey(pageTrack.albumArtPath)
+                                                    )
+                                                    .build()
+                                            }
+                                            AsyncImage(
+                                                model = albumArtRequest,
+                                                contentDescription = stringResource(R.string.album_art),
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            // Fills this slot like real artwork would and
+                                            // scales with the shared-element flight.
+                                            NoAlbumArtPlaceholder()
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                // Same late-tag problem as the art box above: the title and the
+                                // artist/album bounds are only tagged once the page is the settled
+                                // current one (or the gate flips on). A tag added to an already-composed
+                                // page never registers with the coordinator, so the first close (or the
+                                // first close after swiping to a new song) cannot pair the text with the
+                                // full player's and it cross-fades -> flicker. Re-keying on the tag
+                                // states gives the column a fresh identity whenever they appear.
+                                // Marquee state is hoisted per entry, so scrolling carries over.
+                                key(titleSharedState, artistSharedState) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        MarqueeText(
+                                            text = pageTrack.title,
+                                            style = FoamTheme.typography.titleMedium,
+                                            mode = marqueeMode,
+                                            state = pageMarquee.title,
+                                            modifier = if (titleSharedState != null) {
+                                                Modifier.sharedBounds(
+                                                    titleSharedState,
+                                                    animatedVisibilityScope = animatedVisibilityScope
+                                                )
                                             } else Modifier
                                         )
-                                        .graphicsLayer {
-                                            val artTransition = animatedVisibilityScope.transition
-                                            shape = RoundedCornerShape(
-                                                if (artTransition.currentState == artTransition.targetState) {
-                                                    miniImageRadius
-                                                } else {
-                                                    animatedCornerRadius
-                                                }
-                                            )
-                                            clip = true
-                                            val scale =
-                                                1f + (heroPausedArtScale - 1f) * animatedArtElevationFraction
-                                            scaleX = scale
-                                            scaleY = scale
-                                            shadowElevation = if (!isImmersiveEnabled && useSharedElements && isSettledCurrentTrackPage) {
-                                                PlayerDimens.fullPlayerArtElevation.toPx() * animatedArtElevationFraction
-                                            } else {
-                                                0f
-                                            }
-                                        }
-                                        .foamSurface(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (pageTrack.albumArtPath != null) {
-                                        val albumArtRequest = remember(pageTrack.albumArtPath) {
-                                            ImageRequest.Builder(context)
-                                                .data(EmbeddedAlbumArt(pageTrack.albumArtPath.toUri()))
-                                                .size(AlbumArtRequestSize)
-                                                // Shares the player flight's cache slot: this
-                                                // request warms the bitmap the full-player hero
-                                                // draws synchronously on the flight's first frame.
-                                                .placeholderMemoryCacheKey(
-                                                    albumArtMemoryCacheKey(pageTrack.albumArtPath)
+                                        MarqueeText(
+                                            text = stringResource(R.string.artist_album_separator, pageTrack.artist, pageTrack.album),
+                                            style = FoamTheme.typography.caption,
+                                            mode = marqueeMode,
+                                            state = pageMarquee.subtitle,
+                                            modifier = if (artistSharedState != null) {
+                                                Modifier.sharedBounds(
+                                                    artistSharedState,
+                                                    animatedVisibilityScope = animatedVisibilityScope
                                                 )
-                                                .memoryCacheKey(
-                                                    albumArtMemoryCacheKey(pageTrack.albumArtPath)
-                                                )
-                                                .build()
-                                        }
-                                        AsyncImage(
-                                            model = albumArtRequest,
-                                            contentDescription = stringResource(R.string.album_art),
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
+                                            } else Modifier
                                         )
-                                    } else {
-                                        // Fills this slot like real artwork would and
-                                        // scales with the shared-element flight.
-                                        NoAlbumArtPlaceholder()
                                     }
                                 }
                             }
+                        }
 
-                            Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
 
-                            // Same late-tag problem as the art box above: the title and the
-                            // artist/album bounds are only tagged once the page is the settled
-                            // current one (or the gate flips on). A tag added to an already-composed
-                            // page never registers with the coordinator, so the first close (or the
-                            // first close after swiping to a new song) cannot pair the text with the
-                            // full player's and it cross-fades -> flicker. Re-keying on the tag
-                            // states gives the column a fresh identity whenever they appear.
-                            // Marquee state is hoisted per entry, so scrolling carries over.
-                            key(titleSharedState, artistSharedState) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    MarqueeText(
-                                        text = pageTrack.title,
-                                        style = FoamTheme.typography.titleMedium,
-                                        mode = marqueeMode,
-                                        state = pageMarquee.title,
-                                        modifier = if (titleSharedState != null) {
-                                            Modifier.sharedBounds(
-                                                titleSharedState,
-                                                animatedVisibilityScope = animatedVisibilityScope
-                                            )
-                                        } else Modifier
-                                    )
-                                    MarqueeText(
-                                        text = stringResource(R.string.artist_album_separator, pageTrack.artist, pageTrack.album),
-                                        style = FoamTheme.typography.caption,
-                                        mode = marqueeMode,
-                                        state = pageMarquee.subtitle,
-                                        modifier = if (artistSharedState != null) {
-                                            Modifier.sharedBounds(
-                                                artistSharedState,
-                                                animatedVisibilityScope = animatedVisibilityScope
-                                            )
-                                        } else Modifier
-                                    )
-                                }
-                            }
+                        with(sharedTransitionScope) {
+                            MiniPlayerPlayPauseButton(
+                                trackId = track.id,
+                                isPlaying = playbackState.isPlaying,
+                                isLoading = playbackState.isLoading,
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                useSharedElements = useSharedElements,
+                                onPlayPauseClick = onPlayPauseClick,
+                                modifier = Modifier.padding(end = 4.dp)
+                            )
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.height(NavBarDimens.MiniPlayerContentSpacing))
 
-                    with(sharedTransitionScope) {
-                        MiniPlayerPlayPauseButton(
-                            trackId = track.id,
-                            isPlaying = playbackState.isPlaying,
-                            isLoading = playbackState.isLoading,
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            useSharedElements = useSharedElements,
-                            onPlayPauseClick = onPlayPauseClick,
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-                    }
+                    MiniPlayerProgressSlider(
+                        seekBarProgress = seekBarProgress,
+                        isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                        onSeek = onSeek,
+                        modifier = Modifier.height(NavBarDimens.MiniPlayerSliderHeight)
+                    )
                 }
-
-                Spacer(modifier = Modifier.height(NavBarDimens.MiniPlayerContentSpacing))
-
-                MiniPlayerProgressSlider(
-                    seekBarProgress = seekBarProgress,
-                    isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
-                    onSeek = onSeek,
-                    modifier = Modifier.height(NavBarDimens.MiniPlayerSliderHeight)
-                )
             }
         }
     }

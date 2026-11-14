@@ -35,6 +35,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.zIndex
 import com.foamplayer.app.audio.engine.PlaybackState
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.data.settings.AppSettings
@@ -100,16 +101,31 @@ internal fun BoxScope.FoamBottomChrome(
         if (livePlaybackState.currentTrack != null) lastPlayingState = livePlaybackState
     }
 
+    // The mini player fades itself in this case (see MiniPlayer.expandContainer): a fade
+    // applied here would clip the expanding container to the card's bounds.
+    val miniPlayerFadesItself = isTransitionAnimated &&
+            trackListTransitionTrackId == null &&
+            centerTrackRequest == null
+    // The expanding mini player container must pass under the nav bar.
+    val navAboveMiniPlayer = miniPlayerFadesItself &&
+            navigationBarMode != NavigationBarMode.ATTACHED &&
+            (transition.currentState || transition.targetState)
+
     // Nav bar + mini player overlay, hidden on onboarding.
     if (currentRoute != Screen.Onboarding.route) {
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                .zIndex(if (navAboveMiniPlayer) 1f else 0f)
                 .onSizeChanged { onNavZoneHeightChange(it.height) }
                 .collectionHeroOverlayLayer(
                     sharedTransitionScope = sharedTransitionScope,
-                    zIndexInOverlay = BottomChromeNavBarOverlayZIndex,
+                    zIndexInOverlay = if (navAboveMiniPlayer) {
+                        BottomChromeMiniPlayerOverlayZIndex + 1f
+                    } else {
+                        BottomChromeNavBarOverlayZIndex
+                    },
                     renderInOverlay = isBottomChromeLifted
                 )
         ) {
@@ -210,24 +226,21 @@ internal fun BoxScope.FoamBottomChrome(
     ) {
         transition.AnimatedVisibility(
             visible = { isFull -> !isFull },
-            enter = if (isTransitionAnimated) {
-                if (trackListTransitionTrackId != null) {
-                    // The artwork is morphing into a collection row instead of
-                    // the mini player: fade + slide up from the bottom.
+            enter = when {
+                !isTransitionAnimated || miniPlayerFadesItself -> EnterTransition.None
+                // The artwork is morphing into a collection row instead of
+                // the mini player: fade + slide up from the bottom.
+                trackListTransitionTrackId != null ->
                     fadeIn(FoamMotion.Spec.sharedElementFlight) +
-                        slideInVertically(
-                            tween(
-                                FoamMotion.Duration.FLIGHT,
-                                easing = FoamMotion.Easings.STANDARD
-                            )
-                        ) { it / 2 }
-                } else {
-                    fadeIn()
-                }
-            } else {
-                EnterTransition.None
+                            slideInVertically(
+                                tween(
+                                    FoamMotion.Duration.FLIGHT,
+                                    easing = FoamMotion.Easings.STANDARD
+                                )
+                            ) { it / 2 }
+                else -> fadeIn()
             },
-            exit = if (isTransitionAnimated) fadeOut() else ExitTransition.None
+            exit = if (isTransitionAnimated && !miniPlayerFadesItself) fadeOut() else ExitTransition.None
         ) {
             val miniPlayerVisibilityScope = this
             if (currentRoute != Screen.Onboarding.route &&
@@ -259,7 +272,7 @@ internal fun BoxScope.FoamBottomChrome(
                     // preload is pending (a rest-state pairing would pin the
                     // shared elements and break pager swipes).
                     useSharedElements = trackListTransitionTrackId == null &&
-                        centerTrackRequest == null,
+                            centerTrackRequest == null,
                     sharedArtFlightAlpha = {
                         if (settings.playerMode != PlayerMode.NORMAL) {
                             1f - playerTransitionState.progress()
@@ -273,6 +286,7 @@ internal fun BoxScope.FoamBottomChrome(
                     marqueeMode = settings.marqueeMode,
                     skipTrackChangeAnimation = skipMiniPlayerTrackAnimation,
                     showContainer = navigationBarMode != NavigationBarMode.ATTACHED,
+                    expandContainer = miniPlayerFadesItself,
                     fallbackPlaybackState = lastPlayingState,
                     modifier = Modifier
                         .graphicsLayer {
