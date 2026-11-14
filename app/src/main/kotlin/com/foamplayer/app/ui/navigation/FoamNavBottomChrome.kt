@@ -106,8 +106,9 @@ internal fun BoxScope.FoamBottomChrome(
     val miniPlayerFadesItself = isTransitionAnimated &&
             trackListTransitionTrackId == null &&
             centerTrackRequest == null
-    // The expanding mini player container must pass under the nav bar.
-    val navAboveMiniPlayer = miniPlayerFadesItself &&
+    // The mini player must enter and exit under the nav bar, whether it fades itself
+    // (expanding container) or is faded and slid by the host.
+    val navAboveMiniPlayer = isTransitionAnimated &&
             navigationBarMode != NavigationBarMode.ATTACHED &&
             (transition.currentState || transition.targetState)
 
