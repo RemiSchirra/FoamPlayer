@@ -312,16 +312,6 @@ class BitPerfectDetector @Inject constructor(
                         add("HTTP · ${stream.endpoint}")
                     }
                     streamFormatLine(input)?.let { add(it) }
-                    if (stream != null) {
-                        add(
-                            if (stream.direct) {
-                                "Original file streamed without transcoding"
-                            } else {
-                                "Server-side transcode"
-                            }
-                        )
-                    }
-                    add("Integrity not verifiable end-to-end")
                 }
             )
         }
@@ -331,23 +321,19 @@ class BitPerfectDetector @Inject constructor(
             name = "Source file",
             status = PipelineStageStatus.ACTIVE,
             headline = "${input.sourceFormat} · ${input.sourceSampleRate} Hz · ${input.sourceBitDepth}-bit",
-            details = listOf(
-                "${input.sourceChannels} ${if (input.sourceChannels == 1) "channel" else "channels"}",
-                "${input.sourceBitrateKbps} kbps"
-            )
+            details = listOf("${input.sourceChannels}ch · ${input.sourceBitrateKbps} kbps")
         )
 
         // 2. Decoder
         stages += PipelineStage(
             name = "Decoder",
             status = PipelineStageStatus.ACTIVE,
-            headline = "Lossless decode → 32-bit float",
+            headline = "32-bit float decode",
             details = listOf(
                 when (input.sourceFormat.uppercase()) {
-                    "MP3", "AAC", "OGG", "OPUS", "WMA" -> "Lossy codec decode"
-                    else -> "Lossless codec decode"
-                },
-                "ExoPlayer software pipeline"
+                    "MP3", "AAC", "OGG", "OPUS", "WMA" -> "Lossy source"
+                    else -> "Lossless source"
+                }
             )
         )
 
@@ -356,14 +342,11 @@ class BitPerfectDetector @Inject constructor(
             name = "Volume",
             status = if (directVolume) PipelineStageStatus.ACTIVE else PipelineStageStatus.WARN,
             headline = when {
-                directVolume && volumeDb >= 0f -> "Direct volume control · full scale"
-                directVolume -> "Direct volume control · %.1f dB".format(volumeDb)
-                else -> "Platform mixer volume (re-quantized)"
+                directVolume && volumeDb >= 0f -> "Direct volume · full scale"
+                directVolume -> "Direct volume · %.1f dB".format(volumeDb)
+                else -> "Platform mixer"
             },
-            details = buildList {
-                add(if (directVolume) "32-bit float gain, no quantization" else "AudioFlinger int16 mixing")
-                add("Volume: ${dsp.volumePercent}%")
-            }
+            details = listOf("Volume ${dsp.volumePercent}%")
         )
 
         // 4. Tone
@@ -371,9 +354,9 @@ class BitPerfectDetector @Inject constructor(
         stages += PipelineStage(
             name = "Tone",
             status = if (toneNeutral) PipelineStageStatus.BYPASSED else PipelineStageStatus.ACTIVE,
-            headline = if (toneNeutral) "Bypassed" else "Bass/Mid/Treble applied",
+            headline = "",
             details = if (toneNeutral) {
-                listOf("All knobs centered")
+                emptyList()
             } else {
                 listOf(
                     "Bass %+.1f dB".format(dsp.tone.bassDb),
@@ -388,11 +371,11 @@ class BitPerfectDetector @Inject constructor(
         stages += PipelineStage(
             name = "Graphic EQ",
             status = if (graphicActive) PipelineStageStatus.ACTIVE else PipelineStageStatus.BYPASSED,
-            headline = if (graphicActive) "${GraphicEqHelper.activeBandCount(dsp)} active bands" else "Bypassed",
+            headline = if (graphicActive) "${GraphicEqHelper.activeBandCount(dsp)} active bands" else "",
             details = if (graphicActive) {
-                listOf("${dsp.graphicEq.gainsDb.size} log-spaced peaking sections (20 Hz–20 kHz)")
+                listOf("${dsp.graphicEq.gainsDb.size} bands · 20 Hz–20 kHz")
             } else {
-                listOf(if (dsp.graphicEq.enabled) "All bands flat" else "Disabled")
+                emptyList()
             }
         )
 
@@ -401,13 +384,15 @@ class BitPerfectDetector @Inject constructor(
         stages += PipelineStage(
             name = "Parametric EQ",
             status = if (parametricActive) PipelineStageStatus.ACTIVE else PipelineStageStatus.BYPASSED,
-            headline = if (parametricActive) "${dsp.parametricEq.nodes.size} node(s)" else "Bypassed",
+            headline = if (parametricActive) {
+                if (dsp.parametricEq.nodes.size == 1) "1 node" else "${dsp.parametricEq.nodes.size} nodes"
+            } else "",
             details = if (parametricActive) {
                 dsp.parametricEq.nodes.take(4).map {
                     "${it.type.label} @ ${formatHz(it.frequencyHz)} %+.1f dB Q%.2f".format(it.gainDb, it.q)
                 }
             } else {
-                listOf(if (dsp.parametricEq.enabled) "No nodes" else "Disabled")
+                emptyList()
             }
         )
 
@@ -416,14 +401,9 @@ class BitPerfectDetector @Inject constructor(
         stages += PipelineStage(
             name = "Balance & Stereo",
             status = if (stereoNeutral) PipelineStageStatus.BYPASSED else PipelineStageStatus.ACTIVE,
-            headline = when {
-                stereoNeutral -> "Bypassed"
-                dsp.balance != 0f && dsp.stereoWidth != 1f -> "Balance + width applied"
-                dsp.balance != 0f -> "Balance applied"
-                else -> "Stereo width applied"
-            },
+            headline = "",
             details = if (stereoNeutral) {
-                listOf("Centered · width 1.0")
+                emptyList()
             } else {
                 listOf(
                     "Balance %+.0f%%".format(dsp.balance * 100),
@@ -436,19 +416,19 @@ class BitPerfectDetector @Inject constructor(
         stages += PipelineStage(
             name = "Output",
             status = PipelineStageStatus.ACTIVE,
-            headline = "Purely linear chain — boosts are heard as boosts",
-            details = listOf("No limiter, no headroom reduction")
+            headline = "No limiter, full headroom",
+            details = emptyList()
         )
 
         // 9. Resampler
         stages += PipelineStage(
             name = "Resampler",
             status = if (resampling) PipelineStageStatus.WARN else PipelineStageStatus.BYPASSED,
-            headline = if (resampling) "${input.sourceSampleRate} Hz → $mixerRate Hz" else "None (native rate)",
+            headline = if (resampling) "${input.sourceSampleRate} Hz → $mixerRate Hz" else "",
             details = if (resampling) {
-                listOf("System AudioFlinger SRC — quality loss possible")
+                listOf("AudioFlinger SRC")
             } else {
-                listOf("Source rate delivered untouched")
+                emptyList()
             }
         )
 
@@ -461,9 +441,9 @@ class BitPerfectDetector @Inject constructor(
                 add("$outputSampleRate Hz · $outputBitDepth-bit")
                 add(
                     when {
-                        isBitPerfect -> "Bit-perfect path"
-                        directCapable -> "Direct-capable route"
-                        else -> "Standard mixed route"
+                        isBitPerfect -> "Bit-perfect"
+                        directCapable -> "Direct-capable"
+                        else -> "Mixed"
                     }
                 )
             }
