@@ -99,7 +99,8 @@ fun FoamNavHost(
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
+    val startRoute = if (startOnOnboarding) Screen.Onboarding.route else Screen.Home.route
+    val currentRoute = navBackStackEntry?.destination?.route ?: startRoute
 
     val routePair = remember { object { var previous: String? = currentRoute; var current: String? = currentRoute } }
     if (routePair.current != currentRoute) {
@@ -686,11 +687,7 @@ fun FoamNavHost(
                                 NavHost(
                                     modifier = Modifier.fillMaxSize(),
                                     navController = navController,
-                                    startDestination = if (startOnOnboarding) {
-                                        Screen.Onboarding.route
-                                    } else {
-                                        Screen.Home.route
-                                    },
+                                    startDestination = startRoute,
                                     enterTransition = navTransitions.enter,
                                     exitTransition = navTransitions.exit,
                                     popEnterTransition = navTransitions.popEnter,

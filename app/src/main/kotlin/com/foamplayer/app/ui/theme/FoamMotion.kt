@@ -116,5 +116,8 @@ object FoamMotion {
 
         /** Bottom-sheet modal fall. */
         val sheetRiseOut = tween<Float>(Duration.STANDARD)
+
+        /** Onboarding pager slide. */
+        val onboardingPageSlide = tween<Float>(Duration.SMOOTH, easing = Easings.STANDARD)
     }
 }

@@ -55,13 +55,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.lerp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
@@ -175,11 +178,21 @@ fun OnboardingScreen(
             scrollPosition = pagerScrollPosition,
             pageCount = OnboardingPageCount,
             onPrevious = {
-                scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                scope.launch {
+                    pagerState.animateScrollToPage(
+                        pagerState.currentPage - 1,
+                        animationSpec = FoamMotion.Spec.onboardingPageSlide
+                    )
+                }
             },
             onNext = {
                 if (pagerState.currentPage < OnboardingPageCount - 1) {
-                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                    scope.launch {
+                        pagerState.animateScrollToPage(
+                            pagerState.currentPage + 1,
+                            animationSpec = FoamMotion.Spec.onboardingPageSlide
+                        )
+                    }
                 } else {
                     viewModel.setOnboardingCompleted(true)
                     onFinish()
@@ -458,22 +471,34 @@ private fun OnboardingBottomBar(
             }
             OnboardingDots(scrollPosition = scrollPosition, pageCount = pageCount)
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                Box(
+                SubcomposeLayout(
                     modifier = Modifier
                         .clip(RoundedCornerShape(FoamDimens.buttonRounding))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = ripple(color = FoamTheme.colors.textPrimary)
-                        ) { onNext() },
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    ForwardText(text = stringResource(R.string.next), alpha = 1f - forwardProgress)
-                    ForwardText(text = stringResource(R.string.onboarding_get_started), alpha = forwardProgress)
+                        ) { onNext() }
+                ) { constraints ->
+                    val nextContent = subcompose(NextButtonSlot.Label) {
+                        ForwardText(text = stringResource(R.string.next), alpha = 1f - forwardProgress)
+                    }.single().measure(Constraints())
+                    val startedContent = subcompose(NextButtonSlot.GetStarted) {
+                        ForwardText(text = stringResource(R.string.onboarding_get_started), alpha = forwardProgress)
+                    }.single().measure(Constraints())
+                    val width = lerp(nextContent.width, startedContent.width, forwardProgress)
+                        .coerceIn(constraints.minWidth, constraints.maxWidth)
+                    val height = maxOf(nextContent.height, startedContent.height)
+                    layout(width, height) {
+                        nextContent.placeRelative(width - nextContent.width, (height - nextContent.height) / 2)
+                        startedContent.placeRelative(width - startedContent.width, (height - startedContent.height) / 2)
+                    }
                 }
             }
         }
     }
 }
+
+private enum class NextButtonSlot { Label, GetStarted }
 
 @Composable
 private fun ForwardText(text: String, alpha: Float) {
