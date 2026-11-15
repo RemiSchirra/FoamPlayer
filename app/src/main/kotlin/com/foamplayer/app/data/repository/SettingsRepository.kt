@@ -47,6 +47,7 @@ import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.NotificationExtraButton
 import com.foamplayer.app.data.settings.PlayerMode
+import com.foamplayer.app.data.settings.PlayerPagerEffect
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
@@ -102,7 +103,22 @@ class SettingsRepository @Inject constructor(
     suspend fun setPauseOnDeviceDisconnected(enabled: Boolean) = update {
         it.copy(pauseOnDeviceDisconnected = enabled)
     }
-    suspend fun setIconStyle(style: FoamIconStyle) = update { it.copy(iconStyle = style) }
+    /** Persists the variant of one icon pack; other packs keep theirs. */
+    suspend fun setIconStyleFor(packId: String, style: FoamIconStyle) = update {
+        it.copy(iconStyles = it.iconStyles + (packId to style))
+    }
+    /** Persists the bundled icon pack whose drawables overlay the default icons. */
+    suspend fun setIconPack(id: String) = update { it.copy(iconPackId = id) }
+    /** Persists whether navbar icon variants swap with the selection. */
+    suspend fun setDynamicNavIcons(enabled: Boolean) = update { it.copy(dynamicNavIcons = enabled) }
+    /** Persists the navbar icon variant of the selected buttons. */
+    suspend fun setNavIconActiveVariant(style: FoamIconStyle) = update {
+        it.copy(navIconActiveVariant = style)
+    }
+    /** Persists the navbar icon variant of the unselected buttons. */
+    suspend fun setNavIconInactiveVariant(style: FoamIconStyle) = update {
+        it.copy(navIconInactiveVariant = style)
+    }
     suspend fun setMiniPlayerRounding(rounding: Int) = update { it.copy(miniPlayerRounding = rounding) }
     suspend fun setFullPlayerRounding(rounding: Int) = update { it.copy(fullPlayerRounding = rounding) }
     suspend fun setMarqueeMode(mode: MarqueeMode) = update { it.copy(marqueeMode = mode) }
@@ -111,6 +127,10 @@ class SettingsRepository @Inject constructor(
     suspend fun setAccentTintEnabled(enabled: Boolean) = update { it.copy(accentTintEnabled = enabled) }
     /** Persists the full player's look (normal / immersive / vinyl). */
     suspend fun setPlayerMode(mode: PlayerMode) = update { it.copy(playerMode = mode) }
+    /** Persists the full player's track-pager effect. */
+    suspend fun setPlayerPagerEffect(effect: PlayerPagerEffect) = update {
+        it.copy(playerPagerEffect = effect)
+    }
     suspend fun setAnimateSeekBarEnabled(enabled: Boolean) = update { it.copy(animateSeekBarEnabled = enabled) }
     suspend fun setSeekBarStyle(style: SeekBarStyle) = update { it.copy(seekBarStyle = style) }
     suspend fun setPreferredOutputDeviceId(deviceId: String?) = update {
@@ -311,6 +331,14 @@ class SettingsRepository @Inject constructor(
         it.copy(artistImageResolveEnabled = enabled)
     }
 
+    suspend fun setArtistImageCacheLimit(limit: Int) = update {
+        it.copy(artistImageCacheLimit = limit)
+    }
+
+    suspend fun setArtistImageResolveAllEnabled(enabled: Boolean) = update {
+        it.copy(artistImageResolveAllEnabled = enabled)
+    }
+
     suspend fun setDisplayOnLockScreen(enabled: Boolean) = update {
         it.copy(displayOnLockScreen = enabled)
     }
@@ -349,6 +377,18 @@ class SettingsRepository @Inject constructor(
         it.copy(deviceAudioConfigs = it.deviceAudioConfigs + (deviceId to config))
     }
 
+    /** Encodes the per-pack icon style map as comma-separated "packId:STYLE" entries. */
+    private fun encodeIconStyles(styles: Map<String, FoamIconStyle>): String =
+        styles.entries.joinToString(",") { "${it.key}:${it.value.name}" }
+
+    /** Decodes the per-pack icon style map; unknown packs or styles are dropped. */
+    private fun decodeIconStyles(encoded: String?): Map<String, FoamIconStyle> =
+        encoded?.split(",")?.mapNotNull { entry ->
+            val packId = entry.substringBefore(":", "").takeIf { it.isNotEmpty() }
+            val style = runCatching { FoamIconStyle.valueOf(entry.substringAfter(":", "")) }.getOrNull()
+            if (packId != null && style != null) packId to style else null
+        }?.toMap() ?: emptyMap()
+
     private fun Preferences.toAppSettings(): AppSettings = AppSettings(
         bitPerfectEnabled = this[Keys.BIT_PERFECT_ENABLED] ?: AppSettings().bitPerfectEnabled,
         listenedThresholdPercent = this[Keys.LISTENED_THRESHOLD_PERCENT]
@@ -364,9 +404,15 @@ class SettingsRepository @Inject constructor(
             ?: AppSettings().pauseOnDeviceDisconnected,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
         distantServers = DistantServersCodec.decode(this[Keys.DISTANT_SERVERS]),
-        iconStyle = this[Keys.ICON_STYLE]
+        iconStyles = decodeIconStyles(this[Keys.ICON_STYLES]),
+        iconPackId = this[Keys.ICON_PACK] ?: AppSettings().iconPackId,
+        dynamicNavIcons = this[Keys.DYNAMIC_NAV_ICONS] ?: AppSettings().dynamicNavIcons,
+        navIconActiveVariant = this[Keys.NAV_ICON_ACTIVE_VARIANT]
             ?.let { runCatching { FoamIconStyle.valueOf(it) }.getOrNull() }
-            ?: AppSettings().iconStyle,
+            ?: AppSettings().navIconActiveVariant,
+        navIconInactiveVariant = this[Keys.NAV_ICON_INACTIVE_VARIANT]
+            ?.let { runCatching { FoamIconStyle.valueOf(it) }.getOrNull() }
+            ?: AppSettings().navIconInactiveVariant,
         miniPlayerRounding = this[Keys.MINI_PLAYER_ROUNDING] ?: AppSettings().miniPlayerRounding,
         fullPlayerRounding = this[Keys.FULL_PLAYER_ROUNDING] ?: AppSettings().fullPlayerRounding,
         marqueeMode = this[Keys.MARQUEE_MODE]
@@ -380,6 +426,9 @@ class SettingsRepository @Inject constructor(
         playerMode = this[Keys.PLAYER_MODE]
             ?.let { runCatching { PlayerMode.valueOf(it) }.getOrNull() }
             ?: AppSettings().playerMode,
+        playerPagerEffect = this[Keys.PLAYER_PAGER_EFFECT]
+            ?.let { runCatching { PlayerPagerEffect.valueOf(it) }.getOrNull() }
+            ?: AppSettings().playerPagerEffect,
         animateSeekBarEnabled = this[Keys.ANIMATE_SEEK_BAR] ?: AppSettings().animateSeekBarEnabled,
         seekBarStyle = this[Keys.SEEK_BAR_STYLE]
             ?.let { runCatching { SeekBarStyle.valueOf(it) }.getOrNull() }
@@ -464,6 +513,9 @@ class SettingsRepository @Inject constructor(
         scrobbleOnlyFirstArtist = this[Keys.LASTFM_SCROBBLE_ONLY_FIRST_ARTIST]
             ?: AppSettings().scrobbleOnlyFirstArtist,
         artistImageResolveEnabled = this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] ?: AppSettings().artistImageResolveEnabled,
+        artistImageCacheLimit = this[Keys.ARTIST_IMAGE_CACHE_LIMIT] ?: AppSettings().artistImageCacheLimit,
+        artistImageResolveAllEnabled = this[Keys.ARTIST_IMAGE_RESOLVE_ALL_ENABLED]
+            ?: AppSettings().artistImageResolveAllEnabled,
         displayOnLockScreen = this[Keys.DISPLAY_ON_LOCK_SCREEN] ?: AppSettings().displayOnLockScreen,
         fastLockScreenEnabled = this[Keys.FAST_LOCK_SCREEN_ENABLED] ?: AppSettings().fastLockScreenEnabled,
         notificationButtonLeft = this[Keys.NOTIFICATION_BUTTON_LEFT]
@@ -490,7 +542,11 @@ class SettingsRepository @Inject constructor(
         this[Keys.PAUSE_ON_DEVICE_DISCONNECTED] = settings.pauseOnDeviceDisconnected
         this[Keys.SELECTED_FOLDERS] = settings.libraryFolders
         this[Keys.DISTANT_SERVERS] = DistantServersCodec.encode(settings.distantServers)
-        this[Keys.ICON_STYLE] = settings.iconStyle.name
+        this[Keys.ICON_STYLES] = encodeIconStyles(settings.iconStyles)
+        this[Keys.ICON_PACK] = settings.iconPackId
+        this[Keys.DYNAMIC_NAV_ICONS] = settings.dynamicNavIcons
+        this[Keys.NAV_ICON_ACTIVE_VARIANT] = settings.navIconActiveVariant.name
+        this[Keys.NAV_ICON_INACTIVE_VARIANT] = settings.navIconInactiveVariant.name
         this[Keys.MINI_PLAYER_ROUNDING] = settings.miniPlayerRounding
         this[Keys.FULL_PLAYER_ROUNDING] = settings.fullPlayerRounding
         this[Keys.MARQUEE_MODE] = settings.marqueeMode.name
@@ -500,6 +556,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.ACCENT_COLOR] = settings.accentColor
         this[Keys.ACCENT_TINT] = settings.accentTintEnabled
         this[Keys.PLAYER_MODE] = settings.playerMode.name
+        this[Keys.PLAYER_PAGER_EFFECT] = settings.playerPagerEffect.name
         // No migration from the pre-enum boolean: the new key is the single source of
         // truth, so the old key is cleared here to overwrite the old state.
         this.remove(Keys.IMMERSIVE_MODE)
@@ -551,6 +608,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.LASTFM_SCROBBLING_ENABLED] = settings.lastFmScrobblingEnabled
         this[Keys.LASTFM_SCROBBLE_ONLY_FIRST_ARTIST] = settings.scrobbleOnlyFirstArtist
         this[Keys.ARTIST_IMAGE_RESOLVE_ENABLED] = settings.artistImageResolveEnabled
+        this[Keys.ARTIST_IMAGE_CACHE_LIMIT] = settings.artistImageCacheLimit
+        this[Keys.ARTIST_IMAGE_RESOLVE_ALL_ENABLED] = settings.artistImageResolveAllEnabled
         this[Keys.DISPLAY_ON_LOCK_SCREEN] = settings.displayOnLockScreen
         this[Keys.FAST_LOCK_SCREEN_ENABLED] = settings.fastLockScreenEnabled
         this[Keys.NOTIFICATION_BUTTON_LEFT] = settings.notificationButtonLeft.name
@@ -573,7 +632,11 @@ class SettingsRepository @Inject constructor(
         val PAUSE_ON_DEVICE_DISCONNECTED = booleanPreferencesKey("pause_on_device_disconnected")
         val SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
         val DISTANT_SERVERS = stringPreferencesKey("distant_servers")
-        val ICON_STYLE = stringPreferencesKey("icon_style")
+        val ICON_STYLES = stringPreferencesKey("icon_styles")
+        val ICON_PACK = stringPreferencesKey("icon_pack")
+        val DYNAMIC_NAV_ICONS = booleanPreferencesKey("dynamic_nav_icons")
+        val NAV_ICON_ACTIVE_VARIANT = stringPreferencesKey("nav_icon_active_variant")
+        val NAV_ICON_INACTIVE_VARIANT = stringPreferencesKey("nav_icon_inactive_variant")
         val MINI_PLAYER_ROUNDING = intPreferencesKey("mini_player_rounding")
         val FULL_PLAYER_ROUNDING = intPreferencesKey("full_player_rounding")
         val MARQUEE_MODE = stringPreferencesKey("marquee_mode")
@@ -585,6 +648,7 @@ class SettingsRepository @Inject constructor(
         val ACCENT_COLOR = intPreferencesKey("accent_color")
         val ACCENT_TINT = booleanPreferencesKey("accent_tint")
         val PLAYER_MODE = stringPreferencesKey("player_mode")
+        val PLAYER_PAGER_EFFECT = stringPreferencesKey("player_pager_effect")
 
         // Legacy pre-enum boolean, kept only so write() can clear it.
         val IMMERSIVE_MODE = booleanPreferencesKey("immersive_mode")
@@ -638,6 +702,8 @@ class SettingsRepository @Inject constructor(
         val LASTFM_SCROBBLING_ENABLED = booleanPreferencesKey("lastfm_scrobbling_enabled")
         val LASTFM_SCROBBLE_ONLY_FIRST_ARTIST = booleanPreferencesKey("lastfm_scrobble_only_first_artist")
         val ARTIST_IMAGE_RESOLVE_ENABLED = booleanPreferencesKey("artist_image_resolve_enabled")
+        val ARTIST_IMAGE_CACHE_LIMIT = intPreferencesKey("artist_image_cache_limit")
+        val ARTIST_IMAGE_RESOLVE_ALL_ENABLED = booleanPreferencesKey("artist_image_resolve_all_enabled")
         val DISPLAY_ON_LOCK_SCREEN = booleanPreferencesKey("display_on_lock_screen")
         val FAST_LOCK_SCREEN_ENABLED = booleanPreferencesKey("fast_lock_screen_enabled")
         val NOTIFICATION_BUTTON_LEFT = stringPreferencesKey("notification_button_left")

@@ -12,6 +12,8 @@ import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.gestures.DraggableState
@@ -21,12 +23,10 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -46,7 +46,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -68,7 +67,10 @@ import com.foamplayer.app.ui.components.rememberSeekBarProgressState
 import com.foamplayer.app.ui.modals.PlayerAudioInfoModal
 import com.foamplayer.app.ui.modals.PlayOnDevice
 import com.foamplayer.app.ui.modals.PlayOnModal
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.LocalAccentTintState
+import com.foamplayer.app.ui.theme.SurfaceAccentTint
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import com.foamplayer.app.ui.utils.WaveformCache
 import com.foamplayer.app.ui.utils.WaveformState
@@ -278,6 +280,8 @@ fun FullPlayerScreen(
                 return Offset.Zero
             }
 
+            private var listMovedThisGesture = false
+
             override fun onPostScroll(
                 consumed: Offset,
                 available: Offset,
@@ -285,7 +289,12 @@ fun FullPlayerScreen(
             ): Offset {
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
 
-                if (available.y > 0f) {
+                if (consumed.y != 0f) {
+                    listMovedThisGesture = true
+                    return Offset.Zero
+                }
+
+                if (available.y > 0f && !listMovedThisGesture) {
                     gestureController.onDrag(available.y)
                     return Offset(0f, available.y)
                 }
@@ -293,6 +302,8 @@ fun FullPlayerScreen(
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
+                listMovedThisGesture = false
+
                 val upState = gestureController.upTransitionState
                 val isMidDrag = upState.currentState != upState.targetState
 
@@ -311,7 +322,22 @@ fun FullPlayerScreen(
                     upTransitionState.currentState != upTransitionState.targetState
         }
     }
-    val placeholderColor = if (isTransitioning) Color.Transparent else FoamTheme.colors.surfaceVariant
+    // Draw-phase placeholder color: the tinted variant follows the live accent,
+    // which changes every frame of a hero pager swipe (viewModel.setDynamicAccentColor
+    // fires per drag frame). Reading it here -- in this screen's own scope -- would
+    // recompose the entire player at display frequency during an active swipe, so it
+    // is handed to the hero pager as a lambda consumed in the pages' draw phase
+    // (see TrackHeroPager). Both reads inside the lambda (the transition flag and
+    // the live accent) invalidate drawing only.
+    val accentTint = LocalAccentTintState.current
+    val placeholderBaseColor = FoamTheme.colors.surfaceVariant
+    val placeholderColor = {
+        if (isTransitioning) {
+            Color.Transparent
+        } else {
+            accentTint.resolve(placeholderBaseColor, SurfaceAccentTint)
+        }
+    }
 
     val pagerState = key(state.repeatMode == RepeatMode.ALL) {
         rememberPagerState(
@@ -402,6 +428,8 @@ fun FullPlayerScreen(
         lastBackwardSkipMs[0] = if (backward) System.currentTimeMillis() else 0L
     }
     val programmaticScrollPage = remember { mutableStateOf<Int?>(null) }
+    // Page the effect pager will settle on; published on release so the track commits.
+    val pagerFlingTarget = remember { mutableStateOf<Int?>(null) }
 
     var backdropHopHold by remember { mutableStateOf(false) }
     suspend fun hopOffGhost() {
@@ -487,20 +515,36 @@ fun FullPlayerScreen(
             }
     }
 
-    LaunchedEffect(pagerState, settings.automaticColorEnabled) {
+    val fallbackAccent = FoamTheme.colors.textPrimary
+    LaunchedEffect(pagerState, settings.automaticColorEnabled, fallbackAccent) {
         if (!settings.automaticColorEnabled) return@LaunchedEffect
         snapshotFlow {
             // New page number against the old queue for a frame would push a wrong accent.
             if (backdropRenumberHold) return@snapshotFlow null
             val anchoredQueue = pagerAnchoredQueue
-            AlbumArtPaletteCache.interpolatedColor(
-                currentPage = pagerState.currentPage,
-                currentPageOffsetFraction = pagerState.currentPageOffsetFraction,
-                pageCount = anchoredQueue.size
-            ) { page -> anchoredQueue.getOrNull(page)?.albumArtPath }
-        }.collect { interpolatedColor ->
-            if (interpolatedColor != null) {
-                viewModel.setDynamicAccentColor(interpolatedColor)
+            val artPathFor: (Int) -> String? = { p ->
+                anchoredQueue.getOrNull(p)?.albumArtPath
+            }
+            val page = pagerState.currentPage
+            val fraction = pagerState.currentPageOffsetFraction
+            val resolved = AlbumArtPaletteCache.interpolatedColor(
+                currentPage = page,
+                currentPageOffsetFraction = fraction,
+                pageCount = anchoredQueue.size,
+                fallback = fallbackAccent
+            ) { artPathFor(it) }
+            val path = artPathFor(page)
+            when {
+                fraction == 0f &&
+                        (path == null ||
+                                (AlbumArtPaletteCache.colors[path] == null &&
+                                        AlbumArtPaletteCache.isSettled(path))
+                                ) -> fallbackAccent
+                else -> resolved
+            }
+        }.collect { accentColor ->
+            if (accentColor != null) {
+                viewModel.setDynamicAccentColor(accentColor)
             }
         }
     }
@@ -531,6 +575,7 @@ fun FullPlayerScreen(
         isProgressiveEnvelope = isProgressiveEnvelope,
         queueIndex = queueIndex,
         currentEntryId = currentEntryId,
+        pagerEffect = settings.playerPagerEffect,
         latestQueueIndex = latestQueueIndex,
         latestQueueSize = latestQueueSize,
         latestHeroModel = latestHeroModel,
@@ -541,6 +586,7 @@ fun FullPlayerScreen(
         backdropRenumberHold = { backdropRenumberHold },
         isMainPagerVisible = { isMainPagerVisible() },
         programmaticScrollPage = programmaticScrollPage,
+        pagerFlingTarget = pagerFlingTarget,
         hopOffGhost = { hopOffGhost() }
     )
 
@@ -565,7 +611,7 @@ fun FullPlayerScreen(
             programmaticBackdropToPath = toPath
             programmaticBackdropCrossfade.snapTo(0f)
             try {
-                programmaticBackdropCrossfade.animateTo(1f, tween(TRANSITION_DURATION_MS))
+                programmaticBackdropCrossfade.animateTo(1f, tween(FoamMotion.Duration.SMOOTH))
             } finally {
                 if (generation == backdropFadeGeneration) {
                     programmaticBackdropFromPath = null
@@ -584,7 +630,11 @@ fun FullPlayerScreen(
             clearSyncTarget()
             return@LaunchedEffect
         }
-        if (pagerState.currentPage == queueIndex) {
+        if (pagerState.currentPage == queueIndex ||
+            (pagerState.isScrollInProgress &&
+                    programmaticScrollPage.value == null &&
+                    pagerState.targetPage == queueIndex)
+        ) {
             clearSyncTarget()
             return@LaunchedEffect
         }
@@ -606,7 +656,7 @@ fun FullPlayerScreen(
                 try {
                     pagerState.animateScrollToPage(
                         page = transitPage,
-                        animationSpec = tween(TRANSITION_DURATION_MS)
+                        animationSpec = tween(FoamMotion.Duration.SMOOTH)
                     )
                 } finally {
                     withContext(NonCancellable) { hopOffGhost() }
@@ -614,7 +664,7 @@ fun FullPlayerScreen(
             } else {
                 pagerState.animateScrollToPage(
                     page = queueIndex,
-                    animationSpec = tween(TRANSITION_DURATION_MS)
+                    animationSpec = tween(FoamMotion.Duration.SMOOTH)
                 )
             }
         } else {
@@ -722,6 +772,10 @@ fun FullPlayerScreen(
                 backdropState.subViewBlurProgress = subViewBlurProgressProvider
             }
 
+            val selectorTopRoot = androidx.compose.runtime.remember {
+                androidx.compose.runtime.mutableFloatStateOf(Float.NaN)
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -731,10 +785,10 @@ fun FullPlayerScreen(
                 Box(modifier = Modifier.weight(1f)) {
                     upTransition.AnimatedVisibility(
                         visible = { !it },
-                        enter = fadeIn(tween(TRANSITION_DURATION_MS)) +
-                                slideInVertically(tween(TRANSITION_DURATION_MS)) { h -> -h / PlayerDimens.headerSlideDivisor },
-                        exit = fadeOut(tween(TRANSITION_DURATION_MS)) +
-                                slideOutVertically(tween(TRANSITION_DURATION_MS)) { h -> -h / PlayerDimens.headerSlideDivisor },
+                        enter = fadeIn(tween(FoamMotion.Duration.SMOOTH)) +
+                                slideInVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> -h / PlayerDimens.headerSlideDivisor },
+                        exit = fadeOut(tween(FoamMotion.Duration.SMOOTH)) +
+                                slideOutVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> -h / PlayerDimens.headerSlideDivisor },
                         modifier = Modifier.fillMaxSize().then(playerDrag)
                     ) {
                         MainPlayerContent(
@@ -752,6 +806,8 @@ fun FullPlayerScreen(
                             placeholderColor = placeholderColor,
                             immersive = isImmersiveEnabled,
                             vinyl = isVinylEnabled,
+                            pagerEffect = settings.playerPagerEffect,
+                            pagerFlingTarget = pagerFlingTarget,
                             outerVisibilityScope = animatedVisibilityScope,
                             headerVisibilityScope = this@AnimatedVisibility,
                             viewModel = viewModel,
@@ -771,16 +827,19 @@ fun FullPlayerScreen(
                             onOpenAlbum = onOpenAlbum,
                             onOpenArtist = onOpenArtist,
                             flightGeometry = flightGeometry,
-                            onSkipIntent = markSkipIntent
+                            onSkipIntent = markSkipIntent,
+                            selectorTopRoot = selectorTopRoot
                         )
                     }
 
                     upTransition.AnimatedVisibility(
                         visible = { it },
-                        enter = fadeIn(tween(TRANSITION_DURATION_MS)) +
-                                slideInVertically(tween(TRANSITION_DURATION_MS)) { h -> h / 6 },
-                        exit = fadeOut(tween(TRANSITION_DURATION_MS)) +
-                                slideOutVertically(tween(TRANSITION_DURATION_MS)) { h -> h / 6 },
+                        enter = fadeIn(tween(FoamMotion.Duration.SMOOTH)) +
+                                slideInVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> h / 6 } +
+                                scaleIn(tween(FoamMotion.Duration.SMOOTH), initialScale = 0.95f),
+                        exit = fadeOut(tween(FoamMotion.Duration.SMOOTH)) +
+                                slideOutVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> h / 6 } +
+                                scaleOut(tween(FoamMotion.Duration.SMOOTH), targetScale = 0.95f),
                         modifier = Modifier
                             .fillMaxSize()
                             .extendBottom(PlayerDimens.subViewContentBottomExtension)
@@ -818,8 +877,6 @@ fun FullPlayerScreen(
                             gestureController.expandToSubView()
                         }
                     },
-                    repeatMode = state.repeatMode,
-                    isShuffle = state.isShuffle,
                     onPlayOnClick = { showPlayOnModal = true },
                     uiAlpha = uiAlpha,
                     subControlsProgress = subControlsProgress,
@@ -832,7 +889,9 @@ fun FullPlayerScreen(
                     queueIndex = queueIndex,
                     queueSize = queueSize,
                     envelopeMorphProgress = envelopeMorphProgress,
-                    markSkipIntent = markSkipIntent
+                    markSkipIntent = markSkipIntent,
+                    dragModifier = playerDrag,
+                    selectorTopRoot = selectorTopRoot
                 )
             }
 
@@ -885,4 +944,3 @@ fun FullPlayerScreen(
         }
     )
 }
-

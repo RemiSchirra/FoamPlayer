@@ -25,6 +25,7 @@ import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.PlayerMode
+import com.foamplayer.app.data.settings.PlayerPagerEffect
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
 import com.foamplayer.distant.DistantFolder
@@ -42,6 +43,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -59,10 +61,7 @@ class SettingsViewModel @Inject constructor(
     val settings: StateFlow<AppSettings> = settingsRepository.settings.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        // Seed with defaults instead of a blocking DataStore read: this VM is
-        // created during first composition, and a blocking read would land on
-        // the main thread's first frame.
-        initialValue = AppSettings()
+        initialValue = runBlocking { settingsRepository.settings.first() }
     )
 
     /**
@@ -83,14 +82,28 @@ class SettingsViewModel @Inject constructor(
     fun setListenedThresholdPercent(percent: Int) = launch {
         settingsRepository.setListenedThresholdPercent(percent)
     }
-    fun setIconStyle(style: FoamIconStyle) = launch { settingsRepository.setIconStyle(style) }
+    /** Persists the variant of one icon pack; other packs keep theirs. */
+    fun setIconStyleFor(packId: String, style: FoamIconStyle) =
+        launch { settingsRepository.setIconStyleFor(packId, style) }
+    /** Persists the bundled icon pack whose drawables overlay the default icons. */
+    fun setIconPack(id: String) = launch { settingsRepository.setIconPack(id) }
+    /** Persists whether navbar icon variants swap with the selection. */
+    fun setDynamicNavIcons(enabled: Boolean) = launch { settingsRepository.setDynamicNavIcons(enabled) }
+    /** Persists the navbar icon variant of the selected buttons. */
+    fun setNavIconActiveVariant(style: FoamIconStyle) = launch {
+        settingsRepository.setNavIconActiveVariant(style)
+    }
+    /** Persists the navbar icon variant of the unselected buttons. */
+    fun setNavIconInactiveVariant(style: FoamIconStyle) = launch {
+        settingsRepository.setNavIconInactiveVariant(style)
+    }
     fun setMiniPlayerRounding(rounding: Int) = launch { settingsRepository.setMiniPlayerRounding(rounding) }
     fun setFullPlayerRounding(rounding: Int) = launch { settingsRepository.setFullPlayerRounding(rounding) }
     fun setMarqueeMode(mode: MarqueeMode) = launch { settingsRepository.setMarqueeMode(mode) }
     fun addFolder(path: String) = launch { settingsRepository.addFolder(path) }
     fun removeFolder(path: String) = trackRepository.removeFolderDetached(path)
 
-    // ----------------------------- distant providers
+    // distant providers
 
     /** Message of the last distant provider failure, surfaced by the setup modal. */
     @Volatile
@@ -135,6 +148,9 @@ class SettingsViewModel @Inject constructor(
     fun setAccentColor(color: Int) = launch { settingsRepository.setAccentColor(color) }
     fun setAccentTintEnabled(enabled: Boolean) = launch { settingsRepository.setAccentTintEnabled(enabled) }
     fun setPlayerMode(mode: PlayerMode) = launch { settingsRepository.setPlayerMode(mode) }
+    fun setPlayerPagerEffect(effect: PlayerPagerEffect) = launch {
+        settingsRepository.setPlayerPagerEffect(effect)
+    }
     fun setAnimateSeekBarEnabled(enabled: Boolean) = launch { settingsRepository.setAnimateSeekBarEnabled(enabled) }
     fun setSeekBarStyle(style: SeekBarStyle) = launch { settingsRepository.setSeekBarStyle(style) }
     fun setAutoOpenPlayerEnabled(enabled: Boolean) = launch { settingsRepository.setAutoOpenPlayerEnabled(enabled) }
@@ -212,6 +228,16 @@ class SettingsViewModel @Inject constructor(
 
     fun setArtistImageResolveEnabled(enabled: Boolean) = launch {
         settingsRepository.setArtistImageResolveEnabled(enabled)
+    }
+
+    /** Persists the "artists to cache" limit and trims the visited-LRU pool to it. */
+    fun setArtistImageCacheLimit(limit: Int) = launch {
+        settingsRepository.setArtistImageCacheLimit(limit)
+        artistImageScanner.enforceCacheLimit(limit)
+    }
+
+    fun setArtistImageResolveAllEnabled(enabled: Boolean) = launch {
+        settingsRepository.setArtistImageResolveAllEnabled(enabled)
     }
 
     fun startArtistImageScan() = artistImageScanner.startScan()
@@ -298,9 +324,9 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setHomeSectionEnabled(section, enabled)
     }
 
-    // ----------------------------- developer tools
-    // Only reachable from the Components Test screen, compiled in solely when
-    // BuildConfig.DEV_MODE is set at build time.
+    // developer tools
+    // Only reachable from the Components Test screen, compiled in solely in
+    // debug builds (BuildConfig.DEBUG).
 
     /** Reset onboarding so the first-run flow shows again on next start. */
     fun resetOnboarding() = setOnboardingCompleted(false)
@@ -311,7 +337,7 @@ class SettingsViewModel @Inject constructor(
     /** Fills the library with three years of random listening data. */
     fun generateRandomStats() = launch { trackRepository.generateRandomPlayStats(years = 3) }
 
-    // -------------------------------------- backups
+    // backups
 
     /** Reachable for the import sheet's feature probe. */
     val backupManager: SettingsBackupManager = settingsBackupManager

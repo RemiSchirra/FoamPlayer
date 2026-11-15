@@ -28,7 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -46,10 +46,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.ThemeMode
 import com.foamplayer.app.ui.modals.FoamBottomModal
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.modals.DefaultStopPalette
 import com.foamplayer.app.ui.modals.HueBar
@@ -57,9 +58,6 @@ import com.foamplayer.app.ui.modals.SaturationValueField
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
-import com.foamplayer.app.ui.theme.foamBorderOverlay
-import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * One-tap accent shortcuts under the picker: 12 vibrant, evenly spread hues
@@ -98,22 +96,18 @@ fun ColorsSettingsScreen(
 
     var animatePalette by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.colors),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.colors),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
-            contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
+            contentPadding = PaddingValues(
+                top = SettingsHeaderZoneHeight,
+                bottom = LocalBottomBarClearance.current
+            )
         ) {
             item {
                 BasicText(text = stringResource(R.string.theme), style = FoamTheme.typography.titleMedium)
@@ -128,12 +122,7 @@ fun ColorsSettingsScreen(
             item {
                 BasicText(text = stringResource(R.string.system_colors), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     Column {
                         FoamSwitchItem(
                             title = stringResource(R.string.automatic_color),
@@ -144,7 +133,7 @@ fun ColorsSettingsScreen(
                                 viewModel.setAutomaticColorEnabled(it)
                             }
                         )
-                        SectionDivider()
+                        SettingsSectionDivider()
                         FoamSwitchItem(
                             title = stringResource(R.string.accent_tint),
                             description = stringResource(R.string.accent_tint_desc),
@@ -166,12 +155,9 @@ fun ColorsSettingsScreen(
                         BasicText(text = stringResource(R.string.accent_palette), style = FoamTheme.typography.titleMedium)
                         Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                                .foamSurface()
-                                .padding(FoamDimens.paddingMedium)
+                        FoamCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(FoamDimens.paddingMedium)
                         ) {
                             AccentPickerSection(
                                 accentColorInt = accentColorInt,
@@ -292,26 +278,22 @@ private fun ThemeSelector(
         }
     )
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                onClick = { showModal = true }
-            )
-            .padding(FoamDimens.paddingMedium)
+    FoamCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(FoamDimens.paddingMedium),
+        onClick = { showModal = true }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            BasicText(text = currentLabel, style = FoamTheme.typography.body)
+            BasicText(
+                text = currentLabel,
+                style = FoamTheme.typography.body.copy(color = FoamTheme.colors.textPrimary)
+            )
             Icon(
-                imageVector = Icons.Default.ArrowDropDown,
+                imageVector = Icons.Rounded.ExpandMore,
                 contentDescription = null,
                 tint = FoamTheme.colors.textSecondary
             )
@@ -370,19 +352,6 @@ private fun ThemeSelector(
             }
         }
     }
-}
-
-/**
- * Hairline separator between rows of a settings card.
- */
-@Composable
-private fun SectionDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .foamBorderOverlay()
-    )
 }
 
 /**

@@ -2,13 +2,16 @@ package com.foamplayer.app.ui.screens.settings.lyricsmanager
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
@@ -48,14 +51,17 @@ private fun FormatChip(label: String, isSelected: Boolean, onClick: () -> Unit) 
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(if (isSelected) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant)
-            .clickable { onClick() }
+            .background(if (isSelected) FoamTheme.accentColor else FoamTheme.tintedSurfaceVariant)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = FoamTheme.colors.textPrimary)
+            ) { onClick() }
             .padding(horizontal = FoamDimens.paddingSmall, vertical = FoamDimens.spacingTiny)
     ) {
         BasicText(
             text = label,
             style = FoamTheme.typography.caption.copy(
-                color = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
+                color = if (isSelected) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary
             )
         )
     }

@@ -70,12 +70,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.BackgroundMode
 import com.foamplayer.app.data.settings.GradientStop
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.components.FoamSwitch
 import com.foamplayer.app.ui.components.buildGradientImage
@@ -83,24 +84,23 @@ import com.foamplayer.app.ui.modals.DefaultStopPalette
 import com.foamplayer.app.ui.modals.GradientColorPickerModal
 import com.foamplayer.app.ui.navigation.LocalBackgroundSettingsPreview
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
-import com.foamplayer.app.ui.theme.foamBorderOverlay
-import com.foamplayer.app.ui.theme.foamSurface
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlinx.coroutines.flow.first
 
-private const val ModeAnimMillis = 300
+private const val ModeAnimMillis = FoamMotion.Duration.SMOOTH
 
 /** Shared transitions for every block that appears/disappears with the background mode. */
 private val ModeEnter = fadeIn(tween(ModeAnimMillis, delayMillis = 60)) +
         expandVertically(tween(ModeAnimMillis), expandFrom = Alignment.Top)
-private val ModeExit = fadeOut(tween(200)) +
+private val ModeExit = fadeOut(tween(FoamMotion.Duration.SWIFT)) +
         shrinkVertically(tween(ModeAnimMillis), shrinkTowards = Alignment.Top)
 
-private const val StopAnimMillis = 250
+private const val StopAnimMillis = FoamMotion.Duration.STANDARD
 
 /** Enter/exit for the rows of the gradient point list (and its add control). */
 private val StopEnter = fadeIn(tween(StopAnimMillis, delayMillis = 50)) +
@@ -158,7 +158,6 @@ fun BackgroundSettingsScreen(
         SettingsHeader(
             title = stringResource(R.string.background),
             onBack = onBack,
-            transparent = true,
             modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
         )
 
@@ -175,22 +174,15 @@ fun BackgroundSettingsScreen(
             )
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-            Box(
+            FoamCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = FoamDimens.paddingMedium)
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .foamSurface()
             ) {
                 Column {
                     BackgroundMode.entries.forEachIndexed { index, modeOption ->
                         if (index > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .foamBorderOverlay()
-                            )
+                            SettingsSectionDivider()
                         }
                         ModeOptionRow(
                             mode = modeOption,
@@ -253,12 +245,10 @@ fun BackgroundSettingsScreen(
             ) {
                 Column {
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                    Box(
+                    FoamCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = FoamDimens.paddingMedium)
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .foamSurface()
                     ) {
                         Column {
                             Column(
@@ -287,12 +277,7 @@ fun BackgroundSettingsScreen(
                                     viewModel.setForceDynamicBackgroundInCollections(it)
                                 },
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .foamBorderOverlay()
-                            )
+                            SettingsSectionDivider()
                             CompactSwitchRow(
                                 title = stringResource(R.string.player),
                                 checked = forceDynamicInPlayer,
@@ -315,12 +300,10 @@ fun BackgroundSettingsScreen(
             )
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-            Box(
+            FoamCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = FoamDimens.paddingMedium)
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .foamSurface()
             ) {
                 Column {
                     AnimatedVisibility(
@@ -344,12 +327,7 @@ fun BackgroundSettingsScreen(
                                 formatValue = { "${it.roundToInt()}%" },
                                 minMaxDisplay = intensityMin to intensityMax,
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(FoamDimens.separatorHeight)
-                                    .foamBorderOverlay()
-                            )
+                            SettingsSectionDivider()
                         }
                     }
                     FoamSliderStateItem(
@@ -364,12 +342,7 @@ fun BackgroundSettingsScreen(
                         formatValue = { "${it.roundToInt()}%" },
                         minMaxDisplay = colorMin to colorMax,
                     )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(FoamDimens.separatorHeight)
-                            .foamBorderOverlay()
-                    )
+                    SettingsSectionDivider()
                     FoamSliderStateItem(
                         title = stringResource(R.string.player_color_intensity),
                         initialValue = settings.playerBackgroundIntensity.toFloat(),
@@ -460,7 +433,7 @@ private fun ModeOptionRow(
                 indication = ripple(color = FoamTheme.colors.textPrimary),
                 onClick = onSelect
             )
-            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
+            .padding(FoamDimens.spacingStandard),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -503,12 +476,10 @@ private fun CustomImageSection(
     onPickImage: () -> Unit,
     onClearImage: () -> Unit
 ) {
-    Box(
+    FoamCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = FoamDimens.paddingMedium)
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
     ) {
         Row(
             modifier = Modifier
@@ -703,91 +674,78 @@ private fun GradientEditor(
 
             // The point list, right; tapping a row opens its color picker. The
             // add control sits underneath the list, inside the same card.
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .foamSurface()
-            ) {
-                // Live rows plus the rows still animating out, spliced back at the
-                // slot they were removed from (latest removal first, so rows that
-                // left together keep their original order).
-                val entries = buildList<StopListEntry> {
-                    localStops.forEachIndexed { index, stop ->
-                        val row = rowStates.getOrNull(index) ?: return@forEachIndexed
-                        add(StopListEntry(row, stop, index + 1, index > 0, index))
-                    }
-                    exitingRows.asReversed().forEach { exiting ->
-                        add(
-                            exiting.slot.coerceAtMost(size),
-                            StopListEntry(exiting.row, exiting.stop, exiting.pointNumber, exiting.slot > 0, null)
-                        )
-                    }
-                }
-
-                entries.forEach { entry ->
-                    key(entry.row) {
-                        val row = entry.row
-                        if (entry.liveIndex == null) {
-                            // Drop the row for good once its exit has finished.
-                            LaunchedEffect(row) {
-                                snapshotFlow {
-                                    row.visibleState.isIdle && !row.visibleState.currentState
-                                }.first { it }
-                                exitingRows = exitingRows.filterNot { it.row === row }
-                            }
+            FoamCard(modifier = Modifier.weight(1f)) {
+                Column {
+                    // Live rows plus the rows still animating out, spliced back at the
+                    // slot they were removed from (latest removal first, so rows that
+                    // left together keep their original order).
+                    val entries = buildList<StopListEntry> {
+                        localStops.forEachIndexed { index, stop ->
+                            val row = rowStates.getOrNull(index) ?: return@forEachIndexed
+                            add(StopListEntry(row, stop, index + 1, index > 0, index))
                         }
-                        // The separator lives inside the animated block so it
-                        // grows and shrinks together with its row.
-                        AnimatedVisibility(
-                            visibleState = row.visibleState,
-                            enter = StopEnter,
-                            exit = StopExit
-                        ) {
-                            Column {
-                                if (entry.showSeparator) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(FoamDimens.separatorHeight)
-                                            .foamBorderOverlay()
+                        exitingRows.asReversed().forEach { exiting ->
+                            add(
+                                exiting.slot.coerceAtMost(size),
+                                StopListEntry(exiting.row, exiting.stop, exiting.pointNumber, exiting.slot > 0, null)
+                            )
+                        }
+                    }
+
+                    entries.forEach { entry ->
+                        key(entry.row) {
+                            val row = entry.row
+                            if (entry.liveIndex == null) {
+                                // Drop the row for good once its exit has finished.
+                                LaunchedEffect(row) {
+                                    snapshotFlow {
+                                        row.visibleState.isIdle && !row.visibleState.currentState
+                                    }.first { it }
+                                    exitingRows = exitingRows.filterNot { it.row === row }
+                                }
+                            }
+                            // The separator lives inside the animated block so it
+                            // grows and shrinks together with its row.
+                            AnimatedVisibility(
+                                visibleState = row.visibleState,
+                                enter = StopEnter,
+                                exit = StopExit
+                            ) {
+                                Column {
+                                    if (entry.showSeparator) {
+                                        SettingsSectionDivider()
+                                    }
+                                    StopRow(
+                                        label = stringResource(R.string.gradient_point, entry.pointNumber),
+                                        stop = entry.stop,
+                                        // A leaving row keeps its cross so it doesn't
+                                        // flicker while it fades out.
+                                        canRemove = entry.liveIndex == null ||
+                                                localStops.size > AppSettings.MIN_GRADIENT_STOPS,
+                                        enabled = entry.liveIndex != null,
+                                        onEdit = {
+                                            val index = entry.liveIndex ?: return@StopRow
+                                            pickerPointNumber = entry.pointNumber
+                                            pickerStop = entry.stop
+                                            pickerSession++
+                                            editingStopIndex = index
+                                        },
+                                        onRemove = { removeStop(row) }
                                     )
                                 }
-                                StopRow(
-                                    label = stringResource(R.string.gradient_point, entry.pointNumber),
-                                    stop = entry.stop,
-                                    // A leaving row keeps its cross so it doesn't
-                                    // flicker while it fades out.
-                                    canRemove = entry.liveIndex == null ||
-                                            localStops.size > AppSettings.MIN_GRADIENT_STOPS,
-                                    enabled = entry.liveIndex != null,
-                                    onEdit = {
-                                        val index = entry.liveIndex ?: return@StopRow
-                                        pickerPointNumber = entry.pointNumber
-                                        pickerStop = entry.stop
-                                        pickerSession++
-                                        editingStopIndex = index
-                                    },
-                                    onRemove = { removeStop(row) }
-                                )
                             }
                         }
                     }
-                }
 
-                AnimatedVisibility(
-                    visible = localStops.size < AppSettings.MAX_GRADIENT_STOPS,
-                    enter = StopEnter,
-                    exit = StopExit
-                ) {
-                    Column {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(FoamDimens.separatorHeight)
-                                .foamBorderOverlay()
-                        )
-                        AddStopButton(onAdd = { addStop() })
+                    AnimatedVisibility(
+                        visible = localStops.size < AppSettings.MAX_GRADIENT_STOPS,
+                        enter = StopEnter,
+                        exit = StopExit
+                    ) {
+                        Column {
+                            SettingsSectionDivider()
+                            AddStopButton(onAdd = { addStop() })
+                        }
                     }
                 }
             }
@@ -1021,7 +979,7 @@ private fun StopRow(
                 indication = ripple(color = FoamTheme.colors.textPrimary),
                 onClick = onEdit
             )
-            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
+            .padding(FoamDimens.spacingStandard),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -1046,8 +1004,8 @@ private fun StopRow(
             // Row would otherwise capture the call, and Compose forbids that.
             androidx.compose.animation.AnimatedVisibility(
                 visible = canRemove,
-                enter = fadeIn(tween(150)),
-                exit = fadeOut(tween(150))
+                enter = fadeIn(tween(FoamMotion.Duration.SNAP)),
+                exit = fadeOut(tween(FoamMotion.Duration.SNAP))
             ) {
                 Box(
                     modifier = Modifier
@@ -1085,7 +1043,7 @@ private fun AddStopButton(onAdd: () -> Unit) {
                 indication = ripple(color = FoamTheme.colors.textPrimary),
                 onClick = onAdd
             )
-            .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
+            .padding(FoamDimens.spacingStandard),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {

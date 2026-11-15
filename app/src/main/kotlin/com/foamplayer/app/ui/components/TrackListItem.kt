@@ -2,11 +2,11 @@ package com.foamplayer.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.OpenWith
 import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -65,6 +66,7 @@ import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.app.ui.utils.TimeUtils
@@ -112,12 +114,6 @@ private val SwipeActionIconInset = 24.dp
 
 /** Extra translucency at the dismiss threshold (alpha eases 1f -> 1 - this). */
 private const val SwipeMaxFade = 0.3f
-
-/** Duration of the fly-out animation when the item is dismissed. */
-private const val SwipeDismissDurationMs = 150
-
-/** Duration of the spring-back animation when the swipe is cancelled. */
-private const val SwipeReturnDurationMs = 200
 
 /**
  * One item of a track list. At the ROW_* densities it renders the shared
@@ -178,7 +174,7 @@ fun TrackListItem(
         }
         animateColorAsState(
             targetValue = targetTrackNumberColor,
-            animationSpec = tween(durationMillis = 200, easing = EaseOut),
+            animationSpec = tween(FoamMotion.Duration.SWIFT, easing = FoamMotion.Easings.EXIT),
             label = "activeTrackNumberFade"
         ).value
     } else {
@@ -208,6 +204,39 @@ fun TrackListItem(
     } else {
         artworkRestElevation
     }
+
+    // Player-dismiss highlight flight: when this row is the tagged flight target, its
+    // highlight rect pairs with the full player's art + text container — the highlight
+    // wraps that container at the flight's start, morphs into the row's own rect and
+    // fades in over the flight (see playerFlightHighlightTarget). Rows without an
+    // artwork box (track numbers, RowSmall) take no part: no artwork lands on them.
+    val highlightFlight: PlayerFlightHighlightSpec? = if (
+        isSharedTransitionSource &&
+        trackNumberText == null &&
+        density != MediaDensity.ROW_SMALL &&
+        sharedTransitionScope != null &&
+        animatedVisibilityScope != null &&
+        flightPausedArtScale != null
+    ) {
+        PlayerFlightHighlightSpec(
+            key = "player_highlight_${track.id}",
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            highlightColor = animatedBackgroundColor
+        )
+    } else {
+        null
+    }
+    // While the transition is in flight either direction, the shared overlay renders
+    // the morphing highlight; the row's own static background steps aside so the
+    // morphing one never double-draws over it, resuming at the exact settle frame.
+    val highlightInFlight = highlightFlight != null && animatedVisibilityScope != null && (
+            isDismissFlightActive() || derivedStateOf {
+                animatedVisibilityScope.transition.targetState != EnterExitState.Visible ||
+                        animatedVisibilityScope.transition.currentState != EnterExitState.Visible
+            }.value
+            )
+    val suppressHighlightBackground = highlightFlight != null && highlightInFlight
 
     if (density.isGrid) {
         val sharedArtworkBase: Modifier = Modifier.rowSharedArtwork(
@@ -241,6 +270,15 @@ fun TrackListItem(
                 // variant promotes every row to its own render layer even at 1f.
                 .then(if (auxiliary) Modifier.graphicsLayer { alpha = AuxiliaryAlpha } else Modifier)
         ) {
+            if (highlightFlight != null) {
+                // The cell's bounds are the shared-bounds endpoint the highlight morphs
+                // into; the morphing rect itself is drawn in the transition overlay.
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .playerFlightHighlightTarget(spec = highlightFlight, gridCell = true)
+                )
+            }
             MediaGridCell(
                 onClick = onClick,
                 onLongClick = resolvedOnLongClick,
@@ -249,6 +287,7 @@ fun TrackListItem(
                 title = track.title,
                 subtitle = stringResource(R.string.artist_album_separator, track.artist, track.album),
                 highlightBackground = animatedBackgroundColor,
+                suppressHighlightBackground = suppressHighlightBackground,
                 artworkElevation = artworkElevation,
                 titleModifier = Modifier.rowSharedText(
                     key = "track_title_${track.id}",
@@ -425,7 +464,7 @@ fun TrackListItem(
                         // keeps the first composition's parameter capture.
                         latestOnPlayNext != null && dismissOffsetValue >= nextCommitPx - 0.5f -> {
                             latestOnPlayNext?.invoke()
-                            animateSwipeTo(0f, SwipeReturnDurationMs)
+                            animateSwipeTo(0f, FoamMotion.Duration.SWIFT)
                         }
                         // Fling the row fully off-screen, then remove it.
                         dismissOffsetValue <= -swipeThresholdPx() -> {
@@ -433,17 +472,17 @@ fun TrackListItem(
                                 if (itemWidthPx > 0f) itemWidthPx else fallbackDismissThresholdPx
                             animateSwipeTo(
                                 -exitDistance,
-                                SwipeDismissDurationMs,
+                                FoamMotion.Duration.SNAP,
                                 fadeDeleteIcon = true
                             ) {
                                 latestOnRemove?.invoke()
                             }
                         }
-                        else -> animateSwipeTo(0f, SwipeReturnDurationMs)
+                        else -> animateSwipeTo(0f, FoamMotion.Duration.SWIFT)
                     }
                 },
                 onDragCancel = {
-                    animateSwipeTo(0f, SwipeReturnDurationMs)
+                    animateSwipeTo(0f, FoamMotion.Duration.SWIFT)
                 }
             )
         }
@@ -532,6 +571,16 @@ fun TrackListItem(
             )
         }
 
+        if (highlightFlight != null) {
+            // The row's bounds are the shared-bounds endpoint the highlight morphs
+            // into; the morphing rect itself is drawn in the transition overlay.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .playerFlightHighlightTarget(spec = highlightFlight)
+            )
+        }
+
         MediaListRow(
             onClick = onClick,
             onLongClick = resolvedOnLongClick,
@@ -548,6 +597,13 @@ fun TrackListItem(
                         ImageRequest.Builder(context)
                             .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
                             .size(AlbumArtRequestSize)
+                            // Shares the player flight's cache slot: this request warms
+                            // the bitmap the full-player hero draws synchronously on the
+                            // flight's first frame.
+                            .placeholderMemoryCacheKey(
+                                albumArtMemoryCacheKey(track.albumArtPath)
+                            )
+                            .memoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
                             .build()
                     }
                     AlbumArtImage(
@@ -569,6 +625,7 @@ fun TrackListItem(
             },
             artworkElevation = artworkElevation,
             highlightBackground = animatedBackgroundColor,
+            suppressHighlightBackground = suppressHighlightBackground,
             rowModifier = swipeRowModifier,
             titleModifier = Modifier.rowSharedText(
                 key = "track_title_${track.id}",
@@ -598,10 +655,10 @@ fun TrackListItem(
 
                 AnimatedVisibility(
                     visible = showDragHandle,
-                    enter = fadeIn(animationSpec = tween(durationMillis = 200)) +
-                            expandHorizontally(animationSpec = tween(durationMillis = 200)),
-                    exit = fadeOut(animationSpec = tween(durationMillis = 200)) +
-                            shrinkHorizontally(animationSpec = tween(durationMillis = 200))
+                    enter = fadeIn(animationSpec = tween(FoamMotion.Duration.SWIFT)) +
+                            expandHorizontally(animationSpec = tween(FoamMotion.Duration.SWIFT)),
+                    exit = fadeOut(animationSpec = tween(FoamMotion.Duration.SWIFT)) +
+                            shrinkHorizontally(animationSpec = tween(FoamMotion.Duration.SWIFT))
                 ) {
                     Spacer(modifier = Modifier.width(12.dp))
 
@@ -698,6 +755,8 @@ private fun TrackGridArtwork(track: TrackEntity) {
             ImageRequest.Builder(context)
                 .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
                 .size(AlbumArtRequestSize)
+                .placeholderMemoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
+                .memoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
                 .build()
         }
         AlbumArtImage(
@@ -731,10 +790,10 @@ private fun GridOverlayChip(
 
 /** Fade + scale-in of the edit-mode grid drag chip when entering edit mode. */
 private val GridDragHandleEnter =
-    fadeIn(animationSpec = tween(durationMillis = 200)) +
-            scaleIn(initialScale = 0.6f, animationSpec = tween(durationMillis = 200))
+    fadeIn(animationSpec = tween(FoamMotion.Duration.SWIFT)) +
+            scaleIn(initialScale = 0.6f, animationSpec = tween(FoamMotion.Duration.SWIFT))
 
 /** Fade + scale-out of the edit-mode grid drag chip when leaving edit mode. */
 private val GridDragHandleExit =
-    fadeOut(animationSpec = tween(durationMillis = 200)) +
-            scaleOut(targetScale = 0.6f, animationSpec = tween(durationMillis = 200))
+    fadeOut(animationSpec = tween(FoamMotion.Duration.SWIFT)) +
+            scaleOut(targetScale = 0.6f, animationSpec = tween(FoamMotion.Duration.SWIFT))

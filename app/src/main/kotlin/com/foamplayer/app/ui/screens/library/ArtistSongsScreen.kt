@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.ui.components.TrackCenterRequest

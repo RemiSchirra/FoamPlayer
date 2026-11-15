@@ -3,7 +3,6 @@ package com.foamplayer.app.ui.components
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
@@ -34,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -45,6 +45,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -63,6 +64,7 @@ import com.foamplayer.app.ui.modals.DensityOrganisationModal
 import com.foamplayer.app.ui.modals.OrganisationExtraAction
 import com.foamplayer.app.ui.modals.OrganisationMenuButton
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.adaptAccentForTheme
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -93,19 +95,30 @@ class TrackCenterRequest(val trackId: Long, val requestId: Int) {
 }
 
 /**
- * Scrolls the list so the item at [index] sits as close to the vertical middle
- * of the viewport as the list's bounds allow (the raw scroll is clamped at
- * both ends). Both steps are synchronous, so the returned info is already the
- * settled placement.
+ * Vertical viewport fraction where the playing track's row/cell lands when a
+ * dismiss flight settles onto a collection (see [TrackCenterRequest]).
+ * 0.5f centers the item; 1f / 3f lands it a third of the way from the top.
+ */
+private const val CenteredItemViewportFraction = 1f / 3f
+
+/**
+ * Vertical viewport offset (px) where the target item's middle should land.
+ */
+private fun centerAnchorY(viewportStartOffset: Int, viewportEndOffset: Int): Float =
+    viewportStartOffset + (viewportEndOffset - viewportStartOffset) * CenteredItemViewportFraction
+
+/**
+ * Scrolls the list so the item at [index] sits as close to the
+ * [CenteredItemViewportFraction] anchor of the viewport as the list's bounds
+ * allow (the raw scroll is clamped at both ends). Both steps are synchronous,
+ * so the returned info is already the settled placement.
  */
 private suspend fun LazyListState.scrollToCenteredItem(index: Int): LazyListItemInfo? {
     scrollToItem(index)
     val info = layoutInfo
     val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return null
-    val delta = (
-            item.offset + item.size / 2 -
-                    (info.viewportEndOffset + info.viewportStartOffset) / 2
-            ).toFloat()
+    val delta = item.offset + item.size / 2 -
+            centerAnchorY(info.viewportStartOffset, info.viewportEndOffset)
     if (delta != 0f) scrollBy(delta)
     return layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
 }
@@ -115,10 +128,8 @@ private suspend fun LazyGridState.scrollToCenteredItem(index: Int): LazyGridItem
     scrollToItem(index)
     val info = layoutInfo
     val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return null
-    val delta = (
-            item.offset.y + item.size.height / 2 -
-                    (info.viewportEndOffset + info.viewportStartOffset) / 2
-            ).toFloat()
+    val delta = item.offset.y + item.size.height / 2 -
+            centerAnchorY(info.viewportStartOffset, info.viewportEndOffset)
     if (delta != 0f) scrollBy(delta)
     return layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
 }
@@ -140,6 +151,8 @@ fun TrackListScreen(
     /** False when [imageUrl] is a plain image URI (e.g. a playlist cover). */
     imageIsEmbeddedArt: Boolean = true,
     artistName: String? = null,
+    /** Album release year; when set it is prepended to the hero's stats line. */
+    year: Int? = null,
     /** When set, the hero's artist line becomes a tappable link. */
     onArtistClick: ((String) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -194,7 +207,9 @@ fun TrackListScreen(
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.duration } }
     val durationText = remember(totalDurationMs) { TimeUtils.formatDurationLong(totalDurationMs) }
     val trackCount = tracks.size
-    val statsText = stringResource(R.string.track_count_duration, trackCount, durationText)
+    val statsText = year?.let {
+        stringResource(R.string.year_track_count_duration, it, trackCount, durationText)
+    } ?: stringResource(R.string.track_count_duration, trackCount, durationText)
     val context = LocalContext.current
     var showOrganisationModal by remember { mutableStateOf(false) }
 
@@ -202,7 +217,6 @@ fun TrackListScreen(
 
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
-    val topBarFraction = rememberCollectionScrollFraction(listState, gridState, density.isGrid)
     // Flight fractions of this screen's two transitions: the nav flight and
     // the player-container flight. The floating back/more row is lifted into
     // the shared-element overlay while any transition is active
@@ -216,6 +230,7 @@ fun TrackListScreen(
         (1f - navFlightFraction.value) * (1f - containerFlightFraction.value)
     }
     val heroVisibleHeightPx = remember { mutableIntStateOf(0) }
+    val heroOverscroll = rememberCollectionHeroOverscroll()
     val heroScrollOffsetPx: () -> Int = {
         if (density.isGrid) {
             if (gridState.firstVisibleItemIndex == 0) {
@@ -235,6 +250,23 @@ fun TrackListScreen(
     val listTopObserver = Modifier.onGloballyPositioned {
         listTopYInRootPx = it.positionInRoot().y
     }
+    val titleStart = rememberCollectionScrollTopBarTitleStart(
+        listTopInRootPx = { listTopYInRootPx },
+        scrollOffsetPx = heroScrollOffsetPx,
+        isFirstItemVisible = {
+            if (density.isGrid) {
+                gridState.firstVisibleItemIndex == 0
+            } else {
+                listState.firstVisibleItemIndex == 0
+            }
+        }
+    )
+    val topBarFraction = rememberCollectionScrollFraction(
+        listState = listState,
+        gridState = gridState,
+        useGrid = density.isGrid,
+        titleFadeStartPx = titleStart.startPx
+    )
     CollectionSearchScrollToBarEffect(
         searchState = searchState,
         listState = listState,
@@ -400,6 +432,7 @@ fun TrackListScreen(
                 accentColor = heroAccentColor,
                 transitionAlpha = transitionAlpha,
                 scrollOffsetPx = heroScrollOffsetPx,
+                overscrollPx = heroOverscroll.pullPx,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 sharedElementKey = sharedElementKey,
@@ -413,6 +446,7 @@ fun TrackListScreen(
                 columns = GridCells.Fixed(density.gridColumns),
                 modifier = Modifier
                     .fillMaxSize()
+                    .nestedScroll(heroOverscroll.connection)
                     .collectionListTopFade()
                     .then(listTopObserver),
                 state = gridState,
@@ -449,6 +483,7 @@ fun TrackListScreen(
                             accentColor = heroAccentColor,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
                             scrollOffsetPx = heroScrollOffsetPx,
+                            onTitleTopPx = titleStart.onTitleTopPx,
                             transitionAlpha = transitionAlpha,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
@@ -471,7 +506,7 @@ fun TrackListScreen(
                     val currentIndex = rememberUpdatedState(index)
                     val liftScale by animateFloatAsState(
                         targetValue = if (isDragging && !dragReleased) GridDragLiftScale else 1f,
-                        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+                        animationSpec = tween(FoamMotion.Duration.SNAP, easing = FoamMotion.Easings.STANDARD),
                         label = "trackGridDragLift"
                     )
 
@@ -604,6 +639,7 @@ fun TrackListScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
+                    .nestedScroll(heroOverscroll.connection)
                     .collectionListTopFade()
                     .then(listTopObserver),
                 state = listState,
@@ -630,6 +666,7 @@ fun TrackListScreen(
                             accentColor = heroAccentColor,
                             onVisibleHeightPx = { heroVisibleHeightPx.intValue = it },
                             scrollOffsetPx = heroScrollOffsetPx,
+                            onTitleTopPx = titleStart.onTitleTopPx,
                             transitionAlpha = transitionAlpha,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
@@ -765,7 +802,15 @@ fun TrackListScreen(
                     renderInOverlay = animatedVisibilityScope?.let { scope ->
                         { scope.isNavTransitionInProgress() }
                     }
-                )
+                ),
+            // Centre the title in the space the right-hand buttons leave free,
+            // not on the whole screen: with the edit pencil and the
+            // organisation dots both present, a screen-centred title would run
+            // underneath them.
+            trailingTitleInset = collectionScrollTopBarTitleInset(
+                (if (onEditModeChange != null) 1 else 0) +
+                        (if (onDensityChange != null) 1 else 0)
+            )
         )
 
         Box(
@@ -780,14 +825,16 @@ fun TrackListScreen(
                 )
                 .graphicsLayer { alpha = transitionAlpha() }
         ) {
-            TrackListTopBarRow(
-                onBack = onBack,
-                accentColor = heroAccentColor,
-                editMode = editMode,
-                onEditModeChange = onEditModeChange,
-                onDensityChange = onDensityChange,
-                onOpenOrganisation = { showOrganisationModal = true }
-            )
+            CompositionLocalProvider(LocalCollectionTopBarScrollFraction provides topBarFraction) {
+                TrackListTopBarRow(
+                    onBack = onBack,
+                    accentColor = heroAccentColor,
+                    editMode = editMode,
+                    onEditModeChange = onEditModeChange,
+                    onDensityChange = onDensityChange,
+                    onOpenOrganisation = { showOrganisationModal = true }
+                )
+            }
         }
     }
 
@@ -826,6 +873,7 @@ private fun TrackListHero(
     accentColor: Color,
     onVisibleHeightPx: (Int) -> Unit,
     scrollOffsetPx: () -> Int,
+    onTitleTopPx: ((Float) -> Unit)?,
     transitionAlpha: () -> Float,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
@@ -845,6 +893,7 @@ private fun TrackListHero(
             searchState = searchState,
             onVisibleHeightPx = onVisibleHeightPx,
             scrollOffsetPx = scrollOffsetPx,
+            onTitleTopPx = onTitleTopPx,
             transitionAlpha = transitionAlpha,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
@@ -866,6 +915,7 @@ private fun TrackListHero(
         onSubtitleClick = onArtistClick,
         searchState = searchState,
         accentColor = accentColor,
+        onTitleTopPx = onTitleTopPx,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         sharedElementKey = sharedElementKey,
@@ -886,7 +936,10 @@ private fun TrackListTopBarRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(
+                horizontal = CollectionTopBarRowHorizontalPadding,
+                vertical = CollectionTopBarRowVerticalPadding
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // While editing, back leaves edit mode before the screen.
@@ -911,7 +964,7 @@ private fun TrackListTopBarRow(
             )
 
             if (onDensityChange != null) {
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(CollectionTopBarButtonSpacing))
             }
         }
 

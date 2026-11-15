@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.screens.settings.lyricsmanager
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -52,10 +51,9 @@ import com.foamplayer.app.ui.utils.TimeUtils
 /**
  * Long-press modal for a song in the lyrics manager: lyrics type (word-synced /
  * synced / plain), provider, per-source availability (file / embedded / cached)
- * and the full lyrics text in a scrollable container, with a delete-lyrics
- * action pinned at the bottom. Lyrics are read from local sources only (cache,
- * sidecar file, embedded tag) — when none has any, a prompt offers to run the
- * online lyrics search instead.
+ * and the full lyrics text in a scrollable container. Lyrics are read from
+ * local sources only (cache, sidecar file, embedded tag) — when none has any,
+ * a prompt offers to run the online lyrics search instead.
  */
 @Composable
 fun LyricsTrackDetailsModal(
@@ -64,7 +62,6 @@ fun LyricsTrackDetailsModal(
     details: LyricsTrackDetails?,
     isLoading: Boolean,
     onDismiss: () -> Unit,
-    onDelete: () -> Unit,
     onSearch: () -> Unit
 ) {
     FoamBottomModal(
@@ -101,13 +98,6 @@ fun LyricsTrackDetailsModal(
                             Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
 
                             LyricsScrollContainer(content = loaded.content)
-
-                            Spacer(modifier = Modifier.height(FoamDimens.paddingMedium))
-
-                            DeleteLyricsButton(
-                                enabled = !isLoading,
-                                onClick = onDelete
-                            )
                         }
                     }
                 }
@@ -288,31 +278,5 @@ private fun LyricsScrollContainer(content: String?) {
                 modifier = Modifier.fillMaxWidth()
             )
         }
-    }
-}
-
-@Composable
-private fun DeleteLyricsButton(enabled: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(
-                if (enabled) FoamTheme.accentColor.copy(alpha = 0.15f) else FoamTheme.colors.surfaceVariant
-            )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                enabled = enabled
-            ) { onClick() }
-            .padding(vertical = FoamDimens.paddingSmall),
-        contentAlignment = Alignment.Center
-    ) {
-            BasicText(
-                text = stringResource(R.string.lyrics_manager_delete),
-                style = FoamTheme.typography.body.copy(
-                    color = if (enabled) FoamTheme.accentColor else FoamTheme.colors.textSecondary
-                )
-            )
     }
 }

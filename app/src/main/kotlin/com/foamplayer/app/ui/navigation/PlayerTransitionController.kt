@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.navigation
 
 import android.os.Bundle
-import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.TweenSpec
 import androidx.compose.animation.core.tween
@@ -12,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import com.foamplayer.app.ui.components.TrackCenterRequest
 import com.foamplayer.app.ui.screens.player.DownSwipeCommitVelocityPxPerSec
+import com.foamplayer.app.ui.theme.FoamMotion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -179,18 +179,18 @@ internal class PlayerTransitionController(
         val remainingFraction = (if (targetIsFull) 1f - isOpenProgress else isOpenProgress)
             .coerceIn(0f, 1f)
         val maxDuration = if (!targetIsFull && gestureVelocityPxPerSec.isNaN()) {
-            AutoCloseFlightDurationMs
+            FoamMotion.Duration.EXTENDED
         } else {
-            PlayerTransitionMaxDurationMs
+            FoamMotion.Duration.EXPRESSIVE
         }
         val dynamicDuration = (maxDuration * remainingFraction).toInt().coerceAtLeast(1)
         val duration = if (!gestureVelocityPxPerSec.isNaN() &&
             gestureVelocityPxPerSec >= DownSwipeCommitVelocityPxPerSec
         ) {
-            dynamicDuration.coerceAtLeast(MinGestureCloseFlightMs)
+            dynamicDuration.coerceAtLeast(FoamMotion.Duration.STANDARD)
         } else {
             dynamicDuration
         }
-        return tween(durationMillis = duration, easing = EaseInOut)
+        return tween(durationMillis = duration, easing = FoamMotion.Easings.IN_OUT)
     }
 }

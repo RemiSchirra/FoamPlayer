@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -14,17 +15,27 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Density
 import com.foamplayer.app.R
-import com.foamplayer.app.audio.engine.RepeatMode
 import com.foamplayer.app.ui.components.PreviousAction
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.theme.FoamTheme
 
+private const val PlayButtonScale = 1.4f
+private const val TransportSpacingScale = 0.3f
+
+private fun Density.selectorRowTranslationY(progress: Float, navbarExpandHeight: Float): Float =
+    PlayerDimens.selectorRowNavbarDrop.toPx() * (1f - progress) -
+            PlayerDimens.selectorRowRise.toPx() * progress -
+            navbarExpandHeight
+
 /**
  * The control row under the player content: the lyrics/queue selector plus the mini transport
  * cluster, both riding the subview transition (`subControlsProgress`) and the navbar's extra-row
- * growth (`navbarExpandHeight`).
+ * growth (`navbarExpandHeight`). The transport cluster shares the selector row's vertical center.
  *
  * Split out of `FullPlayerScreen` so the screen body stays a layout; everything here is driven by
  * the progress providers it is handed, so no player state is read during composition here.
@@ -34,8 +45,6 @@ internal fun PlayerBottomControls(
     viewModel: PlayerViewModel,
     subViewMode: SubViewMode,
     onSelectSubView: (SubViewMode) -> Unit,
-    repeatMode: RepeatMode,
-    isShuffle: Boolean,
     onPlayOnClick: () -> Unit,
     uiAlpha: () -> Float,
     subControlsProgress: () -> Float,
@@ -48,13 +57,18 @@ internal fun PlayerBottomControls(
     queueIndex: Int,
     queueSize: Int,
     envelopeMorphProgress: () -> Float,
-    markSkipIntent: (Boolean) -> Unit
+    markSkipIntent: (Boolean) -> Unit,
+    dragModifier: Modifier = Modifier,
+    selectorTopRoot: MutableFloatState? = null
 ) {
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = Modifier.fillMaxWidth().then(dragModifier)) {
         val latestNavbarExpandHeight = rememberUpdatedState(navbarExpandHeight)
         val latestSubControlsProgress = rememberUpdatedState(subControlsProgress)
 
-        val selectorRowModifier = remember(subControlsProgress, uiAlpha) {
+        val playButtonSize = PlayerDimens.miniPlayButtonSize * PlayButtonScale
+        val playIconSize = PlayerDimens.miniPlayIconSize * PlayButtonScale
+
+        val selectorRowModifier = remember(subControlsProgress, uiAlpha, selectorTopRoot) {
             Modifier
                 .fillMaxWidth()
                 .padding(
@@ -66,48 +80,44 @@ internal fun PlayerBottomControls(
                 .graphicsLayer {
                     alpha = uiAlpha()
                     val progress = latestSubControlsProgress.value()
-                    translationY = PlayerDimens.selectorRowNavbarDrop.toPx() * (1f - progress) -
-                            PlayerDimens.selectorRowRise.toPx() * progress -
-                            latestNavbarExpandHeight.value()
+                    translationY = selectorRowTranslationY(progress, latestNavbarExpandHeight.value())
                 }
+                .onGloballyPositioned { selectorTopRoot?.floatValue = it.positionInRoot().y }
         }
 
         SubViewSelectorRow(
             subViewMode = subViewMode,
-            repeatMode = repeatMode,
-            isShuffle = isShuffle,
             progress = subControlsProgress,
             onSelect = onSelectSubView,
-            onShuffleClick = { viewModel.toggleShuffle() },
             onPlayOnClick = onPlayOnClick,
-            onRepeatClick = { viewModel.toggleRepeat() },
             modifier = selectorRowModifier
         )
 
         // Compose the transport cluster only while it is (becoming) visible. At rest it
-        // is alpha 0 but still sits on top of the shuffle / radio / Play on / repeat buttons
+        // is alpha 0 but still sits on top of the Play on button
         // (same Box, composed later, ~162dp wide centered), and its disabled
         // clickables still take part in hit-testing, swallowing taps meant for them.
         val showTransportCluster by remember(subControlsProgress) {
             derivedStateOf { subControlsProgress() > PlayerDimens.visibilityEpsilon }
         }
 
-        val transportClusterModifier = remember(subControlsProgress) {
+        val transportClusterModifier = remember(subControlsProgress, playButtonSize) {
             Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = PlayerDimens.selectorRowBottomPadding)
-                .height(PlayerDimens.miniPlayButtonSize)
+                .height(playButtonSize)
                 .graphicsLayer {
-                    translationY = -(PlayerDimens.playButtonRise + PlayerDimens.transportBottomInset).toPx() *
-                            latestSubControlsProgress.value() -
-                            latestNavbarExpandHeight.value()
+                    translationY = selectorRowTranslationY(
+                        latestSubControlsProgress.value(),
+                        latestNavbarExpandHeight.value()
+                    ) + ((playButtonSize - SelectorRowHeight) / 2).toPx()
                 }
         }
 
         if (showTransportCluster) {
             Row(
                 modifier = transportClusterModifier,
-                horizontalArrangement = Arrangement.spacedBy(PlayerDimens.transportSpacing),
+                horizontalArrangement = Arrangement.spacedBy(PlayerDimens.transportSpacing * TransportSpacingScale),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 MiniTransportButton(
@@ -141,7 +151,9 @@ internal fun PlayerBottomControls(
                     isPlaying = isPlayingProvider,
                     isLoading = isLoadingProvider,
                     progress = subControlsProgress,
-                    onClick = { if (isPlayingProvider()) viewModel.pause() else viewModel.play() }
+                    onClick = { if (isPlayingProvider()) viewModel.pause() else viewModel.play() },
+                    size = playButtonSize,
+                    iconSize = playIconSize
                 )
 
                 MiniTransportButton(

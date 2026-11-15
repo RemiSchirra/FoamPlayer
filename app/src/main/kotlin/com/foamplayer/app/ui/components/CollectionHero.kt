@@ -13,10 +13,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -51,6 +54,8 @@ import androidx.compose.material.ripple
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ProvidableCompositionLocal
@@ -66,18 +71,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -97,18 +109,29 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import coil.imageLoader
+import coil.memory.MemoryCache
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
-import com.foamplayer.app.ui.navigation.SharedElementEasing
-import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
+import com.foamplayer.app.ui.navigation.LocalActiveSharedCollectionTagState
+import com.foamplayer.app.ui.navigation.LocalCollectionDetailTag
+import com.foamplayer.app.ui.navigation.activeSharedCollectionOrigin
+import com.foamplayer.app.ui.navigation.sharedCollectionElementKey
+import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
+import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /** Immersive hero image height, as a fraction of the full screen height. */
 const val CollectionHeroImmersiveHeightFraction = 0.5f
@@ -116,7 +139,20 @@ const val CollectionHeroImmersiveHeightFraction = 0.5f
 /** Compact-immersive hero image height, as a fraction of the full screen height. */
 const val CollectionHeroCompactImmersiveHeightFraction = 0.30f
 
-/** Point (fraction of the image height) where the immersive artwork's bottom fade begins. */
+/**
+ * Extra artwork height the immersive layouts bleed BELOW their layout height,
+ * as a fraction of the full screen height. The artwork's top and the fade's
+ * start stay put while the image extends a little further down, so it reaches
+ * under the overlaid title/buttons without moving them.
+ */
+const val CollectionHeroImmersiveBleedFraction = 0.06f
+
+/**
+ * Point (fraction of the layout height, see [CollectionHeroImmersiveHeightFraction])
+ * where the immersive artwork's bottom fade begins. The drawn artwork may be
+ * taller than the layout height by [CollectionHeroImmersiveBleedFraction]; the
+ * fade's fraction is rescaled so the start height stays put.
+ */
 const val CollectionHeroImmersiveFadeStartFraction = 0.65f
 
 /** Vertical position of the immersive text/play block, as a fraction of the image height. */
@@ -124,6 +160,96 @@ const val CollectionHeroImmersiveOverlayFraction = 0.85f
 
 /** Vertical position of the compact-immersive text/play block, as a fraction of the image height. */
 const val CollectionHeroCompactImmersiveOverlayFraction = 0.72f
+
+/**
+ * Fraction of the list's scroll distance the immersive hero artwork travels.
+ * Below 1f the artwork moves up slower than the content, giving the scrolling
+ * collection a parallax backdrop.
+ */
+const val CollectionHeroImmersiveParallaxFactor = 0.55f
+
+/**
+ * Extra scale the immersive hero artwork gains while scrolling down.
+ */
+const val CollectionHeroImmersiveScrollScale = 0.25f
+
+/**
+ * Maximum extra vertical stretch of the immersive hero artwork when the list is
+ * pulled down past its top (1f = the artwork doubles in height). The stretch
+ * follows a rubber-band curve and approaches this value asymptotically.
+ */
+const val CollectionHeroOverscrollMaxStretch = 0.04f
+
+/**
+ * Tracks how far the user has pulled a collection list past its top edge, so
+ * the immersive hero artwork (drawn BEHIND the list, hence outside the list's
+ * own stretch overscroll effect) can stretch along with the rows.
+ *
+ * Attach [connection] with `Modifier.nestedScroll` on the list/grid and pass
+ * [pullPx] to [CollectionHero] as `overscrollPx`. The list's default overscroll
+ * effect is left untouched: it still stretches the rows, this only mirrors the
+ * pull on the artwork. Reads are draw-phase only (no recomposition per frame).
+ */
+@Stable
+class CollectionHeroOverscroll(private val scope: CoroutineScope) {
+    private val pull = mutableFloatStateOf(0f)
+    private var releaseJob: Job? = null
+
+    /** Current pull past the top edge, in px (0f at rest). */
+    val pullPx: () -> Float = { pull.floatValue }
+
+    val connection: NestedScrollConnection = object : NestedScrollConnection {
+        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            // Dragging back up while stretched: release the stretch first.
+            val current = pull.floatValue
+            if (current > 0f && available.y < 0f && source == NestedScrollSource.UserInput) {
+                releaseJob?.cancel()
+                val consumed = maxOf(available.y, -current)
+                pull.floatValue = current + consumed
+                return Offset(0f, consumed)
+            }
+            return Offset.Zero
+        }
+
+        override fun onPostScroll(
+            consumed: Offset,
+            available: Offset,
+            source: NestedScrollSource
+        ): Offset {
+            // Whatever the list could not consume while pulling down is overscroll.
+            if (available.y > 0f && source == NestedScrollSource.UserInput) {
+                releaseJob?.cancel()
+                pull.floatValue += available.y
+            }
+            return Offset.Zero
+        }
+
+        override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+            // Called on every release (even with zero velocity). The spring-back
+            // runs in its own coroutine: the scroll container awaits this
+            // callback before releasing the list's native stretch, so blocking
+            // here would freeze that effect.
+            if (pull.floatValue > 0f) {
+                releaseJob?.cancel()
+                releaseJob = scope.launch {
+                    animate(
+                        initialValue = pull.floatValue,
+                        targetValue = 0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) { value, _ -> pull.floatValue = value }
+                }
+            }
+            return Velocity.Zero
+        }
+    }
+}
+
+@Composable
+fun rememberCollectionHeroOverscroll(): CollectionHeroOverscroll =
+    rememberCoroutineScope().let { scope -> remember(scope) { CollectionHeroOverscroll(scope) } }
 
 /** Alpha of the subtle scrim over the immersive hero's status-bar zone. */
 const val CollectionHeroStatusBarScrimAlpha = 0.35f
@@ -150,11 +276,56 @@ const val CollectionScrollTopBarMaxAlpha = 0.55f
 /** Diameter of the floating top-bar icons' translucent circle. */
 val CollectionTopBarIconCircleSize = 40.dp
 
+/** Horizontal padding of the floating back/more top-bar row. */
+val CollectionTopBarRowHorizontalPadding = FoamDimens.paddingMedium
+
+/** Gap between adjacent floating top-bar buttons. */
+val CollectionTopBarButtonSpacing = FoamDimens.spacingMedium
+
+/**
+ * Vertical padding of the floating back/edit/more top-bar row: centres the
+ * [CollectionTopBarIconCircleSize] icons inside [CollectionTopBarRowHeight] so
+ * they line up with the scroll top bar's title instead of sitting a few dp
+ * below it.
+ */
+val CollectionTopBarRowVerticalPadding = (CollectionTopBarRowHeight - CollectionTopBarIconCircleSize) / 2
+
 /** Alpha of the floating top-bar icons' translucent circle background. */
 const val CollectionTopBarIconBackgroundAlpha = 0.4f
 
-/** Horizontal padding kept clear of the back/more buttons for the top bar's title. */
-val CollectionScrollTopBarTitleHorizontalPadding = 56.dp
+/**
+ * The hosting screen's scroll-top-bar fraction (0f at rest, 1f once the title is
+ * fully shown), read by every [CollectionTopBarIcon] below it. The icons' circle
+ * background fades with the exact reverse of the title's alpha: fully visible
+ * when the title is hidden, gone when the title is fully shown. Draw-phase only.
+ * Defaults to 0f (circle always shown) for screens that don't provide it.
+ */
+val LocalCollectionTopBarScrollFraction: ProvidableCompositionLocal<() -> Float> =
+    compositionLocalOf { { 0f } }
+
+/** Clearance between the scroll top bar's title and the buttons on either side. */
+val CollectionScrollTopBarTitleButtonGap = FoamDimens.paddingSmall
+
+/**
+ * Horizontal inset kept clear of the back/more buttons for the top bar's title
+ * when a side hosts a single button.
+ */
+val CollectionScrollTopBarTitleHorizontalPadding =
+    CollectionTopBarRowHorizontalPadding +
+            CollectionTopBarIconCircleSize +
+            CollectionScrollTopBarTitleButtonGap
+
+/**
+ * Inset from a screen edge to the scroll top bar's title on a side hosting
+ * [buttonCount] top-bar buttons. Keeps the title centred in the space the
+ * buttons leave free instead of the full screen, so longer titles cannot run
+ * under a second right-hand button, and leaves [CollectionScrollTopBarTitleButtonGap]
+ * of breathing room against the buttons.
+ */
+fun collectionScrollTopBarTitleInset(buttonCount: Int): Dp =
+    CollectionScrollTopBarTitleHorizontalPadding +
+            (CollectionTopBarIconCircleSize + CollectionTopBarButtonSpacing) *
+            (buttonCount - 1).coerceAtLeast(0)
 
 /** Padding between the immersive overlay block and the list's first row. */
 val CollectionHeroImmersiveListTopPadding = 16.dp
@@ -192,12 +363,6 @@ val CollectionSearchImmersiveTopClearance = 56.dp
 
 /** Fraction of the screen height reserved below a list while its search bar is open. */
 private const val CollectionSearchOpenReserveScreenFraction = 0.6f
-
-/** Duration of the search-open bottom padding's grow/shrink. */
-private const val CollectionSearchPaddingAnimationMs = 250
-
-/** Duration of the hero title's expand/collapse reveal. */
-private const val CollectionHeroTitleExpandAnimationMs = 250
 
 /**
  * Hero layout of the "list of lists" screens (genres, years, folders and every
@@ -276,9 +441,6 @@ class CollectionSearchState {
 @Composable
 fun rememberCollectionSearchState(): CollectionSearchState = remember { CollectionSearchState() }
 
-/** Duration of the search-open scroll itself. */
-private const val SearchOpenScrollDurationMs = 300
-
 /**
  * Bottom content padding a host list gains while its hero's search bar is
  * open (feed into the lazy container's PaddingValues): the keyboard's own
@@ -304,8 +466,8 @@ fun collectionSearchOpenBottomPadding(searchState: CollectionSearchState?): Dp {
     return animateDpAsState(
         targetValue = target,
         animationSpec = tween(
-            durationMillis = CollectionSearchPaddingAnimationMs,
-            easing = FastOutSlowInEasing
+            durationMillis = FoamMotion.Duration.STANDARD,
+            easing = FoamMotion.Easings.STANDARD
         ),
         label = "collectionSearchOpenBottomPadding"
     ).value
@@ -344,11 +506,11 @@ fun CollectionSearchScrollToBarEffect(
             if (useGrid && gridState != null) {
                 gridState.animateScrollBy(
                     delta,
-                    tween(durationMillis = SearchOpenScrollDurationMs, easing = FastOutSlowInEasing)
+                    tween(durationMillis = FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
                 )
             } else listState?.animateScrollBy(
                 delta,
-                tween(durationMillis = SearchOpenScrollDurationMs, easing = FastOutSlowInEasing)
+                tween(durationMillis = FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
             )
         }
     }
@@ -363,6 +525,21 @@ fun collectionHeroImmersiveHeight(layout: CollectionHeroLayout): Dp {
         else -> 0f
     }
     return LocalConfiguration.current.screenHeightDp.dp * fraction
+}
+
+/**
+ * Total drawn height of an immersive hero artwork for [layout]: its layout
+ * height plus the downward bleed. The bleed is only visual — the list item and
+ * the overlaid text/buttons keep using [collectionHeroImmersiveHeight].
+ */
+@Composable
+fun collectionHeroImmersiveArtworkHeight(layout: CollectionHeroLayout): Dp {
+    val bleed = if (layout.isImmersive) {
+        LocalConfiguration.current.screenHeightDp.dp * CollectionHeroImmersiveBleedFraction
+    } else {
+        0.dp
+    }
+    return collectionHeroImmersiveHeight(layout) + bleed
 }
 
 private fun collectionHeroOverlayFraction(layout: CollectionHeroLayout): Float = when (layout) {
@@ -404,6 +581,8 @@ fun CollectionHeroImmersiveHeader(
     onSubtitleClick: ((String) -> Unit)? = null,
     searchState: CollectionSearchState? = null,
     scrollOffsetPx: (() -> Int)? = null,
+    /** Reports the hero title's current top y in root coordinates, for the scroll top bar's fade-in anchor. */
+    onTitleTopPx: ((Float) -> Unit)? = null,
     overlayTextAlpha: (() -> Float)? = null,
     transitionAlpha: (() -> Float)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -501,6 +680,7 @@ fun CollectionHeroImmersiveHeader(
                     onShuffleAllClick = onShuffleAllClick,
                     onSubtitleClick = onSubtitleClick,
                     searchState = searchState,
+                    onTitleTopPx = onTitleTopPx,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedElementKey = sharedElementKey,
@@ -544,6 +724,14 @@ fun CollectionHeroImmersiveHeader(
  * as a full circle (artist images). Compact and Normal keep the static theme
  * shape and no fade.
  *
+ * [scrollOffsetPx] drives the immersive artwork's scroll treatment: it moves
+ * up slower than the list content (parallax) while scaling up and fading
+ * toward transparent, so the collection's rows slide over a receding backdrop.
+ * Compact and Normal render in the list itself and ignore it.
+ *
+ * [overscrollPx] reports how far the list is pulled past its top edge; the
+ * immersive artwork stretches downward (anchored at the top) to follow it.
+ *
  * NOTE on flight rendering: the shared-element overlay draws only the
  * becoming-visible side's content and clip. On open that is this hero; on
  * close the drawn side is the source row instead — which is why the row side
@@ -568,6 +756,10 @@ fun CollectionHero(
     accentColor: Color = FoamTheme.accentColor,
     transitionAlpha: (() -> Float)? = null,
     scrollOffsetPx: (() -> Int)? = null,
+    /** Pull past the list's top edge in px (see [CollectionHeroOverscroll.pullPx]); stretches the immersive artwork. */
+    overscrollPx: (() -> Float)? = null,
+    /** Reports the hero title's current top y in root coordinates, for the scroll top bar's fade-in anchor. */
+    onTitleTopPx: ((Float) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedElementKey: String? = null,
@@ -587,6 +779,7 @@ fun CollectionHero(
             onSubtitleClick = onSubtitleClick,
             searchState = searchState,
             accentColor = accentColor,
+            onTitleTopPx = onTitleTopPx,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             sharedElementKey = sharedElementKey,
@@ -606,6 +799,7 @@ fun CollectionHero(
             onSubtitleClick = onSubtitleClick,
             searchState = searchState,
             accentColor = accentColor,
+            onTitleTopPx = onTitleTopPx,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             sharedElementKey = sharedElementKey,
@@ -623,6 +817,7 @@ fun CollectionHero(
                 accentColor = accentColor,
                 transitionAlpha = transitionAlpha,
                 scrollOffsetPx = scrollOffsetPx,
+                overscrollPx = overscrollPx,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 sharedElementKey = sharedElementKey,
@@ -653,6 +848,7 @@ private fun CollectionHeroCompact(
     onSubtitleClick: ((String) -> Unit)?,
     searchState: CollectionSearchState?,
     accentColor: Color,
+    onTitleTopPx: ((Float) -> Unit)?,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
@@ -698,6 +894,7 @@ private fun CollectionHeroCompact(
                     accentColor = accentColor,
                     centered = false,
                     onSubtitleClick = onSubtitleClick,
+                    onTitleTopPx = onTitleTopPx,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     sharedElementKey = sharedElementKey,
@@ -756,6 +953,7 @@ private fun CollectionHeroNormal(
     onSubtitleClick: ((String) -> Unit)?,
     searchState: CollectionSearchState?,
     accentColor: Color,
+    onTitleTopPx: ((Float) -> Unit)?,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
@@ -802,6 +1000,7 @@ private fun CollectionHeroNormal(
                 accentColor = accentColor,
                 centered = true,
                 onSubtitleClick = onSubtitleClick,
+                onTitleTopPx = onTitleTopPx,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 sharedElementKey = sharedElementKey,
@@ -853,6 +1052,7 @@ private fun CollectionHeroImmersiveArtwork(
     accentColor: Color,
     transitionAlpha: (() -> Float)?,
     scrollOffsetPx: (() -> Int)?,
+    overscrollPx: (() -> Float)?,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
@@ -863,6 +1063,19 @@ private fun CollectionHeroImmersiveArtwork(
     val statusBarHeightPx = WindowInsets.statusBars.getTop(density)
     val statusBarHeight = with(density) { statusBarHeightPx.toDp() }
     val heroHeight = collectionHeroImmersiveHeight(layout)
+    val artworkHeight = collectionHeroImmersiveArtworkHeight(layout)
+    // The artwork bleeds below the hero's layout height; rescale the fade's
+    // start so it still begins at the same absolute height.
+    val fadeStartFraction = (heroHeight * CollectionHeroImmersiveFadeStartFraction) /
+            artworkHeight
+    val artworkHeightPx = with(density) { artworkHeight.toPx() }
+    val heroVisiblePx = (with(density) { heroHeight.roundToPx() } - statusBarHeightPx)
+        .coerceAtLeast(1)
+    // 0 at rest, 1 once the hero has scrolled its own visible height away.
+    val scrollProgress: () -> Float = {
+        val scroll = scrollOffsetPx?.invoke() ?: 0
+        (scroll.toFloat() / heroVisiblePx).coerceIn(0f, 1f)
+    }
     val flightFraction = rememberCollectionHeroFlightFraction(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
@@ -875,20 +1088,22 @@ private fun CollectionHeroImmersiveArtwork(
         FoamTheme.shapes.miniPlayerRounding * 50f
     }
 
+    val scrimCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val scrimRestPositionPx = remember { floatArrayOf(0f, 0f) }
+    val parallaxShiftPx: () -> Float = {
+        (scrollOffsetPx?.invoke() ?: 0) * CollectionHeroImmersiveParallaxFactor
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(heroHeight)
-            .offset {
-                // Bleed behind the status bar at rest, then ride the list's
-                // scroll 1:1 so the hero scrolls away like a header item.
-                IntOffset(0, -statusBarHeightPx - (scrollOffsetPx?.invoke() ?: 0))
-            }
+            .height(artworkHeight)
+            .offset { IntOffset(0, -statusBarHeightPx) }
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(heroHeight)
+                .height(artworkHeight)
                 .collectionHeroSharedArtwork(
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
@@ -898,12 +1113,22 @@ private fun CollectionHeroImmersiveArtwork(
                     fullyRounded = fullyRoundedArtwork
                 )
                 .graphicsLayer {
+                    val progress = scrollProgress()
+                    translationY = -parallaxShiftPx()
+                    val scale = 1f + progress * CollectionHeroImmersiveScrollScale
+                    // Overscroll stretch (rubber-band), anchored at the artwork's top.
+                    val pull = overscrollPx?.invoke() ?: 0f
+                    val stretch = if (pull > 0f) {
+                        val p = pull / artworkHeightPx
+                        CollectionHeroOverscrollMaxStretch * p / (1f + p)
+                    } else {
+                        0f
+                    }
+                    transformOrigin = TransformOrigin(0.5f, if (stretch > 0f) 0f else 0.5f)
+                    scaleX = scale
+                    scaleY = scale + stretch
+                    alpha = 1f - progress
                     compositingStrategy = CompositingStrategy.Offscreen
-                    // In-flight in-place look: the shared-element overlay only
-                    // takes over once the match's bounds are configured, and
-                    // screens opened without a fade render in place from frame
-                    // one — so the artwork must carry the departing row's
-                    // rounded corners ITSELF on every frame it renders in place.
                     shape = AlbumArtFlightShape(flightRestPercent) { flightFraction.value }
                     clip = true
                 }
@@ -913,7 +1138,7 @@ private fun CollectionHeroImmersiveArtwork(
                     drawRect(
                         brush = Brush.verticalGradient(
                             0f to Color.Black,
-                            CollectionHeroImmersiveFadeStartFraction to Color.Black,
+                            fadeStartFraction to Color.Black,
                             1f to Color.Black.copy(alpha = 1f - fadeStrength)
                         ),
                         blendMode = BlendMode.DstIn
@@ -935,6 +1160,20 @@ private fun CollectionHeroImmersiveArtwork(
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
                 .height(statusBarHeight + CollectionHeroStatusBarScrimExtraHeight)
+                .onGloballyPositioned { coordinates ->
+                    // Fires on every scroll frame (the host moves with the
+                    // parallax): keep it to a reference check, and only read the
+                    // position at scroll 0 outside transitions, where it is the
+                    // scrim's rest position with no parallax term.
+                    if (scrimCoordinates[0] !== coordinates) scrimCoordinates[0] = coordinates
+                    if ((scrollOffsetPx?.invoke() ?: 0) == 0 &&
+                        animatedVisibilityScope?.isNavTransitionInProgress() != true
+                    ) {
+                        val position = coordinates.positionInRoot()
+                        scrimRestPositionPx[0] = position.x
+                        scrimRestPositionPx[1] = position.y
+                    }
+                }
                 .collectionHeroOverlayLayer(
                     sharedTransitionScope = sharedTransitionScope,
                     renderInOverlay = animatedVisibilityScope?.let { scope ->
@@ -942,7 +1181,21 @@ private fun CollectionHeroImmersiveArtwork(
                     }
                 )
                 .graphicsLayer {
-                    alpha = (1f - flightFraction.value) * (transitionAlpha?.invoke() ?: 1f)
+                    alpha = (1f - scrollProgress()) *
+                            (1f - flightFraction.value) *
+                            (transitionAlpha?.invoke() ?: 1f)
+                    // Cancel the host's zoom transform while lifted (see above).
+                    val coordinates = scrimCoordinates[0]
+                    if (coordinates != null &&
+                        coordinates.isAttached &&
+                        animatedVisibilityScope?.isNavTransitionInProgress() == true
+                    ) {
+                        val position = coordinates.positionInRoot()
+                        translationX = scrimRestPositionPx[0] - position.x
+                        translationY = scrimRestPositionPx[1] - parallaxShiftPx() - position.y
+                    } else {
+                        translationY = -parallaxShiftPx()
+                    }
                 }
                 .background(
                     Brush.verticalGradient(
@@ -975,6 +1228,7 @@ private fun CollectionHeroOverlayContent(
     onShuffleAllClick: (() -> Unit)? = null,
     onSubtitleClick: ((String) -> Unit)? = null,
     searchState: CollectionSearchState? = null,
+    onTitleTopPx: ((Float) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedElementKey: String? = null,
@@ -993,6 +1247,7 @@ private fun CollectionHeroOverlayContent(
             accentColor = accentColor,
             centered = centered,
             onSubtitleClick = onSubtitleClick,
+            onTitleTopPx = onTitleTopPx,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             sharedElementKey = sharedElementKey,
@@ -1067,7 +1322,7 @@ private fun CollectionHeroArtworkContent(
                 fading = displayed
                 displayed = imageUrl to imageIsEmbeddedArt
                 fade.snapTo(1f)
-                fade.animateTo(0f, tween(durationMillis = SharedElementTransitionDurationMs))
+                fade.animateTo(0f, FoamMotion.Spec.sharedElementFlight)
                 fading = null
             }
         }
@@ -1118,25 +1373,39 @@ private fun CollectionHeroArtworkImage(
     context: Context,
     modifier: Modifier
 ) {
-    val heroArtRequest = remember(imageUrl, imageIsEmbeddedArt) {
-        val data = if (imageIsEmbeddedArt) {
-            EmbeddedAlbumArt(imageUrl.toUri())
-        } else {
-            imageUrl
-        }
-        ImageRequest.Builder(context)
-            .data(data)
-            .size(AlbumArtRequestSize)
-            .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
-            .crossfade(false)
-            .build()
+    val sharedCacheKey = MemoryCache.Key(albumArtMemoryCacheKey(imageUrl))
+    val cachedBitmap = remember(sharedCacheKey) {
+        context.imageLoader.memoryCache?.get(sharedCacheKey)?.bitmap
     }
-    AlbumArtImage(
-        model = heroArtRequest,
-        contentDescription = null,
-        modifier = modifier,
-        placeholderSize = 40.dp
-    )
+    if (cachedBitmap != null) {
+        Image(
+            bitmap = cachedBitmap.asImageBitmap(),
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        val heroArtRequest = remember(imageUrl, imageIsEmbeddedArt) {
+            val data = if (imageIsEmbeddedArt) {
+                EmbeddedAlbumArt(imageUrl.toUri())
+            } else {
+                imageUrl
+            }
+            ImageRequest.Builder(context)
+                .data(data)
+                .size(AlbumArtRequestSize)
+                .placeholderMemoryCacheKey(albumArtMemoryCacheKey(imageUrl))
+                .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
+                .crossfade(false)
+                .build()
+        }
+        AlbumArtImage(
+            model = heroArtRequest,
+            contentDescription = null,
+            modifier = modifier,
+            placeholderSize = 40.dp
+        )
+    }
 }
 
 /**
@@ -1177,8 +1446,8 @@ private fun CollectionHeroExpandableTitle(
                 .clipToBounds()
                 .animateContentSize(
                     animationSpec = tween(
-                        durationMillis = CollectionHeroTitleExpandAnimationMs,
-                        easing = FastOutSlowInEasing
+                        durationMillis = FoamMotion.Duration.STANDARD,
+                        easing = FoamMotion.Easings.STANDARD
                     )
                 )
                 .then(
@@ -1218,6 +1487,7 @@ private fun CollectionHeroTexts(
     accentColor: Color,
     centered: Boolean,
     onSubtitleClick: ((String) -> Unit)? = null,
+    onTitleTopPx: ((Float) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedElementKey: String?,
@@ -1233,6 +1503,15 @@ private fun CollectionHeroTexts(
         if (centered) style.copy(textAlign = TextAlign.Center) else style
     }
     val textWidth = if (centered) Modifier.fillMaxWidth() else Modifier
+    val titlePositionModifier = if (onTitleTopPx != null) {
+        Modifier.onGloballyPositioned { coordinates ->
+            onTitleTopPx(coordinates.positionInRoot().y)
+        }
+    } else {
+        Modifier
+    }
+    val flightOrigin =
+        activeSharedCollectionOrigin(collectionDetailTag())
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -1242,16 +1521,22 @@ private fun CollectionHeroTexts(
             title = title,
             style = titleStyle,
             modifier = Modifier.collectionHeroSharedText(
-                key = "$sharedElementPrefix-title-$sharedElementKey",
+                key = sharedCollectionElementKey(
+                    "$sharedElementPrefix-title-$sharedElementKey",
+                    flightOrigin
+                ),
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 enabled = sharedElementKey != null
-            )
+            ).then(titlePositionModifier)
         )
 
         if (subtitle != null) {
             val subtitleSharedText = Modifier.collectionHeroSharedText(
-                key = "$sharedElementPrefix-artist-$sharedElementKey",
+                key = sharedCollectionElementKey(
+                    "$sharedElementPrefix-artist-$sharedElementKey",
+                    flightOrigin
+                ),
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 enabled = sharedElementKey != null
@@ -1422,14 +1707,15 @@ private fun CollectionHeroSearchButton(searchState: CollectionSearchState) {
     ) {
         Crossfade(
             targetState = searchState.open,
-            animationSpec = tween(durationMillis = 150),
+            animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP),
             label = "collectionSearchToggleIcon"
         ) { open ->
             Icon(
                 imageVector = if (open) {
                     FoamTheme.icons.current.close
                 } else {
-                    FoamTheme.icons.current.search
+                    // Force the outline variant
+                    FoamTheme.icons.outline.search
                 },
                 contentDescription = stringResource(
                     if (open) R.string.close_search else R.string.search
@@ -1537,12 +1823,7 @@ fun rememberCollectionHeroFlightFraction(
         return noFlight
     }
     return animatedVisibilityScope.transition.animateFloat(
-        transitionSpec = {
-            tween(
-                durationMillis = SharedElementTransitionDurationMs,
-                easing = SharedElementEasing
-            )
-        },
+        transitionSpec = { FoamMotion.Spec.sharedElementFlight },
         label = "collectionHeroFlight"
     ) { state ->
         if (state == EnterExitState.Visible) 0f else 1f
@@ -1590,6 +1871,16 @@ fun AnimatedVisibilityScope.isNavTransitionInProgress(): Boolean =
     transition.currentState != EnterExitState.Visible ||
             transition.targetState != EnterExitState.Visible
 
+/**
+ * Tag the collection hero scopes its shared-element keys with. A detail page
+ * uses the tag stored on its OWN back-stack entry, so its key never drifts when
+ * another collection page is opened on top and popped again. Falls back to the
+ * active transition tag for hosts that are not a collection detail destination.
+ */
+@Composable
+private fun collectionDetailTag(): String? =
+    LocalCollectionDetailTag.current ?: LocalActiveSharedCollectionTagState.current.value
+
 @Composable
 private fun Modifier.collectionHeroSharedArtwork(
     sharedTransitionScope: SharedTransitionScope?,
@@ -1602,6 +1893,9 @@ private fun Modifier.collectionHeroSharedArtwork(
     if (sharedTransitionScope == null || animatedVisibilityScope == null || sharedElementKey == null) {
         return this
     }
+    val flightOrigin =
+        activeSharedCollectionOrigin(collectionDetailTag())
+    val key = sharedCollectionElementKey("$sharedElementPrefix-art-$sharedElementKey", flightOrigin)
     val restPercent = if (fullyRounded) {
         AlbumArtFlightFullyRoundedPercent
     } else {
@@ -1615,7 +1909,7 @@ private fun Modifier.collectionHeroSharedArtwork(
     }
     return with(sharedTransitionScope) {
         this@collectionHeroSharedArtwork.sharedElement(
-            rememberSharedContentState(key = "$sharedElementPrefix-art-$sharedElementKey"),
+            rememberSharedContentState(key = key),
             animatedVisibilityScope = animatedVisibilityScope,
             clipInOverlayDuringTransition = OverlayClip(overlayShape),
             boundsTransform = AlbumArtBoundsTransform,
@@ -1638,10 +1932,7 @@ private fun Modifier.collectionHeroSharedText(
     }
     // The fades ride the same duration/easing tween as the bounds flight
     // instead of sharedBounds' spring defaults; see [rowSharedText].
-    val fadeSpec = tween<Float>(
-        durationMillis = SharedElementTransitionDurationMs,
-        easing = SharedElementEasing
-    )
+    val fadeSpec = FoamMotion.Spec.sharedElementFlight
     return with(sharedTransitionScope) {
         this@collectionHeroSharedText.sharedBounds(
             rememberSharedContentState(key = key),
@@ -1675,7 +1966,9 @@ val LocalCollectionHeroLayoutLookup: ProvidableCompositionLocal<(CollectionHeroT
 fun CollectionScrollTopBar(
     title: String,
     fraction: () -> Float,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    leadingTitleInset: Dp = CollectionScrollTopBarTitleHorizontalPadding,
+    trailingTitleInset: Dp = CollectionScrollTopBarTitleHorizontalPadding
 ) {
     val density = LocalDensity.current
     val statusBarHeightPx = WindowInsets.statusBars.getTop(density)
@@ -1708,7 +2001,7 @@ fun CollectionScrollTopBar(
                 // screen's back/more buttons.
                 .padding(top = statusBarHeight)
                 .height(CollectionScrollTopBarZoneHeight)
-                .padding(horizontal = CollectionScrollTopBarTitleHorizontalPadding),
+                .padding(start = leadingTitleInset, end = trailingTitleInset),
             contentAlignment = Alignment.Center
         ) {
             BasicText(
@@ -1744,11 +2037,18 @@ fun CollectionTopBarIcon(
     circleSize: Dp = CollectionTopBarIconCircleSize
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val scrollFraction = LocalCollectionTopBarScrollFraction.current
     Box(
         modifier = modifier
             .size(circleSize)
             .clip(CircleShape)
-            .background(backgroundColor)
+            // Fades with the reverse of the scroll top bar title's alpha.
+            .drawBehind {
+                drawRect(
+                    color = backgroundColor,
+                    alpha = (1f - scrollFraction()).coerceIn(0f, 1f)
+                )
+            }
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -1788,16 +2088,74 @@ fun Modifier.collectionListTopFade(): Modifier =
             )
         }
 
+/** The scroll offset where the top bar title starts to fade in, plus the hero title-position reporter feeding it. */
+class CollectionScrollTopBarTitleStart(
+    val startPx: Int,
+    val onTitleTopPx: (Float) -> Unit
+)
+
+/**
+ * Tracks when the hero's title starts entering the top chrome's fade zone.
+ * Pass [CollectionScrollTopBarTitleStart.onTitleTopPx] to the hero and feed
+ * [CollectionScrollTopBarTitleStart.startPx] to the scroll-fraction helper, so
+ * the scroll top bar waits for the hero title to actually reach the top of the
+ * screen instead of fading in as soon as the list moves.
+ */
+@Composable
+fun rememberCollectionScrollTopBarTitleStart(
+    listTopInRootPx: () -> Float,
+    scrollOffsetPx: () -> Int,
+    isFirstItemVisible: () -> Boolean
+): CollectionScrollTopBarTitleStart {
+    val topFadeZonePx = with(LocalDensity.current) { CollectionScrollTopBarZoneHeight.roundToPx() }
+    var startPx by remember { mutableIntStateOf(0) }
+    val onTitleTopPx: (Float) -> Unit = { titleTopInRootPx ->
+        if (isFirstItemVisible()) {
+            val listTopPx = listTopInRootPx().takeUnless { it.isNaN() } ?: 0f
+            val measured = collectionScrollTopBarTitleStartPx(
+                titleTopInRootPx = titleTopInRootPx,
+                listTopInRootPx = listTopPx,
+                scrollOffsetPx = scrollOffsetPx(),
+                topFadeZonePx = topFadeZonePx
+            )
+            if (measured != startPx) startPx = measured
+        }
+    }
+    return CollectionScrollTopBarTitleStart(startPx, onTitleTopPx)
+}
+
+/**
+ * Scroll offset (px) at which the hero's title starts entering the top chrome's
+ * fade zone, i.e. the moment the hero title begins to disappear at the top of
+ * the screen. Measurements come from the hero title's and the list's own
+ * root-space positions, so the anchor follows the active hero layout
+ * (compact, normal or immersive) and the title's real height/wrapping instead
+ * of a fixed scroll distance.
+ */
+fun collectionScrollTopBarTitleStartPx(
+    titleTopInRootPx: Float,
+    listTopInRootPx: Float,
+    scrollOffsetPx: Int,
+    topFadeZonePx: Int
+): Int =
+    (titleTopInRootPx - listTopInRootPx + scrollOffsetPx - topFadeZonePx)
+        .roundToInt()
+        .coerceAtLeast(0)
+
 /** Grid-only counterpart used by screens that only ever render a [LazyVerticalGrid]. */
 @Composable
-fun rememberCollectionScrollFraction(gridState: LazyGridState): () -> Float {
+fun rememberCollectionScrollFraction(
+    gridState: LazyGridState,
+    titleFadeStartPx: Int = 0
+): () -> Float {
     val fadeDistancePx = with(LocalDensity.current) { CollectionScrollTopBarFadeDistance.toPx() }
-    return remember(gridState, fadeDistancePx) {
+    return remember(gridState, fadeDistancePx, titleFadeStartPx) {
         {
             if (gridState.firstVisibleItemIndex > 0) {
                 1f
             } else {
-                (gridState.firstVisibleItemScrollOffset / fadeDistancePx).coerceIn(0f, 1f)
+                ((gridState.firstVisibleItemScrollOffset - titleFadeStartPx) / fadeDistancePx)
+                    .coerceIn(0f, 1f)
             }
         }
     }
@@ -1805,18 +2163,19 @@ fun rememberCollectionScrollFraction(gridState: LazyGridState): () -> Float {
 
 /**
  * Scroll fraction (0f at rest, 1f once the list has scrolled
- * [CollectionScrollTopBarFadeDistance]) driving [CollectionScrollTopBar].
- * Works for both a [LazyListState] and a [LazyGridState]; consumed from draw
- * phases without per-frame recomposition.
+ * [CollectionScrollTopBarFadeDistance] past [titleFadeStartPx]) driving
+ * [CollectionScrollTopBar]. Works for both a [LazyListState] and a
+ * [LazyGridState]; consumed from draw phases without per-frame recomposition.
  */
 @Composable
 fun rememberCollectionScrollFraction(
     listState: LazyListState,
     gridState: LazyGridState?,
-    useGrid: Boolean
+    useGrid: Boolean,
+    titleFadeStartPx: Int = 0
 ): () -> Float {
     val fadeDistancePx = with(LocalDensity.current) { CollectionScrollTopBarFadeDistance.toPx() }
-    return remember(listState, gridState, useGrid, fadeDistancePx) {
+    return remember(listState, gridState, useGrid, fadeDistancePx, titleFadeStartPx) {
         {
             val index: Int
             val offset: Int
@@ -1827,7 +2186,11 @@ fun rememberCollectionScrollFraction(
                 index = listState.firstVisibleItemIndex
                 offset = listState.firstVisibleItemScrollOffset
             }
-            if (index > 0) 1f else (offset / fadeDistancePx).coerceIn(0f, 1f)
+            if (index > 0) {
+                1f
+            } else {
+                ((offset - titleFadeStartPx) / fadeDistancePx).coerceIn(0f, 1f)
+            }
         }
     }
 }

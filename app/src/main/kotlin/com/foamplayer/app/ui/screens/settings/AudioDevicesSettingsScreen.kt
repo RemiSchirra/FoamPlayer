@@ -42,16 +42,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.audio.device.AudioOutputDevice
 import com.foamplayer.app.audio.device.DeviceAudioConfig
 import com.foamplayer.app.audio.device.DeviceBitPerfectMode
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
-import com.foamplayer.app.ui.theme.foamSurface
 
 /**
  * Output devices subscreen of the Audio settings: every attached output with its
@@ -66,31 +65,24 @@ fun AudioDevicesSettingsScreen(
     val devices by viewModel.devices.collectAsState()
     val activeDevice by viewModel.activeDevice.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.output_devices),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.output_devices),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
-            contentPadding = PaddingValues(top = FoamDimens.spacingMedium, bottom = LocalBottomBarClearance.current)
+            contentPadding = PaddingValues(
+                top = SettingsHeaderZoneHeight + FoamDimens.spacingMedium,
+                bottom = LocalBottomBarClearance.current
+            )
         ) {
             if (devices.isEmpty()) {
                 item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .foamSurface()
-                            .padding(FoamDimens.paddingMedium)
+                    FoamCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(FoamDimens.paddingMedium)
                     ) {
                         BasicText(
                             text = stringResource(R.string.no_output_devices),
@@ -142,22 +134,16 @@ private fun DeviceConfigCard(
         directLabel.takeIf { device.supportsDirectPlayback }
     ).filterNotNull().joinToString(" · ")
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { expanded = !expanded }
-            )
+    FoamCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { expanded = !expanded },
+        indication = null
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -172,7 +158,7 @@ private fun DeviceConfigCard(
                             .clip(CircleShape)
                             .background(
                                 if (isActive) FoamTheme.colors.bitPerfectActive
-                                else FoamTheme.colors.borderOverlay
+                                else FoamTheme.tintedSurfaceVariant
                             )
                     )
                     Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
@@ -229,7 +215,7 @@ private fun DeviceConfigCard(
                                     .clip(RoundedCornerShape(FoamDimens.buttonRounding))
                                     .background(
                                         if (selected) FoamTheme.accentColor
-                                        else FoamTheme.colors.surfaceVariant
+                                        else FoamTheme.tintedSurfaceVariant
                                     )
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
@@ -272,7 +258,7 @@ private fun DeviceConfigCard(
                                     .clip(RoundedCornerShape(FoamDimens.buttonRounding))
                                     .background(
                                         if (selected) FoamTheme.accentColor
-                                        else FoamTheme.colors.surfaceVariant
+                                        else FoamTheme.tintedSurfaceVariant
                                     )
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },

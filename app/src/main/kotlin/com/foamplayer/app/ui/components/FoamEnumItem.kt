@@ -75,7 +75,7 @@ fun <T : Enum<T>> FoamEnumItem(
                         .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
                         .background(
                             if (isSelected) FoamTheme.accentColor
-                            else FoamTheme.colors.surface
+                            else FoamTheme.tintedSurface
                         )
                         .clickable(
                             interactionSource = interactionSource,
@@ -95,7 +95,7 @@ fun <T : Enum<T>> FoamEnumItem(
                                 imageVector = getIcon(option),
                                 contentDescription = null,
                                 modifier = Modifier.size(FoamDimens.iconSmall),
-                                tint = if (isSelected) FoamTheme.colors.background else FoamTheme.colors.textPrimary
+                                tint = if (isSelected) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary
                             )
                             Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
                         }

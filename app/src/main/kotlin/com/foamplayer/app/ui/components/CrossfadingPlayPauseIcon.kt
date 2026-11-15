@@ -12,10 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
-
-/** Duration of the play/pause glyph crossfade shared by every transport button. */
-internal const val PLAY_PAUSE_CROSSFADE_MS = 250
 
 /**
  * The stacked play/pause glyph pair shared by every transport button (full player,
@@ -44,7 +42,7 @@ internal fun CrossfadingPlayPauseIcon(
     // in opposite directions, so they always crossfade in lockstep.
     val pauseFraction by animateFloatAsState(
         targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.STANDARD),
         label = "playPauseCrossfade"
     )
     Box(modifier, contentAlignment = Alignment.Center) {

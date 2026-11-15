@@ -1,10 +1,11 @@
 package com.foamplayer.app.ui.screens.lyrics
 
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.withFrameNanos
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.mocharealm.accompanist.lyrics.core.model.SyncedLyrics
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -21,6 +22,7 @@ internal suspend fun LazyListState.scrollLyricIntoFocus(
     animateToNearbyItem: Boolean,
     force: Boolean,
     alignByItemCenter: Boolean,
+    animate: Boolean = true,
 ) {
     val itemCount = layoutInfo.totalItemsCount
     if (itemCount == 0) return
@@ -64,14 +66,18 @@ internal suspend fun LazyListState.scrollLyricIntoFocus(
     val targetFocusPoint = viewportStart + (viewportHeight * anchorRatio).roundToInt()
     val scrollDelta = itemFocusPoint - targetFocusPoint
     if (abs(scrollDelta) > LYRIC_FOCUS_MIN_SCROLL_PX) {
-        animateScrollBy(
-            value = scrollDelta.toFloat(),
-            animationSpec =
-                tween(
-                    durationMillis = LYRIC_FOCUS_SCROLL_DURATION_MS,
-                    easing = FastOutSlowInEasing,
-                ),
-        )
+        if (animate) {
+            animateScrollBy(
+                value = scrollDelta.toFloat(),
+                animationSpec =
+                    tween(
+                        durationMillis = FoamMotion.Duration.EXPRESSIVE,
+                        easing = FoamMotion.Easings.STANDARD,
+                    ),
+            )
+        } else {
+            scrollBy(scrollDelta.toFloat())
+        }
     }
 }
 
@@ -115,4 +121,3 @@ private const val LYRIC_FOCUS_TOP_GUARD_RATIO = 0.18f
 private const val LYRIC_FOCUS_BOTTOM_GUARD_RATIO = 0.24f
 private const val LYRIC_FOCUS_MIN_SCROLL_PX = 6
 private const val LYRIC_FOCUS_ANIMATED_DISTANCE = 12
-private const val LYRIC_FOCUS_SCROLL_DURATION_MS = 520

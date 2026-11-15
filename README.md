@@ -26,8 +26,8 @@ FoamPlayer is an independent music player for your local library.
 
 Though for audiophiles, FoamPlayer supports Hi-Res bit perfect playback and is highly customizable.
 
-The project is inspired from many other players, like Poweramp and rely on the open source community 
-for some features (see more).
+The project is inspired from many other players and rely on the open source community 
+for some features <a href="#-credits">(check here)</a>.
 
 ---
 
@@ -53,7 +53,9 @@ for some features (see more).
 * Last.fm scrobbling and full listening-history import.
 
 ### Equalizer
-*Currently in development.*
+* Graphic and parametric equalizer.
+* Configurable presets.
+* AutoEQ (using Squiglink data).
 
 ---
 
@@ -95,6 +97,7 @@ Feel free to contribute to the project, either if it's developing new features, 
 FoamPlayer is built thanks to multiple existing open source projects:
 * **[ArchiveTune](https://github.com/rukamori/ArchiveTune)** : for the lyrics and canvas providers.
 * **[Accompanist lyrics](https://github.com/6xingyv/accompanist-lyrics-core)** : for the lyrics display engine.
+* **[Squiglink](https://squig.link/)** : for the frequency responses database.
 
 ---
 

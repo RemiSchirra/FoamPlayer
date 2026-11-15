@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.toast.ToastCenter
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
 import kotlinx.coroutines.flow.StateFlow
@@ -160,9 +161,9 @@ private class DisplayedToast(
     val state: MutableTransitionState<Boolean>,
 )
 
-private val ToastFadeSpec = tween<Float>(ToastAnimDurationMs)
-private val ToastSlideSpec = tween<IntOffset>(ToastAnimDurationMs)
-private val ToastSizeSpec = tween<IntSize>(ToastAnimDurationMs)
+private val ToastFadeSpec = tween<Float>(FoamMotion.Duration.SWIFT)
+private val ToastSlideSpec = tween<IntOffset>(FoamMotion.Duration.SWIFT)
+private val ToastSizeSpec = tween<IntSize>(FoamMotion.Duration.SWIFT)
 
 /** Start/end scale of the pill's pop-in / shrink-out animation. */
 private const val ToastMinScale = 0.8f
@@ -179,4 +180,3 @@ private val ToastScreenEdgePadding = 24.dp
 private val ToastMaxWidth = 360.dp
 private val ToastVerticalPadding = 10.dp
 private val ToastSpacing = 8.dp
-private const val ToastAnimDurationMs = 200

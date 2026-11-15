@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,13 +35,11 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.decode.DataSource
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlinx.coroutines.launch
 import kotlin.math.min
-
-/** Duration of the fade-in a freshly decoded album art gets over its placeholder. */
-private const val AlbumArtFadeInDurationMs = 200
 
 /**
  * What an artwork surface depicts. Drives the placeholder icon shown while
@@ -248,8 +245,8 @@ fun AlbumArtImage(
                                 fade.animateTo(
                                     targetValue = 1f,
                                     animationSpec = tween(
-                                        durationMillis = AlbumArtFadeInDurationMs,
-                                        easing = EaseOut
+                                        durationMillis = FoamMotion.Duration.SWIFT,
+                                        easing = FoamMotion.Easings.EXIT
                                     )
                                 ) {
                                     alphaState.floatValue = value

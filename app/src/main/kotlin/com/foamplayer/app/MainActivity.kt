@@ -28,12 +28,15 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import com.foamplayer.app.audio.service.PlaybackService
@@ -44,7 +47,11 @@ import com.foamplayer.app.ui.components.LocalDefaultCollectionHeroLayout
 import com.foamplayer.app.ui.navigation.FoamNavHost
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
+import com.foamplayer.app.ui.theme.DarkFoamColors
+import com.foamplayer.app.ui.theme.FoamBackdropHost
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
+import com.foamplayer.app.ui.theme.LightFoamColors
 import com.foamplayer.app.ui.theme.LocalAutomaticColorEnabled
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
@@ -55,6 +62,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.core.content.edit
+import kotlin.time.Duration.Companion.milliseconds
 
 /** Single activity hosting the whole Compose UI and the media playback session. */
 @AndroidEntryPoint
@@ -217,7 +225,7 @@ class MainActivity : AppCompatActivity() {
 
     /** True while the keyguard is showing (device locked). */
     private fun isDeviceLocked(): Boolean =
-        (getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+        (getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
 
     /**
      * Removes this task without an animation, restoring the system's previous
@@ -244,7 +252,7 @@ class MainActivity : AppCompatActivity() {
         restartFastLock()
         if (!isDeviceLocked()) {
             lifecycleScope.launch {
-                delay(KEYGUARD_SETTLE_MS)
+                delay(KEYGUARD_SETTLE_MS.milliseconds)
                 if (lockDisplaySessionActive && !isDeviceLocked()) {
                     lockDisplaySessionActive = false
                     cancelFastLock()
@@ -492,7 +500,7 @@ class MainActivity : AppCompatActivity() {
         if (!settingsViewModel.settings.value.fastLockScreenEnabled) return
         fastLockJob?.cancel()
         fastLockJob = lifecycleScope.launch {
-            delay(FAST_LOCK_TIMEOUT_MS)
+            delay(FAST_LOCK_TIMEOUT_MS.milliseconds)
             fastLockJob = null
             endLockDisplaySession()
         }
@@ -608,7 +616,8 @@ private fun FoamApp(
     ) {
         AccentThemedApp(
             darkTheme = darkTheme,
-            iconStyle = settings.iconStyle,
+            iconStyleForPack = settings::iconStyleFor,
+            iconPackId = settings.iconPackId,
             miniPlayerRounding = settings.miniPlayerRounding / 100f,
             fullPlayerRounding = settings.fullPlayerRounding / 100f,
             accentTintEnabled = settings.accentTintEnabled,
@@ -616,16 +625,18 @@ private fun FoamApp(
             manualAccentColor = settings.accentColor,
             playerViewModel = playerViewModel
         ) {
-            if (onboardingCompleted == null) {
-                // Hold a blank frame while settings load, never flash onboarding over
-                // an existing user's library.
-                Box(modifier = Modifier.fillMaxSize().foamBackground())
-            } else {
-                FoamNavHost(
-                    modifier = Modifier.fillMaxSize(),
-                    startOnOnboarding = onboardingCompleted == false,
-                    playerViewModel = playerViewModel
-                )
+            FoamBackdropHost {
+                if (onboardingCompleted == null) {
+                    // Hold a blank frame while settings load, never flash onboarding over
+                    // an existing user's library.
+                    Box(modifier = Modifier.fillMaxSize().foamBackground())
+                } else {
+                    FoamNavHost(
+                        modifier = Modifier.fillMaxSize(),
+                        startOnOnboarding = onboardingCompleted == false,
+                        playerViewModel = playerViewModel
+                    )
+                }
             }
         }
     }
@@ -642,7 +653,8 @@ private fun FoamApp(
 @Composable
 private fun AccentThemedApp(
     darkTheme: Boolean,
-    iconStyle: FoamIconStyle,
+    iconStyleForPack: (String) -> FoamIconStyle,
+    iconPackId: String,
     miniPlayerRounding: Float,
     fullPlayerRounding: Float,
     accentTintEnabled: Boolean,
@@ -654,19 +666,30 @@ private fun AccentThemedApp(
     val albumArtPath by playerViewModel.currentAlbumArtPath.collectAsState()
     val dynamicAccentColor by playerViewModel.dynamicAccentColor.collectAsState()
 
+    val fallbackAccent =
+        if (darkTheme) DarkFoamColors.textPrimary else LightFoamColors.textPrimary
+
     val accentColor = rememberAccentColor(
         isAutomaticColor = isAutomaticColor,
         manualAccentColor = manualAccentColor,
         dynamicAccentColor = dynamicAccentColor,
+        fallbackAccent = fallbackAccent,
         albumArtPath = albumArtPath
     )
+    val accentIsFallback = when {
+        !isAutomaticColor -> false
+        dynamicAccentColor != null -> dynamicAccentColor == fallbackAccent
+        else -> albumArtPath == null || AlbumArtPaletteCache.colors[albumArtPath] == null
+    }
 
     FoamTheme(
         darkTheme = darkTheme,
-        iconStyle = iconStyle,
+        iconStyle = iconStyleForPack(iconPackId),
+        iconPackId = iconPackId,
         miniPlayerRounding = miniPlayerRounding,
         fullPlayerRounding = fullPlayerRounding,
         accentColor = accentColor,
+        accentIsFallback = accentIsFallback,
         accentTintEnabled = accentTintEnabled,
         content = content
     )
@@ -674,13 +697,16 @@ private fun AccentThemedApp(
 
 /**
  * Resolves the active accent color: the manual pick, or the palette color
- * extracted from the current album art when automatic color is on.
+ * extracted from the current album art when automatic color is on. A track
+ * without album art (or whose extraction failed) falls back to the theme's
+ * text primary ([fallbackAccent]) instead of the manual pick.
  */
 @Composable
 private fun rememberAccentColor(
     isAutomaticColor: Boolean,
     manualAccentColor: Int,
     dynamicAccentColor: Color?,
+    fallbackAccent: Color,
     albumArtPath: String?
 ): Color {
     val context = LocalContext.current
@@ -693,13 +719,29 @@ private fun rememberAccentColor(
     }
     val extractedColor = effectiveArtPath?.let { AlbumArtPaletteCache.colors[it] }
 
+    // The first real palette color must appear in place: the launch gate holds
+    // the UI until it is known, so animating in from the manual fallback would
+    // be visible only as a launch fade. Once resolved, the animation stays
+    // composed so later track changes keep their crossfade.
+    // Seeded from the cache so activity recreation (already-warm palette) does
+    // not flash the manual accent for a frame before this effect runs.
+    var hasResolvedAccent by remember { mutableStateOf(extractedColor != null) }
+    LaunchedEffect(extractedColor) {
+        if (extractedColor != null) hasResolvedAccent = true
+    }
+
     when {
         !isAutomaticColor -> return Color(manualAccentColor)
         dynamicAccentColor != null -> return dynamicAccentColor
+        !hasResolvedAccent -> return fallbackAccent
         else -> {
+            // Entering this branch for the first time initializes the animation
+            // at the target color, so there is no launch-time fade; later
+            // targets still animate -- including the fallback, so switching to
+            // a track without album art crossfades to the text primary.
             val animatedColor by animateColorAsState(
-                targetValue = extractedColor ?: Color(manualAccentColor),
-                animationSpec = tween(durationMillis = 500),
+                targetValue = extractedColor ?: fallbackAccent,
+                animationSpec = tween(durationMillis = FoamMotion.Duration.EXPRESSIVE),
                 label = "AccentColorFade"
             )
             return animatedColor

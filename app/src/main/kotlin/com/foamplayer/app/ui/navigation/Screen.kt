@@ -22,16 +22,18 @@ sealed class Screen(val route: String, val title: String) {
     object SettingsAudioEqualizer : Screen("settings/audio/equalizer", "Equalizer Settings")
     object SettingsUI : Screen("settings/ui", "UI Settings")
     object SettingsColors : Screen("settings/ui/colors", "Color Settings")
+    object SettingsIcons : Screen("settings/ui/icons", "Icon Settings")
     object SettingsPlayer : Screen("settings/ui/player", "Player Settings")
     object SettingsNavBar : Screen("settings/ui/navbar", "Navigation Bar Settings")
     object SettingsBackground : Screen("settings/ui/background", "Background Settings")
     object SettingsUICollections : Screen("settings/ui/collections", "Collection Layouts")
     object SettingsUIHome : Screen("settings/ui/home", "Home Layout")
     object SettingsLibrary : Screen("settings/library", "Library Settings")
+    object SettingsLibraryArtistImages : Screen("settings/library/artist-images", "Artist Images")
     object SettingsLyrics : Screen("settings/lyrics", "Lyrics Settings")
     object SettingsLyricsManager : Screen("settings/lyrics/manager", "Lyrics Manager")
     object SettingsLyricsManagerResults :
-        Screen("settings/lyrics/manager/results?trackId={trackId}", "Lyrics Search Results") {
+        Screen("settings/lyrics/manager/results?trackId={trackId}", "Lyrics details") {
         fun createRoute(trackId: Long) = "settings/lyrics/manager/results?trackId=$trackId"
     }
     object SettingsMisc : Screen("settings/misc", "Misc Settings")
@@ -43,9 +45,11 @@ sealed class Screen(val route: String, val title: String) {
 
     object ArtistDetail : Screen("artist/{artistName}?image={image}&embedded={embedded}", "Artist") {
         /**
-         * [image] seeds the hero on its very first frame (before the cache lookup
-         * completes) so the shared-element transition from the artist lists never
-         * flashes the letter fallback — the same mechanism as [PlaylistDetail].
+         * [image] seeds the hero on its very first frame (before the cache
+         * lookup completes) so the shared-element transition from the artist
+         * lists never flashes the letter fallback — the same mechanism as
+         * [PlaylistDetail]. From an album it is that album's art, shown until
+         * the artist picture resolves.
          * [imageIsEmbeddedArt] says how the seed loads: a Spotify picture is a
          * plain file, the automatic first-track fallback is an audio file whose
          * embedded picture must be extracted.

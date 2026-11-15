@@ -3,11 +3,11 @@ package com.foamplayer.app.ui.screens.player
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.background
@@ -26,9 +26,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -39,10 +42,12 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -52,22 +57,28 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
+import androidx.compose.ui.zIndex
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.imageLoader
@@ -76,12 +87,15 @@ import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.data.settings.PlayerPagerEffect
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.ui.components.AlbumArtRequestSize
+import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.CrossfadingPlayPauseIcon
-import com.foamplayer.app.ui.components.PLAY_PAUSE_CROSSFADE_MS
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
+import com.foamplayer.app.ui.components.PlayerFlightHighlightPadding
 import com.foamplayer.app.ui.components.PreviousAction
+import com.foamplayer.app.ui.components.playerFlightHighlightSource
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.TrackScoreHeart
 import com.foamplayer.app.ui.components.FoamSlider
@@ -91,6 +105,7 @@ import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.components.MarqueeTextState
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.utils.TimeUtils
 import com.foamplayer.app.ui.utils.WaveformState
@@ -98,8 +113,10 @@ import com.foamplayer.app.ui.utils.pressShrink
 import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import com.foamplayer.app.ui.utils.rememberWaveform
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 /** Layer 1 content: handle, hi-res badge, the track hero pager, playback controls, subview shortcuts. */
@@ -119,9 +136,14 @@ internal fun SharedTransitionScope.MainPlayerContent(
     pagerState: PagerState,
     density: Density,
     screenWidthDp: Dp,
-    placeholderColor: Color,
+    // Draw-phase read (lambda): the placeholder color follows the live accent, which
+    // changes every frame of a hero pager swipe -- consuming it inside the pages'
+    // drawBehind keeps accent frames redraw-only (see FullPlayerScreen).
+    placeholderColor: () -> Color,
     immersive: Boolean,
     vinyl: Boolean,
+    pagerEffect: PlayerPagerEffect,
+    pagerFlingTarget: MutableState<Int?>,
     outerVisibilityScope: AnimatedVisibilityScope,
     headerVisibilityScope: AnimatedVisibilityScope,
     viewModel: PlayerViewModel,
@@ -148,7 +170,9 @@ internal fun SharedTransitionScope.MainPlayerContent(
     onOpenArtist: (TrackEntity) -> Unit,
     flightGeometry: PlayerFlightGeometryState? = null,
     /** Reports a transport-button skip (true = previous) so a repeat-all wrap animates in the right direction. */
-    onSkipIntent: (backward: Boolean) -> Unit = {}
+    onSkipIntent: (backward: Boolean) -> Unit = {},
+    /** Root-space Y of the lyrics / play on / queue row's top, reported by PlayerBottomControls. */
+    selectorTopRoot: MutableFloatState? = null
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(top = PlayerDimens.screenPadding),
@@ -174,6 +198,8 @@ internal fun SharedTransitionScope.MainPlayerContent(
             placeholderColor = placeholderColor,
             immersive = immersive,
             vinyl = vinyl,
+            pagerEffect = pagerEffect,
+            pagerFlingTarget = pagerFlingTarget,
             outerVisibilityScope = outerVisibilityScope,
             headerVisibilityScope = headerVisibilityScope,
             playerTransitionState = playerTransitionState,
@@ -210,6 +236,7 @@ internal fun SharedTransitionScope.MainPlayerContent(
             morphFromWaveform = morphFromWaveform,
             morphTargetWaveform = morphTargetWaveform,
             envelopeMorphProgress = envelopeMorphProgress,
+            selectorTopRoot = selectorTopRoot,
             onSeek = { positionMs -> viewModel.seekTo(positionMs) },
             onPrevious = {
                 when (
@@ -266,9 +293,14 @@ internal fun SharedTransitionScope.TrackHeroPager(
     pagerState: PagerState,
     density: Density,
     screenWidthDp: Dp,
-    placeholderColor: Color,
+    // Draw-phase read (lambda): the placeholder color follows the live accent, which
+    // changes every frame of a hero pager swipe -- consuming it inside the pages'
+    // drawBehind keeps accent frames redraw-only (see FullPlayerScreen).
+    placeholderColor: () -> Color,
     immersive: Boolean,
     vinyl: Boolean,
+    pagerEffect: PlayerPagerEffect,
+    pagerFlingTarget: MutableState<Int?>,
     outerVisibilityScope: AnimatedVisibilityScope,
     headerVisibilityScope: AnimatedVisibilityScope,
     playerTransitionState: SeekableTransitionState<Boolean>,
@@ -355,6 +387,23 @@ internal fun SharedTransitionScope.TrackHeroPager(
     val miniPlayerRounding = FoamTheme.shapes.miniPlayerRounding
     val miniRadius = (miniImageSize / 2) * miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
+    // The graphicsLayer scope's own `density` Float is shadowed by the Density
+    // parameter above, so resolve the scalar once for camera distance.
+    val densityScale = density.density
+
+    // Pages keep their full width; only the slot stride shrinks to the effect's travel.
+    val fullPageWidth = screenWidthDp - PlayerDimens.screenPadding * 2
+    val slidePageSpacing = (PlayerDimens.pageSpacing - artInset * 2).coerceAtLeast(0.dp)
+    val effectivePageSpacing = PlayerPagerEffectMath.pageSpacing(
+        pageWidth = fullPageWidth,
+        slideSpacing = slidePageSpacing,
+        effect = pagerEffect
+    )
+
+    // The stock snap divides the finger delta by the full page width, so only SLIDE
+    // can use it; the shortened effects snap in page units instead.
+    val defaultFlingBehavior = PagerDefaults.flingBehavior(state = pagerState)
+    val effectFlingBehavior = rememberPagerEffectFlingBehavior(pagerState, pagerFlingTarget)
 
     // Paused-shrink departure/arrival: the endpoints of the art's shared-element pairs
     // (mini player, subview header) rest UNSCALED -- only this hero shrinks on
@@ -383,11 +432,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
         }
     }
 
-    // Vinyl-mode flight fade: 1 while the player rests open, easing to 0 during the
-    // open/close flight toward the mini player and while a subview slides up. It is
-    // the exact mirror of the square shared-element art (which uses this sum directly
-    // and is visible at rest mini and during flights), so the record and the square
-    // art crossfade instead of stacking.
     val vinylFlightFade = remember(playerTransitionState, upTransitionState) {
         {
             val openFade = 1f - EaseOutCubic.transform(
@@ -409,21 +453,54 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     ImageRequest.Builder(prefetchContext)
                         .data(EmbeddedAlbumArt(path.toUri()))
                         .size(AlbumArtRequestSize)
+                        .memoryCacheKey(albumArtMemoryCacheKey(path))
                         .build()
                 )
             }
         }
     }
 
+    val anchorPageNow by rememberUpdatedState(anchorPage)
+    var restAnchorKey by remember { mutableStateOf(entryKey(anchorPage)) }
+    LaunchedEffect(pagerState) {
+        snapshotFlow {
+            val key = currentEntryKey(anchorPageNow)
+            val pageKey = pagerState.layoutInfo.visiblePagesInfo
+                .firstOrNull { it.index == pagerState.currentPage }?.key
+            if (pagerState.currentPageOffsetFraction == 0f && pageKey == key) key else null
+        }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect { restAnchorKey = it }
+    }
+    val heroBelowPager by remember(pagerEffect, pagerState, anchorPage) {
+        derivedStateOf {
+            if (pagerEffect == PlayerPagerEffect.SLIDE) return@derivedStateOf false
+            val anchorKey = currentEntryKey(anchorPage)
+            val pageKey = pagerState.layoutInfo.visiblePagesInfo
+                .firstOrNull { it.index == pagerState.currentPage }?.key
+            val atRest = pagerState.currentPageOffsetFraction == 0f && pageKey == anchorKey
+            anchorKey == restAnchorKey && !atRest
+        }
+    }
+
     Box(modifier = Modifier.fillMaxWidth()) {
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .zIndex(if (heroBelowPager) 1f else 0f),
             contentPadding = PaddingValues(horizontal = PlayerDimens.screenPadding),
-            // Pages are wider by 2 * artInset now; shave it off the spacing so the gap
-            // between neighbouring album arts (and their peek) stays what it was.
-            pageSpacing = (PlayerDimens.pageSpacing - artInset * 2).coerceAtLeast(0.dp),
-            beyondViewportPageCount = 0,
+            // Pages are wider by 2 * artInset; remove that from the spacing to keep the
+            // album-art gap, then let the effect shorten the stride (overlap).
+            pageSpacing = effectivePageSpacing,
+            flingBehavior = if (pagerEffect == PlayerPagerEffect.SLIDE) {
+                defaultFlingBehavior
+            } else {
+                effectFlingBehavior
+            },
+            // Neighbours must be composed to fade in from the first drag pixel.
+            beyondViewportPageCount = if (pagerEffect == PlayerPagerEffect.SLIDE) 0 else 1,
             // Keyed by queue ENTRY id, not track id: the same track can legitimately
             // appear twice in the queue ("play next" on the playing track), and
             // duplicate keys crash the pager.
@@ -441,19 +518,65 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     abs(offset).coerceIn(0f, 1f)
                 }
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            // The hero overlay renders the anchor page during a swipe; hide the
+            // duplicate art under it so non-SLIDE effects do not double-expose.
+            val suppressAnchorArt =
+                isAnchorPage && showHero && pagerEffect != PlayerPagerEffect.SLIDE
+
+            // Neighbor pages are composed for non-SLIDE effects (see
+            // beyondViewportPageCount) and their pulled-in layer still hit-tests at
+            // alpha 0, so only the settled page keeps its controls interactive.
+            val pageInteractive =
+                pagerEffect == PlayerPagerEffect.SLIDE || page == pagerState.currentPage
+            // Hidden neighbours stay composed for the fade, but must not be announced
+            // or focusable while they are inert.
+            val pageSemanticsModifier =
+                if (pageInteractive) Modifier else Modifier.clearAndSetSemantics {}
+
+            // SLIDE keeps the stock pager untouched (no extra graphics layer).
+            val pageEffectModifier = if (pagerEffect == PlayerPagerEffect.SLIDE) {
+                Modifier
+            } else {
+                Modifier.graphicsLayer {
+                    val offset = PlayerPagerEffectMath.pageOffset(
+                        page = page,
+                        currentPage = pagerState.currentPage,
+                        offsetFraction = pagerState.currentPageOffsetFraction
+                    )
+                    // The pager owns the translation; the effect only layers transforms.
+                    val layer = PlayerPagerEffectMath.layer(pagerEffect, offset)
+                    alpha = layer.alpha
+                    scaleX = layer.scale
+                    scaleY = layer.scale
+                    rotationY = layer.rotationY
+                    rotationX = layer.rotationX
+                    if (pagerEffect.spec.is3d) {
+                        cameraDistance =
+                            PlayerPagerEffectMath.cameraDistance(pagerEffect, densityScale)
+                        compositingStrategy = CompositingStrategy.ModulateAlpha
+                    }
+                }
+            }
+
+            // Every non-anchor page draws above the anchor page, whichever side it comes
+            // from, so reversing direction never lets the anchor cover an incoming page.
+            // Keyed on the anchor (not pagerState.settledPage): the anchor flips in the
+            // same composition as the hero overlay and isAnchorPage, whereas settledPage
+            // flips when the scroll ends and, in between, briefly put the outgoing page
+            // above the new one for a frame after the swipe commit.
+            val pageZIndex = if (pagerEffect != PlayerPagerEffect.SLIDE && page != anchorPage) 1f else 0f
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .zIndex(pageZIndex)
+                    .then(pageSemanticsModifier)
+                    .then(pageEffectModifier)
+            ) {
                 if (immersive) {
                     Spacer(modifier = Modifier.padding(horizontal = artInset).fillMaxWidth().aspectRatio(1f))
                 } else if (vinyl) {
-                    // Vinyl mode keeps the normal pager mechanics (each page is its own
-                    // record, so swipes slide/fade like the square art); the anchor page
-                    // renders a spinning record instead. Its layer alpha is the inverse
-                    // of the hero's immersive fade: visible at rest, fading out as the
-                    // player closes toward the mini player or as a subview slides up, so
-                    // the square shared-element art can take over during flights. The
-                    // player-level tonearm overlay is drawn above the pager; the record
-                    // slides beneath it during swipes. Unlike classic mode the record
-                    // never scales on pause/play.
                     Box(
                         modifier = Modifier
                             .padding(horizontal = artInset)
@@ -475,7 +598,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             .fillMaxWidth()
                             .aspectRatio(1f)
                             .graphicsLayer {
-                                alpha = anchorPageAlpha()
+                                alpha = if (suppressAnchorArt) 0f else anchorPageAlpha()
                                 scaleX = pausedArtScale
                                 scaleY = pausedArtScale
                                 shape = RoundedCornerShape(with(density) { fullRadius.toPx() })
@@ -485,8 +608,16 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 } else {
                                     0f
                                 }
+                                if (pagerEffect.spec.is3d) {
+                                    val offset = PlayerPagerEffectMath.pageOffset(
+                                        page = page,
+                                        currentPage = pagerState.currentPage,
+                                        offsetFraction = pagerState.currentPageOffsetFraction
+                                    )
+                                    fadeShadow(PlayerPagerEffectMath.layer(pagerEffect, offset).alpha)
+                                }
                             }
-                            .background(placeholderColor),
+                            .drawBehind { drawRect(placeholderColor()) },
                         contentAlignment = Alignment.Center
                     ) {
                         if (pageTrack.albumArtPath != null) {
@@ -496,6 +627,10 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                     .data(EmbeddedAlbumArt(pageTrack.albumArtPath.toUri()))
                                     .size(AlbumArtRequestSize)
                                     .crossfade(false)
+                                    .placeholderMemoryCacheKey(
+                                        albumArtMemoryCacheKey(pageTrack.albumArtPath)
+                                    )
+                                    .memoryCacheKey(albumArtMemoryCacheKey(pageTrack.albumArtPath))
                                     .build()
                             }
                             AsyncImage(
@@ -505,10 +640,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 contentScale = ContentScale.Crop
                             )
                         } else {
-                            // No art at all: the image-like music-note placeholder, filling
-                            // this page's art box the same way the mini player's slot and the
-                            // subview header do, so shared-element flights land on the exact
-                            // same look on every surface.
                             NoAlbumArtPlaceholder()
                         }
                     }
@@ -521,14 +652,12 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            // While the hero overlay shows this (anchor) page's text, hide the
-                            // page's copy: both render the same shared marquee state, so
-                            // drawing both would only double the glyphs.
                             .graphicsLayer { alpha = if (isAnchorPage && showHero) 0f else 1f }
                             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
                             .combinedClickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = ripple(color = FoamTheme.colors.textPrimary),
+                                enabled = pageInteractive,
                                 onClick = { onOpenAlbum(pageTrack) },
                                 onLongClick = { onOpenArtist(pageTrack) }
                             )
@@ -549,25 +678,46 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     }
                     TrackScoreHeart(
                         score = scoreOverrides[pageTrack.id] ?: pageTrack.score,
-                        onSetScore = { value -> onSetScore(pageTrack.id, value) }
+                        onSetScore = { value -> onSetScore(pageTrack.id, value) },
+                        enabled = pageInteractive
                     )
-                    TrackMoreButton(track = pageTrack, refresh = viewModel::freshTrack)
+                    TrackMoreButton(
+                        track = pageTrack,
+                        refresh = viewModel::freshTrack,
+                        enabled = pageInteractive
+                    )
                 }
             }
         }
 
         if (showHero) {
             val heroMarquee = statesFor(entryKey(anchorPage))
+            val heroArtState = rememberSharedContentState(key = "album_art_${track.id}")
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .zIndex(if (heroBelowPager) 0f else 1f)
                     .padding(horizontal = PlayerDimens.screenPadding)
                     .graphicsLayer {
                         val offset = pagerState.currentPage - anchorPage + pagerState.currentPageOffsetFraction
-                        val pageWidthPx = pagerState.layoutInfo.pageSize.toFloat()
-                        val pageSpacingPx = pagerState.layoutInfo.pageSpacing.toFloat()
-                        translationX = -offset * (pageWidthPx + pageSpacingPx)
+                        val stridePx = (
+                                pagerState.layoutInfo.pageSize + pagerState.layoutInfo.pageSpacing
+                                ).toFloat()
+                        translationX = -stridePx * offset
+                        if (pagerEffect != PlayerPagerEffect.SLIDE) {
+                            val layer = PlayerPagerEffectMath.layer(pagerEffect, -offset)
+                            alpha = layer.alpha
+                            scaleX = layer.scale
+                            scaleY = layer.scale
+                            rotationY = layer.rotationY
+                            rotationX = layer.rotationX
+                            if (pagerEffect.spec.is3d) {
+                                cameraDistance =
+                                    PlayerPagerEffectMath.cameraDistance(pagerEffect, densityScale)
+                                compositingStrategy = CompositingStrategy.ModulateAlpha
+                            }
+                        }
                     }
             ) {
                 Box(
@@ -582,7 +732,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 coordinates.positionInRoot().y + coordinates.size.height / 2f
                         }
                         .sharedElement(
-                            rememberSharedContentState(key = "album_art_${track.id}"),
+                            heroArtState,
                             animatedVisibilityScope = outerVisibilityScope
                         )
                         .sharedElement(
@@ -627,12 +777,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 }
                             )
                             clip = true
-                            // The paused shrink eases in/out with the flight: at rest the
-                            // hero shows its own paused look (heroRestFraction 1), and while
-                            // flying it tracks the unscaled endpoint the overlay departs
-                            // from (fraction 0), so both ends of the pair render the same
-                            // scale the moment the gesture starts. See
-                            // rememberPausedArtScale for the endpoint-side mirror.
                             scaleX = pausedArtScale + (1f - pausedArtScale) * (1f - heroRestFraction())
                             scaleY = pausedArtScale + (1f - pausedArtScale) * (1f - heroRestFraction())
                             shadowElevation = if (!immersive && !vinyl) {
@@ -641,6 +785,11 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 } * outerFraction * (1f - headerFraction)
                             } else {
                                 0f
+                            }
+                            if (pagerEffect.spec.is3d) {
+                                val offset = pagerState.currentPage - anchorPage +
+                                        pagerState.currentPageOffsetFraction
+                                fadeShadow(PlayerPagerEffectMath.layer(pagerEffect, -offset).alpha)
                             }
                             alpha = if (immersive || vinyl) {
                                 val openFade = 1f - EaseOutCubic.transform(
@@ -656,7 +805,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                                 1f
                             }
                         }
-                        .background(placeholderColor),
+                        .drawBehind { drawRect(placeholderColor()) },
                     contentAlignment = Alignment.Center
                 ) {
                     if (track.albumArtPath != null) {
@@ -665,6 +814,9 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             ImageRequest.Builder(context)
                                 .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
                                 .size(AlbumArtRequestSize)
+                                .crossfade(false)
+                                .placeholderMemoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
+                                .memoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
                                 .build()
                         }
                         AsyncImage(
@@ -736,6 +888,21 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 }
             }
         }
+
+        // SOURCE bounds of the player-dismiss highlight flight: an invisible container
+        // whose bounds wrap the hero's image + text (the layout the pager pages and the
+        // hero overlay share) with breathing room — the origin row's highlight morphs
+        // from it down into its own rect. See playerFlightHighlightSource.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .playerFlightHighlightSource(
+                    sharedTransitionScope = this@TrackHeroPager,
+                    animatedVisibilityScope = outerVisibilityScope,
+                    key = "player_highlight_${track.id}",
+                    paddingPx = with(density) { PlayerFlightHighlightPadding.toPx() }
+                )
+        )
         if (vinyl) {
             var isPagerSwiping by remember { mutableStateOf(false) }
             LaunchedEffect(pagerState) {
@@ -752,6 +919,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                 isDragging = { seekDragPreview.value != null },
                 isSwiping = { isPagerSwiping },
                 modifier = Modifier
+                    .zIndex(2f)
                     .align(Alignment.TopStart)
                     .padding(horizontal = PlayerDimens.screenPadding + artInset)
                     .fillMaxWidth()
@@ -772,7 +940,9 @@ internal fun TrackMoreButton(
     track: TrackEntity,
     // Re-reads the track from the DB right before the modal opens: the queue entity is a
     // snapshot, so its play count / last-listen date are stale once the track has played.
-    refresh: suspend (TrackEntity) -> TrackEntity = { it }
+    refresh: suspend (TrackEntity) -> TrackEntity = { it },
+    // See TrackScoreHeart: neighbour pager pages stay inert until they settle.
+    enabled: Boolean = true
 ) {
     val trackModalState = LocalTrackFoamModalState.current
     val scope = rememberCoroutineScope()
@@ -783,7 +953,8 @@ internal fun TrackMoreButton(
             .pressShrink(moreInteractions)
             .clickable(
                 interactionSource = moreInteractions,
-                indication = null
+                indication = null,
+                enabled = enabled
             ) { scope.launch { trackModalState?.show(refresh(track)) } },
         contentAlignment = Alignment.Center
     ) {
@@ -813,16 +984,22 @@ internal fun SharedTransitionScope.PlaybackControls(
     morphFromWaveform: WaveformState?,
     morphTargetWaveform: WaveformState?,
     envelopeMorphProgress: () -> Float,
+    selectorTopRoot: MutableFloatState?,
     onSeek: (Long) -> Unit,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit
 ) {
+    val sliderBottomRoot = remember { mutableFloatStateOf(Float.NaN) }
+    val rowNaturalCenterRoot = remember { mutableFloatStateOf(Float.NaN) }
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = PlayerDimens.screenPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         PlaybackProgressSlider(
+            modifier = Modifier.onGloballyPositioned {
+                sliderBottomRoot.floatValue = it.positionInRoot().y + it.size.height
+            },
             durationMs = durationMs,
             seekBarProgress = seekBarProgress,
             isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
@@ -838,46 +1015,63 @@ internal fun SharedTransitionScope.PlaybackControls(
         )
         Spacer(modifier = Modifier.height(PlayerDimens.controlsSpacing))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier.fillMaxWidth().onGloballyPositioned {
+                rowNaturalCenterRoot.floatValue = it.positionInRoot().y + it.size.height / 2f
+            }
         ) {
-            val previousInteractions = remember { MutableInteractionSource() }
-            Icon(
-                imageVector = FoamTheme.icons.current.previous,
-                contentDescription = stringResource(R.string.previous),
-                tint = FoamTheme.colors.textPrimary,
+            Row(
                 modifier = Modifier
-                    .size(PlayerDimens.transportIconSize)
-                    .pressShrink(previousInteractions)
-                    .clickable(
-                        interactionSource = previousInteractions,
-                        indication = null,
-                        onClick = onPrevious
-                    )
-            )
-            PlayPauseButton(
-                track = track,
-                isPlaying = isPlaying,
-                isLoading = isLoading,
-                outerVisibilityScope = outerVisibilityScope,
-                onClick = onPlayPause
-            )
-            val nextInteractions = remember { MutableInteractionSource() }
-            Icon(
-                imageVector = FoamTheme.icons.current.next,
-                contentDescription = stringResource(R.string.next),
-                tint = FoamTheme.colors.textPrimary,
-                modifier = Modifier
-                    .size(PlayerDimens.transportIconSize)
-                    .pressShrink(nextInteractions)
-                    .clickable(
-                        interactionSource = nextInteractions,
-                        indication = null,
-                        onClick = onNext
-                    )
-            )
+                    .fillMaxWidth()
+                    .offset {
+                        val sliderBottom = sliderBottomRoot.floatValue
+                        val selectorTop = selectorTopRoot?.floatValue ?: Float.NaN
+                        val naturalCenter = rowNaturalCenterRoot.floatValue
+                        if (sliderBottom.isNaN() || selectorTop.isNaN() || naturalCenter.isNaN()) {
+                            IntOffset.Zero
+                        } else {
+                            IntOffset(0, ((sliderBottom + selectorTop) / 2f - naturalCenter).roundToInt())
+                        }
+                    },
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val previousInteractions = remember { MutableInteractionSource() }
+                Icon(
+                    imageVector = FoamTheme.icons.current.previous,
+                    contentDescription = stringResource(R.string.previous),
+                    tint = FoamTheme.colors.textPrimary,
+                    modifier = Modifier
+                        .requiredSize(PlayerDimens.transportIconSize)
+                        .pressShrink(previousInteractions)
+                        .clickable(
+                            interactionSource = previousInteractions,
+                            indication = null,
+                            onClick = onPrevious
+                        )
+                )
+                PlayPauseButton(
+                    track = track,
+                    isPlaying = isPlaying,
+                    isLoading = isLoading,
+                    outerVisibilityScope = outerVisibilityScope,
+                    onClick = onPlayPause
+                )
+                val nextInteractions = remember { MutableInteractionSource() }
+                Icon(
+                    imageVector = FoamTheme.icons.current.next,
+                    contentDescription = stringResource(R.string.next),
+                    tint = FoamTheme.colors.textPrimary,
+                    modifier = Modifier
+                        .requiredSize(PlayerDimens.transportIconSize)
+                        .pressShrink(nextInteractions)
+                        .clickable(
+                            interactionSource = nextInteractions,
+                            indication = null,
+                            onClick = onNext
+                        )
+                )
+            }
         }
     }
 }
@@ -906,7 +1100,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
     val isPressed by playInteractions.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
         targetValue = if (isPressed) PLAY_BUTTON_PRESSED_SCALE else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = FoamMotion.Springs.CONTROL,
         label = "playButtonPressScale"
     )
 
@@ -914,7 +1108,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
     // convention the two icons use: 0f = transport showing, 1f = circle showing.
     val loadingFraction by animateFloatAsState(
         targetValue = if (isLoading) 1f else 0f,
-        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.STANDARD),
         label = "playLoadingCrossfade"
     )
 
@@ -927,11 +1121,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
     )
     Box(
         modifier = modifier
-            .size(PlayerDimens.playButtonSize)
-            .sharedBounds(
-                rememberSharedContentState(key = "play_button_${track.id}"),
-                animatedVisibilityScope = outerVisibilityScope
-            )
+            .requiredSize(PlayerDimens.playButtonSize)
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
@@ -945,13 +1135,18 @@ internal fun SharedTransitionScope.PlayPauseButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Shared stacked play/pause glyphs: crossfade in lockstep (100% <-> 20% scale
-        // while the alpha flips), faded out while the loading circle takes their place.
         CrossfadingPlayPauseIcon(
             isPlaying = isPlaying,
             loadingFraction = { loadingFraction },
             tint = FoamTheme.colors.textPrimary,
-            iconSize = PlayerDimens.playButtonIconSize
+            iconSize = PlayerDimens.playButtonIconSize,
+            modifier = Modifier.sharedBounds(
+                rememberSharedContentState(key = "play_button_${track.id}"),
+                animatedVisibilityScope = outerVisibilityScope,
+                resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.Fit, Alignment.Center),
+                enter = fadeIn(),
+                exit = fadeOut()
+            )
         )
         if (isLoading || loadingFraction > 0f) {
             CircularProgressIndicator(
@@ -971,6 +1166,13 @@ internal fun SharedTransitionScope.PlayPauseButton(
 }
 
 private const val PLAY_BUTTON_PRESSED_SCALE = 0.88f
+
+/** Native shadows ignore an ancestor's ModulateAlpha, so the page fade is applied to the shadow color. */
+private fun GraphicsLayerScope.fadeShadow(alpha: Float) {
+    val color = Color.Black.copy(alpha = alpha)
+    ambientShadowColor = color
+    spotShadowColor = color
+}
 
 /**
  * Progress bar + optional elapsed/remaining labels. [seekBarStyle] picks the rendering:
@@ -1035,21 +1237,21 @@ internal fun PlaybackProgressSlider(
             // morphFromWaveform anchors the bars elsewhere while a swap is in flight;
             // at rest the bars trace the playing track's own envelope.
             val waveform = morphFromWaveform ?: track?.let { rememberWaveform(it.path, it.duration) }
-            WaveformSeekBar(
+            AccentSeekTrack(
+                seekBarStyle = seekBarStyle,
                 value = { dragValue ?: seekBarProgress.progress },
                 onValueChange = onSliderValueChange,
+                modifier = sliderModifier,
                 waveform = waveform,
                 targetWaveform = morphTargetWaveform,
-                trackChangeProgress = trackChangeProgress,
-                modifier = sliderModifier,
-                inactiveColor = FoamTheme.accentColor.copy(alpha = 0.4f)
+                trackChangeProgress = trackChangeProgress
             )
         } else {
-            FoamSlider(
+            AccentSeekTrack(
+                seekBarStyle = seekBarStyle,
                 value = { dragValue ?: seekBarProgress.progress },
                 onValueChange = onSliderValueChange,
-                modifier = sliderModifier,
-                inactiveColor = FoamTheme.accentColor.copy(alpha = 0.4f)
+                modifier = sliderModifier
             )
         }
         if (showTimeLabels) {
@@ -1086,6 +1288,46 @@ internal fun PlaybackProgressSlider(
                 BasicText(text = TimeUtils.formatDurationCompact(durationMs), style = labelStyle)
             }
         }
+    }
+}
+
+/**
+ * The player's seek track, isolated so the per-frame accent read recomposes
+ * only the track itself, never the time labels: FoamTheme.accentColor changes
+ * every frame of a hero pager swipe (viewModel.setDynamicAccentColor fires per
+ * drag frame), and both track colors follow it here. Same pattern as
+ * MiniPlayerProgressSlider and SubViewSelectorItem -- one small leaf scope per
+ * accent frame. WaveformSeekBar and FoamSlider consume the passed colors in
+ * their own draw phase, so an accent frame only redraws the bars.
+ */
+@Composable
+private fun AccentSeekTrack(
+    seekBarStyle: SeekBarStyle,
+    value: () -> Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    waveform: WaveformState? = null,
+    targetWaveform: WaveformState? = null,
+    trackChangeProgress: () -> Float = { 0f }
+) {
+    val inactiveColor = FoamTheme.accentColor.copy(alpha = 0.4f)
+    if (seekBarStyle == SeekBarStyle.WAVEFORM) {
+        WaveformSeekBar(
+            value = value,
+            onValueChange = onValueChange,
+            waveform = waveform,
+            targetWaveform = targetWaveform,
+            trackChangeProgress = trackChangeProgress,
+            modifier = modifier,
+            inactiveColor = inactiveColor
+        )
+    } else {
+        FoamSlider(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = modifier,
+            inactiveColor = inactiveColor
+        )
     }
 }
 

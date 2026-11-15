@@ -9,8 +9,9 @@ import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.DefaultLyricsProviderOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
 import com.foamplayer.app.constants.AllNavBarScreenItems
+import com.foamplayer.app.constants.DefaultNavBarPrimaryEnabled
 import com.foamplayer.app.constants.DefaultNavBarPrimaryOrder
-import com.foamplayer.app.constants.DefaultNavBarScreenItems
+import com.foamplayer.app.constants.DefaultNavBarSecondaryEnabled
 import com.foamplayer.app.constants.DefaultNavBarSecondaryOrder
 import com.foamplayer.app.constants.DefaultHomeSectionOrder
 import com.foamplayer.app.constants.DefaultEnabledHomeSections
@@ -26,6 +27,13 @@ import com.foamplayer.app.constants.completeNavBarItemOrder
 import com.foamplayer.app.constants.defaultSortMode
 import com.foamplayer.distant.DistantServer
 import kotlin.math.pow
+
+/**
+ * Id of the built-in icon pack (no role overrides). The shared source of truth
+ * for the settings default and the pack registry, so the data layer does not
+ * depend on the ui icon pack module.
+ */
+const val DEFAULT_ICON_PACK_ID = "default"
 
 /** The complete, validated set of user-configurable application preferences. */
 enum class FoamIconStyle(val label: String) {
@@ -43,6 +51,36 @@ enum class MarqueeMode(val label: String) {
 enum class SeekBarStyle(val label: String) {
     NORMAL("Normal"),
     WAVEFORM("Waveform")
+}
+
+/**
+ * Targets an effect reaches at one full page of separation. The centered page
+ * always renders at the identity; these values are interpolated in as a page
+ * moves away.
+ *
+ * [travelFraction] is the page stride relative to SLIDE: 1 is a full slide,
+ * 0.5 advances a page in half the finger travel.
+ */
+@Immutable
+data class PlayerPagerEffectSpec(
+    val travelFraction: Float,
+    val targetScale: Float = 1f,
+    val targetOpacity: Float = 1f,
+    val targetRotationY: Float = 0f,
+    val targetRotationX: Float = 0f
+) {
+    /** Whether the effect needs a perspective camera. */
+    val is3d: Boolean get() = targetRotationY != 0f || targetRotationX != 0f
+}
+
+/** Visual effect of the full player's track pager, with its [spec]. */
+enum class PlayerPagerEffect(val label: String, val spec: PlayerPagerEffectSpec) {
+    SLIDE("Slide", PlayerPagerEffectSpec(travelFraction = 1f)),
+    CROSSFADE("Crossfade", PlayerPagerEffectSpec(0.5f, targetOpacity = 0f)),
+    DEPTH("Depth", PlayerPagerEffectSpec(0.6f, targetScale = 0.7f, targetOpacity = 0f)),
+    FLIP("Flip", PlayerPagerEffectSpec(0.6f, targetOpacity = 0f, targetRotationY = -90f)),
+    CUBE("Cube", PlayerPagerEffectSpec(0.6f, targetOpacity = 0f, targetScale = .7f, targetRotationY = 90f)),
+    TILT("Tilt", PlayerPagerEffectSpec(.87f, targetOpacity = 0f, targetScale = .88f, targetRotationY = -30f, targetRotationX = 15f)),
 }
 
 /** Overall look of the full player: classic art, immersive backdrop, or vinyl. */
@@ -102,7 +140,17 @@ data class AppSettings(
     val libraryFolders: Set<String> = emptySet(),
     /** Connected distant servers (Plex/Jellyfin) and the folders scanned from them. */
     val distantServers: List<DistantServer> = emptyList(),
-    val iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
+    /** Preferred variant (style) of the selected icon pack; packs not drawing it fall back to their first. */
+    /** Preferred variant (style) per icon pack id; packs not drawing it fall back to their first. */
+    val iconStyles: Map<String, FoamIconStyle> = emptyMap(),
+    /** Id of the bundled icon pack whose drawables overlay the default icons (see FoamIconPackRegistry). */
+    val iconPackId: String = DEFAULT_ICON_PACK_ID,
+    /** Swaps navbar icon variants with selection (see navIconActiveVariant/navIconInactiveVariant). */
+    val dynamicNavIcons: Boolean = true,
+    /** Navbar icon variant of the selected buttons (Settings > User interface > Icons). */
+    val navIconActiveVariant: FoamIconStyle = FoamIconStyle.FLAT,
+    /** Navbar icon variant of the unselected buttons. */
+    val navIconInactiveVariant: FoamIconStyle = FoamIconStyle.OUTLINE,
     val miniPlayerRounding: Int = 40,
     val fullPlayerRounding: Int = 40,
     val marqueeMode: MarqueeMode = MarqueeMode.PING_PONG,
@@ -117,6 +165,8 @@ data class AppSettings(
      */
     val accentTintEnabled: Boolean = true,
     val playerMode: PlayerMode = PlayerMode.NORMAL,
+    /** Effect used when swiping between tracks in the full player. */
+    val playerPagerEffect: PlayerPagerEffect = PlayerPagerEffect.TILT,
     val animateSeekBarEnabled: Boolean = false,
     /** Visual style of the full player's seek bar (the mini player keeps the classic bar). */
     val seekBarStyle: SeekBarStyle = SeekBarStyle.NORMAL,
@@ -155,9 +205,9 @@ data class AppSettings(
     val navigationBarMode: NavigationBarMode = NavigationBarMode.ATTACHED,
     val navBarTransparentWhenPlayerOpen: Boolean = false,
     val navBarPrimaryOrder: List<NavBarItem> = DefaultNavBarPrimaryOrder,
-    val navBarPrimaryEnabled: Set<NavBarItem> = DefaultNavBarScreenItems.toSet(),
+    val navBarPrimaryEnabled: Set<NavBarItem> = DefaultNavBarPrimaryEnabled,
     val navBarSecondaryOrder: List<NavBarItem> = DefaultNavBarSecondaryOrder,
-    val navBarSecondaryEnabled: Set<NavBarItem> = setOf(NavBarItem.STATS),
+    val navBarSecondaryEnabled: Set<NavBarItem> = DefaultNavBarSecondaryEnabled,
     /**
      * Home page sections in the user's configured order, and which of them are
      * shown (Settings > User interface > Home). The Home screen renders
@@ -185,6 +235,15 @@ data class AppSettings(
     val scrobbleOnlyFirstArtist: Boolean = true,
     /** Resolves a picture for the library's artists from Spotify (Settings > Library scan). */
     val artistImageResolveEnabled: Boolean = false,
+    /**
+     * How many artist pictures the on-demand cache keeps (0-50). A picture is
+     * resolved when its artist page is opened, and the least-recently visited
+     * image is evicted once the cache is full. Pictures resolved by the
+     * "resolve all artists" scan are exempt from this limit.
+     */
+    val artistImageCacheLimit: Int = DEFAULT_ARTIST_IMAGE_CACHE_LIMIT,
+    /** Gates the scan button that bulk-resolves every library artist (Settings > Library). */
+    val artistImageResolveAllEnabled: Boolean = false,
     /**
      * Shows the app's own player over the lock screen while a song is playing:
      * waking the phone presents the lock-screen player instead of the system
@@ -226,6 +285,9 @@ data class AppSettings(
 
     /** The [MediaDensity] remembered by [view]; every view starts as the classic row. */
     fun mediaDensity(view: MediaListView): MediaDensity = mediaDensities[view] ?: MediaDensity.ROW_NORMAL
+
+    /** The preferred variant remembered for icon pack [id]; packs without one start at FLAT. */
+    fun iconStyleFor(id: String): FoamIconStyle = iconStyles[id] ?: FoamIconStyle.FLAT
 
     /** The [DeviceAudioConfig] remembered by [deviceId]; unknown devices start at defaults. */
     fun deviceAudioConfig(deviceId: String?): DeviceAudioConfig =
@@ -287,6 +349,10 @@ data class AppSettings(
             ),
             miniPlayerRounding = miniPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
             fullPlayerRounding = fullPlayerRounding.coerceIn(MIN_ROUNDING, MAX_ROUNDING),
+            artistImageCacheLimit = artistImageCacheLimit.coerceIn(
+                MIN_ARTIST_IMAGE_CACHE_LIMIT,
+                MAX_ARTIST_IMAGE_CACHE_LIMIT
+            ),
             backgroundBlur = backgroundBlur.coerceIn(MIN_BACKGROUND_BLUR, MAX_BACKGROUND_BLUR),
             appBackgroundIntensity = appBackgroundIntensity.coerceIn(
                 MIN_DYNAMIC_BACKGROUND_INTENSITY,
@@ -312,13 +378,15 @@ data class AppSettings(
         const val MIN_LISTENED_THRESHOLD_PERCENT = 0
         const val MAX_LISTENED_THRESHOLD_PERCENT = 100
         const val DEFAULT_LISTENED_THRESHOLD_PERCENT = 50
+        const val MIN_ARTIST_IMAGE_CACHE_LIMIT = 0
+        const val MAX_ARTIST_IMAGE_CACHE_LIMIT = 50
+        const val DEFAULT_ARTIST_IMAGE_CACHE_LIMIT = 20
         const val MIN_ROUNDING = 0
         const val MAX_ROUNDING = 100
         const val MIN_BACKGROUND_BLUR = 0
         const val MAX_BACKGROUND_BLUR = 100
         const val DEFAULT_BACKGROUND_BLUR = 50
 
-        /** Gaussian radius, in dp, the backdrop layers render at 100% blur. */
         const val BACKGROUND_BLUR_MAX_DP = 100f
 
         /**

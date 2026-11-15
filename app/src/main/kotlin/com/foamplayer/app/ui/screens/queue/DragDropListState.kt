@@ -1,8 +1,8 @@
 package com.foamplayer.app.ui.screens.queue
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import com.foamplayer.app.ui.theme.FoamMotion
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
@@ -33,7 +33,7 @@ private const val AUTO_SCROLL_STEP_PX = 32f
 private const val AUTO_SCROLL_INTERVAL_MS = 16L
 
 /** Duration of the settle animation played when the drag is released. */
-private const val SETTLE_DURATION_MS = 200
+private const val SETTLE_DURATION_MS = FoamMotion.Duration.SWIFT
 
 @Composable
 fun rememberDragDropListState(
@@ -139,7 +139,7 @@ class DragDropListState(
         settleJob = scope.launch {
             animation.animateTo(
                 restingTop,
-                tween(durationMillis = SETTLE_DURATION_MS, easing = FastOutSlowInEasing)
+                tween(durationMillis = SETTLE_DURATION_MS, easing = FoamMotion.Easings.STANDARD)
             ) {
                 draggingItemTop = value
             }

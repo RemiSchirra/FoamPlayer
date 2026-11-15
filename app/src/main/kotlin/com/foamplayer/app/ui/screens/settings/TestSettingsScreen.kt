@@ -1,8 +1,6 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,10 +18,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamSliderItem
 import com.foamplayer.app.ui.components.FoamSwitchItem
 import com.foamplayer.app.ui.modals.FoamBottomModal
@@ -32,20 +29,17 @@ import com.foamplayer.app.ui.modals.ModalButton
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.FoamDimens
-import com.foamplayer.app.ui.theme.foamBackground
-import com.foamplayer.app.ui.theme.foamBorderOverlay
-import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.squig.SquigDatabase
 import com.foamplayer.squig.SquigLink
 import com.foamplayer.squig.SquigSite
 import kotlinx.coroutines.launch
 
 /**
- * Developer screen, compiled in only when the build sets devMode=true
- * (BuildConfig.DEV_MODE): the UI component demos, plus a developer-tools
- * section with helpers for re-testing the first-run flow and for generating
- * or clearing listening data. With devMode off, neither this screen nor its
- * settings entry is compiled into the app.
+ * Developer screen, compiled in only with debug builds (BuildConfig.DEBUG):
+ * the UI component demos, plus a developer-tools section with helpers for
+ * re-testing the first-run flow and for generating or clearing listening
+ * data. In release builds, neither this screen nor its settings entry is
+ * compiled into the app.
  */
 @Composable
 fun TestSettingsScreen(
@@ -67,22 +61,18 @@ fun TestSettingsScreen(
     // Destructive action awaiting its confirmation sheet (null = none).
     var confirmAction by remember { mutableStateOf<DevAction?>(null) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.test_components),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.test_components),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
-            contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
+            contentPadding = PaddingValues(
+                top = SettingsHeaderZoneHeight,
+                bottom = LocalBottomBarClearance.current
+            )
         ) {
             // ------------------------------------------------ developer tools
             item {
@@ -94,30 +84,29 @@ fun TestSettingsScreen(
             }
 
             item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                        .padding(FoamDimens.paddingMedium)
+                FoamCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(FoamDimens.paddingMedium)
                 ) {
-                    ModalButton(
-                        label = stringResource(R.string.dev_reset_onboarding),
-                        filled = false,
-                        onClick = { confirmAction = DevAction.RESET_ONBOARDING }
-                    )
-                    Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
-                    ModalButton(
-                        label = stringResource(R.string.dev_clear_song_stats),
-                        filled = false,
-                        onClick = { confirmAction = DevAction.CLEAR_SONG_STATS }
-                    )
-                    Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
-                    ModalButton(
-                        label = stringResource(R.string.dev_generate_random_data),
-                        filled = false,
-                        onClick = { confirmAction = DevAction.GENERATE_RANDOM_DATA }
-                    )
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        ModalButton(
+                            label = stringResource(R.string.dev_reset_onboarding),
+                            filled = false,
+                            onClick = { confirmAction = DevAction.RESET_ONBOARDING }
+                        )
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
+                        ModalButton(
+                            label = stringResource(R.string.dev_clear_song_stats),
+                            filled = false,
+                            onClick = { confirmAction = DevAction.CLEAR_SONG_STATS }
+                        )
+                        Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
+                        ModalButton(
+                            label = stringResource(R.string.dev_generate_random_data),
+                            filled = false,
+                            onClick = { confirmAction = DevAction.GENERATE_RANDOM_DATA }
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
@@ -126,12 +115,7 @@ fun TestSettingsScreen(
             item {
                 BasicText(text = stringResource(R.string.switches), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     FoamSwitchItem(
                         title = stringResource(R.string.test_switch),
                         description = stringResource(R.string.test_switch_desc),
@@ -146,12 +130,7 @@ fun TestSettingsScreen(
                 BasicText(text = stringResource(R.string.sliders), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     Column {
                         FoamSliderItem(
                             title = stringResource(R.string.test_slider_continuous),
@@ -159,12 +138,7 @@ fun TestSettingsScreen(
                             onValueChange = { sliderValue = it },
                             valueDisplay = "${(sliderValue * 100).toInt()}%"
                         )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(FoamDimens.separatorHeight)
-                                .foamBorderOverlay()
-                        )
+                        SettingsSectionDivider()
                         FoamSliderItem(
                             title = stringResource(R.string.test_slider_snapped),
                             value = snappedSliderValue,
@@ -183,12 +157,7 @@ fun TestSettingsScreen(
                 BasicText(text = stringResource(R.string.test_autoeq), style = FoamTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(FoamDimens.paddingMedium)) {
                         autoEqError?.let { error ->
                             BasicText(

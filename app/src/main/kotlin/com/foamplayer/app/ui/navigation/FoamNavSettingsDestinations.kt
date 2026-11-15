@@ -5,6 +5,7 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.foamplayer.app.BuildConfig
 import com.foamplayer.app.ui.screens.settings.AboutSettingsScreen
+import com.foamplayer.app.ui.screens.settings.ArtistImagesSettingsScreen
 import com.foamplayer.app.ui.screens.settings.AudioBehaviorSettingsScreen
 import com.foamplayer.app.ui.screens.settings.AudioDevicesSettingsScreen
 import com.foamplayer.app.ui.screens.settings.AudioSettingsScreen
@@ -14,6 +15,7 @@ import com.foamplayer.app.ui.screens.settings.ColorsSettingsScreen
 import com.foamplayer.app.ui.screens.settings.DiscordSettingsScreen
 import com.foamplayer.app.ui.screens.settings.EqualizerSettingsScreen
 import com.foamplayer.app.ui.screens.settings.HomeSettingsScreen
+import com.foamplayer.app.ui.screens.settings.IconSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LastFmSettingsScreen
 import com.foamplayer.app.ui.screens.settings.LibrarySettingsScreen
 import com.foamplayer.app.ui.screens.settings.LyricsSettingsScreen
@@ -26,7 +28,7 @@ import com.foamplayer.app.ui.screens.settings.SettingsScreen
 import com.foamplayer.app.ui.screens.settings.TestSettingsScreen
 import com.foamplayer.app.ui.screens.settings.UISettingsScreen
 import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsManagerScreen
-import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsSearchResultsScreen
+import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsDetailsScreen
 
 /** The settings stack and its leaf pages. */
 internal fun NavGraphBuilder.settingsDestinations(context: FoamNavGraphContext) {
@@ -38,9 +40,9 @@ internal fun NavGraphBuilder.settingsDestinations(context: FoamNavGraphContext) 
             onNavigateToLyrics = { context.navController.navigate(Screen.SettingsLyrics.route) },
             onNavigateToMisc = { context.navController.navigate(Screen.SettingsMisc.route) },
             onNavigateToAbout = { context.navController.navigate(Screen.SettingsAbout.route) },
-            // Compiled in only with devMode=true; the entry disappears from
-            // Settings when the flag is off.
-            onNavigateToTest = if (BuildConfig.DEV_MODE) {
+            // Compiled in only with debug builds; the entry disappears from
+            // Settings in release builds.
+            onNavigateToTest = if (BuildConfig.DEBUG) {
                 { context.navController.navigate(Screen.SettingsTest.route) }
             } else {
                 null
@@ -75,12 +77,16 @@ internal fun NavGraphBuilder.settingsDestinations(context: FoamNavGraphContext) 
             onNavigateToPlayer = { context.navController.navigate(Screen.SettingsPlayer.route) },
             onNavigateToNavBar = { context.navController.navigate(Screen.SettingsNavBar.route) },
             onNavigateToBackground = { context.navController.navigate(Screen.SettingsBackground.route) },
+            onNavigateToIcons = { context.navController.navigate(Screen.SettingsIcons.route) },
             onNavigateToCollections = { context.navController.navigate(Screen.SettingsUICollections.route) },
             onNavigateToHome = { context.navController.navigate(Screen.SettingsUIHome.route) }
         )
     }
     composable(Screen.SettingsColors.route) {
         ColorsSettingsScreen(onBack = { context.back() })
+    }
+    composable(Screen.SettingsIcons.route) {
+        IconSettingsScreen(onBack = { context.back() })
     }
     composable(Screen.SettingsPlayer.route) {
         PlayerSettingsScreen(onBack = { context.back() })
@@ -110,13 +116,21 @@ internal fun NavGraphBuilder.settingsDestinations(context: FoamNavGraphContext) 
         arguments = listOf(navArgument("trackId") { type = NavType.LongType })
     ) { backStackEntry ->
         val trackId = backStackEntry.arguments?.getLong("trackId") ?: -1L
-        LyricsSearchResultsScreen(
+        LyricsDetailsScreen(
             trackId = trackId,
             onBack = { context.back() }
         )
     }
     composable(Screen.SettingsLibrary.route) {
-        LibrarySettingsScreen(onBack = { context.back() })
+        LibrarySettingsScreen(
+            onBack = { context.back() },
+            onNavigateToArtistImages = {
+                context.navController.navigate(Screen.SettingsLibraryArtistImages.route)
+            }
+        )
+    }
+    composable(Screen.SettingsLibraryArtistImages.route) {
+        ArtistImagesSettingsScreen(onBack = { context.back() })
     }
     composable(Screen.SettingsLyrics.route) {
         LyricsSettingsScreen(
@@ -152,8 +166,8 @@ internal fun NavGraphBuilder.settingsDestinations(context: FoamNavGraphContext) 
     composable(Screen.SettingsAbout.route) {
         AboutSettingsScreen(onBack = { context.back() })
     }
-    // Developer test screen: registered only with devMode=true.
-    if (BuildConfig.DEV_MODE) {
+    // Developer test screen: registered only in debug builds.
+    if (BuildConfig.DEBUG) {
         composable(Screen.SettingsTest.route) {
             TestSettingsScreen(
                 onBack = { context.back() },

@@ -13,7 +13,11 @@ import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -29,6 +33,14 @@ import org.json.JSONObject
  * has to be re-downloaded while it exists, and when it was evicted
  * [imagePath] fetches it again from the stored URL without a new Spotify
  * lookup. [clearAll] removes both the files and the mapping.
+ *
+ * The cache is a strict visited-LRU queue bounded by the user's "artists to
+ * cache" setting: every stored entry ([remember] from the bulk scan,
+ * [rememberVisited] from an artist page visit) carries a recency timestamp
+ * (last visited, falling back to resolved-at), and [evictToLimit] removes the
+ * least-recently used entries first — the oldest always leaves room for a
+ * newly stored one. [revisions] ticks on every content change so consumers
+ * re-read without polling.
  */
 @Singleton
 class ArtistImageStore @Inject constructor(
@@ -37,6 +49,10 @@ class ArtistImageStore @Inject constructor(
 ) {
     private val snapshotMutex = Mutex()
     private var snapshot: JSONObject? = null
+
+    /** Ticks on every content change (store, evict, clear) so consumers re-read. */
+    private val _revisions = MutableStateFlow(0L)
+    val revisions: StateFlow<Long> = _revisions.asStateFlow()
 
     private fun cacheDir(): File = File(context.cacheDir, DIR_NAME).apply { mkdirs() }
 
@@ -69,13 +85,68 @@ class ArtistImageStore @Inject constructor(
 
         val url = entry.optString(KEY_URL).takeIf { it.startsWith("http") } ?: return@withContext null
         val file = download(url, key) ?: return@withContext null
-        store(key, url, file.absolutePath)
+        put(key, entry, file.absolutePath)
         fileUri(file.absolutePath)
     }
 
-    /** Downloads [url] into the cache and persists the entry. */
-    suspend fun remember(key: String, url: String) = withContext(Dispatchers.IO) {
-        store(key, url, download(url, key)?.absolutePath)
+    /**
+     * Stores the entry produced by the "resolve all artists" scan and evicts
+     * the least-recently used entries until at most [limit] remain, so the
+     * scan fills the same bounded queue as on-demand visits.
+     */
+    suspend fun remember(key: String, url: String, limit: Int) = withContext(Dispatchers.IO) {
+        put(key, baseEntry(url), download(url, key)?.absolutePath)
+        evictToLimit(limit)
+    }
+
+    /**
+     * Stores an on-demand entry (resolved when an artist page is opened) and
+     * evicts the least-recently visited entries until at most [limit] remain,
+     * so the cache never outgrows the user's "artists to cache" setting.
+     */
+    suspend fun rememberVisited(key: String, url: String, limit: Int) = withContext(Dispatchers.IO) {
+        put(
+            key,
+            baseEntry(url).put(KEY_LAST_VISITED, System.currentTimeMillis()),
+            download(url, key)?.absolutePath
+        )
+        evictToLimit(limit)
+    }
+
+    /** Refreshes [key]'s visited recency (its artist page was opened again). */
+    suspend fun touch(key: String) = withContext(Dispatchers.IO) {
+        val entries = loadEntries()
+        val entry = entries.optJSONObject(key) ?: return@withContext
+        entries.put(key, entry.put(KEY_LAST_VISITED, System.currentTimeMillis()))
+        persist(entries)
+    }
+
+    /**
+     * Trims the cache down to [limit] entries, evicting the least-recently
+     * used first (entries without a visited timestamp fall back to their
+     * resolved-at one). Both the bulk scan and on-demand visits fill the same
+     * queue: the oldest entry always leaves room for a newly stored one.
+     */
+    suspend fun evictToLimit(limit: Int) = withContext(Dispatchers.IO) {
+        val entries = loadEntries()
+        val recency = entries.keys().asSequence()
+            .mapNotNull { key ->
+                val entry = entries.optJSONObject(key) ?: return@mapNotNull null
+                key to entry.optLong(KEY_LAST_VISITED, entry.optLong(KEY_RESOLVED_AT, 0L))
+            }
+            .toList()
+        if (recency.size <= limit) return@withContext
+        recency
+            .sortedBy { it.second }
+            .take(recency.size - limit)
+            .forEach { (key, _) ->
+                entries.optJSONObject(key)?.optString(KEY_PATH)?.let { path ->
+                    if (path.isNotBlank()) File(path).delete()
+                }
+                entries.remove(key)
+            }
+        persist(entries)
+        _revisions.update { it + 1 }
     }
 
     /** Empties the cache: deletes every image file and the persisted mapping. */
@@ -83,19 +154,26 @@ class ArtistImageStore @Inject constructor(
         cacheDir().listFiles()?.forEach { it.delete() }
         dataStore.edit { preferences -> preferences.remove(STORAGE_KEY) }
         snapshotMutex.withLock { snapshot = JSONObject() }
+        _revisions.update { it + 1 }
     }
 
-    private suspend fun store(key: String, url: String, path: String?) = withContext(Dispatchers.IO) {
-        val entry = JSONObject()
-            .put(KEY_URL, url)
-            .put(KEY_RESOLVED_AT, System.currentTimeMillis())
+    private suspend fun put(key: String, entry: JSONObject, path: String?) = withContext(Dispatchers.IO) {
         if (!path.isNullOrBlank()) entry.put(KEY_PATH, path)
 
         val entries = loadEntries().put(key, entry)
         prune(entries)
+        persist(entries)
+        _revisions.update { it + 1 }
+    }
+
+    private suspend fun persist(entries: JSONObject) {
         dataStore.edit { preferences -> preferences[STORAGE_KEY] = entries.toString() }
         snapshotMutex.withLock { snapshot = entries }
     }
+
+    private fun baseEntry(url: String): JSONObject = JSONObject()
+        .put(KEY_URL, url)
+        .put(KEY_RESOLVED_AT, System.currentTimeMillis())
 
     private suspend fun loadEntries(): JSONObject = snapshotMutex.withLock {
         snapshot?.let { return@withLock it }
@@ -175,6 +253,7 @@ class ArtistImageStore @Inject constructor(
         private const val KEY_URL = "url"
         private const val KEY_PATH = "path"
         private const val KEY_RESOLVED_AT = "resolvedAt"
+        private const val KEY_LAST_VISITED = "lastVisited"
         private const val MAX_ENTRIES = 2000
         private const val DIR_NAME = "artist_images"
         private const val DOWNLOAD_TIMEOUT_MS = 12_000

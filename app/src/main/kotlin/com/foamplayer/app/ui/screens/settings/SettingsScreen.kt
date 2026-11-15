@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -35,10 +34,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.BuildConfig
 import com.foamplayer.app.R
 import com.foamplayer.app.data.backup.BackupFeature
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.modals.BackupLoadingModal
 import com.foamplayer.app.ui.modals.BackupModalType
 import com.foamplayer.app.ui.modals.BackupResultModal
@@ -47,8 +47,7 @@ import com.foamplayer.app.ui.modals.ImportSettingsModal
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
-import com.foamplayer.app.ui.theme.foamSurface
+import com.foamplayer.app.ui.theme.foamBackgroundTopFade
 
 @Composable
 fun SettingsScreen(
@@ -67,37 +66,19 @@ fun SettingsScreen(
     val backupRunning = viewModel.backupRunning
     val backupManager = viewModel.backupManager
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
-    ) {
-        Box(
-            modifier = Modifier.padding(
-                top = FoamDimens.paddingMedium,
-                start = FoamDimens.paddingSmall,
-                end = FoamDimens.paddingSmall
-            )
-        ) {
-            SettingsHeader(
-                title = stringResource(R.string.settings),
-                modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-            )
-        }
-
+    SettingsPage(title = stringResource(R.string.settings)) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
             contentPadding = PaddingValues(
-                top = FoamDimens.paddingMedium,
+                top = SettingsHeaderZoneHeight + FoamDimens.paddingMedium,
                 bottom = LocalBottomBarClearance.current
             )
         ) {
             item {
                 SettingsCategoryItem(
                     title = stringResource(R.string.audio),
-                    subtitle = stringResource(R.string.audio_settings_subtitle),
                     icon = FoamTheme.icons.current.equalizer,
                     onClick = onNavigateToAudio
                 )
@@ -107,7 +88,6 @@ fun SettingsScreen(
             item {
                 SettingsCategoryItem(
                     title = stringResource(R.string.user_interface),
-                    subtitle = stringResource(R.string.ui_settings_subtitle),
                     icon = FoamTheme.icons.current.ui,
                     onClick = onNavigateToUI
                 )
@@ -117,7 +97,6 @@ fun SettingsScreen(
             item {
                 SettingsCategoryItem(
                     title = stringResource(R.string.library),
-                    subtitle = stringResource(R.string.library_settings_subtitle),
                     icon = FoamTheme.icons.current.library,
                     onClick = onNavigateToLibrary
                 )
@@ -127,7 +106,6 @@ fun SettingsScreen(
             item {
                 SettingsCategoryItem(
                     title = stringResource(R.string.lyrics),
-                    subtitle = stringResource(R.string.lyrics_settings_subtitle),
                     icon = FoamTheme.icons.current.lyrics,
                     onClick = onNavigateToLyrics
                 )
@@ -137,7 +115,6 @@ fun SettingsScreen(
             item {
                 SettingsCategoryItem(
                     title = stringResource(R.string.settings_misc),
-                    subtitle = stringResource(R.string.misc_settings_subtitle),
                     icon = FoamTheme.icons.current.misc,
                     onClick = onNavigateToMisc
                 )
@@ -147,19 +124,17 @@ fun SettingsScreen(
             item {
                 SettingsCategoryItem(
                     title = stringResource(R.string.settings_about),
-                    subtitle = stringResource(R.string.about_settings_subtitle),
                     icon = FoamTheme.icons.current.info,
                     onClick = onNavigateToAbout
                 )
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
-            // Developer entry: compiled in only with devMode=true (BuildConfig.DEV_MODE).
-            if (BuildConfig.DEV_MODE && onNavigateToTest != null) {
+            // Developer entry: compiled in only with debug builds
+            if (BuildConfig.DEBUG && onNavigateToTest != null) {
                 item {
                     SettingsCategoryItem(
                         title = stringResource(R.string.test_components),
-                        subtitle = stringResource(R.string.test_components_subtitle),
                         icon = Icons.Default.BugReport,
                         onClick = onNavigateToTest
                     )
@@ -225,25 +200,17 @@ fun SettingsScreen(
 @Composable
 fun SettingsCategoryItem(
     title: String,
-    subtitle: String,
     icon: ImageVector,
     onClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = FoamTheme.colors.textPrimary),
-                onClick = onClick
-            )
+    FoamCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = FoamDimens.paddingMedium, vertical = FoamDimens.spacingMedium),
+                .padding(FoamDimens.spacingStandard),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -255,30 +222,82 @@ fun SettingsCategoryItem(
             Spacer(modifier = Modifier.width(FoamDimens.spacingStandard))
             Column {
                 BasicText(text = title, style = FoamTheme.typography.titleMedium)
-                BasicText(text = subtitle, style = FoamTheme.typography.body)
             }
         }
     }
 }
 
+/** Height of the header row: icon slot + its vertical padding. */
+private val SettingsHeaderRowHeight =
+    FoamDimens.headerIconSize + FoamDimens.paddingMedium * 2
+
+/** Extra distance below the header row over which the fade reaches zero alpha. */
+private val SettingsHeaderFadeTail = FoamDimens.paddingSmall
+
 /**
- * The standard settings page header: title, optional back button and trailing
- * slot, on a band of the plain theme background. [transparent] opts out of the
- * background band for pages that sit over the root backdrop layers instead
- * (the background settings screen, whose backdrop is its live preview).
+ * Height of the pinned header zone on settings pages: the header row plus the
+ * fade tail. Scrollable content reserves this as its top padding (inside the
+ * scroll) so items rest below the fade at rest and dissolve into the header
+ * when scrolled up.
+ */
+val SettingsHeaderZoneHeight = SettingsHeaderRowHeight + SettingsHeaderFadeTail
+
+/**
+ * Standard settings page scaffold: [content] fills the whole page so rows
+ * scroll UNDER the header, while the pinned header row sits on a fade of the
+ * theme background — fully opaque at the top of the page, dissolving to
+ * nothing at the bottom of the zone — so scrolling rows stay visible instead
+ * of being clipped by the header. Content must reserve
+ * [SettingsHeaderZoneHeight] as its top padding (inside the scroll).
+ */
+@Composable
+fun SettingsPage(
+    title: String,
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
+    Box(modifier = modifier.fillMaxSize()) {
+        content()
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(SettingsHeaderZoneHeight)
+                // Fade behind the header: background color, 100% opaque at the
+                // top of the page, 0% by the bottom of the zone. The tint
+                // resolves in the draw pass (see [foamBackgroundTopFade]), so
+                // accent changes only redraw the fade.
+                .foamBackgroundTopFade()
+        ) {
+            SettingsHeader(
+                title = title,
+                onBack = onBack,
+                trailing = trailing,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = FoamDimens.paddingMedium)
+            )
+        }
+    }
+}
+
+/**
+ * The settings header row (title, optional back button and trailing slot)
+ * pinned by [SettingsPage] over the page's background fade.
  */
 @Composable
 fun SettingsHeader(
     title: String,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
-    transparent: Boolean = false
+    trailing: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (transparent) Modifier else Modifier.foamBackground())
             .padding(vertical = FoamDimens.paddingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -54,6 +54,7 @@ import androidx.core.net.toUri
 import com.foamplayer.app.R
 import com.foamplayer.app.ui.screens.settings.SettingsViewModel
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.distant.DistantAuthMethod
@@ -145,11 +146,15 @@ fun AddProviderModal(
                     contentKey = { it.order },
                     transitionSpec = {
                         if (targetState.order >= initialState.order) {
-                            (slideInHorizontally(tween(260)) { it } + fadeIn(tween(160))) togetherWith
-                                    (slideOutHorizontally(tween(260)) { -it } + fadeOut(tween(120)))
+                            (slideInHorizontally(tween(FoamMotion.Duration.STANDARD)) { it } +
+                                fadeIn(tween(FoamMotion.Duration.SNAP))) togetherWith
+                                (slideOutHorizontally(tween(FoamMotion.Duration.STANDARD)) { -it } +
+                                fadeOut(tween(FoamMotion.Duration.SNAP)))
                         } else {
-                            (slideInHorizontally(tween(260)) { -it } + fadeIn(tween(160))) togetherWith
-                                    (slideOutHorizontally(tween(260)) { it } + fadeOut(tween(120)))
+                            (slideInHorizontally(tween(FoamMotion.Duration.STANDARD)) { -it } +
+                                fadeIn(tween(FoamMotion.Duration.SNAP))) togetherWith
+                                (slideOutHorizontally(tween(FoamMotion.Duration.STANDARD)) { it } +
+                                fadeOut(tween(FoamMotion.Duration.SNAP)))
                         }
                     },
                     label = "addProviderStep"
@@ -292,7 +297,7 @@ private fun ProviderOptionRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+            .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
             .foamSurfaceVariant()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -465,7 +470,7 @@ private fun SelectableFolderRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+            .clip(RoundedCornerShape(FoamDimens.cornerRadiusMedium))
             .foamSurfaceVariant()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

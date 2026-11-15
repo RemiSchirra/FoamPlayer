@@ -254,7 +254,7 @@ class DiscordPresenceController @Inject constructor(
         ).firstOrNull { it.isNotBlank() } ?: return
 
         val activity = DiscordPresenceActivity(
-            name = APP_NAME,
+            name = track.artist.takeIf { it.isNotBlank() } ?: APP_NAME,
             type = DiscordActivityType.Listening,
             details = details.take(MAX_TEXT_LENGTH),
             state = track.artist.takeIf { it.isNotBlank() && it != details }?.take(MAX_TEXT_LENGTH),

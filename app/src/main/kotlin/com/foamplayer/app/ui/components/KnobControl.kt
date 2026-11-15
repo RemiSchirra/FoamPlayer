@@ -55,8 +55,10 @@ private val HalfArcBottomMargin = 6.dp
  * zone. The raw finger value is kept separate from the displayed one so the
  * detent never desyncs the needle from the finger.
  *
- * Every rotation step commits through [onValueChange] so the knob and DSP
+ * Every rotation step reports through [onValueChange] so the knob and DSP
  * update in realtime while dragging (persistence is debounced engine-side).
+ * [onCommit], when provided, fires once on release (and on double-tap reset)
+ * for hosts that preview locally and only persist the final value.
  * [sensitivity] scales the rotation-to-value mapping: 1f means a full
  * [arcSweepDegrees] sweep of finger rotation covers the full range.
  *
@@ -85,6 +87,8 @@ fun KnobControl(
     showNeedle: Boolean = true,
     /** Dim the control when false; gestures stay active so a drag re-engages it. */
     enabled: Boolean = true,
+    /** Fires once when a drag ends (and on double-tap reset) with the final value. */
+    onCommit: ((Float) -> Unit)? = null,
     /** Fixed content drawn at the arc's center (e.g. an always-visible value readout). */
     centerContent: (@Composable () -> Unit)? = null
 ) {
@@ -103,9 +107,10 @@ fun KnobControl(
     // pointerInput survives recomposition: read through these to avoid stale captures.
     val latestValue by rememberUpdatedState(value)
     val latestOnValueChange by rememberUpdatedState(onValueChange)
+    val latestOnCommit by rememberUpdatedState(onCommit)
 
     val accent = FoamTheme.accentColor
-    val trackColor = FoamTheme.colors.surfaceVariant
+    val trackColor = FoamTheme.tintedSurfaceVariant
     val needleColor = FoamTheme.colors.textPrimary
 
     // Arc geometry: the start angle keeps the sweep centered on the vertical
@@ -190,8 +195,14 @@ fun KnobControl(
                                     }
                                 }
                             },
-                            onDragEnd = { isDragging = false },
-                            onDragCancel = { isDragging = false }
+                            onDragEnd = {
+                                isDragging = false
+                                latestOnCommit?.invoke(dragValue)
+                            },
+                            onDragCancel = {
+                                isDragging = false
+                                latestOnCommit?.invoke(dragValue)
+                            }
                         )
                     }
                     .pointerInput(minValue, maxValue, defaultValue) {
@@ -201,6 +212,7 @@ fun KnobControl(
                                 dragValue = defaultValue
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 latestOnValueChange(defaultValue)
+                                latestOnCommit?.invoke(defaultValue)
                             }
                         )
                     }

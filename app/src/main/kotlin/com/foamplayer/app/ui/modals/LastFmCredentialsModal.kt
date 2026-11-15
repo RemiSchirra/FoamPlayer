@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
 import com.foamplayer.app.lastfm.LastFmCredentialSource
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
@@ -144,14 +145,14 @@ fun LastFmCredentialsModal(
             // between the two options reads as one continuous sheet motion.
             AnimatedVisibility(
                 visible = source == LastFmCredentialSource.CUSTOM,
-                enter = fadeIn(animationSpec = tween(FIELD_FADE_MS)) +
+                enter = fadeIn(animationSpec = tween(FoamMotion.Duration.SNAP)) +
                         expandVertically(
-                            animationSpec = tween(FIELD_EXPAND_MS),
+                            animationSpec = tween(FoamMotion.Duration.STANDARD),
                             expandFrom = Alignment.Top
                         ),
-                exit = fadeOut(animationSpec = tween(FIELD_FADE_MS)) +
+                exit = fadeOut(animationSpec = tween(FoamMotion.Duration.SNAP)) +
                         shrinkVertically(
-                            animationSpec = tween(FIELD_EXPAND_MS),
+                            animationSpec = tween(FoamMotion.Duration.STANDARD),
                             shrinkTowards = Alignment.Top
                         )
             ) {
@@ -302,6 +303,3 @@ private fun CredentialTextField(
         )
     }
 }
-
-private const val FIELD_FADE_MS = 160
-private const val FIELD_EXPAND_MS = 220

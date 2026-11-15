@@ -52,7 +52,6 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Piano
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -87,7 +86,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.ui.components.AlbumArtImage
@@ -114,9 +113,9 @@ import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.collectionRowFlightArtwork
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.navigation.LocalSearchFocusRequest
-import com.foamplayer.app.ui.navigation.SharedElementEasing
-import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
+import com.foamplayer.app.ui.utils.rememberPausedArtScale
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
@@ -147,13 +146,8 @@ private val YearCardColor = Color(0xFFB388FF)
 private const val SwipeDismissThresholdFraction = 0.2f
 private val SwipeDismissThreshold = 80.dp
 private const val SwipeMaxFade = 0.3f
-private const val SwipeDismissDurationMs = 150
-private const val SwipeReturnDurationMs = 200
 
-private val textFlightFadeSpec = tween<Float>(
-    durationMillis = SharedElementTransitionDurationMs,
-    easing = SharedElementEasing
-)
+private val textFlightFadeSpec = FoamMotion.Spec.sharedElementFlight
 
 /** Blends the color toward [overlayColor] using the given [factor] (0.0 = original, 1.0 = overlay color). */
 private fun Color.overlay(overlayColor: Color, factor: Float): Color =
@@ -229,7 +223,7 @@ private fun BrowseCardItem(card: BrowseCardData, modifier: Modifier = Modifier) 
  * field, keyboard up, caret at the end of any retained query) on arrival,
  * while a long press on the icon opens the screen idle with its browse cards.
  */
-@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
     onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
@@ -247,6 +241,8 @@ fun SearchScreen(
     sharedTrackId: Long?,
     activeTrackId: Long?,
     onTrackClick: (TrackEntity) -> Unit,
+    isPlaybackActive: Boolean = true,
+    immersiveArt: Boolean = false,
     searchViewModel: SearchViewModel = hiltViewModel()
 ) {
     val query by searchViewModel.query.collectAsState()
@@ -270,6 +266,10 @@ fun SearchScreen(
     val longPressScope = rememberCoroutineScope()
     val imeInsets = WindowInsets.ime
     val listState = rememberLazyListState()
+
+    // One hoisted paused-scale animation read by the flight-source row inside
+    // its graphicsLayer (see TrackListScreen).
+    val flightPausedArtScale = rememberPausedArtScale(isPlaybackActive)
 
     // A modal's Dialog steals focus while the keyboard is up; close the IME
     // first so the sheet opens at its resting position.
@@ -383,7 +383,8 @@ fun SearchScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Rounded.Search,
+                // Force the outline variant
+                imageVector = FoamTheme.icons.outline.search,
                 contentDescription = null,
                 tint = FoamTheme.colors.textSecondary,
                 modifier = Modifier.size(24.dp)
@@ -545,6 +546,8 @@ fun SearchScreen(
                                     active = track.id == activeTrackId,
                                     sharedTransitionScope = sharedTransitionScope,
                                     animatedVisibilityScope = playerTransitionVisibilityScope,
+                                    flightPausedArtScale = { flightPausedArtScale.value },
+                                    immersiveArt = immersiveArt,
                                     isSharedTransitionSource = track.id == sharedTrackId
                                 )
                             }
@@ -577,6 +580,8 @@ fun SearchScreen(
                                     active = track.id == activeTrackId,
                                     sharedTransitionScope = sharedTransitionScope,
                                     animatedVisibilityScope = playerTransitionVisibilityScope,
+                                    flightPausedArtScale = { flightPausedArtScale.value },
+                                    immersiveArt = immersiveArt,
                                     isSharedTransitionSource = track.id == sharedTrackId
                                 )
                             }
@@ -615,6 +620,8 @@ fun SearchScreen(
                                         active = entry.track.id == activeTrackId,
                                         sharedTransitionScope = sharedTransitionScope,
                                         animatedVisibilityScope = playerTransitionVisibilityScope,
+                                        flightPausedArtScale = { flightPausedArtScale.value },
+                                        immersiveArt = immersiveArt,
                                         isSharedTransitionSource = entry.track.id == sharedTrackId,
                                         modifier = Modifier.animateItem()
                                     )
@@ -670,17 +677,27 @@ fun SearchScreen(
                                 }
                             }
                             item(key = "history_clear") {
+                                val clearHistoryInteractionSource = remember { MutableInteractionSource() }
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .animateItem()
-                                        .clickable { searchViewModel.clearHistory() }
                                         .padding(vertical = 16.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     BasicText(
                                         text = stringResource(R.string.clear_search_history),
-                                        style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor)
+                                        style = FoamTheme.typography.body.copy(color = FoamTheme.accentColor),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .clickable(
+                                                interactionSource = clearHistoryInteractionSource,
+                                                indication = ripple(
+                                                    bounded = true,
+                                                    color = FoamTheme.colors.textPrimary
+                                                )
+                                            ) { searchViewModel.clearHistory() }
+                                            .padding(horizontal = 16.dp, vertical = 4.dp)
                                     )
                                 }
                             }
@@ -822,7 +839,6 @@ private fun SearchFilterChip(
  * The row scopes itself to [MediaArtKind.ARTIST], so its portrait loads under
  * the person placeholder without callers passing anything.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistSearchResultItem(
     artist: String,
@@ -854,14 +870,12 @@ fun ArtistSearchResultItem(
                 .size(ListRowArtSize)
                 .let { base ->
                     if (sharedTransitionScope != null &&
-                        animatedVisibilityScope != null &&
-                        isActiveSharedCollection("artist", artist)
+                        animatedVisibilityScope != null
                     ) {
                         base.collectionRowFlightArtwork(
                             key = "artist-art-$artist",
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
-                            enabled = true,
                             restShape = CircleShape,
                             immersiveFlightHero = LocalCollectionHeroLayoutLookup
                                 .current(CollectionHeroTarget.Artist)
@@ -886,6 +900,7 @@ fun ArtistSearchResultItem(
                                 }
                             )
                             .size(AlbumArtRequestSize)
+                            .placeholderMemoryCacheKey(albumArtMemoryCacheKey(imageUrl))
                             .memoryCacheKey(albumArtMemoryCacheKey(imageUrl))
                             .build()
                     }
@@ -933,7 +948,6 @@ fun ArtistSearchResultItem(
  * The row scopes itself to [MediaArtKind.ALBUM], so its cover loads under the
  * album disc placeholder without callers passing anything.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AlbumSearchResultItem(
     album: AlbumSearchResult,
@@ -963,14 +977,12 @@ fun AlbumSearchResultItem(
                 .size(ListRowArtSize)
                 .let { base ->
                     if (sharedTransitionScope != null &&
-                        animatedVisibilityScope != null &&
-                        isActiveSharedCollection("album", album.album)
+                        animatedVisibilityScope != null
                     ) {
                         base.collectionRowFlightArtwork(
                             key = "album-art-${album.album}",
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
-                            enabled = true,
                             restShape = AlbumArtShape(),
                             immersiveFlightHero = LocalCollectionHeroLayoutLookup
                                 .current(CollectionHeroTarget.Album)
@@ -988,6 +1000,7 @@ fun AlbumSearchResultItem(
                         ImageRequest.Builder(context)
                             .data(EmbeddedAlbumArt(album.albumArtPath.toUri()))
                             .size(AlbumArtRequestSize)
+                            .placeholderMemoryCacheKey(albumArtMemoryCacheKey(album.albumArtPath))
                             .memoryCacheKey(albumArtMemoryCacheKey(album.albumArtPath))
                             .build()
                     }
@@ -1111,15 +1124,15 @@ private fun SwipeDismissRow(
                                 if (itemWidthPx > 0f) itemWidthPx else fallbackDismissThresholdPx
                             val exitTarget =
                                 if (dismissOffsetValue > 0f) exitDistance else -exitDistance
-                            animateSwipeTo(exitTarget, SwipeDismissDurationMs) {
+                            animateSwipeTo(exitTarget, FoamMotion.Duration.SNAP) {
                                 latestOnRemove.invoke()
                             }
                         } else {
-                            animateSwipeTo(0f, SwipeReturnDurationMs)
+                            animateSwipeTo(0f, FoamMotion.Duration.SWIFT)
                         }
                     },
                     onDragCancel = {
-                        animateSwipeTo(0f, SwipeReturnDurationMs)
+                        animateSwipeTo(0f, FoamMotion.Duration.SWIFT)
                     }
                 )
             }

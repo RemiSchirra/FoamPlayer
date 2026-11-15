@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -32,9 +33,9 @@ import androidx.core.net.toUri
 import com.foamplayer.app.R
 import com.foamplayer.app.data.scanner.ScanStatus
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
-import com.foamplayer.app.ui.theme.foamSurface
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.distant.DistantServer
 
@@ -56,12 +57,9 @@ fun LibraryFoldersCard(
     onRemoveServer: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .padding(FoamDimens.paddingMedium)
+    FoamCard(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(FoamDimens.paddingMedium)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -182,12 +180,9 @@ fun LibraryScanCard(
     onStartScan: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .padding(FoamDimens.paddingMedium)
+    FoamCard(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(FoamDimens.paddingMedium)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -233,12 +228,9 @@ fun RepairPlaylistsCard(
     onRepair: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-            .foamSurface()
-            .padding(FoamDimens.paddingMedium)
+    FoamCard(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(FoamDimens.paddingMedium)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
@@ -259,13 +251,13 @@ fun RepairPlaylistsCard(
     }
 }
 
-/** REPAIR <-> REPAIRING pill; disabled (surfaceVariant) while repairing. */
+/** REPAIR <-> REPAIRING pill. */
 @Composable
 private fun RepairPillButton(running: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(if (running) FoamTheme.colors.surfaceVariant else FoamTheme.accentColor)
+            .background(if (running) FoamTheme.tintedSurfaceVariant else FoamTheme.accentColor)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
@@ -277,7 +269,7 @@ private fun RepairPillButton(running: Boolean, onClick: () -> Unit) {
         BasicText(
             text = if (running) stringResource(R.string.playlist_repairing_caps) else stringResource(R.string.playlist_repair_caps),
             style = FoamTheme.typography.caption.copy(
-                color = if (running) FoamTheme.colors.textSecondary else FoamTheme.colors.background,
+                color = if (running) FoamTheme.colors.textSecondary else FoamTheme.tintedBackground,
                 fontWeight = FontWeight.Bold
             )
         )
@@ -393,7 +385,7 @@ private fun ScanPillButton(scanning: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(if (scanning) FoamTheme.colors.surfaceVariant else FoamTheme.accentColor)
+            .background(if (scanning) FoamTheme.tintedSurfaceVariant else FoamTheme.accentColor)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
@@ -405,7 +397,7 @@ private fun ScanPillButton(scanning: Boolean, onClick: () -> Unit) {
         BasicText(
             text = if (scanning) stringResource(R.string.scanning_caps) else stringResource(R.string.start_scan),
             style = FoamTheme.typography.caption.copy(
-                color = if (scanning) FoamTheme.colors.textSecondary else FoamTheme.colors.background,
+                color = if (scanning) FoamTheme.colors.textSecondary else FoamTheme.tintedBackground,
                 fontWeight = FontWeight.Bold
             )
         )
@@ -417,7 +409,7 @@ private fun ScanPillButton(scanning: Boolean, onClick: () -> Unit) {
 private fun ScanProgressBar(progress: Float) {
     val animatedProgress by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT),
         label = "libraryScanProgress"
     )
     Box(

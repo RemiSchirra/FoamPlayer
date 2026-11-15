@@ -114,6 +114,10 @@
     <string name="artist_images_stop">ARRÊTER</string>
     <string name="artist_images_cache_count">%1$d images en cache</string>
     <string name="artist_images_clear_cache">VIDER LE CACHE</string>
+    <string name="artist_images_cache_limit">Artistes en cache</string>
+    <string name="artist_images_cache_limit_desc">Les images sont résolues à l\'ouverture d\'une page d\'artiste ; la moins récemment visitée est retirée quand le cache est plein.</string>
+    <string name="artist_images_resolve_all">Résoudre tous les artistes</string>
+    <string name="artist_images_resolve_all_desc">Analyse tous les artistes de votre bibliothèque d\'un coup au lieu de résoudre à l\'ouverture des pages d\'artistes.</string>
 
     <string name="no_audio_detected">Aucun fichier audio détecté.\nAllez dans les Paramètres pour ajouter des dossiers et analyser votre bibliothèque.</string>
     <string name="search_hint">Rechercher</string>
@@ -123,7 +127,7 @@
     <string name="application">Application</string>
     <string name="screens">Écrans</string>
     <string name="dynamic_effects">Effets dynamiques</string>
-    <string name="icon_style">Style d\'icône</string>
+    <string name="icon_pack">Pack d\'icônes</string>
     <string name="visuals">Visuels</string>
     <string name="behaviour">Comportement</string>
     <string name="interface_rounding">Arrondi de l\'interface</string>
@@ -131,23 +135,16 @@
     <string name="system_colors">Couleurs système</string>
 
     <string name="colors">Couleurs</string>
-    <string name="colors_desc">Couleur d\'accentuation et palette</string>
     <string name="player">Lecteur</string>
-    <string name="player_desc">Mise en page et visuels</string>
     <string name="background">Arrière-plan</string>
-    <string name="background_desc">Effets d\'arrière-plan dynamiques</string>
     <string name="navigation_bar">Barre de navigation</string>
-    <string name="navbar_desc">Disposition et transparence de la barre</string>
     <string name="collections">Collections</string>
-    <string name="collections_desc">Disposition des en-têtes de collections</string>
     <string name="navbar_mode">Mode de la barre</string>
     <string name="navbar_mode_desc">Choisissez l\'apparence de la navigation basse</string>
     <string name="navbar_mode_docked">Ancrée</string>
     <string name="navbar_mode_floating">Flottante</string>
     <string name="navbar_mode_attached">Attachée</string>
-    <string name="transparency">Transparence</string>
     <string name="transparent_when_player_open">Transparent quand le lecteur est ouvert</string>
-    <string name="transparent_when_player_open_desc">Rendre l\'arrière-plan de la barre de navigation transparent quand le lecteur est ouvert</string>
     <string name="navbar_main_bar">Barre principale</string>
     <string name="navbar_main_bar_desc">Glisser pour réordonner et afficher ou masquer les éléments</string>
     <string name="navbar_second_bar">Barre secondaire</string>
@@ -155,6 +152,9 @@
     <string name="navbar_item_more">Plus</string>
     <string name="expand_navigation">Déployer la navigation</string>
     <string name="collapse_navigation">Réduire la navigation</string>
+    <string name="dynamic_icons">Icônes dynamiques</string>
+    <string name="nav_icon_active_variant">Variante active</string>
+    <string name="nav_icon_inactive_variant">Variante inactive</string>
 
     <!-- Écran des statistiques -->
     <string name="stats_loading">Chargement des statistiques d\'écoute…</string>
@@ -252,7 +252,10 @@
     <string name="lyrics_results_plain">Brutes</string>
     <string name="lyrics_results_synced">Synchronisées</string>
     <string name="lyrics_results_word_synced">Mot à mot</string>
-    <string name="lyrics_results_title">Résultats de recherche</string>
+    <string name="lyrics_details_title">Détails des paroles</string>
+    <string name="lyrics_details_tab_saved">Paroles enregistrées</string>
+    <string name="lyrics_details_tab_search">Recherche</string>
+    <string name="lyrics_details_saved_empty">Aucune parole enregistrée pour ce titre</string>
     <string name="lyrics_results_provider">Fournisseur</string>
     <string name="lyrics_results_save_as_file">Enregistrer en fichier</string>
     <string name="lyrics_results_embed">Intégrer au fichier</string>
@@ -312,18 +315,14 @@
     <string name="play_on_remote_player_desc">Serveur multimédia %1$s</string>
     <string name="play_on_upnp_desc">UPnP</string>
     <string name="track_count_duration">%1$d Pistes • %2$s</string>
+    <string name="year_track_count_duration">%1$d • %2$d Pistes • %3$s</string>
     <string name="add_separator">Ajouter un séparateur…</string>
 
-    <string name="audio_settings_subtitle">Moteur bit-perfect et options de sortie</string>
-    <string name="ui_settings_subtitle">Apparence, styles d\'icônes et arrondi</string>
-    <string name="library_settings_subtitle">Gérer les dossiers de musique et les métadonnées</string>
-    <string name="lyrics_settings_subtitle">Fournisseurs de paroles et paramètres d\'affichage</string>
     <string name="test_components">Test de composants</string>
-    <string name="test_components_subtitle">Utilitaires de test d\'interface internes</string>
     <string name="switches">Interrupteurs</string>
     <string name="sliders">Curseurs</string>
 
-    <!-- Outils développeur (builds devMode uniquement) -->
+    <!-- Outils développeur (builds debug uniquement) -->
     <string name="dev_tools_section">Outils développeur</string>
     <string name="dev_reset_onboarding">Réinitialiser l\'onboarding</string>
     <string name="dev_reset_onboarding_title">Réinitialiser l\'onboarding ?</string>
@@ -365,6 +364,14 @@
     <string name="seek_bar_style_desc">Apparence de la barre du lecteur complet</string>
     <string name="seek_bar_style_normal">Normale</string>
     <string name="seek_bar_style_waveform">Forme d\'onde</string>
+    <string name="pager_effect">Effet de pagination</string>
+    <string name="pager_effect_desc">Animation lors du balayage entre les pistes du lecteur complet</string>
+    <string name="pager_effect_slide">Glissement</string>
+    <string name="pager_effect_crossfade">Fondu enchaîné</string>
+    <string name="pager_effect_depth">Profondeur</string>
+    <string name="pager_effect_flip">Retournement</string>
+    <string name="pager_effect_cube">Cube</string>
+    <string name="pager_effect_tilt">Inclinaison</string>
     <string name="mini_player">Mini lecteur</string>
     <string name="full_player">Lecteur complet</string>
     <string name="square">Carré</string>
@@ -402,7 +409,6 @@
     <string name="integrations_section">Intégrations</string>
     <string name="discord_section">Discord</string>
     <string name="discord_entry">Discord</string>
-    <string name="discord_entry_desc">Rich Presence et pochettes en ligne</string>
     <string name="discord_presence">Discord Rich Presence</string>
     <string name="discord_presence_desc">Affiche ce que vous écoutez sur votre profil Discord</string>
     <string name="discord_log_in">Se connecter avec Discord</string>
@@ -418,7 +424,6 @@
     <!-- Last.fm -->
     <string name="lastfm_section">Last.fm</string>
     <string name="lastfm_entry">Last.fm</string>
-    <string name="lastfm_entry_desc">Scrobblez et importez votre historique d\'écoute</string>
     <string name="lastfm_log_in">Se connecter avec Last.fm</string>
     <string name="lastfm_log_out">Se déconnecter</string>
     <string name="lastfm_logged_in_as">Connecté en tant que %1$s</string>
@@ -710,6 +715,11 @@
     <string name="eq_delete_node">Supprimer le nœud</string>
     <string name="eq_add_node">Ajouter un nœud paramétrique</string>
     <string name="eq_node_limit">Limite de nœuds atteinte</string>
+    <string name="eq_filter_peaking">Bosse</string>
+    <string name="eq_filter_low_shelf">Plateau bas</string>
+    <string name="eq_filter_high_shelf">Plateau haut</string>
+    <string name="eq_filter_low_pass">Passe-bas</string>
+    <string name="eq_filter_high_pass">Passe-haut</string>
     <string name="eq_volume">Volume</string>
     <string name="eq_save_preset_title">Enregistrer un préréglage</string>
     <string name="eq_preset_name_hint">Nom du préréglage</string>
@@ -768,7 +778,7 @@
     <string name="eq_band_layout">Disposition des bandes</string>
     <string name="eq_band_layout_desc">"Configuration du nombre bandes standard ISO"</string>
 
-    <!-- Écran de test de composants (builds devMode uniquement) -->
+    <!-- Écran de test de composants (builds debug uniquement) -->
     <string name="test_switch">Interrupteur de test</string>
     <string name="test_switch_desc">Démonstration du composant interrupteur plat</string>
     <string name="test_slider_continuous">Curseur continu</string>

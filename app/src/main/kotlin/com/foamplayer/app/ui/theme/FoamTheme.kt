@@ -1,5 +1,7 @@
 package com.foamplayer.app.ui.theme
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -15,6 +17,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -22,6 +27,8 @@ import androidx.compose.ui.unit.Dp
 import com.foamplayer.app.data.settings.FoamIconStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.foamplayer.app.ui.iconpacks.FoamIconPack
+import com.foamplayer.app.ui.iconpacks.FoamIconPackRegistry
 
 /** The app's color palette. */
 @Immutable
@@ -31,17 +38,22 @@ data class FoamColors(
     val surfaceVariant: Color,
     val bitPerfectActive: Color,
     val bitPerfectInactive: Color,
+    /** Lyrics-status dot colors: red = no lyrics, blue = embedded lyrics. */
+    val noLyrics: Color,
+    val embedded: Color,
     val textPrimary: Color,
     val textSecondary: Color,
     val borderOverlay: Color
 )
 
 val DarkFoamColors = FoamColors(
-    background = Color(0xFF121212),
-    surface = Color(0xFF212121),
+    background = Color(0xFF000000),
+    surface = Color(0xFF1C1C1E),
     surfaceVariant = Color(0xFF2A2A2A),
     bitPerfectActive = Color(0xFF00E676),
     bitPerfectInactive = Color(0xFFFFB300),
+    noLyrics = Color(0xFFFF5252),
+    embedded = Color(0xFF448AFF),
     textPrimary = Color(0xFFE0E0E0),
     textSecondary = Color(0x99FFFFFF),
     borderOverlay = Color(0xFF333333)
@@ -53,6 +65,8 @@ val LightFoamColors = FoamColors(
     surfaceVariant = Color(0xFFDFDFDF),
     bitPerfectActive = Color(0xFF00A344),
     bitPerfectInactive = Color(0xFFB26A00),
+    noLyrics = Color(0xFFD32F2F),
+    embedded = Color(0xFF1976D2),
     textPrimary = Color(0xFF1C1C1C),
     textSecondary = Color(0x99000000),
     borderOverlay = Color(0xFFC9C9C9)
@@ -237,6 +251,16 @@ object FoamTheme {
         @Composable get() = LocalAccentTintState.current.resolve(
             LocalFoamColors.current.surface, SurfaceAccentTint
         )
+
+    val tintedSurfaceVariant: Color
+        @Composable get() = LocalAccentTintState.current.resolve(
+            LocalFoamColors.current.surfaceVariant, SurfaceAccentTint
+        )
+
+    val tintedBackground: Color
+        @Composable get() = LocalAccentTintState.current.resolve(
+            LocalFoamColors.current.background, SurfaceAccentTint
+        )
 }
 
 /**
@@ -260,21 +284,85 @@ private fun smoothstep(edge0: Float, edge1: Float, value: Float): Float {
     return t * t * (3f - 2f * t)
 }
 
-/** Provides the app's theme: colors, typography, icon style, shapes and accent. */
+/**
+ * Resolves [pack]'s drawable resources over the default icon set, for all
+ * three styles (the icon settings screen's style preview reads them too).
+ * Packs are partial: a role without a drawable keeps the default icon.
+ *
+ * Resolved once per pack + style + context and remembered. FoamTheme re-runs
+ * on every accent frame (the dynamic accent changes per drag frame while a
+ * track swipe is in flight), and a plain re-resolution here would both re-parse
+ * every icon vector at display frequency and hand CompositionLocalProvider a
+ * fresh, unequal FoamIcons -- invalidating every FoamTheme.icons reader in the
+ * app (nav bar, player chrome, every icon) per frame during an active swipe.
+ * The non-composable vectorResource overload lets the parse live inside the
+ * remember block; the stable instance keeps LocalFoamIcons readers
+ * un-invalidated across accent frames.
+ */
+@Composable
+internal fun rememberFoamIcons(pack: FoamIconPack, style: FoamIconStyle): FoamIcons {
+    val context = LocalContext.current
+    return remember(pack, style, context) {
+        val resolved = FoamIconStyle.entries.associateWith { s ->
+            FoamIconRole.entries.fold(DefaultFoamIcons.setFor(s)) { set, role ->
+                pack.resFor(s, role)?.let { res ->
+                    set.with(
+                        role,
+                        ImageVector.vectorResource(context.theme, context.resources, res)
+                    )
+                } ?: set
+            }
+        }
+        FoamIcons(
+            solid = resolved.getValue(FoamIconStyle.SOLID),
+            outline = resolved.getValue(FoamIconStyle.OUTLINE),
+            flat = resolved.getValue(FoamIconStyle.FLAT),
+            currentStyle = style
+        )
+    }
+}
+
+/**
+ * The single [role] icon of [pack] in [style]: the pack's drawable when it
+ * draws the role, else the default set's icon. Lightweight single-role
+ * resolution for previews (pack cards, variant pills) that need one icon
+ * instead of the full set.
+ */
+@Composable
+internal fun rememberPackRoleIcon(
+    pack: FoamIconPack,
+    style: FoamIconStyle,
+    role: FoamIconRole
+): ImageVector = pack.resFor(style, role)?.let { ImageVector.vectorResource(it) }
+    ?: DefaultFoamIcons.setFor(style)[role]
+
+/** Provides the app's theme: colors, typography, icon pack + style, shapes and accent. */
 @Composable
 fun FoamTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    iconStyle: FoamIconStyle = FoamIconStyle.FLAT,
+    /** Preferred icon style (variant) for the pack; packs not drawing it render their first (Settings > User interface > Icons). */
+    iconStyle: FoamIconStyle? = null,
+    /** Id of the bundled icon pack overlaying the default icons (Settings > User interface > Icons). */
+    iconPackId: String = FoamIconPackRegistry.DEFAULT_ID,
     miniPlayerRounding: Float = 0.4f,
     fullPlayerRounding: Float = 0.4f,
     accentColor: Color? = null,
+    /**
+     * True while the accent is the text-primary fallback (the current track has
+     * no album art, or its extraction failed): tinted backgrounds fade to the
+     * plain palette color instead of greying toward the text color.
+     */
+    accentIsFallback: Boolean = false,
     /** Blends the accent into backgrounds and containers (Settings > Colors). */
     accentTintEnabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
     // Remembered per input so the static locals' consumers skip when only the
     // accent (per-frame) changes.
-    val icons = remember(iconStyle) { DefaultFoamIcons.copy(currentStyle = iconStyle) }
+    val pack = FoamIconPackRegistry.byId(iconPackId)
+    // The style is a per-pack preference: packs not drawing it render their
+    // first variant instead (see FoamIconPack.effectiveVariant).
+    val icons = rememberFoamIcons(pack, pack.effectiveVariant(iconStyle ?: FoamIconStyle.FLAT))
     val shapes = remember(miniPlayerRounding, fullPlayerRounding) {
         FoamShapes(
             miniPlayerRounding = miniPlayerRounding,
@@ -296,6 +384,12 @@ fun FoamTheme(
     val accentTint = remember { AccentTintState() }
     accentTint.color = targetAccentColor
     accentTint.enabled = accentTintEnabled
+    val backgroundTintScale by animateFloatAsState(
+        targetValue = if (accentIsFallback) 0f else 1f,
+        animationSpec = tween(FoamMotion.Duration.EXPRESSIVE),
+        label = "FoamBackgroundTintScale"
+    )
+    accentTint.backgroundTintScale = backgroundTintScale
 
     // Live overrides pushed by the settings screens (see
     // [MiniPlayerRoundingPreviewState]); the holder itself never changes.

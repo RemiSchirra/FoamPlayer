@@ -42,7 +42,7 @@ fun FoamSliderItem(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = FoamDimens.spacingMedium, horizontal = FoamDimens.paddingMedium)
+            .padding(FoamDimens.spacingStandard)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

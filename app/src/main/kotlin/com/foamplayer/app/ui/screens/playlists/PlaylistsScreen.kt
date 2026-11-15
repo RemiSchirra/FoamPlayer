@@ -6,9 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -16,7 +14,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -67,7 +64,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.net.toUri
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroTarget
@@ -110,19 +107,17 @@ import com.foamplayer.app.ui.modals.RenamePlaylistModal
 import com.foamplayer.app.ui.modals.RepairPlaylistsResultModal
 import com.foamplayer.app.ui.modals.rememberPlaylistFoamModalState
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
+import com.foamplayer.app.ui.navigation.LocalActiveSharedCollectionTagState
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
-import com.foamplayer.app.ui.navigation.SharedElementEasing
-import com.foamplayer.app.ui.navigation.SharedElementTransitionDurationMs
+import com.foamplayer.app.ui.navigation.collectionFlightConfig
 import com.foamplayer.app.ui.navigation.isActiveSharedCollection
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlinx.coroutines.launch
 
-private val textFlightFadeSpec = tween<Float>(
-    durationMillis = SharedElementTransitionDurationMs,
-    easing = SharedElementEasing
-)
+private val textFlightFadeSpec = FoamMotion.Spec.sharedElementFlight
 
 private val ImageMimeTypes = arrayOf("image/*")
 
@@ -304,7 +299,7 @@ fun PlaylistsScreen(
                     val currentIndex by rememberUpdatedState(index)
                     val liftScale by animateFloatAsState(
                         targetValue = if (isDragging && !dragReleased) DragLiftScale else 1f,
-                        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+                        animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP, easing = FoamMotion.Easings.STANDARD),
                         label = "playlistDragLift"
                     )
 
@@ -401,7 +396,7 @@ fun PlaylistsScreen(
                     val currentIndex by rememberUpdatedState(index)
                     val liftScale by animateFloatAsState(
                         targetValue = if (isDragging && !dragReleased) DragLiftScale else 1f,
-                        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+                        animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP, easing = FoamMotion.Easings.STANDARD),
                         label = "playlistDragLift"
                     )
 
@@ -632,7 +627,6 @@ fun PlaylistsScreen(
  * queue was started from this playlist; [showDragHandle] shows the edit-mode
  * 2D drag handle.
  */
-@OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 private fun PlaylistItemRow(
     playlist: PlaylistEntity,
@@ -671,25 +665,19 @@ private fun PlaylistItemRow(
 
     val artworkElevation by animateDpAsState(
         targetValue = if (lifted) DragArtworkElevation else 0.dp,
-        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP, easing = FoamMotion.Easings.STANDARD),
         label = "playlistArtworkElevation"
     )
 
     val trackCountText = pluralStringResource(R.plurals.track_count, trackCount, trackCount)
 
     @Composable
-    fun Modifier.sharedArtworkModifier(): Modifier {
-        if (!isActiveCollection) {
-            return Modifier
-                .clip(AlbumArtShape())
-                .foamSurfaceVariant()
-        }
+    fun sharedArtworkModifier(): Modifier {
         return Modifier
             .collectionRowFlightArtwork(
                 key = "playlist-art-${playlist.playlistId}",
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
-                enabled = true,
                 restShape = AlbumArtShape(),
                 immersiveFlightHero = flight,
                 castsFlightShadow = true
@@ -698,19 +686,22 @@ private fun PlaylistItemRow(
     }
     @Composable
     fun Modifier.sharedTitle(): Modifier =
-        if (!isActiveSharedCollection("playlist", "${playlist.playlistId}")) {
-            Modifier
-        } else {
-            with(sharedTransitionScope) {
-                sharedBounds(
-                    rememberSharedContentState(key = "playlist-title-${playlist.playlistId}"),
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    enter = fadeIn(textFlightFadeSpec),
-                    exit = fadeOut(textFlightFadeSpec),
-                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
-                    boundsTransform = AlbumArtBoundsTransform
-                )
-            }
+        with(sharedTransitionScope) {
+            val tagState = LocalActiveSharedCollectionTagState.current
+            sharedBounds(
+                rememberSharedContentState(
+                    key = "playlist-title-${playlist.playlistId}",
+                    config = collectionFlightConfig(
+                        tagState,
+                        "playlist-title-${playlist.playlistId}"
+                    )
+                ),
+                animatedVisibilityScope = animatedVisibilityScope,
+                enter = fadeIn(textFlightFadeSpec),
+                exit = fadeOut(textFlightFadeSpec),
+                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                boundsTransform = AlbumArtBoundsTransform
+            )
         }
 
     @Composable
@@ -728,9 +719,7 @@ private fun PlaylistItemRow(
                         }
                     )
                     .size(AlbumArtRequestSize)
-                    // The destination hero reads the cover under this shared key;
-                    // caching under it here keeps a close flight's first frames
-                    // on the image instead of the placeholder note.
+                    .placeholderMemoryCacheKey(albumArtMemoryCacheKey(coverImageUrl))
                     .memoryCacheKey(albumArtMemoryCacheKey(coverImageUrl))
                     .build()
             }
@@ -750,8 +739,7 @@ private fun PlaylistItemRow(
             modifier = modifier,
             onClick = onClick,
             onLongClick = onLongClick,
-            artworkModifier = Modifier
-                .sharedArtworkModifier(),
+            artworkModifier = sharedArtworkModifier(),
             artworkElevation = staticArtElevation,
             artworkContent = { PlaylistArtwork() },
             artworkOverlay = {
@@ -793,8 +781,7 @@ private fun PlaylistItemRow(
             modifier = modifier,
             onClick = onClick,
             onLongClick = onLongClick,
-            artworkModifier = Modifier
-                .sharedArtworkModifier(),
+            artworkModifier = sharedArtworkModifier(),
             artworkElevation = staticArtElevation,
             artworkContent = { PlaylistArtwork() },
             title = playlist.name,
@@ -830,13 +817,13 @@ private val DragArtworkElevation: Dp = 8.dp
 
 /** Fade + scale-in of the edit-mode drag handle when entering edit mode. */
 private val DragHandleEnter =
-    fadeIn(animationSpec = tween(durationMillis = 200)) +
-            scaleIn(initialScale = 0.6f, animationSpec = tween(durationMillis = 200))
+    fadeIn(animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT)) +
+            scaleIn(initialScale = 0.6f, animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT))
 
 /** Fade + scale-out of the edit-mode drag handle when leaving edit mode. */
 private val DragHandleExit =
-    fadeOut(animationSpec = tween(durationMillis = 200)) +
-            scaleOut(targetScale = 0.6f, animationSpec = tween(durationMillis = 200))
+    fadeOut(animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT)) +
+            scaleOut(targetScale = 0.6f, animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT))
 
 /** Whole-row drag gesture driving edit-mode reordering (swaps come from the drag-drop states). */
 private fun Modifier.playlistEditDrag(

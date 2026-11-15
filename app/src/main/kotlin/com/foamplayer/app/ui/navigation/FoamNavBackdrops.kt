@@ -5,7 +5,6 @@ import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +14,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -32,7 +32,9 @@ import com.foamplayer.app.ui.screens.player.PlayerDimens
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.player.backdropScrimColor
 import com.foamplayer.app.ui.screens.player.progress
+import com.foamplayer.app.ui.theme.FoamMotion
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -43,6 +45,12 @@ import kotlinx.coroutines.launch
  * Blur / intensity are read through [preview] inside this composable's scope, so
  * slider drags on the background settings page only redraw the backdrop. Returns
  * the setter the mini player uses to feed new artwork.
+ *
+ * The returned setter is wrapped in a [BackdropCrossfadeDriver]: continuous
+ * input (the mini player scrubbing the pager offset) passes straight through,
+ * while a DISCONTINUOUS change of artwork (list pick, queue replacement, player
+ * skip, no pager motion behind it) is turned into a timed crossfade here instead
+ * of snapping. That way the backdrop never depends on every caller animating.
  */
 @Composable
 internal fun AppBackdrop(
@@ -53,57 +61,65 @@ internal fun AppBackdrop(
     playerViewModel: PlayerViewModel,
     playerTargetOpen: Boolean,
 ): (frontArtPath: String?, backArtPath: String?, fraction: Float) -> Unit {
-    // Settings pages hide the backdrop layers (they sit on the plain theme
-    // background) — after the nav fade, so the outgoing screen dissolves over the
-    // still-drawn backdrop. The background settings page is the exception: the
-    // layers ARE its live preview.
     var settingsBackdropHidden by remember { mutableStateOf(isSettingsRoute(currentRoute)) }
     LaunchedEffect(currentRoute) {
         if (isSettingsRoute(currentRoute) && !isBackgroundSettingsRoute(currentRoute)) {
-            delay(NavScreenFadeDurationMs.toLong())
+            delay(FoamMotion.Duration.FLIGHT.toLong())
             settingsBackdropHidden = true
         } else {
             settingsBackdropHidden = false
         }
     }
-    val backgroundEnabled = backgroundMode == BackgroundMode.DYNAMIC && !settingsBackdropHidden
-    val onBackgroundTransition = if (backgroundEnabled) {
-        rememberAnimatedBackground(
-            enabled = true,
-            initialFrontArtPath = { playerViewModel.playbackState.value.currentTrack?.albumArtPath },
-            persistedBlur = settings.backgroundBlur,
-            persistedAppIntensity = settings.appBackgroundIntensity,
-            preview = preview,
-            modifier = Modifier.fillMaxSize()
-        )
+    // The delayed flag only hides after ENTERING settings. Leaving settings must
+    // reveal the layers immediately, without waiting for the effect above, so
+    // the outgoing opaque settings page fades onto an already-drawn backdrop.
+    val backdropAlpha = if (
+        settingsBackdropHidden &&
+        isSettingsRoute(currentRoute) &&
+        !isBackgroundSettingsRoute(currentRoute)
+    ) {
+        0f
     } else {
-        remember { { _: String?, _: String?, _: Float -> } }
+        1f
+    }
+    val backdropModifier = Modifier
+        .fillMaxSize()
+        .graphicsLayer { alpha = backdropAlpha }
+
+    val onBackgroundTransition = rememberAnimatedBackground(
+        enabled = backgroundMode == BackgroundMode.DYNAMIC,
+        initialFrontArtPath = { playerViewModel.playbackState.value.currentTrack?.albumArtPath },
+        persistedBlur = settings.backgroundBlur,
+        persistedAppIntensity = settings.appBackgroundIntensity,
+        preview = preview,
+        modifier = backdropModifier
+    )
+
+    // Every caller (mini player, player collector below) goes through this
+    // driver, so any hard cut in the artwork becomes a crossfade.
+    val latestSink by rememberUpdatedState(onBackgroundTransition)
+    val driverScope = rememberCoroutineScope()
+    val driver = remember(driverScope) {
+        BackdropCrossfadeDriver(driverScope) { front, back, fraction ->
+            latestSink(front, back, fraction)
+        }
+    }
+    val drivenTransition = remember(driver) {
+        { front: String?, back: String?, fraction: Float -> driver.submit(front, back, fraction) }
     }
 
-    // While the background settings page previews the art backdrop, the current
-    // track's art must keep feeding it even with the player closed — normally
-    // only the open player drives this collector and the visible mini player
-    // covers the rest. rememberUpdatedState keeps the read inside the collector
-    // fresh across route changes.
     val feedArtToBackground by rememberUpdatedState(
         playerTargetOpen || isBackgroundSettingsRoute(currentRoute)
     )
-    LaunchedEffect(onBackgroundTransition) {
+    LaunchedEffect(drivenTransition) {
         playerViewModel.currentAlbumArtPath.collect { path ->
             if (path != null && feedArtToBackground) {
-                onBackgroundTransition(path, null, 0f)
+                drivenTransition(path, null, 0f)
             }
         }
     }
 
-    // The user-configured static layers (custom blurred image / gradient): same
-    // dim as the dynamic art, hidden on settings pages like the art — EXCEPT the
-    // background settings page, where they are the live preview of the
-    // parameters being edited. They are never suppressed on detail pages: the
-    // collection backdrop paints over them once opaque, and keeping them
-    // composed underneath makes every fade crossfade over the custom image /
-    // gradient instead of dropping to the bare background color.
-    if (!settingsBackdropHidden && backgroundMode != BackgroundMode.DYNAMIC) {
+    if (backgroundMode != BackgroundMode.DYNAMIC) {
         StaticBackgroundLayers(
             mode = backgroundMode,
             customBackgroundUri = settings.customBackgroundUri,
@@ -111,11 +127,106 @@ internal fun AppBackdrop(
             persistedBackgroundBlur = settings.backgroundBlur,
             persistedAppIntensity = settings.appBackgroundIntensity,
             preview = preview,
-            modifier = Modifier.fillMaxSize()
+            modifier = backdropModifier
         )
     }
 
-    return onBackgroundTransition
+    return drivenTransition
+}
+
+/**
+ * Turns hard cuts in the backdrop artwork into timed crossfades.
+ *
+ * Input is a stream of `(front, back, fraction)` frames: the displayed image is
+ * `front` at 0f, `back` at 1f, and a blend in between. While the pager is being
+ * dragged or flung the frames are continuous, so they are forwarded untouched.
+ * When a frame is visually far from the previous one (a different front art
+ * with nothing scrubbing towards it) the driver plays its own 0 -> 1 fade from
+ * the art that was on screen to the new one, then hands control back.
+ */
+private class BackdropCrossfadeDriver(
+    private val scope: CoroutineScope,
+    private val sink: (frontArtPath: String?, backArtPath: String?, fraction: Float) -> Unit,
+) {
+    private class Frame(val front: String?, val back: String?, val fraction: Float) {
+        /** The art that dominates what is on screen. */
+        val dominant: String? get() = if (fraction >= 0.5f) back else front
+    }
+
+    private val progress = Animatable(0f)
+    private var job: Job? = null
+    private var shown: Frame? = null
+    private var latest: Frame? = null
+    private var animatingTo: String? = null
+
+    fun submit(front: String?, back: String?, fraction: Float) {
+        val frame = Frame(front, back, fraction.coerceIn(0f, 1f))
+        latest = frame
+
+        if (job?.isActive == true) {
+            // A fade is running. Same destination: it will land on `latest`.
+            // New destination: retarget from whatever is mostly visible now.
+            if (frame.dominant != animatingTo) startFade(from = shown?.dominant, frame)
+            return
+        }
+
+        val previous = shown
+        if (previous == null || distance(previous, frame) <= CONTINUITY_THRESHOLD) {
+            emit(frame)
+        } else {
+            startFade(from = previous.dominant, frame)
+        }
+    }
+
+    private fun startFade(from: String?, target: Frame) {
+        val to = target.dominant
+        if (from == to) {
+            job?.cancel()
+            emit(target)
+            return
+        }
+        job?.cancel()
+        animatingTo = to
+        job = scope.launch {
+            emit(Frame(from, to, 0f))
+            progress.snapTo(0f)
+            progress.animateTo(
+                targetValue = 1f,
+                animationSpec = FoamMotion.Spec.sharedElementFlight
+            ) {
+                emit(Frame(from, to, value))
+            }
+            // Land on the newest input; visually identical to the fade's end.
+            latest?.let { emit(it) }
+        }
+    }
+
+    private fun emit(frame: Frame) {
+        shown = frame
+        sink(frame.front, frame.back, frame.fraction)
+    }
+
+    /** Total-variation distance between what the two frames put on screen (0..1). */
+    private fun distance(a: Frame, b: Frame): Float {
+        val wa = weights(a)
+        val wb = weights(b)
+        var sum = 0f
+        for (key in wa.keys + wb.keys) {
+            sum += kotlin.math.abs((wa[key] ?: 0f) - (wb[key] ?: 0f))
+        }
+        return sum / 2f
+    }
+
+    private fun weights(frame: Frame): Map<String?, Float> {
+        val map = HashMap<String?, Float>(2)
+        map[frame.front] = 1f - frame.fraction
+        map[frame.back] = (map[frame.back] ?: 0f) + frame.fraction
+        return map
+    }
+
+    private companion object {
+        const val CONTINUITY_THRESHOLD = 0.4f
+    }
 }
 
 /**
@@ -156,10 +267,7 @@ internal class DetailListBackdropState(private val scope: CoroutineScope) {
                     crossfade.snapTo(0f)
                     crossfade.animateTo(
                         targetValue = 1f,
-                        animationSpec = tween(
-                            durationMillis = SharedElementTransitionDurationMs,
-                            easing = SharedElementEasing
-                        )
+                        animationSpec = FoamMotion.Spec.sharedElementFlight
                     )
                 } finally {
                     if (generation == crossfadeGeneration) {
@@ -200,41 +308,26 @@ internal fun DetailListBackdrop(
     val listBackdropArt = state.art
     val lastListBackdropArt = state.lastArt
     val listBackdropAlpha by animateFloatAsState(
-        // Keyed on the ROUTE as well as the art: the art is only cleared from a
-        // LaunchedEffect (a frame or more after the route flips), so keying on
-        // art alone started this fade late while the screens were already
-        // fading, and the status-bar strip (painted only by this backdrop) held
-        // full alpha then dropped out of step.
         targetValue = if (listBackdropArt != null && isDetailListRoute(currentRoute)) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = if (isSharedElementRoute(currentRoute) ||
-                isSharedElementRoute(lastRoute)
-            ) {
-                SharedElementTransitionDurationMs
-            } else {
-                NavScreenFadeDurationMs
-            },
-            // Lock-step with the NavHost's screen fades (FastOutSlowIn):
-            // animateFloatAsState's tween defaults to LINEAR, which made the
-            // backdrop — and with it the status-bar strip it alone paints —
-            // linger half-strength over the already-faded content.
-            easing = SharedElementEasing
-        ),
+        animationSpec = if (isSharedElementRoute(currentRoute) ||
+            isSharedElementRoute(lastRoute)
+        ) {
+            FoamMotion.Spec.sharedElementFlight
+        } else {
+            FoamMotion.Spec.screenFadeIn
+        },
         label = "listBackdropAlpha"
     )
     val display = listBackdropArt ?: lastListBackdropArt
-    // Plain expression, not a remembered derivedStateOf: the art/alpha values
-    // above are read during composition, and a remembered derived state would
-    // keep capturing the FIRST composition's null art and stay false forever.
     val show = (backgroundMode == BackgroundMode.DYNAMIC || forceDynamic) &&
-        display != null && listBackdropAlpha > 0f
+            display != null && listBackdropAlpha > 0f
     if (show) {
         DynamicAlbumArtBackground(
-            frontArtPath = (state.crossfadeFrom ?: display)?.path,
-            frontArtIsEmbedded = (state.crossfadeFrom ?: display)?.isEmbeddedArt ?: true,
+            frontArtPath = (state.crossfadeFrom ?: display).path,
+            frontArtIsEmbedded = (state.crossfadeFrom ?: display).isEmbeddedArt,
             backArtPath = state.crossfadeTo?.path,
             backArtIsEmbedded = state.crossfadeTo?.isEmbeddedArt ?: true,
-            crossfadeFraction = { state.crossfade.value },
+            crossfadeFraction = { if (state.crossfadeTo != null) state.crossfade.value else 0f },
             blur = blur,
             intensity = intensity,
             modifier = Modifier
@@ -262,7 +355,7 @@ internal fun PlayerBackdrop(
 ) {
     // In DOCKED mode the backdrop's black fade must land on the bar's top edge.
     val playerBackdropFadeInset = if (navigationBarMode == NavigationBarMode.DOCKED) {
-        with(androidx.compose.ui.platform.LocalDensity.current) { navZoneHeightPx.toDp() }
+        with(LocalDensity.current) { navZoneHeightPx.toDp() }
     } else {
         0.dp
     }
@@ -303,8 +396,8 @@ internal fun PlayerBackdrop(
                 .fillMaxSize()
                 .graphicsLayer {
                     alpha = PlayerDimens.scrimMaxAlpha *
-                        state.subViewBlurProgress() *
-                        playerBackdropAlpha()
+                            state.subViewBlurProgress() *
+                            playerBackdropAlpha()
                 }
                 .background(backdropScrimColor())
         )

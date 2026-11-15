@@ -18,37 +18,93 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.foamplayer.app.data.settings.FoamIconStyle
 
-/** One app icon, per semantic role. */
+/**
+ * One semantic role of the app's icons (play, search, ...). [FoamIconSet]'s
+ * named accessors and the icon settings screen's preview grid both read this
+ * enum, so a new role is one member + one accessor + one default assignment.
+ */
+enum class FoamIconRole(val label: String) {
+    PLAY("Play"),
+    PAUSE("Pause"),
+    NEXT("Next"),
+    PREVIOUS("Previous"),
+    LYRICS("Lyrics"),
+    QUEUE("Queue"),
+    CAST("Cast"),
+    RADIO("Radio"),
+    REPEAT("Repeat"),
+    REPEAT_ONE("Repeat one"),
+    HOME("Home"),
+    LIBRARY("Library"),
+    PLAYLISTS("Playlists"),
+    SEARCH("Search"),
+    EQUALIZER("Equalizer"),
+    STATS("Stats"),
+    SETTINGS("Settings"),
+    DRAG_HANDLE("Drag handle"),
+    MORE("More"),
+    CLOSE("Close"),
+    DELETE("Delete"),
+    ARROW_FORWARD("Forward"),
+    CHEVRON_RIGHT("Chevron right"),
+    SHUFFLE("Shuffle"),
+    MISC("Misc"),
+    UI("UI"),
+    INFO("Info"),
+    REPAIR("Repair")
+}
+
+/**
+ * One app icon, per semantic role. Backed by a role-to-vector map so bundled
+ * icon packs can override individual roles while every role keeps resolving.
+ * The named accessors below are the call-site compatible surface (the same
+ * names the flat properties used before), [get] reads a role dynamically and
+ * [with] overlays one role for the icon packs.
+ */
 @Immutable
-data class FoamIconSet(
-    val play: ImageVector,
-    val pause: ImageVector,
-    val next: ImageVector,
-    val previous: ImageVector,
-    val lyrics: ImageVector,
-    val queue: ImageVector,
-    val cast: ImageVector,
-    val radio: ImageVector,
-    val repeat: ImageVector,
-    val repeatOne: ImageVector,
-    val home: ImageVector,
-    val library: ImageVector,
-    val playlists: ImageVector,
-    val search: ImageVector,
-    val equalizer: ImageVector,
-    val stats: ImageVector,
-    val settings: ImageVector,
-    val dragHandle: ImageVector,
-    val more: ImageVector,
-    val close: ImageVector,
-    val delete: ImageVector,
-    val arrowForward: ImageVector,
-    val shuffle: ImageVector,
-    val misc: ImageVector,
-    val ui: ImageVector,
-    val info: ImageVector,
-    val repair: ImageVector
-)
+data class FoamIconSet(private val icons: Map<FoamIconRole, ImageVector>) {
+    val play: ImageVector get() = icons.getValue(FoamIconRole.PLAY)
+    val pause: ImageVector get() = icons.getValue(FoamIconRole.PAUSE)
+    val next: ImageVector get() = icons.getValue(FoamIconRole.NEXT)
+    val previous: ImageVector get() = icons.getValue(FoamIconRole.PREVIOUS)
+    val lyrics: ImageVector get() = icons.getValue(FoamIconRole.LYRICS)
+    val queue: ImageVector get() = icons.getValue(FoamIconRole.QUEUE)
+    val cast: ImageVector get() = icons.getValue(FoamIconRole.CAST)
+    val radio: ImageVector get() = icons.getValue(FoamIconRole.RADIO)
+    val repeat: ImageVector get() = icons.getValue(FoamIconRole.REPEAT)
+    val repeatOne: ImageVector get() = icons.getValue(FoamIconRole.REPEAT_ONE)
+    val home: ImageVector get() = icons.getValue(FoamIconRole.HOME)
+    val library: ImageVector get() = icons.getValue(FoamIconRole.LIBRARY)
+    val playlists: ImageVector get() = icons.getValue(FoamIconRole.PLAYLISTS)
+    val search: ImageVector get() = icons.getValue(FoamIconRole.SEARCH)
+    val equalizer: ImageVector get() = icons.getValue(FoamIconRole.EQUALIZER)
+    val stats: ImageVector get() = icons.getValue(FoamIconRole.STATS)
+    val settings: ImageVector get() = icons.getValue(FoamIconRole.SETTINGS)
+    val dragHandle: ImageVector get() = icons.getValue(FoamIconRole.DRAG_HANDLE)
+    val more: ImageVector get() = icons.getValue(FoamIconRole.MORE)
+    val close: ImageVector get() = icons.getValue(FoamIconRole.CLOSE)
+    val delete: ImageVector get() = icons.getValue(FoamIconRole.DELETE)
+    val arrowForward: ImageVector get() = icons.getValue(FoamIconRole.ARROW_FORWARD)
+    val chevronRight: ImageVector get() = icons.getValue(FoamIconRole.CHEVRON_RIGHT)
+    val shuffle: ImageVector get() = icons.getValue(FoamIconRole.SHUFFLE)
+    val misc: ImageVector get() = icons.getValue(FoamIconRole.MISC)
+    val ui: ImageVector get() = icons.getValue(FoamIconRole.UI)
+    val info: ImageVector get() = icons.getValue(FoamIconRole.INFO)
+    val repair: ImageVector get() = icons.getValue(FoamIconRole.REPAIR)
+
+    /** The icon of [role]; the dynamic twin of the matching named accessor. */
+    operator fun get(role: FoamIconRole): ImageVector = icons.getValue(role)
+
+    /** A copy of this set with [role] overlaid by [vector] (icon packs). */
+    fun with(role: FoamIconRole, vector: ImageVector): FoamIconSet =
+        FoamIconSet(icons + (role to vector))
+
+    companion object {
+        /** Builds a set from role-to-vector pairs; missing roles fail on access. */
+        fun of(vararg pairs: Pair<FoamIconRole, ImageVector>): FoamIconSet =
+            FoamIconSet(pairs.toMap())
+    }
+}
 
 /** The three icon styles and which one is active. */
 @Immutable
@@ -56,103 +112,109 @@ data class FoamIcons(
     val solid: FoamIconSet,
     val outline: FoamIconSet,
     val flat: FoamIconSet,
-    val currentStyle: FoamIconStyle
+    val currentStyle: FoamIconStyle,
 ) {
     val current: FoamIconSet
-        get() = when (currentStyle) {
-            FoamIconStyle.SOLID -> solid
-            FoamIconStyle.OUTLINE -> outline
-            FoamIconStyle.FLAT -> flat
-        }
+        get() = setFor(currentStyle)
+
+    /** The set of [style] (the style preview chips read the other two too). */
+    fun setFor(style: FoamIconStyle): FoamIconSet = when (style) {
+        FoamIconStyle.SOLID -> solid
+        FoamIconStyle.OUTLINE -> outline
+        FoamIconStyle.FLAT -> flat
+    }
 }
 
 val DefaultFoamIcons = FoamIcons(
-    solid = FoamIconSet(
-        play = Icons.Filled.PlayArrow,
-        pause = Icons.Filled.Pause,
-        next = Icons.Filled.FastForward,
-        previous = Icons.Filled.FastRewind,
-        lyrics = Icons.Filled.Lyrics,
-        queue = Icons.AutoMirrored.Filled.PlaylistPlay,
-        cast = Icons.Filled.Cast,
-        radio = Icons.Filled.Radio,
-        repeat = Icons.Filled.Repeat,
-        repeatOne = Icons.Filled.RepeatOne,
-        home = Icons.Filled.Home,
-        library = Icons.Filled.LibraryMusic,
-        playlists = Icons.AutoMirrored.Filled.QueueMusic,
-        search = Icons.Filled.Search,
-        equalizer = Icons.Filled.GraphicEq,
-        stats = Icons.Filled.BarChart,
-        settings = Icons.Filled.Settings,
-        dragHandle = Icons.Filled.DragHandle,
-        more = Icons.Filled.Menu,
-        close = Icons.Filled.Close,
-        delete = Icons.Filled.Delete,
-        arrowForward = Icons.AutoMirrored.Filled.ArrowForward,
-        shuffle = Icons.Filled.Shuffle,
-        misc = Icons.Filled.Extension,
-        ui = Icons.Filled.Palette,
-        info = Icons.Filled.Info,
-        repair = Icons.Filled.Build
+    solid = FoamIconSet.of(
+        FoamIconRole.PLAY to Icons.Filled.PlayArrow,
+        FoamIconRole.PAUSE to Icons.Filled.Pause,
+        FoamIconRole.NEXT to Icons.Filled.FastForward,
+        FoamIconRole.PREVIOUS to Icons.Filled.FastRewind,
+        FoamIconRole.LYRICS to Icons.Filled.Lyrics,
+        FoamIconRole.QUEUE to Icons.AutoMirrored.Filled.PlaylistPlay,
+        FoamIconRole.CAST to Icons.Filled.Cast,
+        FoamIconRole.RADIO to Icons.Filled.Radio,
+        FoamIconRole.REPEAT to Icons.Filled.Repeat,
+        FoamIconRole.REPEAT_ONE to Icons.Filled.RepeatOne,
+        FoamIconRole.HOME to Icons.Filled.Home,
+        FoamIconRole.LIBRARY to Icons.Filled.LibraryMusic,
+        FoamIconRole.PLAYLISTS to Icons.Filled.LibraryMusic,
+        FoamIconRole.SEARCH to Icons.Filled.Search,
+        FoamIconRole.EQUALIZER to Icons.Filled.GraphicEq,
+        FoamIconRole.STATS to Icons.Filled.BarChart,
+        FoamIconRole.SETTINGS to Icons.Filled.Settings,
+        FoamIconRole.DRAG_HANDLE to Icons.Filled.DragHandle,
+        FoamIconRole.MORE to Icons.Filled.Menu,
+        FoamIconRole.CLOSE to Icons.Filled.Close,
+        FoamIconRole.DELETE to Icons.Filled.Delete,
+        FoamIconRole.ARROW_FORWARD to Icons.AutoMirrored.Filled.ArrowForward,
+        FoamIconRole.CHEVRON_RIGHT to Icons.Filled.ChevronRight,
+        FoamIconRole.SHUFFLE to Icons.Filled.Shuffle,
+        FoamIconRole.MISC to Icons.Filled.Extension,
+        FoamIconRole.UI to Icons.Filled.Palette,
+        FoamIconRole.INFO to Icons.Filled.Info,
+        FoamIconRole.REPAIR to Icons.Filled.Build
     ),
-    outline = FoamIconSet(
-        play = Icons.Outlined.PlayArrow,
-        pause = Icons.Outlined.Pause,
-        next = Icons.Outlined.FastForward,
-        previous = Icons.Outlined.FastRewind,
-        lyrics = Icons.Outlined.Lyrics,
-        queue = Icons.AutoMirrored.Outlined.PlaylistPlay,
-        cast = Icons.Outlined.Cast,
-        radio = Icons.Outlined.Radio,
-        repeat = Icons.Outlined.Repeat,
-        repeatOne = Icons.Outlined.RepeatOne,
-        home = Icons.Outlined.Home,
-        library = Icons.Outlined.LibraryMusic,
-        playlists = Icons.AutoMirrored.Outlined.QueueMusic,
-        search = Icons.Outlined.Search,
-        equalizer = Icons.Outlined.GraphicEq,
-        stats = Icons.Outlined.BarChart,
-        settings = Icons.Outlined.Settings,
-        dragHandle = Icons.Outlined.DragHandle,
-        more = Icons.Outlined.Menu,
-        close = Icons.Outlined.Close,
-        delete = Icons.Outlined.Delete,
-        arrowForward = Icons.AutoMirrored.Outlined.ArrowForward,
-        shuffle = Icons.Outlined.Shuffle,
-        misc = Icons.Outlined.Extension,
-        ui = Icons.Outlined.Palette,
-        info = Icons.Outlined.Info,
-        repair = Icons.Outlined.Build
+    outline = FoamIconSet.of(
+        FoamIconRole.PLAY to Icons.Outlined.PlayArrow,
+        FoamIconRole.PAUSE to Icons.Outlined.Pause,
+        FoamIconRole.NEXT to Icons.Outlined.FastForward,
+        FoamIconRole.PREVIOUS to Icons.Outlined.FastRewind,
+        FoamIconRole.LYRICS to Icons.Outlined.Lyrics,
+        FoamIconRole.QUEUE to Icons.AutoMirrored.Outlined.PlaylistPlay,
+        FoamIconRole.CAST to Icons.Outlined.Cast,
+        FoamIconRole.RADIO to Icons.Outlined.Radio,
+        FoamIconRole.REPEAT to Icons.Outlined.Repeat,
+        FoamIconRole.REPEAT_ONE to Icons.Outlined.RepeatOne,
+        FoamIconRole.HOME to Icons.Outlined.Home,
+        FoamIconRole.LIBRARY to Icons.Outlined.LibraryMusic,
+        FoamIconRole.PLAYLISTS to Icons.Outlined.LibraryMusic,
+        FoamIconRole.SEARCH to Icons.Outlined.Search,
+        FoamIconRole.EQUALIZER to Icons.Outlined.GraphicEq,
+        FoamIconRole.STATS to Icons.Outlined.BarChart,
+        FoamIconRole.SETTINGS to Icons.Outlined.Settings,
+        FoamIconRole.DRAG_HANDLE to Icons.Outlined.DragHandle,
+        FoamIconRole.MORE to Icons.Outlined.Menu,
+        FoamIconRole.CLOSE to Icons.Outlined.Close,
+        FoamIconRole.DELETE to Icons.Outlined.Delete,
+        FoamIconRole.ARROW_FORWARD to Icons.AutoMirrored.Outlined.ArrowForward,
+        FoamIconRole.CHEVRON_RIGHT to Icons.Outlined.ChevronRight,
+        FoamIconRole.SHUFFLE to Icons.Outlined.Shuffle,
+        FoamIconRole.MISC to Icons.Outlined.Extension,
+        FoamIconRole.UI to Icons.Outlined.Palette,
+        FoamIconRole.INFO to Icons.Outlined.Info,
+        FoamIconRole.REPAIR to Icons.Outlined.Build
     ),
-    flat = FoamIconSet(
-        play = Icons.Rounded.PlayArrow,
-        pause = Icons.Rounded.Pause,
-        next = Icons.Rounded.FastForward,
-        previous = Icons.Rounded.FastRewind,
-        lyrics = Icons.Rounded.Lyrics,
-        queue = Icons.AutoMirrored.Rounded.PlaylistPlay,
-        cast = Icons.Rounded.Cast,
-        radio = Icons.Rounded.Radio,
-        repeat = Icons.Rounded.Repeat,
-        repeatOne = Icons.Rounded.RepeatOne,
-        home = Icons.Rounded.Home,
-        library = Icons.Rounded.LibraryMusic,
-        playlists = Icons.AutoMirrored.Rounded.QueueMusic,
-        search = Icons.Rounded.Search,
-        equalizer = Icons.Rounded.GraphicEq,
-        stats = Icons.Rounded.BarChart,
-        settings = Icons.Rounded.Settings,
-        dragHandle = Icons.Rounded.DragHandle,
-        more = Icons.Rounded.Menu,
-        close = Icons.Rounded.Close,
-        delete = Icons.Rounded.Delete,
-        arrowForward = Icons.AutoMirrored.Rounded.ArrowForward,
-        shuffle = Icons.Rounded.Shuffle,
-        misc = Icons.Rounded.Extension,
-        ui = Icons.Rounded.Palette,
-        info = Icons.Rounded.Info,
-        repair = Icons.Rounded.Build
+    flat = FoamIconSet.of(
+        FoamIconRole.PLAY to Icons.Rounded.PlayArrow,
+        FoamIconRole.PAUSE to Icons.Rounded.Pause,
+        FoamIconRole.NEXT to Icons.Rounded.FastForward,
+        FoamIconRole.PREVIOUS to Icons.Rounded.FastRewind,
+        FoamIconRole.LYRICS to Icons.Rounded.Lyrics,
+        FoamIconRole.QUEUE to Icons.AutoMirrored.Rounded.PlaylistPlay,
+        FoamIconRole.CAST to Icons.Rounded.Cast,
+        FoamIconRole.RADIO to Icons.Rounded.Radio,
+        FoamIconRole.REPEAT to Icons.Rounded.Repeat,
+        FoamIconRole.REPEAT_ONE to Icons.Rounded.RepeatOne,
+        FoamIconRole.HOME to Icons.Rounded.Home,
+        FoamIconRole.LIBRARY to Icons.Rounded.LibraryMusic,
+        FoamIconRole.PLAYLISTS to Icons.Rounded.LibraryMusic,
+        FoamIconRole.SEARCH to Icons.Rounded.Search,
+        FoamIconRole.EQUALIZER to Icons.Rounded.GraphicEq,
+        FoamIconRole.STATS to Icons.Rounded.BarChart,
+        FoamIconRole.SETTINGS to Icons.Rounded.Settings,
+        FoamIconRole.DRAG_HANDLE to Icons.Rounded.DragHandle,
+        FoamIconRole.MORE to Icons.Rounded.Menu,
+        FoamIconRole.CLOSE to Icons.Rounded.Close,
+        FoamIconRole.DELETE to Icons.Rounded.Delete,
+        FoamIconRole.ARROW_FORWARD to Icons.AutoMirrored.Rounded.ArrowForward,
+        FoamIconRole.CHEVRON_RIGHT to Icons.Rounded.ChevronRight,
+        FoamIconRole.SHUFFLE to Icons.Rounded.Shuffle,
+        FoamIconRole.MISC to Icons.Rounded.Extension,
+        FoamIconRole.UI to Icons.Rounded.Palette,
+        FoamIconRole.INFO to Icons.Rounded.Info,
+        FoamIconRole.REPAIR to Icons.Rounded.Build
     ),
     currentStyle = FoamIconStyle.FLAT
 )

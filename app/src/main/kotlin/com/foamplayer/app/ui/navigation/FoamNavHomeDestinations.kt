@@ -4,6 +4,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable as navComposable
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.MediaListView
+import com.foamplayer.app.data.settings.PlayerMode
 import com.foamplayer.app.ui.screens.home.FavoriteArtistsSeeAllScreen
 import com.foamplayer.app.ui.screens.home.FavoriteTracksSeeAllScreen
 import com.foamplayer.app.ui.screens.home.HomeScreen
@@ -36,14 +37,19 @@ internal fun NavGraphBuilder.homeDestinations(context: FoamNavGraphContext) {
     composable(Screen.Home.route) {
         HomeScreen(
             viewModel = context.homeViewModel,
-            onPlaylistClick = { playlist ->
-                context.openPlaylist(playlist.playlistId, playlist.name, playlist.imageUrl)
+            onPlaylistClick = { playlist, flightOrigin ->
+                context.openPlaylist(
+                    playlist.playlistId,
+                    playlist.name,
+                    playlist.imageUrl,
+                    flightOrigin
+                )
             },
-            onAlbumClick = { album ->
-                context.openAlbum(album.album, album.albumArtPath, album.artist)
+            onAlbumClick = { album, flightOrigin ->
+                context.openAlbum(album.album, album.albumArtPath, album.artist, flightOrigin)
             },
-            onArtistClick = { artist, image, imageIsEmbeddedArt ->
-                context.openArtist(artist, image, imageIsEmbeddedArt)
+            onArtistClick = { artist, image, imageIsEmbeddedArt, flightOrigin ->
+                context.openArtist(artist, image, imageIsEmbeddedArt, flightOrigin)
             },
             onTrackClick = { track -> context.onPlayTracks(listOf(track), 0, null) },
             onSeeAllAlbums = { context.navigateUnshared(Screen.HomeSeeAllAlbums.route) },
@@ -61,7 +67,9 @@ internal fun NavGraphBuilder.homeDestinations(context: FoamNavGraphContext) {
             sharedTransitionScope = context.sharedTransitionScope,
             animatedVisibilityScope = this,
             playerTransitionVisibilityScope = context.playerTransitionVisibilityScope,
-            sharedTrackId = context.sharedTrackId
+            sharedTrackId = context.sharedTrackId,
+            isPlaybackActive = context.isPlaybackActive,
+            immersiveArt = context.settings.playerMode == PlayerMode.IMMERSIVE
         )
     }
     composable(Screen.HomeSeeAllPlaylists.route) {
@@ -277,7 +285,9 @@ internal fun NavGraphBuilder.homeDestinations(context: FoamNavGraphContext) {
             playerTransitionVisibilityScope = context.playerTransitionVisibilityScope,
             sharedTrackId = context.sharedTrackId,
             activeTrackId = context.activeTrackId,
-            onTrackClick = { track -> context.onPlayTracks(listOf(track), 0, null) }
+            onTrackClick = { track -> context.onPlayTracks(listOf(track), 0, null) },
+            isPlaybackActive = context.isPlaybackActive,
+            immersiveArt = context.settings.playerMode == PlayerMode.IMMERSIVE
         )
     }
 }

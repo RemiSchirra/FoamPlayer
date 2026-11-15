@@ -3,6 +3,7 @@ package com.foamplayer.app.ui.utils
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.runtime.Composable
@@ -10,10 +11,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import com.foamplayer.app.ui.theme.FoamMotion
 
 private const val PressShrinkTargetScale = 0.9f
-private const val PressShrinkInMs = 110
-private const val PressShrinkOutMs = 200
+
+/**
+ * Swallows tap gestures without reacting to them, so taps that miss the
+ * interactive elements of an overlay surface cannot fall through to the content
+ * scrolling behind it. Place it under the interactive content: whatever gets
+ * the press first keeps working, and this only catches presses nothing else
+ * claimed.
+ */
+fun Modifier.consumeTaps(): Modifier = pointerInput(Unit) { detectTapGestures { } }
 
 /**
  * Press feedback for control buttons: tweens down to the target scale on
@@ -31,11 +41,11 @@ fun Modifier.pressShrink(interactionSource: MutableInteractionSource): Modifier 
             when (interaction) {
                 is PressInteraction.Press -> scale.animateTo(
                     targetValue = PressShrinkTargetScale,
-                    animationSpec = tween(durationMillis = PressShrinkInMs, easing = EaseOutCubic)
+                    animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP, easing = EaseOutCubic)
                 )
                 is PressInteraction.Release, is PressInteraction.Cancel -> scale.animateTo(
                     targetValue = 1f,
-                    animationSpec = tween(durationMillis = PressShrinkOutMs, easing = EaseOutCubic)
+                    animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT, easing = EaseOutCubic)
                 )
             }
         }

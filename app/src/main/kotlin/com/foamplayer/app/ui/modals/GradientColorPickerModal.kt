@@ -348,7 +348,7 @@ private fun PickerButton(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FoamDimens.buttonRounding))
-            .background(if (filled) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant)
+            .background(if (filled) FoamTheme.accentColor else FoamTheme.tintedSurfaceVariant)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -360,7 +360,7 @@ private fun PickerButton(
         BasicText(
             text = label,
             style = FoamTheme.typography.body.copy(
-                color = if (filled) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+                color = if (filled) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary,
                 fontWeight = FontWeight.Bold
             )
         )

@@ -68,6 +68,7 @@ import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.withContext
 import java.text.BreakIterator
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val LRC_LEAD_MS = 300L
 private const val TTML_LEAD_MS = 0L
@@ -355,6 +356,7 @@ fun LyricsEnhanced(
         }.first { it }
 
         var forceNextScroll = true
+        var isInitialPlacement = true
         var lastIndex: Int? = null
         while (isActive) {
             val index =
@@ -376,11 +378,13 @@ fun LyricsEnhanced(
                         animateToNearbyItem = !forceNextScroll,
                         force = forceNextScroll,
                         alignByItemCenter = isTtmlFormat,
+                        animate = !isInitialPlacement,
                     )
                     forceNextScroll = false
+                    isInitialPlacement = false
                 }
             }
-            delay(LYRIC_FOCUS_POLL_INTERVAL_MS)
+            delay(LYRIC_FOCUS_POLL_INTERVAL_MS.milliseconds)
         }
     }
 
@@ -558,4 +562,3 @@ fun LyricsEnhanced(
     }
 
 }
-

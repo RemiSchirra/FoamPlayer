@@ -21,14 +21,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.data.settings.NotificationExtraButton
 import com.foamplayer.app.ui.components.FoamEnumItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
 
 /**
  * Subscreen of Settings > Misc: picks which two actions sit next to the fixed
@@ -41,22 +40,18 @@ fun NotificationSettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.notification_section),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.notification_section),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
-            contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
+            contentPadding = PaddingValues(
+                top = SettingsHeaderZoneHeight,
+                bottom = LocalBottomBarClearance.current
+            )
         ) {
             item {
                 BasicText(

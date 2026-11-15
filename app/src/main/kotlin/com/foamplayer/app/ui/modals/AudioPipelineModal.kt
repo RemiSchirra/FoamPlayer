@@ -28,7 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.audio.bitperfect.AudioOutputInfo
 import com.foamplayer.app.audio.pipeline.PipelineStage
@@ -113,7 +113,7 @@ private fun PipelineStageRow(
         PipelineStageStatus.BYPASSED -> FoamTheme.colors.textSecondary
         PipelineStageStatus.WARN -> FoamTheme.colors.bitPerfectInactive
     }
-    val lineColor = FoamTheme.colors.borderOverlay
+    val lineColor = FoamTheme.tintedSurfaceVariant
 
     Row(modifier = Modifier.height(IntrinsicSize.Min)) {
         // Status dot + connector line.
@@ -144,7 +144,11 @@ private fun PipelineStageRow(
 
         Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
 
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(bottom = 6.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 BasicText(
                     text = stage.name,
@@ -160,7 +164,9 @@ private fun PipelineStageRow(
                 Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
                 StageBadge(stage.status)
             }
-            BasicText(text = stage.headline, style = FoamTheme.typography.caption)
+            if (stage.headline.isNotBlank()) {
+                BasicText(text = stage.headline, style = FoamTheme.typography.caption)
+            }
             stage.details.forEach { detail ->
                 BasicText(
                     text = detail,

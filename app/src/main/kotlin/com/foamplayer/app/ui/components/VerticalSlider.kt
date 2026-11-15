@@ -51,7 +51,7 @@ fun VerticalSlider(
     val display = if (isDragging) dragValue else value
 
     val accent = FoamTheme.accentColor
-    val trackColor = FoamTheme.colors.surfaceVariant
+    val trackColor = FoamTheme.tintedSurface
     val thumbColor = FoamTheme.colors.textPrimary
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {

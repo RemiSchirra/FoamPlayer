@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.lyrics
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,30 +9,38 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.lyrics.LYRICS_NOT_FOUND
+import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 
 private enum class LyricsViewState { LOADING, INSTRUMENTAL, NO_LYRICS, CONTENT }
@@ -42,10 +49,6 @@ private enum class LyricsViewState { LOADING, INSTRUMENTAL, NO_LYRICS, CONTENT }
 fun LyricsScreen(
     viewModel: LyricsViewModel = hiltViewModel(),
     backgroundColor: Color = FoamTheme.colors.background,
-    // Vertical collapse-drag for the states that render no scrollable (loading,
-    // instrumental, "Lyrics not found"): nested-scroll overscroll from the lyrics
-    // list is what powers swipe-back-to-full-player, and these states have no list
-    // to produce it, so they need the drag wired directly.
     dragModifier: Modifier = Modifier
 ) {
     val rawLyrics by viewModel.lyrics.collectAsState()
@@ -55,9 +58,6 @@ fun LyricsScreen(
     val lyricsLineBlur by viewModel.lyricsLineBlur.collectAsState()
     val lyricsWordSyncDisabled by viewModel.lyricsWordSyncDisabled.collectAsState()
 
-    // Handled here (not inside LyricsEnhanced) so EVERY path that ends without
-    // lyrics — provider miss (null), the LYRICS_NOT_FOUND sentinel, or a blank
-    // result — shows the instrumental shortcut.
     val showNoLyrics = rawLyrics == null || rawLyrics == LYRICS_NOT_FOUND || rawLyrics?.isBlank() == true
 
     val viewState = when {
@@ -77,26 +77,20 @@ fun LyricsScreen(
             modifier = Modifier.fillMaxSize(),
             transitionSpec = {
                 if (targetState == LyricsViewState.INSTRUMENTAL) {
-                    // Marking instrumental: the texts shrink away while the
-                    // music note pops in.
                     (scaleIn(
                         initialScale = 0.3f,
-                        animationSpec = tween()
-                    ) + fadeIn(animationSpec = tween(150))) togetherWith
+                        animationSpec = tween(FoamMotion.Duration.SMOOTH, easing = FoamMotion.Easings.STANDARD)
+                    ) + fadeIn(animationSpec = tween(FoamMotion.Duration.SNAP))) togetherWith
                             (scaleOut(
                                 targetScale = 0.7f,
-                                animationSpec = tween(250, easing = FastOutSlowInEasing)
-                            ) + fadeOut(animationSpec = tween(200)))
+                                animationSpec = tween(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.STANDARD)
+                            ) + fadeOut(animationSpec = tween(FoamMotion.Duration.SWIFT)))
                 } else {
-                    fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(220))
+                    fadeIn(animationSpec = tween(FoamMotion.Duration.STANDARD)) togetherWith fadeOut(animationSpec = tween(FoamMotion.Duration.STANDARD))
                 }
             },
             label = "LyricsViewState"
         ) { state ->
-            // Full-size centering container per state: every child (spinner,
-            // icon, texts) is centered on screen regardless of its own size.
-            // The collapse drag only attaches to non-scrollable states -- CONTENT
-            // keeps relying on nested-scroll overscroll from the lyrics list.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -131,7 +125,17 @@ fun LyricsScreen(
                                 style = FoamTheme.typography.body,
                                 color = FoamTheme.accentColor,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.clickable(onClick = viewModel::markCurrentTrackInstrumental)
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(FoamDimens.buttonRounding))
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = ripple(color = FoamTheme.colors.textPrimary),
+                                        onClick = viewModel::markCurrentTrackInstrumental
+                                    )
+                                    .padding(
+                                        horizontal = FoamDimens.paddingSmall,
+                                        vertical = FoamDimens.spacingTiny
+                                    )
                             )
                         }
                     }

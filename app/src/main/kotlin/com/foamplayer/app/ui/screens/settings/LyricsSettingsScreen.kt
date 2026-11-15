@@ -1,11 +1,10 @@
 package com.foamplayer.app.ui.screens.settings
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,7 +23,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,9 +40,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.LyricsSource
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamNavigationButton
 import com.foamplayer.app.ui.components.FoamSwitch
 import com.foamplayer.app.ui.components.FoamSwitchItem
@@ -53,9 +52,7 @@ import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamSurfaceBlend
-import com.foamplayer.app.ui.theme.foamSurface
 
 @Composable
 fun LyricsSettingsScreen(
@@ -66,22 +63,16 @@ fun LyricsSettingsScreen(
     var showProvidersModal by remember { mutableStateOf(false) }
     val settings by viewModel.settings.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.lyrics),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.lyrics),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = FoamDimens.paddingMedium)
+                .padding(top = SettingsHeaderZoneHeight)
                 .padding(bottom = LocalBottomBarClearance.current)
         ) {
             BasicText(text = stringResource(R.string.lyrics_sources), style = FoamTheme.typography.titleMedium)
@@ -99,17 +90,10 @@ fun LyricsSettingsScreen(
             BasicText(text = stringResource(R.string.lyrics_providers), style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .foamSurface()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = ripple(color = FoamTheme.colors.textPrimary),
-                        onClick = { showProvidersModal = true }
-                    )
-                    .padding(FoamDimens.paddingMedium)
+            FoamCard(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(FoamDimens.paddingMedium),
+                onClick = { showProvidersModal = true }
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -136,12 +120,7 @@ fun LyricsSettingsScreen(
             BasicText(text = stringResource(R.string.display), style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .foamSurface()
-            ) {
+            FoamCard(modifier = Modifier.fillMaxWidth()) {
                 FoamSwitchItem(
                     title = stringResource(R.string.blur_inactive_lines),
                     description = null,
@@ -152,12 +131,7 @@ fun LyricsSettingsScreen(
 
             Spacer(modifier = Modifier.height(FoamDimens.spacingSmall))
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .foamSurface()
-            ) {
+            FoamCard(modifier = Modifier.fillMaxWidth()) {
                 FoamSwitchItem(
                     title = stringResource(R.string.disable_word_sync),
                     description = stringResource(R.string.disable_word_sync_desc),
@@ -171,12 +145,7 @@ fun LyricsSettingsScreen(
             BasicText(text = stringResource(R.string.manager), style = FoamTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                    .foamSurface()
-            ) {
+            FoamCard(modifier = Modifier.fillMaxWidth()) {
                 FoamNavigationButton(
                     title = stringResource(R.string.lyrics_manager),
                     description = stringResource(R.string.lyrics_manager_desc),

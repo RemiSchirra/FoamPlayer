@@ -13,20 +13,22 @@ import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.DefaultEnabledHomeSections
 import com.foamplayer.app.constants.DefaultHomeSectionOrder
 import com.foamplayer.app.constants.DefaultLyricsSourceOrder
-import com.foamplayer.app.constants.DefaultNavBarScreenItems
+import com.foamplayer.app.constants.DefaultNavBarPrimaryEnabled
+import com.foamplayer.app.constants.DefaultNavBarSecondaryEnabled
 import com.foamplayer.app.constants.HomeSection
 import com.foamplayer.app.constants.MediaDensity
 import com.foamplayer.app.constants.MediaListView
-import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
 import com.foamplayer.app.constants.PreferredLyricsProvider
 import com.foamplayer.app.data.settings.AppSettings
 import com.foamplayer.app.data.settings.BackgroundMode
+import com.foamplayer.app.data.settings.DEFAULT_ICON_PACK_ID
 import com.foamplayer.app.data.settings.FoamIconStyle
 import com.foamplayer.app.data.settings.GradientStop
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.NotificationExtraButton
 import com.foamplayer.app.data.settings.PlayerMode
+import com.foamplayer.app.data.settings.PlayerPagerEffect
 import com.foamplayer.app.data.settings.SearchHistoryEntry
 import com.foamplayer.app.data.settings.SeekBarStyle
 import com.foamplayer.app.data.settings.ThemeMode
@@ -56,7 +58,13 @@ object BackupJson {
         put("resumeOnStartup", settings.resumeOnStartup)
         put("resumeOnDeviceConnected", settings.resumeOnDeviceConnected)
         put("pauseOnDeviceDisconnected", settings.pauseOnDeviceDisconnected)
-        put("iconStyle", settings.iconStyle.name)
+        put("iconStyles", JSONObject().apply {
+            settings.iconStyles.forEach { (packId, style) -> put(packId, style.name) }
+        })
+        put("iconPackId", settings.iconPackId)
+        put("dynamicNavIcons", settings.dynamicNavIcons)
+        put("navIconActiveVariant", settings.navIconActiveVariant.name)
+        put("navIconInactiveVariant", settings.navIconInactiveVariant.name)
         put("miniPlayerRounding", settings.miniPlayerRounding)
         put("fullPlayerRounding", settings.fullPlayerRounding)
         put("marqueeMode", settings.marqueeMode.name)
@@ -66,6 +74,7 @@ object BackupJson {
         put("accentColor", settings.accentColor)
         put("accentTintEnabled", settings.accentTintEnabled)
         put("playerMode", settings.playerMode.name)
+        put("playerPagerEffect", settings.playerPagerEffect.name)
         put("animateSeekBarEnabled", settings.animateSeekBarEnabled)
         put("seekBarStyle", settings.seekBarStyle.name)
         put("autoOpenPlayerEnabled", settings.autoOpenPlayerEnabled)
@@ -112,6 +121,8 @@ object BackupJson {
         put("lastFmScrobblingEnabled", settings.lastFmScrobblingEnabled)
         put("scrobbleOnlyFirstArtist", settings.scrobbleOnlyFirstArtist)
         put("artistImageResolveEnabled", settings.artistImageResolveEnabled)
+        put("artistImageCacheLimit", settings.artistImageCacheLimit)
+        put("artistImageResolveAllEnabled", settings.artistImageResolveAllEnabled)
         put("displayOnLockScreen", settings.displayOnLockScreen)
         put("fastLockScreenEnabled", settings.fastLockScreenEnabled)
         put("notificationButtonLeft", settings.notificationButtonLeft.name)
@@ -143,7 +154,17 @@ object BackupJson {
         resumeOnStartup = json.optBoolean("resumeOnStartup", false),
         resumeOnDeviceConnected = json.optBoolean("resumeOnDeviceConnected", true),
         pauseOnDeviceDisconnected = json.optBoolean("pauseOnDeviceDisconnected", true),
-        iconStyle = decodeEnum(json.optString("iconStyle"), FoamIconStyle.FLAT),
+        iconStyles = decodeIconStyleMap(json.optJSONObject("iconStyles")),
+  iconPackId = json.optString("iconPackId", DEFAULT_ICON_PACK_ID),
+        dynamicNavIcons = json.optBoolean("dynamicNavIcons", true),
+        navIconActiveVariant = decodeEnum(
+            json.optString("navIconActiveVariant"),
+            FoamIconStyle.FLAT
+        ),
+        navIconInactiveVariant = decodeEnum(
+            json.optString("navIconInactiveVariant"),
+            FoamIconStyle.OUTLINE
+        ),
         miniPlayerRounding = json.optInt("miniPlayerRounding", 40),
         fullPlayerRounding = json.optInt("fullPlayerRounding", 40),
         marqueeMode = decodeEnum(json.optString("marqueeMode"), MarqueeMode.PING_PONG),
@@ -155,6 +176,10 @@ object BackupJson {
         accentColor = json.optInt("accentColor", AppSettings.DEFAULT_ACCENT_COLOR),
         accentTintEnabled = json.optBoolean("accentTintEnabled", true),
         playerMode = decodeEnum(json.optString("playerMode"), PlayerMode.NORMAL),
+        playerPagerEffect = decodeEnum(
+            json.optString("playerPagerEffect"),
+            PlayerPagerEffect.SLIDE
+        ),
         animateSeekBarEnabled = json.optBoolean("animateSeekBarEnabled", false),
         seekBarStyle = decodeEnum(json.optString("seekBarStyle"), SeekBarStyle.NORMAL),
         autoOpenPlayerEnabled = json.optBoolean("autoOpenPlayerEnabled", false),
@@ -205,12 +230,12 @@ object BackupJson {
         navBarPrimaryOrder = decodeEnumList(json.optJSONArray("navBarPrimaryOrder")),
         navBarPrimaryEnabled = decodeEnumSet(
             json.optJSONArray("navBarPrimaryEnabled"),
-            DefaultNavBarScreenItems.toSet()
+            DefaultNavBarPrimaryEnabled
         ),
         navBarSecondaryOrder = decodeEnumList(json.optJSONArray("navBarSecondaryOrder")),
         navBarSecondaryEnabled = decodeEnumSet(
             json.optJSONArray("navBarSecondaryEnabled"),
-            setOf(NavBarItem.STATS)
+            DefaultNavBarSecondaryEnabled
         ),
         homeSectionOrder = decodeEnumList<HomeSection>(json.optJSONArray("homeSectionOrder"))
             .ifEmpty { DefaultHomeSectionOrder },
@@ -230,6 +255,11 @@ object BackupJson {
         lastFmScrobblingEnabled = json.optBoolean("lastFmScrobblingEnabled", false),
         scrobbleOnlyFirstArtist = json.optBoolean("scrobbleOnlyFirstArtist", true),
         artistImageResolveEnabled = json.optBoolean("artistImageResolveEnabled", false),
+        artistImageCacheLimit = json.optInt(
+            "artistImageCacheLimit",
+            AppSettings.DEFAULT_ARTIST_IMAGE_CACHE_LIMIT
+        ),
+        artistImageResolveAllEnabled = json.optBoolean("artistImageResolveAllEnabled", false),
         displayOnLockScreen = json.optBoolean("displayOnLockScreen", false),
         fastLockScreenEnabled = json.optBoolean("fastLockScreenEnabled", true),
         notificationButtonLeft = decodeEnum(
@@ -410,6 +440,20 @@ object BackupJson {
 
     private inline fun <reified T : Enum<T>> decodeEnum(name: String, default: T): T =
         enumValues<T>().firstOrNull { it.name == name } ?: default
+
+    /**
+     * Decodes the per-pack icon style map; unknown packs or styles are dropped so
+     * backups from builds with other packs restore gracefully.
+     */
+    private fun decodeIconStyleMap(obj: JSONObject?): Map<String, FoamIconStyle> {
+        if (obj == null) return emptyMap()
+        val result = mutableMapOf<String, FoamIconStyle>()
+        for (packId in obj.keys()) {
+            runCatching { FoamIconStyle.valueOf(obj.optString(packId)) }.getOrNull()
+                ?.let { result[packId] = it }
+        }
+        return result
+    }
 
     private inline fun <reified T : Enum<T>> decodeEnumList(array: JSONArray?): List<T> {
         if (array == null) return emptyList()

@@ -115,6 +115,10 @@
     <string name="artist_images_stop">STOP</string>
     <string name="artist_images_cache_count">%1$d images in cache</string>
     <string name="artist_images_clear_cache">CLEAR CACHE</string>
+    <string name="artist_images_cache_limit">Artists to cache</string>
+    <string name="artist_images_cache_limit_desc">Images are resolved when you open an artist page; the least recently visited is removed once the cache is full.</string>
+    <string name="artist_images_resolve_all">Resolve all artists</string>
+    <string name="artist_images_resolve_all_desc">Scan every artist in your library up front instead of resolving images on artist page visits.</string>
 
     <string name="no_audio_detected">No audio files detected.\nGo to Settings to add folders and scan your library.</string>
     <string name="search_hint">Search</string>
@@ -124,7 +128,7 @@
     <string name="application">Application</string>
     <string name="screens">Screens</string>
     <string name="dynamic_effects">Dynamic Effects</string>
-    <string name="icon_style">Icon Style</string>
+    <string name="icon_pack">Icon Pack</string>
     <string name="visuals">Visuals</string>
     <string name="behaviour">Behaviour</string>
     <string name="interface_rounding">Interface Rounding</string>
@@ -132,23 +136,16 @@
     <string name="system_colors">System Colors</string>
 
     <string name="colors">Colors</string>
-    <string name="colors_desc">Accent color and palette</string>
     <string name="player">Player</string>
-    <string name="player_desc">Layout and visuals</string>
     <string name="background">Background</string>
-    <string name="background_desc">Dynamic background effects</string>
     <string name="navigation_bar">Navigation Bar</string>
-    <string name="navbar_desc">Navbar layout and transparency</string>
     <string name="collections">Collections</string>
-    <string name="collections_desc">Hero layout of collection screens</string>
     <string name="navbar_mode">Navbar Mode</string>
     <string name="navbar_mode_desc">Choose how the bottom navigation looks</string>
     <string name="navbar_mode_docked">Docked</string>
     <string name="navbar_mode_floating">Floating</string>
     <string name="navbar_mode_attached">Attached</string>
-    <string name="transparency">Transparency</string>
     <string name="transparent_when_player_open">Transparent when player open</string>
-    <string name="transparent_when_player_open_desc">Make the navigation bar background transparent when the full player is open</string>
     <string name="navbar_main_bar">Main Bar</string>
     <string name="navbar_main_bar_desc">Drag to reorder and show or hide items</string>
     <string name="navbar_second_bar">Second Bar</string>
@@ -156,6 +153,9 @@
     <string name="navbar_item_more">More</string>
     <string name="expand_navigation">Expand navigation</string>
     <string name="collapse_navigation">Collapse navigation</string>
+    <string name="dynamic_icons">Dynamic icons</string>
+    <string name="nav_icon_active_variant">Active variant</string>
+    <string name="nav_icon_inactive_variant">Inactive variant</string>
 
     <!-- Stats screen -->
     <string name="stats_loading">Loading listening stats…</string>
@@ -253,7 +253,10 @@
     <string name="lyrics_results_plain">Plain</string>
     <string name="lyrics_results_synced">Synced</string>
     <string name="lyrics_results_word_synced">Word-synced</string>
-    <string name="lyrics_results_title">Lyrics Search Results</string>
+    <string name="lyrics_details_title">Lyrics details</string>
+    <string name="lyrics_details_tab_saved">Saved lyrics</string>
+    <string name="lyrics_details_tab_search">Search</string>
+    <string name="lyrics_details_saved_empty">No lyrics saved for this track</string>
     <string name="lyrics_results_provider">Provider</string>
     <string name="lyrics_results_save_as_file">Save as file</string>
     <string name="lyrics_results_embed">Embed in file</string>
@@ -313,18 +316,14 @@
     <string name="play_on_remote_player_desc">%1$s media server</string>
     <string name="play_on_upnp_desc">UPnP</string>
     <string name="track_count_duration">%1$d Tracks • %2$s</string>
+    <string name="year_track_count_duration">%1$d • %2$d Tracks • %3$s</string>
     <string name="add_separator">Add separator…</string>
 
-    <string name="audio_settings_subtitle">Bit-perfect engine and output options</string>
-    <string name="ui_settings_subtitle">Appearance, icon styles and rounding</string>
-    <string name="library_settings_subtitle">Manage music folders and metadata</string>
-    <string name="lyrics_settings_subtitle">Lyrics providers and display settings</string>
     <string name="test_components">Components Test</string>
-    <string name="test_components_subtitle">Internal UI testing utilities</string>
     <string name="switches">Switches</string>
     <string name="sliders">Sliders</string>
 
-    <!-- Developer tools (devMode builds only) -->
+    <!-- Developer tools (debug builds only) -->
     <string name="dev_tools_section">Developer tools</string>
     <string name="dev_reset_onboarding">Reset onboarding</string>
     <string name="dev_reset_onboarding_title">Reset onboarding?</string>
@@ -368,6 +367,14 @@
     <string name="seek_bar_style_desc">Look of the full player\'s progress bar</string>
     <string name="seek_bar_style_normal">Normal</string>
     <string name="seek_bar_style_waveform">Waveform</string>
+    <string name="pager_effect">Pager Effect</string>
+    <string name="pager_effect_desc">Animation when swiping between tracks in the full player</string>
+    <string name="pager_effect_slide">Slide</string>
+    <string name="pager_effect_crossfade">Crossfade</string>
+    <string name="pager_effect_depth">Depth</string>
+    <string name="pager_effect_flip">Flip</string>
+    <string name="pager_effect_cube">Cube</string>
+    <string name="pager_effect_tilt">Tilt</string>
     <string name="mini_player">Mini Player</string>
     <string name="full_player">Full Player</string>
     <string name="square">Square</string>
@@ -405,7 +412,6 @@
     <string name="integrations_section">Integrations</string>
     <string name="discord_section">Discord</string>
     <string name="discord_entry">Discord</string>
-    <string name="discord_entry_desc">Rich Presence and online cover art</string>
     <string name="discord_presence">Discord Rich Presence</string>
     <string name="discord_presence_desc">Show what you\'re listening to on your Discord profile</string>
     <string name="discord_log_in">Log in with Discord</string>
@@ -421,7 +427,6 @@
     <!-- Last.fm -->
     <string name="lastfm_section">Last.fm</string>
     <string name="lastfm_entry">Last.fm</string>
-    <string name="lastfm_entry_desc">Scrobble and import your listening history</string>
     <string name="lastfm_log_in">Log in with Last.fm</string>
     <string name="lastfm_log_out">Disconnect</string>
     <string name="lastfm_logged_in_as">Connected as %1$s</string>
@@ -712,6 +717,11 @@
     <string name="eq_delete_node">Delete node</string>
     <string name="eq_add_node">Add parametric node</string>
     <string name="eq_node_limit">Node limit reached</string>
+    <string name="eq_filter_peaking">Peaking</string>
+    <string name="eq_filter_low_shelf">Low shelf</string>
+    <string name="eq_filter_high_shelf">High shelf</string>
+    <string name="eq_filter_low_pass">Low pass</string>
+    <string name="eq_filter_high_pass">High pass</string>
     <string name="eq_volume">Volume</string>
     <string name="eq_save_preset_title">Save Preset</string>
     <string name="eq_preset_name_hint">Preset name</string>
@@ -759,7 +769,7 @@
     <string name="eq_autoeq_result_title">Auto EQ - %1$s → %2$s</string>
     <string name="eq_autoeq_result_stats">Pre-amp %1$s - %2$d filters - ±%3$s error</string>
 
-    <!-- Auto EQ devMode test screen (squig.link) -->
+    <!-- Auto EQ test screen (squig.link) -->
     <string name="test_autoeq">Auto EQ (squig.link)</string>
     <string name="test_autoeq_load_sites">Load squig.link sites</string>
     <string name="test_autoeq_load_database">Load first database</string>
@@ -770,7 +780,7 @@
     <string name="eq_band_layout">Band Layout</string>
     <string name="eq_band_layout_desc">ISO-standard band number configuration</string>
 
-    <!-- Component test screen (devMode builds only) -->
+    <!-- Component test screen (debug builds only) -->
     <string name="test_switch">Test Switch</string>
     <string name="test_switch_desc">Demonstration of the flat switch component</string>
     <string name="test_slider_continuous">Continuous Slider</string>

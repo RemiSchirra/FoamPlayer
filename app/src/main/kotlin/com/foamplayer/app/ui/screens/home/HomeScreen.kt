@@ -42,7 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroTarget
 import com.foamplayer.app.constants.HomeSection
@@ -69,6 +69,8 @@ import com.foamplayer.app.ui.modals.PlaylistModalStats
 import com.foamplayer.app.ui.modals.RenamePlaylistModal
 import com.foamplayer.app.ui.modals.rememberPlaylistFoamModalState
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
+import com.foamplayer.app.ui.navigation.sharedCollectionElementKey
+import com.foamplayer.app.ui.utils.rememberPausedArtScale
 import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 import com.foamplayer.app.ui.theme.FoamDimens
@@ -83,8 +85,11 @@ private const val HomeRowItemCount = 5
  * than one row at once, so item identity alone cannot pick the card that was
  * actually clicked: every matching card would register the same shared-element
  * key and the flight would lag between them / leave from the wrong source.
- * HomeScreen remembers the tag of the row whose card started the current
- * transition ([clickedRowTag]) and only that row's cards join the flight.
+ * Collection cards therefore scope their shared-element keys to their row tag
+ * (see [sharedCollectionElementKey]) and pass the same tag to the navigation
+ * call, so the destination hero rebuilds exactly the clicked card's key.
+ * HomeScreen also remembers the row + collection that started the current
+ * transition ([clickedCollectionKey]) for the in-flight card animation.
  */
 private object HomeRowTag {
     const val RANDOM_TRACKS = "home_row_random_tracks"
@@ -140,9 +145,14 @@ private val HomeScanSpinnerSize = 24.dp
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
-    onPlaylistClick: (PlaylistRecommendation) -> Unit,
-    onAlbumClick: (AlbumRecommendation) -> Unit,
-    onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
+    onPlaylistClick: (PlaylistRecommendation, flightOrigin: String?) -> Unit,
+    onAlbumClick: (AlbumRecommendation, flightOrigin: String?) -> Unit,
+    onArtistClick: (
+        artist: String,
+        imageUrl: String?,
+        imageIsEmbeddedArt: Boolean,
+        flightOrigin: String?
+    ) -> Unit,
     onTrackClick: (TrackEntity) -> Unit,
     onSeeAllAlbums: () -> Unit,
     onSeeAllRecent: () -> Unit,
@@ -161,8 +171,13 @@ fun HomeScreen(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     playerTransitionVisibilityScope: AnimatedVisibilityScope? = null,
-    sharedTrackId: Long? = null
+    sharedTrackId: Long? = null,
+    isPlaybackActive: Boolean = true,
+    immersiveArt: Boolean = false
 ) {
+    // One hoisted paused-scale animation shared by whichever track card is the
+    // player-flight source (read inside its graphicsLayer, draw-only).
+    val flightPausedArtScale = rememberPausedArtScale(isPlaybackActive)
     val playlists by viewModel.recommendedPlaylists.collectAsState()
     val playlistCovers by viewModel.playlistCovers.collectAsState()
     val albums by viewModel.recommendedAlbums.collectAsState()
@@ -309,7 +324,8 @@ fun HomeScreen(
                                     artist = album.artist,
                                     albumArtPath = album.albumArtPath,
                                     totalScore = 0
-                                )
+                                ),
+                                null
                             )
                         },
                         onAlbumLongClick = { album ->
@@ -336,7 +352,12 @@ fun HomeScreen(
                             clickedRowTag = HomeRowTag.RANDOM_ARTISTS
                             clickedCollectionKey = collectionKey(HomeRowTag.RANDOM_ARTISTS, "artist", artist.name)
                             val cover = randomArtistCovers.covers[artist.name]
-                            onArtistClick(artist.name, cover?.imageUrl, cover?.isEmbeddedArt ?: false)
+                            onArtistClick(
+                                artist.name,
+                                cover?.imageUrl,
+                                cover?.isEmbeddedArt ?: false,
+                                null
+                            )
                         },
                         onArtistLongClick = { artist ->
                             longPressScope.launch {
@@ -369,7 +390,7 @@ fun HomeScreen(
                             onClick = {
                                 clickedRowTag = HomeRowTag.PLAYLISTS
                                 clickedCollectionKey = collectionKey(HomeRowTag.PLAYLISTS, "playlist", "${playlist.playlistId}")
-                                onPlaylistClick(playlist)
+                                onPlaylistClick(playlist, HomeRowTag.PLAYLISTS)
                             },
                             onLongClick = {
                                 val entity = allPlaylists.firstOrNull { it.playlistId == playlist.playlistId }
@@ -382,8 +403,14 @@ fun HomeScreen(
                             },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
-                            sharedArtKey = "playlist-art-${playlist.playlistId}".takeIf { inFlight },
-                            sharedTitleKey = "playlist-title-${playlist.playlistId}".takeIf { inFlight },
+                            sharedArtKey = sharedCollectionElementKey(
+                                "playlist-art-${playlist.playlistId}",
+                                HomeRowTag.PLAYLISTS
+                            ),
+                            sharedTitleKey = sharedCollectionElementKey(
+                                "playlist-title-${playlist.playlistId}",
+                                HomeRowTag.PLAYLISTS
+                            ),
                             flightHeroTarget = CollectionHeroTarget.Playlist,
                             modifier = Modifier
                                 .let { if (inFlight) it else it.animateItem() }
@@ -405,7 +432,7 @@ fun HomeScreen(
                                 onClick = {
                                     clickedRowTag = HomeRowTag.ALBUMS
                                     clickedCollectionKey = collectionKey(HomeRowTag.ALBUMS, "album", album.album)
-                                    onAlbumClick(album)
+                                    onAlbumClick(album, HomeRowTag.ALBUMS)
                                 },
                                 onLongClick = {
                                     longPressScope.launch {
@@ -422,8 +449,14 @@ fun HomeScreen(
                                 },
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                sharedArtKey = "album-art-${album.album}".takeIf { inFlight },
-                                sharedTitleKey = "album-title-${album.album}".takeIf { inFlight },
+                                sharedArtKey = sharedCollectionElementKey(
+                                    "album-art-${album.album}",
+                                    HomeRowTag.ALBUMS
+                                ),
+                                sharedTitleKey = sharedCollectionElementKey(
+                                    "album-title-${album.album}",
+                                    HomeRowTag.ALBUMS
+                                ),
                                 flightHeroTarget = CollectionHeroTarget.Album,
                                 modifier = Modifier
                                     .let { if (inFlight) it else it.animateItem() }
@@ -449,15 +482,17 @@ fun HomeScreen(
                                 onTrackClick(track)
                             },
                             onLongClick = {
-                longPressScope.launch {
-                    trackModalState?.show(viewModel.freshTrack(track))
-                }
-            },
+                                longPressScope.launch {
+                                    trackModalState?.show(viewModel.freshTrack(track))
+                                }
+                            },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
                             sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
                             sharedTitleKey = "track_title_${track.id}".takeIf { inPlayerFlight },
                             sharedInPlayerTransition = true,
+                            flightPausedArtScale = { flightPausedArtScale.value },
+                            immersiveArt = immersiveArt,
                             modifier = Modifier
                                 .let { if (inPlayerFlight) it else it.animateItem() }
                         )
@@ -490,6 +525,8 @@ fun HomeScreen(
                             sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
                             sharedTitleKey = "track_title_${track.id}".takeIf { inPlayerFlight },
                             sharedInPlayerTransition = true,
+                            flightPausedArtScale = { flightPausedArtScale.value },
+                            immersiveArt = immersiveArt,
                             modifier = Modifier
                                 .let { if (inPlayerFlight) it else it.animateItem() }
                         )
@@ -513,15 +550,17 @@ fun HomeScreen(
                                 onTrackClick(track)
                             },
                             onLongClick = {
-                longPressScope.launch {
-                    trackModalState?.show(viewModel.freshTrack(track))
-                }
-            },
+                                longPressScope.launch {
+                                    trackModalState?.show(viewModel.freshTrack(track))
+                                }
+                            },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
                             sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
                             sharedTitleKey = "track_title_${track.id}".takeIf { inPlayerFlight },
                             sharedInPlayerTransition = true,
+                            flightPausedArtScale = { flightPausedArtScale.value },
+                            immersiveArt = immersiveArt,
                             modifier = Modifier
                                 .let { if (inPlayerFlight) it else it.animateItem() }
                         )
@@ -545,15 +584,17 @@ fun HomeScreen(
                                 onTrackClick(track)
                             },
                             onLongClick = {
-                longPressScope.launch {
-                    trackModalState?.show(viewModel.freshTrack(track))
-                }
-            },
+                                longPressScope.launch {
+                                    trackModalState?.show(viewModel.freshTrack(track))
+                                }
+                            },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = playerTransitionVisibilityScope,
                             sharedArtKey = "album_art_${track.id}".takeIf { inPlayerFlight },
                             sharedTitleKey = "track_title_${track.id}".takeIf { inPlayerFlight },
                             sharedInPlayerTransition = true,
+                            flightPausedArtScale = { flightPausedArtScale.value },
+                            immersiveArt = immersiveArt,
                             modifier = Modifier
                                 .let { if (inPlayerFlight) it else it.animateItem() }
                         )
@@ -574,7 +615,7 @@ fun HomeScreen(
                                 onClick = {
                                     clickedRowTag = HomeRowTag.OLD_FAVORITE_ALBUMS
                                     clickedCollectionKey = collectionKey(HomeRowTag.OLD_FAVORITE_ALBUMS, "album", album.album)
-                                    onAlbumClick(album)
+                                    onAlbumClick(album, HomeRowTag.OLD_FAVORITE_ALBUMS)
                                 },
                                 onLongClick = {
                                     longPressScope.launch {
@@ -591,8 +632,14 @@ fun HomeScreen(
                                 },
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                sharedArtKey = "album-art-${album.album}".takeIf { inFlight },
-                                sharedTitleKey = "album-title-${album.album}".takeIf { inFlight },
+                                sharedArtKey = sharedCollectionElementKey(
+                                    "album-art-${album.album}",
+                                    HomeRowTag.OLD_FAVORITE_ALBUMS
+                                ),
+                                sharedTitleKey = sharedCollectionElementKey(
+                                    "album-title-${album.album}",
+                                    HomeRowTag.OLD_FAVORITE_ALBUMS
+                                ),
                                 flightHeroTarget = CollectionHeroTarget.Album,
                                 modifier = Modifier
                                     .let { if (inFlight) it else it.animateItem() }
@@ -622,7 +669,8 @@ fun HomeScreen(
                                     onArtistClick(
                                         artist.name,
                                         cover?.imageUrl,
-                                        cover?.isEmbeddedArt ?: false
+                                        cover?.isEmbeddedArt ?: false,
+                                        HomeRowTag.ARTISTS
                                     )
                                 },
                                 onLongClick = {
@@ -640,8 +688,14 @@ fun HomeScreen(
                                 },
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                sharedArtKey = "artist-art-${artist.name}".takeIf { inFlight },
-                                sharedTitleKey = "artist-title-${artist.name}".takeIf { inFlight },
+                                sharedArtKey = sharedCollectionElementKey(
+                                    "artist-art-${artist.name}",
+                                    HomeRowTag.ARTISTS
+                                ),
+                                sharedTitleKey = sharedCollectionElementKey(
+                                    "artist-title-${artist.name}",
+                                    HomeRowTag.ARTISTS
+                                ),
                                 flightHeroTarget = CollectionHeroTarget.Artist,
                                 modifier = Modifier
                                     .let { if (inFlight) it else it.animateItem() }
@@ -664,7 +718,7 @@ fun HomeScreen(
                                 onClick = {
                                     clickedRowTag = HomeRowTag.RECENTLY_ADDED_ALBUMS
                                     clickedCollectionKey = collectionKey(HomeRowTag.RECENTLY_ADDED_ALBUMS, "album", album.album)
-                                    onAlbumClick(album)
+                                    onAlbumClick(album, HomeRowTag.RECENTLY_ADDED_ALBUMS)
                                 },
                                 onLongClick = {
                                     longPressScope.launch {
@@ -681,8 +735,14 @@ fun HomeScreen(
                                 },
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                sharedArtKey = "album-art-${album.album}".takeIf { inFlight },
-                                sharedTitleKey = "album-title-${album.album}".takeIf { inFlight },
+                                sharedArtKey = sharedCollectionElementKey(
+                                    "album-art-${album.album}",
+                                    HomeRowTag.RECENTLY_ADDED_ALBUMS
+                                ),
+                                sharedTitleKey = sharedCollectionElementKey(
+                                    "album-title-${album.album}",
+                                    HomeRowTag.RECENTLY_ADDED_ALBUMS
+                                ),
                                 flightHeroTarget = CollectionHeroTarget.Album,
                                 modifier = Modifier
                                     .let { if (inFlight) it else it.animateItem() }
@@ -712,7 +772,8 @@ fun HomeScreen(
                                     onArtistClick(
                                         artist.name,
                                         cover?.imageUrl,
-                                        cover?.isEmbeddedArt ?: false
+                                        cover?.isEmbeddedArt ?: false,
+                                        HomeRowTag.RECENTLY_ADDED_ARTISTS
                                     )
                                 },
                                 onLongClick = {
@@ -730,8 +791,14 @@ fun HomeScreen(
                                 },
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                sharedArtKey = "artist-art-${artist.name}".takeIf { inFlight },
-                                sharedTitleKey = "artist-title-${artist.name}".takeIf { inFlight },
+                                sharedArtKey = sharedCollectionElementKey(
+                                    "artist-art-${artist.name}",
+                                    HomeRowTag.RECENTLY_ADDED_ARTISTS
+                                ),
+                                sharedTitleKey = sharedCollectionElementKey(
+                                    "artist-title-${artist.name}",
+                                    HomeRowTag.RECENTLY_ADDED_ARTISTS
+                                ),
                                 flightHeroTarget = CollectionHeroTarget.Artist,
                                 modifier = Modifier
                                     .let { if (inFlight) it else it.animateItem() }

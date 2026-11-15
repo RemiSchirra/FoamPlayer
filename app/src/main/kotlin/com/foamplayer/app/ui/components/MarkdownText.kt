@@ -130,7 +130,7 @@ fun MarkdownText(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(FoamDimens.itemRounding))
-                        .background(colors.surfaceVariant)
+                        .background(FoamTheme.tintedSurfaceVariant)
                         .padding(FoamDimens.paddingSmall)
                 ) {
                     BasicText(text = block.code.trimEnd('\n'), style = typography.monospace)

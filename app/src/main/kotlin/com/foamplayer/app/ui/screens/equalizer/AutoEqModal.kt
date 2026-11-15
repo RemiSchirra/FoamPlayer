@@ -2,8 +2,11 @@ package com.foamplayer.app.ui.screens.equalizer
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,8 +17,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
@@ -43,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,7 +60,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -72,6 +80,7 @@ import com.foamplayer.app.audio.dsp.FilterType
 import com.foamplayer.app.audio.dsp.NodeColorPalette
 import com.foamplayer.app.audio.dsp.ParametricNode
 import com.foamplayer.app.ui.components.FoamGlassCard
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import com.foamplayer.squig.SquigDatabase
@@ -247,8 +256,8 @@ private data class AutoEqOption(
 /**
  * Caption label + pickable value bar with a filtered dropdown (the genre
  * text-bar pattern):
- * - The dropdown hangs directly under the bar and reads as one surface with
- *   it (same color, no gap, the bar's bottom corners square off while open).
+ * - The dropdown hangs under the bar and reads as one surface with it (same
+ *   color, no gap): it bleeds slightly behind the bar, whose corners never change.
  * - It is filtered live by the typed text (case-insensitive "contains" on
  *   the title and group header, prefix matches first), and opens as soon as
  *   the user types.
@@ -291,11 +300,7 @@ private fun AutoEqSelectionBar(
     val dropdownState = remember { MutableTransitionState(false) }
     dropdownState.targetState = listVisible
 
-    // Square the bar's bottom corners while the list is attached to it.
-    val bottomCorner by animateIntAsState(
-        targetValue = if (listVisible) 0 else 10,
-        label = "AutoEqBarBottomCorner"
-    )
+    val bleedPx = with(LocalDensity.current) { AutoEqDropdownBleed.roundToPx() }
     val chevronRotation by animateFloatAsState(
         targetValue = if (listVisible) 180f else 0f,
         label = "AutoEqBarChevron"
@@ -313,17 +318,37 @@ private fun AutoEqSelectionBar(
                 modifier = Modifier.width(64.dp)
             )
             Box(modifier = Modifier.weight(1f)) {
+                // The list sits BEHIND the bar (it is composed first, so the
+                // bar draws over it) and bleeds up under the bar's rounded
+                // bottom corners by AutoEqDropdownBleed. The bar keeps its
+                // corners as they are; the list's surface shows through the
+                // corner cut-outs, so the two read as one shape with no gap.
+                // The list overlays the content below (the modal never
+                // moves): the bar's wrapper is z-lifted above the following
+                // rows while the list is open, and the list reports a zero
+                // footprint so it never grows the modal's fitted height.
+                AutoEqDropdown(
+                    visibleState = dropdownState,
+                    loading = loading,
+                    options = filtered,
+                    onSelect = { option ->
+                        text = option.fill
+                        expanded = false
+                        option.onPick()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset { IntOffset(x = 0, y = barHeight - bleedPx) }
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints)
+                            layout(0, 0) { placeable.place(0, 0) }
+                        }
+                )
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(
-                            RoundedCornerShape(
-                                topStart = 10.dp,
-                                topEnd = 10.dp,
-                                bottomEnd = bottomCorner.dp,
-                                bottomStart = bottomCorner.dp
-                            )
-                        )
+                        .clip(RoundedCornerShape(AutoEqBarCorner))
                         .foamSurfaceVariant()
                         .onSizeChanged { barHeight = it.height }
                         .padding(start = 12.dp, end = 4.dp)
@@ -403,28 +428,6 @@ private fun AutoEqSelectionBar(
                     }
                 }
 
-                // The list overlays the content below (the modal never
-                // moves): it hangs flush under the bar via offset, the bar's
-                // wrapper is z-lifted above the following rows while the list
-                // is open, and the list reports a zero footprint so it never
-                // grows the modal's fitted height.
-                AutoEqDropdown(
-                    visibleState = dropdownState,
-                    loading = loading,
-                    options = filtered,
-                    onSelect = { option ->
-                        text = option.fill
-                        expanded = false
-                        option.onPick()
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset { IntOffset(x = 0, y = barHeight) }
-                        .layout { measurable, constraints ->
-                            val placeable = measurable.measure(constraints)
-                            layout(0, 0) { placeable.place(0, 0) }
-                        }
-                )
             }
         }
     }
@@ -432,8 +435,8 @@ private fun AutoEqSelectionBar(
 
 /**
  * The Auto EQ suggestion list: reads as the continuation of the bar above it
- * (same surface, rounded bottom), hanging flush under the bar on top of the
- * following content. Height-capped by [AutoEqDropdownMaxHeight] and
+ * (same surface, rounded bottom), bleeding behind the bar and hanging over the
+ * following content. Its first [AutoEqDropdownBleed] is hidden behind the bar. Height-capped by [AutoEqDropdownMaxHeight] and
  * scrollable; the group header renders once per group; picking a row fills
  * the bar. Rows are keyed by [AutoEqOption.id], which is already unique.
  */
@@ -465,8 +468,10 @@ private fun AutoEqDropdown(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = AutoEqDropdownMaxHeight)
-                .clip(RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp))
-                .foamSurfaceVariant()
+                .clip(RoundedCornerShape(bottomStart = AutoEqBarCorner, bottomEnd = AutoEqBarCorner))
+                .foamSurfaceVariant(),
+            // The top of the list is tucked behind the bar; start the rows below it.
+            contentPadding = PaddingValues(top = AutoEqDropdownBleed)
         ) {
             if (loading) {
                 item(key = "loading") { AutoEqLoading() }
@@ -536,12 +541,51 @@ private fun AutoEqDropdown(
 
 private val AutoEqDropdownMaxHeight = 280.dp
 
-/** Parametric | Graphic pills choosing the generated EQ's output section. */
+/** Corner radius of the selection bar and of the dropdown's bottom edge. */
+private val AutoEqBarCorner = 10.dp
+
+/** How far the dropdown extends up behind the bar; covers its rounded corners. */
+private val AutoEqDropdownBleed = AutoEqBarCorner
+
+/**
+ * Parametric | Graphic pills choosing the generated EQ's output section. The
+ * selection highlight slides (and resizes, since the labels differ in width)
+ * between the two options, like the Presets | Auto EQ tabs.
+ */
 @Composable
 private fun AutoEqModeRow(
     mode: AutoEqOutputMode,
     onSet: (AutoEqOutputMode) -> Unit
 ) {
+    val options = listOf(
+        AutoEqOutputMode.PARAMETRIC to stringResource(R.string.eq_autoeq_parametric),
+        AutoEqOutputMode.GRAPHIC to stringResource(R.string.eq_autoeq_graphic)
+    )
+    val selectedIndex = options.indexOfFirst { it.first == mode }.coerceAtLeast(0)
+
+    // Each option's measured x / width inside the pill, so the highlight can
+    // slide to it and take its width.
+    val optionX = remember { mutableStateListOf(0, 0) }
+    val optionWidth = remember { mutableStateListOf(0, 0) }
+
+    // Place the highlight on the first measured layout without animating it
+    // in from zero; animate every change after that.
+    val measured = optionWidth.all { it > 0 }
+    var settled by remember { mutableStateOf(false) }
+    LaunchedEffect(measured) { if (measured) settled = true }
+    val spec = if (settled) tween<Int>(FoamMotion.Duration.STANDARD) else snap<Int>()
+
+    val indicatorX by animateIntAsState(
+        targetValue = optionX[selectedIndex],
+        animationSpec = spec,
+        label = "AutoEqModeIndicatorX"
+    )
+    val indicatorWidth by animateIntAsState(
+        targetValue = optionWidth[selectedIndex],
+        animationSpec = spec,
+        label = "AutoEqModeIndicatorWidth"
+    )
+
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         BasicText(
             text = stringResource(R.string.eq_autoeq_output),
@@ -549,35 +593,59 @@ private fun AutoEqModeRow(
             modifier = Modifier.width(64.dp)
         )
         Spacer(modifier = Modifier.width(6.dp))
-        Row(
+        Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
                 .foamSurfaceVariant()
-                .padding(2.dp)
         ) {
-            listOf(
-                AutoEqOutputMode.PARAMETRIC to stringResource(R.string.eq_autoeq_parametric),
-                AutoEqOutputMode.GRAPHIC to stringResource(R.string.eq_autoeq_graphic)
-            ).forEach { (outputMode, label) ->
-                val selected = outputMode == mode
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(if (selected) FoamTheme.accentColor else Color.Transparent)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple(color = FoamTheme.colors.textPrimary),
-                            onClick = { onSet(outputMode) }
-                        )
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                ) {
-                    BasicText(
-                        text = label,
-                        style = FoamTheme.typography.caption.copy(
-                            color = if (selected) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                        )
+            // Positions below are relative to this padded box, the same
+            // coordinate space the highlight is drawn in.
+            Box(modifier = Modifier.padding(2.dp)) {
+                // Sliding highlight behind the labels; the labels define the
+                // pill's size, so matchParentSize matches them without
+                // influencing it.
+                Box(modifier = Modifier.matchParentSize()) {
+                    Box(
+                        modifier = Modifier
+                            .offset { IntOffset(x = indicatorX, y = 0) }
+                            .width(with(LocalDensity.current) { indicatorWidth.toDp() })
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(50))
+                            .background(FoamTheme.accentColor)
                     )
+                }
+
+                Row {
+                    options.forEachIndexed { index, (outputMode, label) ->
+                        val selected = outputMode == mode
+                        val textColor by animateColorAsState(
+                            targetValue = if (selected) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+                            animationSpec = tween(FoamMotion.Duration.STANDARD),
+                            label = "AutoEqModeLabelColor"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .onGloballyPositioned {
+                                    optionX[index] = it.positionInParent().x.toInt()
+                                    optionWidth[index] = it.size.width
+                                }
+                                .clip(RoundedCornerShape(50))
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = ripple(color = FoamTheme.colors.textPrimary),
+                                    onClick = { onSet(outputMode) }
+                                )
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            BasicText(
+                                text = label,
+                                style = FoamTheme.typography.caption.copy(
+                                    color = textColor,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            )
+                        }
+                    }
                 }
             }
         }

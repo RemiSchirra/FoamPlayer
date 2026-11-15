@@ -2,7 +2,11 @@ package com.foamplayer.app.ui.screens.settings
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +27,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
+import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -35,26 +40,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
+import com.foamplayer.app.data.settings.FoamIconStyle
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamEnumItem
 import com.foamplayer.app.ui.components.FoamSwitch
 import com.foamplayer.app.ui.components.FoamSwitchItem
+import com.foamplayer.app.ui.iconpacks.FoamIconPackRegistry
 import com.foamplayer.app.ui.screens.queue.DragDropListState
 import com.foamplayer.app.ui.screens.queue.rememberDragDropListState
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamSurfaceBlend
-import com.foamplayer.app.ui.theme.foamSurface
 
 /** Which of the two bars a drag gesture belongs to. */
 private enum class NavBarSection { PRIMARY, SECONDARY }
@@ -62,7 +69,8 @@ private enum class NavBarSection { PRIMARY, SECONDARY }
 /*
  * LazyColumn layout (kept in sync with the items built below):
  *   0      – mode enum item
- *   1      – transparency item
+ *   1      – appearance item (transparent-when-player-open + the dynamic
+ *            icons switch with its revealed variant pickers)
  *   2      – "Main bar" section header
  *   3..9   – main bar items (6 screen items + the MORE toggle marker)
  *   10     – "Second bar" section header
@@ -90,6 +98,11 @@ fun NavBarSettingsScreen(
     // then, the order swap from the default value to the loaded settings (and any
     // later external sync) must not animate when the screen opens.
     var animatePlacement by remember { mutableStateOf(false) }
+
+    // Transitions stay off until the user first toggles the dynamic-icons
+    // switch, so the revealed variant pickers never animate on entry (the
+    // settings convention).
+    var animateChanges by remember { mutableStateOf(false) }
 
     LaunchedEffect(settings.navBarPrimaryOrder) {
         if (draggedSection != NavBarSection.PRIMARY) {
@@ -137,21 +150,17 @@ fun NavBarSettingsScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.navigation_bar),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.navigation_bar),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         LazyColumn(
             state = lazyListState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
+            contentPadding = PaddingValues(
+                top = SettingsHeaderZoneHeight,
+                bottom = LocalBottomBarClearance.current
+            )
         ) {
             item {
                 FoamEnumItem(
@@ -174,22 +183,71 @@ fun NavBarSettingsScreen(
             item {
                 Column(modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)) {
                     BasicText(
-                        text = stringResource(R.string.transparency),
+                        text = stringResource(R.string.appearance),
                         style = FoamTheme.typography.titleMedium
                     )
                     Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                            .foamSurface()
-                    ) {
-                        FoamSwitchItem(
-                            title = stringResource(R.string.transparent_when_player_open),
-                            description = stringResource(R.string.transparent_when_player_open_desc),
-                            checked = settings.navBarTransparentWhenPlayerOpen,
-                            onCheckedChange = { viewModel.setNavBarTransparentWhenPlayerOpen(it) }
-                        )
+                    FoamCard(modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            FoamSwitchItem(
+                                title = stringResource(R.string.transparent_when_player_open),
+                                checked = settings.navBarTransparentWhenPlayerOpen,
+                                onCheckedChange = { viewModel.setNavBarTransparentWhenPlayerOpen(it) },
+                                verticalPadding = FoamDimens.spacingMedium
+                            )
+                            // Flush divider: SettingsSectionDivider adds its own vertical
+                            // spacing, which made the dynamic-icons row sit taller than
+                            // the row above it.
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(FoamTheme.colors.textSecondary.copy(alpha = 0.12f))
+                            )
+                            FoamSwitchItem(
+                                title = stringResource(R.string.dynamic_icons),
+                                checked = settings.dynamicNavIcons,
+                                onCheckedChange = {
+                                    animateChanges = true
+                                    viewModel.setDynamicNavIcons(it)
+                                },
+                                verticalPadding = FoamDimens.spacingTiny
+                            )
+                            // The revealed pickers ride the settings expand/shrink
+                            // + fade; the spacer lives inside so its height animates
+                            // too (see BackgroundSettingsScreen).
+                            SettingsExpandVisibility(
+                                visible = settings.dynamicNavIcons,
+                                animate = animateChanges
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(
+                                        top = FoamDimens.spacingSmall,
+                                        start = FoamDimens.spacingStandard,
+                                        end = FoamDimens.spacingStandard,
+                                        bottom = FoamDimens.spacingStandard
+                                    )
+                                ) {
+                                    // Only the variants the selected pack actually
+                                    // draws -- the navbar renders its icons.
+                                    val availableVariants =
+                                        FoamIconPackRegistry.byId(settings.iconPackId).variants
+                                    NavbarVariantPills(
+                                        title = stringResource(R.string.nav_icon_active_variant),
+                                        variants = availableVariants,
+                                        selectedVariant = settings.navIconActiveVariant,
+                                        onVariantSelected = viewModel::setNavIconActiveVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+                                    NavbarVariantPills(
+                                        title = stringResource(R.string.nav_icon_inactive_variant),
+                                        variants = availableVariants,
+                                        selectedVariant = settings.navIconInactiveVariant,
+                                        onVariantSelected = viewModel::setNavIconInactiveVariant
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
@@ -454,4 +512,80 @@ private fun navBarItemLabel(item: NavBarItem): String = when (item) {
     NavBarItem.EQUALIZER -> stringResource(R.string.equalizer_dsp)
     NavBarItem.SETTINGS -> stringResource(R.string.settings)
     NavBarItem.MORE -> stringResource(R.string.navbar_item_more)
+}
+
+/**
+ * One navbar variant picker: [title] over a row of [variants] pills, mirroring
+ * the pack sections' pill row. Each pill previews the resolved icon set for
+ * the variant (the play role), not any raw pack's.
+ */
+@Composable
+internal fun NavbarVariantPills(
+    title: String,
+    variants: List<FoamIconStyle>,
+    selectedVariant: FoamIconStyle,
+    onVariantSelected: (FoamIconStyle) -> Unit
+) {
+    Column {
+        BasicText(
+            text = title,
+            style = FoamTheme.typography.body
+        )
+        Spacer(modifier = Modifier.height(FoamDimens.spacingTiny))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(FoamDimens.spacingTiny)
+        ) {
+            variants.forEach { variant ->
+                PackVariantPill(
+                    variant = variant,
+                    icon = FoamTheme.icons.setFor(variant).play,
+                    isSelected = variant == selectedVariant,
+                    onSelected = { onVariantSelected(variant) }
+                )
+            }
+        }
+    }
+}
+
+/** One variant pill: the pack's own sample play icon for [variant] over its label. */
+@Composable
+internal fun PackVariantPill(
+    variant: FoamIconStyle,
+    icon: ImageVector,
+    isSelected: Boolean,
+    onSelected: () -> Unit
+) {
+    val interactions = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
+            .background(
+                if (isSelected) FoamTheme.accentColor
+                else FoamTheme.tintedSurfaceVariant
+            )
+            .clickable(
+                interactionSource = interactions,
+                indication = ripple(color = FoamTheme.colors.textPrimary),
+                onClick = onSelected
+            )
+            .padding(horizontal = FoamDimens.spacingSmall, vertical = FoamDimens.spacingTiny)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(FoamDimens.iconSmall),
+                tint = if (isSelected) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary
+            )
+            Spacer(modifier = Modifier.width(FoamDimens.spacingTiny))
+            BasicText(
+                text = variant.label,
+                style = FoamTheme.typography.caption.copy(
+                    color = if (isSelected) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+            )
+        }
+    }
 }

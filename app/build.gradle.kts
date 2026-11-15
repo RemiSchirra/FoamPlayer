@@ -11,9 +11,6 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// set devMode=true in gradle.properties to compile the developer tests screens
-val devMode: Boolean = providers.gradleProperty("devMode").getOrElse("false").toBoolean()
-
 // Last.fm API credentials from local.properties
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
@@ -35,14 +32,13 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = 1
-        versionName = "1.4.0"
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
 
-        buildConfigField("boolean", "DEV_MODE", devMode.toString())
         buildConfigField("String", "LASTFM_API_KEY", buildConfigString(credential("LASTFM_API_KEY")))
         buildConfigField("String", "LASTFM_API_SECRET", buildConfigString(credential("LASTFM_API_SECRET")))
     }
@@ -79,6 +75,14 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    // Additional sources for the icon packs
+    sourceSets {
+        getByName("main") {
+            res.directories += "src/main/iconpacks/coolicons/res"
+            res.directories += "src/main/iconpacks/coolicons_outline/res"
+        }
     }
 
     packaging {
@@ -156,7 +160,7 @@ dependencies {
     ksp(libs.hilt.compiler)
     ksp(libs.kotlin.metadata.jvm) // Correctif Hilt
 
-    implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)

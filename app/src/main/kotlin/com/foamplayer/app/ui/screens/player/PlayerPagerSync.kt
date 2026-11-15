@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import com.foamplayer.app.data.settings.PlayerPagerEffect
 import com.foamplayer.app.ui.components.LoopingPagerModel
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import kotlin.math.abs
@@ -24,6 +25,7 @@ internal fun PlayerPagerSyncEffects(
     isProgressiveEnvelope: Boolean,
     queueIndex: Int,
     currentEntryId: Long?,
+    pagerEffect: PlayerPagerEffect,
     latestQueueIndex: State<Int>,
     latestQueueSize: State<Int>,
     latestHeroModel: State<LoopingPagerModel>,
@@ -34,10 +36,13 @@ internal fun PlayerPagerSyncEffects(
     backdropRenumberHold: () -> Boolean,
     isMainPagerVisible: () -> Boolean,
     programmaticScrollPage: MutableState<Int?>,
+    pagerFlingTarget: MutableState<Int?>,
     hopOffGhost: suspend () -> Unit
 ) {
+    val isPagerDragged by pagerState.interactionSource.collectIsDraggedAsState()
+    val pendingSkip = remember { PendingSkip() }
+
     if (isProgressiveEnvelope) {
-        val isPagerDragged by pagerState.interactionSource.collectIsDraggedAsState()
         LaunchedEffect(pagerState) {
             snapshotFlow {
                 Triple(isPagerDragged, pagerState.targetPage, pagerState.currentPageOffsetFraction)
@@ -87,11 +92,57 @@ internal fun PlayerPagerSyncEffects(
         previousEnvelopeEntryId = currentEntryId
     }
 
+    fun requestSkip(model: LoopingPagerModel, page: Int) {
+        val real = model.realIndexOf(page)
+        val forward = if (model.isGhostPage(page)) {
+            markSkipIntent(!model.isTrailingGhost(page))
+            model.isTrailingGhost(page)
+        } else {
+            page > latestQueueIndex.value
+        }
+        pendingSkip.record(real)
+        seekBarProgress.onTrackChangeApplied()
+        viewModel.skipToIndex(real, forward = forward)
+    }
+
+    // Commit on release: the track must not wait for the pager's settle animation.
+    LaunchedEffect(pagerState, pagerEffect) {
+        snapshotFlow {
+            Triple(isPagerDragged, pagerState.targetPage, pagerFlingTarget.value)
+        }
+            .collect { (dragging, stockTargetPage, effectTargetPage) ->
+                if (dragging ||
+                    !isMainPagerVisible() ||
+                    backdropRenumberHold() ||
+                    programmaticScrollPage.value != null
+                ) return@collect
+                // The shortened pager publishes its exact settle page; wait for it
+                // instead of the stock target, which assumes a full page.
+                val targetPage = if (pagerEffect == PlayerPagerEffect.SLIDE) {
+                    stockTargetPage
+                } else {
+                    effectTargetPage ?: return@collect
+                }
+                if (targetPage !in 0 until latestQueueSize.value) return@collect
+                // Consume the published target so a later renumbering cannot replay it.
+                if (pagerEffect != PlayerPagerEffect.SLIDE) pagerFlingTarget.value = null
+                val model = latestHeroModel.value
+                val isNewTrack = if (model.isGhostPage(targetPage)) {
+                    model.ghostTwinPage(targetPage) != latestQueueIndex.value
+                } else {
+                    targetPage != latestQueueIndex.value
+                }
+                if (isNewTrack && !pendingSkip.matches(model.realIndexOf(targetPage))) {
+                    requestSkip(model, targetPage)
+                }
+            }
+    }
+
     LaunchedEffect(pagerState) {
-        var wrapRequestedReal = -1
-        var wrapRequestedAtMs = 0L
         snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
+                // The fling is over; its published target is stale from here on.
+                pagerFlingTarget.value = null
                 if (programmaticScrollPage.value != null) {
                     programmaticScrollPage.value = null
                     if (settledPage == latestQueueIndex.value) {
@@ -104,34 +155,22 @@ internal fun PlayerPagerSyncEffects(
                 val model = latestHeroModel.value
                 if (model.isGhostPage(settledPage)) {
                     if (isMainPagerVisible() &&
-                        model.ghostTwinPage(settledPage) != latestQueueIndex.value
+                        model.ghostTwinPage(settledPage) != latestQueueIndex.value &&
+                        !pendingSkip.matches(model.realIndexOf(settledPage))
                     ) {
-                        wrapRequestedReal = model.realIndexOf(settledPage)
-                        wrapRequestedAtMs = System.currentTimeMillis()
-                        seekBarProgress.onTrackChangeApplied()
-                        markSkipIntent(!model.isTrailingGhost(settledPage))
-                        viewModel.skipToIndex(
-                            wrapRequestedReal,
-                            forward = model.isTrailingGhost(settledPage)
-                        )
+                        requestSkip(model, settledPage)
                     }
                     return@collect
                 }
-                val alreadyRequested = wrapRequestedReal >= 0 &&
-                        System.currentTimeMillis() - wrapRequestedAtMs < 2_000L &&
-                        model.realIndexOf(settledPage) == wrapRequestedReal
-                wrapRequestedReal = -1
+                val alreadyRequested = pendingSkip.matches(model.realIndexOf(settledPage))
+                pendingSkip.clear()
                 if (alreadyRequested) return@collect
 
                 if (isMainPagerVisible() &&
                     settledPage in 0 until latestQueueSize.value &&
                     settledPage != latestQueueIndex.value
                 ) {
-                    seekBarProgress.onTrackChangeApplied()
-                    viewModel.skipToIndex(
-                        model.realIndexOf(settledPage),
-                        forward = settledPage > latestQueueIndex.value
-                    )
+                    requestSkip(model, settledPage)
                 } else if (settledPage == latestQueueIndex.value) {
                     seekBarProgress.revertTrackChangeEnvelope()
                 }
@@ -143,6 +182,7 @@ internal fun PlayerPagerSyncEffects(
             when (interaction) {
                 is DragInteraction.Start -> {
                     programmaticScrollPage.value = null
+                    pagerFlingTarget.value = null
                     viewModel.prepareQueueShuffle()
                 }
                 is DragInteraction.Stop, is DragInteraction.Cancel -> {
@@ -174,5 +214,23 @@ internal fun PlayerPagerSyncEffects(
         }.collect { ghostPage ->
             if (ghostPage >= 0) hopOffGhost()
         }
+    }
+}
+
+/** Last skip requested by the pager, so the settle handler does not request it twice. */
+private class PendingSkip {
+    private var real = -1
+    private var atMs = 0L
+
+    fun record(realIndex: Int) {
+        real = realIndex
+        atMs = System.currentTimeMillis()
+    }
+
+    fun matches(realIndex: Int) =
+        real >= 0 && realIndex == real && System.currentTimeMillis() - atMs < 2_000L
+
+    fun clear() {
+        real = -1
     }
 }

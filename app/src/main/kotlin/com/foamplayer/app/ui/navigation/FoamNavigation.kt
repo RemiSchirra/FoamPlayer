@@ -9,7 +9,6 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.Transition
 import androidx.compose.animation.core.animateFloatAsState
@@ -17,7 +16,6 @@ import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -26,6 +24,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,11 +33,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavController
 import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -68,14 +71,19 @@ import com.foamplayer.app.ui.screens.player.PlayerViewModel
 import com.foamplayer.app.ui.screens.player.progress
 import com.foamplayer.app.ui.screens.playlists.PlaylistsViewModel
 import com.foamplayer.app.update.UpdateManager
-import com.foamplayer.app.ui.screens.settings.lyricsmanager.LyricsDetailsViewModel
-import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
+import com.foamplayer.app.ui.theme.FoamMotion
+import com.foamplayer.app.ui.theme.foamBackdropScale
+import com.foamplayer.app.ui.theme.foamPlayerOpenScale
+import com.foamplayer.app.ui.utils.AlbumArtPaletteCache
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-const val SharedElementTransitionDurationMs = 350
-val SharedElementEasing = FastOutSlowInEasing
+/**
+ * Process-wide latch for the launch gate: once the gate has opened, later
+ * activity recreations (rotation, theme changes) must not hide the already-warm
+ * UI for a frame. A fresh process still starts with the gate closed.
+ */
+private var startupGateOpened = false
 
 /**
  * Root navigation host: every screen of the app, the mini/full player
@@ -91,7 +99,8 @@ fun FoamNavHost(
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
+    val startRoute = if (startOnOnboarding) Screen.Onboarding.route else Screen.Home.route
+    val currentRoute = navBackStackEntry?.destination?.route ?: startRoute
 
     val routePair = remember { object { var previous: String? = currentRoute; var current: String? = currentRoute } }
     if (routePair.current != currentRoute) {
@@ -111,11 +120,6 @@ fun FoamNavHost(
     // Playlist picker / lyrics sheet state is shared with the destination graph
     // (the collection modal) and the global dialogs below.
     val modalState = remember { FoamNavModalState() }
-
-    // Lyrics details sheet: a separate Dialog stacked on the open track sheet.
-    val lyricsDetailsViewModel: LyricsDetailsViewModel = hiltViewModel()
-    val lyricsTrackDetails by lyricsDetailsViewModel.trackDetails.collectAsState()
-    val isLyricsDetailsLoading by lyricsDetailsViewModel.isDetailsLoading.collectAsState()
 
     // Song radio sheet: the similar list is built per seed track on open.
     val trackRadioViewModel: TrackRadioViewModel = hiltViewModel()
@@ -160,6 +164,58 @@ fun FoamNavHost(
     val forceDynamicBackgroundInPlayer = playerSettings.forceDynamicBackgroundInPlayer
     val navigationBarMode = playerSettings.navigationBarMode
     val navBarTransparentWhenPlayerOpen = playerSettings.navBarTransparentWhenPlayerOpen
+    val primaryNavBarItems = playerSettings.primaryNavBarItems
+    val secondaryNavBarItems = playerSettings.secondaryNavBarItems
+
+    // ---------------------------------------------------------------------
+    // Launch gate
+    //
+    // The backdrop layers below are composed from the very first frame (so
+    // the restored artwork can load and warm up), but the screens, the mini
+    // player and the nav bar only enter once everything they show is known:
+    // the saved playback session, the Home query snapshots and the
+    // album-art accent. That makes the app appear as one finished frame
+    // instead of fading, reordering and animating its parts into place.
+    // ---------------------------------------------------------------------
+    val startupContext = LocalContext.current
+    val sessionRestoreSettled by playerViewModel.sessionRestoreSettled.collectAsState()
+    val homeContentReady by homeViewModel.contentReady.collectAsState()
+    val currentAlbumArtPath by playerViewModel.currentAlbumArtPath.collectAsState()
+
+    var startupAccentReady by remember { mutableStateOf(false) }
+    LaunchedEffect(
+        playerSettings.automaticColorEnabled,
+        sessionRestoreSettled,
+        currentAlbumArtPath
+    ) {
+        if (startupAccentReady) return@LaunchedEffect
+        if (!playerSettings.automaticColorEnabled) {
+            startupAccentReady = true
+        } else if (sessionRestoreSettled) {
+            val path = currentAlbumArtPath
+            if (path != null) {
+                AlbumArtPaletteCache.ensure(
+                    scope = this,
+                    context = startupContext,
+                    path = path
+                )
+                AlbumArtPaletteCache.awaitSettled(path)
+            }
+            startupAccentReady = true
+        }
+    }
+
+    var startupReady by remember { mutableStateOf(startupGateOpened) }
+    LaunchedEffect(sessionRestoreSettled, homeContentReady, startupAccentReady) {
+        if (startupReady) return@LaunchedEffect
+        if (sessionRestoreSettled && homeContentReady && startupAccentReady) {
+            // Let the session/row state flows land on their loaded values for
+            // one frame before the UI is composed for the first time.
+            withFrameNanos { }
+            startupGateOpened = true
+            startupReady = true
+        }
+    }
 
     // Per-view list density / sort / inversion setters (organisation modal).
     val densityFor: (MediaListView) -> MediaDensity = { view -> playerSettings.mediaDensity(view) }
@@ -201,8 +257,50 @@ fun FoamNavHost(
     val density = LocalDensity.current
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
 
-    // Collection row clicked to start the current navigation; drives shared-element pairing.
-    var activeSharedCollection by remember { mutableStateOf<String?>(null) }
+    val activeSharedCollectionTag = remember { mutableStateOf<String?>(null) }
+
+    // Pivot of the collection open/close zoom (position of the tapped item).
+    val zoomOrigins = remember { CollectionZoomOrigins() }
+
+    DisposableEffect(navController) {
+        var lastEntry: NavBackStackEntry? = navController.currentBackStackEntry
+        val seenEntryIds = navController.currentBackStack.value.mapTo(mutableSetOf()) { it.id }
+        val listener = NavController.OnDestinationChangedListener { controller, destination, _ ->
+            val entry = controller.currentBackStackEntry
+            val outgoing = lastEntry
+            val returnedToExisting = entry != null && entry.id in seenEntryIds
+            lastEntry = entry
+            entry?.let { seenEntryIds += it.id }
+
+            // A null active tag means the navigation explicitly opted out (e.g.
+            // a nav-bar switch), so leave it alone then.
+            if (returnedToExisting &&
+                outgoing != null &&
+                outgoing.id != entry?.id &&
+                activeSharedCollectionTag.value != null &&
+                isCollectionDetailRoute(outgoing.destination.route)
+            ) {
+                outgoing.savedStateHandle.get<String>(SharedCollectionTagKey)?.let {
+                    activeSharedCollectionTag.value = it
+                }
+            }
+
+            if (!isCollectionDetailRoute(destination.route)) return@OnDestinationChangedListener
+            val currentEntry = entry ?: return@OnDestinationChangedListener
+            val savedState = currentEntry.savedStateHandle
+            val savedTag = savedState.get<String>(SharedCollectionTagKey)
+            if (savedTag == null) {
+                activeSharedCollectionTag.value?.let { savedState[SharedCollectionTagKey] = it }
+            } else if (activeSharedCollectionTag.value == null) {
+                // Reaching a detail page with no click tag means it was restored
+                // (saved tab stack / process death). Give it its own tag back so
+                // its later close still pairs with its original source row.
+                activeSharedCollectionTag.value = savedTag
+            }
+        }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose { navController.removeOnDestinationChangedListener(listener) }
+    }
 
     var miniPlayerTopPx by remember { mutableStateOf(Float.NaN) }
     var miniPlayerBoxHeightPx by remember { mutableStateOf(0) }
@@ -273,8 +371,14 @@ fun FoamNavHost(
     var playerOpenedRoute by remember { mutableStateOf<String?>(null) }
     var playerOpenedPattern by remember { mutableStateOf<String?>(null) }
 
-    /** Navigates while closing the player, staging the flight after the nav swap. */
+    /**
+     * Navigates while closing the player, staging the flight after the nav
+     * swap. The modal shrink scale lives on the SharedTransitionLayout, so the
+     * artwork flight scales with the world and starts together with a
+     * dismissing modal — no pop, no staging.
+     */
     fun navigateClosingPlayer(route: String, pattern: String) {
+        zoomOrigins.discardTouch()
         val topId = navController.currentDestination?.id
         val topPattern = navController.currentDestination?.route
         val replacesPrevious = playerOpenedPattern != null &&
@@ -300,10 +404,74 @@ fun FoamNavHost(
         }
     }
 
-    SharedTransitionLayout {
+    // Backdrop layers: full-bleed root-level siblings, composed OUTSIDE the
+    // shared transition below, so the modal shrink never scales the background.
+    var navZoneHeightPx by remember { mutableStateOf(0) }
+    val onBackgroundTransition = AppBackdrop(
+        currentRoute = currentRoute,
+        backgroundMode = backgroundMode,
+        settings = playerSettings,
+        preview = backgroundSettingsPreview,
+        playerViewModel = playerViewModel,
+        playerTargetOpen = playerTransitionState.targetState
+    )
+
+    val listBackdropState = remember(scope) { DetailListBackdropState(scope) }
+    LaunchedEffect(currentRoute) { listBackdropState.onRouteChanged(currentRoute) }
+    DetailListBackdrop(
+        state = listBackdropState,
+        currentRoute = currentRoute,
+        lastRoute = lastRoute,
+        backgroundMode = backgroundMode,
+        forceDynamic = forceDynamicBackgroundInCollections,
+        blur = backgroundBlurRadius(playerSettings.backgroundBlur),
+        intensity = playerSettings.appBackgroundIntensity / 100f
+    )
+    val onListBackdropArt: (String?, Boolean) -> Unit = listBackdropState::onArt
+
+    // Full player backdrop (root-hosted)
+    val fullPlayerBackdropState = remember { FullPlayerBackdropState() }
+    PlayerBackdrop(
+        transitionState = playerTransitionState,
+        state = fullPlayerBackdropState,
+        backgroundMode = backgroundMode,
+        settings = playerSettings,
+        navigationBarMode = navigationBarMode,
+        navZoneHeightPx = navZoneHeightPx,
+        forceDynamic = forceDynamicBackgroundInPlayer
+    )
+
+    // The modal shrink scale is applied to the SharedTransitionLayout itself,
+    // so the shared-element overlay scales with the world: the artwork flight
+    // departs exactly at the on-screen hero's bounds, and a close can start
+    // together with a dismissing modal — no pop, no staging. No base background
+    // here: it would paint over the backdrop layers behind this layout — the
+    // base comes from FoamBackdropHost instead.
+    SharedTransitionLayout(
+        modifier = modifier
+            .fillMaxSize()
+            // Unscaled bottom fade, drawn only in the margin the shrunk content
+            // leaves, so the fade stays full-bleed while a modal is open.
+            .foamBottomScrimOutsideShrunk(
+                currentRoute = currentRoute,
+                bottomBarClearance = bottomBarClearance,
+                enabled = startupReady
+            )
+            .foamBackdropScale()
+    ) {
         val transition: Transition<Boolean> = rememberTransition(playerTransitionState, label = "PlayerTransition")
-        val navTransitions = remember(playerTransitionState) {
-            buildFoamNavTransitions(playerTransitionState)
+        val navTransitions = remember(
+            playerTransitionState,
+            primaryNavBarItems,
+            secondaryNavBarItems,
+            zoomOrigins
+        ) {
+            buildFoamNavTransitions(
+                playerTransitionState = playerTransitionState,
+                primaryNavBarItems = primaryNavBarItems,
+                secondaryNavBarItems = secondaryNavBarItems,
+                zoomOrigins = zoomOrigins
+            )
         }
 
         val isBottomChromeLiftAllowed = remember { mutableStateOf(true) }
@@ -350,73 +518,36 @@ fun FoamNavHost(
             },
             LocalBottomBarClearance provides bottomBarClearance,
             LocalCollectionHeroLayoutLookup provides heroLayoutFor,
-            LocalActiveSharedCollection provides activeSharedCollection,
+            LocalActiveSharedCollection provides activeSharedCollectionTag.value,
+            LocalActiveSharedCollectionTagState provides activeSharedCollectionTag,
             LocalSearchFocusRequest provides searchFocusRequest,
-            LocalBackgroundSettingsPreview provides backgroundSettingsPreview
+            LocalBackgroundSettingsPreview provides backgroundSettingsPreview,
+            LocalPlayerTransitionState provides playerTransitionState
         ) {
-            Box(modifier = modifier.fillMaxSize().foamBackground()) {
-
-                var navZoneHeightPx by remember { mutableStateOf(0) }
-                val onBackgroundTransition = AppBackdrop(
-                    currentRoute = currentRoute,
-                    backgroundMode = backgroundMode,
-                    settings = playerSettings,
-                    preview = backgroundSettingsPreview,
-                    playerViewModel = playerViewModel,
-                    playerTargetOpen = playerTransitionState.targetState
-                )
-
-                // Full-bleed backdrop for the detail list screens (album /
-                // playlist / artist), drawn at the root so it covers the status
-                // bar and nav zone.
-                val listBackdropState = remember(scope) { DetailListBackdropState(scope) }
-                LaunchedEffect(currentRoute) { listBackdropState.onRouteChanged(currentRoute) }
-                DetailListBackdrop(
-                    state = listBackdropState,
-                    currentRoute = currentRoute,
-                    lastRoute = lastRoute,
-                    backgroundMode = backgroundMode,
-                    forceDynamic = forceDynamicBackgroundInCollections,
-                    blur = backgroundBlurRadius(playerSettings.backgroundBlur),
-                    intensity = playerSettings.appBackgroundIntensity / 100f
-                )
-                val onListBackdropArt: (String?, Boolean) -> Unit = listBackdropState::onArt
-
-                // Full player backdrop (root-hosted)
-                val fullPlayerBackdropState = remember { FullPlayerBackdropState() }
-                PlayerBackdrop(
-                    transitionState = playerTransitionState,
-                    state = fullPlayerBackdropState,
-                    backgroundMode = backgroundMode,
-                    settings = playerSettings,
-                    navigationBarMode = navigationBarMode,
-                    navZoneHeightPx = navZoneHeightPx,
-                    forceDynamic = forceDynamicBackgroundInPlayer
-                )
+            Box(modifier = Modifier.fillMaxSize()) {
 
                 val isPlayerOpen = playerTransitionState.targetState
+                val scalesWholeScreenForPlayer = !isSettingsRoute(currentRoute)
 
-                val miniPlayerPresence = remember {
-                    Animatable(if (playerViewModel.hasCurrentTrack.value) 1f else 0f)
-                }
                 val isOnboardingRoute = currentRoute == Screen.Onboarding.route
-                LaunchedEffect(hasCurrentTrack, isOnboardingRoute) {
+                // Created only once the gate opens, seeded with the restored
+                // session, so the first revealed frame already has the mini
+                // player in its final position: no snap/animation visible.
+                val miniPlayerPresence = remember(startupReady) {
+                    Animatable(if (startupReady && hasCurrentTrack && !isOnboardingRoute) 1f else 0f)
+                }
+                LaunchedEffect(hasCurrentTrack, isOnboardingRoute, startupReady) {
+                    if (!startupReady) return@LaunchedEffect
                     when {
                         isOnboardingRoute -> miniPlayerPresence.snapTo(0f)
                         !hasCurrentTrack -> miniPlayerPresence.animateTo(
                             targetValue = 0f,
-                            animationSpec = tween(
-                                durationMillis = SharedElementTransitionDurationMs,
-                                easing = SharedElementEasing
-                            )
+                            animationSpec = FoamMotion.Spec.sharedElementFlight
                         )
                         playerTransitionState.targetState -> miniPlayerPresence.snapTo(1f)
                         else -> miniPlayerPresence.animateTo(
                             targetValue = 1f,
-                            animationSpec = tween(
-                                durationMillis = SharedElementTransitionDurationMs,
-                                easing = SharedElementEasing
-                            )
+                            animationSpec = FoamMotion.Spec.sharedElementFlight
                         )
                     }
                 }
@@ -438,7 +569,7 @@ fun FoamNavHost(
                 var isNavBarExpanded by remember { mutableStateOf(false) }
                 val navBarExpandFraction by animateFloatAsState(
                     targetValue = if (isNavBarExpanded) 1f else 0f,
-                    animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                    animationSpec = tween(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.STANDARD),
                     label = "NavBarExpandFraction"
                 )
                 LaunchedEffect(isPlayerOpen) {
@@ -460,7 +591,7 @@ fun FoamNavHost(
 
                 val handleNavBarNavigation: (String) -> Unit = { route ->
                     isNavBarExpanded = false
-                    activeSharedCollection = null
+                    activeSharedCollectionTag.value = null
                     // Only the search icon's tap raises the focused-search request just
                     // before landing here; any other destination cancels a stale one.
                     if (route != Screen.Search.route) searchFocusRequest.consume()
@@ -483,7 +614,11 @@ fun FoamNavHost(
                     }
                 }
 
-                Box(modifier = Modifier.fillMaxSize()) {
+                if (startupReady) Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .foamZoomOriginTracker(zoomOrigins)
+                ) {
                     fun playTrackFromList(
                         tracks: List<TrackEntity>,
                         index: Int,
@@ -507,12 +642,24 @@ fun FoamNavHost(
                             visible = { isFull -> !isFull },
                             enter = if (playerTransition.isTransitionAnimated) fadeIn() else EnterTransition.None,
                             exit = if (playerTransition.isTransitionAnimated) fadeOut() else ExitTransition.None,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(
+                                    if (scalesWholeScreenForPlayer) {
+                                        Modifier.foamPlayerOpenScale(
+                                            playerOpen = playerTransitionState.targetState,
+                                            playerProgress = { playerTransitionState.progress() }
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
                         ) {
                             val playerTransitionVisibilityScope = this
                             Box(modifier = Modifier.fillMaxSize()) {
                                 val navGraphContext = FoamNavGraphContext(
                                     navController = navController,
+                                    context = LocalContext.current,
                                     sharedTransitionScope = this@SharedTransitionLayout,
                                     playerTransitionVisibilityScope = playerTransitionVisibilityScope,
                                     homeViewModel = homeViewModel,
@@ -535,16 +682,12 @@ fun FoamNavHost(
                                     onPlayTracks = { tracks, index, collectionId ->
                                         playTrackFromList(tracks, index, collectionId)
                                     },
-                                    onActiveSharedCollectionChange = { activeSharedCollection = it }
+                                    onActiveSharedCollectionChange = { activeSharedCollectionTag.value = it }
                                 )
                                 NavHost(
                                     modifier = Modifier.fillMaxSize(),
                                     navController = navController,
-                                    startDestination = if (startOnOnboarding) {
-                                        Screen.Onboarding.route
-                                    } else {
-                                        Screen.Home.route
-                                    },
+                                    startDestination = startRoute,
                                     enterTransition = navTransitions.enter,
                                     exitTransition = navTransitions.exit,
                                     popEnterTransition = navTransitions.popEnter,
@@ -590,14 +733,14 @@ fun FoamNavHost(
                                 },
                                 isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
                                 onOpenAlbum = { track ->
-                                    activeSharedCollection = sharedCollectionTag("album", track.album)
+                                    activeSharedCollectionTag.value = sharedCollectionTag("album", track.album)
                                     navigateClosingPlayer(
                                         Screen.AlbumDetail.createRoute(track.album, track.albumArtPath, track.artist),
                                         Screen.AlbumDetail.route
                                     )
                                 },
                                 onOpenArtist = { track ->
-                                    activeSharedCollection = sharedCollectionTag("artist", track.artist)
+                                    activeSharedCollectionTag.value = sharedCollectionTag("artist", track.artist)
                                     navigateClosingPlayer(
                                         Screen.ArtistDetail.createRoute(track.artist),
                                         Screen.ArtistDetail.route
@@ -609,39 +752,48 @@ fun FoamNavHost(
                     }
                 }
 
-                FoamBottomChrome(
-                    currentRoute = currentRoute,
-                    navigationBarMode = navigationBarMode,
-                    transition = transition,
-                    playerTransitionState = playerTransitionState,
-                    isPlayerOpen = isPlayerOpen,
-                    isTransitionAnimated = playerTransition.isTransitionAnimated,
-                    navBarExpandFraction = navBarExpandFraction,
-                    playerClosedFraction = playerClosedFraction,
-                    isBottomChromeLifted = isBottomChromeLifted,
-                    onToggleNavBarExpand = { isNavBarExpanded = !isNavBarExpanded },
-                    onNavigate = handleNavBarNavigation,
-                    settings = playerSettings,
-                    hasCurrentTrack = hasCurrentTrack,
-                    cardPresenceFraction = { miniPlayerPresence.value },
-                    miniPlayerSwipeController = miniPlayerSwipeController,
-                    miniPlayerTopPx = { miniPlayerTopPx.takeUnless { it.isNaN() } },
-                    bottomBarClearance = bottomBarClearance,
-                    miniPlayerBoxHeight = miniPlayerBoxHeight,
-                    sharedTransitionScope = this@SharedTransitionLayout,
-                    playerViewModel = playerViewModel,
-                    onBackgroundTransition = onBackgroundTransition,
-                    onOpenPlayer = { playerTransition.animate(open = true, precompose = true) },
-                    trackListTransitionTrackId = playerTransition.trackListTransitionTrackId,
-                    centerTrackRequest = playerTransition.centerTrackRequest,
-                    skipMiniPlayerTrackAnimation = playerTransition.skipMiniPlayerTrackAnimation,
-                    isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
-                    navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
-                    toastViewModel = toastViewModel,
-                    onNavZoneHeightChange = { navZoneHeightPx = it },
-                    onMiniPlayerTopChange = { miniPlayerTopPx = it },
-                    onMiniPlayerHeightChange = { miniPlayerBoxHeightPx = it }
-                )
+                if (startupReady) {
+                    FoamBottomScrim(
+                        currentRoute = currentRoute,
+                        bottomBarClearance = bottomBarClearance
+                    )
+                }
+
+                // Bottom chrome (mini player + nav bar + toasts) shrinks with
+                // the screen content, in the shared-transition scale above.
+                if (startupReady) Box(modifier = Modifier.fillMaxSize()) {
+                    FoamBottomChrome(
+                        currentRoute = currentRoute,
+                        navigationBarMode = navigationBarMode,
+                        transition = transition,
+                        playerTransitionState = playerTransitionState,
+                        isTransitionAnimated = playerTransition.isTransitionAnimated,
+                        navBarExpandFraction = navBarExpandFraction,
+                        playerClosedFraction = playerClosedFraction,
+                        isBottomChromeLifted = isBottomChromeLifted,
+                        onToggleNavBarExpand = { isNavBarExpanded = !isNavBarExpanded },
+                        onNavigate = handleNavBarNavigation,
+                        settings = playerSettings,
+                        hasCurrentTrack = hasCurrentTrack,
+                        cardPresenceFraction = { miniPlayerPresence.value },
+                        miniPlayerSwipeController = miniPlayerSwipeController,
+                        miniPlayerTopPx = { miniPlayerTopPx.takeUnless { it.isNaN() } },
+                        miniPlayerBoxHeight = miniPlayerBoxHeight,
+                        sharedTransitionScope = this@SharedTransitionLayout,
+                        playerViewModel = playerViewModel,
+                        onBackgroundTransition = onBackgroundTransition,
+                        onOpenPlayer = { playerTransition.animate(open = true, precompose = true) },
+                        trackListTransitionTrackId = playerTransition.trackListTransitionTrackId,
+                        centerTrackRequest = playerTransition.centerTrackRequest,
+                        skipMiniPlayerTrackAnimation = playerTransition.skipMiniPlayerTrackAnimation,
+                        isAnimateSeekBarEnabled = isAnimateSeekBarEnabled,
+                        navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
+                        toastViewModel = toastViewModel,
+                        onNavZoneHeightChange = { navZoneHeightPx = it },
+                        onMiniPlayerTopChange = { miniPlayerTopPx = it },
+                        onMiniPlayerHeightChange = { miniPlayerBoxHeightPx = it }
+                    )
+                }
             }
 
             FoamGlobalModals(
@@ -650,7 +802,6 @@ fun FoamNavHost(
                 playerViewModel = playerViewModel,
                 playlistsViewModel = playlistsViewModel,
                 trackRadioViewModel = trackRadioViewModel,
-                lyricsDetailsViewModel = lyricsDetailsViewModel,
                 updateManager = updateManager,
                 updateStartupRelease = updateStartupRelease,
                 updateDownloadState = updateDownloadState,
@@ -658,8 +809,6 @@ fun FoamNavHost(
                 trackModalState = trackModalState,
                 collectionModalState = collectionModalState,
                 trackRadioState = trackRadioState,
-                lyricsTrackDetails = lyricsTrackDetails,
-                isLyricsDetailsLoading = isLyricsDetailsLoading,
                 playlists = playlists,
                 playlistCovers = playlistCovers,
                 playlistIdsWithTrack = playlistIdsWithTrack,
@@ -669,13 +818,15 @@ fun FoamNavHost(
                 scoreOverrides = scoreOverrides,
                 existingGenres = libraryGenres,
                 onNavigateClosingPlayer = { route, pattern -> navigateClosingPlayer(route, pattern) },
-                onActiveSharedCollectionChange = { activeSharedCollection = it },
+                onActiveSharedCollectionChange = { activeSharedCollectionTag.value = it },
                 onOpenArtist = { artist ->
-                    activeSharedCollection = sharedCollectionTag("artist", artist)
+                    zoomOrigins.discardTouch()
+                    activeSharedCollectionTag.value = sharedCollectionTag("artist", artist)
                     navController.navigate(Screen.ArtistDetail.createRoute(artist))
                 },
                 onOpenAlbum = { album, albumArtPath, artist ->
-                    activeSharedCollection = sharedCollectionTag("album", album)
+                    zoomOrigins.discardTouch()
+                    activeSharedCollectionTag.value = sharedCollectionTag("album", album)
                     navController.navigate(Screen.AlbumDetail.createRoute(album, albumArtPath, artist))
                 }
             )

@@ -1,6 +1,5 @@
 package com.foamplayer.app.ui.screens.settings
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -9,23 +8,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
+import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamSliderStateItem
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
 import com.foamplayer.app.ui.theme.FoamDimens
 import com.foamplayer.app.ui.theme.FoamTheme
-import com.foamplayer.app.ui.theme.foamBackground
-import com.foamplayer.app.ui.theme.foamBorderOverlay
-import com.foamplayer.app.ui.theme.foamSurface
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -45,31 +39,22 @@ fun PlaybackSettingsScreen(
     val secondsTemplate = stringResource(R.string.duration_seconds)
     val secondsDecimalTemplate = stringResource(R.string.duration_seconds_decimal)
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .foamBackground()
+    SettingsPage(
+        title = stringResource(R.string.playback),
+        onBack = onBack
     ) {
-        SettingsHeader(
-            title = stringResource(R.string.playback),
-            onBack = onBack,
-            modifier = Modifier.padding(horizontal = FoamDimens.paddingMedium)
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = FoamDimens.paddingMedium),
-            contentPadding = PaddingValues(bottom = LocalBottomBarClearance.current)
+            contentPadding = PaddingValues(
+                top = SettingsHeaderZoneHeight,
+                bottom = LocalBottomBarClearance.current
+            )
         ) {
             item {
                 Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(FoamDimens.cornerRadiusSmall))
-                        .foamSurface()
-                ) {
+                FoamCard(modifier = Modifier.fillMaxWidth()) {
                     Column {
                         FoamSliderStateItem(
                             title = stringResource(R.string.crossfade),
@@ -81,7 +66,7 @@ fun PlaybackSettingsScreen(
                             formatValue = { String.format(Locale.getDefault(), secondsTemplate, it.roundToInt()) },
                             minMaxDisplay = formatSeconds(secondsTemplate, 0) to formatSeconds(secondsTemplate, 15)
                         )
-                        SectionDivider()
+                        SettingsSectionDivider()
                         FoamSliderStateItem(
                             title = stringResource(R.string.quick_fade),
                             description = stringResource(R.string.quick_fade_desc),
@@ -94,7 +79,7 @@ fun PlaybackSettingsScreen(
                             },
                             minMaxDisplay = formatSeconds(secondsTemplate, 0) to formatSeconds(secondsTemplate, 1)
                         )
-                        SectionDivider()
+                        SettingsSectionDivider()
                         FoamSliderStateItem(
                             title = stringResource(R.string.silence_between_tracks),
                             description = stringResource(R.string.silence_between_tracks_desc),
@@ -122,13 +107,3 @@ private fun formatSeconds(template: String, seconds: Int): String =
 /** "0.5 s" from the localized decimal [template] ("%1$.1f s"). */
 private fun formatSecondsDecimal(template: String, seconds: Float): String =
     String.format(Locale.getDefault(), template, seconds)
-
-@Composable
-private fun SectionDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .foamBorderOverlay()
-    )
-}

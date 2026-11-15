@@ -1,7 +1,7 @@
 package com.foamplayer.app.ui.navigation
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -19,15 +19,13 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Icon
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -46,9 +44,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -58,95 +59,168 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foamplayer.app.R
+import androidx.navigation.NavBackStackEntry
 import com.foamplayer.app.constants.NavBarItem
 import com.foamplayer.app.constants.NavigationBarMode
+import com.foamplayer.app.data.settings.FoamIconStyle
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.LocalAccentTintState
 import com.foamplayer.app.ui.theme.SurfaceAccentTint
 import com.foamplayer.app.ui.theme.SurfaceVariantAccentTint
+import com.foamplayer.app.ui.utils.consumeTaps
 
-/** Duration of every nav-bar slot animation */
-private const val NavBarSlotAnimMillis = 250
-
-/** Elevation shared by both bars' drop shadow. */
+/** Elevation of both bars' drop shadow. */
 private val NavBarShadowElevation = 6.dp
 
 /**
- * Radius and peak strength of the drawn translucent-when-player-open shadow in
- * [FloatingNavigationBar]: with that setting on, the RenderNode elevation shadow is
- * replaced by a [dropShadow] while the player transitions, because elevation shadows
- * only wrap the outline -- seen through the fading surface they read as a ring with
- * a hole under the bar. The drawn shadow fills under the surface as well.
+ * Drawn shadow used by [FloatingNavigationBar] when the bar is translucent with the
+ * player open. An elevation shadow would show as a ring through the fading surface.
  */
 private val NavBarShadowRadius = 6.dp
 private const val NavBarShadowStrength = 0.35f
 
-/**
- * Shared 250ms tween for all nav-bar slot motion: item fade/scale on enable/disable,
- * slot-center slides on reorder, and the floating pill's hugging width bounds.
- */
-private val NavBarSlotAnimation = tween<Float>(durationMillis = NavBarSlotAnimMillis, easing = FastOutSlowInEasing)
+/** Tween shared by all nav-bar slot motion (fade, slide, pill width). */
+private val NavBarSlotAnimation = tween<Float>(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.STANDARD)
 
-/** The [NavBarSlotAnimation] timing for Dp values (the floating pill's width). */
-private val NavBarSlotDpAnimation = tween<Dp>(durationMillis = NavBarSlotAnimMillis, easing = FastOutSlowInEasing)
+/** [NavBarSlotAnimation] for Dp values. */
+private val NavBarSlotDpAnimation = tween<Dp>(FoamMotion.Duration.STANDARD, easing = FoamMotion.Easings.STANDARD)
+
+/** Shape of every item's hit target: a circle in a packed row, a pill when it has room. */
+private val NavItemHitShape = RoundedCornerShape(percent = 50)
 
 /**
- * Bottom strip of the screen -- nav-bar zone plus floating mini player card, system
- * nav-bar inset included -- that edge-to-edge scrollable content should keep its
- * trailing rows clear of. Screens scroll BEHIND the floating bar and card (they are
- * occluded, not clipped), and add this value as a trailing spacer / bottom content
- * padding so the last rows can be scrolled up past them. Provided at the navigation
- * root; 0 when unconstrained.
+ * Height of the bottom zone (nav bar, floating mini player, system inset).
+ * Screens scroll behind it and add this as bottom padding. 0 when unconstrained.
  */
 val LocalBottomBarClearance = compositionLocalOf { 0.dp }
 
 /**
- * Identity of the collection item that was clicked to start the current
- * navigation, as "<kind>:<key>" (e.g. "album:Abbey Road", "playlist:12",
- * "artist:Radiohead"), or null when the last navigation did not start from a
- * collection row.
+ * Tag ("<kind>:<key>", e.g. "album:Abbey Road") of the collection row clicked to
+ * start the current navigation, or null.
  *
- * Shared-element rows register their keys ONLY while they match this tag, so a
- * screen transition pairs exactly one source row with its destination hero --
- * other rows that happen to also exist on the destination (e.g. the artist's
- * albums already visible on the home page) never join the flight. The tag is
- * overwritten by every collection click, which also drops stale tags from
- * earlier flights, and cleared by navigations that do not start from a
+ * Only the matching row registers its shared-element keys, so a transition pairs
+ * one source row with its hero. Reset by navigations that don't start from a
  * collection row (see [FoamNavGraphContext.navigateUnshared]).
  */
 val LocalActiveSharedCollection = compositionLocalOf { null as String? }
 
-/** Canonical tag of a clickable collection row for [LocalActiveSharedCollection]. */
-fun sharedCollectionTag(kind: String, key: String): String = "$kind:$key"
+/** Separates a tag or key from its row origin. A control char, so it can't clash with names. */
+private const val SharedCollectionOriginSeparator = '\u0000'
 
 /**
- * True when this row is the element that was clicked to start the current
- * transition (and therefore the only source that should register its
- * shared-element keys).
+ * Tag of a collection row. [origin] tells apart several copies of the same
+ * collection on one screen (e.g. Home sections).
  */
+fun sharedCollectionTag(kind: String, key: String, origin: String? = null): String =
+    if (origin.isNullOrEmpty()) {
+        "$kind:$key"
+    } else {
+        "$kind:$key$SharedCollectionOriginSeparator$origin"
+    }
+
+/** Scopes a shared-element key to a row [origin]. */
+fun sharedCollectionElementKey(baseKey: String, origin: String?): String =
+    if (origin.isNullOrEmpty()) {
+        baseKey
+    } else {
+        "$baseKey$SharedCollectionOriginSeparator$origin"
+    }
+
+/**
+ * Saved-state key for the tag a detail destination was opened with. Keeps the
+ * hero's key stable while other pages are opened on top and closed again.
+ */
+internal const val SharedCollectionTagKey = "foam.sharedCollectionTag"
+
+/**
+ * Tag the current collection detail destination was opened with, read from its own
+ * [NavBackStackEntry]. Heroes use it to scope their shared-element keys.
+ */
+val LocalCollectionDetailTag = compositionLocalOf { null as String? }
+
+/** Origin encoded in [tag], or null. */
+fun activeSharedCollectionOrigin(tag: String?): String? =
+    tag?.substringAfter(SharedCollectionOriginSeparator, missingDelimiterValue = "")
+        ?.takeIf { it.isNotEmpty() }
+
+/** True if this row is the one clicked to start the current transition. */
 @Composable
 fun isActiveSharedCollection(kind: String, key: String): Boolean =
     LocalActiveSharedCollection.current == sharedCollectionTag(kind, key)
 
 /**
- * Pending request for the search screen to open in its active state -- search
- * bar focused, keyboard up, history shown -- instead of the idle browse cards.
- * A normal tap on the nav bar's search icon raises it (both bar rows); a long
- * press on the icon navigates WITHOUT raising it, keeping the browse cards.
- * [com.foamplayer.app.ui.screens.search.SearchScreen] consumes the request once
- * honored, so returning to the screen later never re-raises the keyboard on its
- * own.
+ * True if a collection flight key ("album-art-<row id>", "playlist-title-<row id>", ...)
+ * belongs to the clicked row. Other keys (player flights, empty) always return false.
+ */
+@Composable
+fun isActiveSharedCollectionFlightKey(key: String): Boolean {
+    val kind = key.substringBefore("-")
+    val rowKey = key.substringAfter("-").substringAfter("-")
+    return LocalActiveSharedCollection.current == sharedCollectionTag(kind, rowKey)
+}
+
+/** Detail route prefix for a collection kind. */
+private fun collectionDetailRoutePrefix(kind: String): String = when (kind) {
+    "album" -> "album/"
+    "artist" -> "artist/"
+    else -> "playlist/"
+}
+
+/**
+ * True if the transition is between a screen and this kind's detail page, the only
+ * pair a collection flight may run in. Stops rows with the same key on different
+ * screens from pairing up (e.g. when switching tabs).
+ * See [com.foamplayer.app.ui.components.collectionRowFlightArtwork].
+ */
+internal fun AnimatedVisibilityScope.isCollectionFlightPair(kind: String): Boolean {
+    val detailPrefix = collectionDetailRoutePrefix(kind)
+    val currentRoute = (transition.currentState as? NavBackStackEntry)?.destination?.route
+        ?: return false
+    val targetRoute = (transition.targetState as? NavBackStackEntry)?.destination?.route
+        ?: return false
+    return currentRoute.startsWith(detailPrefix) || targetRoute.startsWith(detailPrefix)
+}
+
+/**
+ * State version of [LocalActiveSharedCollection].
+ *
+ * Readable outside composition (needed by [collectionFlightConfig]) and already up
+ * to date when the destination first composes.
+ */
+val LocalActiveSharedCollectionTagState =
+    compositionLocalOf { mutableStateOf<String?>(null) }
+
+/**
+ * Enables a collection flight only for the clicked row. The getter is evaluated
+ * lazily by the transition, so it reads live state.
+ */
+internal fun collectionFlightConfig(
+    tagState: State<String?>,
+    key: String
+): SharedTransitionScope.SharedContentConfig {
+    // "album-art-<id>" -> kind "album", row id "<id>"
+    val kind = key.substringBefore("-")
+    val rowKey = key.substringAfter("-").substringAfter("-")
+    return object : SharedTransitionScope.SharedContentConfig {
+        override val SharedTransitionScope.SharedContentState.isEnabled: Boolean
+            get() = tagState.value == sharedCollectionTag(kind, rowKey)
+    }
+}
+
+/**
+ * Request for the search screen to open focused (keyboard up, history shown).
+ * Raised by a tap on the search icon, not by a long press.
+ * [com.foamplayer.app.ui.screens.search.SearchScreen] consumes it once honored.
  */
 class SearchFocusRequest {
     var isPending: Boolean by mutableStateOf(false)
         private set
 
-    /** Raises the request; honored by the next [Screen.Search] composition. */
     fun request() {
         isPending = true
     }
 
-    /** Called by the search screen after honoring the request. */
     fun consume() {
         isPending = false
     }
@@ -154,153 +228,109 @@ class SearchFocusRequest {
 
 val LocalSearchFocusRequest = compositionLocalOf { SearchFocusRequest() }
 
-/**
- * Single source of truth for nav-bar / mini-player geometry.
- */
+/** Geometry of the nav bar and the mini player. */
 object NavBarDimens {
 
     // ---- Docked bar -----------------------------------------------------------
-    /** The icon row itself. */
-    val DockedRowHeight = 64.dp
+    /** Icon row height, with 4dp slack around each hit target. */
+    val DockedRowHeight = 56.dp
 
-    /** Connector that joins the bar to the mini player card above it. */
-    val DockedConnector = 6.dp
+    /** Extra surface above the icon row. Zero, kept to tune the bar height in one place. */
+    val DockedConnector = 0.dp
 
-    /**
-     * The docked container's height in EVERY state: player open or closed, mini
-     * player present or not. The connector is folded into the container instead of
-     * being a separately-faded draw, so the visible height can never change anymore.
-     */
+    /** Docked container height, constant in every state. */
     val DockedBarHeight = DockedRowHeight + DockedConnector
 
     /**
-     * Slack kept above/below the docked bar's interactive row so the icons sit
-     * centered within the surface's visible height, with a moderate amount of
-     * breathing room to the bottom edge. The surface itself lands on the bottom
-     * of the screen, extending down through the system nav-bar inset.
+     * Gap below the icon row, on top of the system inset. The surface still runs
+     * down through it to the screen bottom.
      */
-    val DockedBarBottomMargin = 6.dp
+    val DockedBarBottomMargin = 4.dp
 
     // ---- Floating / attached bar ----------------------------------------------
     val FloatingRowHeight = 56.dp
 
-    /** Margin around the floating pill (horizontal and vertical). */
+    /** Margin around the pill's sides and top. */
     val FloatingBarMargin = 12.dp
 
-    /** Mini player artwork size the pill's corner radius hugs. Used by MiniPlayer.kt. */
+    /** Gap between the pill's bottom edge and the system nav bar inset. */
+    val FloatingBarBottomMargin = 4.dp
+
+    /** Mini player artwork size, which the pill's corner radius follows. */
     val MiniPlayerArtSize = 44.dp
 
-    /**
-     * The mini player card's own vertical padding around its content; its *visible*
-     * edge sits this far inside the box that [miniPlayerBottomPadding] positions.
-     * Used by MiniPlayer.kt.
-     */
+    /** Vertical padding around the card; its visible edge sits this far inside its box. */
     val MiniPlayerCardVerticalPadding = 6.dp
 
-    /** The mini player card's inner padding around its content. Used by MiniPlayer.kt. */
+    /** Inner padding of the card. */
     val MiniPlayerContainerPadding = 8.dp
 
-    /** Vertical gap between the mini player's artwork row and its seek slider. */
+    /** Gap between the artwork row and the seek slider. */
     val MiniPlayerContentSpacing = 6.dp
 
-    /** Height of the strip the mini player's seek slider occupies. */
+    /** Gap between pages in the mini player pager. */
+    val MiniPlayerPageSpacing = 12.dp
+
+    /** Height of the seek slider strip. */
     val MiniPlayerSliderHeight = 12.dp
 
-    /**
-     * The mini player card's full visible height: artwork row + spacing + slider,
-     * plus the container's inner padding on both sides.
-     */
+    /** Visible card height: artwork row, spacing, slider and inner padding. */
     val MiniPlayerCardHeight = MiniPlayerArtSize +
             MiniPlayerContentSpacing +
             MiniPlayerSliderHeight +
             MiniPlayerContainerPadding * 2
 
     /**
-     * How far the pill's corner radius grows past the artwork radius. Derived from
-     * the card's container padding so the pill's radius always matches the card
-     * container's -- required for the attached extension to blend into the card's
-     * top corners.
+     * How much the pill's corner radius exceeds the artwork radius. Matches the
+     * card's container so the attached extension blends into its corners.
      */
     val FloatingCornerOverhang = MiniPlayerContainerPadding
 
     // ---- Shared item metrics ---------------------------------------------------
     val ItemIconSize = 28.dp
 
-    /** Hit padding for the extra row's items, whose row hugs them tightly. */
+    /** Hit padding for the extra row's items. */
     val ItemHitAreaPadding = 6.dp
 
-    /**
-     * Square touch target for main-row items (Material's 48dp minimum). Fits
-     * inside both bars' rows, so the bars' sizes never change. The extra row's
-     * items use the same target size even though their row is only [ExtraRowHeight]
-     * tall: their targets live in an unclipped overlay that overflows the row
-     * (see FoamNavExtraRow).
-     */
+    /** Hit target height (Material's 48dp minimum), and its width in a packed row. */
     val ItemHitTargetSize = 48.dp
 
-    /** Padding around [ItemIconSize] that produces [ItemHitTargetPadding]. */
+    /** Widest a hit target stretches when its row has room. */
+    val ItemHitTargetMaxWidth = 72.dp
+
+    /** Padding around the icon that gives [ItemHitTargetSize]. */
     val ItemHitTargetPadding = (ItemHitTargetSize - ItemIconSize) / 2
 
-    val RowHorizontalPadding = 8.dp
+    /** Padding between the edge buttons and the container edges, equal on all sides. */
+    val RowEdgePadding = (FloatingRowHeight - ItemHitTargetSize) / 2
 
     // ---- Expandable extra row ---------------------------------------------------
-    /** Tighter hit padding for the extra row's icons so the row can hug the main row. */
+    /** Tighter hit padding for the extra row's icons. */
     val ExtraRowItemHitPadding = 2.dp
 
     /**
-     * Height of the secondary row revealed above the main row when expanded.
-     * Hugs its tighter items exactly, so no dead slack opens up inside the row.
-     * This is the row's visual footprint only: its touch targets are full
-     * [ItemHitTargetSize] squares in an unclipped overlay that overflows the row
-     * above and below (see FoamNavExtraRow).
+     * Visible height of the extra row. Its touch targets are taller and live in an
+     * unclipped overlay (see [FoamNavExtraRow]).
      */
     val ExtraRowHeight = ItemIconSize + ExtraRowItemHitPadding * 2
 
-    /**
-     * Edge-to-edge gap to keep between the extra row's icons and the main row's
-     * icons. The extra row dips into the main row's empty upper hit padding to get
-     * this close without clipping anything. The floating/attached bar trades part
-     * of this gap away to keep the extra row's ripple circles inside the container
-     * (see [extraRowBottomOverlap]).
-     */
+    /** Wanted edge-to-edge gap between the extra row's icons and the main row's. */
     val ExtraRowIconGap = 12.dp
 
-    /**
-     * Breathing room the extra row's ripple circles keep below the bar surface's
-     * top edge once [extraRowBottomOverlap] clamps the row's dip: the same margin
-     * the main row's ripples keep above the floating pill's bottom edge
-     * (([FloatingRowHeight] - [ItemHitTargetSize]) / 2), so neither row's ripple
-     * hugs its container edge.
-     */
+    /** Margin kept between the extra row's ripples and the surface's top edge. */
     val ExtraRowRippleMargin = (FloatingRowHeight - ItemHitTargetSize) / 2
 
     /**
-     * Extra thickness the bar surface gains while the extra row is expanded,
-     * inserted BETWEEN the two icon rows: the extra row stays glued to the
-     * surface's top edge and the main row to its bottom edge (both keeping their
-     * ripple margins), so the whole growth lands in the gap between the rows and
-     * the top/bottom padding never changes. [miniPlayerBottomPadding] and
-     * [attachedExtensionHeight] derive from the same constant, so the mini player
-     * card and the attached surface extension track the taller bar in lock-step.
+     * Extra surface height while expanded, inserted between the two rows so the
+     * top and bottom paddings never change. [miniPlayerBottomPadding] and
+     * [attachedExtensionHeight] use it too, to follow the taller bar.
      */
     val ExtraRowExpandedSpacing = 8.dp
 
     /**
-     * How far the extra row visually dips into the main row below it. The dipped
-     * strip only contains the main row's own hit-area padding, so nothing visibly
-     * collides -- but the two icon rows end up [ExtraRowIconGap] apart.
-     *
-     * Floor: the row's touch targets are [ItemHitTargetSize] squares centered on
-     * the icons, so each one overflows the tight row by half that much past its
-     * top edge, and [ExtraRowRippleMargin] on top keeps the ripple clear of the
-     * surface's top edge -- mirroring the main row's ripple margin above the
-     * pill's bottom edge. The floating/attached bar's natural dip (4dp, from the
-     * [ExtraRowIconGap] arithmetic below) is therefore clamped up to 12dp and the
-     * items end up only 4dp (edge-to-edge) above the main row's icons instead of
-     * 12dp; the docked bar's natural dip (11dp) is 1dp short of the floor and is
-     * clamped up to it. While the bar is expanded, [ExtraRowExpandedSpacing] pushes
-     * the main row (and only the main row) down, widening the edge-to-edge gap by
-     * that much again.
+     * How far the extra row dips into the main row. The natural dip comes from
+     * [ExtraRowIconGap]; it is clamped up so the row's ripples stay inside the
+     * surface ([ExtraRowRippleMargin]).
      */
     fun extraRowBottomOverlap(mainRowHeight: Dp): Dp =
         (
@@ -309,15 +339,12 @@ object NavBarDimens {
                         ItemHitAreaPadding -
                         ExtraRowIconGap
                 ).coerceAtLeast(
-            (ItemHitTargetSize - ExtraRowHeight) / 2 + ExtraRowRippleMargin
-        )
+                (ItemHitTargetSize - ExtraRowHeight) / 2 + ExtraRowRippleMargin
+            )
 
     /**
-     * How far content sitting above the bar rides UP while the extra row expands —
-     * its VISIBLE growth. The row's tight footprint dips into the main row below it
-     * ([extraRowBottomOverlap]), so riding the full height would overshoot the bar's
-     * visible top and open a gap bigger than the collapsed one. The full player's
-     * bottom controls use this to keep a constant gap to the bar.
+     * How far content above the bar rises while the extra row expands. Less than
+     * the row's height because of the dip ([extraRowBottomOverlap]).
      */
     fun extraRowVisibleRide(mode: NavigationBarMode, expandFraction: Float = 1f): Dp {
         val expandedGrowth = ExtraRowHeight + ExtraRowExpandedSpacing
@@ -329,61 +356,51 @@ object NavBarDimens {
     }
 
     // ---- Mini player card placement --------------------------------------------
-    /** Gap between the card's bottom edge and the top of the docked bar. */
+    /** Gap between the card and the docked bar. */
     val DockedMiniPlayerGap = 2.dp
 
-    /** Gap between the card's bottom edge and the top of the floating pill. */
+    /** Gap between the card and the floating pill. */
     val FloatingMiniPlayerGap = 4.dp
 
-    /** How far the card is lowered into the bar in ATTACHED mode. */
-    val AttachedCardDrop = 24.dp
+    /**
+     * How far the card sinks into the bar in ATTACHED mode. Tuned so that, with
+     * the extra row closed, the gap between the buttons and the seek strip
+     * equals the gap between the buttons and the bar's bottom edge
+     * ([RowEdgePadding] + [ItemHitTargetPadding]). The expanded card position
+     * doesn't depend on this.
+     */
+    val AttachedCardDrop = 22.dp
 
     /**
-     * Where the mini player card's visible bottom edge lands relative to the extra
-     * row's glyph tops in ATTACHED mode once the row is fully expanded. Negative:
-     * the card sinks past the glyphs' top edge, so the card's artwork ends up only
-     * [MiniPlayerCardVerticalPadding] + [MiniPlayerContainerPadding] - |this| above
-     * the icons -- a tight sliver of surface instead of a full container-padding
-     * gap, echoing how deeply the card sinks into the pill when the row is closed.
+     * ATTACHED, fully expanded: where the card's visible bottom edge lands relative
+     * to the top of the extra row's icons. Negative, so the card sinks past them.
      */
     val AttachedExpandedIconGap = (-12).dp
 
     // ---- Player backdrop reach into the nav zone -------------------------------
     /**
-     * Distance from the bottom of the screen (above the system nav-bar inset) to the
-     * mini player card's box bottom edge, per mode.
+     * Distance from the screen bottom (above the system inset) to the card's box
+     * bottom edge. [expandFraction] is the animated expansion of the extra row.
      *
-     * [expandFraction] (0f..1f) is the *animated* fraction of the expanded secondary
-     * row, so the card rides up in lock-step with the bar expanding.
-     *
-     * DOCKED/FLOATING: the card only rides up by the extra row's *visible* growth --
-     * the row's top dips into the main row below it, so riding the full height would
-     * open up a bigger gap to the navbar top than when the row is closed.
-     *
-     * ATTACHED: the card instead un-drops just enough that its visible edge ends up
-     * hovering right on top of the extra row's icons (gap = [AttachedExpandedIconGap])
-     * instead of floating a full [AttachedCardDrop] away from the bar.
+     * DOCKED/FLOATING: the card rises by the row's visible growth.
+     * ATTACHED: the card lifts until it hovers just above the extra row's icons.
      */
     fun miniPlayerBottomPadding(mode: NavigationBarMode, expandFraction: Float = 0f): Dp {
-        val attachedBase = DockedBarHeight + DockedMiniPlayerGap - AttachedCardDrop
-        // How much taller the bar surface is at full expansion: the extra row plus
-        // the inter-row spacing that only exists while expanded.
+        val attachedBase =
+            FloatingBarBottomMargin + FloatingRowHeight + FloatingMiniPlayerGap - AttachedCardDrop
+        // Extra bar height at full expansion
         val expandedGrowth = ExtraRowHeight + ExtraRowExpandedSpacing
         val base = when (mode) {
             NavigationBarMode.ATTACHED -> {
-                // Where the extra row's icons end up once the bar is fully open:
-                // pill top, minus the row's dip into the main row, minus the icons'
-                // own hit padding.
-                val pillTop = FloatingBarMargin + FloatingRowHeight + expandedGrowth
+                val pillTop = FloatingBarBottomMargin + FloatingRowHeight + expandedGrowth
                 val iconsTop = pillTop -
                         extraRowBottomOverlap(FloatingRowHeight) -
                         ExtraRowItemHitPadding
-                // Lift that leaves the card's visible edge just above those icons.
                 val fullLift = iconsTop + AttachedExpandedIconGap -
                         MiniPlayerCardVerticalPadding - attachedBase - expandedGrowth
                 attachedBase + fullLift * expandFraction
             }
-            NavigationBarMode.FLOATING -> FloatingRowHeight + FloatingBarMargin + FloatingMiniPlayerGap
+            NavigationBarMode.FLOATING -> FloatingRowHeight + FloatingBarBottomMargin + FloatingMiniPlayerGap
             else -> DockedBarHeight + DockedMiniPlayerGap + DockedBarBottomMargin
         }
         val ride = when (mode) {
@@ -395,35 +412,23 @@ object NavBarDimens {
     }
 
     /**
-     * Fixed collapsed footprint (excluding the system nav-bar inset) of the nav-zone
-     * container in the nav Column: the docked bar's surface height, or the floating
-     * pill's height including its margins. The expandable extra row grows UPWARDS as
-     * an overlay inside this fixed footprint, so the zone's height never changes.
+     * Collapsed height of the nav zone, without the system inset. The extra row
+     * grows upwards as an overlay, so this never changes.
      */
     fun navBarZoneHeight(mode: NavigationBarMode): Dp = when (mode) {
         NavigationBarMode.DOCKED -> DockedBarHeight + DockedBarBottomMargin
-        else -> FloatingRowHeight + FloatingBarMargin * 2
+        else -> FloatingRowHeight + FloatingBarMargin + FloatingBarBottomMargin
     }
 
-    /** Fade length of the elevation scrim drawn at a bar surface's top edge. */
+    /** Fade length of the elevation scrim at a bar surface's top edge. */
     val BarElevationScrimHeight = 16.dp
 
     /**
-     * Exact distance the attached pill's grey surface must stretch above its own top
-     * edge to land flush on the mini player card's top edge. In ATTACHED mode the
-     * card draws no container of its own -- the pill's extension IS the card's
-     * container -- so an overshoot pokes out above the card and a shortfall clips
-     * its top corners.
+     * How far the attached pill's surface must reach above its top edge to sit flush
+     * with the card's top. In ATTACHED mode this extension is the card's container.
      *
-     * [miniPlayerBoxHeight] is the mini player's MEASURED box height (its own outer
-     * padding included), so the surface reaches the card's real top edge whatever its
-     * content actually measures (font scale, text metrics, future edits) instead of
-     * trusting the derived [MiniPlayerCardHeight]. The default keeps that derived
-     * height for callers without a measurement.
-     *
-     * Derived from [miniPlayerBottomPadding] (which positions the card's box), so the
-     * two can never drift apart: while the extra row expands, the card lifts exactly
-     * as much as the pill grows and the extension stays constant.
+     * [miniPlayerBoxHeight] is the measured box height of the mini player; the
+     * default falls back to the derived [MiniPlayerCardHeight].
      */
     fun attachedExtensionHeight(
         expandFraction: Float = 0f,
@@ -432,53 +437,98 @@ object NavBarDimens {
         val cardTop = miniPlayerBottomPadding(NavigationBarMode.ATTACHED, expandFraction) +
                 miniPlayerBoxHeight -
                 MiniPlayerCardVerticalPadding
-        val pillTop = FloatingBarMargin + FloatingRowHeight +
+        val pillTop = FloatingBarBottomMargin + FloatingRowHeight +
                 (ExtraRowHeight + ExtraRowExpandedSpacing) * expandFraction
         return (cardTop - pillTop).coerceAtLeast(0.dp)
     }
 }
 
 /**
- * The icon half of a nav-bar item: glyph with the animated selected/unselected tint,
- * no interaction of its own. Split from [FoamNavItem] so [FoamNavExtraRow] can draw
- * its icons inside the row's clipped visual layer while their touch targets live in
- * an unclipped hit layer (a clipping node stops hit-testing outside its bounds, so
- * full-size targets cannot live inside the row).
+ * Icon of a nav item, tinted by selection, with no interaction.
+ * Split from [FoamNavItem] so [FoamNavExtraRow] can draw icons in its clipped layer
+ * and keep the touch targets in an unclipped one.
+ *
+ * The tint is resolved at draw time: the route-selection amount is animated
+ * with [tintTiming]'s duration — its spec is only read when [selected] flips,
+ * so the fade lasts exactly as long as the screen transition that caused it —
+ * and the player fraction is read per frame, so swiping the player open/closed
+ * fades the accent with the gesture. Accent-color changes redraw without
+ * recomposing.
+ *
+ * [activeIcon] and [inactiveIcon] crossfade on the same route-selection
+ * fraction that drives the color highlight, so the icon swap and the accent
+ * fade together: the inactive variant fades out while the active one fades
+ * in, both at the selection tint. Identical vectors (a disabled dynamic-icon
+ * switch) draw once with no crossfade.
  */
 @Composable
 private fun NavItemVisual(
-    icon: ImageVector,
+    activeIcon: ImageVector,
+    inactiveIcon: ImageVector,
     selected: Boolean,
+    tintTiming: ScreenSwitchTiming,
+    playerClosedFraction: () -> Float,
     modifier: Modifier = Modifier,
     contentDescription: String? = null
 ) {
-    val animatedTint by animateColorAsState(
-        targetValue = if (selected) FoamTheme.accentColor else FoamTheme.colors.textSecondary,
-        label = "NavIconTint"
+    val routeSelection by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = if (selected) tintTiming.enterMillis else tintTiming.exitMillis,
+            easing = FoamMotion.Easings.STANDARD
+        ),
+        label = "NavRouteSelection"
     )
-    Icon(
-        imageVector = icon,
-        contentDescription = contentDescription,
-        modifier = modifier.size(NavBarDimens.ItemIconSize),
-        tint = animatedTint
+    val activePainter = rememberVectorPainter(activeIcon)
+    val inactivePainter = rememberVectorPainter(inactiveIcon)
+    val secondary = FoamTheme.colors.textSecondary
+    val accentTint = LocalAccentTintState.current
+    Box(
+        modifier
+            .size(NavBarDimens.ItemIconSize)
+            .then(
+                if (contentDescription != null) {
+                    Modifier.semantics { this.contentDescription = contentDescription }
+                } else {
+                    Modifier
+                }
+            )
+            .drawBehind {
+                val amount = (routeSelection * playerClosedFraction()).coerceIn(0f, 1f)
+                val tint = ColorFilter.tint(lerp(secondary, accentTint.color, amount))
+                if (activeIcon == inactiveIcon) {
+                    with(activePainter) {
+                        draw(size, colorFilter = tint)
+                    }
+                } else {
+                    // Inactive: fades out as the selection arrives.
+                    with(inactivePainter) {
+                        draw(size, colorFilter = tint, alpha = 1f - amount)
+                    }
+                    // Active: fades in on top as the selection arrives.
+                    with(activePainter) {
+                        draw(size, colorFilter = tint, alpha = amount)
+                    }
+                }
+            }
     )
 }
 
 /**
- * A single clickable nav-bar icon with an animated selected/unselected tint.
- *
- * The touch target is a fixed [NavBarDimens.ItemHitTargetSize] square, centered
- * inside its slot, so it grows past the glyph without ever extending the bar.
- * The node is clipped to a [CircleShape] *before* becoming clickable: the ripple
- * is bounded by that circle and stays rounded. An optional [onLongClick] turns
- * the item into a combined click target (currently only the search item, whose
- * long press keeps the plain browse-card entry point).
+ * Clickable nav icon. The hit target fills its slot width (see [NavBarSlotRow]) and
+ * is clipped to [NavItemHitShape] before the click so the ripple stays rounded.
+ * [onLongClick] is optional (only used by the search item).
+ * [tintTiming], [activeIcon] and [inactiveIcon] drive the icon's selection tint
+ * and variant crossfade (see [NavItemVisual]).
  */
 @Composable
 private fun FoamNavItem(
-    icon: ImageVector,
+    activeIcon: ImageVector,
+    inactiveIcon: ImageVector,
     contentDescription: String,
     selected: Boolean,
+    tintTiming: ScreenSwitchTiming,
+    playerClosedFraction: () -> Float,
     modifier: Modifier = Modifier,
     iconModifier: Modifier = Modifier,
     hitPadding: Dp = NavBarDimens.ItemHitTargetPadding,
@@ -489,7 +539,8 @@ private fun FoamNavItem(
     val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
-            .clip(CircleShape)
+            .fillMaxWidth()
+            .clip(NavItemHitShape)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -501,9 +552,12 @@ private fun FoamNavItem(
         contentAlignment = Alignment.Center
     ) {
         NavItemVisual(
-            icon = icon,
+            activeIcon = activeIcon,
+            inactiveIcon = inactiveIcon,
             contentDescription = contentDescription,
             selected = selected,
+            tintTiming = tintTiming,
+            playerClosedFraction = playerClosedFraction,
             modifier = iconModifier
         )
     }
@@ -517,57 +571,82 @@ private fun NavBarItem.targetScreen(): Screen = when (this) {
     NavBarItem.STATS -> Screen.Stats
     NavBarItem.EQUALIZER -> Screen.Equalizer
     NavBarItem.SETTINGS -> Screen.Settings
-    // Unreachable: MORE is rendered as the expand toggle and never navigates.
+    // Unreachable: MORE is the expand toggle and never navigates.
     NavBarItem.MORE -> Screen.Settings
 }
 
+/** The item's icon in [variant]; null = the theme's current (default) set. */
 @Composable
-private fun NavBarItem.icon(): ImageVector = when (this) {
-    NavBarItem.HOME -> FoamTheme.icons.current.home
-    NavBarItem.PLAYLISTS -> FoamTheme.icons.current.playlists
-    NavBarItem.SEARCH -> FoamTheme.icons.current.search
-    NavBarItem.STATS -> FoamTheme.icons.current.stats
-    NavBarItem.EQUALIZER -> FoamTheme.icons.current.equalizer
-    NavBarItem.SETTINGS -> FoamTheme.icons.current.settings
-    NavBarItem.MORE -> FoamTheme.icons.current.more
+private fun NavBarItem.icon(variant: FoamIconStyle?): ImageVector {
+    val icons = FoamTheme.icons
+    val set = if (variant == null) icons.current else icons.setFor(variant)
+    return when (this) {
+        NavBarItem.HOME -> set.home
+        NavBarItem.PLAYLISTS -> set.playlists
+        NavBarItem.SEARCH -> set.search
+        NavBarItem.STATS -> set.stats
+        NavBarItem.EQUALIZER -> set.equalizer
+        NavBarItem.SETTINGS -> set.settings
+        NavBarItem.MORE -> set.more
+    }
 }
 
-/** Whether an item pointing at [screen] should render as selected. */
-private fun isScreenSelected(currentRoute: String?, isPlayerOpen: Boolean, screen: Screen): Boolean =
-    !isPlayerOpen && (
-            currentRoute == screen.route ||
-                    (screen == Screen.Settings && currentRoute?.startsWith("settings/") == true)
-            )
+/**
+ * Whether an item pointing at [screen] is the screen currently shown. The
+ * player's dehighlight is a separate, gesture-following factor (see
+ * [NavItemVisual]), so opening/closing the player fades the accent with the
+ * swipe instead of on its own timer.
+ */
+private fun isRouteSelected(currentRoute: String?, screen: Screen): Boolean =
+    currentRoute == screen.route ||
+            (screen == Screen.Settings && currentRoute?.startsWith("settings/") == true)
+
+/** Per-bar holder for the tint timing of the last screen switch. */
+private class SwitchTintHolder(initialRoute: String?) {
+    var route: String? = initialRoute
+    var timing: ScreenSwitchTiming = ScreenSwitchTiming.Rest
+}
 
 /**
- * Row of nav-bar icon slots shared by the main row and the second-bar row.
+ * Enter/exit durations of the selection-tint fade for the screen transition
+ * between the previous and the current route (see [screenSwitchTiming]).
+ * Recomputed only on route changes, so an in-flight fade keeps its spec until
+ * the next switch.
+ */
+@Composable
+private fun rememberSwitchTintTiming(currentRoute: String?): ScreenSwitchTiming {
+    val holder = remember { SwitchTintHolder(currentRoute) }
+    if (currentRoute != holder.route) {
+        holder.timing = screenSwitchTiming(
+            initialRoute = holder.route,
+            targetRoute = currentRoute
+        )
+        holder.route = currentRoute
+    }
+    return holder.timing
+}
+
+/**
+ * Row of icon slots shared by the main and extra rows.
  *
- * [order] is the full configured layout (enabled AND disabled items); slots are
- * distributed across the enabled items. Every item is always composed, so its
- * visibility animation state can never be lost:
- * - **Enable**: the item snaps to its slot while still invisible (keyed position
- *   state restarts) and fades/scales in in place; the other items slide to open
- *   the gap.
- * - **Disable**: the item holds its last position and fades/scales out in place
- *   while the other items slide closed.
- * - **Reorder**: enabled items slide to their new slots.
+ * [order] is the full layout (enabled and disabled items); slots are spread over
+ * the enabled ones. Every item stays composed so its animation state isn't lost:
+ * - Enable: snaps to its slot, fades/scales in, others slide apart.
+ * - Disable: stays put and fades/scales out, others slide closed.
+ * - Reorder: items slide to their new slots.
  *
- * Items are placed at an animated *center fraction* of the row -- a Float, not a
- * Dp -- with the fixed-width box at `x = fraction * rowWidth - itemWidth / 2`.
- * Animating the fraction instead of an absolute offset keeps every icon GLUED to
- * the row's live width: the floating pill's width moves every frame while the
- * extra row expands (and while it re-hugs its items after a settings toggle), and
- * an animated Dp would chase that per-frame-moving target with its own tween,
- * visibly lagging behind the surface. With a stable fraction the position is a
- * pure function of the current width, so width-driven motion is tracked exactly,
- * while discrete slot changes still slide through the fraction's own
- * [NavBarSlotAnimation]. Disabled items are not clickable.
+ * Positions are animated as a center fraction of the row width rather than a Dp,
+ * so icons follow the pill's width exactly while it animates.
+ *
+ * With [stretchBetweenItems], each slot widens from [itemWidth] up to
+ * [NavBarDimens.ItemHitTargetMaxWidth] so neighbouring targets meet halfway.
  */
 @Composable
 private fun NavBarSlotRow(
     order: List<NavBarItem>,
     enabledItems: Set<NavBarItem>,
     itemWidth: Dp,
+    stretchBetweenItems: Boolean = false,
     modifier: Modifier = Modifier,
     itemContent: @Composable (item: NavBarItem, enabled: Boolean) -> Unit
 ) {
@@ -575,25 +654,29 @@ private fun NavBarSlotRow(
         val enabledList = order.filter { it in enabledItems }
         val slotCount = enabledList.size
 
+        // Read live (not animated) so it follows the pill's width.
+        val slotWidth = if (stretchBetweenItems && slotCount > 0) {
+            (maxWidth / slotCount).coerceIn(itemWidth, NavBarDimens.ItemHitTargetMaxWidth)
+        } else {
+            itemWidth
+        }
+
         order.forEach { item ->
             key(item) {
                 val isEnabled = item in enabledItems
                 val slotIndex = enabledList.indexOf(item)
 
-                // Always composed and never keyed on the toggle, so every item's
-                // enter/exit fade+scale runs the same way.
                 val visibility by animateFloatAsState(
                     targetValue = if (isEnabled) 1f else 0f,
                     animationSpec = NavBarSlotAnimation,
                     label = "navSlotVisibility_${item.name}"
                 )
 
-                // Frozen fraction for disabled items (invisible while they fade out).
+                // Last position, kept for disabled items while they fade out.
                 val lastFraction = remember { mutableStateOf(0f) }
                 val centerFraction: Float = if (isEnabled && slotIndex >= 0) {
-                    // key(isEnabled) restarts the fraction state on (re-)enter, so the
-                    // item appears at its slot instead of sliding in from an old spot;
-                    // while it stays enabled, slot changes slide it around.
+                    // key(isEnabled) resets the animation on enable, so the item
+                    // appears in its slot instead of sliding in.
                     key(isEnabled) {
                         val animatedFraction by animateFloatAsState(
                             targetValue = (slotIndex + 0.5f) / slotCount,
@@ -609,17 +692,15 @@ private fun NavBarSlotRow(
 
                 Box(
                     modifier = Modifier
-                        // offset OUTSIDE graphicsLayer: the layer's transform origin
-                        // (its center) must be the icon's own center, otherwise every
-                        // item but the first scales around the row's left edge.
-                        .offset(x = maxWidth * centerFraction - itemWidth / 2)
+                        // offset goes before graphicsLayer so scaling pivots on the icon's center
+                        .offset(x = maxWidth * centerFraction - slotWidth / 2)
                         .graphicsLayer {
                             alpha = visibility
                             val scale = 0.4f + 0.6f * visibility
                             scaleX = scale
                             scaleY = scale
                         }
-                        .width(itemWidth)
+                        .width(slotWidth)
                         .fillMaxHeight(),
                     contentAlignment = Alignment.Center
                 ) {
@@ -631,19 +712,21 @@ private fun NavBarSlotRow(
 }
 
 /**
- * Main row of clickable icons for the nav bar.
- * [items] is the user-configured main-bar layout, in display order, including the
- * [NavBarItem.MORE] marker which renders the expand toggle at its configured slot.
- * [primaryEnabled] are the switchable items the user turned on; the toggle itself
- * is only "enabled" while [showExpandToggle] is true (second bar non-empty).
+ * Main row of icons.
+ * [items] is the configured layout, including the [NavBarItem.MORE] expand toggle.
+ * The toggle is only enabled while [showExpandToggle] is true.
  */
 @Composable
 private fun FoamNavigationItems(
     currentRoute: String?,
-    isPlayerOpen: Boolean,
+    tintTiming: ScreenSwitchTiming,
+    playerClosedFraction: () -> Float,
     onNavigate: (String) -> Unit,
     items: List<NavBarItem>,
     primaryEnabled: Set<NavBarItem>,
+    dynamicIcons: Boolean,
+    activeVariant: FoamIconStyle,
+    inactiveVariant: FoamIconStyle,
     showExpandToggle: Boolean = false,
     expandFraction: Float = 0f,
     onToggleExpand: () -> Unit = {},
@@ -656,31 +739,42 @@ private fun FoamNavigationItems(
         order = items,
         enabledItems = effectiveEnabled,
         itemWidth = NavBarDimens.ItemHitTargetSize,
+        stretchBetweenItems = true,
         modifier = modifier
     ) { item, itemEnabled ->
         if (item == NavBarItem.MORE) {
+            // The toggle is never selected: with dynamic icons it renders the
+            // inactive variant.
+            val moreIcon = item.icon(if (dynamicIcons) inactiveVariant else null)
             FoamNavItem(
-                icon = FoamTheme.icons.current.more,
+                activeIcon = moreIcon,
+                inactiveIcon = moreIcon,
                 contentDescription = stringResource(
                     if (expandFraction > 0.5f) R.string.collapse_navigation else R.string.expand_navigation
                 ),
                 selected = false,
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 enabled = itemEnabled,
                 iconModifier = Modifier.rotate(expandFraction * 90f),
                 onClick = onToggleExpand
             )
         } else {
             val screen = item.targetScreen()
-            val selected = isScreenSelected(currentRoute, isPlayerOpen, screen)
-            // The search item splits its gestures: a tap raises the focused-search
-            // request (bar focused, keyboard up) before navigating, while a long
-            // press navigates without it, landing on the idle browse cards.
+            val selected = isRouteSelected(currentRoute, screen)
+            // Search: tap opens it focused, long press opens the browse cards.
             val isSearch = item == NavBarItem.SEARCH
 
+            val activeIcon = item.icon(if (dynamicIcons) activeVariant else null)
+            val inactiveIcon = if (dynamicIcons) item.icon(inactiveVariant) else activeIcon
+
             FoamNavItem(
-                icon = item.icon(),
+                activeIcon = activeIcon,
+                inactiveIcon = inactiveIcon,
                 contentDescription = screen.title,
                 selected = selected,
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 enabled = itemEnabled,
                 onLongClick = {
                     if (isSearch)
@@ -697,32 +791,27 @@ private fun FoamNavigationItems(
 }
 
 /**
- * Secondary row revealed above the main row while the bar is expanded.
- * [items] is the full configured second-bar layout; [enabledItems] are the user's
- * active entries. [expandFraction] (0f..1f) drives both the height and the content
- * alpha so the row smoothly grows out of the bar.
+ * Secondary row revealed above the main row. [expandFraction] (0..1) drives its
+ * height and alpha.
  *
- * Visuals and touch targets are split into two stacked layers with identical slot
- * geometry. The row's visible footprint stays tight -- [NavBarDimens.ExtraRowHeight]
- * hugs the icons so the row can dip into the main row without opening a visible gap
- * -- but the touch targets must be the same [NavBarDimens.ItemHitTargetSize] squares
- * as the main row's. They cannot simply be grown inside the row: the row is clipped
- * while it grows out of the bar ([clipToBounds]), and a clipping node also stops
- * hit-testing anything outside its bounds, so the overflowing half of a bigger
- * target would be dead. The icons therefore render in the clipped visual layer with
- * no interaction, while an unclipped hit layer of transparent
- * [NavBarDimens.ItemHitTargetSize] squares on the same slots carries the click,
- * ripple and semantics, overflowing the row above and below without changing its
- * layout. The main row is composed after this one, so its own hit targets keep
- * priority in the band where the two rows' targets overlap.
+ * Built from two stacked layers on the same slots: a clipped visual layer with the
+ * icons, and an unclipped hit layer with the touch targets. They can't share one
+ * layer because the row is clipped while it grows, and a clipping node doesn't
+ * hit-test outside its bounds, so the part of a target overflowing the tight row
+ * would be dead. The main row is composed after this one, so its targets win where
+ * they overlap.
  */
 @Composable
 private fun FoamNavExtraRow(
     items: List<NavBarItem>,
     enabledItems: Set<NavBarItem>,
     currentRoute: String?,
-    isPlayerOpen: Boolean,
+    tintTiming: ScreenSwitchTiming,
+    playerClosedFraction: () -> Float,
     onNavigate: (String) -> Unit,
+    dynamicIcons: Boolean,
+    activeVariant: FoamIconStyle,
+    inactiveVariant: FoamIconStyle,
     expandFraction: Float,
     modifier: Modifier = Modifier
 ) {
@@ -735,8 +824,7 @@ private fun FoamNavExtraRow(
             .fillMaxWidth()
             .height(NavBarDimens.ExtraRowHeight * expandFraction)
     ) {
-        // Visual layer: the icons only, clipped to the row while it grows out of
-        // the bar. No interaction -- the hit layer below owns the touch targets.
+        // Visual layer: icons only, no interaction
         NavBarSlotRow(
             order = items,
             enabledItems = enabledItems,
@@ -745,38 +833,46 @@ private fun FoamNavExtraRow(
                 .matchParentSize()
                 .clipToBounds()
                 .alpha(expandFraction.coerceIn(0f, 1f))
-                .padding(horizontal = NavBarDimens.RowHorizontalPadding)
+                .padding(horizontal = NavBarDimens.RowEdgePadding)
         ) { item, _ ->
             val screen = item.targetScreen()
+            val activeIcon = item.icon(if (dynamicIcons) activeVariant else null)
+            val inactiveIcon = if (dynamicIcons) item.icon(inactiveVariant) else activeIcon
             NavItemVisual(
-                icon = item.icon(),
-                selected = isScreenSelected(currentRoute, isPlayerOpen, screen),
+                activeIcon = activeIcon,
+                inactiveIcon = inactiveIcon,
+                selected = isRouteSelected(currentRoute, screen),
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 modifier = Modifier.padding(NavBarDimens.ExtraRowItemHitPadding)
             )
         }
 
-        // Hit layer: full-size touch targets on the same slots, unclipped so the
-        // overflow above/below the tight row stays touchable. Disabled items get
-        // no target, matching their non-clickable visuals.
+        // Hit layer: unclipped touch targets, none for disabled items
         NavBarSlotRow(
             order = items,
             enabledItems = enabledItems,
             itemWidth = NavBarDimens.ItemHitTargetSize,
+            stretchBetweenItems = true,
             modifier = Modifier
                 .matchParentSize()
-                .padding(horizontal = NavBarDimens.RowHorizontalPadding)
+                .padding(horizontal = NavBarDimens.RowEdgePadding)
         ) { item, itemEnabled ->
             if (itemEnabled) {
                 val screen = item.targetScreen()
-                // Same search gesture split as the main row: tap opens the screen
-                // with its bar focused, long press keeps the browse-card entry.
                 val isSearch = item == NavBarItem.SEARCH
                 Box(
                     modifier = Modifier
-                        // requiredSize, not size: the slot box is only as tall as the
-                        // row, and the target must overflow it to reach 48dp.
-                        .requiredSize(NavBarDimens.ItemHitTargetSize)
-                        .clip(CircleShape)
+                        // Width follows the slot, only the height overflows the row
+                        .fillMaxWidth()
+                        .requiredHeight(NavBarDimens.ItemHitTargetSize)
+                        .graphicsLayer {
+                            val fraction = expandFraction.coerceIn(0f, 1f)
+                            alpha = fraction
+                            scaleX = fraction
+                            scaleY = fraction
+                        }
+                        .clip(NavItemHitShape)
                         .combinedClickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = ripple(color = FoamTheme.colors.textPrimary),
@@ -798,30 +894,39 @@ private fun FoamNavExtraRow(
 }
 
 /**
- * Classic docked navigation bar
+ * Classic docked navigation bar.
+ *
+ * [playerClosedFraction] (1 = player closed, 0 = open) fades the selection
+ * tint with the player transition, so the accent follows the swipe in and out.
+ * [dynamicIcons] with [activeVariant]/[inactiveVariant] swaps each item's icon
+ * variant with its selection (see [NavItemVisual]).
  */
 @Composable
 fun FoamNavigationBar(
     currentRoute: String?,
-    isPlayerOpen: Boolean,
+    playerClosedFraction: () -> Float = { 1f },
     onNavigate: (String) -> Unit,
     primaryItems: List<NavBarItem>,
     primaryEnabled: Set<NavBarItem>,
     secondaryItems: List<NavBarItem>,
     secondaryEnabled: Set<NavBarItem>,
+    dynamicIcons: Boolean = false,
+    activeVariant: FoamIconStyle = FoamIconStyle.FLAT,
+    inactiveVariant: FoamIconStyle = FoamIconStyle.OUTLINE,
     connectToMiniPlayer: Boolean = false,
     expandFraction: Float = 0f,
     onToggleExpand: () -> Unit = {}
 ) {
-    // Base surface color; the live accent tint is resolved inside the draw
-    // lambda below so accent frames stay draw-only (see [AccentTintState]).
+    // Tint is resolved at draw time to keep accent frames draw-only
     val surfaceColor = FoamTheme.colors.surface
     val accentTint = LocalAccentTintState.current
     val density = LocalDensity.current
     val navBarBottomInsetPx = WindowInsets.navigationBars.getBottom(density)
+    // The items' selection tint fades for as long as the screen transition
+    // that caused the route change
+    val tintTiming = rememberSwitchTintTiming(currentRoute)
 
-    // Fixed collapsed footprint: the content above never resizes when the extra
-    // row folds. The row expands upwards as an overlay instead of taking space.
+    // Fixed footprint: the extra row expands upwards as an overlay
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -830,21 +935,17 @@ fun FoamNavigationBar(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
+                .consumeTaps()
                 .padding(bottom = NavBarDimens.DockedBarBottomMargin)
                 .fillMaxWidth()
                 .requiredHeight(
                     NavBarDimens.DockedBarHeight +
                             (NavBarDimens.ExtraRowHeight + NavBarDimens.ExtraRowExpandedSpacing) * expandFraction
                 )
-                // Elevation over the scrolling content: the shadow wraps the surface's
-                // own bounds; the part below them is painted over by the surface
-                // extension that reaches down through the bottom margin and inset.
-                // clip stays off so that extension (drawn outside the bounds) survives.
+                // clip stays off so the surface drawn below the bounds survives
                 .shadow(elevation = 6.dp, shape = RectangleShape, clip = false)
                 .drawBehind {
-                    // Solid surface behind the extra row + main row, landing on the
-                    // bottom of the screen: it extends down through the bottom
-                    // margin and the system nav-bar inset.
+                    // Surface runs down through the bottom margin and system inset
                     drawRect(
                         color = accentTint.resolve(surfaceColor, SurfaceAccentTint),
                         size = Size(
@@ -855,10 +956,7 @@ fun FoamNavigationBar(
                         )
                     )
                 },
-            // The expanded spacing thickens the surface BETWEEN the two rows: the
-            // extra row stays glued to the surface's top edge and the main row to
-            // its bottom edge, so both keep their ripple margins to the top/bottom
-            // edges and the whole growth lands in the gap between the rows.
+            // Expansion grows the gap between the two rows
             verticalArrangement = Arrangement.spacedBy(
                 NavBarDimens.ExtraRowExpandedSpacing * expandFraction
             )
@@ -867,25 +965,33 @@ fun FoamNavigationBar(
                 items = secondaryItems,
                 enabledItems = secondaryEnabled,
                 currentRoute = currentRoute,
-                isPlayerOpen = isPlayerOpen,
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 onNavigate = onNavigate,
+                dynamicIcons = dynamicIcons,
+                activeVariant = activeVariant,
+                inactiveVariant = inactiveVariant,
                 expandFraction = expandFraction,
                 modifier = Modifier.offset(y = NavBarDimens.extraRowBottomOverlap(NavBarDimens.DockedBarHeight))
             )
 
             FoamNavigationItems(
                 currentRoute = currentRoute,
-                isPlayerOpen = isPlayerOpen,
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 onNavigate = onNavigate,
                 items = primaryItems,
                 primaryEnabled = primaryEnabled,
+                dynamicIcons = dynamicIcons,
+                activeVariant = activeVariant,
+                inactiveVariant = inactiveVariant,
                 showExpandToggle = secondaryEnabled.isNotEmpty(),
                 expandFraction = expandFraction,
                 onToggleExpand = onToggleExpand,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(NavBarDimens.DockedBarHeight)
-                    .padding(horizontal = NavBarDimens.RowHorizontalPadding)
+                    .padding(horizontal = NavBarDimens.RowEdgePadding)
             )
         }
     }
@@ -894,37 +1000,36 @@ fun FoamNavigationBar(
 /**
  * Floating navigation bar.
  *
- * In the standalone floating mode (not [attachedToMiniPlayer]) the pill HUGS its
- * items instead of stretching across the screen: every enabled item contributes one
- * [NavBarDimens.ItemHitTargetSize] slot plus the rows' shared horizontal padding, so
- * the icons stay packed and the pill shrinks around them rather than spacing them
- * out. While the extra row expands, the width interpolates to the LARGER row's width
- * in lock-step with the row's own growth ([expandFraction] drives both), so a busier
- * second row widens the pill smoothly -- and a roomier one doesn't shrink it.
+ * Standalone, the pill wraps its items: one [NavBarDimens.ItemHitTargetMaxWidth]
+ * slot per enabled item, compressed when the screen is too narrow. Its ends are
+ * fully round. While the extra row expands, the width follows the larger of the
+ * two rows.
  *
- * ATTACHED keeps the full-width pill: its drawn surface extension doubles as the
- * mini player card's container and must keep spanning the card.
+ * When [attachedToMiniPlayer], the pill stays full width: its surface extension
+ * is the mini player card's container.
  */
 @Composable
 internal fun FloatingNavigationBar(
     currentRoute: String?,
-    isPlayerOpen: Boolean,
     onNavigate: (String) -> Unit,
     primaryItems: List<NavBarItem>,
     primaryEnabled: Set<NavBarItem>,
     secondaryItems: List<NavBarItem>,
     secondaryEnabled: Set<NavBarItem>,
+    dynamicIcons: Boolean = false,
+    activeVariant: FoamIconStyle = FoamIconStyle.FLAT,
+    inactiveVariant: FoamIconStyle = FoamIconStyle.OUTLINE,
     attachedToMiniPlayer: Boolean = false,
     connectToMiniPlayer: Boolean = false,
     miniPlayerTopPx: () -> Float? = { null },
-    playerClosedFraction: () -> Float = { 0f },
     /**
-     * 0..1 presence of the mini player card itself, independent of the player
-     * transition: pinned at 1 through every open/close flight (whose own
-     * enter/exit owns the motion), animating 0->1 on the very first play --
-     * which lands with the transition at rest, so the attached surface
-     * extension must grow out of the pill on its own instead of riding a
-     * close flight's [playerClosedFraction].
+     * How closed the player is (1 = closed, 0 = open), live with the swipe:
+     * drives the pill's transparent-mode fade and the items' selection tint.
+     */
+    playerClosedFraction: () -> Float = { 1f },
+    /**
+     * Presence (0..1) of the mini player card, independent of the player
+     * transition. Animates in on the first play.
      */
     cardPresenceFraction: () -> Float = { 1f },
     transitionAnimated: Boolean = true,
@@ -933,39 +1038,36 @@ internal fun FloatingNavigationBar(
     onToggleExpand: () -> Unit = {}
 ) {
     val miniImageRadius = (NavBarDimens.MiniPlayerArtSize / 2) * FoamTheme.shapes.miniPlayerRounding
-    val containerRadius = miniImageRadius + NavBarDimens.FloatingCornerOverhang
+    // Attached: match the card's radius. Standalone: fully round ends.
+    val containerRadius = if (attachedToMiniPlayer) {
+        miniImageRadius + NavBarDimens.FloatingCornerOverhang
+    } else {
+        NavBarDimens.ItemHitTargetSize / 2 + NavBarDimens.RowEdgePadding
+    }
 
-    // Base surfaceVariant color; the live accent tint is resolved inside the
-    // draw lambda below so accent frames stay draw-only (see [AccentTintState]).
+    // Tint is resolved at draw time to keep accent frames draw-only. The base
+    // palette color is read here (not tintedSurfaceVariant): that one is
+    // already resolved once, so resolving it again would double-tint the pill.
     val surfaceVariantColor = FoamTheme.colors.surfaceVariant
     val accentTint = LocalAccentTintState.current
+    // The items' selection tint fades for as long as the screen transition
+    // that caused the route change
+    val tintTiming = rememberSwitchTintTiming(currentRoute)
 
-    // Measured top edge (root coordinates) of the surface column. Paired with the
-    // card's measured top, it defines the attached extension directly: the surface is
-    // drawn to the literal distance between the two, with no geometry model to fall
-    // out of sync with the real layout.
+    // Measured top of the pill, used with the card's top to size the attached extension
     var pillTopPx by remember { mutableStateOf(Float.NaN) }
 
-    // Fixed collapsed footprint (pill + its margins): the content above never
-    // resizes when the extra row folds. The pill grows upwards as an overlay.
+    // Fixed footprint: the pill expands upwards as an overlay
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(NavBarDimens.FloatingRowHeight + NavBarDimens.FloatingBarMargin * 2)
+            .height(NavBarDimens.FloatingRowHeight + NavBarDimens.FloatingBarMargin + NavBarDimens.FloatingBarBottomMargin)
     ) {
-        // Widest the pill's drawn surface may get: the zone minus the pill's own
-        // outer horizontal margins. Rows denser than this compress their slots
-        // instead of pushing the pill past the screen edges.
+        // Widest the surface may get; denser rows compress their slots instead
         val maxSurfaceWidth = maxWidth - NavBarDimens.FloatingBarMargin * 2
 
-        // Standalone floating pill: wrap the items instead of stretching across the
-        // screen. One [NavBarDimens.ItemHitTargetSize] slot per enabled item plus the
-        // rows' shared horizontal padding, sized for the LARGER of the two rows. Both
-        // bounds animate with the shared slot timing (toggling items in the settings
-        // never snaps the pill), and the collapsed->expanded interpolation rides
-        // [expandFraction], so the width grows exactly in step with the extra row it
-        // makes room for -- wider only when the second row holds more items than the
-        // first.
+        // Standalone pill hugs its items, sized for the larger of the two rows.
+        // The width animates and follows expandFraction.
         val pillSurfaceWidth: Dp? = if (!attachedToMiniPlayer) {
             val effectivePrimaryEnabled =
                 if (secondaryEnabled.isNotEmpty()) primaryEnabled + NavBarItem.MORE else primaryEnabled
@@ -973,8 +1075,8 @@ internal fun FloatingNavigationBar(
             val secondaryCount = secondaryItems.count { it in secondaryEnabled }
 
             fun rowWidth(itemCount: Int): Dp =
-                NavBarDimens.ItemHitTargetSize * itemCount +
-                        NavBarDimens.RowHorizontalPadding * 2
+                NavBarDimens.ItemHitTargetMaxWidth * itemCount +
+                        NavBarDimens.RowEdgePadding * 2
 
             val collapsedWidth by animateDpAsState(
                 targetValue = rowWidth(primaryCount),
@@ -998,7 +1100,7 @@ internal fun FloatingNavigationBar(
                 .padding(
                     start = NavBarDimens.FloatingBarMargin,
                     end = NavBarDimens.FloatingBarMargin,
-                    bottom = NavBarDimens.FloatingBarMargin
+                    bottom = NavBarDimens.FloatingBarBottomMargin
                 )
                 .then(
                     pillSurfaceWidth?.let { Modifier.width(it) } ?: Modifier
@@ -1007,10 +1109,8 @@ internal fun FloatingNavigationBar(
                     NavBarDimens.FloatingRowHeight +
                             (NavBarDimens.ExtraRowHeight + NavBarDimens.ExtraRowExpandedSpacing) * expandFraction
                 )
-                // Elevation over the scrolling content. In ATTACHED mode the shadow's
-                // top edge is hidden behind the card-connected surface extension; the
-                // extension's own top edge gets its depth from the scrim drawn below.
-                // clip stays off so the extension drawing outside the bounds survives.
+                .consumeTaps()
+                // clip stays off so the attached extension drawn outside the bounds survives
                 .graphicsLayer {
                     shape = RoundedCornerShape(containerRadius)
                     shadowElevation = if (navBarTransparentWhenPlayerOpen) {
@@ -1019,14 +1119,8 @@ internal fun FloatingNavigationBar(
                         NavBarShadowElevation.toPx()
                     }
                 }
-                // With translucent-when-player-open the RenderNode shadow is replaced
-                // by a drawn [dropShadow] for the bar's whole lifecycle: elevation
-                // shadows only wrap the outline, so seen through the fading surface
-                // they read as a ring with a hole under the bar, while the drawn one
-                // fills under it too. Its alpha tracks the same closed fraction as the
-                // surface fade -- full behind the opaque resting surface, gone when the
-                // player rests open -- so there is no handover pop, and the block
-                // re-runs at draw phase as the fraction moves (drag-scrub included).
+                // Translucent mode: drawn shadow instead of elevation. Its alpha follows
+                // the surface fade, so there is no pop when switching.
                 .then(
                     if (navBarTransparentWhenPlayerOpen) {
                         Modifier.dropShadow(shape = RoundedCornerShape(containerRadius)) {
@@ -1047,15 +1141,12 @@ internal fun FloatingNavigationBar(
                     val extensionPx = if (attachedToMiniPlayer && connectToMiniPlayer) {
                         val cardTopPx = miniPlayerTopPx()
                         if (cardTopPx != null && !pillTopPx.isNaN()) {
-                            // Measured: the surface's top lands exactly on the card's
-                            // visible top edge (its box top + the card's outer vertical
-                            // padding). The pill sits below the card, so its top edge is
-                            // the larger root-y of the two.
+                            // Measured: up to the card's visible top edge
                             (pillTopPx - cardTopPx -
                                     NavBarDimens.MiniPlayerCardVerticalPadding.toPx())
                                 .coerceAtLeast(0f) * closed * presence
                         } else {
-                            // Layout not measured yet: fall back to the derived geometry.
+                            // Not measured yet: use the derived geometry
                             NavBarDimens.attachedExtensionHeight(expandFraction).toPx() * closed * presence
                         }
                     } else 0f
@@ -1068,10 +1159,7 @@ internal fun FloatingNavigationBar(
                         alpha = greyAlpha
                     )
                 },
-            // The expanded spacing thickens the pill BETWEEN the two rows: the extra
-            // row stays glued to the pill's top edge and the main row to its bottom
-            // edge, so both keep their ripple margins to the top/bottom edges and the
-            // whole growth lands in the gap between the rows.
+            // Expansion grows the gap between the two rows
             verticalArrangement = Arrangement.spacedBy(
                 NavBarDimens.ExtraRowExpandedSpacing * expandFraction
             )
@@ -1080,25 +1168,33 @@ internal fun FloatingNavigationBar(
                 items = secondaryItems,
                 enabledItems = secondaryEnabled,
                 currentRoute = currentRoute,
-                isPlayerOpen = isPlayerOpen,
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 onNavigate = onNavigate,
+                dynamicIcons = dynamicIcons,
+                activeVariant = activeVariant,
+                inactiveVariant = inactiveVariant,
                 expandFraction = expandFraction,
                 modifier = Modifier.offset(y = NavBarDimens.extraRowBottomOverlap(NavBarDimens.FloatingRowHeight))
             )
 
             FoamNavigationItems(
                 currentRoute = currentRoute,
-                isPlayerOpen = isPlayerOpen,
+                tintTiming = tintTiming,
+                playerClosedFraction = playerClosedFraction,
                 onNavigate = onNavigate,
                 items = primaryItems,
                 primaryEnabled = primaryEnabled,
+                dynamicIcons = dynamicIcons,
+                activeVariant = activeVariant,
+                inactiveVariant = inactiveVariant,
                 showExpandToggle = secondaryEnabled.isNotEmpty(),
                 expandFraction = expandFraction,
                 onToggleExpand = onToggleExpand,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(NavBarDimens.FloatingRowHeight)
-                    .padding(horizontal = NavBarDimens.RowHorizontalPadding)
+                    .padding(horizontal = NavBarDimens.RowEdgePadding)
             )
         }
     }

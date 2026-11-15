@@ -4,11 +4,9 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import com.foamplayer.app.ui.theme.FoamMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -17,7 +15,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -61,7 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroTarget
@@ -91,7 +88,7 @@ import com.foamplayer.app.ui.components.rowSharedText
 import com.foamplayer.app.ui.modals.LocalCollectionFoamModalState
 import com.foamplayer.app.ui.modals.LocalTrackFoamModalState
 import com.foamplayer.app.ui.navigation.LocalBottomBarClearance
-import com.foamplayer.app.ui.navigation.isActiveSharedCollection
+import com.foamplayer.app.ui.navigation.isActiveSharedCollectionFlightKey
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlinx.coroutines.launch
@@ -117,7 +114,6 @@ private const val TopListDisplaySize = 10
  * track/artist/album/genre lists — all scoped to the selected period.
  * Reached from the nav bar's second bar by default.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun StatsScreen(
     onArtistClick: (artist: String, imageUrl: String?, imageIsEmbeddedArt: Boolean) -> Unit,
@@ -373,9 +369,6 @@ fun StatsScreen(
                                 collectionModalState?.show(
                                     CollectionInfo(
                                         title = artist.name,
-                                        // Either a Spotify cache file (plain) or an
-                                        // audio file (embedded art): the flag routes
-                                        // the modal header to the right Coil model.
                                         imageUrl = artistImages[artist.name]?.imageUrl,
                                         imageIsEmbeddedArt = artistImages[artist.name]?.isEmbeddedArt ?: false,
                                         kind = CollectionKind.Artist,
@@ -388,7 +381,6 @@ fun StatsScreen(
                         animatedVisibilityScope = animatedVisibilityScope,
                         // Only the clicked row flies (see LocalActiveSharedCollection).
                         sharedElementKey = artist.name
-                            .takeIf { isActiveSharedCollection("artist", artist.name) }
                     )
                 }
 
@@ -419,7 +411,6 @@ fun StatsScreen(
                         animatedVisibilityScope = animatedVisibilityScope,
                         // Only the clicked row flies (see LocalActiveSharedCollection).
                         sharedElementKey = album.album
-                            .takeIf { isActiveSharedCollection("album", album.album) }
                     )
                 }
 
@@ -452,7 +443,7 @@ private fun PeriodChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) FoamTheme.accentColor else FoamTheme.colors.surfaceVariant)
+            .background(if (selected) FoamTheme.accentColor else FoamTheme.tintedSurfaceVariant)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(bounded = true, color = FoamTheme.colors.textPrimary),
@@ -463,7 +454,7 @@ private fun PeriodChip(label: String, selected: Boolean, onClick: () -> Unit) {
         BasicText(
             text = label,
             style = FoamTheme.typography.caption.copy(
-                color = if (selected) FoamTheme.colors.background else FoamTheme.colors.textPrimary,
+                color = if (selected) FoamTheme.tintedBackground else FoamTheme.colors.textPrimary,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
             )
         )
@@ -574,7 +565,7 @@ private fun AnimatedRankedRow(content: @Composable () -> Unit) {
                 if (previous != null && kotlin.math.abs(previous - y) > 1f) {
                     scope.launch {
                         glideOffset.snapTo(glideOffset.value + previous - y)
-                        glideOffset.animateTo(0f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                        glideOffset.animateTo(0f, animationSpec = FoamMotion.Springs.SHEET_SETTLE)
                     }
                 }
             }
@@ -616,6 +607,7 @@ internal fun albumArtModel(artPath: String?): Any? {
         ImageRequest.Builder(context)
             .data(EmbeddedAlbumArt(artPath.toUri()))
             .size(AlbumArtRequestSize)
+            .placeholderMemoryCacheKey(albumArtMemoryCacheKey(artPath))
             .memoryCacheKey(albumArtMemoryCacheKey(artPath))
             .build()
     }
@@ -663,7 +655,6 @@ internal fun TopTrackRow(
  * artwork to [MediaArtKind.ARTIST], so the portrait loads under the person
  * placeholder.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun TopArtistRow(
     artist: ArtistStat,
@@ -680,7 +671,6 @@ internal fun TopArtistRow(
             key = "artist-art-$elementKey",
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
-            enabled = elementKey != null,
             restShape = CircleShape,
             immersiveFlightHero = LocalCollectionHeroLayoutLookup
                 .current(CollectionHeroTarget.Artist)
@@ -692,7 +682,7 @@ internal fun TopArtistRow(
         key = "artist-title-$elementKey",
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
-        enabled = elementKey != null,
+        collectionFlight = elementKey != null,
         boundsTransform = AlbumArtBoundsTransform
     )
 
@@ -713,6 +703,7 @@ internal fun TopArtistRow(
                             }
                         )
                         .size(AlbumArtRequestSize)
+                        .placeholderMemoryCacheKey(albumArtMemoryCacheKey(cover.imageUrl))
                         .memoryCacheKey(albumArtMemoryCacheKey(cover.imageUrl))
                         .build()
                 }
@@ -746,7 +737,6 @@ internal fun TopArtistRow(
  * The row scopes its artwork to [MediaArtKind.ALBUM], so the cover loads
  * under the album disc placeholder.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun TopAlbumRow(
     entry: TopAlbumStat,
@@ -767,7 +757,6 @@ internal fun TopAlbumRow(
             key = "album-art-$elementKey",
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
-            enabled = elementKey != null,
             restShape = artShape,
             immersiveFlightHero = LocalCollectionHeroLayoutLookup
                 .current(CollectionHeroTarget.Album)
@@ -779,14 +768,14 @@ internal fun TopAlbumRow(
         key = "album-title-$elementKey",
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
-        enabled = elementKey != null,
+        collectionFlight = elementKey != null,
         boundsTransform = AlbumArtBoundsTransform
     )
     val sharedSubtitleModifier = Modifier.rowSharedText(
         key = "album-artist-$elementKey",
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
-        enabled = elementKey != null,
+        collectionFlight = elementKey != null,
         boundsTransform = AlbumArtBoundsTransform
     )
 
@@ -817,14 +806,18 @@ internal fun TopAlbumRow(
         titleModifier = sharedTitleModifier,
         subtitleModifier = sharedSubtitleModifier,
         artworkShape = artShape,
-        artworkElevation = if (closeFlightActive) 0.dp else MediaItemArtElevation,
+        artworkElevation = if (
+            elementKey != null &&
+            isActiveSharedCollectionFlightKey("album-art-$elementKey") &&
+            closeFlightActive
+        ) 0.dp else MediaItemArtElevation,
         trailingContent = { RankedPlayBadge(entry.playCount) }
     )
 }
 
 /** Trailing "×N" play-count badge of a ranked media row. */
 @Composable
-private fun RowScope.RankedPlayBadge(count: Int) {
+private fun RankedPlayBadge(count: Int) {
     BasicText(
         text = "×$count",
         style = FoamTheme.typography.body.copy(
@@ -841,7 +834,7 @@ private fun GenreBar(genre: GenreStat, maxPlays: Int) {
     val fraction = genre.playCount.toFloat() / maxPlays.coerceAtLeast(1)
     val animatedFraction by animateFloatAsState(
         targetValue = fraction,
-        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.EXPRESSIVE, easing = FoamMotion.Easings.STANDARD),
         label = "genreBarFraction"
     )
     Column {

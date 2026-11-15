@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -40,6 +39,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
@@ -72,7 +72,10 @@ fun TrackScoreHeart(
     onSetScore: (Int) -> Unit,
     modifier: Modifier = Modifier,
     iconSize: Dp = 26.dp,
-    touchTarget: Dp = 40.dp
+    touchTarget: Dp = 40.dp,
+    // Pager prefetch composes neighbour pages while they are invisible; they must
+    // not react to taps aimed at the settled page underneath.
+    enabled: Boolean = true
 ) {
     var menuVisible by remember { mutableStateOf(false) } // popup in composition
     var menuExpanded by remember { mutableStateOf(false) } // target state
@@ -106,7 +109,10 @@ fun TrackScoreHeart(
                 spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
             )
         } else {
-            menuProgress.animateTo(0f, tween(durationMillis = 130, easing = FastOutSlowInEasing))
+            menuProgress.animateTo(
+                0f,
+                tween(durationMillis = FoamMotion.Duration.SNAP, easing = FoamMotion.Easings.STANDARD)
+            )
             menuVisible = false
         }
     }
@@ -122,6 +128,7 @@ fun TrackScoreHeart(
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                enabled = enabled,
                 onLongClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     menuVisible = true

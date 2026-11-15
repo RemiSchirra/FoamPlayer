@@ -30,6 +30,7 @@ import com.foamplayer.app.lastfm.LastFmImportProgress
 import com.foamplayer.app.lastfm.LastFmUnmatchedTrack
 import com.foamplayer.app.ui.screens.settings.LastFmImportUiState
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 
@@ -310,7 +311,7 @@ private fun UnmatchedTrackRow(track: LastFmUnmatchedTrack) {
 private fun ImportProgressBar(progress: Float) {
     val animatedProgress by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT),
         label = "lastFmImportProgress"
     )
     Box(

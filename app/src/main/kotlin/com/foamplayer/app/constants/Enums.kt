@@ -277,24 +277,53 @@ enum class NavBarItem {
     MORE,
 }
 
-/** The nav items that open a screen; [NavBarItem.MORE] is not one of them. */
-val DefaultNavBarScreenItems =
+/** Every screen-opening nav item, placeable in either bar; [NavBarItem.MORE] is not one of them. */
+val AllNavBarScreenItems =
     listOf(
         NavBarItem.HOME,
         NavBarItem.PLAYLISTS,
         NavBarItem.SEARCH,
         NavBarItem.EQUALIZER,
+        NavBarItem.STATS,
         NavBarItem.SETTINGS,
     )
 
-/** Every switchable nav item (main bar + second bar). */
-val AllNavBarScreenItems = DefaultNavBarScreenItems + NavBarItem.STATS
-
-/** Default layout of the second bar: the screen items, with Stats last. */
-val DefaultNavBarSecondaryOrder = DefaultNavBarScreenItems + NavBarItem.STATS
-
-/** Default layout of the main bar: every placeable item, with the "more" toggle last. */
+/**
+ * Default layout of the main bar: every placeable item, with the "more" toggle
+ * last. Out of the box only Home, Playlists and Search are enabled
+ * ([DefaultNavBarPrimaryEnabled]); the "more" toggle reveals the second bar.
+ */
 val DefaultNavBarPrimaryOrder = AllNavBarScreenItems + NavBarItem.MORE
+
+/** Out-of-box visibility of the main bar: home, playlists, search. */
+val DefaultNavBarPrimaryEnabled =
+    setOf(
+        NavBarItem.HOME,
+        NavBarItem.PLAYLISTS,
+        NavBarItem.SEARCH,
+    )
+
+/**
+ * Default layout of the second bar: every placeable item, with the out-of-box
+ * order equalizer, stats, settings leading; the rest follow disabled.
+ */
+val DefaultNavBarSecondaryOrder =
+    listOf(
+        NavBarItem.EQUALIZER,
+        NavBarItem.STATS,
+        NavBarItem.SETTINGS,
+        NavBarItem.HOME,
+        NavBarItem.PLAYLISTS,
+        NavBarItem.SEARCH,
+    )
+
+/** Out-of-box visibility of the second bar: equalizer, stats, settings. */
+val DefaultNavBarSecondaryEnabled =
+    setOf(
+        NavBarItem.EQUALIZER,
+        NavBarItem.STATS,
+        NavBarItem.SETTINGS,
+    )
 
 /**
  * Completes [order] so it contains every [allowed] item exactly once, appending

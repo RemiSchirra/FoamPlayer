@@ -1,15 +1,13 @@
 package com.foamplayer.app.ui.screens.player
 
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.runtime.withFrameNanos
+import com.foamplayer.app.ui.theme.FoamMotion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-internal const val SETTLE_DURATION_MS = 250
 
 /**
  * Cancels an in-flight seek without ever calling animateTo() on the opposite state. Keeps
@@ -32,7 +30,7 @@ internal const val SETTLE_DURATION_MS = 250
  * since fraction is already 0) so the Transition actually settles.
  */
 internal suspend fun SeekableTransitionState<Boolean>.settleBackToRest(
-    durationMillis: Int = SETTLE_DURATION_MS
+    durationMillis: Int = FoamMotion.Duration.STANDARD
 ) {
     val restingTarget = targetState
     val restState = currentState
@@ -48,7 +46,7 @@ internal suspend fun SeekableTransitionState<Boolean>.settleBackToRest(
         do {
             val elapsedMs = (withFrameNanos { it } - startFrameNanos) / 1_000_000f
             t = (elapsedMs / durationMillis).coerceIn(0f, 1f)
-            seekTo(targetState = restingTarget, fraction = startFraction * (1f - FastOutSlowInEasing.transform(t)))
+            seekTo(targetState = restingTarget, fraction = startFraction * (1f - FoamMotion.Easings.STANDARD.transform(t)))
         } while (t < 1f)
     } finally {
         withContext(NonCancellable) { snapTo(restState) }

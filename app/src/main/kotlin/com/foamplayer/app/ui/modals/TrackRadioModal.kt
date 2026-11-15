@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.CircularProgressIndicator
@@ -55,8 +54,8 @@ private val FoamTrackRadioSpacing = FoamDimens.spacingSmall
 /** Art size of the header's radio chip, matching the row scaffold's artwork. */
 private val TrackRadioChipSize = 44.dp
 
-/** Size of the round play button in the radio header. */
-private val TrackRadioPlaySize = 40.dp
+/** Size of the play button in the radio header. */
+private val TrackRadioPlaySize = 32.dp
 
 /** Composed height of one ROW_NORMAL [TrackListItem] row, for list sizing. */
 private val TrackRadioRowHeight = 60.dp
@@ -74,7 +73,9 @@ private val TrackRadioHeaderReserve = 220.dp
  * - The radio list rendered as standard [TrackListItem] rows — the seed track
  *   first, then similar tracks in random order, plain rows without any card
  *   wrapper. Tapping a row starts the radio from it, handing the list to the
- *   player, which replaces the upcoming queue with it.
+ *   player, which replaces the upcoming queue with it. Long-pressing a row
+ *   closes the sheet and hands the track to [onTrackLongPress], which opens
+ *   the track's own action modal in its place.
  *
  * The list itself is provided by [TrackRadioViewModel]; this composable is pure
  * rendering. [visible] follows the ViewModel's open state, while the internally
@@ -90,6 +91,7 @@ fun TrackRadioModal(
     isLoading: Boolean,
     useAlbumArtAccent: Boolean,
     onPlay: (Int) -> Unit,
+    onTrackLongPress: (TrackEntity) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -132,7 +134,11 @@ fun TrackRadioModal(
                 when {
                     isLoading && tracks.isEmpty() -> TrackRadioLoading()
                     !isLoading && tracks.isEmpty() -> TrackRadioEmpty()
-                    else -> TrackRadioList(tracks = tracks, onPlayFrom = onPlay)
+                    else -> TrackRadioList(
+                        tracks = tracks,
+                        onPlayFrom = onPlay,
+                        onTrackLongPress = onTrackLongPress
+                    )
                 }
             }
         }
@@ -190,7 +196,6 @@ private fun TrackRadioHeader(
         Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
 
         TrackRadioPlayButton(
-            accentColor = accentColor,
             enabled = isPlayEnabled,
             onClick = onPlay
         )
@@ -200,7 +205,6 @@ private fun TrackRadioHeader(
 /** Play button that starts the radio from its seed track. */
 @Composable
 private fun TrackRadioPlayButton(
-    accentColor: Color,
     enabled: Boolean,
     onClick: () -> Unit
 ) {
@@ -208,11 +212,9 @@ private fun TrackRadioPlayButton(
     Box(
         modifier = Modifier
             .size(TrackRadioPlaySize)
-            .clip(CircleShape)
-            .background(if (enabled) accentColor else FoamTheme.colors.borderOverlay)
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(color = FoamTheme.colors.textPrimary),
+                indication = ripple(bounded = false, color = FoamTheme.colors.textPrimary),
                 enabled = enabled,
                 onClick = onClick
             ),
@@ -221,8 +223,8 @@ private fun TrackRadioPlayButton(
         Icon(
             imageVector = FoamTheme.icons.current.play,
             contentDescription = stringResource(R.string.play),
-            tint = FoamTheme.colors.background,
-            modifier = Modifier.size(22.dp)
+            tint = if (enabled) FoamTheme.colors.textPrimary else FoamTheme.colors.borderOverlay,
+            modifier = Modifier.size(TrackRadioPlaySize)
         )
     }
 }
@@ -265,7 +267,8 @@ private fun TrackRadioLoading() {
 @Composable
 private fun TrackRadioList(
     tracks: List<TrackEntity>,
-    onPlayFrom: (Int) -> Unit
+    onPlayFrom: (Int) -> Unit,
+    onTrackLongPress: (TrackEntity) -> Unit
 ) {
     val listHeight = minOf(
         TrackRadioRowHeight * tracks.size,
@@ -283,6 +286,7 @@ private fun TrackRadioList(
             TrackListItem(
                 track = track,
                 onClick = { onPlayFrom(index) },
+                onLongClick = { onTrackLongPress(track) },
                 density = MediaDensity.ROW_NORMAL
             )
         }

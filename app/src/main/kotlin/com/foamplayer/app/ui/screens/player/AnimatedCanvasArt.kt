@@ -22,8 +22,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-
-private const val CanvasFadeInDurationMs = 450
+import com.foamplayer.app.ui.theme.FoamMotion
 
 /**
  * Renders a looping, muted canvas video over the static album art.
@@ -82,7 +81,7 @@ fun AnimatedCanvasArt(
     // frozen frame out; resuming just continues toward 1.
     LaunchedEffect(hasFirstFrame, playing) {
         if (hasFirstFrame && playing) {
-            fadeIn.animateTo(1f, tween(CanvasFadeInDurationMs))
+            fadeIn.animateTo(1f, tween(FoamMotion.Duration.EXPRESSIVE))
         }
     }
 

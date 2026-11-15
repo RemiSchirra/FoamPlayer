@@ -15,7 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.foamplayer.app.R
 import com.foamplayer.app.constants.CollectionHeroLayout
 import com.foamplayer.app.constants.CollectionHeroTarget
@@ -182,8 +182,7 @@ fun StatsSeeAllScreen(
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
                                 // Only the clicked row flies (see LocalActiveSharedCollection).
-                                sharedElementKey = artist.name
-                                    .takeIf { isActiveSharedCollection("artist", artist.name) },
+                                sharedElementKey = artist.name,
                                 sharedElementPrefix = "artist",
                                 immersiveFlightHero = LocalCollectionHeroLayoutLookup
                                     .current(CollectionHeroTarget.Artist)
@@ -265,8 +264,7 @@ fun StatsSeeAllScreen(
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
                                 // Only the clicked row flies (see LocalActiveSharedCollection).
-                                sharedElementKey = album.album
-                                    .takeIf { isActiveSharedCollection("album", album.album) },
+                                sharedElementKey = album.album,
                                 immersiveFlightHero = LocalCollectionHeroLayoutLookup
                                     .current(CollectionHeroTarget.Album)
                                     .isImmersive

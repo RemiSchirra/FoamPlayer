@@ -9,7 +9,6 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
@@ -61,6 +60,7 @@ import com.foamplayer.app.audio.dsp.DspState
 import com.foamplayer.app.audio.dsp.FilterType
 import com.foamplayer.app.audio.dsp.GraphicEqSettings
 import com.foamplayer.app.audio.dsp.ParametricNode
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -71,10 +71,6 @@ import kotlin.math.sqrt
 
 /** dB range shown by the response graphs (grid lines go to ±12). */
 private const val GAIN_RANGE_DB = 15f
-private const val NODE_HIT_RADIUS_PX = 44f
-
-/** How long after the last scroll movement the mini map's viewport thumb starts fading out. */
-private const val THUMB_HIDE_DELAY_MS = 700L
 
 /** Width of one graphic EQ fader column; the strip content spans the current band count of these. */
 internal val BAND_SPACING = 44.dp
@@ -85,239 +81,6 @@ private val DOT_GRAB_RADIUS = 32.dp
 /** Filters without a meaningful gain (cut filters): their nodes only move in x. */
 internal val FilterType.gainAdjustable: Boolean
     get() = this != FilterType.LOW_PASS && this != FilterType.HIGH_PASS
-
-/**
- * The interactive parametric EQ graph (Poweramp-style): draggable colored nodes
- * (x = frequency, y = gain), tap to select. Each node's individual response is
- * drawn faintly in its own color under the combined curve, matching the mini
- * map's per-node curves.
- *
- * Drags run against the [nodes] working list owned by the caller so the curve
- * follows the finger every frame without emitting DSP state; the engine is
- * committed once on release through [onNodeCommit].
- */
-@Composable
-fun EqualizerGraph(
-    state: DspState,
-    nodes: List<ParametricNode>,
-    enabled: Boolean,
-    selectedNodeId: Long?,
-    onNodeSelect: (Long?) -> Unit,
-    onNodesChange: (List<ParametricNode>) -> Unit,
-    onNodeCommit: (ParametricNode) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var dragNodeId by remember { mutableStateOf<Long?>(null) }
-
-    // Live proxies: the gesture handlers are created once (pointerInput is keyed
-    // on `enabled`), so they must read the current animated node list and
-    // callbacks instead of capturing stale ones.
-    val latestNodes by rememberUpdatedState(nodes)
-    val latestOnNodeSelect by rememberUpdatedState(onNodeSelect)
-    val latestOnNodesChange by rememberUpdatedState(onNodesChange)
-    val latestOnNodeCommit by rememberUpdatedState(onNodeCommit)
-
-    val curve = remember(state, nodes) {
-        DspMath.combinedResponse(
-            state.copy(parametricEq = state.parametricEq.copy(nodes = nodes))
-        )
-    }
-
-    val accent = FoamTheme.accentColor
-    val gridColor = FoamTheme.colors.borderOverlay
-    val labelColor = FoamTheme.colors.textSecondary
-    val surfaceColor = FoamTheme.colors.surface
-    val textMeasurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(fontSize = 9.sp, color = labelColor)
-
-    // Static grid labels measured once outside the draw block: text measurement is
-    // expensive, and the graph redraws every frame of a node drag — re-measuring
-    // these in the Canvas each frame multiplied the drag cost for nothing.
-    val dbLabelLayouts = remember(labelStyle, textMeasurer) {
-        listOf(-12, -6, 0, 6, 12).associateWith { db ->
-            textMeasurer.measure(if (db > 0) "+${db}dB" else "${db}dB", labelStyle)
-        }
-    }
-    val freqLabelLayouts = remember(labelStyle, textMeasurer) {
-        GRID_FREQUENCIES.associateWith { freq ->
-            textMeasurer.measure(frequencyLabel(freq), labelStyle)
-        }
-    }
-
-    Canvas(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(230.dp)
-            .pointerInput(enabled) {
-                detectDragGestures(
-                    onDragStart = { start ->
-                        if (!enabled) return@detectDragGestures
-                        val w = size.width.toFloat()
-                        val h = size.height.toFloat()
-                        val hit = latestNodes
-                            .filter { (start - nodePosition(it, w, h)).getDistance() <= NODE_HIT_RADIUS_PX }
-                            .minByOrNull { (start - nodePosition(it, w, h)).getDistance() }
-                        dragNodeId = hit?.id
-                        if (hit != null) latestOnNodeSelect(hit.id)
-                    },
-                    onDrag = { change, _ ->
-                        if (!enabled) return@detectDragGestures
-                        change.consume()
-                        val id = dragNodeId ?: return@detectDragGestures
-                        val node = latestNodes.firstOrNull { it.id == id } ?: return@detectDragGestures
-                        val w = size.width.toFloat()
-                        val freq = frequencyAtX(change.position.x.coerceIn(0f, w), w)
-                        val gain = gainAtY(
-                            change.position.y.coerceIn(0f, size.height.toFloat()),
-                            size.height.toFloat()
-                        )
-                        latestOnNodesChange(
-                            latestNodes.map {
-                                if (it.id == id) {
-                                    it.copy(
-                                        frequencyHz = freq,
-                                        gainDb = if (it.type.gainAdjustable) gain else it.gainDb
-                                    )
-                                } else it
-                            }
-                        )
-                    },
-                    onDragEnd = {
-                        val id = dragNodeId
-                        val node = latestNodes.firstOrNull { it.id == id }
-                        if (id != null && node != null) latestOnNodeCommit(node)
-                        dragNodeId = null
-                    },
-                    onDragCancel = { dragNodeId = null }
-                )
-            }
-            .pointerInput(enabled) {
-                detectTapGestures(
-                    onTap = { position ->
-                        val w = size.width.toFloat()
-                        val h = size.height.toFloat()
-                        val hit = latestNodes
-                            .filter { (position - nodePosition(it, w, h)).getDistance() <= NODE_HIT_RADIUS_PX }
-                            .minByOrNull { (position - nodePosition(it, w, h)).getDistance() }
-                        latestOnNodeSelect(hit?.id)
-                    }
-                )
-            }
-    ) {
-        val w = size.width
-        val h = size.height
-
-        // Grid: frequency decades + dB lines with labels.
-        GRID_FREQUENCIES.forEach { freq ->
-            val x = xForFrequency(freq.toFloat(), w)
-            drawLine(gridColor, Offset(x, 0f), Offset(x, h), strokeWidth = 1f)
-        }
-        listOf(-12, -6, 0, 6, 12).forEach { db ->
-            val y = yForGain(db.toFloat(), h)
-            drawLine(
-                gridColor,
-                Offset(0f, y),
-                Offset(w, y),
-                strokeWidth = if (db == 0) 1.5f else 1f
-            )
-            drawText(
-                textLayoutResult = dbLabelLayouts.getValue(db),
-                topLeft = Offset(4.dp.toPx(), (y - 6.dp.toPx()).coerceAtLeast(0f))
-            )
-        }
-        GRID_FREQUENCIES.forEach { freq ->
-            val x = xForFrequency(freq.toFloat(), w)
-            val measured = freqLabelLayouts.getValue(freq)
-            drawText(
-                textLayoutResult = measured,
-                topLeft = Offset(
-                    (x - 8.dp.toPx()).coerceAtMost(w - measured.size.width.toFloat() - 2.dp.toPx()),
-                    h - 12.dp.toPx()
-                )
-            )
-        }
-
-        // Per-node individual responses, in each node's color.
-        nodes.forEach { node ->
-            drawCurve(
-                points = DspMath.nodeResponse(node),
-                color = Color(node.colorArgb).copy(alpha = 0.35f),
-                strokeWidth = 1.5.dp.toPx()
-            )
-        }
-
-        // Combined curve + soft fill under it (down to the 0 dB line).
-        drawCurve(
-            points = curve,
-            color = accent,
-            strokeWidth = 3.dp.toPx(),
-            fill = true
-        )
-
-        drawParametricNodes(
-            nodes = nodes,
-            enabled = enabled,
-            selectedId = selectedNodeId,
-            dragId = dragNodeId,
-            surface = surfaceColor,
-            textMeasurer = textMeasurer,
-            labelStyle = labelStyle
-        )
-    }
-}
-
-private fun DrawScope.drawParametricNodes(
-    nodes: List<ParametricNode>,
-    enabled: Boolean,
-    selectedId: Long?,
-    dragId: Long?,
-    surface: Color,
-    textMeasurer: TextMeasurer,
-    labelStyle: TextStyle
-) {
-    nodes.forEach { node ->
-        val pos = nodePosition(node, size.width, size.height)
-        val nodeColor = Color(node.colorArgb)
-        val isSelected = node.id == selectedId
-        val isDragging = node.id == dragId
-
-        drawCircle(
-            color = if (enabled) nodeColor else surface,
-            radius = when {
-                isDragging -> 13f
-                isSelected -> 11f
-                else -> 9f
-            },
-            center = pos
-        )
-        if (isSelected || isDragging) {
-            drawCircle(
-                color = Color.White.copy(alpha = 0.9f),
-                radius = 14f,
-                center = pos,
-                style = Stroke(width = 2f)
-            )
-        } else {
-            drawCircle(
-                color = Color.White.copy(alpha = if (enabled) 0.8f else 0.3f),
-                radius = 9f,
-                center = pos,
-                style = Stroke(width = 2f)
-            )
-        }
-
-        val label = "${node.type.label.take(2).uppercase()} ${frequencyLabel(node.frequencyHz.roundToInt())}"
-        drawText(
-            textMeasurer = textMeasurer,
-            text = label,
-            topLeft = Offset(
-                (pos.x - 10.dp.toPx()).coerceIn(0f, (size.width - 30.dp.toPx()).coerceAtLeast(0f)),
-                (pos.y - 22.dp.toPx()).coerceAtLeast(0f)
-            ),
-            style = labelStyle.copy(color = nodeColor)
-        )
-    }
-}
 
 // -------------------------------------------------------------- graphic strip
 
@@ -345,9 +108,9 @@ fun GraphicEqStrip(
     onViewportWidthChanged: (Int) -> Unit = {}
 ) {
     val accent = FoamTheme.accentColor
-    val trackColor = FoamTheme.colors.surfaceVariant
+    val trackColor = FoamTheme.tintedSurfaceVariant
     val labelColor = FoamTheme.colors.textSecondary
-    val disabledDotColor = FoamTheme.colors.surface
+    val disabledDotColor = FoamTheme.tintedSurface
     val textMeasurer = rememberTextMeasurer()
     val valueStyle = TextStyle(fontSize = 8.sp, color = accent)
     val labelStyle = TextStyle(fontSize = 8.sp, color = labelColor)
@@ -456,7 +219,7 @@ fun GraphicEqStrip(
                                     scope.launch {
                                         latestScroll?.animateScrollBy(
                                             velocity * 0.3f,
-                                            tween(durationMillis = 350, easing = LinearOutSlowInEasing)
+                                            tween(durationMillis = FoamMotion.Duration.FLIGHT, easing = FoamMotion.Easings.DECELERATE)
                                         )
                                     }
                                 }
@@ -626,7 +389,9 @@ fun EqMiniMap(
                 .drop(1) // the initial value is not a scroll
                 .collectLatest {
                     scrollRecentlyChanged = true
-                    delay(THUMB_HIDE_DELAY_MS)
+                    // How long after the last scroll movement the mini map's
+                    // viewport thumb starts fading out.
+                    delay(FoamMotion.Duration.EXTENDED.toLong())
                     scrollRecentlyChanged = false
                 }
         }
@@ -634,7 +399,7 @@ fun EqMiniMap(
     val thumbVisible = interactive && (scrollRecentlyChanged || touchingMap)
     val thumbAlpha by animateFloatAsState(
         targetValue = if (thumbVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = if (thumbVisible) 150 else 450),
+        animationSpec = tween(durationMillis = if (thumbVisible) FoamMotion.Duration.SNAP else FoamMotion.Duration.EXPRESSIVE),
         label = "miniMapThumbAlpha"
     )
 
@@ -795,35 +560,8 @@ private fun viewportSpanPx(density: androidx.compose.ui.unit.Density, bandCount:
 
 // ------------------------------------------------------------------- mapping
 
-private fun nodePosition(node: ParametricNode, width: Float, height: Float): Offset =
-    Offset(
-        xForFrequency(node.frequencyHz, width),
-        yForGain(node.gainDb, height)
-    )
-
-private fun xForFrequency(freq: Float, width: Float): Float {
-    val logMin = ln(DspMath.RESPONSE_MIN_HZ)
-    val logMax = ln(DspMath.RESPONSE_MAX_HZ)
-    val t = (ln(freq.coerceIn(DspMath.RESPONSE_MIN_HZ, DspMath.RESPONSE_MAX_HZ)) - logMin) / (logMax - logMin)
-    return t * width
-}
-
-private fun frequencyAtX(x: Float, width: Float): Float {
-    val logMin = ln(DspMath.RESPONSE_MIN_HZ)
-    val logMax = ln(DspMath.RESPONSE_MAX_HZ)
-    val t = (x / width.coerceAtLeast(1f)).coerceIn(0f, 1f)
-    return 10f.pow(logMin + (logMax - logMin) * t)
-}
-
 private fun yForGain(gainDb: Float, height: Float): Float =
     height * (1f - (gainDb.coerceIn(-GAIN_RANGE_DB, GAIN_RANGE_DB) + GAIN_RANGE_DB) / (GAIN_RANGE_DB * 2f))
-
-private fun gainAtY(y: Float, height: Float): Float {
-    val t = (y / height.coerceAtLeast(1f)).coerceIn(0f, 1f)
-    return (1f - t) * GAIN_RANGE_DB * 2f - GAIN_RANGE_DB
-}
-
-private val GRID_FREQUENCIES = listOf(20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000)
 
 internal fun frequencyLabel(hz: Int): String = when {
     hz >= 9995 -> "${(hz / 1000f).roundToInt()}k"

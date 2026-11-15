@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.home
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -55,6 +54,7 @@ import com.foamplayer.app.data.scanner.ArtistCover
 import com.foamplayer.app.ui.components.MediaArtKind
 import com.foamplayer.app.ui.components.NoAlbumArtLetter
 import com.foamplayer.app.ui.components.mediaArtPlaceholderIcon
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
 import kotlinx.coroutines.launch
@@ -71,9 +71,6 @@ private val StartPlayingCardSize = StartPlayingArtSize + StartPlayingGridPadding
 
 /** Alpha of the cards' translucent surface tint. */
 private const val StartPlayingCardSurfaceAlpha = 0.2f
-
-/** Duration of the crossfade between two shuffled artworks. */
-private const val ShuffledArtCrossfadeMs = 200
 
 /** Icon size of the random cards' artwork placeholder. */
 private val ShuffledArtPlaceholderSize = 20.dp
@@ -593,8 +590,8 @@ private fun IncomingImage(
                             Animatable(0f).animateTo(
                                 targetValue = 1f,
                                 animationSpec = tween(
-                                    durationMillis = ShuffledArtCrossfadeMs,
-                                    easing = EaseOut
+                                    durationMillis = FoamMotion.Duration.SWIFT,
+                                    easing = FoamMotion.Easings.EXIT
                                 )
                             ) { alphaState.floatValue = value }
                             onSettled()
@@ -622,7 +619,7 @@ private fun IncomingLetter(
     androidx.compose.runtime.LaunchedEffect(title) {
         letterAlpha.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = ShuffledArtCrossfadeMs, easing = EaseOut)
+            animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT, easing = FoamMotion.Easings.EXIT)
         )
         onSettled()
     }

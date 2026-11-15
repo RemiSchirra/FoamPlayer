@@ -14,7 +14,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -45,26 +44,32 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.util.lerp as lerpFloat
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.foamplayer.app.R
-import com.foamplayer.app.audio.engine.RepeatMode
 import com.foamplayer.app.data.db.entities.TrackEntity
 import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
+import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.CrossfadingPlayPauseIcon
-import com.foamplayer.app.ui.components.PLAY_PAUSE_CROSSFADE_MS
 import com.foamplayer.app.ui.components.MarqueeText
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
+import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.screens.lyrics.LyricsScreen
 import com.foamplayer.app.ui.screens.queue.QueueScreen
 import com.foamplayer.app.ui.theme.FoamDimens
+import com.foamplayer.app.ui.theme.FoamMotion
 import com.foamplayer.app.ui.theme.FoamTheme
 import com.foamplayer.app.ui.theme.foamBackground
 import com.foamplayer.app.ui.theme.foamSurfaceVariant
@@ -104,16 +109,9 @@ private fun SubViewSelectorItem(
         SubViewMode.QUEUE -> FoamTheme.icons.current.queue
     }
 
-    // TODO : For some reason the queue icon is smaller than lyrics icon, so sizes are hardcoded
     val label = stringResource(mode.labelRes)
-    val iconSize = when (mode) {
-        SubViewMode.LYRICS -> 24.dp
-        SubViewMode.QUEUE -> 28.dp
-    }
-    val touchPadding = when (mode) {
-        SubViewMode.LYRICS -> 12.dp
-        SubViewMode.QUEUE -> 10.dp
-    }
+    val iconSize = 28.dp
+    val touchPadding = 10.dp
     val selectorInteractions = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
@@ -153,34 +151,30 @@ private fun SubViewSelectorItem(
 @Composable
 internal fun SubViewSelectorRow(
     subViewMode: SubViewMode,
-    repeatMode: RepeatMode,
-    isShuffle: Boolean,
     progress: () -> Float,
     onSelect: (SubViewMode) -> Unit,
-    onShuffleClick: () -> Unit,
     onPlayOnClick: () -> Unit,
-    onRepeatClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val restInsetPx = with(LocalDensity.current) { SelectorRestInset.toPx() }
+    val directionSign = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1f else -1f
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SubViewSelectorItem(
-            mode = SubViewMode.LYRICS,
-            isSelected = subViewMode == SubViewMode.LYRICS,
-            progress = progress,
-            onSelect = onSelect
-        )
-
-        SubViewSelectorAction(
-            icon = FoamTheme.icons.current.shuffle,
-            contentDescription = "Shuffle",
-            isDimmed = !isShuffle,
-            progress = progress,
-            onClick = onShuffleClick
-        )
+        Box(
+            modifier = Modifier.graphicsLayer {
+                translationX = directionSign * restInsetPx * (1f - progress().coerceIn(0f, 1f))
+            }
+        ) {
+            SubViewSelectorItem(
+                mode = SubViewMode.LYRICS,
+                isSelected = subViewMode == SubViewMode.LYRICS,
+                progress = progress,
+                onSelect = onSelect
+            )
+        }
 
         SubViewSelectorAction(
             icon = FoamTheme.icons.current.cast,
@@ -189,29 +183,30 @@ internal fun SubViewSelectorRow(
             onClick = onPlayOnClick
         )
 
-        SubViewSelectorAction(
-            icon = when (repeatMode) {
-                RepeatMode.ONE -> FoamTheme.icons.current.repeatOne
-                else -> FoamTheme.icons.current.repeat
-            },
-            contentDescription = stringResource(R.string.action_repeat),
-            isDimmed = repeatMode == RepeatMode.NONE,
-            progress = progress,
-            onClick = onRepeatClick
-        )
-
-        SubViewSelectorItem(
-            mode = SubViewMode.QUEUE,
-            isSelected = subViewMode == SubViewMode.QUEUE,
-            progress = progress,
-            onSelect = onSelect
-        )
+        Box(
+            modifier = Modifier.graphicsLayer {
+                translationX = -directionSign * restInsetPx * (1f - progress().coerceIn(0f, 1f))
+            }
+        ) {
+            SubViewSelectorItem(
+                mode = SubViewMode.QUEUE,
+                isSelected = subViewMode == SubViewMode.QUEUE,
+                progress = progress,
+                onSelect = onSelect
+            )
+        }
     }
 }
 
+private val SelectorRestInset = 40.dp
+private val SelectorIconSize = 28.dp
+private val SelectorActionTouchPadding = 12.dp
+
+/** Height of the selector row's content (the tallest item is the "Play on" action). */
+internal val SelectorRowHeight = SelectorIconSize + SelectorActionTouchPadding * 2
+
 /**
- * Non-selector action icons living between the lyrics/queue selectors (shuffle, radio, "Play
- * on", repeat). Same icon/touch sizing as SubViewSelectorItem, but they disappear
+ * Non-selector action icons living between the lyrics/queue selectors (currently just "Play on"). Same icon/touch sizing as SubViewSelectorItem, but they disappear
  * as the subview opens: [progress] -> 1 fades the icon out (draw-phase alpha) and
  * gates the click once invisible, so a hidden action is never tappable while the
  * lyrics/queue selectors at both ends stay reachable for switching/collapsing.
@@ -240,7 +235,7 @@ private fun SubViewSelectorAction(
                 enabled = isEnabled,
                 onClick = onClick
             )
-            .padding(12.dp),
+            .padding(SelectorActionTouchPadding),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -248,7 +243,7 @@ private fun SubViewSelectorAction(
             contentDescription = contentDescription,
             tint = FoamTheme.colors.textPrimary,
             modifier = Modifier
-                .size(24.dp)
+                .size(SelectorIconSize)
                 .graphicsLayer {
                     alpha = (if (isDimmed) 0.4f else 1f) * (1f - progress().coerceIn(0f, 1f))
                 }
@@ -296,8 +291,8 @@ internal fun SharedTransitionScope.SubViewContent(
             AnimatedContent(
                 targetState = subViewMode,
                 transitionSpec = {
-                    fadeIn(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) togetherWith
-                            fadeOut(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS))
+                    fadeIn(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH)) togetherWith
+                            fadeOut(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH))
                 },
                 label = "SubViewContent"
             ) { mode ->
@@ -429,9 +424,9 @@ private fun SharedTransitionScope.MiniPlayerHeader(
         AnimatedContent(
             targetState = track,
             transitionSpec = {
-                (fadeIn(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) +
-                        slideInVertically(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS)) { height -> height / 3 }) togetherWith
-                        fadeOut(androidx.compose.animation.core.tween(TRANSITION_DURATION_MS))
+                (fadeIn(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH)) +
+                        slideInVertically(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH)) { height -> height / 3 }) togetherWith
+                        fadeOut(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH))
             },
             contentKey = { it.id },
             modifier = Modifier.weight(1f),
@@ -460,8 +455,20 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                         .foamSurfaceVariant()
                 ) {
                     if (headerTrack.albumArtPath != null) {
+                        val context = LocalContext.current
+                        val headerArtRequest = remember(headerTrack.albumArtPath) {
+                            ImageRequest.Builder(context)
+                                .data(EmbeddedAlbumArt(headerTrack.albumArtPath.toUri()))
+                                .size(AlbumArtRequestSize)
+                                .crossfade(false)
+                                .placeholderMemoryCacheKey(
+                                    albumArtMemoryCacheKey(headerTrack.albumArtPath)
+                                )
+                                .memoryCacheKey(albumArtMemoryCacheKey(headerTrack.albumArtPath))
+                                .build()
+                        }
                         AsyncImage(
-                            model = EmbeddedAlbumArt(headerTrack.albumArtPath.toUri()),
+                            model = headerArtRequest,
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -490,8 +497,25 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                 }
             }
         }
-        Icon(imageVector = Icons.Rounded.KeyboardArrowDown, contentDescription = stringResource(R.string.collapse), tint = FoamTheme.accentColor, modifier = Modifier.size(28.dp))
+        CollapseAccentIcon()
     }
+}
+
+/**
+ * Isolated so the per-frame accent read recomposes only the icon: accentColor
+ * changes every frame of a hero pager swipe (viewModel.setDynamicAccentColor
+ * fires per drag frame), and reading it inline in the header body would
+ * recompose the header (and its sharedBounds/marquee children) at display
+ * frequency. Same pattern as SubViewSelectorItem above.
+ */
+@Composable
+private fun CollapseAccentIcon() {
+    Icon(
+        imageVector = Icons.Rounded.KeyboardArrowDown,
+        contentDescription = stringResource(R.string.collapse),
+        tint = FoamTheme.accentColor,
+        modifier = Modifier.size(28.dp)
+    )
 }
 
 /**
@@ -509,7 +533,9 @@ internal fun MiniPlayPauseButton(
     isLoading: () -> Boolean,
     progress: () -> Float,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    size: Dp = PlayerDimens.miniPlayButtonSize,
+    iconSize: Dp = PlayerDimens.miniPlayIconSize
 ) {
     // Read in this leaf's scope: a play/pause flip recomposes only this button.
     val isPlaying = isPlaying()
@@ -520,7 +546,7 @@ internal fun MiniPlayPauseButton(
     // Same scale+fade convention as the full player's play/pause crossfade.
     val loadingFraction by animateFloatAsState(
         targetValue = if (isLoading) 1f else 0f,
-        animationSpec = tween(durationMillis = PLAY_PAUSE_CROSSFADE_MS),
+        animationSpec = tween(durationMillis = FoamMotion.Duration.STANDARD),
         label = "miniPlayLoadingCrossfade"
     )
     val description = stringResource(
@@ -534,10 +560,8 @@ internal fun MiniPlayPauseButton(
     Box(
         modifier = modifier
             .pressShrink(playInteractions)
-            .size(PlayerDimens.miniPlayButtonSize)
+            .size(size)
             .graphicsLayer { alpha = progress() }
-            .clip(CircleShape)
-            .background(FoamTheme.accentColor)
             .semantics { contentDescription = description }
             .clickable(
                 interactionSource = playInteractions,
@@ -550,15 +574,15 @@ internal fun MiniPlayPauseButton(
         CrossfadingPlayPauseIcon(
             isPlaying = isPlaying,
             loadingFraction = { loadingFraction },
-            tint = FoamTheme.colors.background,
-            iconSize = PlayerDimens.miniPlayIconSize
+            tint = FoamTheme.colors.textPrimary,
+            iconSize = iconSize
         )
         if (isLoading || loadingFraction > 0f) {
             CircularProgressIndicator(
-                color = FoamTheme.colors.background,
+                color = FoamTheme.colors.textPrimary,
                 strokeWidth = 2.dp,
                 modifier = Modifier
-                    .size(PlayerDimens.miniPlayIconSize)
+                    .size(iconSize)
                     .graphicsLayer {
                         alpha = loadingFraction
                         val circleScale = 0.2f + 0.8f * loadingFraction
