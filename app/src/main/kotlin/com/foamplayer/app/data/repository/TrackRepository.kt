@@ -658,7 +658,7 @@ class TrackRepository @Inject constructor(
     fun observeListenedGenreRows(since: Long?): Flow<List<GenrePlayRow>> =
         listenHistoryDao.observeGenrePlayRows(since)
 
-    // ---- Developer tools (only reachable from the DEV_MODE test screen) ----
+    // ---- Developer tools (only reachable from the debug-build test screen) ----
 
     /** Clears every track's play count, last-listen date, score and history atomically. */
     suspend fun clearAllPlayStats() {

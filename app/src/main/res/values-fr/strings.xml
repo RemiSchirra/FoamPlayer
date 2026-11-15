@@ -322,7 +322,7 @@
     <string name="switches">Interrupteurs</string>
     <string name="sliders">Curseurs</string>
 
-    <!-- Outils développeur (builds devMode uniquement) -->
+    <!-- Outils développeur (builds debug uniquement) -->
     <string name="dev_tools_section">Outils développeur</string>
     <string name="dev_reset_onboarding">Réinitialiser l\'onboarding</string>
     <string name="dev_reset_onboarding_title">Réinitialiser l\'onboarding ?</string>
@@ -778,7 +778,7 @@
     <string name="eq_band_layout">Disposition des bandes</string>
     <string name="eq_band_layout_desc">"Configuration du nombre bandes standard ISO"</string>
 
-    <!-- Écran de test de composants (builds devMode uniquement) -->
+    <!-- Écran de test de composants (builds debug uniquement) -->
     <string name="test_switch">Interrupteur de test</string>
     <string name="test_switch_desc">Démonstration du composant interrupteur plat</string>
     <string name="test_slider_continuous">Curseur continu</string>

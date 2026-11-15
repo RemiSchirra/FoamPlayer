@@ -11,9 +11,6 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// set devMode=true in gradle.properties to compile the developer tests screens
-val devMode: Boolean = providers.gradleProperty("devMode").getOrElse("false").toBoolean()
-
 // Last.fm API credentials from local.properties
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
@@ -42,7 +39,6 @@ android {
             useSupportLibrary = true
         }
 
-        buildConfigField("boolean", "DEV_MODE", devMode.toString())
         buildConfigField("String", "LASTFM_API_KEY", buildConfigString(credential("LASTFM_API_KEY")))
         buildConfigField("String", "LASTFM_API_SECRET", buildConfigString(credential("LASTFM_API_SECRET")))
     }

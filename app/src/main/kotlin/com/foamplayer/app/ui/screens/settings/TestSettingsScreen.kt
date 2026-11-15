@@ -35,11 +35,11 @@ import com.foamplayer.squig.SquigSite
 import kotlinx.coroutines.launch
 
 /**
- * Developer screen, compiled in only when the build sets devMode=true
- * (BuildConfig.DEV_MODE): the UI component demos, plus a developer-tools
- * section with helpers for re-testing the first-run flow and for generating
- * or clearing listening data. With devMode off, neither this screen nor its
- * settings entry is compiled into the app.
+ * Developer screen, compiled in only with debug builds (BuildConfig.DEBUG):
+ * the UI component demos, plus a developer-tools section with helpers for
+ * re-testing the first-run flow and for generating or clearing listening
+ * data. In release builds, neither this screen nor its settings entry is
+ * compiled into the app.
  */
 @Composable
 fun TestSettingsScreen(

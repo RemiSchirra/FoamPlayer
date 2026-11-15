@@ -325,8 +325,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     // developer tools
-    // Only reachable from the Components Test screen, compiled in solely when
-    // BuildConfig.DEV_MODE is set at build time.
+    // Only reachable from the Components Test screen, compiled in solely in
+    // debug builds (BuildConfig.DEBUG).
 
     /** Reset onboarding so the first-run flow shows again on next start. */
     fun resetOnboarding() = setOnboardingCompleted(false)

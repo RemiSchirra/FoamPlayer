@@ -130,8 +130,8 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(FoamDimens.spacingLarge))
             }
 
-            // Developer entry: compiled in only with devMode=true (BuildConfig.DEV_MODE).
-            if (BuildConfig.DEV_MODE && onNavigateToTest != null) {
+            // Developer entry: compiled in only with debug builds
+            if (BuildConfig.DEBUG && onNavigateToTest != null) {
                 item {
                     SettingsCategoryItem(
                         title = stringResource(R.string.test_components),

@@ -40,9 +40,9 @@ internal fun NavGraphBuilder.settingsDestinations(context: FoamNavGraphContext) 
             onNavigateToLyrics = { context.navController.navigate(Screen.SettingsLyrics.route) },
             onNavigateToMisc = { context.navController.navigate(Screen.SettingsMisc.route) },
             onNavigateToAbout = { context.navController.navigate(Screen.SettingsAbout.route) },
-            // Compiled in only with devMode=true; the entry disappears from
-            // Settings when the flag is off.
-            onNavigateToTest = if (BuildConfig.DEV_MODE) {
+            // Compiled in only with debug builds; the entry disappears from
+            // Settings in release builds.
+            onNavigateToTest = if (BuildConfig.DEBUG) {
                 { context.navController.navigate(Screen.SettingsTest.route) }
             } else {
                 null
@@ -166,8 +166,8 @@ internal fun NavGraphBuilder.settingsDestinations(context: FoamNavGraphContext) 
     composable(Screen.SettingsAbout.route) {
         AboutSettingsScreen(onBack = { context.back() })
     }
-    // Developer test screen: registered only with devMode=true.
-    if (BuildConfig.DEV_MODE) {
+    // Developer test screen: registered only in debug builds.
+    if (BuildConfig.DEBUG) {
         composable(Screen.SettingsTest.route) {
             TestSettingsScreen(
                 onBack = { context.back() },
