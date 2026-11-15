@@ -358,7 +358,7 @@ fun FoamBottomModal(
                                         .width(32.dp)
                                         .height(4.dp)
                                         .clip(RoundedCornerShape(2.dp))
-                                        .background(FoamTheme.colors.textSecondary)
+                                        .background(FoamTheme.colors.textPrimary.copy(alpha = 0.3f))
                                 )
                             }
 
