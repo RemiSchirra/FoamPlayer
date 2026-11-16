@@ -31,13 +31,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.foamplayer.app.R
-import com.foamplayer.app.data.media.EmbeddedAlbumArt
-import com.foamplayer.app.ui.components.AlbumArtRequestSize
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
+import com.foamplayer.app.ui.components.fullResAlbumArtRequest
 import com.foamplayer.app.ui.theme.FoamMotion
 import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
@@ -116,13 +113,7 @@ internal fun VinylDisc(
     val playing = isPlaying()
     val context = LocalContext.current
     val artRequest = remember(albumArtPath) {
-        albumArtPath?.let { path ->
-            ImageRequest.Builder(context)
-                .data(EmbeddedAlbumArt(path.toUri()))
-                .size(AlbumArtRequestSize)
-                .crossfade(false)
-                .build()
-        }
+        albumArtPath?.let { path -> fullResAlbumArtRequest(context, path) }
     }
 
     // Frame-accumulated rotation: advances with real frame deltas while playing and

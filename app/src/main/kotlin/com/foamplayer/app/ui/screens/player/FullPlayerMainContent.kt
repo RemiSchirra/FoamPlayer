@@ -79,22 +79,18 @@ import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.zIndex
-import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.imageLoader
-import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
-import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.PlayerPagerEffect
 import com.foamplayer.app.data.settings.SeekBarStyle
-import com.foamplayer.app.ui.components.AlbumArtRequestSize
-import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.CrossfadingPlayPauseIcon
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
 import com.foamplayer.app.ui.components.PlayerFlightHighlightPadding
 import com.foamplayer.app.ui.components.PreviousAction
+import com.foamplayer.app.ui.components.fullResAlbumArtRequest
 import com.foamplayer.app.ui.components.playerFlightHighlightSource
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.TrackScoreHeart
@@ -450,11 +446,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
             for (p in (page - 2)..(page + 2)) {
                 val path = queue.getOrNull(p)?.albumArtPath ?: continue
                 prefetchContext.imageLoader.enqueue(
-                    ImageRequest.Builder(prefetchContext)
-                        .data(EmbeddedAlbumArt(path.toUri()))
-                        .size(AlbumArtRequestSize)
-                        .memoryCacheKey(albumArtMemoryCacheKey(path))
-                        .build()
+                    fullResAlbumArtRequest(prefetchContext, path)
                 )
             }
         }
@@ -623,15 +615,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         if (pageTrack.albumArtPath != null) {
                             val context = LocalContext.current
                             val pageArtRequest = remember(pageTrack.albumArtPath) {
-                                ImageRequest.Builder(context)
-                                    .data(EmbeddedAlbumArt(pageTrack.albumArtPath.toUri()))
-                                    .size(AlbumArtRequestSize)
-                                    .crossfade(false)
-                                    .placeholderMemoryCacheKey(
-                                        albumArtMemoryCacheKey(pageTrack.albumArtPath)
-                                    )
-                                    .memoryCacheKey(albumArtMemoryCacheKey(pageTrack.albumArtPath))
-                                    .build()
+                                fullResAlbumArtRequest(context, pageTrack.albumArtPath)
                             }
                             AsyncImage(
                                 model = pageArtRequest,
@@ -811,13 +795,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     if (track.albumArtPath != null) {
                         val context = LocalContext.current
                         val albumArtRequest = remember(track.albumArtPath) {
-                            ImageRequest.Builder(context)
-                                .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
-                                .size(AlbumArtRequestSize)
-                                .crossfade(false)
-                                .placeholderMemoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
-                                .memoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
-                                .build()
+                            fullResAlbumArtRequest(context, track.albumArtPath)
                         }
                         AsyncImage(
                             model = albumArtRequest,
@@ -826,8 +804,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             contentScale = ContentScale.Crop
                         )
                     } else {
-                        // No art at all: the image-like music-note placeholder, exactly
-                        // like the mini player's slot and this page's underlying art box.
                         NoAlbumArtPlaceholder()
                     }
                 }
