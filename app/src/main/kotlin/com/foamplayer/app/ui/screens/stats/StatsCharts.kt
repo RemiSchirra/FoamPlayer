@@ -1,5 +1,6 @@
 package com.foamplayer.app.ui.screens.stats
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -140,10 +142,25 @@ fun StatsDonutChart(
     modifier: Modifier = Modifier,
     strokeWidth: Dp = 18.dp
 ) {
-    val progress = remember(slices) { Animatable(0f) }
-    LaunchedEffect(slices) {
+    // Colors are intentionally excluded from the key: an accent change must
+    // recolor the ring live without replaying the grow-in animation. Only a
+    // change in the data (labels/fractions, e.g. new timespan) replays it.
+    val animationKey = slices.map { it.label to it.fraction }
+
+    val progress = remember(animationKey) { Animatable(0f) }
+    LaunchedEffect(animationKey) {
         progress.snapTo(0f)
         progress.animateTo(1f, tween(durationMillis = FoamMotion.Duration.EXPRESSIVE, easing = FoamMotion.Easings.STANDARD))
+    }
+
+    val sliceColors = slices.mapIndexed { index, slice ->
+        key(index) {
+            animateColorAsState(
+                targetValue = slice.color,
+                animationSpec = tween(durationMillis = 180),
+                label = "donutSliceColor$index"
+            )
+        }
     }
 
     Canvas(modifier) {
@@ -154,11 +171,11 @@ fun StatsDonutChart(
         val gapSweep = if (slices.size > 1) 4f else 0f
 
         var startAngle = -90f
-        slices.forEach { slice ->
+        slices.forEachIndexed { index, slice ->
             val sweep = 360f * slice.fraction * progress.value
             val drawn = (sweep - gapSweep).coerceAtLeast(0.5f)
             drawArc(
-                color = slice.color,
+                color = sliceColors[index].value,
                 startAngle = startAngle + gapSweep / 2,
                 sweepAngle = drawn,
                 useCenter = false,
