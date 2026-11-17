@@ -829,12 +829,16 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             drivesState = false,
                             modifier = Modifier
                                 .sharedBounds(
-                                    rememberSharedContentState(key = "track_title_${track.id}"),
-                                    animatedVisibilityScope = outerVisibilityScope
+                                    rememberSharedContentState(key = "track_title"),
+                                    animatedVisibilityScope = outerVisibilityScope,
+                                    enter = fadeIn(FoamMotion.Spec.sharedElementFlight),
+                                    exit = fadeOut(FoamMotion.Spec.sharedElementFlight)
                                 )
                                 .sharedBounds(
-                                    rememberSharedContentState(key = "track_title_header_${track.id}"),
-                                    animatedVisibilityScope = headerVisibilityScope
+                                    rememberSharedContentState(key = "track_title_header"),
+                                    animatedVisibilityScope = headerVisibilityScope,
+                                    enter = fadeIn(FoamMotion.Spec.sharedElementFlight),
+                                    exit = fadeOut(FoamMotion.Spec.sharedElementFlight)
                                 )
                         )
                         MarqueeText(
@@ -845,12 +849,16 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             drivesState = false,
                             modifier = Modifier
                                 .sharedBounds(
-                                    rememberSharedContentState(key = "track_artist_${track.id}"),
-                                    animatedVisibilityScope = outerVisibilityScope
+                                    rememberSharedContentState(key = "track_artist"),
+                                    animatedVisibilityScope = outerVisibilityScope,
+                                    enter = fadeIn(FoamMotion.Spec.sharedElementFlight),
+                                    exit = fadeOut(FoamMotion.Spec.sharedElementFlight)
                                 )
                                 .sharedBounds(
-                                    rememberSharedContentState(key = "track_artist_header_${track.id}"),
-                                    animatedVisibilityScope = headerVisibilityScope
+                                    rememberSharedContentState(key = "track_artist_header"),
+                                    animatedVisibilityScope = headerVisibilityScope,
+                                    enter = fadeIn(FoamMotion.Spec.sharedElementFlight),
+                                    exit = fadeOut(FoamMotion.Spec.sharedElementFlight)
                                 )
                         )
                     }
@@ -1027,7 +1035,6 @@ internal fun SharedTransitionScope.PlaybackControls(
                         )
                 )
                 PlayPauseButton(
-                    track = track,
                     isPlaying = isPlaying,
                     isLoading = isLoading,
                     outerVisibilityScope = outerVisibilityScope,
@@ -1060,7 +1067,6 @@ internal fun SharedTransitionScope.PlaybackControls(
  */
 @Composable
 internal fun SharedTransitionScope.PlayPauseButton(
-    track: TrackEntity,
     isPlaying: () -> Boolean,
     isLoading: () -> Boolean,
     outerVisibilityScope: AnimatedVisibilityScope,
@@ -1117,7 +1123,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
             tint = FoamTheme.colors.textPrimary,
             iconSize = PlayerDimens.playButtonIconSize,
             modifier = Modifier.sharedBounds(
-                rememberSharedContentState(key = "play_button_${track.id}"),
+                rememberSharedContentState(key = "play_button"),
                 animatedVisibilityScope = outerVisibilityScope,
                 resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.Fit, Alignment.Center),
                 enter = fadeIn(),

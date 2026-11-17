@@ -157,7 +157,6 @@ private class MiniEntryMarqueeStates {
  */
 @Composable
 private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
-    trackId: Long,
     isPlaying: Boolean,
     isLoading: Boolean,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -184,8 +183,11 @@ private fun SharedTransitionScope.MiniPlayerPlayPauseButton(
     // The glyph is the shared element, laid out at its own size and scaled to the
     // interpolated bounds (ScaleToBounds) so it morphs between 28dp and the full
     // player's glyph without a size pop.
+    // Stable across tracks (matching the hero's key): a track.id key would re-create
+    // the shared bounds on every track change, resetting the captured stable size the
+    // content scale reads on a flight's first frame.
     val glyphSharedState = if (useSharedElements) {
-        rememberSharedContentState(key = "play_button_$trackId")
+        rememberSharedContentState(key = "play_button")
     } else null
 
     Box(
@@ -918,11 +920,18 @@ fun MiniPlayer(
                             val artSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
                                 rememberSharedContentState(key = "album_art_${track.id}")
                             } else null
+                            // Stable across tracks (matching the hero's keys): a track.id key
+                            // would re-create the shared bounds on every track change, resetting
+                            // the captured stable size the content scale reads on a flight's
+                            // first frame and leaving a never-placed entry that makes the bounds
+                            // animation start from the wrong box. Rows pair with these same keys
+                            // (only the shared-transition source row is tagged), so row flights
+                            // still match.
                             val titleSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
-                                rememberSharedContentState(key = "track_title_${track.id}")
+                                rememberSharedContentState(key = "track_title")
                             } else null
                             val artistSharedState = if (useSharedElements && isSettledCurrentTrackPage) {
-                                rememberSharedContentState(key = "track_artist_${track.id}")
+                                rememberSharedContentState(key = "track_artist")
                             } else null
                             val pageMarquee = statesFor(entryKey(page))
 
@@ -1014,14 +1023,6 @@ fun MiniPlayer(
 
                                 Spacer(modifier = Modifier.width(12.dp))
 
-                                // Same late-tag problem as the art box above: the title and the
-                                // artist/album bounds are only tagged once the page is the settled
-                                // current one (or the gate flips on). A tag added to an already-composed
-                                // page never registers with the coordinator, so the first close (or the
-                                // first close after swiping to a new song) cannot pair the text with the
-                                // full player's and it cross-fades -> flicker. Re-keying on the tag
-                                // states gives the column a fresh identity whenever they appear.
-                                // Marquee state is hoisted per entry, so scrolling carries over.
                                 key(titleSharedState, artistSharedState) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         MarqueeText(
@@ -1032,7 +1033,9 @@ fun MiniPlayer(
                                             modifier = if (titleSharedState != null) {
                                                 Modifier.sharedBounds(
                                                     titleSharedState,
-                                                    animatedVisibilityScope = animatedVisibilityScope
+                                                    animatedVisibilityScope = animatedVisibilityScope,
+                                                    enter = fadeIn(FoamMotion.Spec.sharedElementFlight),
+                                                    exit = fadeOut(FoamMotion.Spec.sharedElementFlight)
                                                 )
                                             } else Modifier
                                         )
@@ -1044,7 +1047,9 @@ fun MiniPlayer(
                                             modifier = if (artistSharedState != null) {
                                                 Modifier.sharedBounds(
                                                     artistSharedState,
-                                                    animatedVisibilityScope = animatedVisibilityScope
+                                                    animatedVisibilityScope = animatedVisibilityScope,
+                                                    enter = fadeIn(FoamMotion.Spec.sharedElementFlight),
+                                                    exit = fadeOut(FoamMotion.Spec.sharedElementFlight)
                                                 )
                                             } else Modifier
                                         )
@@ -1057,7 +1062,6 @@ fun MiniPlayer(
 
                         with(sharedTransitionScope) {
                             MiniPlayerPlayPauseButton(
-                                trackId = track.id,
                                 isPlaying = playbackState.isPlaying,
                                 isLoading = playbackState.isLoading,
                                 animatedVisibilityScope = animatedVisibilityScope,
