@@ -92,6 +92,14 @@ class AudioSettingsViewModel @OptIn(UnstableApi::class)
         settingsRepository.setPauseOnDeviceDisconnected(enabled)
     }
 
+    fun setPauseOnFocusLoss(enabled: Boolean) = launch {
+        settingsRepository.setPauseOnFocusLoss(enabled)
+    }
+
+    fun setResumeOnFocusRegain(enabled: Boolean) = launch {
+        settingsRepository.setResumeOnFocusRegain(enabled)
+    }
+
     @OptIn(UnstableApi::class)
     fun setDirectVolumeControl(enabled: Boolean) = launch {
         dspEngine.setDirectVolumeControl(enabled)

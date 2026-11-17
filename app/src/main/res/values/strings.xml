@@ -223,6 +223,10 @@
     <string name="resume_on_device_connected_desc">Automatically resume playback when an audio device is connected</string>
     <string name="pause_on_device_disconnected">Pause on Device Disconnected</string>
     <string name="pause_on_device_disconnected_desc">Automatically pause playback when the audio device in use is disconnected</string>
+    <string name="pause_on_focus_loss">Pause on Focus Loss</string>
+    <string name="pause_on_focus_loss_desc">Pause when another app starts playing audio</string>
+    <string name="resume_on_focus_regain">Resume on Focus Regain</string>
+    <string name="resume_on_focus_regain_desc">Resume when the other audio stops and focus is available again</string>
 
     <!-- Fades -->
     <string name="crossfade">Crossfade</string>

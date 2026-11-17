@@ -58,6 +58,8 @@ object BackupJson {
         put("resumeOnStartup", settings.resumeOnStartup)
         put("resumeOnDeviceConnected", settings.resumeOnDeviceConnected)
         put("pauseOnDeviceDisconnected", settings.pauseOnDeviceDisconnected)
+        put("pauseOnFocusLoss", settings.pauseOnFocusLoss)
+        put("resumeOnFocusRegain", settings.resumeOnFocusRegain)
         put("iconStyles", JSONObject().apply {
             settings.iconStyles.forEach { (packId, style) -> put(packId, style.name) }
         })
@@ -154,6 +156,8 @@ object BackupJson {
         resumeOnStartup = json.optBoolean("resumeOnStartup", false),
         resumeOnDeviceConnected = json.optBoolean("resumeOnDeviceConnected", true),
         pauseOnDeviceDisconnected = json.optBoolean("pauseOnDeviceDisconnected", true),
+        pauseOnFocusLoss = json.optBoolean("pauseOnFocusLoss", true),
+        resumeOnFocusRegain = json.optBoolean("resumeOnFocusRegain", true),
         iconStyles = decodeIconStyleMap(json.optJSONObject("iconStyles")),
   iconPackId = json.optString("iconPackId", DEFAULT_ICON_PACK_ID),
         dynamicNavIcons = json.optBoolean("dynamicNavIcons", true),

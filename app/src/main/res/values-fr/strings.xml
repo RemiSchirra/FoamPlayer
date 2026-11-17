@@ -222,6 +222,10 @@
     <string name="resume_on_device_connected_desc">Reprendre automatiquement la lecture lorsqu\'un appareil audio est connecté</string>
     <string name="pause_on_device_disconnected">Mettre en pause à la déconnexion d\'un appareil</string>
     <string name="pause_on_device_disconnected_desc">Mettre automatiquement la lecture en pause lorsque l\'appareil audio utilisé est déconnecté</string>
+    <string name="pause_on_focus_loss">Mettre en pause à la perte du focus</string>
+    <string name="pause_on_focus_loss_desc">Mettre automatiquement la lecture en pause lorsqu\'une autre application prend le focus audio</string>
+    <string name="resume_on_focus_regain">Reprendre à la récupération du focus</string>
+    <string name="resume_on_focus_regain_desc">Reprendre automatiquement la lecture lorsque l\'audio interrompu s\'arrête et que le focus est de nouveau disponible</string>
 
     <!-- Fondus -->
     <string name="crossfade">Enchaînement fondu</string>
