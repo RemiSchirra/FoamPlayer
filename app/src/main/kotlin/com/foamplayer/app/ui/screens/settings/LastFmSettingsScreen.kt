@@ -41,6 +41,7 @@ import com.foamplayer.app.R
 import com.foamplayer.app.lastfm.LastFmCredentialSource
 import com.foamplayer.app.ui.components.FoamCard
 import com.foamplayer.app.ui.components.FoamSwitchItem
+import com.foamplayer.app.ui.components.Quote
 import com.foamplayer.app.ui.modals.LastFmCredentialsModal
 import com.foamplayer.app.ui.modals.LastFmImportChoiceModal
 import com.foamplayer.app.ui.modals.LastFmImportProgressModal
@@ -90,6 +91,13 @@ fun LastFmSettingsScreen(
             )
         ) {
             item {
+                Quote(
+                    text = stringResource(R.string.lastfm_disclaimer),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(FoamDimens.spacingMedium))
+
                 FoamCard(modifier = Modifier.fillMaxWidth()) {
                     ApiKeyRow(
                         title = stringResource(R.string.lastfm_api_key),

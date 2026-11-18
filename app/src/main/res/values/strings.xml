@@ -480,6 +480,7 @@
     <string name="lastfm_import_plays">×%1$d</string>
     <string name="lastfm_import_failed_title">Import failed</string>
     <string name="lastfm_import_failed_generic">Could not import your Last.fm history.</string>
+    <string name="lastfm_disclaimer">From 1 December 2026, FoamPlayer\'s native scrobbling will no longer be supported. To keep scrobbling, set up your own API key or use a third-party app such as the official Last.fm app.</string>
 
     <!-- Notification buttons -->
     <string name="notification_entry">Notification</string>

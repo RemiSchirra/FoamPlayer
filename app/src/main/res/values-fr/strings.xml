@@ -477,6 +477,7 @@
     <string name="lastfm_import_plays">×%1$d</string>
     <string name="lastfm_import_failed_title">Échec de l\'importation</string>
     <string name="lastfm_import_failed_generic">Impossible d\'importer votre historique Last.fm.</string>
+    <string name="lastfm_disclaimer">À partir du 1er décembre 2026, le scrobbling natif de FoamPlayer ne sera plus pris en charge. Pour continuer à scrobler, configurez votre propre clé API ou utilisez une application tierce comme l\'application Last.fm officielle.</string>
 
     <!-- Boutons de notification -->
     <string name="notification_entry">Notification</string>
