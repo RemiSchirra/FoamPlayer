@@ -2,6 +2,11 @@
     <string name="playback_channel_name">Lecture FoamPlayer</string>
     <string name="action_shuffle">Aléatoire</string>
     <string name="action_repeat">Répéter</string>
+    <string name="repeat_off">Répétition désactivée</string>
+    <string name="repeat_all">Tout répéter</string>
+    <string name="repeat_one">Répéter un titre</string>
+    <string name="shuffle_off">Aléatoire désactivé</string>
+    <string name="shuffle_on">Aléatoire activé</string>
     <string name="action_radio">Radio</string>
     <string name="play">Lecture</string>
     <string name="pause">Pause</string>
@@ -308,6 +313,7 @@
     <string name="cancel">Annuler</string>
 
     <string name="queue_shuffle">Mélanger la file d\'attente</string>
+    <string name="queue_randomize">Randomiser</string>
     <string name="queue_clear">Vider la file d\'attente</string>
 
     <!-- Play on (cast / appareils distants) -->

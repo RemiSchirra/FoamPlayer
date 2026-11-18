@@ -2539,25 +2539,33 @@ class AudioEngine @Inject constructor(
      * Toggles queue shuffle. Only effective in repeat-all: wrapping past the end (next) or the
      * start (previous) of the main queue reshuffles it (see [prepareWrapLanding]).
      */
-    fun toggleShuffle() {
-        val newShuffle = !_playbackState.value.isShuffle
+    fun toggleShuffle() = setShuffle(!_playbackState.value.isShuffle)
+
+    /** Sets queue shuffle on/off directly (the queue screen's mode picker). */
+    fun setShuffle(enabled: Boolean) {
+        if (_playbackState.value.isShuffle == enabled) return
         player.shuffleModeEnabled = false
         clearQueueShufflePending()
-        _playbackState.value = _playbackState.value.copy(isShuffle = newShuffle)
+        _playbackState.value = _playbackState.value.copy(isShuffle = enabled)
     }
 
     /** Cycles repeat mode: NONE -> ONE -> ALL. */
-    fun toggleRepeat() {
-        val nextMode = when (_playbackState.value.repeatMode) {
+    fun toggleRepeat() = setRepeatMode(
+        when (_playbackState.value.repeatMode) {
             RepeatMode.NONE -> RepeatMode.ONE
             RepeatMode.ONE -> RepeatMode.ALL
             RepeatMode.ALL -> RepeatMode.NONE
         }
-        player.repeatMode = playerRepeatMode(nextMode)
+    )
+
+    /** Sets the session repeat mode directly (the queue screen's mode picker). */
+    fun setRepeatMode(mode: RepeatMode) {
+        if (_playbackState.value.repeatMode == mode) return
+        player.repeatMode = playerRepeatMode(mode)
         // Repeat-one loops the item itself, so the pause-at-end signal must stay armed off.
         applyPauseAtEndOfMediaItems()
         clearQueueShufflePending()
-        _playbackState.value = _playbackState.value.copy(repeatMode = nextMode)
+        _playbackState.value = _playbackState.value.copy(repeatMode = mode)
     }
 
     /**

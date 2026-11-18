@@ -3,6 +3,11 @@
     <string name="playback_channel_name">FoamPlayer Playback</string>
     <string name="action_shuffle">Shuffle</string>
     <string name="action_repeat">Repeat</string>
+    <string name="repeat_off">Repeat off</string>
+    <string name="repeat_all">Repeat all</string>
+    <string name="repeat_one">Repeat one</string>
+    <string name="shuffle_off">Shuffle off</string>
+    <string name="shuffle_on">Shuffle on</string>
     <string name="action_radio">Radio</string>
     <string name="play">Play</string>
     <string name="pause">Pause</string>
@@ -309,6 +314,7 @@
     <string name="cancel">Cancel</string>
 
     <string name="queue_shuffle">Shuffle queue</string>
+    <string name="queue_randomize">Randomize</string>
     <string name="queue_clear">Clear queue</string>
 
     <!-- Play on (cast / remote devices) -->

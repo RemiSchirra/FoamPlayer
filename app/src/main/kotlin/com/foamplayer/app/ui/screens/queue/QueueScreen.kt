@@ -2,7 +2,7 @@ package com.foamplayer.app.ui.screens.queue
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -21,6 +21,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,14 +38,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -64,7 +73,8 @@ import com.foamplayer.app.ui.utils.TimeUtils
  * Mutations go through the engine by entry id. The header row acts on the
  * whole upcoming list: reshuffle it (auxiliary slots included are swapped for
  * fresh random tracks) or clear it (the auxiliary pool refills itself right
- * away).
+ * away). The repeat and shuffle toggles open their mode pickers on long press:
+ * a small modal scaled in from the pressed button listing every mode.
  *
  * Row gestures: tap plays the entry now; swiping right locks at the max
  * travel and on release springs back and plays the track next (auxiliary rows
@@ -181,6 +191,65 @@ fun QueueScreen(
         }
     }
 
+    // The header's mode-picker modal: which toggle opened it plus the pressed button's
+    // center (in the window's root coordinates) so the modal scales in from the button.
+    var modeModalRequest by remember { mutableStateOf<QueueModeModalRequest?>(null) }
+
+    // Options of the open mode picker: repeat (off/all/one) or shuffle (off/on). Built
+    // here so the overlay stays presentation-only; a handful of rows, rebuilt per
+    // recomposition is fine.
+    val modeModalOptions = when (modeModalRequest?.type) {
+        QueueModeModalType.REPEAT -> listOf(
+            QueueModeOption(
+                icon = FoamTheme.icons.current.repeat,
+                label = stringResource(R.string.repeat_off),
+                isSelected = state.repeatMode == RepeatMode.NONE,
+                isDimmed = true,
+                onSelect = { viewModel.setRepeatMode(RepeatMode.NONE) }
+            ),
+            QueueModeOption(
+                icon = FoamTheme.icons.current.repeat,
+                label = stringResource(R.string.repeat_all),
+                isSelected = state.repeatMode == RepeatMode.ALL,
+                onSelect = { viewModel.setRepeatMode(RepeatMode.ALL) }
+            ),
+            QueueModeOption(
+                icon = FoamTheme.icons.current.repeatOne,
+                label = stringResource(R.string.repeat_one),
+                isSelected = state.repeatMode == RepeatMode.ONE,
+                onSelect = { viewModel.setRepeatMode(RepeatMode.ONE) }
+            )
+        )
+        QueueModeModalType.SHUFFLE -> listOf(
+            QueueModeOption(
+                icon = FoamTheme.icons.current.shuffle,
+                label = stringResource(R.string.shuffle_off),
+                isSelected = !state.isShuffle,
+                isDimmed = true,
+                onSelect = { viewModel.setShuffle(false) }
+            ),
+            QueueModeOption(
+                icon = FoamTheme.icons.current.shuffle,
+                label = stringResource(R.string.shuffle_on),
+                isSelected = state.isShuffle,
+                onSelect = { viewModel.setShuffle(true) }
+            )
+        )
+        null -> emptyList()
+    }
+
+    // The shuffle modal's trailing action (after a separator): reshuffles the
+    // upcoming list once. The repeat modal keeps no trailing action.
+    val modeModalAction = if (modeModalRequest?.type == QueueModeModalType.SHUFFLE) {
+        QueueModeAction(
+            icon = Icons.Rounded.Casino,
+            label = stringResource(R.string.queue_randomize),
+            onSelect = { viewModel.shuffleUpcoming() }
+        )
+    } else {
+        null
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -193,6 +262,9 @@ fun QueueScreen(
             isShuffle = state.isShuffle,
             onToggleShuffle = viewModel::toggleShuffle,
             onToggleRepeat = viewModel::toggleRepeat,
+            onOpenModeModal = { type, anchor ->
+                modeModalRequest = QueueModeModalRequest(type, anchor)
+            },
             onRandomize = viewModel::shuffleUpcoming,
             onClear = viewModel::clearUpcoming,
             modifier = Modifier.fillMaxWidth()
@@ -308,14 +380,27 @@ fun QueueScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Rendered in its own window, so composition placement doesn't matter. The
+        // dialog window is full-screen and edge-to-edge like the activity, so the
+        // activity view's size IS the dialog root's size: the modal's resting
+        // position (and with it the scale-in origin) is derived from it.
+        QueueModeModalOverlay(
+            request = modeModalRequest,
+            options = modeModalOptions,
+            action = modeModalAction,
+            rootSize = IntSize(LocalView.current.width, LocalView.current.height),
+            onDismiss = { modeModalRequest = null }
+        )
     }
 }
 
 /**
  * Header row of the queue subview: "Queue" with the main queue's stats under it
  * (track count and total duration on one line, auxiliary entries excluded) on
- * the left; on the right the repeat and shuffle mode toggles, the randomize (dice)
- * button that reshuffles the upcoming list once, and the clear button.
+ * the left; on the right the repeat and shuffle mode toggles — long press opens
+ * their mode pickers, reported with the pressed button's center — the randomize
+ * (dice) button that reshuffles the upcoming list once, and the clear button.
  */
 @Composable
 private fun QueueHeaderRow(
@@ -324,6 +409,7 @@ private fun QueueHeaderRow(
     isShuffle: Boolean,
     onToggleShuffle: () -> Unit,
     onToggleRepeat: () -> Unit,
+    onOpenModeModal: (QueueModeModalType, Offset) -> Unit,
     onRandomize: () -> Unit, // Unused but can be used to randomize the queue
     onClear: () -> Unit,
     modifier: Modifier = Modifier
@@ -356,13 +442,15 @@ private fun QueueHeaderRow(
             },
             contentDescription = stringResource(R.string.action_repeat),
             isDimmed = repeatMode == RepeatMode.NONE,
-            onClick = onToggleRepeat
+            onClick = onToggleRepeat,
+            onLongClick = { anchor -> onOpenModeModal(QueueModeModalType.REPEAT, anchor) }
         )
         QueueHeaderButton(
             icon = FoamTheme.icons.current.shuffle,
             contentDescription = "Shuffle",
             isDimmed = !isShuffle,
-            onClick = onToggleShuffle
+            onClick = onToggleShuffle,
+            onLongClick = { anchor -> onOpenModeModal(QueueModeModalType.SHUFFLE, anchor) }
         )
         QueueHeaderButton(
             icon = FoamTheme.icons.current.close,
@@ -372,24 +460,40 @@ private fun QueueHeaderRow(
     }
 }
 
-/** Small circular icon button with a bounded ripple; [isDimmed] marks a toggle that is off. */
+/**
+ * Small circular icon button with a bounded ripple; [isDimmed] marks a toggle that is off.
+ * [onLongClick] (the header's mode pickers) fires with the button's center in the
+ * window's root coordinates so the modal can scale in from the pressed button.
+ */
 @Composable
 private fun QueueHeaderButton(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    isDimmed: Boolean = false
+    isDimmed: Boolean = false,
+    onLongClick: ((Offset) -> Unit)? = null
 ) {
     val buttonInteractions = remember { MutableInteractionSource() }
+    val hapticFeedback = LocalHapticFeedback.current
+    // Center of the button in the window's root coordinates; read when the long press
+    // fires (the mode picker's scale-in origin).
+    var buttonCenter by remember { mutableStateOf(Offset.Zero) }
 
     Box(
         modifier = modifier
             .clip(CircleShape)
-            .clickable(
+            .onGloballyPositioned { buttonCenter = it.boundsInRoot().center }
+            .combinedClickable(
                 interactionSource = buttonInteractions,
                 indication = ripple(color = FoamTheme.colors.textPrimary),
-                onClick = onClick
+                onClick = onClick,
+                onLongClick = onLongClick?.let { handler ->
+                    {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        handler(buttonCenter)
+                    }
+                }
             )
             .padding(10.dp),
         contentAlignment = Alignment.Center

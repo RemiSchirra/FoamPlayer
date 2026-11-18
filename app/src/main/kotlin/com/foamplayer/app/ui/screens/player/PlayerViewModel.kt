@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.foamplayer.app.audio.cast.ChromecastController
 import com.foamplayer.app.audio.engine.AudioEngine
 import com.foamplayer.app.audio.engine.PlaybackState
+import com.foamplayer.app.audio.engine.RepeatMode
 import com.foamplayer.app.audio.dsp.PresetAssignments
 import com.foamplayer.app.constants.CollectionSortMode
 import com.foamplayer.app.constants.MediaDensity
@@ -338,6 +339,12 @@ class PlayerViewModel @Inject constructor(
     /** The full player's hero pager came to rest on the playing page: queue shuffle may reorder now. */
     fun onHeroPagerRested() = audioEngine.onHeroPagerRested()
     fun toggleRepeat() = audioEngine.toggleRepeat()
+
+    /** Queue-screen mode picker: sets shuffle on/off directly. */
+    fun setShuffle(enabled: Boolean) = audioEngine.setShuffle(enabled)
+
+    /** Queue-screen mode picker: sets the session repeat mode directly. */
+    fun setRepeatMode(mode: RepeatMode) = audioEngine.setRepeatMode(mode)
 
     // Track details modal: the queue entities held in PlaybackState are snapshots and go
     // stale as soon as the DB row changes (play count, last-listen date, ...). Re-read the
