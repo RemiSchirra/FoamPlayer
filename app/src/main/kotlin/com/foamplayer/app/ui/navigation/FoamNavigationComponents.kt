@@ -109,10 +109,10 @@ private val NavBarSlotDpAnimation = tween<Dp>(FoamMotion.Duration.STANDARD, easi
 private const val NavBarBubbleAlpha = 0.15f
 
 /** How much the bubble mode's selection pill grows while it is dragged. */
-private const val NavBarBubbleDragScale = 1.12f
+private const val NavBarBubbleDragScale = 1.08f
 
 /** Max extra width (fraction) the bubble gains when it moves horizontally at full speed. */
-private const val NavBarBubbleStretchX = 0.3f
+private const val NavBarBubbleStretchX = 0.2f
 
 /** Max extra height (fraction) the bubble gains when it moves vertically at full speed. */
 private const val NavBarBubbleStretchY = 0.2f
@@ -121,7 +121,7 @@ private const val NavBarBubbleStretchY = 0.2f
 private const val NavBarBubbleFullSpeedX = 10f
 private const val NavBarBubbleFullSpeedY = 7f
 
-/** Smoothing time constants (s): the bubble chasing the finger eases from a slow catch-up to a tight follow. */
+/** Smoothing time constants : the bubble chasing the finger eases from a slow catch-up to a tight follow. */
 private const val NavBarBubbleCatchUpTau = 0.11f
 private const val NavBarBubbleFollowTau = 0.045f
 private const val NavBarBubbleStretchTau = 0.06f
@@ -1029,6 +1029,10 @@ private class NavBarBubbleController(
     var stretchX by mutableFloatStateOf(0f)
     var stretchY by mutableFloatStateOf(0f)
 
+    /** Last movement direction on screen (+1 = right / down, -1 = left / up); the opposite (trailing) side is the one that stretches. */
+    var stretchDirX by mutableFloatStateOf(1f)
+    var stretchDirY by mutableFloatStateOf(1f)
+
     /** True while the finger holds the bubble; drives the scale-up. */
     var dragging by mutableStateOf(false)
 
@@ -1132,8 +1136,13 @@ private class NavBarBubbleController(
                 val blend = drawnBlend()
                 val span = (mainCenterY(columnHeightPx) - extraCenterY(expandFraction.coerceIn(0f, 1f)))
                     .coerceAtLeast(0f)
-                val speedX = abs(x - prevX) / dt
-                val speedY = abs(blend - prevBlend) * span / dt
+                val dx = x - prevX
+                val dyScreen = -(blend - prevBlend) * span
+                val speedX = abs(dx) / dt
+                val speedY = abs(dyScreen) / dt
+                val unitDir = itemHeightPx.coerceAtLeast(1f)
+                if (speedX > 0.5f * unitDir) stretchDirX = if (dx >= 0f) 1f else -1f
+                if (speedY > 0.5f * unitDir) stretchDirY = if (dyScreen >= 0f) 1f else -1f
                 prevX = x
                 prevBlend = blend
 
@@ -1267,20 +1276,26 @@ private class NavBarBubbleController(
         val centerX = edgePx + if (dragging) dragCenterX else xFraction.value * rowW
         val centerY = blendPx(mainCenterY(size.height), extraCenterY(expand), blend)
         val scale = scaleAnim.value * presence
-        val w = width * scale * (1f + stretchX)
-        val h = itemHeightPx * scale * (1f + stretchY)
+        val baseW = width * scale
+        val baseH = itemHeightPx * scale
+        val extraW = baseW * stretchX
+        val extraH = baseH * stretchY
 
+        // Only the trailing side stretches; the leading edge stays on the unstretched bubble.
         // A stretched bubble stays inside the surface, half an edge padding from its sides.
         val inset = edgePx / 2
-        val left = (centerX - w / 2).coerceAtLeast(inset)
-        val right = (centerX + w / 2).coerceAtMost(size.width - inset)
+        val left = (centerX - baseW / 2 - extraW * maxOf(stretchDirX, 0f)).coerceAtLeast(inset)
+        val right = (centerX + baseW / 2 + extraW * maxOf(-stretchDirX, 0f)).coerceAtMost(size.width - inset)
         if (right <= left) return
+        val top = centerY - baseH / 2 - extraH * maxOf(stretchDirY, 0f)
+        val bottom = centerY + baseH / 2 + extraH * maxOf(-stretchDirY, 0f)
+        val h = bottom - top
 
         drawRoundRect(
             color = color.copy(alpha = color.alpha * alpha),
-            topLeft = Offset(left, centerY - h / 2),
+            topLeft = Offset(left, top),
             size = Size(right - left, h),
-            cornerRadius = CornerRadius(h / 2)
+            cornerRadius = CornerRadius(minOf(h, right - left) / 2)
         )
     }
 }
@@ -1360,8 +1375,9 @@ private fun rememberNavBarBubble(
         val item = (if (row == BubbleRow.Main) mainList else extraList).getOrNull(index)
         if (item != null) {
             if (item == NavBarItem.MORE) {
-                // A drag that already opened the extra row must not close it again.
-                if (!autoOpened) onToggleExpand()
+                // Releasing on "more" always toggles. If this drag auto-opened the
+                // extra row on hover, the release closes it again.
+                onToggleExpand()
             } else {
                 val screen = item.targetScreen()
                 // Dropping on the already-selected item is a no-op:
@@ -1439,7 +1455,7 @@ fun FoamNavigationBar(
         onNavigate = onNavigate,
         onToggleExpand = onToggleExpand
     )
-    val bubbleColor = FoamTheme.colors.textPrimary.copy(alpha = NavBarBubbleAlpha)
+    val bubbleColor = FoamTheme.accentColor.copy(alpha = NavBarBubbleAlpha)
 
     // Fixed footprint: the extra row expands upwards as an overlay
     Box(
@@ -1590,7 +1606,7 @@ internal fun FloatingNavigationBar(
         onNavigate = onNavigate,
         onToggleExpand = onToggleExpand
     )
-    val bubbleColor = FoamTheme.colors.textPrimary.copy(alpha = NavBarBubbleAlpha)
+    val bubbleColor = FoamTheme.accentColor.copy(alpha = NavBarBubbleAlpha)
 
     // Measured top of the pill, used with the card's top to size the attached extension
     var pillTopPx by remember { mutableStateOf(Float.NaN) }
