@@ -208,6 +208,12 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.FOLLOW_SYSTEM,
     val navigationBarMode: NavigationBarMode = NavigationBarMode.ATTACHED,
     val navBarTransparentWhenPlayerOpen: Boolean = false,
+    /**
+     * Bubble mode of the nav bar: replaces each item's ripple with a
+     * semi-transparent pill that slides to the selected item and can be
+     * dragged to navigate (Settings > User interface > Navigation bar).
+     */
+    val navBarBubbleMode: Boolean = true,
     val navBarPrimaryOrder: List<NavBarItem> = DefaultNavBarPrimaryOrder,
     val navBarPrimaryEnabled: Set<NavBarItem> = DefaultNavBarPrimaryEnabled,
     val navBarSecondaryOrder: List<NavBarItem> = DefaultNavBarSecondaryOrder,

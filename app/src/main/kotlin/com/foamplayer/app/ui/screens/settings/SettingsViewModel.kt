@@ -290,6 +290,11 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setNavBarTransparentWhenPlayerOpen(enabled)
     }
 
+    /** Persists whether the navbar renders the draggable selection bubble instead of ripples. */
+    fun setNavBarBubbleMode(enabled: Boolean) = launch {
+        settingsRepository.setNavBarBubbleMode(enabled)
+    }
+
     fun setNavBarPrimaryOrder(order: List<NavBarItem>) = launch {
         settingsRepository.setNavBarPrimaryOrder(order)
     }

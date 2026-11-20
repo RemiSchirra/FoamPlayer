@@ -151,6 +151,7 @@
     <string name="navbar_mode_floating">Floating</string>
     <string name="navbar_mode_attached">Attached</string>
     <string name="transparent_when_player_open">Transparent when player open</string>
+    <string name="bubble_mode">Bubble mode</string>
     <string name="navbar_main_bar">Main Bar</string>
     <string name="navbar_main_bar_desc">Drag to reorder and show or hide items</string>
     <string name="navbar_second_bar">Second Bar</string>

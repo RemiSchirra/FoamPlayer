@@ -156,7 +156,8 @@ internal fun BoxScope.FoamBottomChrome(
                         inactiveVariant = settings.navIconInactiveVariant,
                         connectToMiniPlayer = hasCurrentTrack,
                         expandFraction = navBarExpandFraction,
-                        onToggleExpand = onToggleNavBarExpand
+                        onToggleExpand = onToggleNavBarExpand,
+                        bubbleMode = settings.navBarBubbleMode
                     )
                 }
                 NavigationBarMode.FLOATING -> Box(
@@ -178,7 +179,8 @@ internal fun BoxScope.FoamBottomChrome(
                         transitionAnimated = isTransitionAnimated,
                         navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
                         expandFraction = navBarExpandFraction,
-                        onToggleExpand = onToggleNavBarExpand
+                        onToggleExpand = onToggleNavBarExpand,
+                        bubbleMode = settings.navBarBubbleMode
                     )
                 }
                 NavigationBarMode.ATTACHED -> Box(
@@ -203,7 +205,8 @@ internal fun BoxScope.FoamBottomChrome(
                         cardPresenceFraction = cardPresenceFraction,
                         navBarTransparentWhenPlayerOpen = navBarTransparentWhenPlayerOpen,
                         expandFraction = navBarExpandFraction,
-                        onToggleExpand = onToggleNavBarExpand
+                        onToggleExpand = onToggleNavBarExpand,
+                        bubbleMode = settings.navBarBubbleMode
                     )
                 }
             }

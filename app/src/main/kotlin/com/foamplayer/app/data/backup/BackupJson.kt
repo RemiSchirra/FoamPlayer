@@ -105,6 +105,7 @@ object BackupJson {
         put("themeMode", settings.themeMode.name)
         put("navigationBarMode", settings.navigationBarMode.name)
         put("navBarTransparentWhenPlayerOpen", settings.navBarTransparentWhenPlayerOpen)
+        put("navBarBubbleMode", settings.navBarBubbleMode)
         put("navBarPrimaryOrder", toNamesArray(settings.navBarPrimaryOrder))
         put("navBarPrimaryEnabled", toNamesArray(settings.navBarPrimaryEnabled))
         put("navBarSecondaryOrder", toNamesArray(settings.navBarSecondaryOrder))
@@ -231,6 +232,7 @@ object BackupJson {
         themeMode = decodeEnum(json.optString("themeMode"), ThemeMode.FOLLOW_SYSTEM),
         navigationBarMode = decodeEnum(json.optString("navigationBarMode"), NavigationBarMode.ATTACHED),
         navBarTransparentWhenPlayerOpen = json.optBoolean("navBarTransparentWhenPlayerOpen", false),
+        navBarBubbleMode = json.optBoolean("navBarBubbleMode", false),
         navBarPrimaryOrder = decodeEnumList(json.optJSONArray("navBarPrimaryOrder")),
         navBarPrimaryEnabled = decodeEnumSet(
             json.optJSONArray("navBarPrimaryEnabled"),

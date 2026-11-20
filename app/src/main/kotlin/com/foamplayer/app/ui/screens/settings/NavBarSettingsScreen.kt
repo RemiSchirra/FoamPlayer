@@ -195,15 +195,14 @@ fun NavBarSettingsScreen(
                                 onCheckedChange = { viewModel.setNavBarTransparentWhenPlayerOpen(it) },
                                 verticalPadding = FoamDimens.spacingMedium
                             )
-                            // Flush divider: SettingsSectionDivider adds its own vertical
-                            // spacing, which made the dynamic-icons row sit taller than
-                            // the row above it.
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(1.dp)
-                                    .background(FoamTheme.colors.textSecondary.copy(alpha = 0.12f))
+                            SettingsSectionDivider()
+                            FoamSwitchItem(
+                                title = stringResource(R.string.bubble_mode),
+                                checked = settings.navBarBubbleMode,
+                                onCheckedChange = { viewModel.setNavBarBubbleMode(it) },
+                                verticalPadding = FoamDimens.spacingTiny
                             )
+                            SettingsSectionDivider()
                             FoamSwitchItem(
                                 title = stringResource(R.string.dynamic_icons),
                                 checked = settings.dynamicNavIcons,

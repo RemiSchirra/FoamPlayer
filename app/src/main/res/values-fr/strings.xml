@@ -150,6 +150,7 @@
     <string name="navbar_mode_floating">Flottante</string>
     <string name="navbar_mode_attached">Attachée</string>
     <string name="transparent_when_player_open">Transparent quand le lecteur est ouvert</string>
+    <string name="bubble_mode">Mode bulle</string>
     <string name="navbar_main_bar">Barre principale</string>
     <string name="navbar_main_bar_desc">Glisser pour réordonner et afficher ou masquer les éléments</string>
     <string name="navbar_second_bar">Barre secondaire</string>
