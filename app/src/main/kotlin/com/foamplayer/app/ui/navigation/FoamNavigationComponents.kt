@@ -108,6 +108,12 @@ private val NavBarSlotDpAnimation = tween<Dp>(FoamMotion.Duration.STANDARD, easi
 /** Alpha of the bubble mode's selection pill (semi-transparent textPrimary). */
 private const val NavBarBubbleAlpha = 0.15f
 
+/**
+ * Alpha of the dark strip over the docked bar's nav-bar-inset region — the part
+ * of the surface that sits under the system action buttons (back, home, ...).
+ */
+private const val DockedInsetScrimAlpha = 0.3f
+
 /** How much the bubble mode's selection pill grows while it is dragged. */
 private const val NavBarBubbleDragScale = 1.08f
 
@@ -297,10 +303,12 @@ object NavBarDimens {
     val DockedBarHeight = DockedRowHeight + DockedConnector
 
     /**
-     * Gap below the icon row, on top of the system inset. The surface still runs
-     * down through it to the screen bottom.
+     * Extra surface below the icon row, on top of the system inset. Zero, so the
+     * row's visible bottom padding matches its top ([ButtonSurroundPadding]):
+     * in DOCKED mode the surface runs down through this and the system inset to
+     * the screen bottom, so any value here reads as padding under the buttons.
      */
-    val DockedBarBottomMargin = 4.dp
+    val DockedBarBottomMargin = 0.dp
 
     // ---- Floating / attached bar ----------------------------------------------
     val FloatingRowHeight = ItemHitTargetSize + ButtonSurroundPadding * 2
@@ -1438,6 +1446,9 @@ fun FoamNavigationBar(
 ) {
     // Tint is resolved at draw time to keep accent frames draw-only
     val surfaceColor = FoamTheme.colors.surface
+    // Base of the inset darkening strip: FoamTheme.tintedBackground read in
+    // composition, then scaled down at draw time by [DockedInsetScrimAlpha].
+    val scrimBase = FoamTheme.tintedBackground
     val accentTint = LocalAccentTintState.current
     val density = LocalDensity.current
     val navBarBottomInsetPx = WindowInsets.navigationBars.getBottom(density)
@@ -1483,15 +1494,20 @@ fun FoamNavigationBar(
                 .shadow(elevation = 6.dp, shape = RectangleShape, clip = false)
                 .drawBehind {
                     // Surface runs down through the bottom margin and system inset
+                    val surfaceBottom = size.height +
+                            navBarBottomInsetPx +
+                            NavBarDimens.DockedBarBottomMargin.toPx()
                     drawRect(
                         color = accentTint.resolve(surfaceColor, SurfaceAccentTint),
-                        size = Size(
-                            width = size.width,
-                            height = size.height +
-                                    navBarBottomInsetPx +
-                                    NavBarDimens.DockedBarBottomMargin.toPx()
-                        )
+                        size = Size(width = size.width, height = surfaceBottom)
                     )
+                    if (navBarBottomInsetPx > 0) {
+                        drawRect(
+                            color = scrimBase.copy(alpha = scrimBase.alpha * DockedInsetScrimAlpha),
+                            topLeft = Offset(0f, surfaceBottom - navBarBottomInsetPx),
+                            size = Size(width = size.width, height = navBarBottomInsetPx.toFloat())
+                        )
+                    }
                     // Selection bubble: above the surface, behind the icons
                     bubble?.let { with(it) { drawBubble(bubbleColor) } }
                 },
