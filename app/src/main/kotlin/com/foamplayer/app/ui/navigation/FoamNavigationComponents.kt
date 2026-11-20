@@ -987,6 +987,7 @@ private class NavBarBubbleController(
 ) {
     // ---- Geometry & callbacks, refreshed by rememberNavBarBubble on every recomposition ----
     var expandFraction: Float = 0f
+    var playerClosedFraction: () -> Float = { 1f }
     var edgePx = 0f
     var itemHeightPx = 0f
     var minSlotPx = 0f
@@ -1258,7 +1259,7 @@ private class NavBarBubbleController(
         val expand = expandFraction.coerceIn(0f, 1f)
         // The extra row's targets scale/fade with its expansion; so does the bubble on it.
         val presence = 1f + (expand - 1f) * blend
-        val alpha = alphaAnim.value * presence
+        val alpha = alphaAnim.value * presence * playerClosedFraction()
         if (alpha <= 0.001f) return
 
         val rowW = size.width - 2 * edgePx
@@ -1300,6 +1301,7 @@ private fun rememberNavBarBubble(
     secondaryEnabled: Set<NavBarItem>,
     mainRowHeight: Dp,
     expandFraction: Float,
+    playerClosedFraction: () -> Float = { 1f },
     onNavigate: (String) -> Unit,
     onToggleExpand: () -> Unit
 ): NavBarBubbleController? {
@@ -1339,6 +1341,7 @@ private fun rememberNavBarBubble(
 
     with(density) {
         controller.expandFraction = expandFraction
+        controller.playerClosedFraction = playerClosedFraction
         controller.edgePx = NavBarDimens.RowEdgePadding.toPx()
         controller.itemHeightPx = NavBarDimens.ItemHitTargetSize.toPx()
         controller.minSlotPx = NavBarDimens.ItemHitTargetSize.toPx()
@@ -1432,6 +1435,7 @@ fun FoamNavigationBar(
         secondaryEnabled = secondaryEnabled,
         mainRowHeight = NavBarDimens.DockedBarHeight,
         expandFraction = expandFraction,
+        playerClosedFraction = playerClosedFraction,
         onNavigate = onNavigate,
         onToggleExpand = onToggleExpand
     )
@@ -1582,6 +1586,7 @@ internal fun FloatingNavigationBar(
         secondaryEnabled = secondaryEnabled,
         mainRowHeight = NavBarDimens.FloatingRowHeight,
         expandFraction = expandFraction,
+        playerClosedFraction = playerClosedFraction,
         onNavigate = onNavigate,
         onToggleExpand = onToggleExpand
     )
