@@ -108,10 +108,10 @@ internal fun BoxScope.FoamBottomChrome(
             trackListTransitionTrackId == null &&
             centerTrackRequest == null
     // The mini player must enter and exit under the nav bar, whether it fades itself
-    // (expanding container) or is faded and slid by the host.
-    val navAboveMiniPlayer = isTransitionAnimated &&
-            navigationBarMode != NavigationBarMode.ATTACHED &&
-            (transition.currentState || transition.targetState)
+    // (expanding container) or is faded and slid by the host — and stay under it at
+    // rest too, so the card's drop shadow never falls onto the bar. In ATTACHED mode
+    // the card sinks into the bar's surface extension, so it stays on top.
+    val navAboveMiniPlayer = navigationBarMode != NavigationBarMode.ATTACHED
 
     // Nav bar + mini player overlay, hidden on onboarding.
     if (currentRoute != Screen.Onboarding.route) {
