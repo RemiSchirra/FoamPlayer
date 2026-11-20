@@ -39,6 +39,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -82,8 +83,10 @@ import com.foamplayer.app.ui.theme.SurfaceAccentTint
 import com.foamplayer.app.ui.theme.SurfaceVariantAccentTint
 import com.foamplayer.app.ui.utils.consumeTaps
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /** Elevation of both bars' drop shadow. */
@@ -107,6 +110,21 @@ private const val NavBarBubbleAlpha = 0.15f
 
 /** How much the bubble mode's selection pill grows while it is dragged. */
 private const val NavBarBubbleDragScale = 1.12f
+
+/** Max extra width (fraction) the bubble gains when it moves horizontally at full speed. */
+private const val NavBarBubbleStretchX = 0.3f
+
+/** Max extra height (fraction) the bubble gains when it moves vertically at full speed. */
+private const val NavBarBubbleStretchY = 0.2f
+
+/** Speeds (in item heights per second) at which the stretch reaches its maximum. */
+private const val NavBarBubbleFullSpeedX = 10f
+private const val NavBarBubbleFullSpeedY = 7f
+
+/** Smoothing time constants (s): the bubble chasing the finger eases from a slow catch-up to a tight follow. */
+private const val NavBarBubbleCatchUpTau = 0.11f
+private const val NavBarBubbleFollowTau = 0.045f
+private const val NavBarBubbleStretchTau = 0.06f
 
 /** Slot width shared by the item rows and the bubble: slots spread over the enabled items when there's room. */
 private fun navSlotWidth(maxWidth: Dp, slotCount: Int, itemWidth: Dp, stretchBetweenItems: Boolean): Dp =
@@ -261,9 +279,16 @@ val LocalSearchFocusRequest = compositionLocalOf { SearchFocusRequest() }
 /** Geometry of the nav bar and the mini player. */
 object NavBarDimens {
 
+    // ---- Metrics that size the rows (declared first: later vals are built from them) ----
+    /** Hit target height (Material's 48dp minimum), and its width in a packed row. */
+    val ItemHitTargetSize = 48.dp
+
+    /** Room between a nav button's hit target and the bar's edges, equal on all sides. */
+    val ButtonSurroundPadding = 8.dp
+
     // ---- Docked bar -----------------------------------------------------------
-    /** Icon row height, with 4dp slack around each hit target. */
-    val DockedRowHeight = 56.dp
+    /** Icon row height: the hit target plus [ButtonSurroundPadding] above and below. */
+    val DockedRowHeight = ItemHitTargetSize + ButtonSurroundPadding * 2
 
     /** Extra surface above the icon row. Zero, kept to tune the bar height in one place. */
     val DockedConnector = 0.dp
@@ -278,7 +303,7 @@ object NavBarDimens {
     val DockedBarBottomMargin = 4.dp
 
     // ---- Floating / attached bar ----------------------------------------------
-    val FloatingRowHeight = 56.dp
+    val FloatingRowHeight = ItemHitTargetSize + ButtonSurroundPadding * 2
 
     /** Margin around the pill's sides and top. */
     val FloatingBarMargin = 12.dp
@@ -322,9 +347,6 @@ object NavBarDimens {
     /** Hit padding for the extra row's items. */
     val ItemHitAreaPadding = 6.dp
 
-    /** Hit target height (Material's 48dp minimum), and its width in a packed row. */
-    val ItemHitTargetSize = 48.dp
-
     /** Widest a hit target stretches when its row has room. */
     val ItemHitTargetMaxWidth = 72.dp
 
@@ -332,7 +354,7 @@ object NavBarDimens {
     val ItemHitTargetPadding = (ItemHitTargetSize - ItemIconSize) / 2
 
     /** Padding between the edge buttons and the container edges, equal on all sides. */
-    val RowEdgePadding = (FloatingRowHeight - ItemHitTargetSize) / 2
+    val RowEdgePadding = ButtonSurroundPadding
 
     // ---- Expandable extra row ---------------------------------------------------
     /** Tighter hit padding for the extra row's icons. */
@@ -950,9 +972,10 @@ private fun blendPx(from: Float, to: Float, fraction: Float): Float = from + (to
  *
  * Gestures:
  * - Selection change: slides to the selected item, switching row if needed.
- * - Drag (any direction, anywhere on the bar): the bubble follows the finger in X
- *   and, once the extra row is open, in Y too (clamped between the two row centers),
- *   so it glides between the rows instead of snapping to one of them.
+ * - Drag (any direction, anywhere on the bar): the bubble slides from where it is to
+ *   the finger, then keeps chasing it with a light smoothing, in X and (once the extra
+ *   row is open) in Y, clamped between the two row centers. While it moves it stretches:
+ *   wider with horizontal speed, taller with vertical speed.
  * - Hovering the "more" item while the extra row is closed opens it.
  * - Release: settles on the closest item of the closest row and navigates to it.
  */
@@ -995,11 +1018,15 @@ private class NavBarBubbleController(
     val alphaAnim = Animatable(if (initialVisible) 1f else 0f)
     val scaleAnim = Animatable(1f)
 
-    /** Bubble center X (px, row frame) while the finger holds it. */
+    /** Displayed (smoothed) bubble center X (px, row frame) while the finger holds it. */
     var dragCenterX by mutableFloatStateOf(0f)
 
-    /** Vertical position while the finger holds the bubble: 0 = main row center, 1 = extra row center. */
+    /** Displayed (smoothed) vertical position while dragging: 0 = main row center, 1 = extra row center. */
     var dragBlend by mutableFloatStateOf(0f)
+
+    /** Transient stretch from the bubble's speed (fractions of its size, >= 0). */
+    var stretchX by mutableFloatStateOf(0f)
+    var stretchY by mutableFloatStateOf(0f)
 
     /** True while the finger holds the bubble; drives the scale-up. */
     var dragging by mutableStateOf(false)
@@ -1011,6 +1038,12 @@ private class NavBarBubbleController(
     private var holdPosition = false
     private var autoOpened = false
     private var settleJob: Job? = null
+    private var motionJob: Job? = null
+
+    /** What the finger asks for: row-frame X (px) and row blend. The displayed values chase these. */
+    private var targetX = 0f
+    private var targetBlend = 0f
+    private var dragElapsed = 0f
 
     private val rowWidthPx: Float get() = (columnWidthPx - 2 * edgePx).coerceAtLeast(0f)
 
@@ -1062,40 +1095,95 @@ private class NavBarBubbleController(
         val target = fractionOf(row, selectedIndex)
         scope.launch { xFraction.animateTo(target, NavBarSlotAnimation) }
         scope.launch { rowBlend.animateTo(rowValue(row), NavBarSlotAnimation) }
+        ensureMotionLoop()
+    }
+
+    /** Position the bubble is currently drawn at (row-frame X in px, row blend). */
+    private fun drawnX(): Float = if (dragging) dragCenterX else xFraction.value * rowWidthPx
+    private fun drawnBlend(): Float = (if (dragging) dragBlend else rowBlend.value).coerceIn(0f, 1f)
+
+    /**
+     * Per-frame loop that runs while the bubble moves: it eases the displayed drag position
+     * toward the finger and turns the bubble's speed into a stretch (see [stretchX]/[stretchY]).
+     * Ends once the bubble is at rest.
+     */
+    private fun ensureMotionLoop() {
+        if (motionJob?.isActive == true) return
+        motionJob = scope.launch {
+            var lastNanos = withFrameNanos { it }
+            var prevX = drawnX()
+            var prevBlend = drawnBlend()
+            while (true) {
+                val now = withFrameNanos { it }
+                val dt = ((now - lastNanos) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
+                lastNanos = now
+
+                if (dragging) {
+                    dragElapsed += dt
+                    // Slow catch-up right after the grab (the slide to the finger), then tighter.
+                    val tau = (NavBarBubbleCatchUpTau - 0.4f * dragElapsed).coerceAtLeast(NavBarBubbleFollowTau)
+                    val k = 1f - exp(-dt / tau)
+                    dragCenterX += (targetX - dragCenterX) * k
+                    dragBlend += (targetBlend - dragBlend) * k
+                }
+
+                val x = drawnX()
+                val blend = drawnBlend()
+                val span = (mainCenterY(columnHeightPx) - extraCenterY(expandFraction.coerceIn(0f, 1f)))
+                    .coerceAtLeast(0f)
+                val speedX = abs(x - prevX) / dt
+                val speedY = abs(blend - prevBlend) * span / dt
+                prevX = x
+                prevBlend = blend
+
+                val unit = itemHeightPx.coerceAtLeast(1f)
+                val goalX = (speedX / (NavBarBubbleFullSpeedX * unit)).coerceIn(0f, 1f) * NavBarBubbleStretchX
+                val goalY = (speedY / (NavBarBubbleFullSpeedY * unit)).coerceIn(0f, 1f) * NavBarBubbleStretchY
+                val ks = 1f - exp(-dt / NavBarBubbleStretchTau)
+                stretchX += (goalX - stretchX) * ks
+                stretchY += (goalY - stretchY) * ks
+
+                val moving = dragging || holdPosition || xFraction.isRunning || rowBlend.isRunning
+                if (!moving && stretchX < 0.002f && stretchY < 0.002f) break
+            }
+            stretchX = 0f
+            stretchY = 0f
+        }
     }
 
     private fun onDragStart(offset: Offset) {
         settleJob?.cancel()
+        // Start from where the bubble is drawn now, so it slides to the finger instead of jumping.
+        dragCenterX = xFraction.value * rowWidthPx
+        dragBlend = rowBlend.value.coerceIn(0f, 1f)
         holdPosition = true
         autoOpened = false
+        dragElapsed = 0f
         dragging = true
         followFinger(offset)
+        ensureMotionLoop()
     }
 
-    /** The bubble follows the finger exactly in X and Y (Y limited to the span between the rows). */
+    /** Records where the finger wants the bubble (X, and Y as a row blend); the motion loop chases it. */
     private fun followFinger(position: Offset) {
         val blend = blendForY(position.y)
-        dragBlend = blend
+        targetBlend = blend
         // The row the bubble would settle on if released now
         val row = if (blend >= 0.5f) BubbleRow.Extra else BubbleRow.Main
         rowTarget = row
 
         val rowW = rowWidthPx
-        val width = blendPx(
-            slotWidthPx(mainCount, rowW),
-            slotWidthPx(extraCount, rowW),
-            blend
-        )
+        val width = blendPx(slotWidthPx(mainCount, rowW), slotWidthPx(extraCount, rowW), blend)
         val half = width / 2
         val x = position.x - edgePx
-        dragCenterX = if (rowW > width) x.coerceIn(half, rowW - half) else x
+        targetX = if (rowW > width) x.coerceIn(half, rowW - half) else x
 
-        // Bubble over the "more" item while the extra row is closed: open it.
+        // Finger over the "more" item while the extra row is closed: open it.
         if (!autoOpened &&
             row == BubbleRow.Main &&
             mainMoreIndex >= 0 &&
             expandFraction < 0.5f &&
-            closestIndex(dragCenterX, BubbleRow.Main) == mainMoreIndex
+            closestIndex(targetX, BubbleRow.Main) == mainMoreIndex
         ) {
             autoOpened = true
             onAutoOpen()
@@ -1110,7 +1198,7 @@ private class NavBarBubbleController(
     private fun finishDrag(navigate: Boolean) {
         if (!dragging) return
         val row = rowTarget
-        val index = closestIndex(dragCenterX, row)
+        val index = closestIndex(targetX, row)
         val selected = selectedRow
         val settleRow: BubbleRow
         val settleIndex: Int
@@ -1131,6 +1219,7 @@ private class NavBarBubbleController(
             xFraction.snapTo(release)
             dragging = false
             launch { rowBlend.animateTo(rowValue(settleRow), NavBarSlotAnimation) }
+            ensureMotionLoop()
             xFraction.animateTo(target, NavBarSlotAnimation)
             holdPosition = false
         }
@@ -1177,13 +1266,19 @@ private class NavBarBubbleController(
         val centerX = edgePx + if (dragging) dragCenterX else xFraction.value * rowW
         val centerY = blendPx(mainCenterY(size.height), extraCenterY(expand), blend)
         val scale = scaleAnim.value * presence
-        val w = width * scale
-        val h = itemHeightPx * scale
+        val w = width * scale * (1f + stretchX)
+        val h = itemHeightPx * scale * (1f + stretchY)
+
+        // A stretched bubble stays inside the surface, half an edge padding from its sides.
+        val inset = edgePx / 2
+        val left = (centerX - w / 2).coerceAtLeast(inset)
+        val right = (centerX + w / 2).coerceAtMost(size.width - inset)
+        if (right <= left) return
 
         drawRoundRect(
             color = color.copy(alpha = color.alpha * alpha),
-            topLeft = Offset(centerX - w / 2, centerY - h / 2),
-            size = Size(w, h),
+            topLeft = Offset(left, centerY - h / 2),
+            size = Size(right - left, h),
             cornerRadius = CornerRadius(h / 2)
         )
     }
