@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -82,6 +81,7 @@ import com.foamplayer.app.ui.theme.LocalAccentTintState
 import com.foamplayer.app.ui.theme.SurfaceAccentTint
 import com.foamplayer.app.ui.theme.SurfaceVariantAccentTint
 import com.foamplayer.app.ui.utils.consumeTaps
+import com.foamplayer.app.ui.utils.pressShrink
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlinx.coroutines.CoroutineScope
@@ -580,10 +580,12 @@ private fun NavItemVisual(
 
 /**
  * Clickable nav icon. The hit target fills its slot width (see [NavBarSlotRow]) and
- * is clipped to [NavItemHitShape] before the click so the ripple stays rounded.
+ * is clipped to [NavItemHitShape] before the click.
  * [onLongClick] is optional (only used by the search item).
  * [tintTiming], [activeIcon] and [inactiveIcon] drive the icon's selection tint
  * and variant crossfade (see [NavItemVisual]).
+ * Press feedback is [pressShrink] on the icon, driven by the same interaction
+ * source as the click, with no ripple on top of the scale.
  */
 @Composable
 private fun FoamNavItem(
@@ -597,7 +599,6 @@ private fun FoamNavItem(
     iconModifier: Modifier = Modifier,
     hitPadding: Dp = NavBarDimens.ItemHitTargetPadding,
     enabled: Boolean = true,
-    bubbleMode: Boolean = false,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
@@ -608,8 +609,8 @@ private fun FoamNavItem(
             .clip(NavItemHitShape)
             .combinedClickable(
                 interactionSource = interactionSource,
-                // Bubble mode: the shared selection pill replaces the ripple.
-                indication = if (bubbleMode) null else ripple(color = FoamTheme.colors.textPrimary),
+                // The icon's press shrink is the feedback; no ripple on top.
+                indication = null,
                 enabled = enabled,
                 onLongClick = onLongClick,
                 onClick = onClick
@@ -624,7 +625,7 @@ private fun FoamNavItem(
             selected = selected,
             tintTiming = tintTiming,
             playerClosedFraction = playerClosedFraction,
-            modifier = iconModifier
+            modifier = iconModifier.pressShrink(interactionSource)
         )
     }
 }
@@ -792,11 +793,9 @@ private fun FoamNavigationItems(
     showExpandToggle: Boolean = false,
     expandFraction: Float = 0f,
     onToggleExpand: () -> Unit = {},
-    bubbleMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val effectiveEnabled = if (showExpandToggle) primaryEnabled + NavBarItem.MORE else primaryEnabled
-    val enabledList = items.filter { it in effectiveEnabled }
     val searchFocusRequest = LocalSearchFocusRequest.current
 
     // The selection bubble and its drag gesture live on the bar itself (see
@@ -824,7 +823,6 @@ private fun FoamNavigationItems(
                     tintTiming = tintTiming,
                     playerClosedFraction = playerClosedFraction,
                     enabled = itemEnabled,
-                    bubbleMode = bubbleMode,
                     iconModifier = Modifier.rotate(expandFraction * 90f),
                     onClick = onToggleExpand
                 )
@@ -845,7 +843,6 @@ private fun FoamNavigationItems(
                     tintTiming = tintTiming,
                     playerClosedFraction = playerClosedFraction,
                     enabled = itemEnabled,
-                    bubbleMode = bubbleMode,
                     onLongClick = {
                         if (isSearch)
                             searchFocusRequest.request()
@@ -884,12 +881,14 @@ private fun FoamNavExtraRow(
     activeVariant: FoamIconStyle,
     inactiveVariant: FoamIconStyle,
     expandFraction: Float,
-    bubbleMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (expandFraction <= 0f) return
 
     val searchFocusRequest = LocalSearchFocusRequest.current
+    // One source per item, shared by the visual layer's press shrink and the
+    // hit layer's click, so a press scales the icon drawn on the other layer.
+    val itemSources = remember(items) { items.associateWith { MutableInteractionSource() } }
 
     Box(
         modifier = modifier
@@ -916,7 +915,9 @@ private fun FoamNavExtraRow(
                 selected = isRouteSelected(currentRoute, screen),
                 tintTiming = tintTiming,
                 playerClosedFraction = playerClosedFraction,
-                modifier = Modifier.padding(NavBarDimens.ExtraRowItemHitPadding)
+                modifier = Modifier
+                    .padding(NavBarDimens.ExtraRowItemHitPadding)
+                    .pressShrink(itemSources.getValue(item))
             )
         }
 
@@ -946,9 +947,9 @@ private fun FoamNavExtraRow(
                         }
                         .clip(NavItemHitShape)
                         .combinedClickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            // Bubble mode: the shared selection pill replaces the ripple.
-                            indication = if (bubbleMode) null else ripple(color = FoamTheme.colors.textPrimary),
+                            interactionSource = itemSources.getValue(item),
+                            // The visual layer's press shrink is the feedback; no ripple.
+                            indication = null,
                             onLongClick = if (isSearch) {
                                 { onNavigate(screen.route) }
                             } else {
@@ -1527,7 +1528,6 @@ fun FoamNavigationBar(
                 activeVariant = activeVariant,
                 inactiveVariant = inactiveVariant,
                 expandFraction = expandFraction,
-                bubbleMode = bubbleMode,
                 modifier = Modifier.offset(y = NavBarDimens.extraRowBottomOverlap(NavBarDimens.DockedBarHeight))
             )
 
@@ -1544,7 +1544,6 @@ fun FoamNavigationBar(
                 showExpandToggle = secondaryEnabled.isNotEmpty(),
                 expandFraction = expandFraction,
                 onToggleExpand = onToggleExpand,
-                bubbleMode = bubbleMode,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(NavBarDimens.DockedBarHeight)
@@ -1753,7 +1752,6 @@ internal fun FloatingNavigationBar(
                 activeVariant = activeVariant,
                 inactiveVariant = inactiveVariant,
                 expandFraction = expandFraction,
-                bubbleMode = bubbleMode,
                 modifier = Modifier.offset(y = NavBarDimens.extraRowBottomOverlap(NavBarDimens.FloatingRowHeight))
             )
 
@@ -1770,7 +1768,6 @@ internal fun FloatingNavigationBar(
                 showExpandToggle = secondaryEnabled.isNotEmpty(),
                 expandFraction = expandFraction,
                 onToggleExpand = onToggleExpand,
-                bubbleMode = bubbleMode,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(NavBarDimens.FloatingRowHeight)
