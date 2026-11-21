@@ -6,7 +6,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -33,7 +32,6 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,7 +60,6 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -70,6 +67,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.lerp
 import com.foamplayer.app.R
 import androidx.navigation.NavBackStackEntry
 import com.foamplayer.app.constants.NavBarItem
@@ -86,7 +84,6 @@ import kotlin.math.abs
 import kotlin.math.exp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /** Elevation of both bars' drop shadow. */
@@ -107,6 +104,10 @@ private val NavBarSlotDpAnimation = tween<Dp>(FoamMotion.Duration.STANDARD, easi
 
 /** Alpha of the bubble mode's selection pill (semi-transparent textPrimary). */
 private const val NavBarBubbleAlpha = 0.15f
+
+/** Fade of the player-open lift: in on grab, out on a release that keeps the player open. */
+private val NavBarBubbleLiftAnimation =
+    tween<Float>(FoamMotion.Duration.SNAP, easing = FoamMotion.Easings.STANDARD)
 
 /**
  * Alpha of the dark strip over the docked bar's nav-bar-inset region — the part
@@ -991,6 +992,9 @@ private fun blendPx(from: Float, to: Float, fraction: Float): Float = from + (to
  *   wider with horizontal speed, taller with vertical speed.
  * - Hovering the "more" item while the extra row is closed opens it.
  * - Release: settles on the closest item of the closest row and navigates to it.
+ * - With the player open (the bubble is otherwise hidden), the drag fades it in;
+ *   on release it stays visible when the drop navigates (the player is closing)
+ *   and fades back out otherwise.
  */
 private class NavBarBubbleController(
     private val scope: CoroutineScope,
@@ -1023,14 +1027,25 @@ private class NavBarBubbleController(
     /** Opens the extra row (the bar's toggle; only called while it is closed). */
     var onAutoOpen: () -> Unit = {}
 
-    /** Drop handler: (row, slot index, whether this drag already opened the extra row). */
-    var onDrop: (BubbleRow, Int, Boolean) -> Unit = { _, _, _ -> }
+    /**
+     * Drop handler: (row, slot index, whether this drag already opened the extra row).
+     * Returns whether the drop navigated (which closes the player).
+     */
+    var onDrop: (BubbleRow, Int, Boolean) -> Boolean = { _, _, _ -> false }
 
     // ---- Animated state ----
     val xFraction = Animatable(initialFraction)
     val rowBlend = Animatable(if (initialRow == BubbleRow.Extra) 1f else 0f)
     val alphaAnim = Animatable(if (initialVisible) 1f else 0f)
     val scaleAnim = Animatable(1f)
+
+    /**
+     * Lifts the player-open dim while the finger holds the bubble (with the player
+     * open the bubble is otherwise hidden). Raised on grab; on release it is cleared
+     * faded when the player stays open, and snapped once the player settles closed
+     * (the dim is gone, so the lift is moot).
+     */
+    val playerLiftAnim = Animatable(0f)
 
     /** Displayed (smoothed) bubble center X (px, row frame) while the finger holds it. */
     var dragCenterX by mutableFloatStateOf(0f)
@@ -1057,6 +1072,7 @@ private class NavBarBubbleController(
     private var autoOpened = false
     private var settleJob: Job? = null
     private var motionJob: Job? = null
+    private var liftJob: Job? = null
 
     /** What the finger asks for: row-frame X (px) and row blend. The displayed values chase these. */
     private var targetX = 0f
@@ -1183,6 +1199,9 @@ private class NavBarBubbleController(
         autoOpened = false
         dragElapsed = 0f
         dragging = true
+        // With the player open the bubble is dimmed out: fade it in under the finger.
+        liftJob?.cancel()
+        liftJob = scope.launch { playerLiftAnim.animateTo(1f, NavBarBubbleLiftAnimation) }
         followFinger(offset)
         ensureMotionLoop()
     }
@@ -1246,7 +1265,48 @@ private class NavBarBubbleController(
             xFraction.animateTo(target, NavBarSlotAnimation)
             holdPosition = false
         }
-        if (navigate) onDrop(row, index, autoOpened)
+        if (navigate) {
+            if (onDrop(row, index, autoOpened)) {
+                // The drop navigated and closes the player: the bubble stays visible
+                // and settles on the new item while the player transitions out.
+                watchPlayerSettle()
+            } else {
+                fadeLiftOut()
+            }
+        } else {
+            fadeLiftOut()
+        }
+    }
+
+    /** Fades the player-open lift back out: the bubble disappears again. */
+    private fun fadeLiftOut() {
+        liftJob?.cancel()
+        liftJob = scope.launch { playerLiftAnim.animateTo(0f, NavBarBubbleLiftAnimation) }
+    }
+
+    /**
+     * Ends a drag whose drop navigated: the player is closing, so the lift holds the
+     * bubble visible while the dim fades away. Once [playerClosedFraction] settles,
+     * the lift is cleared: snapped when the player closed (the dim is gone, so the
+     * lift is moot) and faded out when it stayed open (e.g. the drop was a no-op).
+     */
+    private fun watchPlayerSettle() {
+        liftJob?.cancel()
+        liftJob = scope.launch {
+            var last = -1f
+            var stableFrames = 0
+            while (stableFrames < 3) {
+                withFrameNanos { }
+                val now = playerClosedFraction().coerceIn(0f, 1f)
+                stableFrames = if (now == last) stableFrames + 1 else 0
+                last = now
+            }
+            if (last >= 1f) {
+                playerLiftAnim.snapTo(0f)
+            } else {
+                playerLiftAnim.animateTo(0f, NavBarBubbleLiftAnimation)
+            }
+        }
     }
 
     /**
@@ -1281,7 +1341,11 @@ private class NavBarBubbleController(
         val expand = expandFraction.coerceIn(0f, 1f)
         // The extra row's targets scale/fade with its expansion; so does the bubble on it.
         val presence = 1f + (expand - 1f) * blend
-        val alpha = alphaAnim.value * presence * playerClosedFraction()
+        // The player-open dim hides the bubble; while the finger holds it the lift
+        // fades it back in, and the release fades it out again. With the player
+        // closed the dim is already 1, so the lift is a no-op there.
+        val playerFade = lerp(playerClosedFraction(), 1f, playerLiftAnim.value)
+        val alpha = alphaAnim.value * presence * playerFade
         if (alpha <= 0.001f) return
 
         val rowW = size.width - 2 * edgePx
@@ -1386,16 +1450,22 @@ private fun rememberNavBarBubble(
     controller.onAutoOpen = onToggleExpand
     controller.onDrop = { row, index, autoOpened ->
         val item = (if (row == BubbleRow.Main) mainList else extraList).getOrNull(index)
-        if (item != null) {
-            if (item == NavBarItem.MORE) {
-                // Releasing on "more" always toggles. If this drag auto-opened the
-                // extra row on hover, the release closes it again.
+        when {
+            item == null -> false
+            item == NavBarItem.MORE -> {
                 onToggleExpand()
-            } else {
+                false
+            }
+            else -> {
                 val screen = item.targetScreen()
-                // Dropping on the already-selected item is a no-op:
-                // don't push a duplicate entry on the back stack.
-                if (!isRouteSelected(currentRoute, screen)) onNavigate(screen.route)
+                if (playerClosedFraction() < 0.5f) {
+                    onNavigate(screen.route)
+                    true
+                } else {
+                    val navigated = !isRouteSelected(currentRoute, screen)
+                    if (navigated) onNavigate(screen.route)
+                    navigated
+                }
             }
         }
     }
