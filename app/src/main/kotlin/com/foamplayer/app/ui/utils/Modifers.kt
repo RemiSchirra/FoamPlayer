@@ -1,8 +1,6 @@
 package com.foamplayer.app.ui.utils
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.EaseOutCubic
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
@@ -13,8 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import com.foamplayer.app.ui.theme.FoamMotion
+import kotlinx.coroutines.launch
 
-private const val PressShrinkTargetScale = 0.9f
+private const val PressShrinkTargetScale = 0.8f
 
 /**
  * Swallows tap gestures without reacting to them, so taps that miss the
@@ -26,27 +25,43 @@ private const val PressShrinkTargetScale = 0.9f
 fun Modifier.consumeTaps(): Modifier = pointerInput(Unit) { detectTapGestures { } }
 
 /**
- * Press feedback for control buttons: tweens down to the target scale on
- * press and back to 1f on release/cancel. Pair with the same
- * [interactionSource] on `clickable(interactionSource = ..., indication = null)`
- * so no ripple draws on top of the scale. The animated value is only read
- * inside the graphicsLayer block, so press frames are draw-only.
+ * Press feedback for control buttons: springs down to [pressedScale] on press
+ * and back to 1f on release/cancel with a slightly elastic return. Every
+ * interaction launches its own animation and a newer event cancels the
+ * in-flight one (a single [Animatable] preserves velocity across the
+ * retarget), so rapid taps replace each other instead of queueing -- the
+ * scale always settles at 1f shortly after the last release, no matter how
+ * many presses piled up. On release the compress is finished before the
+ * return starts, so a tap that ends within a single frame still plays the
+ * full down-up pop instead of nothing. Pair with the same [interactionSource]
+ * on `clickable(interactionSource = ..., indication = null)` so no ripple
+ * draws on top of the scale. The animated value is only read inside the
+ * graphicsLayer block, so press frames are draw-only.
  */
 @Composable
-fun Modifier.pressShrink(interactionSource: MutableInteractionSource): Modifier {
+fun Modifier.pressShrink(
+    interactionSource: MutableInteractionSource,
+    pressedScale: Float = PressShrinkTargetScale,
+): Modifier {
     val scale = remember { Animatable(1f) }
 
     LaunchedEffect(interactionSource) {
+        // Child jobs of this effect's own scope: cancelled when the effect
+        // leaves composition, and each new launch cancels the previous
+        // in-flight animation via the Animatable's mutation mutex.
+        val scope = this
         interactionSource.interactions.collect { interaction ->
             when (interaction) {
-                is PressInteraction.Press -> scale.animateTo(
-                    targetValue = PressShrinkTargetScale,
-                    animationSpec = tween(durationMillis = FoamMotion.Duration.SNAP, easing = EaseOutCubic)
-                )
-                is PressInteraction.Release, is PressInteraction.Cancel -> scale.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(durationMillis = FoamMotion.Duration.SWIFT, easing = EaseOutCubic)
-                )
+                is PressInteraction.Press -> scope.launch {
+                    scale.animateTo(pressedScale, FoamMotion.Springs.PRESS_DOWN)
+                }
+                is PressInteraction.Release, is PressInteraction.Cancel -> scope.launch {
+                    // Fast taps deliver Press + Release before one frame can render
+                    // the pressed state, so finish the compress here first: the
+                    // down-up pop always plays in full, whatever the tap speed.
+                    scale.animateTo(pressedScale, FoamMotion.Springs.PRESS_DOWN)
+                    scale.animateTo(1f, FoamMotion.Springs.PRESS_RETURN)
+                }
             }
         }
     }

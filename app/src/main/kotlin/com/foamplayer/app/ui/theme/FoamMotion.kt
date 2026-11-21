@@ -65,12 +65,6 @@ object FoamMotion {
             stiffness = Spring.StiffnessMediumLow,
         )
 
-        /** Control-position settles (transport cluster). */
-        val CONTROL = spring<Float>(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
-        )
-
         /** Smooth list auto-scrolls and scale pops. */
         val LIST_SCROLL = spring<Float>(
             dampingRatio = Spring.DampingRatioNoBouncy,
@@ -86,6 +80,18 @@ object FoamMotion {
         /** Active-line pop-in. */
         val POP = spring<Float>(
             dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        )
+
+        /** Press-feedback compress (fast, no overshoot). */
+        val PRESS_DOWN = spring<Float>(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        )
+
+        /** Press-feedback release; a bit of elasticity reads as life. */
+        val PRESS_RETURN = spring<Float>(
+            dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessMedium,
         )
     }

@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.player
 
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.fadeIn
@@ -15,7 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.DragInteraction
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -1079,13 +1077,6 @@ internal fun SharedTransitionScope.PlayPauseButton(
     val isLoading = isLoading()
     val playInteractions = remember { MutableInteractionSource() }
 
-    val isPressed by playInteractions.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) PLAY_BUTTON_PRESSED_SCALE else 1f,
-        animationSpec = FoamMotion.Springs.CONTROL,
-        label = "playButtonPressScale"
-    )
-
     // The loading circle replaces the play/pause glyph with the same scale+fade
     // convention the two icons use: 0f = transport showing, 1f = circle showing.
     val loadingFraction by animateFloatAsState(
@@ -1104,10 +1095,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
     Box(
         modifier = modifier
             .requiredSize(PlayerDimens.playButtonSize)
-            .graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
-            }
+            .pressShrink(playInteractions, pressedScale = PLAY_BUTTON_PRESSED_SCALE)
             .semantics { contentDescription = description }
             .clickable(
                 interactionSource = playInteractions,
