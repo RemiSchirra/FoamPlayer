@@ -119,10 +119,10 @@ private const val DockedInsetScrimAlpha = 0.3f
 private const val NavBarBubbleDragScale = 1.08f
 
 /** Max extra width (fraction) the bubble gains when it moves horizontally at full speed. */
-private const val NavBarBubbleStretchX = 0.2f
+private const val NavBarBubbleStretchX = 0.3f
 
 /** Max extra height (fraction) the bubble gains when it moves vertically at full speed. */
-private const val NavBarBubbleStretchY = 0.2f
+private const val NavBarBubbleStretchY = 0.3f
 
 /** Speeds (in item heights per second) at which the stretch reaches its maximum. */
 private const val NavBarBubbleFullSpeedX = 10f
