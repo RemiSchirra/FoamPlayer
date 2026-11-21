@@ -127,8 +127,14 @@ fun StatsSeeAllScreen(
                 searchedArtists,
                 sortMode,
                 sortInverted
-            ) {
-                caseInsensitiveComparator { it.name }
+            ) { mode ->
+                when (mode) {
+                    // The ranked page opens in the card's own order: plays first.
+                    CollectionSortMode.LISTEN_COUNT ->
+                        compareByDescending<ArtistStat> { it.playCount }
+                            .then(caseInsensitiveComparator { it.name })
+                    else -> caseInsensitiveComparator { it.name }
+                }
             }
             MediaArtKindScope(MediaArtKind.ARTIST) {
                 CollectionListScreen(
@@ -139,7 +145,11 @@ fun StatsSeeAllScreen(
                     headerIcon = FoamTheme.icons.current.stats,
                     density = density,
                     onDensityChange = onDensityChange,
-                    sortOptions = listOf(CollectionSortMode.NAME, CollectionSortMode.RANDOM),
+                    sortOptions = listOf(
+                        CollectionSortMode.NAME,
+                        CollectionSortMode.LISTEN_COUNT,
+                        CollectionSortMode.RANDOM
+                    ),
                     currentSort = sortMode,
                     onSortChange = onSortChange,
                     sortInverted = sortInverted,
@@ -216,6 +226,10 @@ fun StatsSeeAllScreen(
                     CollectionSortMode.ARTIST ->
                         compareBy(String.CASE_INSENSITIVE_ORDER, TopAlbumStat::artist)
                             .then(compareBy(String.CASE_INSENSITIVE_ORDER, TopAlbumStat::album))
+                    // The ranked page opens in the card's own order: plays first.
+                    CollectionSortMode.LISTEN_COUNT ->
+                        compareByDescending<TopAlbumStat> { it.playCount }
+                            .then(compareBy(String.CASE_INSENSITIVE_ORDER, TopAlbumStat::album))
                     else -> compareBy(String.CASE_INSENSITIVE_ORDER, TopAlbumStat::album)
                 }
             }
@@ -230,6 +244,7 @@ fun StatsSeeAllScreen(
                     onDensityChange = onDensityChange,
                     sortOptions = listOf(
                         CollectionSortMode.NAME,
+                        CollectionSortMode.LISTEN_COUNT,
                         CollectionSortMode.ARTIST,
                         CollectionSortMode.RANDOM
                     ),

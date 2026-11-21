@@ -130,9 +130,12 @@ private const val SwipeMaxFade = 0.3f
  * swiping left follows the finger, reveals a delete icon on the right, and on
  * release past the threshold flies the row off-screen and fires [onRemove].
  *
- * Shared-element keys ("album_art_*", "track_title_*", "track_artist_*")
- * match the mini/full player's artwork and text so the row animates into the
- * player when its track starts playing.
+ * Shared-element keys match the mini/full player's artwork and text so the row
+ * animates into the player when its track starts playing. The artwork keys carry
+ * the track id ("album_art_<id>"); the text keys are stable ("track_title",
+ * "track_artist") matching the player side, where stable keys keep the shared
+ * bounds — and their content-scale capture — alive across track changes. Only
+ * the shared-transition source row is tagged, so exactly one row pairs at a time.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -290,13 +293,13 @@ fun TrackListItem(
                 suppressHighlightBackground = suppressHighlightBackground,
                 artworkElevation = artworkElevation,
                 titleModifier = Modifier.rowSharedText(
-                    key = "track_title_${track.id}",
+                    key = "track_title",
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     enabled = isSharedTransitionSource
                 ),
                 subtitleModifier = Modifier.rowSharedText(
-                    key = "track_artist_${track.id}",
+                    key = "track_artist",
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     enabled = isSharedTransitionSource
@@ -597,9 +600,6 @@ fun TrackListItem(
                         ImageRequest.Builder(context)
                             .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
                             .size(AlbumArtRequestSize)
-                            // Shares the player flight's cache slot: this request warms
-                            // the bitmap the full-player hero draws synchronously on the
-                            // flight's first frame.
                             .placeholderMemoryCacheKey(
                                 albumArtMemoryCacheKey(track.albumArtPath)
                             )
@@ -628,13 +628,13 @@ fun TrackListItem(
             suppressHighlightBackground = suppressHighlightBackground,
             rowModifier = swipeRowModifier,
             titleModifier = Modifier.rowSharedText(
-                key = "track_title_${track.id}",
+                key = "track_title",
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 enabled = isSharedTransitionSource
             ),
             subtitleModifier = Modifier.rowSharedText(
-                key = "track_artist_${track.id}",
+                key = "track_artist",
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 enabled = isSharedTransitionSource

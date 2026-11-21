@@ -1,7 +1,6 @@
 package com.foamplayer.app.ui.screens.player
 
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.fadeIn
@@ -15,7 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.DragInteraction
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -79,22 +77,18 @@ import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.zIndex
-import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.imageLoader
-import coil.request.ImageRequest
 import com.foamplayer.app.R
 import com.foamplayer.app.data.db.entities.TrackEntity
-import com.foamplayer.app.data.media.EmbeddedAlbumArt
 import com.foamplayer.app.data.settings.MarqueeMode
 import com.foamplayer.app.data.settings.PlayerPagerEffect
 import com.foamplayer.app.data.settings.SeekBarStyle
-import com.foamplayer.app.ui.components.AlbumArtRequestSize
-import com.foamplayer.app.ui.components.albumArtMemoryCacheKey
 import com.foamplayer.app.ui.components.CrossfadingPlayPauseIcon
 import com.foamplayer.app.ui.components.NoAlbumArtPlaceholder
 import com.foamplayer.app.ui.components.PlayerFlightHighlightPadding
 import com.foamplayer.app.ui.components.PreviousAction
+import com.foamplayer.app.ui.components.fullResAlbumArtRequest
 import com.foamplayer.app.ui.components.playerFlightHighlightSource
 import com.foamplayer.app.ui.components.SeekBarProgressState
 import com.foamplayer.app.ui.components.TrackScoreHeart
@@ -450,11 +444,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
             for (p in (page - 2)..(page + 2)) {
                 val path = queue.getOrNull(p)?.albumArtPath ?: continue
                 prefetchContext.imageLoader.enqueue(
-                    ImageRequest.Builder(prefetchContext)
-                        .data(EmbeddedAlbumArt(path.toUri()))
-                        .size(AlbumArtRequestSize)
-                        .memoryCacheKey(albumArtMemoryCacheKey(path))
-                        .build()
+                    fullResAlbumArtRequest(prefetchContext, path)
                 )
             }
         }
@@ -623,15 +613,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                         if (pageTrack.albumArtPath != null) {
                             val context = LocalContext.current
                             val pageArtRequest = remember(pageTrack.albumArtPath) {
-                                ImageRequest.Builder(context)
-                                    .data(EmbeddedAlbumArt(pageTrack.albumArtPath.toUri()))
-                                    .size(AlbumArtRequestSize)
-                                    .crossfade(false)
-                                    .placeholderMemoryCacheKey(
-                                        albumArtMemoryCacheKey(pageTrack.albumArtPath)
-                                    )
-                                    .memoryCacheKey(albumArtMemoryCacheKey(pageTrack.albumArtPath))
-                                    .build()
+                                fullResAlbumArtRequest(context, pageTrack.albumArtPath)
                             }
                             AsyncImage(
                                 model = pageArtRequest,
@@ -811,13 +793,7 @@ internal fun SharedTransitionScope.TrackHeroPager(
                     if (track.albumArtPath != null) {
                         val context = LocalContext.current
                         val albumArtRequest = remember(track.albumArtPath) {
-                            ImageRequest.Builder(context)
-                                .data(EmbeddedAlbumArt(track.albumArtPath.toUri()))
-                                .size(AlbumArtRequestSize)
-                                .crossfade(false)
-                                .placeholderMemoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
-                                .memoryCacheKey(albumArtMemoryCacheKey(track.albumArtPath))
-                                .build()
+                            fullResAlbumArtRequest(context, track.albumArtPath)
                         }
                         AsyncImage(
                             model = albumArtRequest,
@@ -826,8 +802,6 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             contentScale = ContentScale.Crop
                         )
                     } else {
-                        // No art at all: the image-like music-note placeholder, exactly
-                        // like the mini player's slot and this page's underlying art box.
                         NoAlbumArtPlaceholder()
                     }
                 }
@@ -853,12 +827,16 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             drivesState = false,
                             modifier = Modifier
                                 .sharedBounds(
-                                    rememberSharedContentState(key = "track_title_${track.id}"),
-                                    animatedVisibilityScope = outerVisibilityScope
+                                    rememberSharedContentState(key = "track_title"),
+                                    animatedVisibilityScope = outerVisibilityScope,
+                                    enter = fadeIn(FoamMotion.Spec.sharedElementFlight),
+                                    exit = fadeOut(FoamMotion.Spec.sharedElementFlight)
                                 )
                                 .sharedBounds(
-                                    rememberSharedContentState(key = "track_title_header_${track.id}"),
-                                    animatedVisibilityScope = headerVisibilityScope
+                                    rememberSharedContentState(key = "track_title_header"),
+                                    animatedVisibilityScope = headerVisibilityScope,
+                                    enter = fadeIn(FoamMotion.Spec.sharedElementFlight),
+                                    exit = fadeOut(FoamMotion.Spec.sharedElementFlight)
                                 )
                         )
                         MarqueeText(
@@ -869,12 +847,16 @@ internal fun SharedTransitionScope.TrackHeroPager(
                             drivesState = false,
                             modifier = Modifier
                                 .sharedBounds(
-                                    rememberSharedContentState(key = "track_artist_${track.id}"),
-                                    animatedVisibilityScope = outerVisibilityScope
+                                    rememberSharedContentState(key = "track_artist"),
+                                    animatedVisibilityScope = outerVisibilityScope,
+                                    enter = fadeIn(FoamMotion.Spec.sharedElementFlight),
+                                    exit = fadeOut(FoamMotion.Spec.sharedElementFlight)
                                 )
                                 .sharedBounds(
-                                    rememberSharedContentState(key = "track_artist_header_${track.id}"),
-                                    animatedVisibilityScope = headerVisibilityScope
+                                    rememberSharedContentState(key = "track_artist_header"),
+                                    animatedVisibilityScope = headerVisibilityScope,
+                                    enter = fadeIn(FoamMotion.Spec.sharedElementFlight),
+                                    exit = fadeOut(FoamMotion.Spec.sharedElementFlight)
                                 )
                         )
                     }
@@ -1051,7 +1033,6 @@ internal fun SharedTransitionScope.PlaybackControls(
                         )
                 )
                 PlayPauseButton(
-                    track = track,
                     isPlaying = isPlaying,
                     isLoading = isLoading,
                     outerVisibilityScope = outerVisibilityScope,
@@ -1084,7 +1065,6 @@ internal fun SharedTransitionScope.PlaybackControls(
  */
 @Composable
 internal fun SharedTransitionScope.PlayPauseButton(
-    track: TrackEntity,
     isPlaying: () -> Boolean,
     isLoading: () -> Boolean,
     outerVisibilityScope: AnimatedVisibilityScope,
@@ -1096,13 +1076,6 @@ internal fun SharedTransitionScope.PlayPauseButton(
     val isPlaying = isPlaying()
     val isLoading = isLoading()
     val playInteractions = remember { MutableInteractionSource() }
-
-    val isPressed by playInteractions.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) PLAY_BUTTON_PRESSED_SCALE else 1f,
-        animationSpec = FoamMotion.Springs.CONTROL,
-        label = "playButtonPressScale"
-    )
 
     // The loading circle replaces the play/pause glyph with the same scale+fade
     // convention the two icons use: 0f = transport showing, 1f = circle showing.
@@ -1122,10 +1095,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
     Box(
         modifier = modifier
             .requiredSize(PlayerDimens.playButtonSize)
-            .graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
-            }
+            .pressShrink(playInteractions, pressedScale = PLAY_BUTTON_PRESSED_SCALE)
             .semantics { contentDescription = description }
             .clickable(
                 interactionSource = playInteractions,
@@ -1141,7 +1111,7 @@ internal fun SharedTransitionScope.PlayPauseButton(
             tint = FoamTheme.colors.textPrimary,
             iconSize = PlayerDimens.playButtonIconSize,
             modifier = Modifier.sharedBounds(
-                rememberSharedContentState(key = "play_button_${track.id}"),
+                rememberSharedContentState(key = "play_button"),
                 animatedVisibilityScope = outerVisibilityScope,
                 resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.Fit, Alignment.Center),
                 enter = fadeIn(),

@@ -3,11 +3,14 @@ package com.foamplayer.app.ui.screens.player
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -49,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -785,51 +789,71 @@ fun FullPlayerScreen(
                 Box(modifier = Modifier.weight(1f)) {
                     upTransition.AnimatedVisibility(
                         visible = { !it },
-                        enter = fadeIn(tween(FoamMotion.Duration.SMOOTH)) +
-                                slideInVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> -h / PlayerDimens.headerSlideDivisor },
-                        exit = fadeOut(tween(FoamMotion.Duration.SMOOTH)) +
-                                slideOutVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> -h / PlayerDimens.headerSlideDivisor },
+                        enter = slideInVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> -h / PlayerDimens.headerSlideDivisor },
+                        exit = slideOutVertically(tween(FoamMotion.Duration.SMOOTH)) { h -> -h / PlayerDimens.headerSlideDivisor },
                         modifier = Modifier.fillMaxSize().then(playerDrag)
                     ) {
-                        MainPlayerContent(
-                            track = track,
-                            queue = queue,
-                            queueIndex = queueIndex,
-                            queueEntryIds = queueEntryIds,
-                            isPlaying = isPlayingProvider,
-                            isLoading = isLoadingProvider,
-                            isPlaybackActive = isPlaybackActiveProvider,
-                            durationMs = durationMs,
-                            pagerState = pagerState,
-                            density = density,
-                            screenWidthDp = configuration.screenWidthDp.dp,
-                            placeholderColor = placeholderColor,
-                            immersive = isImmersiveEnabled,
-                            vinyl = isVinylEnabled,
-                            pagerEffect = settings.playerPagerEffect,
-                            pagerFlingTarget = pagerFlingTarget,
-                            outerVisibilityScope = animatedVisibilityScope,
-                            headerVisibilityScope = this@AnimatedVisibility,
-                            viewModel = viewModel,
-                            playerTransitionState = playerTransitionState,
-                            upTransitionState = upTransitionState,
-                            seekBarProgress = seekBarProgress,
-                            isAnimateSeekBarEnabled = settleSeekBarAnimated,
-                            seekBarStyle = seekBarStyle,
-                            audioInfoText = audioInfoText,
-                            onAudioInfoClick = { showAudioInfoModal = true },
-                            morphFromWaveform = morphFromWaveform,
-                            morphTargetWaveform = morphTargetWaveform,
-                            envelopeMorphProgress = envelopeMorphProgress,
-                            marqueeMode = marqueeMode,
-                            scoreOverrides = scoreOverrides,
-                            onSetScore = viewModel::setTrackScore,
-                            onOpenAlbum = onOpenAlbum,
-                            onOpenArtist = onOpenArtist,
-                            flightGeometry = flightGeometry,
-                            onSkipIntent = markSkipIntent,
-                            selectorTopRoot = selectorTopRoot
-                        )
+                        val mainFade by transition.animateFloat(
+                            transitionSpec = {
+                                if (targetState == EnterExitState.Visible) {
+                                    tween(FoamMotion.Duration.SMOOTH)
+                                } else {
+                                    tween(
+                                        durationMillis = FoamMotion.Duration.SMOOTH,
+                                        easing = LinearOutSlowInEasing
+                                    )
+                                }
+                            },
+                            label = "MainPlayerFade"
+                        ) { state -> if (state == EnterExitState.Visible) 1f else 0f }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    alpha = mainFade
+                                    compositingStrategy = CompositingStrategy.ModulateAlpha
+                                }
+                        ) {
+                            MainPlayerContent(
+                                track = track,
+                                queue = queue,
+                                queueIndex = queueIndex,
+                                queueEntryIds = queueEntryIds,
+                                isPlaying = isPlayingProvider,
+                                isLoading = isLoadingProvider,
+                                isPlaybackActive = isPlaybackActiveProvider,
+                                durationMs = durationMs,
+                                pagerState = pagerState,
+                                density = density,
+                                screenWidthDp = configuration.screenWidthDp.dp,
+                                placeholderColor = placeholderColor,
+                                immersive = isImmersiveEnabled,
+                                vinyl = isVinylEnabled,
+                                pagerEffect = settings.playerPagerEffect,
+                                pagerFlingTarget = pagerFlingTarget,
+                                outerVisibilityScope = animatedVisibilityScope,
+                                headerVisibilityScope = this@AnimatedVisibility,
+                                viewModel = viewModel,
+                                playerTransitionState = playerTransitionState,
+                                upTransitionState = upTransitionState,
+                                seekBarProgress = seekBarProgress,
+                                isAnimateSeekBarEnabled = settleSeekBarAnimated,
+                                seekBarStyle = seekBarStyle,
+                                audioInfoText = audioInfoText,
+                                onAudioInfoClick = { showAudioInfoModal = true },
+                                morphFromWaveform = morphFromWaveform,
+                                morphTargetWaveform = morphTargetWaveform,
+                                envelopeMorphProgress = envelopeMorphProgress,
+                                marqueeMode = marqueeMode,
+                                scoreOverrides = scoreOverrides,
+                                onSetScore = viewModel::setTrackScore,
+                                onOpenAlbum = onOpenAlbum,
+                                onOpenArtist = onOpenArtist,
+                                flightGeometry = flightGeometry,
+                                onSkipIntent = markSkipIntent,
+                                selectorTopRoot = selectorTopRoot
+                            )
+                        }
                     }
 
                     upTransition.AnimatedVisibility(

@@ -137,6 +137,10 @@ data class AppSettings(
     val resumeOnDeviceConnected: Boolean = true,
     /** Automatically pauses playback when the audio output device in use is disconnected. */
     val pauseOnDeviceDisconnected: Boolean = true,
+    /** Automatically pauses playback when another app takes the audio focus. */
+    val pauseOnFocusLoss: Boolean = true,
+    /** Automatically resumes playback when the interrupted audio stops and the focus is back. */
+    val resumeOnFocusRegain: Boolean = true,
     val libraryFolders: Set<String> = emptySet(),
     /** Connected distant servers (Plex/Jellyfin) and the folders scanned from them. */
     val distantServers: List<DistantServer> = emptyList(),
@@ -204,6 +208,12 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.FOLLOW_SYSTEM,
     val navigationBarMode: NavigationBarMode = NavigationBarMode.ATTACHED,
     val navBarTransparentWhenPlayerOpen: Boolean = false,
+    /**
+     * Bubble mode of the nav bar: replaces each item's ripple with a
+     * semi-transparent pill that slides to the selected item and can be
+     * dragged to navigate (Settings > User interface > Navigation bar).
+     */
+    val navBarBubbleMode: Boolean = true,
     val navBarPrimaryOrder: List<NavBarItem> = DefaultNavBarPrimaryOrder,
     val navBarPrimaryEnabled: Set<NavBarItem> = DefaultNavBarPrimaryEnabled,
     val navBarSecondaryOrder: List<NavBarItem> = DefaultNavBarSecondaryOrder,

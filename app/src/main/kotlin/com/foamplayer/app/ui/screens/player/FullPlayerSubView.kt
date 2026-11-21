@@ -124,13 +124,6 @@ private fun SubViewSelectorItem(
             .padding(touchPadding),
         contentAlignment = Alignment.Center
     ) {
-        // Selection tint as a draw-phase crossfade: the subview transition fraction changes
-        // every frame of the drag/settle, so the interpolation between the resting and
-        // selected colors runs in graphicsLayer (redraw-only) instead of composition -- the
-        // previous single-icon composition-phase lerp recomposed both selector items on
-        // every frame of every subview transition. For two opaque colors, stacking the
-        // resting tint at alpha (1 - progress) over the selected tint composites to exactly
-        // lerp(selected, resting, progress).
         Icon(
             imageVector = icon,
             contentDescription = label,
@@ -257,13 +250,7 @@ internal fun SharedTransitionScope.SubViewContent(
     track: TrackEntity,
     subViewMode: SubViewMode,
     viewModel: PlayerViewModel,
-    // Raw isPlaying: read only by the play/pause button leaf inside MiniPlayerHeader's
-    // caller (see below), so a playback flip doesn't recompose this subtree.
     isPlaying: () -> Boolean,
-    // Current paused shrink of the full player hero (isPlaying || isPlaybackRequested
-    // feeds rememberPausedArtScale): the subview header does NOT shrink at rest on
-    // play/pause, but mid-flight this header's art IS what the shared-element overlay
-    // renders, so it departs at the hero's current paused scale and relaxes to 1f.
     isPlaybackActive: () -> Boolean,
     isImmersiveEnabled: Boolean,
     marqueeMode: MarqueeMode,
@@ -291,8 +278,8 @@ internal fun SharedTransitionScope.SubViewContent(
             AnimatedContent(
                 targetState = subViewMode,
                 transitionSpec = {
-                    fadeIn(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH)) togetherWith
-                            fadeOut(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH))
+                    fadeIn(tween(FoamMotion.Duration.SMOOTH)) togetherWith
+                            fadeOut(tween(FoamMotion.Duration.SMOOTH))
                 },
                 label = "SubViewContent"
             ) { mode ->
@@ -308,7 +295,6 @@ internal fun SharedTransitionScope.SubViewContent(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun SharedTransitionScope.MiniPlayerHeader(
     track: TrackEntity,
@@ -327,22 +313,8 @@ private fun SharedTransitionScope.MiniPlayerHeader(
     val miniRadius = (miniImageSize / 2) * FoamTheme.shapes.miniPlayerRounding
     val fullRadius = (fullImageSize / 2) * FoamTheme.shapes.fullPlayerRounding
 
-    // The full player hero's current paused shrink (see rememberPausedArtScale). This
-    // header rests at scale 1f -- a play/pause flip must NOT animate this header's art
-    // -- but mid-flight this header's art IS what the shared-element overlay renders,
-    // so it departs at the hero's CURRENT paused scale and relaxes to 1f.
     val heroPausedArtScale by rememberPausedArtScale(isPlaybackActive)
 
-    // Deferred reads: the transition fraction is evaluated inside the graphicsLayer
-    // blocks below, so the subview drag animates the corner radii per frame without
-    // recomposing this header (which used to re-run on every drag frame just to
-    // rebuild a RoundedCornerShape for .clip()).
-    // The overlay records the shared element layer at the interpolated bounds each
-    // frame, so this radius lives in that changing coordinate space: it has to lerp
-    // from the hero-end full radius down to this header's mini radius, eased in the
-    // direction of travel to keep pace with the fast-start spring bounds. A constant
-    // mini radius here goes nearly square the moment the interpolated bounds exceed
-    // the header's 48dp.
     val density = LocalDensity.current
     val miniRadiusPx = with(density) { miniRadius.toPx() }
     val fullRadiusPx = with(density) { fullRadius.toPx() }
@@ -361,15 +333,6 @@ private fun SharedTransitionScope.MiniPlayerHeader(
             )
         }
     }
-    // Shadow elevation for the art during the up-morph. While the bounds animation is
-    // active, the shared-element overlay renders ONLY the target entry's content
-    // (SharedElementEntry.shouldRenderAtAll) -- on the up-swipe that is THIS header's
-    // art, not the hero's -- so the full player's shadow has to live here too, or it
-    // drops the frame the morph takes over. The elevation starts at the hero's full
-    // value (the interpolated bounds begin at the hero's full-size art) and fades to
-    // zero as the art settles into this shadowless 48dp slot, so the up/down swipe
-    // fades the shadow progressively. Same easing as the radius above so both chase
-    // the flight in lockstep.
     val fullArtElevationPx = with(density) { PlayerDimens.fullPlayerArtElevation.toPx() }
     val imageShadowElevationPx = remember(fullArtElevationPx, upTransitionState) {
         {
@@ -382,9 +345,6 @@ private fun SharedTransitionScope.MiniPlayerHeader(
             fullArtElevationPx * (1f - fraction)
         }
     }
-    // Paused-shrink departure, eased by the same flight fraction as the shadow: the
-    // hero-end (fraction 0 toward this slot) renders the hero's paused scale, this
-    // slot's own rest (fraction 1) is unscaled 1f.
     val imageScalePx = remember(heroPausedArtScale, upTransitionState) {
         {
             val raw = upTransitionState.progress().coerceIn(0f, 1f)
@@ -396,10 +356,6 @@ private fun SharedTransitionScope.MiniPlayerHeader(
             1f + (heroPausedArtScale - 1f) * (1f - fraction)
         }
     }
-    // The container is not a shared element (it only slides/fades with the header), so its
-    // rounding stays fixed at the resting art-radius + padding relationship -- the same
-    // formula as the bottom mini player's container -- instead of chasing the animated
-    // shared-element radius during the flight.
     val containerRadius = miniRadius + 8.dp
     val headerInteractions = remember { MutableInteractionSource() }
 
@@ -424,9 +380,9 @@ private fun SharedTransitionScope.MiniPlayerHeader(
         AnimatedContent(
             targetState = track,
             transitionSpec = {
-                (fadeIn(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH)) +
-                        slideInVertically(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH)) { height -> height / 3 }) togetherWith
-                        fadeOut(androidx.compose.animation.core.tween(FoamMotion.Duration.SMOOTH))
+                (fadeIn(tween(FoamMotion.Duration.SMOOTH)) +
+                        slideInVertically(tween(FoamMotion.Duration.SMOOTH)) { height -> height / 3 }) togetherWith
+                        fadeOut(tween(FoamMotion.Duration.SMOOTH))
             },
             contentKey = { it.id },
             modifier = Modifier.weight(1f),
@@ -443,9 +399,6 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                             alpha = headerArtAlpha()
                             scaleX = imageScalePx()
                             scaleY = imageScalePx()
-                            // Classic player only: in immersive the headerArtAlpha above
-                            // fades this art, and a layer's own alpha does not fade its
-                            // RenderNode shadow, so the shadow is kept out of that path.
                             shadowElevation = if (!isImmersiveEnabled) {
                                 imageShadowElevationPx()
                             } else {
@@ -474,9 +427,6 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                             contentScale = ContentScale.Crop
                         )
                     } else {
-                        // No art at all: the image-like music-note placeholder. It fills
-                        // this 48dp slot the same way real artwork fills it, so the
-                        // up/down subview morph renders the identical look at both ends.
                         NoAlbumArtPlaceholder()
                     }
                 }
@@ -486,13 +436,13 @@ private fun SharedTransitionScope.MiniPlayerHeader(
                         text = headerTrack.title,
                         style = FoamTheme.typography.titleMedium,
                         mode = marqueeMode,
-                        modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_title_header_${headerTrack.id}"), animatedVisibilityScope = headerVisibilityScope)
+                        modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_title_header"), animatedVisibilityScope = headerVisibilityScope)
                     )
                     MarqueeText(
                         text = stringResource(R.string.artist_album_separator, headerTrack.artist, headerTrack.album),
                         style = FoamTheme.typography.caption.copy(color = FoamTheme.colors.textSecondary),
                         mode = marqueeMode,
-                        modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_artist_header_${headerTrack.id}"), animatedVisibilityScope = headerVisibilityScope)
+                        modifier = Modifier.sharedBounds(rememberSharedContentState(key = "track_artist_header"), animatedVisibilityScope = headerVisibilityScope)
                     )
                 }
             }

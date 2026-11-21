@@ -163,6 +163,13 @@ val AlbumArtRequestSize = CoilSize(480, 480)
  * a first open shows the bare placeholder surface mid-flight and only
  * RE-opening the same collection — where the request has already warmed the
  * cache under this key — appears to animate.
+ *
+ * The full player's art surfaces are the one exception: they render the
+ * artwork at its ORIGINAL size under [albumArtFullResMemoryCacheKey] (this
+ * key would pin them to the cached 480px downscale), but pair that full-res
+ * key with this one as their `placeholderMemoryCacheKey` via
+ * [fullResAlbumArtRequest] — so a flight still paints this 480px bitmap on
+ * frame one and upgrades to full-res once decoded.
  */
 fun albumArtMemoryCacheKey(path: String): String = "album-art:$path"
 
@@ -184,6 +191,39 @@ fun preloadAlbumArtForFlight(context: Context, path: String, isEmbeddedArt: Bool
         .build()
     context.imageLoader.enqueue(request)
 }
+
+/**
+ * Deterministic Coil memory-cache key for the full player's FULL-RESOLUTION
+ * album art.
+ *
+ * The full player's art surfaces (hero, pager page, vinyl disc) decode the
+ * artwork at its original size instead of the shared [AlbumArtRequestSize]
+ * downscale, so they cannot use the shared `album-art:` slot: requests keyed
+ * identically return whichever bitmap is cached there, so a warm 480px entry
+ * would pin the full player to the downscale forever (and a full-res entry
+ * would evict it for every other surface). A separate key keeps both bitmaps
+ * resident; the quality split is bridged by the placeholder fallback in
+ * [fullResAlbumArtRequest].
+ */
+fun albumArtFullResMemoryCacheKey(path: String): String = "album-art-full:$path"
+
+/**
+ * Builds the full player's artwork request: the ORIGINAL decode of [path]'s
+ * artwork under [albumArtFullResMemoryCacheKey], falling back to the shared
+ * 480px [albumArtMemoryCacheKey] slot as the placeholder. The placeholder
+ * pairing is what keeps shared-element flights working: the entering
+ * full-player art paints the flight-warmed 480px bitmap on its FIRST frame
+ * (see [albumArtMemoryCacheKey]) and upgrades to the full-res bitmap once its
+ * own decode completes.
+ */
+fun fullResAlbumArtRequest(context: Context, path: String): ImageRequest =
+    ImageRequest.Builder(context)
+        .data(EmbeddedAlbumArt(path.toUri()))
+        .size(CoilSize.ORIGINAL)
+        .crossfade(false)
+        .placeholderMemoryCacheKey(albumArtMemoryCacheKey(path))
+        .memoryCacheKey(albumArtFullResMemoryCacheKey(path))
+        .build()
 
 /**
  * Bounds transform shared by all artwork shared elements: the same

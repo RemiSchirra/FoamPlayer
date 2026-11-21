@@ -2,6 +2,11 @@
     <string name="playback_channel_name">Lecture FoamPlayer</string>
     <string name="action_shuffle">Aléatoire</string>
     <string name="action_repeat">Répéter</string>
+    <string name="repeat_off">Répétition désactivée</string>
+    <string name="repeat_all">Tout répéter</string>
+    <string name="repeat_one">Répéter un titre</string>
+    <string name="shuffle_off">Aléatoire désactivé</string>
+    <string name="shuffle_on">Aléatoire activé</string>
     <string name="action_radio">Radio</string>
     <string name="play">Lecture</string>
     <string name="pause">Pause</string>
@@ -145,6 +150,7 @@
     <string name="navbar_mode_floating">Flottante</string>
     <string name="navbar_mode_attached">Attachée</string>
     <string name="transparent_when_player_open">Transparent quand le lecteur est ouvert</string>
+    <string name="bubble_mode">Mode bulle</string>
     <string name="navbar_main_bar">Barre principale</string>
     <string name="navbar_main_bar_desc">Glisser pour réordonner et afficher ou masquer les éléments</string>
     <string name="navbar_second_bar">Barre secondaire</string>
@@ -222,6 +228,10 @@
     <string name="resume_on_device_connected_desc">Reprendre automatiquement la lecture lorsqu\'un appareil audio est connecté</string>
     <string name="pause_on_device_disconnected">Mettre en pause à la déconnexion d\'un appareil</string>
     <string name="pause_on_device_disconnected_desc">Mettre automatiquement la lecture en pause lorsque l\'appareil audio utilisé est déconnecté</string>
+    <string name="pause_on_focus_loss">Mettre en pause à la perte du focus</string>
+    <string name="pause_on_focus_loss_desc">Mettre automatiquement la lecture en pause lorsqu\'une autre application prend le focus audio</string>
+    <string name="resume_on_focus_regain">Reprendre à la récupération du focus</string>
+    <string name="resume_on_focus_regain_desc">Reprendre automatiquement la lecture lorsque l\'audio interrompu s\'arrête et que le focus est de nouveau disponible</string>
 
     <!-- Fondus -->
     <string name="crossfade">Enchaînement fondu</string>
@@ -304,6 +314,7 @@
     <string name="cancel">Annuler</string>
 
     <string name="queue_shuffle">Mélanger la file d\'attente</string>
+    <string name="queue_randomize">Randomiser</string>
     <string name="queue_clear">Vider la file d\'attente</string>
 
     <!-- Play on (cast / appareils distants) -->
@@ -467,6 +478,7 @@
     <string name="lastfm_import_plays">×%1$d</string>
     <string name="lastfm_import_failed_title">Échec de l\'importation</string>
     <string name="lastfm_import_failed_generic">Impossible d\'importer votre historique Last.fm.</string>
+    <string name="lastfm_disclaimer">À partir du 1er décembre 2026, le scrobbling natif de FoamPlayer ne sera plus pris en charge. Pour continuer à scrobler, configurez votre propre clé API ou utilisez une application tierce comme l\'application Last.fm officielle.</string>
 
     <!-- Boutons de notification -->
     <string name="notification_entry">Notification</string>

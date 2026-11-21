@@ -3,6 +3,11 @@
     <string name="playback_channel_name">FoamPlayer Playback</string>
     <string name="action_shuffle">Shuffle</string>
     <string name="action_repeat">Repeat</string>
+    <string name="repeat_off">Repeat off</string>
+    <string name="repeat_all">Repeat all</string>
+    <string name="repeat_one">Repeat one</string>
+    <string name="shuffle_off">Shuffle off</string>
+    <string name="shuffle_on">Shuffle on</string>
     <string name="action_radio">Radio</string>
     <string name="play">Play</string>
     <string name="pause">Pause</string>
@@ -146,6 +151,7 @@
     <string name="navbar_mode_floating">Floating</string>
     <string name="navbar_mode_attached">Attached</string>
     <string name="transparent_when_player_open">Transparent when player open</string>
+    <string name="bubble_mode">Bubble mode</string>
     <string name="navbar_main_bar">Main Bar</string>
     <string name="navbar_main_bar_desc">Drag to reorder and show or hide items</string>
     <string name="navbar_second_bar">Second Bar</string>
@@ -223,6 +229,10 @@
     <string name="resume_on_device_connected_desc">Automatically resume playback when an audio device is connected</string>
     <string name="pause_on_device_disconnected">Pause on Device Disconnected</string>
     <string name="pause_on_device_disconnected_desc">Automatically pause playback when the audio device in use is disconnected</string>
+    <string name="pause_on_focus_loss">Pause on Focus Loss</string>
+    <string name="pause_on_focus_loss_desc">Pause when another app starts playing audio</string>
+    <string name="resume_on_focus_regain">Resume on Focus Regain</string>
+    <string name="resume_on_focus_regain_desc">Resume when the other audio stops and focus is available again</string>
 
     <!-- Fades -->
     <string name="crossfade">Crossfade</string>
@@ -305,6 +315,7 @@
     <string name="cancel">Cancel</string>
 
     <string name="queue_shuffle">Shuffle queue</string>
+    <string name="queue_randomize">Randomize</string>
     <string name="queue_clear">Clear queue</string>
 
     <!-- Play on (cast / remote devices) -->
@@ -470,6 +481,7 @@
     <string name="lastfm_import_plays">×%1$d</string>
     <string name="lastfm_import_failed_title">Import failed</string>
     <string name="lastfm_import_failed_generic">Could not import your Last.fm history.</string>
+    <string name="lastfm_disclaimer">From 1 December 2026, FoamPlayer\'s native scrobbling will no longer be supported. To keep scrobbling, set up your own API key or use a third-party app such as the official Last.fm app.</string>
 
     <!-- Notification buttons -->
     <string name="notification_entry">Notification</string>

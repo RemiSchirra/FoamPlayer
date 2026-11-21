@@ -105,8 +105,9 @@ val TrackSortOptions: List<CollectionSortMode> =
 /**
  * A view's initial sort mode: user-ordered views start in [CollectionSortMode.CUSTOM],
  * the ranked Home see-all pages in [CollectionSortMode.RECOMMENDED] (the source
- * query's own ranking, so a "See all" shows its row's order), everything else
- * alphabetically.
+ * query's own ranking, so a "See all" shows its row's order), the ranked stats
+ * pages in [CollectionSortMode.LISTEN_COUNT] (the cards' plays-first order),
+ * everything else alphabetically.
  */
 fun MediaListView.defaultSortMode(): CollectionSortMode = when (this) {
     MediaListView.PLAYLISTS,
@@ -115,7 +116,9 @@ fun MediaListView.defaultSortMode(): CollectionSortMode = when (this) {
     MediaListView.HOME_SEE_ALL_RECENT_TRACKS -> CollectionSortMode.LISTEN_DATE
     MediaListView.HOME_SEE_ALL_RECOMMENDED_TRACKS,
     MediaListView.HOME_SEE_ALL_TOP_TRACKS,
-    MediaListView.STATS_SEE_ALL_TRACKS -> CollectionSortMode.LISTEN_COUNT
+    MediaListView.STATS_SEE_ALL_TRACKS,
+    MediaListView.STATS_SEE_ALL_ARTISTS,
+    MediaListView.STATS_SEE_ALL_ALBUMS -> CollectionSortMode.LISTEN_COUNT
     MediaListView.HOME_SEE_ALL_PLAYLISTS,
     MediaListView.HOME_SEE_ALL_ALBUMS,
     MediaListView.HOME_SEE_ALL_ARTISTS,

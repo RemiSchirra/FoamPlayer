@@ -58,6 +58,8 @@ object BackupJson {
         put("resumeOnStartup", settings.resumeOnStartup)
         put("resumeOnDeviceConnected", settings.resumeOnDeviceConnected)
         put("pauseOnDeviceDisconnected", settings.pauseOnDeviceDisconnected)
+        put("pauseOnFocusLoss", settings.pauseOnFocusLoss)
+        put("resumeOnFocusRegain", settings.resumeOnFocusRegain)
         put("iconStyles", JSONObject().apply {
             settings.iconStyles.forEach { (packId, style) -> put(packId, style.name) }
         })
@@ -103,6 +105,7 @@ object BackupJson {
         put("themeMode", settings.themeMode.name)
         put("navigationBarMode", settings.navigationBarMode.name)
         put("navBarTransparentWhenPlayerOpen", settings.navBarTransparentWhenPlayerOpen)
+        put("navBarBubbleMode", settings.navBarBubbleMode)
         put("navBarPrimaryOrder", toNamesArray(settings.navBarPrimaryOrder))
         put("navBarPrimaryEnabled", toNamesArray(settings.navBarPrimaryEnabled))
         put("navBarSecondaryOrder", toNamesArray(settings.navBarSecondaryOrder))
@@ -154,6 +157,8 @@ object BackupJson {
         resumeOnStartup = json.optBoolean("resumeOnStartup", false),
         resumeOnDeviceConnected = json.optBoolean("resumeOnDeviceConnected", true),
         pauseOnDeviceDisconnected = json.optBoolean("pauseOnDeviceDisconnected", true),
+        pauseOnFocusLoss = json.optBoolean("pauseOnFocusLoss", true),
+        resumeOnFocusRegain = json.optBoolean("resumeOnFocusRegain", true),
         iconStyles = decodeIconStyleMap(json.optJSONObject("iconStyles")),
   iconPackId = json.optString("iconPackId", DEFAULT_ICON_PACK_ID),
         dynamicNavIcons = json.optBoolean("dynamicNavIcons", true),
@@ -227,6 +232,7 @@ object BackupJson {
         themeMode = decodeEnum(json.optString("themeMode"), ThemeMode.FOLLOW_SYSTEM),
         navigationBarMode = decodeEnum(json.optString("navigationBarMode"), NavigationBarMode.ATTACHED),
         navBarTransparentWhenPlayerOpen = json.optBoolean("navBarTransparentWhenPlayerOpen", false),
+        navBarBubbleMode = json.optBoolean("navBarBubbleMode", false),
         navBarPrimaryOrder = decodeEnumList(json.optJSONArray("navBarPrimaryOrder")),
         navBarPrimaryEnabled = decodeEnumSet(
             json.optJSONArray("navBarPrimaryEnabled"),

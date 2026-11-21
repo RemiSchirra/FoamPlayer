@@ -46,6 +46,7 @@ fun ScreenTitle(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Spacer(modifier = Modifier.width(FoamDimens.spacingSmall))
         Icon(
             imageVector = icon,
             contentDescription = null,

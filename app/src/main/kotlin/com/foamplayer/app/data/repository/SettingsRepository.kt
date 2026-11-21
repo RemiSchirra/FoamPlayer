@@ -103,6 +103,12 @@ class SettingsRepository @Inject constructor(
     suspend fun setPauseOnDeviceDisconnected(enabled: Boolean) = update {
         it.copy(pauseOnDeviceDisconnected = enabled)
     }
+    suspend fun setPauseOnFocusLoss(enabled: Boolean) = update {
+        it.copy(pauseOnFocusLoss = enabled)
+    }
+    suspend fun setResumeOnFocusRegain(enabled: Boolean) = update {
+        it.copy(resumeOnFocusRegain = enabled)
+    }
     /** Persists the variant of one icon pack; other packs keep theirs. */
     suspend fun setIconStyleFor(packId: String, style: FoamIconStyle) = update {
         it.copy(iconStyles = it.iconStyles + (packId to style))
@@ -242,6 +248,8 @@ class SettingsRepository @Inject constructor(
     suspend fun setNavBarTransparentWhenPlayerOpen(enabled: Boolean) = update {
         it.copy(navBarTransparentWhenPlayerOpen = enabled)
     }
+
+    suspend fun setNavBarBubbleMode(enabled: Boolean) = update { it.copy(navBarBubbleMode = enabled) }
 
     suspend fun setNavBarPrimaryOrder(order: List<NavBarItem>) = update {
         it.copy(navBarPrimaryOrder = order)
@@ -402,6 +410,9 @@ class SettingsRepository @Inject constructor(
             ?: AppSettings().resumeOnDeviceConnected,
         pauseOnDeviceDisconnected = this[Keys.PAUSE_ON_DEVICE_DISCONNECTED]
             ?: AppSettings().pauseOnDeviceDisconnected,
+        pauseOnFocusLoss = this[Keys.PAUSE_ON_FOCUS_LOSS] ?: AppSettings().pauseOnFocusLoss,
+        resumeOnFocusRegain = this[Keys.RESUME_ON_FOCUS_REGAIN]
+            ?: AppSettings().resumeOnFocusRegain,
         libraryFolders = this[Keys.SELECTED_FOLDERS] ?: emptySet(),
         distantServers = DistantServersCodec.decode(this[Keys.DISTANT_SERVERS]),
         iconStyles = decodeIconStyles(this[Keys.ICON_STYLES]),
@@ -477,6 +488,7 @@ class SettingsRepository @Inject constructor(
             ?.let { runCatching { NavigationBarMode.valueOf(it) }.getOrNull() }
             ?: AppSettings().navigationBarMode,
         navBarTransparentWhenPlayerOpen = this[Keys.NAVBAR_TRANSPARENT_PLAYER_OPEN] ?: AppSettings().navBarTransparentWhenPlayerOpen,
+        navBarBubbleMode = this[Keys.NAVBAR_BUBBLE_MODE] ?: AppSettings().navBarBubbleMode,
         navBarPrimaryOrder = deserializeNavBarItemOrder(this[Keys.NAVBAR_PRIMARY_ORDER], DefaultNavBarPrimaryOrder),
         navBarPrimaryEnabled = this[Keys.NAVBAR_PRIMARY_ENABLED]
             ?.mapNotNull { name -> NavBarItem.entries.find { it.name == name } }
@@ -540,6 +552,8 @@ class SettingsRepository @Inject constructor(
         this[Keys.RESUME_ON_STARTUP] = settings.resumeOnStartup
         this[Keys.RESUME_ON_DEVICE_CONNECTED] = settings.resumeOnDeviceConnected
         this[Keys.PAUSE_ON_DEVICE_DISCONNECTED] = settings.pauseOnDeviceDisconnected
+        this[Keys.PAUSE_ON_FOCUS_LOSS] = settings.pauseOnFocusLoss
+        this[Keys.RESUME_ON_FOCUS_REGAIN] = settings.resumeOnFocusRegain
         this[Keys.SELECTED_FOLDERS] = settings.libraryFolders
         this[Keys.DISTANT_SERVERS] = DistantServersCodec.encode(settings.distantServers)
         this[Keys.ICON_STYLES] = encodeIconStyles(settings.iconStyles)
@@ -588,6 +602,7 @@ class SettingsRepository @Inject constructor(
         this[Keys.THEME_MODE] = settings.themeMode.name
         this[Keys.NAVIGATION_BAR_MODE] = settings.navigationBarMode.name
         this[Keys.NAVBAR_TRANSPARENT_PLAYER_OPEN] = settings.navBarTransparentWhenPlayerOpen
+        this[Keys.NAVBAR_BUBBLE_MODE] = settings.navBarBubbleMode
         this[Keys.NAVBAR_PRIMARY_ORDER] = settings.navBarPrimaryOrder.joinToString(",") { it.name }
         this[Keys.NAVBAR_PRIMARY_ENABLED] = settings.navBarPrimaryEnabled.map { it.name }.toSet()
         this[Keys.NAVBAR_SECONDARY_ORDER] = settings.navBarSecondaryOrder.joinToString(",") { it.name }
@@ -630,6 +645,8 @@ class SettingsRepository @Inject constructor(
         val RESUME_ON_STARTUP = booleanPreferencesKey("resume_on_startup")
         val RESUME_ON_DEVICE_CONNECTED = booleanPreferencesKey("resume_on_device_connected")
         val PAUSE_ON_DEVICE_DISCONNECTED = booleanPreferencesKey("pause_on_device_disconnected")
+        val PAUSE_ON_FOCUS_LOSS = booleanPreferencesKey("pause_on_focus_loss")
+        val RESUME_ON_FOCUS_REGAIN = booleanPreferencesKey("resume_on_focus_regain")
         val SELECTED_FOLDERS = stringSetPreferencesKey("selected_folders")
         val DISTANT_SERVERS = stringPreferencesKey("distant_servers")
         val ICON_STYLES = stringPreferencesKey("icon_styles")
@@ -682,6 +699,7 @@ class SettingsRepository @Inject constructor(
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val NAVIGATION_BAR_MODE = stringPreferencesKey("navigation_bar_mode")
         val NAVBAR_TRANSPARENT_PLAYER_OPEN = booleanPreferencesKey("navbar_transparent_player_open")
+    val NAVBAR_BUBBLE_MODE = booleanPreferencesKey("navbar_bubble_mode")
         val NAVBAR_PRIMARY_ORDER = stringPreferencesKey("navbar_primary_order")
         val NAVBAR_PRIMARY_ENABLED = stringSetPreferencesKey("navbar_primary_enabled")
         val NAVBAR_SECONDARY_ORDER = stringPreferencesKey("navbar_secondary_order")

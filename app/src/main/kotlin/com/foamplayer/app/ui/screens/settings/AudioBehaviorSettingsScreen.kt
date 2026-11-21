@@ -23,8 +23,9 @@ import com.foamplayer.app.ui.theme.FoamTheme
 
 /**
  * Behavior settings (subscreen of Settings > Audio): automatic playback
- * resumption on app start and on output-device connection, plus automatic
- * pausing when the output device in use is disconnected.
+ * resumption on app start and on output-device connection, automatic pausing
+ * when the output device in use is disconnected, and the audio-focus
+ * behaviors (pause when another app takes the focus, resume when it is back).
  */
 @Composable
 fun AudioBehaviorSettingsScreen(
@@ -69,6 +70,20 @@ fun AudioBehaviorSettingsScreen(
                             description = stringResource(R.string.pause_on_device_disconnected_desc),
                             checked = settings.pauseOnDeviceDisconnected,
                             onCheckedChange = { viewModel.setPauseOnDeviceDisconnected(it) }
+                        )
+                        SettingsSectionDivider()
+                        FoamSwitchItem(
+                            title = stringResource(R.string.pause_on_focus_loss),
+                            description = stringResource(R.string.pause_on_focus_loss_desc),
+                            checked = settings.pauseOnFocusLoss,
+                            onCheckedChange = { viewModel.setPauseOnFocusLoss(it) }
+                        )
+                        SettingsSectionDivider()
+                        FoamSwitchItem(
+                            title = stringResource(R.string.resume_on_focus_regain),
+                            description = stringResource(R.string.resume_on_focus_regain_desc),
+                            checked = settings.resumeOnFocusRegain,
+                            onCheckedChange = { viewModel.setResumeOnFocusRegain(it) }
                         )
                     }
                 }

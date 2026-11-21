@@ -253,6 +253,20 @@ class AudioEngine @Inject constructor(
         }
     )
 
+    /**
+     * Focus subsystem: applies the two focus-behavior preferences — pausing
+     * when another app takes the audio focus and resuming when it comes back
+     * (see [AudioFocusHandler]). The players themselves are built without
+     * focus handling ([AudioOutputRouter], [fadeHost] and [FadeEngine]).
+     */
+    private val audioFocusHandler = AudioFocusHandler(
+        context = context,
+        latestSettings = { latestSettings },
+        isPlaying = { _playbackState.value.isPlaying || activePlayerField.playWhenReady },
+        onPause = ::pauseForFocusLoss,
+        onResume = ::play
+    )
+
     /** DSP mirror of the active player when it was promoted from a crossfade secondary. */
     private var activeMirrorField: DspAudioProcessor? = null
 
@@ -448,7 +462,7 @@ class AudioEngine @Inject constructor(
             activeMirrorField?.let { dspEngine.removeMirrorProcessor(it) }
             activeMirrorField = newMirror
             activePlayerField = newPlayer
-            newPlayer.setAudioAttributes(mediaAudioAttributes, /* handleAudioFocus = */ true)
+            newPlayer.setAudioAttributes(mediaAudioAttributes, /* handleAudioFocus = */ false)
             onPlayerSwappedListener?.invoke()
         }
 
@@ -1095,6 +1109,8 @@ class AudioEngine @Inject constructor(
     private fun detachLocalAudio() {
         cancelPendingTransitions()
         fadeEngine.completeCrossfadeNow()
+        // Playback moves to the receiver, which manages its own focus.
+        audioFocusHandler.abandon()
         // The local listener is not guarded yet at this point (no pending route):
         // pausing would otherwise clear the request the receiver must inherit.
         val requested = _playbackState.value.isPlaybackRequested
@@ -1631,6 +1647,7 @@ class AudioEngine @Inject constructor(
         pendingWindowResync = false
         suppressLoadingUntilReady = false
         val playAfterPrepare = forcePlay || !switchStaysPaused()
+        if (playAfterPrepare) audioFocusHandler.request()
         val targetTrack = tracks.getOrNull(centerIndex)
         setLoading(
             playAfterPrepare &&
@@ -1731,6 +1748,7 @@ class AudioEngine @Inject constructor(
                 _playbackState.value.copy(isPlaying = true, isPlaybackRequested = true)
             return
         }
+        audioFocusHandler.request()
         cancelPendingTransitions()
         suppressLoadingUntilReady = false
 
@@ -1764,6 +1782,7 @@ class AudioEngine @Inject constructor(
                 _playbackState.value.copy(isPlaying = false, isPlaybackRequested = false)
             return
         }
+        audioFocusHandler.notifyManualPause()
         // Mid-crossfade, `player` is still the outgoing stream while the UI shows the incoming one.
         val settledCrossfade = fadeEngine.completeCrossfadeNow()
         cancelSilenceCountdown()
@@ -1810,6 +1829,25 @@ class AudioEngine @Inject constructor(
             isPlaybackRequested = false
         )
         player.volume = fadeHost.playerBaseVolume()
+    }
+
+    /**
+     * Pause caused by losing the audio focus to a higher-priority stream
+     * (another app started playing). Pauses immediately — no quick fade, the
+     * other audio is already playing — and mirrors a user pause in the state.
+     * The auto-resume on a regain is [AudioFocusHandler]'s decision.
+     */
+    private fun pauseForFocusLoss() {
+        if (chromecast.isCasting) return
+        cancelPendingTransitions()
+        cancelSilenceCountdown()
+        suppressLoadingUntilReady = false
+        setLoading(false)
+        player.pause()
+        _playbackState.value = _playbackState.value.copy(
+            isPlaying = false,
+            isPlaybackRequested = false
+        )
     }
 
     /**
@@ -2501,25 +2539,33 @@ class AudioEngine @Inject constructor(
      * Toggles queue shuffle. Only effective in repeat-all: wrapping past the end (next) or the
      * start (previous) of the main queue reshuffles it (see [prepareWrapLanding]).
      */
-    fun toggleShuffle() {
-        val newShuffle = !_playbackState.value.isShuffle
+    fun toggleShuffle() = setShuffle(!_playbackState.value.isShuffle)
+
+    /** Sets queue shuffle on/off directly (the queue screen's mode picker). */
+    fun setShuffle(enabled: Boolean) {
+        if (_playbackState.value.isShuffle == enabled) return
         player.shuffleModeEnabled = false
         clearQueueShufflePending()
-        _playbackState.value = _playbackState.value.copy(isShuffle = newShuffle)
+        _playbackState.value = _playbackState.value.copy(isShuffle = enabled)
     }
 
     /** Cycles repeat mode: NONE -> ONE -> ALL. */
-    fun toggleRepeat() {
-        val nextMode = when (_playbackState.value.repeatMode) {
+    fun toggleRepeat() = setRepeatMode(
+        when (_playbackState.value.repeatMode) {
             RepeatMode.NONE -> RepeatMode.ONE
             RepeatMode.ONE -> RepeatMode.ALL
             RepeatMode.ALL -> RepeatMode.NONE
         }
-        player.repeatMode = playerRepeatMode(nextMode)
+    )
+
+    /** Sets the session repeat mode directly (the queue screen's mode picker). */
+    fun setRepeatMode(mode: RepeatMode) {
+        if (_playbackState.value.repeatMode == mode) return
+        player.repeatMode = playerRepeatMode(mode)
         // Repeat-one loops the item itself, so the pause-at-end signal must stay armed off.
         applyPauseAtEndOfMediaItems()
         clearQueueShufflePending()
-        _playbackState.value = _playbackState.value.copy(repeatMode = nextMode)
+        _playbackState.value = _playbackState.value.copy(repeatMode = mode)
     }
 
     /**

@@ -67,7 +67,7 @@ internal class AudioOutputRouter(
     fun start() {
         outputDeviceManager.start()
 
-        playerProvider().setAudioAttributes(mediaAudioAttributes, /* handleAudioFocus = */ true)
+        playerProvider().setAudioAttributes(mediaAudioAttributes, /* handleAudioFocus = */ false)
 
         scope.launch {
             dspEngine.state.collect { state ->
