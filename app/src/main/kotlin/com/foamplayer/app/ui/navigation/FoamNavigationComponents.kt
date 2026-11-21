@@ -317,7 +317,7 @@ object NavBarDimens {
     val FloatingBarMargin = 12.dp
 
     /** Gap between the pill's bottom edge and the system nav bar inset. */
-    val FloatingBarBottomMargin = 4.dp
+    val FloatingBarBottomMargin = 8.dp
 
     /** Mini player artwork size, which the pill's corner radius follows. */
     val MiniPlayerArtSize = 44.dp
